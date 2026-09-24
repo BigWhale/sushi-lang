@@ -1,0 +1,16 @@
+# An Own@(T) local in an `if` body is destroyed on the `return` inside the block and
+# is not visited by the `return` after the block.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 0\n"
+fn pick(i32 n) i32:
+    if (n > 0):
+        let Own@(i32) o = Own.alloc(n)
+        let i32 v = o.get()
+        return Result.Ok(v)
+    return Result.Ok(0)
+
+fn main() i32:
+    println("{pick(3).realise(0)} {pick(0).realise(0)}")
+    return Result.Ok(0)

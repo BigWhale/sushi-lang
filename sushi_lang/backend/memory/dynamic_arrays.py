@@ -59,11 +59,10 @@ class DynamicArrayManager:
         # overwrite the outer one. A flat dict lost the outer descriptor and the outer pop
         # then double-freed the inner array.
         self.arrays: Dict[str, List[DynamicArrayDescriptor]] = {}
-        # Track Own<T> variables for RAII cleanup. Flat by name: Own cleanup is driven by a
-        # wholesale iteration (emit_own_cleanup) at function/scope exit, not scope-popped like
-        # arrays, so a per-name stack would never drain. The descriptor carries its slot for
-        # slot-keyed move checks.
-        self.owned_pointers: Dict[str, OwnDescriptor] = {}
+        # Stacked like `arrays`: a nested Own@(T) is destroyed and popped when its scope
+        # ends, and a shadow does not overwrite the outer descriptor (#820).
+        self.owned_pointers: Dict[str, List[OwnDescriptor]] = {}
+        self.own_scope_stack: List[Dict[str, None]] = []
         self.lists: Dict[str, List[ListDescriptor]] = {}
         self.list_scope_stack: List[Dict[str, None]] = []
 
@@ -77,10 +76,23 @@ class DynamicArrayManager:
         stack = self.lists.get(name)
         return stack[-1] if stack else None
 
+    def _own(self, name: str) -> Optional[OwnDescriptor]:
+        """Innermost live Own<T> descriptor for `name`, or None."""
+        stack = self.owned_pointers.get(name)
+        return stack[-1] if stack else None
+
+    def own_at_depth(self, name: str, depth: int) -> Optional[OwnDescriptor]:
+        """The Own<T> descriptor `name` registered at scope `depth`, or None."""
+        for descriptor in self.owned_pointers.get(name, ()):
+            if descriptor.depth == depth:
+                return descriptor
+        return None
+
     def push_scope(self) -> None:
         """Enter a new scope for dynamic array and List<T> tracking."""
         self.scope_stack.append({})
         self.list_scope_stack.append({})
+        self.own_scope_stack.append({})
 
     def pop_scope(self) -> None:
         """Exit current scope and automatically destroy all dynamic arrays declared in this scope
@@ -92,6 +104,7 @@ class DynamicArrayManager:
 
         current_scope = self.scope_stack.pop()
         current_lists = self.list_scope_stack.pop() if self.list_scope_stack else {}
+        current_owns = self.own_scope_stack.pop() if self.own_scope_stack else {}
 
         # Popping the stacks IS the drain, and it restores any outer namesake. If the block
         # already terminated, an early exit emitted the destructors on that path, so skip
@@ -111,6 +124,11 @@ class DynamicArrayManager:
             if emit:
                 self._emit_list_destructor(list_name)
             self._pop_descriptor(self.lists, list_name)
+        for own_name in reversed(current_owns):
+            descriptor = self._own(own_name)
+            if emit and descriptor is not None and not descriptor.destroyed:
+                self._emit_own_destructor(descriptor)
+            self._pop_descriptor(self.owned_pointers, own_name)
 
     @staticmethod
     def _pop_descriptor(reg: Dict[str, List], name: str) -> None:
@@ -279,10 +297,17 @@ class DynamicArrayManager:
 
     def register_own(self, var_name: str, own_type: StructType, slot: ir.Instruction) -> None:
         """Register Own<T> variable for automatic RAII cleanup."""
-        depth = self.codegen.memory._scope_depth
-        self.owned_pointers[var_name] = OwnDescriptor(
+        depth = len(self.own_scope_stack) - 1
+        descriptor = OwnDescriptor(
             name=var_name, own_type=own_type, slot=slot, depth=depth, destroyed=False)
+        stack = self.owned_pointers.setdefault(var_name, [])
+        if stack and stack[-1].depth == depth:
+            stack[-1] = descriptor
+        else:
+            stack.append(descriptor)
         self.codegen.moves.arm_if_conditional(var_name, slot)
+        if self.own_scope_stack:
+            self.own_scope_stack[-1].setdefault(var_name)
 
     def is_destroyed(self, var_name: str) -> bool:
         """Has `var_name` already been released by an explicit `.destroy()` / `.free()`?"""
@@ -292,7 +317,7 @@ class DynamicArrayManager:
         lst = self._list(var_name)
         if lst is not None and lst.destroyed:
             return True
-        own = self.owned_pointers.get(var_name)
+        own = self._own(var_name)
         return own is not None and own.destroyed
 
     def reset_destroyed_on_rebind(self, var_name: str) -> None:
@@ -303,31 +328,32 @@ class DynamicArrayManager:
         lst = self._list(var_name)
         if lst is not None:
             lst.destroyed = False
-        own = self.owned_pointers.get(var_name)
+        own = self._own(var_name)
         if own is not None:
             own.destroyed = False
 
     def mark_own_destroyed(self, var_name: str) -> None:
         """Mark an Own<T> variable as explicitly destroyed."""
-        if var_name in self.owned_pointers:
-            self.owned_pointers[var_name].destroyed = True
+        own = self._own(var_name)
+        if own is not None:
+            own.destroyed = True
 
     def emit_own_cleanup(self) -> None:
-        """Emit cleanup code for all Own<T> variables in current scope."""
-        for var_name, descriptor in self.owned_pointers.items():
-            if not descriptor.destroyed and not self.codegen.moves.is_moved(descriptor.slot):
-                self._emit_own_destructor(var_name, descriptor.own_type)
+        """Emit, without draining, the destructor of every live Own<T> in every open scope."""
+        for depth in range(len(self.own_scope_stack) - 1, -1, -1):
+            for var_name in reversed(self.own_scope_stack[depth]):
+                descriptor = self.own_at_depth(var_name, depth)
+                if (descriptor is not None and not descriptor.destroyed
+                        and not self.codegen.moves.is_moved(descriptor.slot)):
+                    self._emit_own_destructor(descriptor)
 
-    def _emit_own_destructor(self, var_name: str, own_type: StructType) -> None:
+    def _emit_own_destructor(self, descriptor: OwnDescriptor) -> None:
         """Emit destructor code for a single Own<T> variable."""
         from sushi_lang.backend.destructors import emit_value_destructor
 
-        own_slot = self.codegen.memory.find_local_slot(var_name)
-        descriptor = self.owned_pointers.get(var_name)
-        gate_slot = descriptor.slot if descriptor is not None else own_slot
         self.codegen.moves.emit_free_unless_moved(
-            gate_slot,
-            lambda: emit_value_destructor(self.codegen, own_slot, own_type))
+            descriptor.slot,
+            lambda: emit_value_destructor(self.codegen, descriptor.slot, descriptor.own_type))
 
     def _emit_array_destructor(self, name: str) -> None:
         """Generate destructor code for a dynamic array."""

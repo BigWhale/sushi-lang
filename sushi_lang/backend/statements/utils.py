@@ -124,11 +124,10 @@ def emit_loop_exit_cleanup(codegen: 'LLVMCodegen', min_scope_index: int) -> None
                     codegen.moves.emit_free_unless_moved(
                         entry[-1], lambda s=entry[-1]: mem._emit_string_free(s))
                     break
-            descriptor = da.owned_pointers.get(var_name)
-            if (descriptor is not None and descriptor.depth == scope_idx
-                    and not descriptor.destroyed):
+            descriptor = da.own_at_depth(var_name, scope_idx)
+            if descriptor is not None and not descriptor.destroyed:
                 # _emit_own_destructor carries its own moved/flag gate (#414).
-                da._emit_own_destructor(var_name, descriptor.own_type)
+                da._emit_own_destructor(descriptor)
 
     for scope_idx in range(len(mem._cstr_cleanup) - 1, min_scope_index - 1, -1):
         mem._free_cstr_list(mem._cstr_cleanup[scope_idx])
