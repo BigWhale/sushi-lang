@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Protocol
 
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.report import Origin, Reporter
+from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import (
     apply_template_bindings, deserialize_perk_impl)
@@ -659,7 +660,7 @@ class LibraryRegistration:
                 for tp, rec_tp in zip(gfd.type_params, rec_tps, strict=False):
                     if hasattr(tp, "constraints"):
                         tp.constraints = list(rec_tp.get("constraints") or [])
-                    if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
+                    if isinstance(tp, BoundedTypeParam) and "is_pack" in rec_tp:
                         tp.is_pack = bool(rec_tp["is_pack"])
 
             generic_funcs.declare(func_name, gfd)

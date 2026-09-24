@@ -1,15 +1,15 @@
 """An interned generic name is spelled in ONE place, and "is this an X instance" reads one field.
 
-`interned_name(base, args)` in `semantics/generics/interned.py` spells `List<i32>`, and
-`interned_prefix(base)` spells the `List<` a prefix-taking reader still needs. Everything
-else asks `type_predicates.is_instance_of(ty, "List")`, which reads `generic_base`.
+`interned_name(base, args)` in `semantics/generics/interned.py` spells `List<i32>`.
+Everything else asks `type_predicates.is_instance_of(ty, "List")`, which reads
+`generic_base`.
 
 The scan refuses three spellings in `semantics/` and `backend/`: an f-string that puts `<`
 right after a name or a hole (`f"{base}<{args}>"`, `f"Entry<{k}>"`, `f"{name}<"`), a string
 constant that IS a prefix (`"List<"`), and a concatenation with `"<"`. A constant is caught
 wherever it stands, so a prefix parked in a tuple or passed as an argument is refused too.
 
-`KNOWN` lists the sites that stay in files another change owns; it may only go down.
+`KNOWN` lists the sites that are allowed to stay; it is empty and may only go down.
 """
 
 from __future__ import annotations
@@ -22,10 +22,7 @@ REPO = Path(__file__).resolve().parents[2]
 ROOTS = ("sushi_lang/semantics", "sushi_lang/backend")
 SEAM = "sushi_lang/semantics/generics/interned.py"
 
-KNOWN: dict[str, int] = {
-    # The CE2106 emitter's `f"{name}<"`; the file belongs to the library-seam change.
-    "sushi_lang/semantics/passes/types/expressions.py": 1,
-}
+KNOWN: dict[str, int] = {}
 
 _PREFIX = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*<$")
 _NAME_THEN_ANGLE = re.compile(r"[A-Za-z0-9_]<$")
@@ -106,7 +103,7 @@ def test_no_module_spells_an_interned_name_by_hand():
     new = {path: lines for path, lines in found.items()
            if len(lines) > KNOWN.get(path, 0)}
     assert not new, (
-        "an interned name or prefix is spelled by hand; call interned_name / interned_prefix "
+        "an interned name or prefix is spelled by hand; call interned_name "
         f"(semantics/generics/interned.py) or type_predicates.is_instance_of: {new}")
 
 
@@ -118,13 +115,12 @@ def test_the_known_sites_only_go_down():
 
 
 def test_the_seam_spells_the_name_the_tables_hold():
-    from sushi_lang.semantics.generics.interned import interned_name, interned_prefix
+    from sushi_lang.semantics.generics.interned import interned_name
     from sushi_lang.semantics.typesys import BuiltinType
 
     assert interned_name("List", (BuiltinType.I32,)) == "List<i32>"
     assert interned_name("HashMap", (BuiltinType.STRING, BuiltinType.I32)) == "HashMap<string, i32>"
     assert interned_name("Result", (BuiltinType.I32, "StdError")) == "Result<i32, StdError>"
-    assert interned_name("List", (BuiltinType.I32,)).startswith(interned_prefix("List"))
 
 
 def test_is_instance_of_reads_the_generic_base():

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.generics.interned import interned_prefix
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import (
     ArrayType, StructType, DynamicArrayType, EnumType, Type,
@@ -224,7 +223,7 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
         # IR, which is what makes it safe to call from a predicate.
         from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
         for base in CONTAINER_BASES:
-            receiver_type = infer_generic_struct_type(codegen, receiver, interned_prefix(base))
+            receiver_type = infer_generic_struct_type(codegen, receiver, base)
             if receiver_type is not None:
                 break
     return is_get_out_container(receiver_type)

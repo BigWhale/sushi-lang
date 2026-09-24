@@ -126,7 +126,7 @@ class FunctionMonomorphizer:
         """
         tps = list(generic.type_params)
 
-        pack_indices = [i for i, tp in enumerate(tps) if getattr(tp, 'is_pack', False)]
+        pack_indices = [i for i, tp in enumerate(tps) if tp.is_pack]
 
         if not pack_indices:
             if len(type_args) != len(generic.type_params):
@@ -209,7 +209,7 @@ class FunctionMonomorphizer:
         # A trailing pack type-param passes its arity, so the symbol is distinct per pack
         # size and cannot collide with a regular generic of the same base.
         type_params = generic.type_params or []
-        has_pack = bool(type_params) and getattr(type_params[-1], 'is_pack', False)
+        has_pack = bool(type_params) and type_params[-1].is_pack
         if has_pack:
             pack_arity = len(type_args) - (len(type_params) - 1)
             mangled_name = mangle_function_name(

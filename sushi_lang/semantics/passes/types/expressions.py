@@ -602,7 +602,7 @@ def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
     GenericTypeRef a declared one keeps.
     """
     for name, predicate in _WRAPPER_PREDICATES.items():
-        if isinstance(ty, EnumType) and ty.name.startswith(f"{name}<"):
+        if isinstance(ty, EnumType) and ty.generic_base == name:
             return name, predicate
         if isinstance(ty, GenericTypeRef) and ty.base_name == name:
             return name, predicate

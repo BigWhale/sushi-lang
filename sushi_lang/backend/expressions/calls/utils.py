@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.ast import Name, Call, Expr, MemberAccess, MethodCall, DotCall, IndexAccess
 from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.internals.diagnostics import InternalCompilerError
@@ -54,7 +55,7 @@ def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type'
     return resolved
 
 
-def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: str) -> Optional[StructType]:
+def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, base: str) -> Optional[StructType]:
     """Infer generic struct type (Own<T>, HashMap<K,V>, List<T>) from receiver using multiple strategies."""
     from sushi_lang.semantics.typesys import ReferenceType
     from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -66,12 +67,12 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
         if isinstance(semantic_type, ReferenceType):
             semantic_type = semantic_type.referenced_type
 
-        if isinstance(semantic_type, StructType) and semantic_type.name.startswith(prefix):
+        if isinstance(semantic_type, StructType) and is_instance_of(semantic_type, base):
             return semantic_type
 
         if isinstance(semantic_type, GenericTypeRef):
             type_name = str(semantic_type)  # e.g., "HashMap<string, string>"
-            if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+            if semantic_type.base_name == base and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
     # Strategy 2: a struct-field member access. Resolving the field's semantic type is
@@ -85,11 +86,11 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             # `geo.items.push(x)`: the alias reaches a unit variable, whose declared
             # type answers, not a field of `geo`.
             field_type = storage[2]
-            if isinstance(field_type, StructType) and field_type.name.startswith(prefix):
+            if isinstance(field_type, StructType) and is_instance_of(field_type, base):
                 return field_type
             if isinstance(field_type, GenericTypeRef):
                 type_name = str(field_type)
-                if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+                if field_type.base_name == base and type_name in codegen.struct_table.by_name:
                     return codegen.struct_table.by_name[type_name]
             return None
         try:
@@ -102,11 +103,11 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
             field_type = None
         if isinstance(field_type, ReferenceType):
             field_type = field_type.referenced_type
-        if isinstance(field_type, StructType) and field_type.name.startswith(prefix):
+        if isinstance(field_type, StructType) and is_instance_of(field_type, base):
             return field_type
         if isinstance(field_type, GenericTypeRef):
             type_name = str(field_type)
-            if type_name.startswith(prefix) and type_name in codegen.struct_table.by_name:
+            if field_type.base_name == base and type_name in codegen.struct_table.by_name:
                 return codegen.struct_table.by_name[type_name]
 
     # Strategy 3: a chained method call, which neither strategy above can see. The typecheck pass
@@ -115,7 +116,7 @@ def infer_generic_struct_type(codegen: 'LLVMCodegen', receiver: Expr, prefix: st
     stamped = stamped_semantic_type(codegen, receiver)
     if isinstance(stamped, ReferenceType):
         stamped = stamped.referenced_type
-    if isinstance(stamped, StructType) and stamped.name.startswith(prefix):
+    if isinstance(stamped, StructType) and is_instance_of(stamped, base):
         return stamped
 
     return None
@@ -170,7 +171,7 @@ def _named_ok(codegen: 'LLVMCodegen', ok):
     return ok
 
 
-def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_value: ir.Value, prefix: str) -> Optional[EnumType]:
+def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_value: ir.Value, base: str) -> Optional[EnumType]:
     """Infer generic enum type (Result<T> or Maybe<T>) from receiver using multiple strategies."""
     from sushi_lang.semantics.typesys import ReferenceType
     from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -186,12 +187,12 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
         # to the layout heuristic, which cannot tell `Maybe<Color>` from
         # `Result<i32, StdError>` -- they share one LLVM type.
         if isinstance(semantic_type, EnumType):
-            return semantic_type if semantic_type.name.startswith(prefix) else None
+            return semantic_type if is_instance_of(semantic_type, base) else None
 
         if isinstance(semantic_type, GenericTypeRef):
             type_name = str(semantic_type)  # e.g., "Result<i32>"
             if type_name in codegen.enum_table.by_name:
-                return codegen.enum_table.by_name[type_name] if type_name.startswith(prefix) else None
+                return codegen.enum_table.by_name[type_name] if semantic_type.base_name == base else None
 
     # Strategy 1b: a method-call or `??` receiver carries the typecheck pass's stamp. Authoritative
     # like Strategy 1 -- the uniform enum layout (#300) makes the fallback heuristic unable
@@ -199,7 +200,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     for stamp_attr in ('inferred_return_type', 'inferred_unwrapped_type'):
         stamped = getattr(receiver, stamp_attr, None)
         if isinstance(stamped, EnumType):
-            return stamped if stamped.name.startswith(prefix) else None
+            return stamped if is_instance_of(stamped, base) else None
 
     # Strategy 2: from the call's return type. Both lookups build the TWO-argument interned
     # name -- a one-argument `Result<T>` can never match, so they always missed and fell
@@ -211,23 +212,23 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
             if isinstance(fn_ty, FunctionType):
                 from sushi_lang.backend.generics.result_builder import intern_result
                 result_enum = intern_result(codegen, fn_ty.ok_type, fn_ty.err_type)
-                if result_enum is not None and result_enum.name.startswith(prefix):
+                if result_enum is not None and is_instance_of(result_enum, base):
                     return result_enum
         else:
             func_name = receiver.callee.id
             result_type = codegen.function_return_types.lookup(
                 func_name, codegen.emitting_unit, codegen.scope)
             if result_type is not None:
-                if isinstance(result_type, EnumType) and result_type.name.startswith(prefix):
+                if isinstance(result_type, EnumType) and is_instance_of(result_type, base):
                     return result_type
 
             # Stdlib module functions are in no function table. Under the uniform enum
             # layout (#300) the fallback heuristic let the wrong family claim
             # `getenv(x).realise(d)`, so these resolve from the facts the instantiate pass registers
-            # and a non-matching prefix answers None.
+            # and a non-matching family answers None.
             stdlib_ret = _stdlib_call_return_enum(codegen, func_name)
             if stdlib_ret is not None:
-                return stdlib_ret if stdlib_ret.name.startswith(prefix) else None
+                return stdlib_ret if is_instance_of(stdlib_ret, base) else None
 
     # Strategy 3: any other receiver -- a field, an element -- by the typecheck pass's
     # stamp or the field it reads. Authoritative like the others.
@@ -236,7 +237,7 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
     if isinstance(semantic_type, ReferenceType):
         semantic_type = semantic_type.referenced_type
     if isinstance(semantic_type, EnumType):
-        return semantic_type if semantic_type.name.startswith(prefix) else None
+        return semantic_type if is_instance_of(semantic_type, base) else None
 
     # No match on the LLVM layout (#769): every instance of one family with the same
     # payload size has one LLVM type, so a match is a guess, and a wrong guess reads the
@@ -378,7 +379,7 @@ def get_resolved_type(expr: Union[MethodCall, DotCall], type_attr: str) -> Optio
 
 
 def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
-                        receiver_value: Optional[ir.Value], expected_prefix: str,
+                        receiver_value: Optional[ir.Value], expected_base: str,
                         expected_type_class) -> Optional['Type']:
     """Unified type inference for generic types."""
     receiver = expr.receiver
@@ -395,9 +396,9 @@ def infer_semantic_type(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
     if expected_type_class == EnumType:
         if receiver_value is None:
             receiver_value = codegen.expressions.emit_expr(receiver)
-        return infer_generic_enum_type(codegen, receiver, receiver_value, expected_prefix)
+        return infer_generic_enum_type(codegen, receiver, receiver_value, expected_base)
     elif expected_type_class == StructType:
-        return infer_generic_struct_type(codegen, receiver, expected_prefix)
+        return infer_generic_struct_type(codegen, receiver, expected_base)
 
     return None
 
