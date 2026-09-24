@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -50,11 +52,11 @@ def reject_unusable_hashmap_keys(validator: 'TypeValidator', type_obj: Optional[
     def instance(ty: Type) -> Optional[Type]:
         if not isinstance(ty, GenericTypeRef):
             return None
-        name = f"{ty.base_name}<{', '.join(str(arg) for arg in ty.type_args)}>"
+        name = interned_name(ty.base_name, ty.type_args)
         return structs.get(name) or enums.get(name)
 
     def is_hashmap(ty: Type) -> bool:
-        return isinstance(ty, StructType) and ty.name.startswith("HashMap<")
+        return isinstance(ty, StructType) and is_instance_of(ty, "HashMap")
 
     def stop(ty: Type) -> bool:
         return is_hashmap(ty) or (isinstance(ty, (StructType, EnumType))
@@ -125,8 +127,7 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
         for type_arg in type_obj.type_args:
             _check_type_names(validator, type_arg, span)
 
-        type_args_str = ", ".join(str(arg) for arg in type_obj.type_args)
-        concrete_name = f"{type_obj.base_name}<{type_args_str}>"
+        concrete_name = interned_name(type_obj.base_name, type_obj.type_args)
 
         if concrete_name not in validator.enum_table.by_name and concrete_name not in validator.struct_table.by_name:
             # Monomorphized type should exist after monomorphization pass

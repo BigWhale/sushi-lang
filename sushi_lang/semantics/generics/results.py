@@ -2,6 +2,7 @@
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Optional
 
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals import errors as er
@@ -29,9 +30,7 @@ def validate_result_method_with_validator(
     validator: Any
 ) -> None:
     """Validate Result<T, E> method calls."""
-    # CRITICAL: Annotate the MethodCall with the resolved Result<T, E> type
-    # This allows the backend to use the correct type during code generation
-    # instead of relying on unreliable LLVM type matching
+    # The backend reads the receiver's Result type from this stamp.
     call.resolved_enum_type = result_type
 
     if call.method not in RESULT_METHOD_ARITY:
@@ -108,7 +107,7 @@ _CHECKS = {"realise": validate_result_realise_method_with_validator,
 
 def is_result_enum(t: Any) -> bool:
     """Whether ``t`` is a concrete ``Result<T, E>`` enum."""
-    return isinstance(t, EnumType) and t.name.startswith("Result<")
+    return isinstance(t, EnumType) and t.generic_base == "Result"
 
 
 def is_builtin_wrapper_enum(t: Any) -> bool:
@@ -117,8 +116,7 @@ def is_builtin_wrapper_enum(t: Any) -> bool:
     Both are ordinary interned enums, so an "is this an enum" test admits them. The
     positions that mean an error VOCABULARY have to ask this as well (CE2086, #668).
     """
-    return isinstance(t, EnumType) and (
-        t.name.startswith("Result<") or t.name.startswith("Maybe<"))
+    return isinstance(t, EnumType) and t.generic_base in ("Result", "Maybe")
 
 
 def result_ok_err(result_enum: EnumType) -> tuple[Type, Type]:
@@ -255,7 +253,7 @@ def intern_wrapper_enum(
     structs = struct_table if struct_table is not None else {}
     resolved = tuple(resolve_type_recursively(t, structs, enums) for t in payloads)
 
-    name = f"{base}<{', '.join(str(t) for t in resolved)}>"
+    name = interned_name(base, resolved)
     variants = make_variants(*resolved)
 
     def build() -> EnumType:

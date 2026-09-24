@@ -392,6 +392,18 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A `Maybe` or `Result` method on a field or an element reads its own payload type**
+  (#815, #769). With no stamp on a `Maybe` call, the backend chose the receiver's type by
+  comparing LLVM layouts, and `Maybe@(i32)`, `Maybe@(i64)` and `Maybe@(f64)` share one: a
+  `Maybe@(i64)[]` element printed `705032704` for `5000000000` in some builds and not in
+  others, by the hash seed, and an `f64`/`i64` pair stopped with CE0017. The backend now
+  reads the receiver's semantic type and never a layout; a receiver with no known type is
+  the internal CE0019.
+- **A consumer type that a binary library keeps private is CE3011** (#761), not a cascade of
+  CE2027/CE2028/CE2106 located in the library's template. The analysis stops after it.
+- **CE0004 or CE3011 on a library's type is not followed by CE2106** (#738) on the binary
+  generic, the source generic and the source concrete paths: the member-read rule steps
+  aside for a contested name.
 - **A pack element that fails its perk constraint is one CE2090** (#797). `many(5, true)`
   against `fn many@(...Ts: Named)` answered a cascade before the CE2090, because the copy
   was made first and its body checked with `bool`. The one constraint check now reads every
@@ -1075,6 +1087,13 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One interned generic name** (#805). `interned_name(base, args)` in
+  `semantics/generics/interned.py` spells every `Base<...>` name, and "is this an instance of
+  X" reads `generic_base` through `generic_base_of` / `is_instance_of` in
+  `semantics/type_predicates.py`. A gate refuses a hand-built name.
+- **The early passes write no inference stamp** (#806). The instantiate pass and the
+  monomorphizer infer through `ReadOnlyInferrer`, which restores every node it touched;
+  1,278 stamps at the entry of `resolve` are now 0.
 - **One copy of an extension or perk signature** (#803). `substitute_signature` in
   `generics/extensions.py` copies the declaration with every field kept; the copies lost
   `self_mode_span`, a parameter's `loc` and `nom_span`.

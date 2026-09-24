@@ -250,4 +250,51 @@ class TypeValidator:
         return types_compatible(self, actual, expected)
 
 
-__all__ = ['TypeValidator']
+class ReadOnlyInferrer(TypeValidator):
+    """The typecheck pass's inference, for a pass that runs BEFORE the typecheck pass (#806).
+
+    The `instantiate` and `monomorphize` passes type a generic call's arguments with it.
+    Inference writes stamps on the nodes it types, and the backend reads those stamps,
+    so an early pass that kept them would leave values read from tables that are not
+    complete yet. This inferrer puts every field of every node under the expression back
+    when the outermost inference returns, and its diagnostics go to a Reporter that
+    nobody reads: the typecheck pass reports them later, for real.
+
+    Only the nodes under the expression are put back. A node that inference builds for
+    itself (the `MethodCall` view of a `DotCall`) is dropped when inference returns.
+    `tests/unit/test_early_inference_writes_no_stamp.py` is the gate.
+    """
+
+    def __init__(self, tables: 'SymbolTables') -> None:
+        super().__init__(Reporter(), tables)
+        self._depth = 0
+
+    def infer_expression_type(self, expr: Expr) -> Optional[Type]:
+        if self._depth:
+            return super().infer_expression_type(expr)
+        saved = _field_values_under(expr)
+        self._depth += 1
+        try:
+            return super().infer_expression_type(expr)
+        finally:
+            self._depth -= 1
+            for node, values in saved:
+                for name, value in values:
+                    setattr(node, name, value)
+
+
+def _field_values_under(root: Expr) -> list:
+    """Every node under `root`, with the value of each of its declared fields."""
+    from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
+
+    saved: list = []
+
+    def visit(node) -> bool:
+        saved.append((node, list(node_fields(node))))
+        return True
+
+    walk_nodes(root, visit)
+    return saved
+
+
+__all__ = ['ReadOnlyInferrer', 'TypeValidator']

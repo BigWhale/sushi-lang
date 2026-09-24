@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Union
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType, StructType
 
@@ -39,8 +40,8 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
     receiver_value = codegen.expressions.emit_expr(receiver)
 
     if may_be_result:
-        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Result<", EnumType)
-        if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Result<"):
+        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Result", EnumType)
+        if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Result"):
             from sushi_lang.backend.generics.results import emit_builtin_result_method
             temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
             if hasattr(expr, 'resolved_enum_type'):
@@ -51,8 +52,8 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
             return emitted
 
     if may_be_maybe:
-        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe<", EnumType)
-        if isinstance(receiver_semantic_type, EnumType) and receiver_semantic_type.name.startswith("Maybe<"):
+        receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe", EnumType)
+        if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Maybe"):
             from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
             temp_expr = MethodCall(receiver=receiver, method=method, args=args, loc=expr.loc)
             emitted = emit_builtin_maybe_method(codegen, temp_expr, receiver_value, receiver_semantic_type, to_i1)
@@ -73,9 +74,9 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
     if not is_builtin_own_method(method):
         return None
 
-    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "Own<", StructType)
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "Own", StructType)
     if not (isinstance(receiver_semantic_type, StructType)
-            and receiver_semantic_type.name.startswith("Own<")):
+            and is_instance_of(receiver_semantic_type, "Own")):
         return None
 
     own_value = None
@@ -99,9 +100,9 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if not is_builtin_hashmap_method(method):
         return None
 
-    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap<", StructType)
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "HashMap", StructType)
     if not (isinstance(receiver_semantic_type, StructType)
-            and receiver_semantic_type.name.startswith("HashMap<")):
+            and is_instance_of(receiver_semantic_type, "HashMap")):
         return None
 
     # `HashMap.new()` is a static call: its receiver is the type name, not a value.
@@ -130,9 +131,9 @@ def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     if not is_builtin_list_method(method):
         return None
 
-    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List<", StructType)
+    receiver_semantic_type = infer_semantic_type(codegen, expr, None, "List", StructType)
     if not (isinstance(receiver_semantic_type, StructType)
-            and receiver_semantic_type.name.startswith("List<")):
+            and is_instance_of(receiver_semantic_type, "List")):
         return None
 
     # `List.new()` / `List.with_capacity()` are static calls: the receiver is the type

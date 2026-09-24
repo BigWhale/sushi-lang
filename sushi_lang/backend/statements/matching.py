@@ -2,6 +2,8 @@
 from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
@@ -227,8 +229,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                     err_type, struct_table=codegen.struct_table.by_name)
                 return result_enum
             else:
-                type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
-                concrete_name = f"{var_type.base_name}<{type_args_str}>"
+                concrete_name = interned_name(var_type.base_name, var_type.type_args)
                 if concrete_name in codegen.enum_table.by_name:
                     return codegen.enum_table.by_name[concrete_name]
 
@@ -261,8 +262,7 @@ def _get_scrutinee_type(codegen: 'LLVMCodegen', scrutinee: 'Expr') -> 'EnumType 
                                     err_type, struct_table=codegen.struct_table.by_name)
                                 return result_enum
                             else:
-                                type_args_str = ", ".join(str(arg) for arg in field_type.type_args)
-                                concrete_name = f"{field_type.base_name}<{type_args_str}>"
+                                concrete_name = interned_name(field_type.base_name, field_type.type_args)
                                 if concrete_name in codegen.enum_table.by_name:
                                     return codegen.enum_table.by_name[concrete_name]
                         elif isinstance(field_type, EnumType):
@@ -569,7 +569,7 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
     from sushi_lang.backend.generics import own as own_module
     from sushi_lang.semantics.generics.own import get_own_element_type
 
-    if not isinstance(own_type, StructType) or not own_type.name.startswith("Own<"):
+    if not isinstance(own_type, StructType) or not is_instance_of(own_type, "Own"):
         raise_internal_error("CE0022", type=str(own_type))
 
     element_type = get_own_element_type(own_type)

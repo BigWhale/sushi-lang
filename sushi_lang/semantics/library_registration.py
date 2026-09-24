@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Protocol
 
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.report import Origin, Reporter
+from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import (
     apply_template_bindings, deserialize_perk_impl)
@@ -100,6 +101,10 @@ class LibraryRegistration:
         # The concrete perk implementations a library ships: registered here for the
         # constraint checks and dispatch, declared and never defined by the backend.
         self.shipped_perk_impls: list['ExtendWithDef'] = []
+        # The private type names a consumer declaration took from the export closure
+        # (#761). The library's template bodies name them, so the analyzer stops before
+        # the per-unit passes measure those bodies against the consumer's layout.
+        self.refused_private_types: list[str] = []
         # One collector for every re-parsed record, built on first use. A fresh
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
@@ -177,7 +182,7 @@ class LibraryRegistration:
         self._register_private_functions(build_units)
         self._register_not_exported()
         self._register_constants(compilation_order)
-        self._register_private_types()
+        self._register_private_types(build_units)
         self._register_perk_impls()
         self._register_generic_perk_impls()
         self._register_generic_functions(build_units)
@@ -444,7 +449,7 @@ class LibraryRegistration:
             decl.link_symbol = record["link_symbol"]
         host_unit.ast.constants.append(decl)
 
-    def _register_private_types(self) -> None:
+    def _register_private_types(self, build_units: set[str]) -> None:
         """Register the private structs and enums the export closure ships.
 
         A private type is not in the manifest's `structs` / `enums` index -- the marker
@@ -459,6 +464,10 @@ class LibraryRegistration:
         reads. Only the record is this arm's, and the SNIPPET says which kind it is --
         reading the concrete tables answered "enum" for a generic struct, because a
         template lands in neither of them (#707).
+
+        A name one of THIS build's units already declared is refused with CE3011, as
+        the public arm refuses it: the transplanted body would otherwise be measured
+        against the consumer's layout (#761).
         """
         for lib_name, _manifest, record in self._template_records("private_types"):
             name = record.get("name")
@@ -466,6 +475,7 @@ class LibraryRegistration:
             if not name or not source:
                 continue
             if name in self.tables.structs.by_name or name in self.tables.enums.by_name:
+                self._reject_private_type_clash(lib_name, name, build_units)
                 continue
 
             snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name)
@@ -485,6 +495,25 @@ class LibraryRegistration:
 
             self.tables.visibility.record(DeclOrigin(
                 kind=kind, name=name, unit_name=lib_name, is_public=False))
+
+    def _reject_private_type_clash(self, lib_name: str, name: str,
+                                   build_units: set[str]) -> None:
+        """CE3011 when a unit of this build declares a name the closure ships privately.
+
+        The consumer's declaration says which KIND the refused name is: a library's
+        private struct takes the name from a consumer enum as firmly as from a struct.
+        A name another library already registered is not this build's, and is no clash.
+        """
+        for kind in ("struct", "enum"):
+            origin = self.tables.visibility.origin(kind, name)
+            if origin is None or origin.unit_name not in build_units:
+                continue
+            reject_library_clash(
+                self.reporter,
+                DeclOrigin(kind=kind, name=name, unit_name=lib_name),
+                origin.name_span, kind=kind, name=name, filename=origin.filename)
+            self.refused_private_types.append(name)
+            return
 
     def _register_perk_impls(self) -> None:
         """Register the concrete perk IMPLEMENTATIONS the libraries ship."""
@@ -631,7 +660,7 @@ class LibraryRegistration:
                 for tp, rec_tp in zip(gfd.type_params, rec_tps, strict=False):
                     if hasattr(tp, "constraints"):
                         tp.constraints = list(rec_tp.get("constraints") or [])
-                    if hasattr(tp, "is_pack") and "is_pack" in rec_tp:
+                    if isinstance(tp, BoundedTypeParam) and "is_pack" in rec_tp:
                         tp.is_pack = bool(rec_tp["is_pack"])
 
             generic_funcs.declare(func_name, gfd)
@@ -641,8 +670,17 @@ class LibraryRegistration:
 
         `key` names both the manifest list and the table: `generic_structs` or
         `generic_enums`.
+
+        A PUBLIC template gets a visibility record with no declaring unit, as the
+        registry's other public types have: a binary library is no unit of the build,
+        and the consumer's scope admits a name no unit declared. The seed runs before
+        the collect loop, so a consumer that then declares the same name is filed as
+        the LOSER, and a rule that reads the winner's shape asks `name_is_contested`
+        before it speaks to it (#738). A private template is the private arm's to
+        record (`_register_private_types`).
         """
         table = getattr(self.tables, key)
+        kind = "struct" if key == "generic_structs" else "enum"
         for lib_name, _manifest, record in self._template_records(key):
             type_name = record["name"]
             if type_name in table.by_name:
@@ -660,3 +698,8 @@ class LibraryRegistration:
 
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
+            declarations = snippet.program.structs if kind == "struct" \
+                else snippet.program.enums
+            node = next((d for d in declarations or [] if d.name == type_name), None)
+            if getattr(node, "is_public", False):
+                self.tables.visibility.record(DeclOrigin(kind=kind, name=type_name))

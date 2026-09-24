@@ -4,6 +4,7 @@ import itertools
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import (
     ArrayType, StructType, DynamicArrayType, EnumType, Type,
@@ -220,9 +221,9 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
         # (`calls/utils.py`), so this predicate and `try_emit_own_method` cannot disagree
         # about what an `Own` / `List` / `HashMap` receiver is. It is AST-only and emits no
         # IR, which is what makes it safe to call from a predicate.
-        from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-        for prefix in CONTAINER_PREFIXES:
-            receiver_type = infer_generic_struct_type(codegen, receiver, prefix)
+        from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+        for base in CONTAINER_BASES:
+            receiver_type = infer_generic_struct_type(codegen, receiver, base)
             if receiver_type is not None:
                 break
     return is_get_out_container(receiver_type)
@@ -347,11 +348,11 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
 def _clone_struct_value_dispatch(codegen: 'LLVMCodegen', value: ir.Value,
                                  value_type: Type) -> ir.Value:
     """The struct kind's clone handler: containers first, then the field-walk clone."""
-    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    if value_type.name.startswith(CONTAINER_PREFIXES):
-        if value_type.name.startswith("Own<"):
+    from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+    if is_instance_of(value_type, *CONTAINER_BASES):
+        if is_instance_of(value_type, "Own"):
             return _clone_own_value(codegen, value, value_type)
-        if value_type.name.startswith("List<"):
+        if is_instance_of(value_type, "List"):
             return _clone_list_value(codegen, value, value_type)
         return _clone_hashmap_value(codegen, value, value_type)
     return _clone_struct_value(codegen, value, value_type)

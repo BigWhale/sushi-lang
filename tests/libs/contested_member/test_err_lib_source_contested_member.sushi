@@ -1,0 +1,14 @@
+# The SOURCE twin with a concrete struct: a consumer's `Point` beside a source
+# library's public `Point` is CE0004, and the consumer's own field read is not
+# measured against the library's shape (the pytest gate
+# tests/unit/test_contested_type_member_read.py pins the absence of CE2106).
+# EXPECT_ERROR_CODE: CE0004
+use <lib/types_lib>
+
+struct Point:
+    i32 mine
+
+fn main() i32:
+    let Point p = Point(1)
+    println("{p.mine}")
+    return Result.Ok(0)

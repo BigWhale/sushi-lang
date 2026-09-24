@@ -36,11 +36,11 @@ def _fn(captures=None) -> FunctionType:
 
 
 def _list(elem="i32") -> StructType:
-    return StructType(name=f"List<{elem}>", fields=())
+    return StructType(name=f"List<{elem}>", fields=(), generic_base="List")
 
 
 def _own(elem="i32") -> StructType:
-    return StructType(name=f"Own<{elem}>", fields=())
+    return StructType(name=f"Own<{elem}>", fields=(), generic_base="Own")
 
 
 # Every type family a value can have at a consuming use. Named so a failure says which.
@@ -183,7 +183,7 @@ fn main() i32:
 
 def test_hashmap_carries_a_clone():
     """The closed hole, asserted from the other side."""
-    hashmap = StructType(name="HashMap<i32, i32>", fields=())
+    hashmap = StructType(name="HashMap<i32, i32>", fields=(), generic_base="HashMap")
     assert builtin_method_exists(hashmap, "clone", NOTHING_DERIVED), (
         "HashMap.clone() is the only escape from CE2411 for a borrowed HashMap; it must exist"
     )

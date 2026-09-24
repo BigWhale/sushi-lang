@@ -602,7 +602,7 @@ def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
     GenericTypeRef a declared one keeps.
     """
     for name, predicate in _WRAPPER_PREDICATES.items():
-        if isinstance(ty, EnumType) and ty.name.startswith(f"{name}<"):
+        if isinstance(ty, EnumType) and ty.generic_base == name:
             return name, predicate
         if isinstance(ty, GenericTypeRef) and ty.base_name == name:
             return name, predicate
@@ -701,6 +701,7 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
     """
     from sushi_lang.semantics.generics.results import is_builtin_wrapper_enum
     from sushi_lang.semantics.namespaces import suggest_member
+    from sushi_lang.semantics.passes.types.visibility import name_is_contested
     from sushi_lang.semantics.typesys import ReferenceType
 
     if validator.namespace_of(node.receiver) is not None:
@@ -714,6 +715,11 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
 
     names = _field_names_of(receiver_type)
     if names is None or node.member in names:
+        return
+    # A struct name this unit declared and LOST holds the winner's fields, not the
+    # unit's own; the loser already heard CE0004 or CE3011 at its declaration (#738).
+    if isinstance(receiver_type, StructType) and name_is_contested(
+            validator, "struct", receiver_type.generic_base or receiver_type.name):
         return
 
     shown = display_type(receiver_type)

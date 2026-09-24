@@ -142,7 +142,7 @@ def _type_param_records(node) -> List[dict]:
         {
             "name": tp.name,
             "constraints": list(getattr(tp, "constraints", None) or []),
-            "is_pack": bool(getattr(tp, "is_pack", False)),
+            "is_pack": bool(tp.is_pack),
         }
         for tp in (node.type_params or [])
     ]

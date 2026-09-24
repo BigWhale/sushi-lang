@@ -1,6 +1,6 @@
 """List<T> iterator method implementation."""
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
@@ -8,9 +8,6 @@ from sushi_lang.backend import gep_utils
 from .types import get_list_len_ptr, get_list_data_ptr, extract_element_type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
-
-if TYPE_CHECKING:
-    pass
 
 
 def emit_list_iter(

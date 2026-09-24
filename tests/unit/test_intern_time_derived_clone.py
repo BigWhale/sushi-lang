@@ -6,7 +6,7 @@ methods, and a clone that arrives instead from a later whole-table walk is a sec
 supplier for one fact -- a supplier a program that drives no late intern never runs.
 
 `List`, `Own` and `HashMap` are the deliberate absence, at both ends: `cloning.py` returns
-early on `CONTAINER_PREFIXES` and the backend passes `exclude_containers=True`, because
+early on `CONTAINER_BASES` and the backend passes `exclude_containers=True`, because
 each keeps its own method path. They are structs, so the invariant below reads the enums.
 """
 from __future__ import annotations

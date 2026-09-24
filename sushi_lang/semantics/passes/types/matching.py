@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Set, Tuple
 
+from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
@@ -252,7 +253,7 @@ def collect_and_validate_patterns(
         if pattern.enum_name == scrutinee_type.name:
             enum_names_match = True
         elif pattern.enum_name in validator.generic_enum_table.by_name:
-            if scrutinee_type.name.startswith(f"{pattern.enum_name}<"):
+            if generic_base_of(scrutinee_type) == pattern.enum_name:
                 enum_names_match = True
 
         if not enum_names_match:
@@ -329,7 +330,7 @@ def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', va
 
             if binding.enum_name != resolved_type.name:
                 if not (binding.enum_name in validator.generic_enum_table.by_name and
-                        resolved_type.name.startswith(f"{binding.enum_name}<")):
+                        generic_base_of(resolved_type) == binding.enum_name):
                     reject_other_enum(
                         validator, binding.enum_name,
                         binding.enum_name_span or binding.loc, resolved_type,

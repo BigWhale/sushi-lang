@@ -1,6 +1,7 @@
 """Loop statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -79,8 +80,8 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
             # foreach and iterate zero entries with no diagnostic.
             from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
             receiver_type = infer_generic_struct_type(
-                codegen, node.iterable.receiver, "HashMap<")
-            if isinstance(receiver_type, StructType) and receiver_type.name.startswith("HashMap<"):
+                codegen, node.iterable.receiver, "HashMap")
+            if isinstance(receiver_type, StructType) and is_instance_of(receiver_type, "HashMap"):
                 is_hashmap_keys_or_values = True
                 hashmap_type = receiver_type
                 hashmap_method = node.iterable.method

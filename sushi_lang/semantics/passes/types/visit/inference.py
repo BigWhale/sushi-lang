@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.extension_targets import (
@@ -438,8 +439,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         from sushi_lang.semantics.generics.types import GenericTypeRef
         if isinstance(actual_type, GenericTypeRef):
-            type_args_str = ", ".join(str(arg) for arg in actual_type.type_args)
-            type_name = f"{actual_type.base_name}<{type_args_str}>"
+            type_name = interned_name(actual_type.base_name, actual_type.type_args)
             if type_name in self.type_validator.struct_table.by_name:
                 actual_type = self.type_validator.struct_table.by_name[type_name]
             elif type_name in self.type_validator.enum_table.by_name:

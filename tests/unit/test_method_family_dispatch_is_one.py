@@ -67,7 +67,7 @@ class _StubDerivedTable:
     def get_method(self, target_type, method_name):
         if not isinstance(target_type, (StructType, EnumType)):
             return None
-        if method_name == "hash" and target_type.name.startswith("HashMap<"):
+        if method_name == "hash" and target_type.generic_base == "HashMap":
             return None
         if method_name in ("hash", "clone"):
             return object()
@@ -79,12 +79,12 @@ class _StubValidator:
     derived_methods = _StubDerivedTable()
 
 
-def _struct(name: str) -> StructType:
-    return StructType(name=name, fields=())
+def _struct(name: str, base: str | None = None) -> StructType:
+    return StructType(name=name, fields=(), generic_base=base)
 
 
-def _enum(name: str) -> EnumType:
-    return EnumType(name=name, variants=())
+def _enum(name: str, base: str | None = None) -> EnumType:
+    return EnumType(name=name, variants=(), generic_base=base)
 
 
 #: One receiver per family, plus the plain struct and enum the derived family answers for.
@@ -95,11 +95,11 @@ _RECEIVERS = (
     BuiltinType.I32,
     BuiltinType.F64,
     BuiltinType.BOOL,
-    _enum("Result<i32, StdError>"),
-    _enum("Maybe<i32>"),
-    _struct("List<i32>"),
-    _struct("HashMap<i32, string>"),
-    _struct("Own<i32>"),
+    _enum("Result<i32, StdError>", "Result"),
+    _enum("Maybe<i32>", "Maybe"),
+    _struct("List<i32>", "List"),
+    _struct("HashMap<i32, string>", "HashMap"),
+    _struct("Own<i32>", "Own"),
     _struct("Point"),
     _enum("Colour"),
     FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,

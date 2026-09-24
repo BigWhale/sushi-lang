@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
@@ -233,7 +234,7 @@ def _emit_struct_destructor(
     """Emit destructor code for a struct."""
     # Check if this is Own<T> which needs special handling
     builder = codegen.builder
-    if value_type.name.startswith("Own<"):
+    if is_instance_of(value_type, "Own"):
         ptr_field_ptr = builder.gep(value_ptr, [
             ZERO_I32,
             ZERO_I32
@@ -256,11 +257,11 @@ def _emit_struct_destructor(
             void_ptr = builder.bitcast(owned_ptr, ir.PointerType(ir.IntType(INT8_BIT_WIDTH)))
             free_func = codegen.get_free_func()
             builder.call(free_func, [void_ptr])
-    elif value_type.name.startswith("List<"):
+    elif is_instance_of(value_type, "List"):
         # List<T>'s data field is a raw T*, not a DynamicArrayType, so the generic field
         # loop below frees nothing. Keep in lockstep with _clone_list_value (#140).
         _emit_list_value_destructor(codegen, value_ptr, value_type)
-    elif value_type.name.startswith("HashMap<"):
+    elif is_instance_of(value_type, "HashMap"):
         # The owning keys/values live in an LLVM-only Entry<K, V> buffer the generic field
         # loop cannot see -- `buckets` is an i32[] placeholder. In lockstep with
         # _clone_hashmap_value (#181).

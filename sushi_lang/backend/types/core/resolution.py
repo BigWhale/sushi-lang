@@ -1,17 +1,13 @@
 """Shared type resolution helpers for mapping and sizing modules."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import (
     UnknownType,
     StructType,
     EnumType,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 def require_named_type(
@@ -55,8 +51,7 @@ def require_generic_instance(
     # Result<T, E> resolves by concrete-name lookup like every other generic -- it is interned
     # into the enum table exactly like Maybe. It used to be special-cased into a ResultType here,
     # which is not an EnumType, so it matched none of the RAII predicates downstream (#179).
-    type_args_str = ", ".join(str(arg) for arg in semantic_type.type_args)
-    concrete_name = f"{semantic_type.base_name}<{type_args_str}>"
+    concrete_name = interned_name(semantic_type.base_name, semantic_type.type_args)
 
     if concrete_name in enum_table:
         return enum_table[concrete_name]

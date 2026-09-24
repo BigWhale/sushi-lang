@@ -126,7 +126,7 @@ class FunctionMonomorphizer:
         """
         tps = list(generic.type_params)
 
-        pack_indices = [i for i, tp in enumerate(tps) if getattr(tp, 'is_pack', False)]
+        pack_indices = [i for i, tp in enumerate(tps) if tp.is_pack]
 
         if not pack_indices:
             if len(type_args) != len(generic.type_params):
@@ -209,7 +209,7 @@ class FunctionMonomorphizer:
         # A trailing pack type-param passes its arity, so the symbol is distinct per pack
         # size and cannot collide with a regular generic of the same base.
         type_params = generic.type_params or []
-        has_pack = bool(type_params) and getattr(type_params[-1], 'is_pack', False)
+        has_pack = bool(type_params) and type_params[-1].is_pack
         if has_pack:
             pack_arity = len(type_args) - (len(type_params) - 1)
             mangled_name = mangle_function_name(
@@ -552,16 +552,15 @@ class FunctionMonomorphizer:
             pass
 
     def _get_arg_inferrer(self, var_types: Dict[str, Type]):
-        """The typecheck pass's TypeValidator over the whole program, seeded with this scope."""
+        """The typecheck pass's inference over the whole program, seeded with this scope.
+
+        One per call, so no call sees the scope of another; it writes no stamp (#806).
+        """
         tables = getattr(self.monomorphizer, "tables", None)
         if tables is None:
             return None
-        inferrer = getattr(self, "_arg_inferrer", None)
-        if inferrer is None:
-            from sushi_lang.internals.report import Reporter
-            from sushi_lang.semantics.passes.types import TypeValidator
-            inferrer = TypeValidator(Reporter(), tables)
-            self._arg_inferrer = inferrer
+        from sushi_lang.semantics.passes.types import ReadOnlyInferrer
+        inferrer = ReadOnlyInferrer(tables)
         inferrer.variable_types = var_types
         return inferrer
 

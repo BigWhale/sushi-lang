@@ -16,9 +16,8 @@ from sushi_lang.semantics.typesys import (
 
 
 OWN_SPELLINGS = [
-    StructType(name="Own<i32>", fields=()),
+    StructType(name="Own<i32>", fields=(), generic_base="Own"),
     GenericTypeRef(base_name="Own", type_args=(BuiltinType.I32,)),
-    UnknownType(name="Own<i32>"),
 ]
 
 
@@ -70,7 +69,8 @@ def test_the_payload_is_read_the_same_way_from_either_spelling():
     from sushi_lang.semantics.typesys import PointerType
 
     interned = StructType(
-        name="Own<i32>", fields=(("value", PointerType(pointee_type=BuiltinType.I32)),))
+        name="Own<i32>", fields=(("value", PointerType(pointee_type=BuiltinType.I32)),),
+        generic_base="Own", generic_args=(BuiltinType.I32,))
     written = GenericTypeRef(base_name="Own", type_args=(BuiltinType.I32,))
 
     assert own_payload_type(interned) is BuiltinType.I32
