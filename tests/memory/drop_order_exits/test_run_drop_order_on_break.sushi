@@ -1,0 +1,23 @@
+# A break destroys the loop body's owning locals in reverse declaration order.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x y\ndrop y\ndrop x\n"
+struct Res:
+    string name
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn broken() i32:
+    while (true):
+        let Res x = Res("x")
+        let Res y = Res("y")
+        println("{x.name} {y.name}")
+        break
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 b = broken().realise(1)
+    return Result.Ok(b)
