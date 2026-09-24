@@ -19,7 +19,7 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
 
     if func_name in {'abs', 'min', 'max'} and args:
         arg_type = args[0].type
-        type_suffix = _get_math_type_suffix(arg_type)
+        type_suffix = _get_math_type_suffix(arg_type, _is_unsigned_argument(codegen, expr.args[0]))
         stdlib_func_name = f"sushi_{func_name}_{type_suffix}"
 
         stdlib_func = declare_stdlib_function(codegen.module, stdlib_func_name, arg_type, [arg_type] * len(args))
@@ -58,20 +58,16 @@ def emit_math_function(codegen: 'LLVMCodegen', expr, func_name: str, to_i1: bool
     return codegen.utils.as_i1(result) if to_i1 else result
 
 
-def _get_math_type_suffix(llvm_type) -> str:
-    """Get the type suffix for polymorphic math functions."""
-    from llvmlite import ir
+def _is_unsigned_argument(codegen: 'LLVMCodegen', arg) -> bool:
+    """An LLVM integer carries no sign, so the signedness comes from the semantic type."""
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type, is_unsigned_type
+    return is_unsigned_type(infer_expr_semantic_type(codegen, arg))
 
-    if isinstance(llvm_type, ir.IntType):
-        bit_width = llvm_type.width
-        if bit_width == 8:
-            return 'i8'
-        elif bit_width == 16:
-            return 'i16'
-        elif bit_width == 32:
-            return 'i32'
-        elif bit_width == 64:
-            return 'i64'
+
+def _get_math_type_suffix(llvm_type, unsigned: bool) -> str:
+    """Get the type suffix for polymorphic math functions."""
+    if isinstance(llvm_type, ir.IntType) and llvm_type.width in (8, 16, 32, 64):
+        return f"{'u' if unsigned else 'i'}{llvm_type.width}"
     elif isinstance(llvm_type, ir.FloatType):
         return 'f32'
     elif isinstance(llvm_type, ir.DoubleType):
