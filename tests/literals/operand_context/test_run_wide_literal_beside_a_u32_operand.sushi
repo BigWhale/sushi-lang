@@ -1,0 +1,12 @@
+# A bare literal operand takes the type of the other operand: 3000000000 beside a
+# u32 is a u32, not an i32 that overflows.
+# EXPECT_STDOUT_EXACT: "u32 eq\nu32 lt\n3000000001\n2147483648\n"
+fn main() i32:
+    let u32 x = 3000000000
+    if (x == 3000000000):
+        println("u32 eq")
+    if (x < 4000000000):
+        println("u32 lt")
+    println("{x + 1}")
+    println("{x & 2147483648}")
+    return Result.Ok(0)

@@ -166,16 +166,14 @@ def _dynamic_array_from_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
 def _field_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     """The declared type of the field a member access reads, or None."""
-    from sushi_lang.backend.expressions.structs import infer_struct_type
-    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.backend.expressions.structs import try_infer_struct_type
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.typesys import UnknownType
 
-    try:
-        owner = infer_struct_type(codegen, expr.receiver)
-    except InternalCompilerError:
-        # A receiver that names no struct -- an FFI namespace, an enum type name. Those
-        # shapes reach this function too, and none of them has a field to read.
+    # A receiver that names no struct -- an alias, an FFI namespace, an enum type name --
+    # has no field to read.
+    owner = try_infer_struct_type(codegen, expr.receiver)
+    if owner is None:
         return None
 
     field_type = owner.get_field_type(expr.member)

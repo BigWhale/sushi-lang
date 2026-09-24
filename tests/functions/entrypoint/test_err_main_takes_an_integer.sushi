@@ -1,0 +1,6 @@
+# main takes `string[] args` or no parameter. An integer parameter used to compile
+# and was always 0.
+# EXPECT_ERROR_CODE: CE0138
+fn main(i32 x) i32:
+    println("x {x}")
+    return Result.Ok(x)

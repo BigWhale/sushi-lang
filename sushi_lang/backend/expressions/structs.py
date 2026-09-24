@@ -13,7 +13,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.backend.expressions.names import resolve_name_semantic_type
 from sushi_lang.backend.ownership import ConsumingUse, consume
-from sushi_lang.internals.errors import InternalCompilerError, raise_internal_error
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -175,8 +175,8 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         return None
 
 
-def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
-    """Resolve a semantic type to a concrete StructType, or None if it is not one."""
+def _struct_named_by(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
+    """The StructType a semantic type names, or None if it names no struct."""
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if isinstance(ty, StructType):
@@ -186,6 +186,17 @@ def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
     if isinstance(ty, GenericTypeRef):
         return codegen.struct_table.by_name.get(interned_name(ty.base_name, ty.type_args))
     return None
+
+
+def _named_struct(codegen: 'LLVMCodegen', ty, strict: bool) -> Optional[StructType]:
+    """The struct `ty` names, or None. A strict miss on an unknown name is CE0020.
+
+    Every other strict miss raises the code of the caller, which knows the position.
+    """
+    found = _struct_named_by(codegen, ty)
+    if found is None and strict and isinstance(ty, UnknownType):
+        raise_internal_error("CE0020", type=ty.name)
+    return found
 
 
 def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
@@ -201,15 +212,15 @@ def _stamped_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructT
     stamped = stamped_semantic_type(codegen, expr)
     if isinstance(stamped, ReferenceType):
         stamped = stamped.referenced_type
-    resolved = _resolve_to_struct(codegen, stamped)
+    resolved = _struct_named_by(codegen, stamped)
     if resolved is None:
         return None
     # Never rebuild a named type -- the table is what a name means (#240).
     return codegen.struct_table.by_name.get(resolved.name, resolved)
 
 
-def _infer_get_element_struct(codegen: 'LLVMCodegen',
-                              expr: Expr) -> Optional[StructType]:
+def _infer_get_element_struct(codegen: 'LLVMCodegen', expr: Expr,
+                              strict: bool) -> Optional[StructType]:
     """Struct type produced by a `.get()` call, or None if this is not one."""
     if getattr(expr, "method", None) != "get":
         return None
@@ -224,49 +235,50 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
         receiver_type = receiver_type.referenced_type
 
     if isinstance(receiver_type, DynamicArrayType):
-        element_struct = _resolve_to_struct(codegen, receiver_type.base_type)
-        if element_struct is not None:
-            return element_struct
-        if isinstance(receiver_type.base_type, UnknownType):
-            raise_internal_error("CE0020", type=receiver_type.base_type.name)
-        raise_internal_error("CE0043", type=str(receiver_type.base_type))
+        found = _named_struct(codegen, receiver_type.base_type, strict)
+        if found is None and strict:
+            raise_internal_error("CE0043", type=str(receiver_type.base_type))
+        return found
 
-    own_struct = _resolve_to_struct(codegen, receiver_type)
+    own_struct = _struct_named_by(codegen, receiver_type)
     if own_struct is None:
-        try:
-            own_struct = infer_struct_type(codegen, receiver)
-        except InternalCompilerError:
-            return None
+        own_struct = try_infer_struct_type(codegen, receiver)
 
     if is_instance_of(own_struct, "Own"):
         from sushi_lang.semantics.generics.own import get_own_element_type
-        return _resolve_to_struct(codegen, get_own_element_type(own_struct))
+        return _struct_named_by(codegen, get_own_element_type(own_struct))
 
     return None
 
 
-def _struct_type_of(codegen: 'LLVMCodegen', var_type) -> StructType:
+def _struct_type_of(codegen: 'LLVMCodegen', var_type, strict: bool) -> Optional[StructType]:
     """The struct a NAMED value's semantic type denotes, whichever spelling it kept."""
     if isinstance(var_type, ReferenceType):
         var_type = var_type.referenced_type
+    found = _named_struct(codegen, var_type, strict)
+    if found is None and strict:
+        raise_internal_error("CE0031", type=str(var_type))
+    return found
 
-    if isinstance(var_type, UnknownType):
-        if var_type.name not in codegen.struct_table.by_name:
-            raise_internal_error("CE0020", type=var_type.name)
-        return codegen.struct_table.by_name[var_type.name]
-    if isinstance(var_type, StructType):
-        return var_type
 
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if isinstance(var_type, GenericTypeRef):
-        struct_name = interned_name(var_type.base_name, var_type.type_args)
-        if struct_name in codegen.struct_table.by_name:
-            return codegen.struct_table.by_name[struct_name]
+def try_infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[StructType]:
+    """The struct type of an expression, or None if the expression is not a struct.
 
-    raise_internal_error("CE0031", type=str(var_type))
+    An alias name (`geo` in `geo.x`) and an enum type name (`Sign` in `Sign.Plus`) are
+    receivers of that kind. The answer is None and no exception, so a caller never
+    catches an internal error to mean "not a struct" (#823).
+    """
+    return _infer_struct(codegen, expr, strict=False)
 
 
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
+    """Infer the struct type of an expression, or raise the internal error of the miss."""
+    found = _infer_struct(codegen, expr, strict=True)
+    assert found is not None, "a strict inference raises on a miss"
+    return found
+
+
+def _infer_struct(codegen: 'LLVMCodegen', expr: Expr, strict: bool) -> Optional[StructType]:
     """Infer the struct type of an expression.
 
     The typecheck pass's stamp answers first, whatever the node kind is. A dispatch of
@@ -286,63 +298,70 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         var_name = expr.id
         var_type = resolve_name_semantic_type(codegen, var_name)
         if var_type is None:
-            raise_internal_error("CE0056", name=var_name)
-        return _struct_type_of(codegen, var_type)
+            if strict:
+                raise_internal_error("CE0056", name=var_name)
+            return None
+        return _struct_type_of(codegen, var_type, strict)
 
     elif isinstance(expr, MemberAccess):
         from sushi_lang.backend.expressions.names import namespaced_storage
         storage = namespaced_storage(codegen, expr)
         if storage is not None:
             # `geo.pair` names a unit variable behind an alias, not a field of `geo`.
-            return _struct_type_of(codegen, storage[2])
-        parent_struct_type = infer_struct_type(codegen, expr.receiver)
+            return _struct_type_of(codegen, storage[2], strict)
+        parent_struct_type = _infer_struct(codegen, expr.receiver, strict)
+        if parent_struct_type is None:
+            return None
         field_type = parent_struct_type.get_field_type(expr.member)
 
         if field_type is None:
-            raise_internal_error("CE0029", struct=parent_struct_type.name, field=expr.member)
+            if strict:
+                raise_internal_error("CE0029", struct=parent_struct_type.name, field=expr.member)
+            return None
 
-        if isinstance(field_type, UnknownType):
-            if field_type.name not in codegen.struct_table.by_name:
-                raise_internal_error("CE0020", type=field_type.name)
-            return codegen.struct_table.by_name[field_type.name]
-        elif isinstance(field_type, StructType):
-            return field_type
-        else:
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            if isinstance(field_type, GenericTypeRef):
-                struct_name = interned_name(field_type.base_name, field_type.type_args)
-                if struct_name in codegen.struct_table.by_name:
-                    return codegen.struct_table.by_name[struct_name]
-
+        found = _named_struct(codegen, field_type, strict)
+        if found is None and strict:
             raise_internal_error("CE0044", type=str(field_type))
+        return found
 
     elif isinstance(expr, MethodCall):
-        inferred = _infer_get_element_struct(codegen, expr)
+        inferred = _infer_get_element_struct(codegen, expr, strict)
         if inferred is not None:
             return inferred
 
-        raise_internal_error("CE0068", method=expr.method)
+        if strict:
+            raise_internal_error("CE0068", method=expr.method)
+        return None
 
     elif isinstance(expr, DotCall):
-        inferred = _infer_get_element_struct(codegen, expr)
+        inferred = _infer_get_element_struct(codegen, expr, strict)
         if inferred is not None:
             return inferred
 
-        raise_internal_error("CE0069", method=expr.method)
+        if strict:
+            raise_internal_error("CE0069", method=expr.method)
+        return None
 
     elif isinstance(expr, IndexAccess):
         # `a[i].field` -- the struct is the indexed array's ELEMENT type, and the stamp
         # above already answered it (#348). This walk stays for an unstamped node.
-        array_type = _indexed_array_type(codegen, expr.array)
+        array_type = _indexed_array_type(codegen, expr.array, strict)
         if isinstance(array_type, (ArrayType, DynamicArrayType)):
-            return _resolve_struct_type(codegen, array_type.base_type, "CE0043")
-        raise_internal_error("CE0043", type=str(array_type))
+            found = _named_struct(codegen, array_type.base_type, strict)
+            if found is None and strict:
+                raise_internal_error("CE0043", type=str(array_type.base_type))
+            return found
+        if strict:
+            raise_internal_error("CE0043", type=str(array_type))
+        return None
 
     else:
-        raise_internal_error("CE0067", expr=type(expr).__name__)
+        if strict:
+            raise_internal_error("CE0067", expr=type(expr).__name__)
+        return None
 
 
-def _indexed_array_type(codegen: 'LLVMCodegen', array_expr: Expr):
+def _indexed_array_type(codegen: 'LLVMCodegen', array_expr: Expr, strict: bool):
     """Semantic type of the array being indexed (a local, or a struct field)."""
     if isinstance(array_expr, Name):
         array_type = codegen.memory.find_semantic_type(array_expr.id)
@@ -350,23 +369,6 @@ def _indexed_array_type(codegen: 'LLVMCodegen', array_expr: Expr):
             array_type = array_type.referenced_type
         return array_type
     if isinstance(array_expr, MemberAccess):
-        parent = infer_struct_type(codegen, array_expr.receiver)
-        return parent.get_field_type(array_expr.member)
+        parent = _infer_struct(codegen, array_expr.receiver, strict)
+        return None if parent is None else parent.get_field_type(array_expr.member)
     return None
-
-
-def _resolve_struct_type(codegen: 'LLVMCodegen', ty, err_code: str) -> StructType:
-    """Resolve a declared type to the concrete StructType it names."""
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if isinstance(ty, StructType):
-        return ty
-    if isinstance(ty, UnknownType):
-        if ty.name not in codegen.struct_table.by_name:
-            raise_internal_error("CE0020", type=ty.name)
-        return codegen.struct_table.by_name[ty.name]
-    if isinstance(ty, GenericTypeRef):
-        struct_name = interned_name(ty.base_name, ty.type_args)
-        if struct_name in codegen.struct_table.by_name:
-            return codegen.struct_table.by_name[struct_name]
-    raise_internal_error(err_code, type=str(ty))

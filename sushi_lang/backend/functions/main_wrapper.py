@@ -87,29 +87,9 @@ class MainFunctionWrapper:
 
         args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
 
-        args_param_index = None
-        for i, param in enumerate(fn.params):
-            if param.name == "args":
-                args_param_index = i
-                break
-
-        if args_param_index is None:
-            raise_internal_error("CE0065")
-
-        user_main_args = []
-        for _i, param in enumerate(fn.params):
-            if param.name == "args":
-                args_struct = self.codegen.builder.load(args_array, name="args_struct")
-                user_main_args.append(args_struct)
-            else:
-                param_type = self.codegen.types.ll_type(param.ty)
-                if hasattr(param_type, 'intrinsic_name') and param_type.intrinsic_name.startswith('i'):
-                    zero_val = ir.Constant(param_type, 0)
-                elif str(param_type).endswith('*'):
-                    zero_val = ir.Constant(param_type, None)
-                else:
-                    zero_val = ir.Constant(param_type, 0)
-                user_main_args.append(zero_val)
+        # The entrypoint pass admits `string[] args` alone (CE0138), so argv is the one
+        # argument.
+        user_main_args = [self.codegen.builder.load(args_array, name="args_struct")]
 
         result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
@@ -156,13 +136,7 @@ class MainFunctionWrapper:
         begin_function_fn(c_main)
         self._unbuffer_libc_stdio()
 
-        user_main_args = []
-        for param in fn.params:
-            param_type = self.codegen.types.ll_type(param.ty)
-            zero_val = self.codegen.utils.get_zero_value(param_type)
-            user_main_args.append(zero_val)
-
-        result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
+        result_struct = self.codegen.builder.call(user_main, [], name="user_main_result")
 
         value_type = self.codegen.types.ll_type(fn.ret)
 
@@ -195,10 +169,8 @@ class MainFunctionWrapper:
         """Create a separate function for the user's main function body."""
         params = params_of_fn(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-        from sushi_lang.backend.generics.result_builder import intern_result
-        std_error = self.codegen.enum_table.by_name.get("StdError")
-        result_type = intern_result(self.codegen, fn.ret, std_error if std_error else fn.ret)
-        ll_ret = self.codegen.types.ll_type(result_type)
+        from sushi_lang.backend.functions.helpers import declared_result_of
+        ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)
         user_main = ir.Function(self.codegen.module, fnty, name="user_main")
@@ -218,7 +190,7 @@ class MainFunctionWrapper:
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
-            emit_default_return_fn(fn.ret)
+            emit_default_return_fn(fn)
 
         end_function_fn()
 

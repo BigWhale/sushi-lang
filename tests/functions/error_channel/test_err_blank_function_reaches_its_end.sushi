@@ -1,0 +1,11 @@
+# A `~` function whose body reaches its end with no return is refused. It used to
+# compile and answer Result.Err, a value the program never wrote.
+# EXPECT_ERROR_CODE: CE0107
+fn say() ~:
+    println("Mostly Harmless")
+
+fn main() i32:
+    match say():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

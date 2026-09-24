@@ -1,0 +1,17 @@
+# A `~ | E` function whose body reaches its end is refused. With a small error
+# payload it used to compile and answer Err(Why.First), a value the program never
+# wrote.
+# EXPECT_ERROR_CODE: CE0107
+enum Why:
+    First
+    Second
+
+fn say() ~ | Why:
+    println("Mostly Harmless")
+
+fn main() i32:
+    match say():
+        Result.Ok(_) -> println("ok")
+        Result.Err(Why.First) -> println("first")
+        Result.Err(Why.Second) -> println("second")
+    return Result.Ok(0)

@@ -1026,8 +1026,17 @@ class SemanticAnalyzer:
                         getattr(func, "ret_span", None) or func.name_span,
                         type=display_type(ret_ty))
 
-        self.main_expects_args = any(
-            param.name == "args"
-            and isinstance(param.ty, DynamicArrayType)
-            and param.ty.base_type == BuiltinType.STRING
-            for param in (mains[0].params if mains else ()))
+        def is_args(param) -> bool:
+            return (param.name == "args"
+                    and isinstance(param.ty, DynamicArrayType)
+                    and param.ty.base_type == BuiltinType.STRING)
+
+        if not self.is_library:
+            for func in mains:
+                wrong = [p for i, p in enumerate(func.params) if i > 0 or not is_args(p)]
+                if wrong:
+                    er.emit(self.reporter, er.ERR.CE0138,
+                            wrong[0].name_span or wrong[0].type_span or func.name_span)
+
+        self.main_expects_args = bool(mains) and [
+            is_args(p) for p in mains[0].params] == [True]

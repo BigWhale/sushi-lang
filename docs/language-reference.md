@@ -33,6 +33,11 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+`main` returns an integer type (`CE0106`) and takes one parameter, `string[] args`, or no
+parameter at all. The type and the name are both part of the rule: `fn main(string[] argv)`,
+`fn main(i32 x)` and `fn main(string[] args, i32 x)` are `CE0138`. `args` holds the program
+name and then each command-line argument, and it is a borrowed view (`CE2410` refuses a move).
+
 ### Lines and Continuation
 
 A statement ends at the end of its line. An expression continues onto the next line only
@@ -357,6 +362,9 @@ fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
         return Result.Err(StdError.Error)
     return Result.Ok(a / b)
 ```
+
+The body must return on every code path, and a `~` function is no exception: it ends with
+`return Result.Ok(~)`. A body that can reach its end is `CE0107`.
 
 ### Parameters
 

@@ -392,6 +392,29 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`.clone()` on a borrowed function value compiles** (#822). A `peek` or `poke`
+  parameter, a `let peek` binding or a `foreach(poke ...)` item of function type was a
+  CE0000 crash on `.clone()`. Every deep clone now enters through `copy_out`, and the gate
+  `tests/unit/test_clone_entry_is_copy_out.py` refuses a direct `emit_value_clone` call
+  outside the clone module.
+- **A bare enum variant is a method receiver** (#823). `Sign.Plus.hash()` was CE0019. The
+  backend reads the variant's enum as the receiver type. The four struct resolvers in
+  `expressions/structs.py` are one, and no module under `backend/expressions/` catches
+  `InternalCompilerError` any more (gate
+  `tests/unit/test_backend_expressions_catch_no_internal_error.py`).
+- **A function body that reaches its end with no `return` is CE0107 for a `~` function
+  too** (#824). `fn say() ~:` with a body of one `println` compiled, and the call answered
+  `Result.Err` in silence. It is refused now. The default return and the user `main` build
+  the function's DECLARED `Result@(T, E)`, so a large `| E` payload is no longer a CE0000
+  crash, with or without a fall-off.
+- **`main` takes `string[] args` or no parameter, and nothing else** (#825). `fn
+  main(string[] argv)` got an empty array, `fn main(peek string[] args)` crashed at run
+  time, and any other list was accepted. Every other parameter list is **CE0138** at the
+  parameter. CE0065 is retired with the zero-fill loops it guarded.
+- **A wide literal beside a wide operand takes the operand's type** (#826). `x ==
+  3000000000` with `x: u32` was a false CE2070. The literal is typed from its sibling
+  before validation, with no stamp left behind; a literal that does not fit the sibling is
+  still CE2073.
 - **`min` and `max` on an unsigned integer compare as unsigned** (#817). `max(200 as u8, 3
   as u8)` answered `3`: the emitter picked the signed callee from the LLVM width alone. It
   now reads the signedness from the semantic type of the argument.

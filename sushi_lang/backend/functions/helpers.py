@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
-from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, UnknownType, ReferenceType, ForeignPtrType
+from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, DynamicArrayType, EnumType
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.ownership import relinquish
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.errors import raise_internal_error, InternalCompilerError
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -19,6 +19,22 @@ def callee_owns_param(param) -> bool:
     return param_mode(param).consumes
 
 
+def declared_result_of(codegen: 'LLVMCodegen', fn: FuncDef) -> EnumType:
+    """The Result a function returns: `Result@(T, E)` as written, else the one `T | E` implies."""
+    from sushi_lang.semantics.generics.results import is_result_enum
+    from sushi_lang.semantics.typesys import GenericTypeRef
+    from sushi_lang.backend.generics.result_builder import implicit_result_of
+    if isinstance(fn.ret, EnumType) and is_result_enum(fn.ret):
+        return fn.ret
+    result = None
+    if not (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result"):
+        result = implicit_result_of(codegen, fn)
+    if result is None:
+        raise InternalCompilerError(
+            "CE0015", message=f"{fn.name}: no Result type for return type {fn.ret!r}")
+    return result
+
+
 class FunctionHelpers:
     """Utility functions for function emission."""
 
@@ -26,46 +42,6 @@ class FunctionHelpers:
         """Initialize helpers with reference to main codegen instance."""
         self.codegen = codegen
         self._variable_types_stack: list[dict] = []
-
-    def is_valid_param_type(self, param_type: Ty) -> bool:
-        """Check if a type is valid for function parameters."""
-        if param_type in (
-            BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-            BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-            BuiltinType.F32, BuiltinType.F64, BuiltinType.BOOL, BuiltinType.STRING
-        ):
-            return True
-
-        if isinstance(param_type, (ArrayType, DynamicArrayType)):
-            return True
-
-        if isinstance(param_type, StructType):
-            return True
-
-        if isinstance(param_type, EnumType):
-            return True
-
-        if isinstance(param_type, ReferenceType):
-            return True
-
-        if isinstance(param_type, ForeignPtrType):
-            return True
-
-        from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(param_type, FunctionType):
-            return True
-
-        if isinstance(param_type, UnknownType):
-            if hasattr(self.codegen, 'struct_table') and param_type.name in self.codegen.struct_table.by_name:
-                return True
-            if hasattr(self.codegen, 'enum_table') and param_type.name in self.codegen.enum_table.by_name:
-                return True
-
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(param_type, GenericTypeRef):
-            return True
-
-        return False
 
     def params_of(self, fn: FuncDef) -> List[Tuple[str, Ty]]:
         """Extract parameter information from function definition."""
@@ -79,9 +55,6 @@ class FunctionHelpers:
 
             if p.ty is None:
                 raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] '{p.name}' has no type")
-
-            if not self.is_valid_param_type(p.ty):
-                raise_internal_error("CE0015", message=f"{fn.name}: param[{idx}] '{p.name}' has invalid type {p.ty!r}")
 
             out.append((p.name, p.ty))
         return out
@@ -97,40 +70,30 @@ class FunctionHelpers:
         return extension_symbol(target_type_name, ext.name,
                                 getattr(ext, "method_type_args", None) or ())
 
-    def emit_default_return(self, ret_type: Ty | None) -> None:
-        """Emit default return value for function without explicit return."""
-        if ret_type is None:
+    def emit_default_return(self, fn: FuncDef) -> None:
+        """Terminate a block that the body left open, with the DECLARED Result.
+
+        CE0107 refuses a body that reaches its end, so no path arrives here: the open
+        block is the merge block of an `if` or a `match` whose every arm returned. The
+        value still has the declared `Result@(T, E)` type, or LLVM refuses the module
+        when the payload of E is larger than the payload of StdError (#824).
+        """
+        if fn.ret is None:
             return
 
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen, cleanup_type='all')
 
-        from sushi_lang.backend.generics.result_builder import intern_result
-        std_error = self.codegen.enum_table.by_name.get("StdError")
-        result_type = intern_result(self.codegen, ret_type, std_error if std_error else ret_type)
-        result_llvm_type = self.codegen.types.ll_type(result_type)
-
-        result_enum_name = str(result_type)
-        if result_enum_name in self.codegen.enum_table.by_name:
-            result_enum = self.codegen.enum_table.by_name[result_enum_name]
-            # Use enum constructor emission for Err()
-            # Result.Err() has no arguments, variant index is 1 (Ok=0, Err=1)
-            variant_index = result_enum.get_variant_index("Err")
-
-            err_result = enum_utils.construct_enum_variant(
-                self.codegen, result_llvm_type, variant_index=variant_index,
-                data=None, name_prefix="Result_Err"
-            )
-
-            self.codegen.builder.ret(err_result)
-        else:
-            value_llvm_type = self.codegen.types.ll_type(ret_type)
-            zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
-            err_result = ir.Constant(result_llvm_type, [
-                ir.Constant(self.codegen.i1, 0),  # is_ok = 0 (Err)
-                zero_value                         # value = zero/default
-            ])
-            self.codegen.builder.ret(err_result)
+        result_type = declared_result_of(self.codegen, fn)
+        err_index = result_type.get_variant_index("Err")
+        if err_index is None:
+            raise InternalCompilerError("CE0015", message=f"{result_type.name} has no Err variant")
+        err_result = enum_utils.construct_enum_variant(
+            self.codegen, self.codegen.types.ll_type(result_type),
+            variant_index=err_index,
+            data=None, name_prefix="Result_Err"
+        )
+        self.codegen.builder.ret(err_result)
 
     def emit_default_return_for_extension(self, ret_type: Ty | None) -> None:
         """Emit default return value for extension method without explicit return."""

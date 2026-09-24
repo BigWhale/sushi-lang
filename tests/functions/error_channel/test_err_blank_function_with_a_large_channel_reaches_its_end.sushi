@@ -1,0 +1,22 @@
+# A `~ | E` function whose body reaches its end is refused, whatever the size of
+# the error payload. A payload larger than the payload of StdError was a CE0000.
+# EXPECT_ERROR_CODE: CE0107
+struct Big:
+    i64 a
+    i64 b
+    i64 c
+    i64 d
+    i64 e
+
+enum BigErr:
+    Huge(Big)
+    Small
+
+fn say() ~ | BigErr:
+    println("Mostly Harmless")
+
+fn main() i32:
+    match say():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# The user main answers its DECLARED Result: an error payload larger than the
+# payload of StdError must not change the layout of the value main returns.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+struct Big:
+    i64 a
+    i64 b
+    i64 c
+    i64 d
+    i64 e
+
+enum BigErr:
+    Huge(Big)
+    Small
+
+fn main() i32 | BigErr:
+    println("Mostly Harmless")
+    return Result.Err(BigErr.Huge(Big(1, 2, 3, 4, 5)))
