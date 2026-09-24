@@ -52,13 +52,6 @@ def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Valu
     raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
 
 
-def _ensure_i32(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
-    """Efficiently convert value to i32, avoiding redundant conversions."""
-    if isinstance(val.type, ir.IntType) and val.type.width == 32:
-        return val
-    return codegen.utils.as_i32(val)
-
-
 def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
     """Emit binary operation with proper type handling."""
     op = expr.op
@@ -99,30 +92,30 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
             i1v = codegen.runtime.strings.emit_string_order(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
-    is_float = str(lhs.type) in ('double', 'float')
-    if is_float:
+    if isinstance(lhs.type, (ir.FloatType, ir.DoubleType)):
         i1v = codegen.builder.fcmp_ordered(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
-    # Integer comparisons at operand width. The typecheck pass's strict same-type rule
-    # (CE2510) guarantees equal widths; the i32 squeeze is kept only as a
-    # defensive fallback for mismatched widths (it would truncate i64).
-    if (isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType)
-            and lhs.type.width == rhs.type.width):
-        from .type_utils import infer_expr_semantic_type, is_unsigned_type
-        sem = infer_expr_semantic_type(codegen, expr.left)
-        if sem is None:
-            sem = infer_expr_semantic_type(codegen, expr.right)
-        if sem is not None and is_unsigned_type(sem):
-            i1v = codegen.builder.icmp_unsigned(op, lhs, rhs)
-        else:
-            i1v = codegen.builder.icmp_signed(op, lhs, rhs)
-        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+    for operand in (lhs, rhs):
+        if not isinstance(operand.type, ir.IntType):
+            raise_internal_error("CE0017", src=str(operand.type), dst="an integer comparison operand")
+    _require_one_width(op, lhs, rhs)
 
-    lhs_i32 = _ensure_i32(codegen, lhs)
-    rhs_i32 = _ensure_i32(codegen, rhs)
-    i1v = codegen.builder.icmp_signed(op, lhs_i32, rhs_i32)
+    from .type_utils import infer_expr_semantic_type, is_unsigned_type
+    sem = infer_expr_semantic_type(codegen, expr.left)
+    if sem is None:
+        sem = infer_expr_semantic_type(codegen, expr.right)
+    if sem is not None and is_unsigned_type(sem):
+        i1v = codegen.builder.icmp_unsigned(op, lhs, rhs)
+    else:
+        i1v = codegen.builder.icmp_signed(op, lhs, rhs)
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
+
+def _require_one_width(op: str, left: ir.Value, right: ir.Value) -> None:
+    """Stop on two operand types: CE2510 refuses a mixed pair before the backend."""
+    if left.type != right.type:
+        raise_internal_error("CE0139", op=op, left=str(left.type), right=str(right.type))
 
 
 def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Value, left_type: 'Optional[Type]' = None) -> ir.Value:
@@ -132,9 +125,7 @@ def emit_arithmetic(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.V
     integer operator of its own: the constant evaluator is the one compile-time home
     of the semantics, and LLVM folds the instruction at run time's level (#681).
     """
-    is_float = str(left.type) in ('double', 'float')
-
-    if is_float:
+    if isinstance(left.type, (ir.FloatType, ir.DoubleType)):
         float_ops = {
             "+": codegen.builder.fadd,
             "-": codegen.builder.fsub,
@@ -169,15 +160,7 @@ def emit_bitwise(codegen: 'LLVMCodegen', op: str, left: ir.Value, right: ir.Valu
             and isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType)):
         return _emit_shift(codegen, op, left, right, left_type)
 
-    # For & | ^ the widths already agree: a mixed pair is CE2510 in the typecheck
-    # pass. This reconciliation was once the only thing standing between mixed
-    # operands and the binary, and it truncated silently (#438).
-    if left.type != right.type:
-        if isinstance(left.type, ir.IntType) and isinstance(right.type, ir.IntType):
-            if left.type.width > right.type.width:
-                right = codegen.builder.zext(right, left.type)
-            elif left.type.width < right.type.width:
-                right = codegen.builder.trunc(right, left.type)
+    _require_one_width(op, left, right)
 
     bitwise_ops = {
         "&": codegen.builder.and_,
