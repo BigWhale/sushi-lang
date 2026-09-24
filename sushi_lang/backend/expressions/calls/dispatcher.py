@@ -1,6 +1,5 @@
 """Main call dispatcher for function and method calls."""
 from __future__ import annotations
-import itertools
 from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
@@ -162,21 +161,15 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-_ARG_TEMP_SEQ = itertools.count()
-
-
-def _park_argument_temp(codegen: 'LLVMCodegen', value: ir.Value, resolved) -> None:
+def _park_argument_temp(codegen: 'LLVMCodegen', arg_expr, value: ir.Value, resolved) -> None:
     """Give a caller-kept argument temporary an owner, so scope exit frees it once."""
+    from sushi_lang.backend.expressions.memory import own_temporary
     ll_type = codegen.types.ll_type(resolved)
     if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
         value = codegen.builder.load(value, name="arg_temp_val")
     elif value.type != ll_type:
         return
-
-    name = f"__arg_temp_{next(_ARG_TEMP_SEQ)}"
-    slot = codegen.memory.create_local(name, value.type, value, resolved,
-                                       register_cleanup=False)
-    codegen.memory.register_owning_value(name, resolved, slot)
+    own_temporary(codegen, arg_expr, value, resolved, prefix="__arg_temp")
 
 
 def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
@@ -197,7 +190,7 @@ def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
                               ConsumingUse.CALL_ARG)
         elif (resolved is not None and needs_cleanup(codegen, resolved)
                 and expression_is_temporary(codegen, arg_expr)):
-            _park_argument_temp(codegen, args[i], resolved)
+            _park_argument_temp(codegen, arg_expr, args[i], resolved)
 
 
 def consume_receiver(codegen: 'LLVMCodegen', expr, value: ir.Value) -> ir.Value:

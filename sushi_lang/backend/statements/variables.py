@@ -1,10 +1,9 @@
 """Variable lifecycle statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from sushi_lang.backend.destructors import destroy_old_value
+from sushi_lang.backend.destructors import destroy_old_value, resolve_named_type
 from sushi_lang.backend.ownership import ConsumingUse, bind, consume
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ownership import is_own_type
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
 
 def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
     """Emit variable declaration with initialization."""
-    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType, StructType, UnknownType
+    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
     from sushi_lang.semantics.ast import ArrayLiteral
 
     blk = codegen.builder.block
@@ -45,23 +44,9 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
     else:
         ll_type = codegen.types.ll_type(stmt.ty)
 
-        semantic_type = stmt.ty
-
-        if isinstance(stmt.ty, StructType):
-            semantic_type = stmt.ty
-        elif isinstance(stmt.ty, UnknownType):
-            # Resolving to a concrete EnumType is what lets create_local register an
-            # owning enum local for RAII cleanup; without it they leaked (#139).
-            type_name = stmt.ty.name
-            if type_name in codegen.struct_table.by_name:
-                semantic_type = codegen.struct_table.by_name[type_name]
-            elif type_name in codegen.enum_table.by_name:
-                semantic_type = codegen.enum_table.by_name[type_name]
-        elif isinstance(stmt.ty, str):
-            if stmt.ty in codegen.struct_table.by_name:
-                semantic_type = codegen.struct_table.by_name[stmt.ty]
-            elif stmt.ty in codegen.enum_table.by_name:
-                semantic_type = codegen.enum_table.by_name[stmt.ty]
+        # Resolving a named type to its concrete EnumType is what lets an owning enum
+        # local be registered for RAII cleanup; without it they leaked (#139).
+        semantic_type = resolve_named_type(codegen, stmt.ty)
 
         # Registration is DEFERRED until the seam has spoken (#242): whether a `let` owns
         # its value is `bind()`'s answer, and that needs the initializer emitted first.
@@ -92,12 +77,7 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
             codegen.builder.store(casted_rhs, slot)
 
         if owns:
-            codegen.memory.register_local_cleanup(stmt.name, semantic_type, slot)
-            if isinstance(semantic_type, StructType) and hasattr(codegen, 'dynamic_arrays'):
-                if is_own_type(semantic_type):
-                    codegen.dynamic_arrays.register_own(stmt.name, semantic_type, slot)
-                elif codegen.dynamic_arrays.is_list_type(semantic_type):
-                    codegen.dynamic_arrays.register_list(stmt.name, semantic_type, slot)
+            codegen.memory.register_owning_value(stmt.name, semantic_type, slot)
 
 
 def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
