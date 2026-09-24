@@ -24,7 +24,7 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen') -> None:
 
     # A `??` inside a print argument leaves through here, not the frame's straight-line
     # pop, so the buffers built before the propagation had no free at all (#295).
-    codegen.emit_string_temp_frame_cleanup_all()
+    codegen.print_frames.free_all_on_early_exit()
 
 
 def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['ir.Block', 'ir.Block', 'ir.Block']:

@@ -335,9 +335,9 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     if perk_method is None:
         return None
 
-    from sushi_lang.semantics.generics.name_mangling import sanitize_extension_receiver
-    lang_type = str(semantic_type)
-    func_name = f"{sanitize_extension_receiver(lang_type)}_{expr.method}"
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+    func_name = extension_symbol(str(semantic_type), expr.method,
+                                 getattr(expr, "callee_method_type_args", None) or ())
 
     llvm_fn = codegen.funcs.get(func_name)
     if llvm_fn is None:

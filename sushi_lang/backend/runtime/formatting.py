@@ -283,7 +283,7 @@ class FormattingOperations:
         buffer = emit_malloc(self.codegen, self.codegen.builder, buffer_size)
         # If emitted inside a print/println argument, this to-string buffer is a temporary
         # to free after output (#141). No-op elsewhere.
-        self.codegen.register_string_temp(buffer)
+        self.codegen.print_frames.register_data(buffer)
         return buffer
 
     def _prepare_integer_for_sprintf(

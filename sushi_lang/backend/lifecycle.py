@@ -130,10 +130,7 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
         caches = codegen._dtor_funcs
         symbol = lifecycle_symbol("__sushi_dtor_", value_type)
     elif half == "clone":
-        caches = getattr(codegen, "_clone_funcs", None)
-        if caches is None:
-            caches = {}
-            codegen._clone_funcs = caches
+        caches = codegen._clone_funcs
         symbol = lifecycle_symbol("__sushi_clone_", value_type)
     else:
         raise AssertionError(f"unknown lifecycle half: {half}")
@@ -161,7 +158,7 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
         saved_stack = codegen._dtor_inprogress
         codegen._dtor_inprogress = [key]
     else:
-        saved_stack = getattr(codegen, "_clone_inprogress", None)
+        saved_stack = codegen._clone_inprogress
         codegen._clone_inprogress = [key]
     codegen.builder, codegen.func = fb, fn
     try:
@@ -180,7 +177,7 @@ def get_or_emit_lifecycle_func(codegen: 'LLVMCodegen', value_type: Type,
         if half == "destroy":
             codegen._dtor_inprogress = saved_stack
         else:
-            codegen._clone_inprogress = saved_stack if saved_stack is not None else []
+            codegen._clone_inprogress = saved_stack
     if half == "destroy":
         fb.ret_void()
     return fn
