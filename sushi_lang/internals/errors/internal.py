@@ -240,9 +240,9 @@ _add(ErrorMessage("CE0064", Severity.ERROR,
     "C-style main function not found",
     Category.INTERNAL, "Generated C main wrapper not found in module."))
 
-_add(ErrorMessage("CE0065", Severity.ERROR,
-    "args parameter not found in main function",
-    Category.INTERNAL, "Main function parameter structure invalid."))
+# CE0065 ("args parameter not found in main function") was RETIRED by the ruling on #825
+# (2026-09-24). The entrypoint pass now refuses every parameter list but `string[] args` and
+# none (CE0138), so the back end no longer searches the parameters for `args`.
 
 
 # Type Inference (CE0067-CE0070)

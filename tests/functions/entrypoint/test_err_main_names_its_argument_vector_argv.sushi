@@ -1,0 +1,6 @@
+# main takes `string[] args` or no parameter, and the name is part of the rule. A
+# `string[] argv` used to compile and was always an empty array.
+# EXPECT_ERROR_CODE: CE0138
+fn main(string[] argv) i32:
+    println("n {argv.len()}")
+    return Result.Ok(0)

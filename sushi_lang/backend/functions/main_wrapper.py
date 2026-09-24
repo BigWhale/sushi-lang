@@ -87,29 +87,9 @@ class MainFunctionWrapper:
 
         args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
 
-        args_param_index = None
-        for i, param in enumerate(fn.params):
-            if param.name == "args":
-                args_param_index = i
-                break
-
-        if args_param_index is None:
-            raise_internal_error("CE0065")
-
-        user_main_args = []
-        for _i, param in enumerate(fn.params):
-            if param.name == "args":
-                args_struct = self.codegen.builder.load(args_array, name="args_struct")
-                user_main_args.append(args_struct)
-            else:
-                param_type = self.codegen.types.ll_type(param.ty)
-                if hasattr(param_type, 'intrinsic_name') and param_type.intrinsic_name.startswith('i'):
-                    zero_val = ir.Constant(param_type, 0)
-                elif str(param_type).endswith('*'):
-                    zero_val = ir.Constant(param_type, None)
-                else:
-                    zero_val = ir.Constant(param_type, 0)
-                user_main_args.append(zero_val)
+        # The entrypoint pass admits `string[] args` alone (CE0138), so argv is the one
+        # argument.
+        user_main_args = [self.codegen.builder.load(args_array, name="args_struct")]
 
         result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
@@ -156,13 +136,7 @@ class MainFunctionWrapper:
         begin_function_fn(c_main)
         self._unbuffer_libc_stdio()
 
-        user_main_args = []
-        for param in fn.params:
-            param_type = self.codegen.types.ll_type(param.ty)
-            zero_val = self.codegen.utils.get_zero_value(param_type)
-            user_main_args.append(zero_val)
-
-        result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
+        result_struct = self.codegen.builder.call(user_main, [], name="user_main_result")
 
         value_type = self.codegen.types.ll_type(fn.ret)
 

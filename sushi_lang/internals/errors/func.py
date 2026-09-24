@@ -139,6 +139,10 @@ _add(ErrorMessage("CE0136", Severity.ERROR,
     "internal error: the AST walk has no arm for node '{node}'",
     Category.INTERNAL, "semantics/visitors.py dispatches on a method name it BUILDS from the class name, and RecursiveVisitor.generic_visit answered a miss with a bare `pass`. A node kind that ast.py added was therefore skipped in SILENCE by every consumer -- StatementValidator, ExpressionValidator and TypeInferenceVisitor -- and a class RENAME read exactly the same way (#639). Expand and Lambda were both missing an arm. A node kind a PARENT arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED_IN_PARENT and never arrives here. tests/unit/test_visitor_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
 
+_add(ErrorMessage("CE0138", Severity.ERROR,
+    "main() takes one parameter, `string[] args`, or no parameter",
+    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
+
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",
     Category.FUNC, "A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so nothing was called ON: there is no receiver to declare a mode for and none to read in the body. ONE code for TWO positions, because it is one fault -- a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of `self` in the body -- and the caret sits on whichever one was written. Drop the `static` marker to get an instance method, whose `self` is implicit, or take the value as an ordinary parameter."))
