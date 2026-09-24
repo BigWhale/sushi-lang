@@ -83,11 +83,9 @@ class InstantiationCollector:
             func_table=self.func_table or {},
         )
 
-        # Build the typecheck pass's real inferrer over the same tables, with a discard reporter so
-        # any diagnostics it raises never reach the user (they belong to the typecheck pass, which
-        # runs later and emits them for real). It shares this collector's variable_types
-        # dict, so the scope the collector builds as it walks is the scope the inferrer
-        # sees. Constructed only when the whole SymbolTables is available.
+        # The typecheck pass's inference, read-only (#806). It shares this collector's
+        # variable_types dict, so the scope the collector builds as it walks is the scope
+        # the inferrer sees. Constructed only when the whole SymbolTables is available.
         type_validator = self._build_shared_inferrer()
 
         expression_scanner = ExpressionScanner(
@@ -233,12 +231,11 @@ class InstantiationCollector:
                 return
 
     def _build_shared_inferrer(self):
-        """The typecheck pass's TypeValidator over the same tables, wired to discard diagnostics."""
+        """The typecheck pass's inference over the same tables: no diagnostic, no stamp."""
         if self.tables is None:
             return None
-        from sushi_lang.internals.report import Reporter
-        from sushi_lang.semantics.passes.types import TypeValidator
+        from sushi_lang.semantics.passes.types import ReadOnlyInferrer
 
-        validator = TypeValidator(Reporter(), self.tables)
+        validator = ReadOnlyInferrer(self.tables)
         validator.variable_types = self.variable_types
         return validator

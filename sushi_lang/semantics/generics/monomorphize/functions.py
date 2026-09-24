@@ -552,16 +552,15 @@ class FunctionMonomorphizer:
             pass
 
     def _get_arg_inferrer(self, var_types: Dict[str, Type]):
-        """The typecheck pass's TypeValidator over the whole program, seeded with this scope."""
+        """The typecheck pass's inference over the whole program, seeded with this scope.
+
+        One per call, so no call sees the scope of another; it writes no stamp (#806).
+        """
         tables = getattr(self.monomorphizer, "tables", None)
         if tables is None:
             return None
-        inferrer = getattr(self, "_arg_inferrer", None)
-        if inferrer is None:
-            from sushi_lang.internals.report import Reporter
-            from sushi_lang.semantics.passes.types import TypeValidator
-            inferrer = TypeValidator(Reporter(), tables)
-            self._arg_inferrer = inferrer
+        from sushi_lang.semantics.passes.types import ReadOnlyInferrer
+        inferrer = ReadOnlyInferrer(tables)
         inferrer.variable_types = var_types
         return inferrer
 
