@@ -6,7 +6,8 @@ import llvmlite.ir as ir
 from llvmlite import binding as llvm
 
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import Type, BuiltinType
+from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType
 from sushi_lang.internals import errors as er
 
 from .intrinsics.utf8_count import emit_utf8_count_intrinsic
@@ -69,57 +70,79 @@ from .methods.parse import (
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-@dataclass
+@dataclass(frozen=True)
 class MethodSpec:
-    """Specification for a string method's signature."""
+    """One string method's row: the arguments after the receiver, and the return (#828).
+
+    The return-type reader and the back end both read this row, and the back end turns
+    each Sushi type into its LLVM type through `llvm_value_type`.
+    """
     name: str
-    arg_count: int
-    arg_types: list[BuiltinType]  # Expected types for each argument
+    arg_types: tuple
+    returns: Any
+
+    @property
+    def arg_count(self) -> int:
+        return len(self.arg_types)
 
 
-# Method specification registry - single source of truth for all string method signatures
-# Note: is_empty is NOT included here as it's an inline intrinsic, not a stdlib method
-METHOD_SPECS = {
-    "len": MethodSpec("string.len", 0, []),
-    "size": MethodSpec("string.size", 0, []),
-    "upper": MethodSpec("string.upper", 0, []),
-    "lower": MethodSpec("string.lower", 0, []),
-    "cap": MethodSpec("string.cap", 0, []),
-    "trim": MethodSpec("string.trim", 0, []),
-    "tleft": MethodSpec("string.tleft", 0, []),
-    "tright": MethodSpec("string.tright", 0, []),
-    "to_bytes": MethodSpec("string.to_bytes", 0, []),
-    "reverse": MethodSpec("string.reverse", 0, []),
+_S, _I32, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.BOOL
 
-    "concat": MethodSpec("string.concat", 1, [BuiltinType.STRING]),
-    "contains": MethodSpec("string.contains", 1, [BuiltinType.STRING]),
-    "find": MethodSpec("string.find", 1, [BuiltinType.STRING]),
-    "find_last": MethodSpec("string.find_last", 1, [BuiltinType.STRING]),
-    "count": MethodSpec("string.count", 1, [BuiltinType.STRING]),
-    "starts_with": MethodSpec("string.starts_with", 1, [BuiltinType.STRING]),
-    "ends_with": MethodSpec("string.ends_with", 1, [BuiltinType.STRING]),
-    "strip_prefix": MethodSpec("string.strip_prefix", 1, [BuiltinType.STRING]),
-    "strip_suffix": MethodSpec("string.strip_suffix", 1, [BuiltinType.STRING]),
 
-    "sleft": MethodSpec("string.sleft", 1, [BuiltinType.I32]),
-    "sright": MethodSpec("string.sright", 1, [BuiltinType.I32]),
-    "char_at": MethodSpec("string.char_at", 1, [BuiltinType.I32]),
-    "repeat": MethodSpec("string.repeat", 1, [BuiltinType.I32]),
+def _maybe(payload: BuiltinType) -> GenericTypeRef:
+    return GenericTypeRef(base_name="Maybe", type_args=(payload,))
 
-    "s": MethodSpec("string.s", 2, [BuiltinType.I32, BuiltinType.I32]),
-    "ss": MethodSpec("string.ss", 2, [BuiltinType.I32, BuiltinType.I32]),
 
-    "split": MethodSpec("string.split", 1, [BuiltinType.STRING]),
-    "join": MethodSpec("string.join", 1, []),
+def _spec(name: str, args: tuple, returns: Any) -> MethodSpec:
+    return MethodSpec(f"string.{name}", args, returns)
 
-    "replace": MethodSpec("string.replace", 2, [BuiltinType.STRING, BuiltinType.STRING]),
-    "pad_left": MethodSpec("string.pad_left", 2, [BuiltinType.I32, BuiltinType.STRING]),
-    "pad_right": MethodSpec("string.pad_right", 2, [BuiltinType.I32, BuiltinType.STRING]),
 
-    "to_i32": MethodSpec("string.to_i32", 0, []),
-    "to_i64": MethodSpec("string.to_i64", 0, []),
-    "to_f64": MethodSpec("string.to_f64", 0, []),
-}
+# The ONE spelling of every string method's signature.
+# Note: is_empty and clone are NOT here: they are inline intrinsics, not stdlib methods.
+METHOD_SPECS = {name: _spec(name, args, returns) for name, args, returns in (
+    ("len", (), _I32),
+    ("size", (), _I32),
+    ("upper", (), _S),
+    ("lower", (), _S),
+    ("cap", (), _S),
+    ("trim", (), _S),
+    ("tleft", (), _S),
+    ("tright", (), _S),
+    ("to_bytes", (), DynamicArrayType(BuiltinType.U8)),
+    ("reverse", (), _S),
+
+    ("concat", (_S,), _S),
+    ("contains", (_S,), _BOOL),
+    ("find", (_S,), _maybe(_I32)),
+    ("find_last", (_S,), _maybe(_I32)),
+    ("count", (_S,), _I32),
+    ("starts_with", (_S,), _BOOL),
+    ("ends_with", (_S,), _BOOL),
+    ("strip_prefix", (_S,), _S),
+    ("strip_suffix", (_S,), _S),
+
+    ("sleft", (_I32,), _S),
+    ("sright", (_I32,), _S),
+    ("char_at", (_I32,), _S),
+    ("repeat", (_I32,), _S),
+
+    ("s", (_I32, _I32), _S),
+    ("ss", (_I32, _I32), _S),
+
+    ("split", (_S,), DynamicArrayType(_S)),
+    ("join", (DynamicArrayType(_S),), _S),
+
+    ("replace", (_S, _S), _S),
+    ("pad_left", (_I32, _S), _S),
+    ("pad_right", (_I32, _S), _S),
+
+    ("to_i32", (), _maybe(_I32)),
+    ("to_i64", (), _maybe(BuiltinType.I64)),
+    ("to_f64", (), _maybe(BuiltinType.F64)),
+)}
+
+# The inline intrinsics answer here, beside the rows.
+_INLINE_RETURNS = {"is_empty": _BOOL, "clone": _S}
 
 
 def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any, validator: Any = None) -> None:
@@ -129,11 +152,12 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any
                name=spec.name, expected=spec.arg_count, got=len(call.args))
         return
 
-    # Validate argument types if validator is available. strict=False is load-bearing:
-    # a spec may list fewer arg_types than arg_count (join declares 1 arg, [] types --
-    # its string[] argument has no entry), so this zip validates only the typed prefix.
+    # Validate argument types if validator is available. Only a scalar parameter is
+    # checked here: `join`'s string[] argument is not, as before the row held it.
     if validator:
-        for i, (arg, expected_type) in enumerate(zip(call.args, spec.arg_types, strict=False)):
+        for i, (arg, expected_type) in enumerate(zip(call.args, spec.arg_types, strict=True)):
+            if not isinstance(expected_type, BuiltinType):
+                continue
             validator.validate_expression(arg)
             arg_type = validator.infer_expression_type(arg)
             if arg_type is not None and arg_type != expected_type:
@@ -165,35 +189,15 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:
-    """Get the return type of a built-in string method.
+    """Get the return type of a built-in string method, from its row.
 
     Total over every string method: a Maybe-returning one answers a GenericTypeRef
-    spelling, which a caller with an enum table interns (the table has none). The
-    former None special cases made every caller keep a private copy of those arms
-    (#269).
+    spelling, which a caller with an enum table interns (the table has none) (#269).
     """
-    from sushi_lang.semantics.typesys import DynamicArrayType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if method_name in {"len", "size", "count"}:
-        return BuiltinType.I32
-    elif method_name in {"is_empty", "contains", "starts_with", "ends_with"}:
-        return BuiltinType.BOOL
-    elif method_name in {"clone", "concat", "s", "sleft", "sright", "char_at", "ss",
-                         "upper", "lower", "cap", "trim", "tleft", "tright", "replace",
-                         "join", "pad_left", "pad_right", "strip_prefix", "strip_suffix",
-                         "repeat", "reverse"}:
-        return BuiltinType.STRING
-    elif method_name == "to_bytes":
-        return DynamicArrayType(BuiltinType.U8)
-    elif method_name == "split":
-        return DynamicArrayType(BuiltinType.STRING)
-    elif method_name in {"find", "find_last", "to_i32"}:
-        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I32,))
-    elif method_name == "to_i64":
-        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.I64,))
-    elif method_name == "to_f64":
-        return GenericTypeRef(base_name="Maybe", type_args=(BuiltinType.F64,))
-    return None
+    spec = METHOD_SPECS.get(method_name)
+    if spec is not None:
+        return spec.returns
+    return _INLINE_RETURNS.get(method_name)
 
 
 def generate_module_ir() -> ir.Module:

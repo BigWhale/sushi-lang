@@ -85,24 +85,10 @@ def _get_param_specs():
     if _param_specs_cache is not None:
         return _param_specs_cache
 
-    from sushi_lang.semantics.typesys import BuiltinType
-    I32, U64, F64 = BuiltinType.I32, BuiltinType.U64, BuiltinType.F64
+    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
 
-    specs = {}
-
-    for fn in ("abs", "min", "max"):
-        specs[("math", fn)] = None
-    for fn in ("sqrt", "floor", "ceil", "round", "trunc",
-               "sin", "cos", "tan", "asin", "acos", "atan",
-               "sinh", "cosh", "tanh", "log", "log2", "log10", "exp", "exp2"):
-        specs[("math", fn)] = [F64]
-    for fn in ("pow", "atan2", "hypot"):
-        specs[("math", fn)] = [F64, F64]
-
-    for fn in ("rand", "rand_f64"):
-        specs[("random", fn)] = []
-    specs[("random", "rand_range")] = [I32, I32]
-    specs[("random", "srand")] = [U64]
+    # A math FAMILY takes any of its types, so the registry holds no one spec for it.
+    specs = {("math", name): None for name in MATH_FAMILIES}
 
     # A module with a signature table keeps its parameter types in it, beside its
     # generators, and every reader takes its row from there (#550).
@@ -118,9 +104,12 @@ def _get_param_specs():
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798).
 
-    `<math>` and `<random>` have no table: nothing of theirs answers a Result.
+    The math FAMILIES (`abs`, `min`, `max`) have one row per argument type and are not
+    here: `math.family_row` builds the row for the type a call reaches.
     """
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.math import MATH_SIGNATURES
+    from sushi_lang.sushi_stdlib.src.random import RANDOM_SIGNATURES
     from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.env import ENV_SIGNATURES
     from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
@@ -132,6 +121,8 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
         "sys/process": PROCESS_SIGNATURES,
         "io/files": FILES_SIGNATURES,
         "net/socket": SOCKET_SIGNATURES,
+        "math": MATH_SIGNATURES,
+        "random": RANDOM_SIGNATURES,
     }
 
 
@@ -231,6 +222,7 @@ class StdlibRegistry:
     ) -> None:
         """Discover functions using heuristic approach."""
         from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
+        from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
         from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_FUNCTIONS
 
         tables = signature_tables()
@@ -238,16 +230,8 @@ class StdlibRegistry:
             "time": list(tables["time"]),
             "env": list(tables["sys/env"]),
             "process": list(tables["sys/process"]),
-            "math": [
-                "abs", "min", "max", "sqrt", "pow", "floor", "ceil", "round", "trunc",
-                "sin", "cos", "tan",
-                "asin", "acos", "atan", "atan2",
-                "sinh", "cosh", "tanh",
-                "log", "log2", "log10",
-                "exp", "exp2",
-                "hypot",
-            ],
-            "random": ["rand", "rand_range", "srand", "rand_f64"],
+            "math": [*MATH_FAMILIES, *tables["math"]],
+            "random": list(tables["random"]),
             # `files` and `socket` READ their lists rather than repeating them. The copies
             # had to be kept in step by hand, and a name in one and not the other is
             # invisible until a program calls it and gets CE2008 for a function the
