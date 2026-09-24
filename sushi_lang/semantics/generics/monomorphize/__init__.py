@@ -1,7 +1,7 @@
 """The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, Tuple, Set, TYPE_CHECKING
+from typing import Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
@@ -14,12 +14,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef, FunctionTable
     from sushi_lang.semantics.passes.collect.enums import EnumTable
     from sushi_lang.semantics.passes.collect.structs import StructTable
-from sushi_lang.internals import errors as er
-
-try:
     from sushi_lang.semantics.generics.constraints import ConstraintValidator
-except ImportError:
-    ConstraintValidator = None  # Graceful degradation if not available
+from sushi_lang.internals import errors as er
 
 from .transformer import TypeSubstitutor
 from .types import TypeMonomorphizer, MonomorphizationDepthExceeded
@@ -101,6 +97,11 @@ class Monomorphizer:
     ) -> bool:
         """Validate perk constraints on type arguments. False when one refused (#579).
 
+        ONE check for every kind of type parameter (#797). A trailing PACK parameter
+        binds every argument from its position on, and each element is judged against
+        the pack's constraints with the pack wording (CE2090); a leading parameter
+        binds one argument (CE4006). A refusal of either kind cuts no copy.
+
         `key` names the instantiation in `sites` and in the refusal record: a refused
         instantiation is reported ONCE, at the first site that named it, and every later
         reach -- a field of another instance, a copy's body -- answers False silently.
@@ -113,11 +114,17 @@ class Monomorphizer:
 
         span, filename = self.sites.get(key, (None, None)) if key is not None else (None, None)
         valid = True
-        for param, arg in zip(type_params, type_args, strict=False):
-            if isinstance(param, BoundedTypeParam) and param.constraints:
+        for position, param in enumerate(type_params):
+            if not (isinstance(param, BoundedTypeParam) and param.constraints):
+                continue
+            note = (getattr(param, "loc", None), template_file)
+            if param.is_pack:
+                bound = list(enumerate(type_args[position:]))
+            else:
+                bound = [(None, type_args[position])] if position < len(type_args) else []
+            for pack_index, arg in bound:
                 if not self.constraint_validator.validate_all_constraints(
-                        param, arg, span, filename,
-                        note=(getattr(param, "loc", None), template_file)):
+                        param, arg, span, filename, note=note, pack_index=pack_index):
                     valid = False
         if not valid:
             self.constraint_violations += 1
@@ -196,8 +203,8 @@ class Monomorphizer:
         self,
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
-    ) -> 'FuncDef':
-        """Create concrete function from generic definition."""
+    ) -> Optional['FuncDef']:
+        """Create concrete function from generic definition. None when a constraint refused."""
         return self.function_monomorphizer.monomorphize_function(generic, type_args)
 
     def monomorphize_all_functions(

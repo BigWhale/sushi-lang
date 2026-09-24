@@ -103,17 +103,16 @@ class FunctionMonomorphizer:
             return table.lookup(func_name, unit_name)
         return table.get(func_name)
 
-    def _constraints_hold(self, generic, params, args, all_args=None) -> bool:
+    def _constraints_hold(self, generic, params, args) -> bool:
         """The constraint check for one function instantiation, at the call that named it.
 
-        `args` are the arguments the `params` bind -- the leading ones, on a pack --
-        and `all_args` names the instantiation for the site lookup.
+        `params` are every type parameter and `args` every argument; a trailing pack
+        parameter binds the rest of `args`, and the check judges each element (#797).
         """
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        named = tuple(all_args if all_args is not None else args)
         return self.monomorphizer._validate_type_constraints(
             params, args,
-            key=("fn", instantiation_key(generic.name, named)),
+            key=("fn", instantiation_key(generic.name, tuple(args))),
             template_file=getattr(generic, "filename", None))
 
     def build_substitution(
@@ -167,7 +166,7 @@ class FunctionMonomorphizer:
         leading_params = tps[:k]
         leading_args = type_args[:k]
 
-        if not self._constraints_hold(generic, leading_params, leading_args, type_args):
+        if not self._constraints_hold(generic, tps, type_args):
             return None
 
         substitution = {}
@@ -184,8 +183,8 @@ class FunctionMonomorphizer:
         self,
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
-    ) -> 'FuncDef':
-        """Create concrete function from generic definition."""
+    ) -> Optional['FuncDef']:
+        """Create concrete function from generic definition. None when a constraint refused."""
         cache_key = (getattr(generic, "unit_name", None), generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
             return self.monomorphizer.func_cache[cache_key]

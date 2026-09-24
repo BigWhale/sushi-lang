@@ -118,10 +118,13 @@ class BorrowChecker:
         # them left a perk body unchecked entirely (#176).
         for perk_impl in program.perk_impls:
             for method in perk_impl.methods:
+                # Whether this body is one of many copies of one source (#800).
+                self.reporter.enter_body(method)
                 self._check_callable(method.params, method.body, fn_name=method.name,
                                      self_type=perk_impl.target_type,
                                      self_span=perk_impl.target_type_span,
                                      self_mode=getattr(method, "self_mode", None))
+        self.reporter.leave_body()
 
     def _check_function(self, func: FuncDef) -> None:
         """Check borrow safety for a single plain function."""

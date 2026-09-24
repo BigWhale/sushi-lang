@@ -1,38 +1,38 @@
 """Time module for Sushi standard library."""
 from __future__ import annotations
 import typing
+from typing import Dict
+
 from llvmlite import ir
 
-if typing.TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.sushi_stdlib.src.signatures import Signature, params_of
+
+
+I32, I64 = BuiltinType.I32, BuiltinType.I64
+
+# The ONE spelling of what each `<time>` function takes and answers (#550, #798).
+TIME_SIGNATURES: Dict[str, Signature] = {
+    "sleep":        Signature(params_of(I64), ok=I32, error="StdError"),
+    "msleep":       Signature(params_of(I64), ok=I32, error="StdError"),
+    "usleep":       Signature(params_of(I64), ok=I32, error="StdError"),
+    "nanosleep":    Signature(params_of(I64, I64), ok=I32, error="StdError"),
+    "now":          Signature(ok=I64, error="StdError"),
+    "monotonic_ns": Signature(ok=I64, error="StdError"),
+}
 
 
 def is_builtin_time_function(name: str) -> bool:
     """Check if name is a built-in time module function."""
-    return name in {
-        'nanosleep',
-        'sleep',
-        'msleep',
-        'usleep',
-        'now',
-        'monotonic_ns',
-    }
+    return name in TIME_SIGNATURES
 
 
 def get_builtin_time_function_return_type(name: str) -> Type:
-    """Get the return type for a built-in time function."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    from sushi_lang.semantics.typesys import UnknownType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if name in {'nanosleep', 'sleep', 'msleep', 'usleep'}:
-        return GenericTypeRef("Result", (BuiltinType('i32'), UnknownType("StdError")))
-
-    if name in {'now', 'monotonic_ns'}:
-        return GenericTypeRef("Result", (BuiltinType('i64'), UnknownType("StdError")))
-
-    raise ValueError(f"Unknown time function: {name}")
+    """The declared return type, from the row."""
+    sig = TIME_SIGNATURES.get(name)
+    if sig is None:
+        raise ValueError(f"Unknown time function: {name}")
+    return sig.return_type()
 
 
 def validate_time_function_call(name: str, signature: typing.Any) -> None:

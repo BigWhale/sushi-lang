@@ -1,5 +1,6 @@
 """Validation and element-type parsing for the built-in List<T> methods."""
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType, Type
@@ -8,31 +9,25 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 
 
-BUILTIN_LIST_METHODS = {
-    "new",           # List.new() -> List<T>
-    "with_capacity", # List.with_capacity(i32) -> List<T>
-    "len",           # list.len() -> i32
-    "capacity",      # list.capacity() -> i32
-    "is_empty",      # list.is_empty() -> bool
-    "push",          # list.push(T) -> ~
-    "pop",           # list.pop() -> Maybe<T>
-    "get",           # list.get(i32) -> Maybe<T>
-    "clear",         # list.clear() -> ~
-    "reserve",       # list.reserve(i32) -> ~
-    "shrink_to_fit", # list.shrink_to_fit() -> ~
-    "insert",        # list.insert(i32, T) -> Result<~>
-    "remove",        # list.remove(i32) -> Maybe<T>
-    "destroy",       # list.destroy() -> ~
-    "free",          # list.free() -> ~
-    "debug",         # list.debug() -> ~
-    "iter",          # list.iter() -> Iterator<T>
-    "clone",         # list.clone() -> List<T>
-}
+#: Every built-in `List@(T)` method and the number of arguments it takes. The family
+#: claims a name from these keys, and the typecheck pass checks the count (CE2009)
+#: before it runs the check below.
+LIST_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
+    "new": 0, "with_capacity": 1,
+    "len": 0, "capacity": 0, "is_empty": 0,
+    "push": 1, "pop": 0, "get": 1, "insert": 2, "remove": 1,
+    "clear": 0, "reserve": 1, "shrink_to_fit": 0,
+    "destroy": 0, "free": 0, "debug": 0, "iter": 0, "clone": 0,
+})
 
 
 def is_builtin_list_method(method_name: str) -> bool:
     """Return True if ``method_name`` is a built-in List<T> method."""
-    return method_name in BUILTIN_LIST_METHODS
+    return method_name in LIST_METHOD_ARITY
+
+
+#: The methods whose ELEMENT argument is checked against T, and its position.
+_ELEMENT_ARGUMENT = {"push": 0, "insert": 1}
 
 
 def validate_list_method_with_validator(
@@ -41,30 +36,11 @@ def validate_list_method_with_validator(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate a List<T> method call: arity, then element-type where relevant."""
-    method = call.method
-    num_args = len(call.args)
+    """Validate a List<T> method call whose count is correct: the element type."""
+    if call.method not in LIST_METHOD_ARITY:
+        raise_internal_error("CE0083", method=call.method)
 
-    expected_args = {
-        "new": 0, "len": 0, "capacity": 0, "is_empty": 0,
-        "pop": 0, "clear": 0, "shrink_to_fit": 0, "destroy": 0, "free": 0, "debug": 0, "iter": 0,
-        "clone": 0,
-        "with_capacity": 1, "push": 1, "get": 1, "reserve": 1, "remove": 1,
-        "insert": 2,
-    }
-
-    if method not in expected_args:
-        raise_internal_error("CE0083", method=method)
-
-    expected = expected_args[method]
-    if num_args != expected:
-        er.emit(reporter, er.ERR.CE2053, call.loc,
-                method=method, expected=expected, got=num_args)
-        return
-
-    # Element-type validation for methods taking a T argument:
-    #   push(T) -> args[0], insert(i32, T) -> args[1] (issue #47).
-    element_arg_index = {"push": 0, "insert": 1}.get(method)
+    element_arg_index = _ELEMENT_ARGUMENT.get(call.method)
     if element_arg_index is not None:
         _validate_list_element_type(call, list_type, element_arg_index, reporter, validator)
 

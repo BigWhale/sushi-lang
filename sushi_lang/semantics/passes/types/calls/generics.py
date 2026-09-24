@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import declared_modes
-from sushi_lang.semantics.typesys import StructType, EnumType, UnknownType, Type
+from sushi_lang.semantics.typesys import UnknownType
 from sushi_lang.semantics.ast import Call
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.explicit_type_args import (
@@ -78,9 +78,6 @@ def validate_generic_function_call(
                 reason="could not infer type arguments from call site"
             )
         return
-
-    # Per-element perk-constraint check for a constrained type-pack (CE2090).
-    _validate_pack_element_constraints(validator, call, generic_func, type_args)
 
     # Generate mangled name. When the function's LAST type-param is a pack, the
     # symbol carries the pack arity so it matches the monomorphizer's ".pack{N}"
@@ -230,46 +227,3 @@ def _infer_type_args_from_call_site(
 
     return infer_flat_type_args(
         generic_func, arg_types, validator.struct_table, validator.enum_table)
-
-
-def _validate_pack_element_constraints(
-    validator: 'TypeValidator',
-    call: Call,
-    generic_func,
-    flat_type_args: tuple
-) -> None:
-    """Per-element perk-constraint check for a constrained type-pack (CE2090)."""
-    type_params = generic_func.type_params or []
-    if not type_params:
-        return
-
-    pack_tp = type_params[-1]
-    if not getattr(pack_tp, "is_pack", False):
-        return
-
-    constraints = getattr(pack_tp, "constraints", None) or []
-    if not constraints:
-        return
-
-    leading_count = len(type_params) - 1
-    pack_element_types = list(flat_type_args[leading_count:])
-
-    for elem_index, elem_ty in enumerate(pack_element_types):
-        type_name = _type_name_for_constraint(elem_ty)
-        for perk_name in constraints:
-            if not validator.perk_impl_table.implements(type_name, perk_name):
-                er.emit(
-                    validator.reporter,
-                    er.ERR.CE2090,
-                    call.callee.loc,
-                    index=elem_index,
-                    ty=display_type(elem_ty),
-                    perk=perk_name,
-                )
-
-
-def _type_name_for_constraint(ty: Type) -> str:
-    """Extract the lookup name used by the perk implementation table."""
-    if isinstance(ty, (StructType, EnumType)):
-        return ty.name
-    return str(ty)

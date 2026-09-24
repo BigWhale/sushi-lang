@@ -76,8 +76,9 @@ def test_trailing_pack_absorbs_all_trailing_args():
 
     assert sub["T"] == BuiltinType.I32
     assert sub["Ts"] == TypePack((BuiltinType.STRING, BuiltinType.F32))
-    # Constraints validated only on the leading 1:1 params.
-    assert mono.constraint_calls == [((generic.type_params[0],), (BuiltinType.I32,))]
+    # Every parameter and every argument: the pack's elements are checked too (#797).
+    assert mono.constraint_calls == [((generic.type_params[0], generic.type_params[1]),
+                                      (BuiltinType.I32, BuiltinType.STRING, BuiltinType.F32))]
 
 
 def test_pack_absorbs_zero_trailing_args():

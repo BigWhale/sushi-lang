@@ -1,6 +1,6 @@
 """Type parameter substitution and AST transformation."""
 from __future__ import annotations
-from dataclasses import replace
+from dataclasses import fields, replace
 from typing import Dict, List, TYPE_CHECKING
 import copy
 
@@ -21,6 +21,21 @@ if TYPE_CHECKING:
 # Nodes that hold no sub-expression and no type the SOURCE writes. Listed EXPLICITLY so
 # `substitute_expr`'s `case _` can be a hard error (CE0135) instead of a silent copy.
 INERT_EXPRS = (Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, DynamicArrayNew)
+
+
+def substituted_param(param, ty: "Type | None") -> 'Param':
+    """The ONE copy of a parameter with its type substituted (#803).
+
+    Every field the source carries is kept: the declared MODE is the same for every
+    instantiation (docs/design/borrow-model.md S7), and so are the spans. A generic
+    function's parameter is the collected record, so the copy is built as an AST `Param`
+    from the fields the two share.
+    """
+    from sushi_lang.semantics.ast import Param
+
+    kept = {f.name: getattr(param, f.name) for f in fields(Param) if hasattr(param, f.name)}
+    kept["ty"] = ty
+    return Param(**kept)
 
 
 class TypeSubstitutor:
@@ -174,21 +189,7 @@ class TypeSubstitutor:
             ]
 
         concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None
-        return [
-            Param(
-                name=param.name,
-                ty=concrete_type,
-                name_span=param.name_span,
-                type_span=param.type_span,
-                loc=getattr(param, 'loc', None),
-                is_variadic=getattr(param, 'is_variadic', False),
-                # The MODE is declared, so it is the same for every instantiation
-                # (docs/design/borrow-model.md S7). Dropping it here would make one
-                # body's parameters transfer and another's borrow.
-                is_nom=getattr(param, 'is_nom', False),
-                nom_span=getattr(param, 'nom_span', None),
-            )
-        ]
+        return [substituted_param(param, concrete_type)]
 
     def substitute_body(self, body: 'Block', substitution: Dict[str, "Type | TypePack"]) -> 'Block':
         """Substitute type parameters in a function body."""

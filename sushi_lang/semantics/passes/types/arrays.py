@@ -24,6 +24,7 @@ from sushi_lang.internals.errors import ErrorMessage, Span
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Expr, MethodCall
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import effect_of
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
@@ -274,9 +275,6 @@ class ArraySpec:
     receiver: Receiver
     returns: Union[ReturnRule, _InternedByTheCaller]
     arguments: ArgumentRule = _accepts_anything
-    # An in-place write. A constant is emitted as a read-only global, so a constant
-    # receiver is refused before anything else is asked (CE2096).
-    mutates: bool = False
     # Every row reads CE2009 (#764). A field, not a spelled code: `test_argument_check_is_one`
     # pins this indirect emit until the array arity check reads `check_arguments`.
     arity_code: ErrorMessage = er.ERR.CE2009
@@ -297,10 +295,9 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "push": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
                       arguments=_an_element_to_store),
     "pop": ArraySpec(0, Receiver.DYNAMIC, INTERNED_BY_THE_CALLER),
-    "clear": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
-                       mutates=True),
+    "clear": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
     "truncate": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
-                          arguments=_an_index, mutates=True),
+                          arguments=_an_index),
     "capacity": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.I32)),
     "destroy": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
     "free": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
@@ -313,14 +310,14 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "clone": ArraySpec(0, Receiver.ANY, _the_receiver),
     "hash": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.U64)),
     "fill": ArraySpec(1, Receiver.ANY, _answers(BuiltinType.BLANK),
-                      arguments=_an_element, mutates=True),
-    "reverse": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.BLANK), mutates=True),
+                      arguments=_an_element),
+    "reverse": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.BLANK)),
     # The destination must be able to grow, so a fixed array is not a receiver here. It is
     # a legal SOURCE, and `.s()`/`.ss()` read either kind.
     "extend": ArraySpec(1, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                        arguments=_a_source, mutates=True),
+                        arguments=_a_source),
     "extend_range": ArraySpec(3, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
-                              arguments=_a_source_and_a_range, mutates=True),
+                              arguments=_a_source_and_a_range),
     "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
     "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }
@@ -409,7 +406,9 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayReceiver,
     if spec is None:
         return
 
-    if spec.mutates and reject_write_to_constant(
+    # An in-place write. A constant is emitted as a read-only global, so a constant
+    # receiver is refused before anything else is asked (CE2096).
+    if effect_of(call.method).mutates and reject_write_to_constant(
             call.receiver, f"call '{call.method}()' on", call.loc, reporter, validator):
         return
 

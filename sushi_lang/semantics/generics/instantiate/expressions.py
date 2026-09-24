@@ -238,7 +238,6 @@ class ExpressionScanner:
         hands it in; a bare call reads the unit's own view (#495).
         """
         from sushi_lang.semantics.ast import Name
-        from sushi_lang.semantics.typesys import BuiltinType
 
         callee = getattr(call, "callee", None)
         if not isinstance(callee, Name):
@@ -246,22 +245,9 @@ class ExpressionScanner:
 
         function_name = callee.id
 
-        if function_name in {'sleep', 'msleep', 'usleep', 'nanosleep'}:
-            std_error = self.type_inferrer.enum_table.get("StdError")
-            if std_error:
-                self.instantiations.add(("Result", (BuiltinType.I32, std_error)))
-            return
-        elif function_name in {'now', 'monotonic_ns'}:
-            std_error = self.type_inferrer.enum_table.get("StdError")
-            if std_error:
-                self.instantiations.add(("Result", (BuiltinType.I64, std_error)))
-            return
-        elif function_name == 'setenv':
-            env_error = self.type_inferrer.enum_table.get("EnvError")
-            if env_error:
-                self.instantiations.add(("Result", (BuiltinType.I32, env_error)))
-            return
-        elif self._scan_registry_signature(function_name):
+        row = self._stdlib_row(function_name, generic_func)
+        if row is not None:
+            self._intern_stdlib_result(row)
             return
 
         resolved = self.resolve_generic_call(call, generic_func)
@@ -286,28 +272,42 @@ class ExpressionScanner:
         self.sites.setdefault(("fn", instantiation_key(name, tuple(type_args))),
                               (loc, self.file_of()))
 
-    def _scan_registry_signature(self, function_name: str) -> bool:
-        """Intern the Result a registry primitive answers, from its own row (#550).
+    def _stdlib_row(self, function_name: str, generic_func=None):
+        """The stdlib row a bare call reaches in this unit, or None (#798).
 
-        `<io/files>` and `<net/socket>` each keep one signature table, so the payload
-        and the error enum are read rather than spelled here per function. A payload
-        that is itself a generic -- `fd_readln` answers `Result@(Maybe@(string), E)` --
-        is interned too: the Result goes through its own seam, but a payload enum has
-        to be asked for here or the match on the answer sees an unresolved
-        `Maybe@(string)` (CE2048).
+        Section 8's ladder, as the typecheck pass walks it: a generic or a concrete
+        declaration the unit can see answers first, and a registry module answers only
+        when the unit imports it. A reader with no tables sees every module.
+        """
+        from sushi_lang.semantics.stdlib_registry import signature_tables, stdlib_signature
 
-        Returns True when the name is a registry primitive, so the caller stops.
+        if generic_func is not None or function_name in (self.generic_funcs or {}):
+            return None
+        funcs = getattr(self.type_validator, "func_table", None)
+        if funcs is None:
+            if function_name in (self.type_inferrer.func_table or {}):
+                return None
+            return next((table[function_name] for table in signature_tables().values()
+                         if function_name in table), None)
+        scope = getattr(self.namespaces, "scope", None)
+        if funcs.lookup(function_name, getattr(scope, "unit", None), scope) is not None:
+            return None
+        found = funcs.lookup_stdlib_by_name(function_name, scope)
+        return stdlib_signature(found[0], function_name) if found is not None else None
+
+    def _intern_stdlib_result(self, sig) -> None:
+        """Intern the Result a stdlib row answers, from the row itself (#550).
+
+        A payload that is itself a generic -- `fd_readln` answers
+        `Result@(Maybe@(string), E)` -- is interned too: the Result goes through its own
+        seam, but a payload enum has to be asked for here or the match on the answer
+        sees an unresolved `Maybe@(string)` (CE2048).
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.typesys import UnknownType
-        from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
-        from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_SIGNATURES
 
-        sig = FILES_SIGNATURES.get(function_name) or SOCKET_SIGNATURES.get(function_name)
-        if sig is None:
-            return False
         if sig.ok is None:
-            return True  # a bare answer: no Result to intern
+            return  # a bare answer: no Result to intern
 
         payload = sig.ok
         if isinstance(payload, GenericTypeRef):
@@ -318,13 +318,12 @@ class ExpressionScanner:
             named = (self.type_inferrer.struct_table.get(payload.name)
                      or self.type_inferrer.enum_table.get(payload.name))
             if named is None:
-                return True
+                return
             payload = named
 
         error = self.type_inferrer.enum_table.get(sig.error) if sig.error else None
         if error is not None and not isinstance(payload, GenericTypeRef):
             self.instantiations.add(("Result", (payload, error)))
-        return True
 
     @staticmethod
     def _resolve_payload_arg(type_args) -> tuple | None:

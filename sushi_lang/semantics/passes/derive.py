@@ -4,9 +4,7 @@ from typing import Iterable, Optional, Set
 
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.passes.collect.utils import types_to_walk
-from sushi_lang.semantics.generics.hashing import can_struct_be_hashed, register_struct_hash_method
-from sushi_lang.semantics.generics.hashing import can_enum_be_hashed, register_enum_hash_method
-from sushi_lang.semantics.generics.hashing import can_array_be_hashed, register_array_hash_method
+from sushi_lang.semantics.generics.hashing import register_hash_if_hashable
 from sushi_lang.semantics.generics.cloning import (
     register_struct_clone_method, register_enum_clone_method)
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -21,9 +19,7 @@ def derive_for_struct(struct_type: StructType, derived: DerivedMethodTable) -> N
     behind it calls this, so the pair arrives with the type and not from a later
     whole-table walk that a program may never drive (#720, #730).
     """
-    can_hash, _ = can_struct_be_hashed(struct_type)
-    if can_hash:
-        register_struct_hash_method(struct_type, derived)
+    register_hash_if_hashable(struct_type, derived)
     register_struct_clone_method(struct_type, derived)
 
 
@@ -33,9 +29,7 @@ def derive_for_enum(enum_type: EnumType, derived: DerivedMethodTable) -> None:
     The `Result` and `Maybe` intern seams are the callers. A type with no variants YET
     stays outside: the gate below reads the variants, and an empty shell has none (#730).
     """
-    can_hash, _ = can_enum_be_hashed(enum_type)
-    if can_hash:
-        register_enum_hash_method(enum_type, derived)
+    register_hash_if_hashable(enum_type, derived)
     register_enum_clone_method(enum_type, derived)
 
 
@@ -48,18 +42,14 @@ def register_all_struct_hashes(struct_table: StructTable,
     walks it whole once, and the late-interning seam names what it interned (#676).
     """
     for struct_type in types_to_walk(struct_table, only):
-        can_hash, _ = can_struct_be_hashed(struct_type)
-        if can_hash:
-            register_struct_hash_method(struct_type, derived)
+        register_hash_if_hashable(struct_type, derived)
 
 
 def register_all_enum_hashes(enum_table: EnumTable, derived: DerivedMethodTable,
                              only: Optional[Iterable[str]] = None) -> None:
     """Register hash() for every enum a derived hash can read."""
     for enum_type in types_to_walk(enum_table, only):
-        can_hash, _ = can_enum_be_hashed(enum_type)
-        if can_hash:
-            register_enum_hash_method(enum_type, derived)
+        register_hash_if_hashable(enum_type, derived)
 
 
 def collect_array_types(struct_table: StructTable, enum_table: EnumTable,
@@ -88,9 +78,7 @@ def register_all_array_hashes(struct_table: StructTable, enum_table: EnumTable,
                               only: Optional[Iterable[str]] = None) -> None:
     """Register hash() for every array type a derived hash can read."""
     for array_type in collect_array_types(struct_table, enum_table, only):
-        can_hash, _ = can_array_be_hashed(array_type)
-        if can_hash:
-            register_array_hash_method(array_type, derived)
+        register_hash_if_hashable(array_type, derived)
 
 
 def register_all_clones(struct_table: StructTable, enum_table: EnumTable,

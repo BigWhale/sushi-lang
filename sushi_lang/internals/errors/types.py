@@ -44,7 +44,7 @@ _add(ErrorMessage("CE2008", Severity.ERROR,
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
     "wrong number of arguments: '{name}' expects {expected}, got {got}",
-    Category.TYPE, "A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal CE0023 until #764."))
+    Category.TYPE, "A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal CE0023 until #764. The built-in `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)` methods, and the `List` and `HashMap` statics, reported it with CE2053, CE2016 and CE2502 until #799; their counts are one table per family now (`MethodFamily.arity`)."))
 
 # Array-specific errors
 _add(ErrorMessage("CE2010", Severity.ERROR,
@@ -71,9 +71,11 @@ _add(ErrorMessage("CE2015", Severity.ERROR,
     "constant '{name}' cannot use dynamic array type",
     Category.TYPE, "Constants must use compile-time types. Dynamic arrays are not allowed."))
 
-_add(ErrorMessage("CE2016", Severity.ERROR,
-    "method '{method}' expects {expected} argument(s), got {got}",
-    Category.TYPE, "Built-in Result@(T, E) and Maybe@(T) methods take a fixed number of arguments."))
+# CE2016 ("method '{method}' expects {expected} argument(s), got {got}") was RETIRED by
+# #799. It answered a miscount on a built-in HashMap, Own, Maybe or Result method, while
+# an array, a string, a derived method and a function answered the same fault with CE2009.
+# One fault is one code: a built-in method miscount is CE2009, read from the family's
+# count table (`MethodFamily.arity`).
 
 _add(ErrorMessage("CE2017", Severity.ERROR,
     "invalid repeat count in an array literal: {reason}",
@@ -206,9 +208,10 @@ _add(ErrorMessage("CE2050", Severity.ERROR,
     "enum variant '{variant}' expects {expected} argument(s), got {got}",
     Category.TYPE, "Enum variant constructor must provide exact number of arguments for associated data."))
 
-_add(ErrorMessage("CE2051", Severity.ERROR,
-    "{message}",
-    Category.TYPE, "Struct hashing limitation or error."))
+# CE2051 ("{message}", a hashing limitation) was RETIRED by #804. Its one emit site refused
+# `.hash()` on an array of arrays, and nothing could reach it: `i32[][]` cannot be written,
+# the hashability gate refuses a nested array before a hash is registered, and the array
+# family answers an array's `.hash()` before the derived method is asked.
 
 # CE2052 ("recursive enum '{name}' requires Own@(T) indirection") was RETIRED by the ruling
 # on #677 (2026-09-14). The derive pass found an enum cycle in its topological sort and said
@@ -219,9 +222,8 @@ _add(ErrorMessage("CE2051", Severity.ERROR,
 # reads CE2095 at its first member. The number is not reused.
 
 # List@(T) method errors
-_add(ErrorMessage("CE2053", Severity.ERROR,
-    "List@(T).{method}() expects {expected} argument(s), got {got}",
-    Category.TYPE, "List method called with incorrect number of arguments."))
+# CE2053 ("List@(T).{method}() expects {expected} argument(s), got {got}") was RETIRED by
+# #799: a miscount on a List@(T) method or static is CE2009, as on every other callee.
 
 # HashMap@(K, V) type errors
 _add(ErrorMessage("CE2054", Severity.ERROR,

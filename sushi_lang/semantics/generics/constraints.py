@@ -1,11 +1,11 @@
 """Generic constraint validation for Sushi compiler."""
 
 from typing import Optional
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
+from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.passes.collect import (
     PerkTable, PerkImplementationTable, StructTable, EnumTable)
-from sushi_lang.semantics.passes.collect.perks import PerkCollector
+from sushi_lang.semantics.passes.collect.perks import PerkCollector, _get_type_name
 from sushi_lang.semantics.passes.resolve import table_resolver
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -45,8 +45,12 @@ class ConstraintValidator:
         span: Optional['Span'],
         filename: Optional[str] = None,
         note: Optional[tuple] = None,
+        pack_index: Optional[int] = None,
     ) -> bool:
         """Check if a type satisfies a single perk constraint.
+
+        `pack_index` is the element's position in a type pack, and a refusal of a pack
+        element takes the pack wording (CE2090) with the same note (#797).
 
         `span` and `filename` are the site that NAMES the refused instantiation, and
         `note` is `(span, filename)` of the constraint it violates (#579): the caret goes
@@ -62,13 +66,19 @@ class ConstraintValidator:
         if self.perk_table.get(constraint_name) is None:
             return True
 
-        type_name = self._get_type_name(type_arg)
+        type_name = _get_type_name(type_arg)
 
         if not (self.perk_impl_table.implements(type_name, constraint_name)
                 or self._template_implements(type_arg, constraint_name)
                 or self._derived_implements(type_arg, constraint_name)):
-            diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span, filename=filename,
-                                      type=display_type(type_arg), perk=constraint_name)
+            if pack_index is None:
+                diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span,
+                                          filename=filename, type=display_type(type_arg),
+                                          perk=constraint_name)
+            else:
+                diagnostic = er.emit_with(self.reporter, er.ERR.CE2090, span,
+                                          filename=filename, index=pack_index,
+                                          ty=display_type(type_arg), perk=constraint_name)
             note_span, note_file = note if note is not None else (None, None)
             if note_span is not None:
                 diagnostic = diagnostic.note(
@@ -117,6 +127,7 @@ class ConstraintValidator:
         span: Optional['Span'],
         filename: Optional[str] = None,
         note: Optional[tuple] = None,
+        pack_index: Optional[int] = None,
     ) -> bool:
         """Validate all constraints on a type parameter."""
         if not bounded_param.constraints or len(bounded_param.constraints) == 0:
@@ -124,16 +135,8 @@ class ConstraintValidator:
 
         all_valid = True
         for constraint in bounded_param.constraints:
-            if not self.validate_constraint(type_arg, constraint, span, filename, note):
+            if not self.validate_constraint(type_arg, constraint, span, filename, note,
+                                            pack_index):
                 all_valid = False
 
         return all_valid
-
-    def _get_type_name(self, ty: Type) -> str:
-        """Extract type name for lookup in implementation table."""
-        if isinstance(ty, BuiltinType):
-            return str(ty)
-        elif isinstance(ty, (StructType, EnumType)):
-            return ty.name
-        else:
-            return str(ty)

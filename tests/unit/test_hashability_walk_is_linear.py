@@ -39,7 +39,6 @@ def _visit_counts(analyze, monkeypatch, src: str) -> collections.Counter:
         return original(struct_type, *args, **kwargs)
 
     monkeypatch.setattr(hashing, "can_struct_be_hashed", counted)
-    monkeypatch.setattr("sushi_lang.semantics.passes.derive.can_struct_be_hashed", counted)
     analyze(src)
     return counts
 

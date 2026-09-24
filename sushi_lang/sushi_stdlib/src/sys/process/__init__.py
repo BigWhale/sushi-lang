@@ -1,6 +1,11 @@
 """Process control module for Sushi standard library."""
 
+from typing import Dict
+
 from llvmlite import ir
+
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type, UnknownType
+from sushi_lang.sushi_stdlib.src.signatures import Signature, cstr, params_of
 from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
 from sushi_lang.sushi_stdlib.src.sys.process.functions import (
     generate_getcwd,
@@ -12,43 +17,30 @@ from sushi_lang.sushi_stdlib.src.sys.process.functions import (
 )
 
 
-PROCESS_FUNCTIONS = {
-    'getcwd',
-    'chdir',
-    'exit',
-    'getpid',
-    'getuid',
-    'run',
+# The ONE spelling of what each `<sys/process>` function takes and answers (#550,
+# #798). `run` takes its command as a string VALUE, not as a C string.
+PROCESS_SIGNATURES: Dict[str, Signature] = {
+    "getcwd": Signature(ok=BuiltinType.STRING, error="ProcessError"),
+    "chdir":  Signature(params_of(cstr()), ok=BuiltinType.I32, error="ProcessError"),
+    "exit":   Signature(params_of(BuiltinType.I32), bare=BuiltinType.BLANK),
+    "getpid": Signature(bare=BuiltinType.I32),
+    "getuid": Signature(bare=BuiltinType.I32),
+    "run":    Signature(params_of(BuiltinType.STRING, DynamicArrayType(BuiltinType.STRING)),
+                        ok=UnknownType("ProcessOutput"), error="ProcessError"),
 }
 
 
 def is_builtin_process_function(name: str) -> bool:
     """Check if name is a built-in process function."""
-    return name in PROCESS_FUNCTIONS
+    return name in PROCESS_SIGNATURES
 
 
-def get_builtin_process_function_return_type(name: str):
-    """Get return type for a process function."""
-    from sushi_lang.semantics.typesys import BuiltinType, UnknownType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    # A Result comes back as a type-REF, not a concrete enum: get_return_type() has no access
-    # to the enum table, so the consumer (_materialize_stdlib_return_type) interns it. Same
-    # shape getenv has always used for its Maybe<string>.
-    if name == 'getcwd':
-        return GenericTypeRef("Result", (BuiltinType.STRING, UnknownType("ProcessError")))
-    elif name == 'run':
-        return GenericTypeRef("Result", (UnknownType("ProcessOutput"), UnknownType("ProcessError")))
-    elif name == 'chdir':
-        return GenericTypeRef("Result", (BuiltinType.I32, UnknownType("ProcessError")))
-    elif name == 'exit':
-        return BuiltinType.BLANK
-    elif name == 'getpid':
-        return BuiltinType.I32
-    elif name == 'getuid':
-        return BuiltinType.I32
-    else:
+def get_builtin_process_function_return_type(name: str) -> Type:
+    """The declared return type, from the row."""
+    sig = PROCESS_SIGNATURES.get(name)
+    if sig is None:
         raise ValueError(f"Unknown process function: {name}")
+    return sig.return_type()
 
 
 def validate_process_function_call(name: str, signature) -> None:

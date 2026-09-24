@@ -1,5 +1,6 @@
 """Validation and table-building for the built-in Maybe<T> methods."""
-from typing import Any, Optional
+from types import MappingProxyType
+from typing import Any, Mapping, Optional
 
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type, BuiltinType
@@ -8,9 +9,16 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 
 
+#: Every built-in `Maybe@(T)` method and the number of arguments it takes. The count is
+#: checked in the typecheck pass (CE2009) before the check below runs.
+MAYBE_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
+    "is_some": 0, "is_none": 0, "realise": 1, "expect": 1,
+})
+
+
 def is_builtin_maybe_method(method_name: str) -> bool:
     """Return True if ``method_name`` is a recognized Maybe<T> method."""
-    return method_name in ("is_some", "is_none", "realise", "expect")
+    return method_name in MAYBE_METHOD_ARITY
 
 
 def maybe_method_return_type(payload_type: Type, method_name: str) -> Optional[Type]:
@@ -28,29 +36,12 @@ def validate_maybe_method_with_validator(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate a Maybe<T> method call, routing on the method name."""
-    if call.method == "is_some":
-        _validate_maybe_is_some(call, maybe_type, reporter)
-    elif call.method == "is_none":
-        _validate_maybe_is_none(call, maybe_type, reporter)
-    elif call.method == "realise":
-        _validate_maybe_realise(call, maybe_type, reporter, validator)
-    elif call.method == "expect":
-        _validate_maybe_expect(call, maybe_type, reporter, validator)
-    else:
+    """Validate a Maybe<T> method call whose count is correct."""
+    if call.method not in MAYBE_METHOD_ARITY:
         raise_internal_error("CE0094", method=call.method)
-
-
-def _validate_maybe_is_some(call: MethodCall, maybe_type: EnumType, reporter: Any) -> None:
-    """Validate Maybe<T>.is_some() takes no arguments."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_some", expected=0, got=len(call.args))
-
-
-def _validate_maybe_is_none(call: MethodCall, maybe_type: EnumType, reporter: Any) -> None:
-    """Validate Maybe<T>.is_none() takes no arguments."""
-    if len(call.args) != 0:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="is_none", expected=0, got=len(call.args))
+    check = _CHECKS.get(call.method)
+    if check is not None:
+        check(call, maybe_type, reporter, validator)
 
 
 def _validate_maybe_realise(
@@ -59,11 +50,7 @@ def _validate_maybe_realise(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate Maybe<T>.realise(default): one arg whose type matches T."""
-    if len(call.args) != 1:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="realise", expected=1, got=len(call.args))
-        return
-
+    """Validate Maybe<T>.realise(default): the default's type matches T."""
     some_variant = maybe_type.get_variant("Some")
     if some_variant is None:
         raise_internal_error("CE0092", enum=maybe_type.name)
@@ -96,11 +83,7 @@ def _validate_maybe_expect(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate Maybe<T>.expect(message): one string argument."""
-    if len(call.args) != 1:
-        er.emit(reporter, er.ERR.CE2016, call.loc, method="expect", expected=1, got=len(call.args))
-        return
-
+    """Validate Maybe<T>.expect(message): the message is a string."""
     message_arg = call.args[0]
 
     validator.validate_expression(message_arg)
@@ -109,6 +92,10 @@ def _validate_maybe_expect(
     if arg_type is not None and arg_type != BuiltinType.STRING:
         er.emit(reporter, er.ERR.CE2503, message_arg.loc,
                 expected="string", got=display_type(arg_type))
+
+
+#: The methods that check more than their count.
+_CHECKS = {"realise": _validate_maybe_realise, "expect": _validate_maybe_expect}
 
 
 def ensure_maybe_type_in_table(

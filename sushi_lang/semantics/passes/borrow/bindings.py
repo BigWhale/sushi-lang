@@ -252,11 +252,9 @@ def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: P
                 scope.bind_value(binding, payload_type, span)
             case NomBinding():
                 # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
-                # only do out of a scrutinee the match owns, and never out of an
-                # `Own(...)` cell, which would be left with nothing to free it.
-                if kind is ScrutineeKind.OWN_PAYLOAD:
-                    _reject_take_from_own(checker, binding)
-                elif kind is ScrutineeKind.BORROWED:
+                # only do out of a scrutinee the match owns. A take out of an `Own(...)`
+                # cell never reaches here: the AST builder refuses it.
+                if kind is ScrutineeKind.BORROWED:
                     _reject_take_from_a_borrow(checker, binding, scrutinee)
                 scope.bind_owned(binding.name, payload_type, binding.loc or span)
             case RefBinding():
@@ -286,14 +284,6 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
               f"taken here; drop the marker to read through the borrow instead")
     diag.emit()
-
-
-def _reject_take_from_own(checker: 'BorrowChecker', binding: NomBinding) -> None:
-    """Report CE2434 for a `nom` binding nested inside an `Own(...)` pattern."""
-    checker.err.emit_with(er.ERR.CE2434, binding.loc) \
-        .help("drop the marker to read the value through the cell, or take the whole "
-              "`Own@(T)` with a `nom` binding on the payload that holds it") \
-        .emit()
 
 
 def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,

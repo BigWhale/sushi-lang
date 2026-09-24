@@ -1,0 +1,10 @@
+# A user generic function may carry the name of a stdlib function. With no import of
+# that module, the name is the user's own, and the call is an ordinary generic call.
+# EXPECT_STDOUT_EXACT: 7\n
+fn remove@(T)(T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let i32 r = remove(7).realise(0)
+    println(r)
+    return Result.Ok(0)

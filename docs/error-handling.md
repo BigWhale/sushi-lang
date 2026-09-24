@@ -779,7 +779,7 @@ fn main() i32:
 
 Common error codes related to error handling:
 
-- **CE2502**: `.realise()` wrong argument count
+- **CE2009**: `.realise()` wrong argument count (the code of every miscount)
 - **CE2503**: `.realise()` default type mismatch
 - **CE2505**: Assigning `Result@(T)` to non-Result without handling
 - **CE2507**: Using `??` on non-Result/non-Maybe type

@@ -392,6 +392,26 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A pack element that fails its perk constraint is one CE2090** (#797). `many(5, true)`
+  against `fn many@(...Ts: Named)` answered a cascade before the CE2090, because the copy
+  was made first and its body checked with `bool`. The one constraint check now reads every
+  type parameter, a pack's elements included, refuses the copy, and answers CE2090 with the
+  relational note. A `Hashable` pack no longer answers a false CE2090 for `i32`, and a
+  leading refusal no longer hides a pack refusal in the same program.
+- **A built-in method miscount is CE2009** (#799). `List`, `HashMap`, `Own`, `Maybe` and
+  `Result` methods answered four codes for one fault. Each family has one arity table, read
+  before its validator. **CE2016, CE2053 and CE2502 are retired**; CE2051 goes with the
+  unreachable arm that was its only emitter.
+- **A diagnostic in a perk implementation body on a generic target prints once** (#800),
+  not once per instance of the target.
+- **A user generic may take the name of a stdlib function** (#798). `now`, `copy`, `setenv`
+  and 45 more names were intercepted by bare name before a declaration was asked; the
+  stdlib rows now apply only when no declaration takes the name and the unit imports the
+  module.
+- **A mutating method on a constant array is CE2096** (#791). `A.push(4)`, `pop()`,
+  `destroy()` and `free()` on a `const i32[3] A` answered CE2023; `clear()` already
+  answered CE2096. "This method changes its receiver" is one table,
+  `semantics/method_effects.py`.
 - **A `Maybe` whose payload nests a user type is interned like a `Result`** (#793). `let
   Maybe@(Point[]) m = l.get(0)` stopped with the internal CE0126: the Maybe seam resolved
   its payload one level deep and had no guard. One seam, `intern_wrapper_enum`, now interns
@@ -1055,6 +1075,12 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One copy of an extension or perk signature** (#803). `substitute_signature` in
+  `generics/extensions.py` copies the declaration with every field kept; the copies lost
+  `self_mode_span`, a parameter's `loc` and `nom_span`.
+- **The derived `hash` and `clone` are registered through one mechanism** (#804).
+- **A nested `Own(nom x)` take is refused in the AST builder alone** (#791, CE2434), and the
+  compiler driver reads the drop set through `drops_of` (#791).
 - **A named type is terminal in type substitution** (#802). `TypeSubstitutor` rebuilt a
   struct or an enum it met and lost `generic_base`, `generic_args` and `home_module`; it now
   returns the table's type, as `substitute_type_params` does. Measured over 1,407 fixtures:
