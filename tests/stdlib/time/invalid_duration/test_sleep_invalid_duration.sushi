@@ -1,0 +1,23 @@
+# A sleep with a duration that is not valid answers Result.Err (#818).
+# libc nanosleep writes the remaining time only on EINTR. On EINVAL the remaining time is
+# an uninitialized slot, and the call answered that garbage inside Result.Ok.
+# The zero-length sleeps are the control: they answer Ok(0).
+# EXPECT_STDOUT_EXACT: "sleep(-1) = 99\nmsleep(-1) = 99\nusleep(-1) = 99\nnanosleep(0, 2e9): Err\nnanosleep(0, -1): Err\nsleep(0) = 0\nnanosleep(0, 0): Ok(0)\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <time>
+
+fn main() i32:
+    println("sleep(-1) = {sleep(-1 as i64).realise(99)}")
+    println("msleep(-1) = {msleep(-1 as i64).realise(99)}")
+    println("usleep(-1) = {usleep(-1 as i64).realise(99)}")
+    match nanosleep(0 as i64, 2000000000 as i64):
+        Result.Ok(v) -> println("nanosleep(0, 2e9): Ok({v})")
+        Result.Err(_) -> println("nanosleep(0, 2e9): Err")
+    match nanosleep(0 as i64, -1 as i64):
+        Result.Ok(v) -> println("nanosleep(0, -1): Ok({v})")
+        Result.Err(_) -> println("nanosleep(0, -1): Err")
+    println("sleep(0) = {sleep(0 as i64).realise(99)}")
+    match nanosleep(0 as i64, 0 as i64):
+        Result.Ok(v) -> println("nanosleep(0, 0): Ok({v})")
+        Result.Err(_) -> println("nanosleep(0, 0): Err")
+    return Result.Ok(0)

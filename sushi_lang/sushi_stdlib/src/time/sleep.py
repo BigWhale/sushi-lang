@@ -5,6 +5,7 @@ from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_timespec_type
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.io.files.errno import emit_is_eintr
 
 _platform_time = get_platform_module('time')
 
@@ -13,7 +14,11 @@ if typing.TYPE_CHECKING:
 
 
 def generate_nanosleep(module: ir.Module) -> None:
-    """Generate nanosleep function: nanosleep(i64 seconds, i64 nanoseconds) -> i32"""
+    """Generate nanosleep function: nanosleep(i64 seconds, i64 nanoseconds) -> i32
+
+    0 when the sleep completes, the remaining microseconds on EINTR, and -1 for any
+    other failure. The call site maps a negative answer to Result.Err.
+    """
     _, _, i32, i64 = get_basic_types()
     timespec_type = get_timespec_type()
 
@@ -54,7 +59,15 @@ def generate_nanosleep(module: ir.Module) -> None:
     builder.cbranch(was_interrupted, interrupted_block, completed_block)
 
     builder.position_at_end(interrupted_block)
+    # libc writes `rem` only on EINTR. Any other failure (EINVAL) leaves it unwritten.
+    eintr_block = func.append_basic_block("eintr")
+    failed_block = func.append_basic_block("failed")
+    builder.cbranch(emit_is_eintr(builder, module), eintr_block, failed_block)
 
+    builder.position_at_end(failed_block)
+    builder.ret(minus_one)
+
+    builder.position_at_end(eintr_block)
     rem_sec_ptr = builder.gep(rem, [i32(0), i32(0)])
     rem_nsec_ptr = builder.gep(rem, [i32(0), i32(1)])
     rem_sec = builder.load(rem_sec_ptr, name="rem.tv_sec")
@@ -67,9 +80,11 @@ def generate_nanosleep(module: ir.Module) -> None:
     rem_nsec_micros = builder.sdiv(rem_nsec, thousand, name="rem_nsec_micros")
     remaining_micros = builder.add(rem_sec_micros, rem_nsec_micros, name="remaining_micros")
 
-    remaining_i32 = builder.trunc(remaining_micros, i32, name="remaining_i32")
-
-    builder.ret(remaining_i32)
+    # A negative answer is the failure, so a remaining time past i32 saturates.
+    i32_max = ir.Constant(i64, 2**31 - 1)
+    too_long = builder.icmp_signed('>', remaining_micros, i32_max, name="too_long")
+    saturated = builder.select(too_long, i32_max, remaining_micros, name="saturated")
+    builder.ret(builder.trunc(saturated, i32, name="remaining_i32"))
 
     builder.position_at_end(completed_block)
     builder.ret(zero)
