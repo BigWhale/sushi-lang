@@ -1,0 +1,28 @@
+# min and max on an unsigned integer compare in the unsigned type (#817).
+# A value with the top bit set is the LARGER value. The signed pair is the control.
+# EXPECT_STDOUT_EXACT: "max u8 = 200\nmin u8 = 3\nmax u16 = 60000\nmin u16 = 2\nmax u32 = 4000000000\nmin u32 = 1\nmax u64 = 18000000000000000000\nmin u64 = 7\nmax i8 = 3\nabs i8 = 56\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    let u8 a8 = 200 as u8
+    let u8 b8 = 3 as u8
+    println("max u8 = {max(a8, b8)}")
+    println("min u8 = {min(a8, b8)}")
+    let u16 a16 = 60000 as u16
+    let u16 b16 = 2 as u16
+    println("max u16 = {max(a16, b16)}")
+    println("min u16 = {min(a16, b16)}")
+    let u32 a32 = 4000000000 as u32
+    let u32 b32 = 1 as u32
+    println("max u32 = {max(a32, b32)}")
+    println("min u32 = {min(a32, b32)}")
+    let u64 a64 = 18000000000000000000 as u64
+    let u64 b64 = 7 as u64
+    println("max u64 = {max(a64, b64)}")
+    println("min u64 = {min(a64, b64)}")
+    let i8 n8 = -56 as i8
+    let i8 p8 = 3 as i8
+    println("max i8 = {max(n8, p8)}")
+    println("abs i8 = {abs(n8)}")
+    return Result.Ok(0)

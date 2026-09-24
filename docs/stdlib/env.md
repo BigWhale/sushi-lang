@@ -80,7 +80,7 @@ fn main() i32:
 Set an environment variable value.
 
 ```sushi
-fn setenv(string key, string value) -> Result@(i32)
+fn setenv(string key, string value) -> Result@(i32, EnvError)
 ```
 
 **Parameters:**
@@ -91,7 +91,7 @@ An existing variable with the same name is always overwritten.
 
 **Returns:**
 - `Result.Ok(0)` on success
-- `Result.Err()` on failure (e.g., insufficient memory, invalid name)
+- `Result.Err(EnvError.InvalidValue)` on failure (e.g., an empty name, a name that contains `=`, insufficient memory)
 
 **Example:**
 
@@ -263,7 +263,8 @@ Environment variable names should:
 - Not start with a digit
 - Not contain `=` or null bytes
 
-Invalid names will cause `setenv` to return `Result.Err()`.
+An empty name, or a name that contains `=`, causes `setenv` to return
+`Result.Err(EnvError.InvalidValue)`.
 
 ## Example: Configuration from Environment
 
