@@ -29,5 +29,5 @@ def test_a_receiver_with_no_known_type_is_an_internal_error():
     layout = ir.LiteralStructType([ir.IntType(32), ir.ArrayType(ir.IntType(64), 1)])
     value = ir.Constant(layout, None)
     with pytest.raises(InternalCompilerError) as caught:
-        utils.infer_generic_enum_type(object(), IntLit(value=1, loc=None), value, "Maybe<")
+        utils.infer_generic_enum_type(object(), IntLit(value=1, loc=None), value, "Maybe")
     assert "CE0019" in str(caught.value) or getattr(caught.value, "code", None) == "CE0019"
