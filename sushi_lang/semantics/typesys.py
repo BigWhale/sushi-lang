@@ -3,6 +3,7 @@ from enum import Enum
 from typing import AbstractSet, Callable, Optional, Mapping, Union
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 
 
@@ -119,7 +120,7 @@ class IteratorType:
     element_type: "Type"  # The type of elements yielded by this iterator
 
     def __str__(self) -> str:
-        return f"Iterator<{self.element_type}>"
+        return interned_name("Iterator", (self.element_type,))
 
     def __hash__(self) -> int:
         return hash(("iterator", self.element_type))
@@ -221,10 +222,10 @@ class FunctionType:
                 self.modes == other.modes)
 
 
-def _container_names() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The container base names, and the prefixes of their interned names."""
-    from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
-    return tuple(p[:-1] for p in CONTAINER_PREFIXES), CONTAINER_PREFIXES
+def _container_bases() -> tuple[str, ...]:
+    """The base names of the compiler's containers."""
+    from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+    return CONTAINER_BASES
 
 
 # Where each predicate stops. A pointer, an iterator, a fn value and a template hold what
@@ -252,10 +253,11 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
 
     One question per type over `type_walk.walk_named_types`. A fixed array owns no buffer
     of its own, but its elements can own heap (#185). A container's fields are raw
-    pointers, so its NAME answers (#162, #181, #183).
+    pointers, so its generic base answers (#162, #181, #183).
     """
     from sushi_lang.semantics.type_walk import walk_named_types
-    bases, prefixes = _container_names()
+    from sushi_lang.semantics.type_predicates import generic_base_of
+    bases = _container_bases()
 
     def owns_here(ty: "Type") -> bool:
         if isinstance(ty, BuiltinType):
@@ -268,7 +270,7 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
             return ty.base_name in bases
         if isinstance(ty, (StructType, EnumType)):
             return ty.name in drops or (
-                isinstance(ty, StructType) and ty.name.startswith(prefixes))
+                isinstance(ty, StructType) and generic_base_of(ty) in bases)
         return False
 
     return any(owns_here(ty) for ty in walk_named_types(

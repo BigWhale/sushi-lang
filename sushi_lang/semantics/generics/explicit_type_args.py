@@ -32,7 +32,7 @@ def check_explicit_type_arg_arity(generic, n_args: int) -> Optional[str]:
     """The count a generic function or type expects, when `n_args` is not that count."""
     type_params = generic.type_params or []
     n_params = len(type_params)
-    has_pack = bool(type_params) and getattr(type_params[-1], "is_pack", False)
+    has_pack = bool(type_params) and type_params[-1].is_pack
     if has_pack:
         return None if n_args >= n_params - 1 else f"at least {n_params - 1}"
     return None if n_args == n_params else str(n_params)

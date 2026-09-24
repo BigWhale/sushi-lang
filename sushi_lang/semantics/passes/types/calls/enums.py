@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from ..visibility import name_is_contested
 from sushi_lang.semantics.typesys import BuiltinType, EnumType
@@ -118,7 +119,7 @@ def validate_constructor_arguments(
 
     # Special check for Result.Ok() with zero arguments (CE2036)
     # This provides a more helpful error message than the generic "wrong argument count"
-    if (enum_type.name.startswith("Result<") and variant_name == "Ok" and
+    if (is_instance_of(enum_type, "Result") and variant_name == "Ok" and
         len(actual_args) == 0 and len(expected_types) == 1):
         expected_type = expected_types[0]
         if expected_type == BuiltinType.BLANK:

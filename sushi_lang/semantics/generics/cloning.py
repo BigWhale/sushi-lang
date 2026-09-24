@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import EnumType, StructType, Type
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -15,7 +16,7 @@ from sushi_lang.sushi_stdlib.src.common import get_clone_emitter_factory
 # Also the one authority on "is this named struct a container?" for method-type inference
 # (passes/types/method_registry.py) -- the derive pass's hash registration has no such exclusion,
 # so a List<i32> monomorph does carry a registered hash that the typecheck pass nonetheless rejects.
-CONTAINER_PREFIXES = ("Own<", "List<", "HashMap<")
+CONTAINER_BASES = ("Own", "List", "HashMap")
 
 
 #: The derived `clone` takes no argument; the typecheck pass reads this row (CE2009).
@@ -39,7 +40,7 @@ def register_struct_clone_method(struct_type: StructType,
     `exclude_containers=True`. A census of the derived table therefore reads those three
     as empty by design and not as a registration that went missing (#720).
     """
-    if struct_type.name.startswith(CONTAINER_PREFIXES):
+    if is_instance_of(struct_type, *CONTAINER_BASES):
         return
     _add_clone(struct_type, derived, "struct")
 

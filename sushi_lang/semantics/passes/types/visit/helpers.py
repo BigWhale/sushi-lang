@@ -2,11 +2,8 @@
 and the fn-typed-field call.
 """
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
-
-if TYPE_CHECKING:
-    pass
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.ast import (
     Lambda,

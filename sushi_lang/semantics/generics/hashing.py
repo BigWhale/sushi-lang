@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
@@ -15,7 +16,7 @@ from sushi_lang.semantics.typesys import (
     Type,
     UnknownType,
 )
-from sushi_lang.semantics.generics.cloning import CONTAINER_PREFIXES
+from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.internals import errors as er
@@ -221,7 +222,7 @@ def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[b
 
     # A compiler container's fields are its IMPLEMENTATION, not its content: two of the
     # three hold a raw pointer there. Read what it holds instead (#628).
-    if struct_type.name.startswith(CONTAINER_PREFIXES):
+    if is_instance_of(struct_type, *CONTAINER_BASES):
         return _container_content_is_hashable(struct_type, walk)
 
     for field_name, field_type in struct_type.fields:

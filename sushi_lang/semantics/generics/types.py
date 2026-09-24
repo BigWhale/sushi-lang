@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, ClassVar, Optional, Tuple, Union
+
+from sushi_lang.semantics.generics.interned import interned_name
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, EnumVariantInfo
@@ -15,6 +17,8 @@ TypeParam = Union['TypeParameter', 'BoundedTypeParam']
 class TypeParameter:
     """Represents a generic type parameter."""
     name: str  # Parameter name (e.g., "T", "E", "U")
+    # A bare parameter is never a pack; `BoundedTypeParam` carries the field that can be.
+    is_pack: ClassVar[bool] = False
 
     def __str__(self) -> str:
         return self.name
@@ -44,8 +48,7 @@ class GenericEnumType:
     variants: tuple[EnumVariantInfo, ...]        # Variants (may contain TypeParameters in associated types)
 
     def __str__(self) -> str:
-        params = ", ".join(str(tp) for tp in self.type_params)
-        return f"{self.name}<{params}>"
+        return interned_name(self.name, self.type_params)
 
     def __hash__(self) -> int:
         return hash(("generic_enum", self.name, self.type_params))
@@ -65,8 +68,7 @@ class GenericStructType:
     fields: tuple[tuple[str, Type], ...]         # Fields (may contain TypeParameters in field types)
 
     def __str__(self) -> str:
-        params = ", ".join(str(tp) for tp in self.type_params)
-        return f"{self.name}<{params}>"
+        return interned_name(self.name, self.type_params)
 
     def __hash__(self) -> int:
         return hash(("generic_struct", self.name, self.type_params))
@@ -88,8 +90,7 @@ class GenericTypeRef:
     namespace: Optional[str] = None
 
     def __str__(self) -> str:
-        args = ", ".join(str(t) for t in self.type_args)
-        return f"{self.base_name}<{args}>"
+        return interned_name(self.base_name, self.type_args)
 
     def __hash__(self) -> int:
         return hash(("generic_ref", self.base_name, self.type_args))
@@ -163,7 +164,7 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
 
 def type_param_substitution(generic_func, type_args) -> Optional[dict[str, Type]]:
     """Type parameter name -> type argument. A pack fans out and binds nothing here."""
-    params = [tp for tp in generic_func.type_params if not getattr(tp, "is_pack", False)]
+    params = [tp for tp in generic_func.type_params if not tp.is_pack]
     args = [arg for arg in type_args if not isinstance(arg, TypePack)]
     if len(params) != len(args):
         return None

@@ -11,7 +11,7 @@ def _pack_value_param_index(generic_func) -> Optional[int]:
     """Index of the (single) pack value-parameter, or None if there is none."""
     params = getattr(generic_func, "params", None) or []
     for i, p in enumerate(params):
-        if getattr(p, "is_pack", False):
+        if p.is_pack:
             return i
     return None
 
@@ -35,7 +35,7 @@ def solve_leading_type_args(
     from sushi_lang.semantics.generics.unify import unify_types
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
-    params = [p for p in generic_func.params if not getattr(p, "is_pack", False)]
+    params = [p for p in generic_func.params if not p.is_pack]
     if len(arg_types) != len(params):
         return None
 
@@ -49,7 +49,7 @@ def solve_leading_type_args(
 
     solved = []
     for tp in generic_func.type_params or ():
-        if getattr(tp, "is_pack", False):
+        if tp.is_pack:
             continue
         name = tp.name if hasattr(tp, "name") else str(tp)
         if name not in type_param_map:

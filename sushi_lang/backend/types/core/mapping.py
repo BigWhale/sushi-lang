@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from sushi_lang.backend.types.core.caching import TypeCache
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.semantics.typesys import (
     Type as Ty,
@@ -180,13 +181,13 @@ class TypeMapper:
         # The builtin containers are anonymous LAYOUT DESCRIPTORS whose LLVM shape other
         # backend code builds directly, so they stay LITERAL and never take the identified
         # path below: an identified `%Own<i32>` would not equal `{i32*}` (#257).
-        if struct_type.name.startswith("HashMap<"):
+        if is_instance_of(struct_type, "HashMap"):
             return self._create_hashmap_struct_type(struct_type)
 
-        if struct_type.name.startswith("List<"):
+        if is_instance_of(struct_type, "List"):
             return self._create_list_struct_type(struct_type)
 
-        if struct_type.name.startswith("Own<") or struct_type.name.startswith("Entry<"):
+        if is_instance_of(struct_type, "Own", "Entry"):
             return self._create_builtin_literal_struct_type(struct_type)
 
         # A user struct is an LLVM IDENTIFIED type, which is what makes a self-reference

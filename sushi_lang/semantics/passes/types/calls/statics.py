@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import Name
 from sushi_lang.semantics.generics.type_display import display_type
@@ -333,8 +334,7 @@ def _returns_the_target(declarations, base: str) -> bool:
             continue
         if getattr(ret, "base_name", None) == base or getattr(ret, "name", None) == base:
             return True
-        name = getattr(ret, "name", None)
-        if isinstance(name, str) and name.startswith(f"{base}<"):
+        if generic_base_of(ret) == base:
             return True
     return False
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
@@ -25,8 +26,7 @@ def resolve_return_type_to_result(validator: 'TypeValidator',
                 validator.enum_table.by_name
             )
         else:
-            type_args_str = ", ".join(str(arg) for arg in declared_type.type_args)
-            enum_name = f"{declared_type.base_name}<{type_args_str}>"
+            enum_name = interned_name(declared_type.base_name, declared_type.type_args)
             if enum_name in validator.enum_table.by_name:
                 resolved_type = validator.enum_table.by_name[enum_name]
 

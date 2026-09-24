@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 from typing import Any, Literal, Mapping, Optional, TYPE_CHECKING, overload
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 from sushi_lang.internals import errors as er
@@ -240,7 +241,7 @@ def hashmap_generic_struct() -> 'GenericStructType':
 
 def get_entry_type_name(key_type: Type, value_type: Type) -> str:
     """Get the name for a user-facing Entry<K, V> struct type."""
-    return f"Entry<{key_type}, {value_type}>"
+    return interned_name("Entry", (key_type, value_type))
 
 
 def ensure_entry_type_in_struct_table(struct_table: Any, derived: DerivedMethodTable,

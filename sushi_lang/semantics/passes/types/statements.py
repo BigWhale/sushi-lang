@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from itertools import count
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
@@ -475,7 +476,7 @@ _protocol_iter_ids = count()
 
 def _result_ok_payload(ty):
     """The Ok payload of a `Result@(T, E)`, or None when this is not one."""
-    if not isinstance(ty, EnumType) or not ty.name.startswith("Result<"):
+    if not isinstance(ty, EnumType) or not is_instance_of(ty, "Result"):
         return None
     ok_variant = ty.get_variant("Ok")
     if ok_variant is None or len(ok_variant.associated_types) != 1:
@@ -485,7 +486,7 @@ def _result_ok_payload(ty):
 
 def _maybe_some_payload(ty):
     """The Some payload of a `Maybe@(T)`, or None when this is not one."""
-    if not isinstance(ty, EnumType) or not ty.name.startswith("Maybe<"):
+    if not isinstance(ty, EnumType) or not is_instance_of(ty, "Maybe"):
         return None
     some_variant = ty.get_variant("Some")
     if some_variant is None or len(some_variant.associated_types) != 1:

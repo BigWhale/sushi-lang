@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 
 if TYPE_CHECKING:
@@ -70,7 +71,7 @@ class StatementValidator(RecursiveVisitor):
         if expr_type is not None:
             from sushi_lang.semantics.typesys import EnumType, BuiltinType
 
-            if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+            if isinstance(expr_type, EnumType) and is_instance_of(expr_type, "Result"):
                 ok_variant = expr_type.get_variant("Ok")
                 if ok_variant and ok_variant.associated_types:
                     t_type = ok_variant.associated_types[0]
@@ -101,7 +102,7 @@ class StatementValidator(RecursiveVisitor):
         self.type_validator.validate_expression(value)
 
         expr_type = self.type_validator.infer_expression_type(value)
-        if isinstance(expr_type, EnumType) and expr_type.name.startswith("Result<"):
+        if isinstance(expr_type, EnumType) and is_instance_of(expr_type, "Result"):
             er.emit(self.type_validator.reporter, er.ERR.CE2037, value.loc)
 
     def visit_rebind(self, node: Rebind) -> None:

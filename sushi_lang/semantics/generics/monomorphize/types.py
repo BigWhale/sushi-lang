@@ -1,15 +1,13 @@
 """Enum and struct type monomorphization."""
 from __future__ import annotations
-from typing import Dict, Tuple, Set, TYPE_CHECKING
+from typing import Dict, Tuple, Set
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
 from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.type_predicates import is_abstract_type
 from sushi_lang.semantics.type_resolution import TypeResolver
-
-if TYPE_CHECKING:
-    pass
 
 
 class MonomorphizationDepthExceeded(Exception):
@@ -69,7 +67,7 @@ class TypeMonomorphizer:
 
         concrete_name = self._generate_concrete_name(generic.name, type_args)
         if self._refuse_arity("enum", generic, type_args, concrete_name):
-            return EnumType(name=f"{generic.name}<error>", variants=())
+            return EnumType(name=interned_name(generic.name, ("error",)), variants=())
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -77,7 +75,7 @@ class TypeMonomorphizer:
         if not self.monomorphizer._validate_type_constraints(
                 generic.type_params, type_args, key=concrete_name,
                 template_file=self.monomorphizer.template_file("enum", generic.name)):
-            return EnumType(name=f"{generic.name}<error>", variants=())
+            return EnumType(name=interned_name(generic.name, ("error",)), variants=())
 
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
@@ -159,7 +157,7 @@ class TypeMonomorphizer:
 
         concrete_name = self._generate_concrete_name(generic.name, type_args)
         if self._refuse_arity("struct", generic, type_args, concrete_name):
-            return StructType(name=f"{generic.name}<error>", fields=())
+            return StructType(name=interned_name(generic.name, ("error",)), fields=())
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -167,7 +165,7 @@ class TypeMonomorphizer:
         if not self.monomorphizer._validate_type_constraints(
                 generic.type_params, type_args, key=concrete_name,
                 template_file=self.monomorphizer.template_file("struct", generic.name)):
-            return StructType(name=f"{generic.name}<error>", fields=())
+            return StructType(name=interned_name(generic.name, ("error",)), fields=())
 
         substitution: Dict[str, Type] = {}
         for param, arg in zip(generic.type_params, type_args, strict=False):
@@ -340,10 +338,4 @@ class TypeMonomorphizer:
         if not type_args:
             return base_name
 
-        arg_strs = [self._type_to_string(arg) for arg in type_args]
-
-        return f"{base_name}<{', '.join(arg_strs)}>"
-
-    def _type_to_string(self, ty: Type) -> str:
-        """Convert a type to its string representation for name generation."""
-        return str(ty)
+        return interned_name(base_name, type_args)

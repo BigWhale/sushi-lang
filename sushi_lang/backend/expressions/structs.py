@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ast import (
     Expr, Name, Call, MemberAccess, MethodCall, DotCall, IndexAccess,
 )
@@ -182,8 +184,7 @@ def _resolve_to_struct(codegen: 'LLVMCodegen', ty) -> Optional[StructType]:
     if isinstance(ty, UnknownType):
         return codegen.struct_table.by_name.get(ty.name)
     if isinstance(ty, GenericTypeRef):
-        type_args_str = ", ".join(str(arg) for arg in ty.type_args)
-        return codegen.struct_table.by_name.get(f"{ty.base_name}<{type_args_str}>")
+        return codegen.struct_table.by_name.get(interned_name(ty.base_name, ty.type_args))
     return None
 
 
@@ -237,7 +238,7 @@ def _infer_get_element_struct(codegen: 'LLVMCodegen',
         except InternalCompilerError:
             return None
 
-    if own_struct.name.startswith("Own<"):
+    if is_instance_of(own_struct, "Own"):
         from sushi_lang.semantics.generics.own import get_own_element_type
         return _resolve_to_struct(codegen, get_own_element_type(own_struct))
 
@@ -258,8 +259,7 @@ def _struct_type_of(codegen: 'LLVMCodegen', var_type) -> StructType:
 
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(var_type, GenericTypeRef):
-        type_args_str = ", ".join(str(arg) for arg in var_type.type_args)
-        struct_name = f"{var_type.base_name}<{type_args_str}>"
+        struct_name = interned_name(var_type.base_name, var_type.type_args)
         if struct_name in codegen.struct_table.by_name:
             return codegen.struct_table.by_name[struct_name]
 
@@ -310,8 +310,7 @@ def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
         else:
             from sushi_lang.semantics.generics.types import GenericTypeRef
             if isinstance(field_type, GenericTypeRef):
-                type_args_str = ", ".join(str(arg) for arg in field_type.type_args)
-                struct_name = f"{field_type.base_name}<{type_args_str}>"
+                struct_name = interned_name(field_type.base_name, field_type.type_args)
                 if struct_name in codegen.struct_table.by_name:
                     return codegen.struct_table.by_name[struct_name]
 
@@ -367,8 +366,7 @@ def _resolve_struct_type(codegen: 'LLVMCodegen', ty, err_code: str) -> StructTyp
             raise_internal_error("CE0020", type=ty.name)
         return codegen.struct_table.by_name[ty.name]
     if isinstance(ty, GenericTypeRef):
-        type_args_str = ", ".join(str(arg) for arg in ty.type_args)
-        struct_name = f"{ty.base_name}<{type_args_str}>"
+        struct_name = interned_name(ty.base_name, ty.type_args)
         if struct_name in codegen.struct_table.by_name:
             return codegen.struct_table.by_name[struct_name]
     raise_internal_error(err_code, type=str(ty))
