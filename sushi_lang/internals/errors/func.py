@@ -141,7 +141,7 @@ _add(ErrorMessage("CE0136", Severity.ERROR,
 
 _add(ErrorMessage("CE0138", Severity.ERROR,
     "main() takes one parameter, `string[] args`, or no parameter",
-    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
+    Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. The parameter takes no mode: argv is a borrowed view that the runtime owns, so `nom string[] args` (main would free argv a second time at exit), `peek string[] args` and `poke string[] args` are refused too (#844). Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
 
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",

@@ -1,0 +1,6 @@
+# The main parameter takes no mode: `string[] args` or nothing.
+# A `peek` parameter used to compile, and the binary crashed on the null reference.
+# EXPECT_ERROR_CODE: CE0138
+fn main(peek string[] args) i32:
+    println("n {args.len()}")
+    return Result.Ok(0)
