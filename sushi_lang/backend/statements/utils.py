@@ -1,7 +1,6 @@
 """Shared utilities for statement emission in the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_function
 
 if TYPE_CHECKING:
@@ -19,17 +18,13 @@ def emit_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
     return codegen.utils.as_i1(codegen.expressions.emit_expr(expr))
 
 
-def emit_scope_cleanup(codegen: 'LLVMCodegen', cleanup_type: str = 'all') -> None:
+def emit_scope_cleanup(codegen: 'LLVMCodegen') -> None:
     """Emit the destructors of every open scope on a function exit (return, `??`)."""
-    if cleanup_type != 'all':
-        raise_internal_error("CE0062", type=cleanup_type)
-
     codegen.memory.emit_exit_cleanup(0)
 
     # A `??` inside a print argument leaves through here, not the frame's straight-line
     # pop, so the buffers built before the propagation had no free at all (#295).
-    if hasattr(codegen, 'emit_string_temp_frame_cleanup_all'):
-        codegen.emit_string_temp_frame_cleanup_all()
+    codegen.emit_string_temp_frame_cleanup_all()
 
 
 def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['ir.Block', 'ir.Block', 'ir.Block']:

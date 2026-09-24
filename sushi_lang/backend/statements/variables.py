@@ -198,7 +198,7 @@ def _emit_dynamic_array_rebind(
         descriptor = codegen.dynamic_arrays._array(var_name)
         if descriptor is not None:
             if not descriptor.destroyed:
-                codegen.dynamic_arrays._emit_array_destructor(var_name)
+                codegen.dynamic_arrays.emit_array_destructor(var_name)
     if descriptor is None:
         # No descriptor is registered for a unit variable -- it is never destroyed at
         # scope exit -- so the old buffer is freed through its slot here.

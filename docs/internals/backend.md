@@ -524,16 +524,25 @@ def destroy_enum(self, enum_ptr, enum_type):
 
 ### Scope-Based Cleanup
 
-At end of function or block:
+`ScopeManager` (`backend/memory/scopes.py`) does all scope-exit cleanup in one walk.
+The walk goes through the names of a scope in reverse declaration order, and it sends
+each name to the registry that holds it:
 
 ```python
-def emit_scope_cleanup(self):
-    for var_name in scope.variables:
-        if needs_cleanup(var_name):
-            var_ptr = variables[var_name]
-            var_value = builder.load(var_ptr)
-            emit_value_destructor(var_value, var_type)
+def _emit_scope_exit(self, depth):
+    for name in reversed(self._scope_vars[depth]):
+        for slot, emit_free in self._exit_actions(name, depth):
+            self.codegen.moves.emit_free_unless_moved(slot, emit_free)
+    self._free_cstr_list(self._cstr_cleanup[depth])
+    self._free_closure_temp_list(self._closure_temp_cleanup[depth])
 ```
+
+- `pop_scope` walks the innermost scope on the fall-through path, then removes its
+  entries.
+- `emit_exit_cleanup(lowest_depth)` walks each scope from the innermost down to
+  `lowest_depth` on an early exit, and removes no entries: `0` for a `return` or a `??`
+  (through `statements/utils.py:emit_scope_cleanup`), the first scope of the loop for a
+  `break` or a `continue`.
 
 ## Runtime Support
 
@@ -617,9 +626,9 @@ built-in externs and before function bodies:
   marshalled via `runtime.strings.emit_to_cstr` and a `string` return via
   `emit_cstr_to_fat_pointer`.
 - **No-leak registry:** each marshalled `char*` is appended to a per-scope list
-  in `ScopeManager` (`register_cstr`). `emit_scope_cleanup` drains every open
-  scope on early-exit paths (return, `??`); a normal `pop_scope` frees its own
-  scope's list. Each pointer is freed exactly once via `get_free_func()`.
+  in `ScopeManager` (`register_cstr`). `ScopeManager.emit_exit_cleanup` frees
+  the lists of every open scope on an early-exit path (return, `??`) and removes
+  nothing; a normal `pop_scope` frees its own scope's list and removes it. Each pointer is freed exactly once via `get_free_func()`.
 
 The reserved built-in symbols and their canonical signatures live in
 `RESERVED_EXTERNS` (colocated with `runtime/core.py`), used by the collector for
