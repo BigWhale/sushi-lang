@@ -1,0 +1,6 @@
+# EXPECT_RUNTIME_EXIT: 254
+# A main that returns i16 exits with the value, widened with sign extension.
+# The shell reads the low eight bits of -2, which is 254.
+
+fn main() i16:
+    return Result.Ok(-2)

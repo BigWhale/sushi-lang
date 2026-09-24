@@ -66,9 +66,9 @@ def _emit_result_err(
     error_llvm_type = codegen.types.ll_type(e_type)
 
     # Extract (is_ok, error_value) from Result<T, E>
-    # Note: We're extracting the Err variant's data, but _extract_value_from_result_enum
+    # Note: We're extracting the Err variant's data, but extract_value_from_result_enum
     # always extracts from the data field regardless of tag
-    is_ok, error_value = codegen.functions._extract_value_from_result_enum(
+    is_ok, error_value = codegen.functions.extract_value_from_result_enum(
         result_value, error_llvm_type, e_type
     )
 

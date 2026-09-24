@@ -62,7 +62,7 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
 def _extract_variant_from_result(codegen: 'LLVMCodegen', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
     """Extract variant data from Result/Maybe enum value."""
     variant_llvm_type = codegen.types.ll_type(variant_type)
-    _, extracted_value = codegen.functions._extract_value_from_result_enum(
+    _, extracted_value = codegen.functions.extract_value_from_result_enum(
         result_value,
         variant_llvm_type,
         variant_type
