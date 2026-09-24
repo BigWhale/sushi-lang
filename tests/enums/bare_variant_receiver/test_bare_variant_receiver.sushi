@@ -1,0 +1,24 @@
+# A bare enum variant (no parentheses) is a method receiver: a derived hash(), a
+# derived clone() and a user extension all read the enum as the receiver type.
+# EXPECT_STDOUT_EXACT: true\nfalse\nminus\n2\n
+# EXPECT_NO_LEAKS
+
+enum Sign:
+    Plus
+    Minus
+
+extend Sign code() i32:
+    match self:
+        Sign.Plus -> return 1
+        Sign.Minus -> return 2
+
+fn main() i32:
+    let u64 h = Sign.Plus.hash()
+    println("{h == Sign.Plus().hash()}")
+    println("{h == Sign.Minus().hash()}")
+    let Sign c = Sign.Minus.clone()
+    match c:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    println("{Sign.Minus.code()}")
+    return Result.Ok(0)
