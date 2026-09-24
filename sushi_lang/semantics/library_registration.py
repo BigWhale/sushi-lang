@@ -669,8 +669,17 @@ class LibraryRegistration:
 
         `key` names both the manifest list and the table: `generic_structs` or
         `generic_enums`.
+
+        A PUBLIC template gets a visibility record with no declaring unit, as the
+        registry's other public types have: a binary library is no unit of the build,
+        and the consumer's scope admits a name no unit declared. The seed runs before
+        the collect loop, so a consumer that then declares the same name is filed as
+        the LOSER, and a rule that reads the winner's shape asks `name_is_contested`
+        before it speaks to it (#738). A private template is the private arm's to
+        record (`_register_private_types`).
         """
         table = getattr(self.tables, key)
+        kind = "struct" if key == "generic_structs" else "enum"
         for lib_name, _manifest, record in self._template_records(key):
             type_name = record["name"]
             if type_name in table.by_name:
@@ -688,3 +697,8 @@ class LibraryRegistration:
 
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
+            declarations = snippet.program.structs if kind == "struct" \
+                else snippet.program.enums
+            node = next((d for d in declarations or [] if d.name == type_name), None)
+            if getattr(node, "is_public", False):
+                self.tables.visibility.record(DeclOrigin(kind=kind, name=type_name))
