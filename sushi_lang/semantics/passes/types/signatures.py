@@ -138,7 +138,9 @@ def validate_function(self, func: FuncDef) -> None:
     # A `~` function returns too (#824), and so does a lifted lambda (#845): a body
     # that reached its end answered a Result.Err that no source wrote.
     if not block_always_returns(self, func.body):
-        self.err.emit(er.ERR.CE0107, func.name_span, name=func.name)
+        from sushi_lang.semantics.passes.lift import is_lifted_lambda
+        callable_text = "lambda" if is_lifted_lambda(func) else f"function '{func.name}'"
+        self.err.emit(er.ERR.CE0107, func.name_span, callable=callable_text)
 
     self.current_function = None
 
@@ -236,7 +238,8 @@ def _validate_method_body(self, target_type, method) -> None:
     # reaches its end is refused too (#845). A bare `~` method has no Result to answer.
     answers_result = method.ret != BuiltinType.BLANK or method.err_type is not None
     if answers_result and not block_always_returns(self, method.body):
-        self.err.emit(er.ERR.CE0107, method.name_span, name=method.name)
+        self.err.emit(er.ERR.CE0107, method.name_span,
+                      callable=f"method '{method.name}'")
 
     self.in_extension_context = False
     self.extension_method_name = None
