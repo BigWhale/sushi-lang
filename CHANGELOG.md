@@ -1220,6 +1220,22 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One growth block, one memmove, one checked Maybe for List and arrays** (#874).
+  `emit_grow_to_fit` (the policy -- double or exact -- a parameter) serves `List.push`,
+  `List.insert`, `List.reserve`, `T[].push` and `T[].extend`; `emit_memmove_bytes` beside
+  `emit_memcpy_bytes` serves the List shifts; `expressions/memory.py` is the only module that
+  declares an `llvm.mem*` intrinsic (new gate). `emit_checked_maybe` holds the bounds check and
+  the Some/None merge once, for `get` on both array kinds and `List.get`/`List.remove`; no
+  Maybe is built with a numeric tag. `emit_bounds_check` takes an inclusive bound for `insert`.
+  The List debug print and the dynamic-array clone are counted walks now.
+- **The List and HashMap emitters are tables** (#875). One `name -> emitter` row per method,
+  built once at import, in `backend/generics/container_table.py`; the bool answer is in the
+  row, the static names come from `BUILTIN_STATICS`, and a gate holds each table's key set
+  equal to the semantic arity table's.
+- **No backend invariant is an `assert`** (#880). The nine became `raise_internal_error`
+  with a code each (CE0141 is new, for an unknown lifecycle kind); a gate refuses a new one.
+- **The console format strings are one table** (#881). A dict keyed by name, one text per
+  name from `FORMAT_STRINGS`; the dead bool slots and the misleading `"%.6f"` are gone.
 - **One HashMap key hash and one key lookup** (#872). `get`, `remove` and `contains_key` share
   `emit_find_key`; `get` and `remove` build their result through the Maybe seam; `free` and
   `destroy` share one body; a resize walks its old buckets with `emit_container_walk`.
