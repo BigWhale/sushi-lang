@@ -10,7 +10,7 @@ from sushi_lang.semantics.generics.hashmap import (
     validate_hashmap_method_with_validator,
 )
 
-from sushi_lang.backend.generics.list import ContainerMethod, emit_from_table
+from sushi_lang.backend.generics.container_table import ContainerMethod, emit_from_table
 from .methods import (
     emit_hashmap_new,
     emit_hashmap_len,
