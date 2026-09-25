@@ -1,0 +1,18 @@
+# A function type is not an extension target. The declaration is refused at its
+# target, and it is the one diagnostic: the body's `self` and each call of the
+# refused method add none (#771).
+# EXPECT_ERROR_CODE: CE2110
+# EXPECT_STDERR_CONTAINS: "test_err_function_type_target.sushi:7:8:"
+# EXPECT_STDERR_CONTAINS: "'fn(i32) -> i32'"
+extend fn(i32) -> i32 seven() i32:
+    return self(1).realise(7)
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 f = twice
+    println("{f.seven()}")
+    let i32 again = f.seven()
+    println(again)
+    return Result.Ok(0)

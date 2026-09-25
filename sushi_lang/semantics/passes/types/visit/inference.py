@@ -445,12 +445,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             elif type_name in self.type_validator.enum_table.by_name:
                 actual_type = self.type_validator.enum_table.by_name[type_name]
 
-        if isinstance(actual_type, CONCRETE_EXTENSION_TARGETS):
-            from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
-            inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
-                actual_type, node.method, self.type_validator
-            )
+        # The built-in method families answer for EVERY receiver, a function value
+        # included (#771). The extension ladder below them answers only for a type an
+        # extension may name.
+        from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+        inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
+            actual_type, node.method, self.type_validator)
 
+        if isinstance(actual_type, CONCRETE_EXTENSION_TARGETS):
             # An extension or perk method's return type is a DECLARED spelling, so it
             # resolves before it is stamped: a `Maybe@(string)` left as a GenericTypeRef is
             # no EnumType, so every consumer reading the stamp fell through -- the backend
@@ -476,9 +478,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                     inferred_type = extension_call_result_type(
                         self.type_validator, resolved.method)
 
-            if inferred_type is not None:
-                node.inferred_return_type = inferred_type
-                return inferred_type
+        if inferred_type is not None:
+            node.inferred_return_type = inferred_type
+            return inferred_type
 
         return None
 

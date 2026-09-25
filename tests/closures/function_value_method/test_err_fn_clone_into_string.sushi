@@ -1,0 +1,12 @@
+# A function value's clone into a `string` is CE2002 at the `let`, and the
+# message spells both Sushi types (#771).
+# EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign fn(i32) -> i32 to string"
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 f = twice
+    let string s = f.clone()
+    println(s)
+    return Result.Ok(0)

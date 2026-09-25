@@ -40,6 +40,9 @@ from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
 # table holds the type object itself -- and a name that resolved to nothing, a
 # reference, or a `@(...)` reference is not one of these and belongs to another
 # collector. ONE tuple: four readers asked the same question with four copies of it.
+# It answers "may an extension name this target" and nothing else (#771). A function
+# type is not in it, and the collect pass refuses one (CE2110); which receivers carry a
+# BUILT-IN method is the method-family table's question, for every receiver.
 CONCRETE_EXTENSION_TARGETS = (
     BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType)
 

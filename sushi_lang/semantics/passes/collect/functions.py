@@ -23,6 +23,7 @@ from sushi_lang.semantics.typesys import (
     Type,
     ArrayType,
     DynamicArrayType,
+    FunctionType,
     ReferenceType,
 )
 from sushi_lang.semantics.generics.types import (
@@ -534,6 +535,7 @@ class FunctionCollector:
             moved = [e for e in extensions
                      if isinstance(e, ExtendDef)
                      and (e.type_params
+                          or isinstance(e.target_type, FunctionType)
                           or (isinstance(e.target_type, DynamicArrayType)
                               and (e.target_shape is None or e.target_shape.param_names)))]
             if moved:
@@ -1025,6 +1027,14 @@ class FunctionCollector:
         """A target that names ONE type: the extension table keys on the type itself."""
         resolved_type = resolve_unknown_type(
             h.target_type, self.structs.by_name, self.enums.by_name)
+
+        # A function type is not an extension target (#771): refused at the target,
+        # and recorded so that a call of the method adds no CE2008.
+        if isinstance(resolved_type, FunctionType):
+            er.emit(self.r, ERR.CE2110, h.target_type_span or h.name_span,
+                    target=display_type(resolved_type))
+            self.generic_extensions.refuse(display_type(resolved_type), h.name)
+            return
 
         if h.method_type_params and resolved_type is not None:
             self._collect_method_generic(h, resolved_type)
