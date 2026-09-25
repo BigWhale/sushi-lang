@@ -15,7 +15,8 @@ if TYPE_CHECKING:
 def emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[EnumConstructor, DotCall], is_dotcall: bool = False) -> ir.Value:
     """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red())."""
     if is_dotcall:
-        assert isinstance(expr.receiver, Name), "DotCall receiver must be a Name for enum constructors"
+        if not isinstance(expr.receiver, Name):
+            raise_internal_error("CE0027", type=type(expr.receiver).__name__)
         enum_name = expr.receiver.id
         variant_name = expr.method
         args = expr.args

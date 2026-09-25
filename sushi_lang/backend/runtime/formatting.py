@@ -83,14 +83,11 @@ class FormattingOperations:
     def emit_print_value(self, v: ir.Value, is_line: bool = False,
                          semantic_type=None) -> None:
         """Write one value to the console, with the newline when `is_line` asks."""
-        assert (
-            self.codegen.builder is not None
-            and self.codegen.runtime.libc_strings.sprintf is not None
-            and self.fmt_i32 is not None
-            and self.fmt_str is not None
-            and self.fmt_f32 is not None
-            and self.fmt_f64 is not None
-        )
+        if self.codegen.builder is None:
+            raise_internal_error("CE0009")
+        if self.codegen.runtime.libc_strings.sprintf is None:
+            raise_internal_error("CE0013", name="sprintf")
+        self.declare_format_strings()
 
         if self.codegen.types.is_string_type(v.type):
             # The fat pointer carries its own byte count, so the string is written in

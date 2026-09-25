@@ -294,7 +294,8 @@ def _emit_match_arms(
 
         if isinstance(arm.pattern, Pattern):
             # Only an enum match has Pattern arms, and emit_match refuses one with no type.
-            assert scrutinee_type is not None
+            if scrutinee_type is None:
+                raise_internal_error("CE0121", pattern=_first_arm_pattern(stmt))
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
 
             # This arm TAKES a payload, so the match must not free the scrutinee on this

@@ -15,6 +15,7 @@ from sushi_lang.semantics.typesys import (
     Type, ArrayType, DynamicArrayType, StructType, EnumType,
 )
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -53,7 +54,8 @@ _HANDLERS: Dict[str, Dict[str, Callable]] = {}
 def register_lifecycle(kind: str, *, destroy: Callable | None = None,
                        clone: Callable | None = None) -> None:
     """Register one half (or both) of a composite kind's lifecycle handler."""
-    assert kind in _KINDS, f"unknown lifecycle kind: {kind}"
+    if kind not in _KINDS:
+        raise_internal_error("CE0141", kind=kind)
     entry = _HANDLERS.setdefault(kind, {})
     if destroy is not None:
         entry["destroy"] = destroy

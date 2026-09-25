@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 
 def emit_break(codegen: 'LLVMCodegen') -> None:
     """Emit break statement (jump to loop end)."""
-    assert codegen.loop_stack, "checker guarantees inside-loop"
+    if not codegen.loop_stack:
+        raise_internal_error("CE0015", message="'break' outside a loop reached the backend")
     _, break_bb, scope_boundary = codegen.loop_stack[-1]
     # Free heap-owning locals of the loop's own scopes before abandoning them; the
     # branch terminates this block, so pop_scope would otherwise skip their destructors.
@@ -27,7 +28,8 @@ def emit_break(codegen: 'LLVMCodegen') -> None:
 
 def emit_continue(codegen: 'LLVMCodegen') -> None:
     """Emit continue statement (jump to loop condition)."""
-    assert codegen.loop_stack, "checker guarantees inside-loop"
+    if not codegen.loop_stack:
+        raise_internal_error("CE0015", message="'continue' outside a loop reached the backend")
     cont_bb, _, scope_boundary = codegen.loop_stack[-1]
     codegen.memory.emit_exit_cleanup(scope_boundary)
     codegen.builder.branch(cont_bb)
@@ -150,7 +152,9 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
 
     iter_name = node.protocol_iter_name
-    assert iter_name is not None, "the typecheck pass names the iterator slot"
+    if iter_name is None:
+        raise_internal_error("CE0015", message="the typecheck pass named no iterator slot "
+                             "for a protocol foreach")
 
     iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = infer_expr_semantic_type(codegen, node.iterable)
