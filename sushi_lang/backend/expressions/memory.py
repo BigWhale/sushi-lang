@@ -37,8 +37,8 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
     # `getelementptr(null, 1)` is the offset of the second element, i.e. one element's
     # padded size. BaseStructType, not LiteralStructType: a user struct is an IDENTIFIED
     # type and a SIBLING rather than a subclass, so the narrower check sent every one to
-    # the CE0079 below (#257).
-    elif isinstance(element_type, ir.types.BaseStructType):
+    # the CE0079 below (#257). A fixed array (`List@(i32[3])`) is an aggregate too (#884).
+    elif isinstance(element_type, (ir.types.BaseStructType, ir.ArrayType)):
         null_ptr = ir.Constant(ir.PointerType(element_type), None)
         size_gep = codegen.builder.gep(
             null_ptr,
