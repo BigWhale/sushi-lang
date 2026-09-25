@@ -13,9 +13,10 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import Name
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+from ..visibility import name_is_contested
 from sushi_lang.semantics.statics import (builtin_type_named, is_builtin_static,
                                           solve_target_type_args, static_template)
-from sushi_lang.semantics.typesys import EnumType, Type
+from sushi_lang.semantics.typesys import EnumType, StructType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -348,6 +349,11 @@ def _refuse_missing_static(validator: 'TypeValidator', call, target: Type) -> bo
     """
     if isinstance(target, EnumType) or _is_generic_enum(validator, call):
         return False
+    # A type name this unit lost (#863) reads the winner's statics; the declaration's
+    # CE0004 / CE0006 already answered for the call.
+    if isinstance(target, StructType) and name_is_contested(validator, "struct",
+                                                              target.name):
+        return True
 
     from sushi_lang.semantics.passes.types.calls.methods import resolve_method
 

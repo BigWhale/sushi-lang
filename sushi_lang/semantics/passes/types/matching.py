@@ -6,7 +6,7 @@ from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
-    BuiltinType, EnumType, ReferenceType, Type,
+    BuiltinType, EnumType, ReferenceType, StructType, Type,
 )
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
@@ -143,6 +143,12 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
 
     if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
         return scrutinee_type
+
+    # A type name this unit lost (#863): the value has the winner's type, and the
+    # declaration's CE0004 / CE0006 is the one fault.
+    if isinstance(scrutinee_type, StructType) and name_is_contested(
+            validator, "struct", scrutinee_type.name):
+        return None
 
     er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=display_type(scrutinee_type))
     return None
