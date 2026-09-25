@@ -2,15 +2,17 @@
 bool).
 """
 
-from typing import Any
+from typing import Any, Callable, Optional
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import BuiltinType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals import errors as er
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 from sushi_lang.sushi_stdlib.src import conversions, ir_common
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT8_BIT_WIDTH
+from sushi_lang.sushi_stdlib.src.type_definitions import get_string_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.semantics.generics.type_display import display_type
 
 
@@ -88,152 +90,35 @@ for prim_type in primitive_types:
 
 
 def generate_module_ir() -> ir.Module:
-    """Generate standalone LLVM IR module for primitive type extension methods."""
+    """Generate the `sushi_<T>_to_str` functions, one for each row of `_TYPE_CONVERSION_SPECS`."""
     module = ir_common.create_stdlib_module("core.primitives")
+    string_type = get_string_type()
 
-    _generate_i8_to_str(module)
-    _generate_i16_to_str(module)
-    _generate_i32_to_str(module)
-    _generate_i64_to_str(module)
-    _generate_u8_to_str(module)
-    _generate_u16_to_str(module)
-    _generate_u32_to_str(module)
-    _generate_u64_to_str(module)
-    _generate_f32_to_str(module)
-    _generate_f64_to_str(module)
-    _generate_bool_to_str(module)
-    _generate_string_to_str(module)
+    for prim_type, (kind, flag, width) in _TYPE_CONVERSION_SPECS.items():
+        param_type, emit_body = _to_str_parts(kind, flag, width, string_type)
+        func = ir.Function(module, ir.FunctionType(string_type, [param_type]),
+                           name=f"sushi_{prim_type}_to_str")
+        builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+        builder.ret(emit_body(module, builder, func.args[0]))
 
     return module
 
 
-def _generate_i8_to_str(module: ir.Module) -> None:
-    """Generate i8.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT8_BIT_WIDTH), "i8", is_signed=True, bit_width=INT8_BIT_WIDTH)
+_BodyEmitter = Callable[[ir.Module, ir.IRBuilder, ir.Value], ir.Value]
 
 
-def _generate_i16_to_str(module: ir.Module) -> None:
-    """Generate i16.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(16), "i16", is_signed=True, bit_width=16)
-
-
-def _generate_i32_to_str(module: ir.Module) -> None:
-    """Generate i32.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT32_BIT_WIDTH), "i32", is_signed=True, bit_width=INT32_BIT_WIDTH)
-
-
-def _generate_i64_to_str(module: ir.Module) -> None:
-    """Generate i64.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT64_BIT_WIDTH), "i64", is_signed=True, bit_width=INT64_BIT_WIDTH)
-
-
-def _generate_u8_to_str(module: ir.Module) -> None:
-    """Generate u8.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT8_BIT_WIDTH), "u8", is_signed=False, bit_width=INT8_BIT_WIDTH)
-
-
-def _generate_u16_to_str(module: ir.Module) -> None:
-    """Generate u16.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(16), "u16", is_signed=False, bit_width=16)
-
-
-def _generate_u32_to_str(module: ir.Module) -> None:
-    """Generate u32.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT32_BIT_WIDTH), "u32", is_signed=False, bit_width=INT32_BIT_WIDTH)
-
-
-def _generate_u64_to_str(module: ir.Module) -> None:
-    """Generate u64.to_str() -> string"""
-    _generate_integer_to_str(module, ir.IntType(INT64_BIT_WIDTH), "u64", is_signed=False, bit_width=INT64_BIT_WIDTH)
-
-
-def _generate_f32_to_str(module: ir.Module) -> None:
-    """Generate f32.to_str() -> string"""
-    _generate_float_to_str(module, ir.FloatType(), "f32", is_double=False)
-
-
-def _generate_f64_to_str(module: ir.Module) -> None:
-    """Generate f64.to_str() -> string"""
-    _generate_float_to_str(module, ir.DoubleType(), "f64", is_double=True)
-
-
-def _generate_bool_to_str(module: ir.Module) -> None:
-    """Generate bool.to_str() -> string"""
-    i8 = ir.IntType(INT8_BIT_WIDTH)
-    i8_ptr = i8.as_pointer()
-    i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-
-    fn_ty = ir.FunctionType(string_struct, [i8])
-    func = ir.Function(module, fn_ty, name="sushi_bool_to_str")
-
-    block = func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-
-    result = conversions.emit_bool_to_string(module, builder, func.args[0])
-
-    builder.ret(result)
-
-
-def _generate_string_to_str(module: ir.Module) -> None:
-    """Generate string.to_str() -> string (identity operation)"""
-    i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
-    i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-
-    fn_ty = ir.FunctionType(string_struct, [string_struct])
-    func = ir.Function(module, fn_ty, name="sushi_string_to_str")
-
-    block = func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-
-    builder.ret(func.args[0])
-
-
-def _generate_integer_to_str(
-    module: ir.Module,
-    int_type: ir.Type,
-    type_name: str,
-    is_signed: bool,
-    bit_width: int
-) -> None:
-    """Generate integer to_str() method implementation."""
-    i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
-    i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-
-    fn_ty = ir.FunctionType(string_struct, [int_type])
-    func = ir.Function(module, fn_ty, name=f"sushi_{type_name}_to_str")
-
-    block = func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-
-    result = conversions.emit_integer_to_string(
-        module, builder, func.args[0], is_signed, bit_width
-    )
-
-    builder.ret(result)
-
-
-def _generate_float_to_str(
-    module: ir.Module,
-    float_type: ir.Type,
-    type_name: str,
-    is_double: bool
-) -> None:
-    """Generate float to_str() method implementation."""
-    i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
-    i32 = ir.IntType(INT32_BIT_WIDTH)
-    string_struct = ir.LiteralStructType([i8_ptr, i32, ir.IntType(8)])  # {data, size, owned} (#145)
-
-    fn_ty = ir.FunctionType(string_struct, [float_type])
-    func = ir.Function(module, fn_ty, name=f"sushi_{type_name}_to_str")
-
-    block = func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-
-    result = conversions.emit_float_to_string(
-        module, builder, func.args[0], is_double
-    )
-
-    builder.ret(result)
+def _to_str_parts(kind: str, flag: Optional[bool], width: Optional[int],
+                  string_type: ir.LiteralStructType) -> tuple[ir.Type, _BodyEmitter]:
+    """The parameter type and the body emitter of one `to_str` function, from its kind."""
+    if kind == 'integer' and width is not None:
+        signed, bits = bool(flag), width
+        return ir.IntType(bits), lambda m, b, v: conversions.emit_integer_to_string(m, b, v, signed, bits)
+    if kind == 'float':
+        is_double = bool(flag)
+        param = ir.DoubleType() if is_double else ir.FloatType()
+        return param, lambda m, b, v: conversions.emit_float_to_string(m, b, v, is_double)
+    if kind == 'bool':
+        return ir.IntType(INT8_BIT_WIDTH), conversions.emit_bool_to_string
+    if kind == 'string':
+        return string_type, lambda m, b, v: v
+    raise InternalCompilerError("CE0075", kind=kind)
