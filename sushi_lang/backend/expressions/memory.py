@@ -14,6 +14,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.generics.container_walk import emit_container_walk
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -159,35 +160,18 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
-    copy_index = entry_alloca(codegen.builder, codegen.types.i32, name="copy_idx")
-    codegen.builder.store(zero, copy_index)
-
-    copy_loop_head = codegen.builder.append_basic_block('copy_loop_head')
-    copy_loop_body = codegen.builder.append_basic_block('copy_loop_body')
-    copy_loop_exit = codegen.builder.append_basic_block('copy_loop_exit')
-
-    codegen.builder.branch(copy_loop_head)
-
-    codegen.builder.position_at_end(copy_loop_head)
-    idx = codegen.builder.load(copy_index)
-    cond = codegen.builder.icmp_unsigned('<', idx, source_len)
-    codegen.builder.cbranch(cond, copy_loop_body, copy_loop_exit)
-
     # An owning element must get its OWN buffers, or the clone and the source share them
     # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
     # and recursion-safe for a self-referential one.
-    codegen.builder.position_at_end(copy_loop_body)
-    src_elem_ptr = codegen.builder.gep(source_data_ptr, [idx])
-    elem = codegen.builder.load(src_elem_ptr)
-    elem = emit_value_clone(codegen, elem, element_type)
-    dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
-    codegen.builder.store(elem, dst_elem_ptr)
+    def copy_element(src_elem_ptr: ir.Value, idx: ir.Value) -> None:
+        elem = codegen.builder.load(src_elem_ptr)
+        elem = emit_value_clone(codegen, elem, element_type)
+        dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
+        codegen.builder.store(elem, dst_elem_ptr)
 
-    next_idx = codegen.builder.add(idx, ir.Constant(codegen.types.i32, 1))
-    codegen.builder.store(next_idx, copy_index)
-    codegen.builder.branch(copy_loop_head)
+    emit_container_walk(codegen, source_data_ptr, source_len, copy_element, prefix="copy")
+    copy_exit = codegen.builder.block
 
-    codegen.builder.position_at_end(copy_loop_exit)
     new_array = ir.Constant(array_struct_type, ir.Undefined)
     new_array = codegen.builder.insert_value(new_array, source_len, 0)
     new_array = codegen.builder.insert_value(new_array, source_cap, 1)
@@ -197,7 +181,7 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     codegen.builder.position_at_end(clone_merge_bb)
     result_phi = codegen.builder.phi(array_struct_type, name="cloned_array")
     result_phi.add_incoming(empty_array, empty_clone_bb)
-    result_phi.add_incoming(new_array, copy_loop_exit)
+    result_phi.add_incoming(new_array, copy_exit)
 
     return result_phi
 
