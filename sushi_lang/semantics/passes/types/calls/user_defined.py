@@ -10,7 +10,7 @@ from ..visibility import (name_is_contested, out_of_scope_help,
                           reject_private_kept_call)
 from ..arguments import check_arguments
 from ..compatibility import types_compatible
-from ..propagation import propagate_types_to_value
+from ..propagation import propagate_types_to_value, type_literal_from_sibling
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES, BUILTIN_NUMERIC_TYPES,
     BUILTIN_UNSIGNED_INTEGER_TYPES)
@@ -276,6 +276,9 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     args = call.args if hasattr(call, 'args') else []
 
     if stdlib_func.params is None:
+        if function_name in ("min", "max") and len(args) == 2:
+            type_literal_from_sibling(validator, args[0], args[1],
+                                      validator.infer_expression_type)
         for arg in args:
             validator.validate_expression(arg)
         _validate_polymorphic_math(validator, call, function_name)

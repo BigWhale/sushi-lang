@@ -595,7 +595,8 @@ class SemanticAnalyzer:
 
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.tables.constants, self.tables.structs, self.tables.enums, self.tables.generic_enums, self.tables.generic_structs, external_table=self.tables.externals,
                                            kept_constants=libraries.kept_constant_names(),
-                                           namespaces=namespaces)
+                                           namespaces=namespaces,
+                                           visibility=self.tables.visibility)
             scope_analyzer.run(unit.ast)
 
             type_validator = TypeValidator(

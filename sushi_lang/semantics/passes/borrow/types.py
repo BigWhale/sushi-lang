@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
 from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
     ArrayType,
@@ -107,13 +108,8 @@ class TypeQueries:
 
     @property
     def drops(self) -> frozenset:
-        """The type names that implement `Drop`, read from the perk table.
-
-        The semantics half of ruling R2a. The classifier takes the answer rather than
-        reaching for a registry, and the tables this object already holds are where the
-        answer lives.
-        """
-        return frozenset(self.tables.perk_impls.by_perk.get("Drop", ()))
+        """The type names that implement `Drop`, read from the perk table."""
+        return drop_type_names(self.tables.perk_impls)
 
     def type_class(self, ty: Optional[Type]) -> TypeClass:
         """Classify a type as PLAIN or MOVE, resolving named types first."""

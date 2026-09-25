@@ -1,0 +1,9 @@
+# A literal argument of min that does not fit the other argument's type is CE2073 (#842).
+# EXPECT_ERROR_CODE: CE2073
+use <math>
+
+fn main() i32:
+    let u8 x = 7
+    let u8 m = min(300, x)
+    println("{m}")
+    return Result.Ok(0)

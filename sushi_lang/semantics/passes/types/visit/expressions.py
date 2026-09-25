@@ -158,28 +158,9 @@ class ExpressionValidator(RecursiveVisitor):
 
     def _context_type_operand_from_sibling(
             self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:
-        """Stamp a bare numeric-literal operand with its concrete sibling's type.
-
-        Bareness is read THROUGH the unary operators that keep their operand's type, so
-        `flags & ~0x0F` is one width rather than the mixed u8/i32 pair of CE2510 (#448).
-        What gets propagated is still the operand node, not the literal under it: the
-        recursion owns the negated-literal rule.
-        """
-        from sushi_lang.semantics.passes.types.propagation import (
-            is_bare_numeric_literal, propagate_types_to_value, unwrap_type_preserving_unary)
-        left, right = node.left, node.right
-        left_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(left))
-        right_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(right))
-        if left_bare == right_bare:
-            return
-        if left_bare:
-            sibling_type = infer(right)
-            if isinstance(sibling_type, BuiltinType):
-                propagate_types_to_value(self.type_validator, left, sibling_type)
-        else:
-            sibling_type = infer(left)
-            if isinstance(sibling_type, BuiltinType):
-                propagate_types_to_value(self.type_validator, right, sibling_type)
+        """Stamp a bare numeric-literal operand with its concrete sibling's type (#448)."""
+        from sushi_lang.semantics.passes.types.propagation import type_literal_from_sibling
+        type_literal_from_sibling(self.type_validator, node.left, node.right, infer)
 
     def visit_lambda(self, node: Lambda) -> None:
         """Type the lambda and reject illegal captures (CE2094).

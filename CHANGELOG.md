@@ -428,6 +428,12 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A literal argument of `min` / `max` takes the other argument's type** (#842). `max(b, 1)` with
+  `b: u32` was a false CE2006; it is a `u32` compare now, bare and behind `use <math> as m`, and a
+  literal that does not fit is CE2073. The rule and the binary-operand rule share one helper.
+- **A type name that lost a clash is silent at its uses** (#863). After CE0004 / CE0006, the losing
+  unit's uses cascaded into CE2105, CE2048, CE2102, CE2028 and CE2080. The contested-name predicate
+  is asked at each of those sites now, so the clash is the one diagnostic.
 - **A perk implementation on a function type is refused** (#864). It compiled, and a call of the
   perk method on a function value ran. It is CE2110 at the target now, the extension path's code,
   and a call of the refused method adds nothing.
@@ -1237,6 +1243,8 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One semantic reader of the `Drop` set** (#791, row 1). `semantics/drop_set.py:drop_type_names`
+  serves the typecheck and the borrow pass; the gate holds one reader per layer.
 - **One seam computes a `T[]` descriptor field address** (#878). The `LLVMTypeSystem` trio is
   gone; every descriptor field GEP -- 32 facade call sites and 12 raw-index sites, four of them
   in files the ticket did not name -- goes through `gep_utils`. The facade calls only public

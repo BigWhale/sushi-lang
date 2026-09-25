@@ -18,6 +18,7 @@ from sushi_lang.semantics.places import Step, walk_place
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceTable
+    from sushi_lang.semantics.visibility import VisibilityTable
 
 # The rungs a `poke` element binding cannot write through: each is a name with no frame
 # slot of its own, so a store through it is undefined behaviour and not a diagnostic
@@ -37,7 +38,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -56,6 +57,7 @@ class ScopeAnalyzer:
         # and "no such name" is the wrong word for a declaration the library has: the
         # type pass says whose it is (CE3005) once this pass lets the name through.
         self.kept_constants: AbstractSet[str] = kept_constants or frozenset()
+        self.visibility = visibility
         self.scopes: List[Dict[str, VariableInfo]] = []
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
@@ -161,7 +163,17 @@ class ScopeAnalyzer:
         """
         if self._is_bound_local(name):
             return False
-        return name in self.enums.by_name or name in self.generic_enums.by_name
+        return (name in self.enums.by_name or name in self.generic_enums.by_name
+                or self._lost_here(name))
+
+    def _lost_here(self, name: str) -> bool:
+        """True if this unit declared the type `name` and lost it to another unit (#863).
+
+        The table then holds the winner's type, and the loser already heard CE0004 or
+        CE0006 at its declaration. Its own `Name.Variant` is a written name, not a value.
+        """
+        return (self.visibility is not None
+                and self.visibility.contested_by("enum", name, self.namespaces.scope.unit))
 
     # --- The rungs of section 8's ladder, as `name_ladder.Rungs` asks them. The ORDER
     # lives in `semantics/name_ladder.py` and the lookups are this pass's own.
