@@ -5,6 +5,17 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **`a.fill(a[i])` is refused when the element owns a resource** (#867). `fill` destroys each
+  slot before it stores its copy, so a value that was a slot of the receiver was freed by the
+  first store and every later slot copied freed storage: the program printed garbage and
+  exited 0. It is **CE2430** now, the `a.extend(a)` code, whose text reads "cannot be the
+  source of a bulk write into" for both. An index reads as any slot, and a get-out
+  (`a.get(0)??`) is refused too. The escape is `a.fill(a[0].clone())`; a plain element is a
+  copy and stays legal. A `let` binding of the slot is not caught yet (#888).
+- **An empty `from([])` with no position type is CE2111** (#868). It was the internal error
+  CE0042. Every `from()` now carries its element type stamp from the typecheck pass -- the
+  declared type, else the inferred one -- and the backend's two guesses from the LLVM layout
+  are deleted. A missing stamp is an internal error.
 - **A channel method spells its success: `return Result.Ok(value)`** (#848). An extension or
   a perk-implementation method with a `| E` channel returned its success BARE, and the
   backend wrapped it in `Result.Ok` in silence. Nothing is wrapped now: a bare `return value`
@@ -406,6 +417,13 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`List.insert` out of bounds evaluates and destroys its element** (#869). The element was
+  emitted only on the in-bounds path: its side effects did not run, a moved local leaked, the
+  temporaries were freed uninitialised (SIGABRT), and the `Err` held an undefined payload.
+  The element is evaluated and consumed before the bounds check now, the `Err` path destroys
+  it, and the `Err` is a real `StdError.Error` built through the Result seam.
+- **A `List@(T[N])` has an element size** (#884). Its first `push` was the internal error
+  CE0079, because the element-size helper had no arm for an LLVM array type.
 - **`string.join` checks its argument** (#850). A `join` argument that was not a `string[]`
   crashed the backend with CE0000 (an `i32[]`, a `bool[]`, a fixed array, a `string`), and a
   `List@(string)` was accepted in silence. Every string method argument now goes through the
