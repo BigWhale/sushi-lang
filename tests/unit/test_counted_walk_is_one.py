@@ -27,10 +27,6 @@ KNOWN_HAND_LOOPS = {
     # A user loop body: `break`/`continue` need loop blocks that the walk does not expose.
     ("statements/loops.py", "_emit_hashmap_foreach"),
     ("types/arrays/methods/core.py", "emit_dynamic_array_free"),
-    ("types/arrays/methods/core.py", "emit_dynamic_array_fill"),
-    ("types/arrays/methods/core.py", "emit_dynamic_array_reverse"),
-    ("types/arrays/methods/core.py", "emit_fixed_array_fill"),
-    ("types/arrays/methods/core.py", "emit_fixed_array_reverse"),
     ("types/arrays/methods/utf8_validate.py", "get_or_emit_utf8_validate"),
 }
 

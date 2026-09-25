@@ -354,118 +354,27 @@ def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, ar
 
     return ir.Constant(codegen.types.i32, 0)
 
-
-def emit_dynamic_array_fill(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
-                            fill_value: ir.Value, element_type: 'Type') -> ir.Value:
-    """Emit code to fill all elements of a dynamic array with a value.
+def emit_array_fill(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
+                    fill_value: ir.Value, element_type: 'Type') -> ir.Value:
+    """Fill `data_ptr[0..count)` with a value, for either array kind.
 
     The argument is a BORROW: each slot takes its own deep copy, so one value can fill
     several arrays and stays usable afterwards. `fill` is the one container write that
     does not consume -- see `docs/stdlib/collections/arrays.md`.
     """
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
 
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
-
-    zero = ir.Constant(codegen.types.i32, 0)
-    one = ir.Constant(codegen.types.i32, 1)
-    is_empty = codegen.builder.icmp_unsigned("==", current_len, zero)
-
-    with codegen.builder.if_then(codegen.builder.not_(is_empty)):
-        loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="fill_loop_i")
-        codegen.builder.store(zero, loop_i)
-
-        loop_cond_bb = codegen.builder.append_basic_block(name="fill_loop_cond")
-        loop_body_bb = codegen.builder.append_basic_block(name="fill_loop_body")
-        loop_end_bb = codegen.builder.append_basic_block(name="fill_loop_end")
-
-        codegen.builder.branch(loop_cond_bb)
-
-        codegen.builder.position_at_end(loop_cond_bb)
-        i_val = codegen.builder.load(loop_i, name="i_val")
-        loop_cond = codegen.builder.icmp_unsigned("<", i_val, current_len, name="loop_cond")
-        codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
-
-        codegen.builder.position_at_end(loop_body_bb)
-        i_val = codegen.builder.load(loop_i, name="i_val")
-        element_ptr = gep_utils.gep_array_element(codegen, data_ptr, i_val, "element_ptr")
-        _store_fill_element(codegen, element_ptr, fill_value, element_type)
-
-        i_next = codegen.builder.add(i_val, one, name="i_next")
-        codegen.builder.store(i_next, loop_i)
-        codegen.builder.branch(loop_cond_bb)
-
-        codegen.builder.position_at_end(loop_end_bb)
-
-    return ir.Constant(codegen.types.i32, 0)
-
-
-def emit_dynamic_array_reverse(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType) -> ir.Value:
-    """Emit code to reverse a dynamic array in-place."""
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
-
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
-
-    zero = ir.Constant(codegen.types.i32, 0)
-    one = ir.Constant(codegen.types.i32, 1)
-    two = ir.Constant(codegen.types.i32, 2)
-
-    is_trivial = codegen.builder.icmp_unsigned("<", current_len, two)
-
-    with codegen.builder.if_then(codegen.builder.not_(is_trivial)):
-        half_len = codegen.builder.udiv(current_len, two, name="half_len")
-
-        element_type = array_type.elements[2].pointee
-        temp_var = entry_alloca(codegen.builder, element_type, name="temp")
-
-        loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="reverse_loop_i")
-        codegen.builder.store(zero, loop_i)
-
-        loop_cond_bb = codegen.builder.append_basic_block(name="reverse_loop_cond")
-        loop_body_bb = codegen.builder.append_basic_block(name="reverse_loop_body")
-        loop_end_bb = codegen.builder.append_basic_block(name="reverse_loop_end")
-
-        codegen.builder.branch(loop_cond_bb)
-
-        codegen.builder.position_at_end(loop_cond_bb)
-        i_val = codegen.builder.load(loop_i, name="i_val")
-        loop_cond = codegen.builder.icmp_unsigned("<", i_val, half_len, name="loop_cond")
-        codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
-
-        codegen.builder.position_at_end(loop_body_bb)
-        i_val = codegen.builder.load(loop_i, name="i_val")
-
-        len_minus_one = codegen.builder.sub(current_len, one, name="len_minus_one")
-        j_val = codegen.builder.sub(len_minus_one, i_val, name="j_val")
-
-        left_ptr = gep_utils.gep_array_element(codegen, data_ptr, i_val, "left_ptr")
-        right_ptr = gep_utils.gep_array_element(codegen, data_ptr, j_val, "right_ptr")
-
-        left_val = codegen.builder.load(left_ptr, name="left_val")
-        codegen.builder.store(left_val, temp_var)
-
-        right_val = codegen.builder.load(right_ptr, name="right_val")
-        codegen.builder.store(right_val, left_ptr)
-
-        temp_val = codegen.builder.load(temp_var, name="temp_val")
-        codegen.builder.store(temp_val, right_ptr)
-
-        i_next = codegen.builder.add(i_val, one, name="i_next")
-        codegen.builder.store(i_next, loop_i)
-        codegen.builder.branch(loop_cond_bb)
-
-        codegen.builder.position_at_end(loop_end_bb)
-
+    emit_container_walk(
+        codegen, data_ptr, count,
+        lambda element_ptr, _i: _store_fill_element(codegen, element_ptr, fill_value,
+                                                    element_type),
+        prefix="fill")
     return ir.Constant(codegen.types.i32, 0)
 
 
 def _store_fill_element(codegen: 'LLVMCodegen', element_ptr: ir.Value,
                         fill_value: ir.Value, element_type: 'Type') -> None:
-    """Put one copy of the fill value into one slot, for either array kind.
+    """Put one copy of the fill value into one slot.
 
     The copy comes FIRST: it reads the source before the old element is freed, so a source
     that aliases the buffer about to go is still intact. `arr[i] := v` orders it the same
@@ -479,95 +388,40 @@ def _store_fill_element(codegen: 'LLVMCodegen', element_ptr: ir.Value,
     codegen.builder.store(codegen.utils.cast_for_param(copy, element_ptr.type.pointee), element_ptr)
 
 
-def emit_fixed_array_fill(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType,
-                          fill_value: ir.Value, element_type: 'Type') -> ir.Value:
-    """Emit code to fill all elements of a fixed array with a value.
+def emit_array_reverse(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value) -> ir.Value:
+    """Reverse `data_ptr[0..count)` in place, for either array kind.
 
-    The argument is a BORROW; see `emit_dynamic_array_fill`.
+    A count known at compile time decides the short case here; a loaded one decides it at
+    run time.
     """
-    zero = ir.Constant(codegen.types.i32, 0)
-    one = ir.Constant(codegen.types.i32, 1)
-    array_size = ir.Constant(codegen.types.i32, array_type.count)
+    builder = codegen.builder
+    two = ir.Constant(codegen.types.i32, 2)
 
-    loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="fill_loop_i")
-    codegen.builder.store(zero, loop_i)
-
-    loop_cond_bb = codegen.builder.append_basic_block(name="fill_loop_cond")
-    loop_body_bb = codegen.builder.append_basic_block(name="fill_loop_body")
-    loop_end_bb = codegen.builder.append_basic_block(name="fill_loop_end")
-
-    codegen.builder.branch(loop_cond_bb)
-
-    codegen.builder.position_at_end(loop_cond_bb)
-    i_val = codegen.builder.load(loop_i, name="i_val")
-    loop_cond = codegen.builder.icmp_unsigned("<", i_val, array_size, name="loop_cond")
-    codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
-
-    codegen.builder.position_at_end(loop_body_bb)
-    i_val = codegen.builder.load(loop_i, name="i_val")
-    element_ptr = codegen.builder.gep(array_ptr, [zero, i_val], name="element_ptr")
-    _store_fill_element(codegen, element_ptr, fill_value, element_type)
-
-    i_next = codegen.builder.add(i_val, one, name="i_next")
-    codegen.builder.store(i_next, loop_i)
-    codegen.builder.branch(loop_cond_bb)
-
-    codegen.builder.position_at_end(loop_end_bb)
+    if isinstance(count, ir.Constant):
+        if count.constant >= 2:
+            _swap_halves(codegen, data_ptr, count,
+                         ir.Constant(codegen.types.i32, count.constant // 2))
+    else:
+        with builder.if_then(builder.icmp_unsigned(">=", count, two, name="reverse_needed")):
+            _swap_halves(codegen, data_ptr, count, builder.udiv(count, two, name="half_len"))
 
     return ir.Constant(codegen.types.i32, 0)
 
 
-def emit_fixed_array_reverse(codegen: 'LLVMCodegen', array_ptr: ir.Value, array_type: ir.ArrayType) -> ir.Value:
-    """Emit code to reverse a fixed array in-place."""
-    zero = ir.Constant(codegen.types.i32, 0)
-    one = ir.Constant(codegen.types.i32, 1)
-    array_size = array_type.count
+def _swap_halves(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
+                 half: ir.Value) -> None:
+    """A walk over the LEFT half: each element swaps with its mirror `count - 1 - i`."""
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
 
-    if array_size < 2:
-        return ir.Constant(codegen.types.i32, 0)
+    builder = codegen.builder
+    temp = entry_alloca(builder, data_ptr.type.pointee, name="temp")
+    last = builder.sub(count, ir.Constant(codegen.types.i32, 1), name="last_index")
 
-    half_len = ir.Constant(codegen.types.i32, array_size // 2)
-    array_size_const = ir.Constant(codegen.types.i32, array_size)
+    def swap(left_ptr: ir.Value, index: ir.Value) -> None:
+        mirror = builder.sub(last, index, name="mirror_index")
+        right_ptr = gep_utils.gep_array_element(codegen, data_ptr, mirror, "right_ptr")
+        builder.store(builder.load(left_ptr, name="left_val"), temp)
+        builder.store(builder.load(right_ptr, name="right_val"), left_ptr)
+        builder.store(builder.load(temp, name="temp_val"), right_ptr)
 
-    element_type = array_type.element
-    temp_var = entry_alloca(codegen.builder, element_type, name="temp")
-
-    loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="reverse_loop_i")
-    codegen.builder.store(zero, loop_i)
-
-    loop_cond_bb = codegen.builder.append_basic_block(name="reverse_loop_cond")
-    loop_body_bb = codegen.builder.append_basic_block(name="reverse_loop_body")
-    loop_end_bb = codegen.builder.append_basic_block(name="reverse_loop_end")
-
-    codegen.builder.branch(loop_cond_bb)
-
-    codegen.builder.position_at_end(loop_cond_bb)
-    i_val = codegen.builder.load(loop_i, name="i_val")
-    loop_cond = codegen.builder.icmp_unsigned("<", i_val, half_len, name="loop_cond")
-    codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
-
-    codegen.builder.position_at_end(loop_body_bb)
-    i_val = codegen.builder.load(loop_i, name="i_val")
-
-    size_minus_one = codegen.builder.sub(array_size_const, one, name="size_minus_one")
-    j_val = codegen.builder.sub(size_minus_one, i_val, name="j_val")
-
-    left_ptr = codegen.builder.gep(array_ptr, [zero, i_val], name="left_ptr")
-    right_ptr = codegen.builder.gep(array_ptr, [zero, j_val], name="right_ptr")
-
-    left_val = codegen.builder.load(left_ptr, name="left_val")
-    codegen.builder.store(left_val, temp_var)
-
-    right_val = codegen.builder.load(right_ptr, name="right_val")
-    codegen.builder.store(right_val, left_ptr)
-
-    temp_val = codegen.builder.load(temp_var, name="temp_val")
-    codegen.builder.store(temp_val, right_ptr)
-
-    i_next = codegen.builder.add(i_val, one, name="i_next")
-    codegen.builder.store(i_next, loop_i)
-    codegen.builder.branch(loop_cond_bb)
-
-    codegen.builder.position_at_end(loop_end_bb)
-
-    return ir.Constant(codegen.types.i32, 0)
+    emit_container_walk(codegen, data_ptr, half, swap, prefix="reverse")
