@@ -101,9 +101,11 @@ class LibraryRegistration:
         # The concrete perk implementations a library ships: registered here for the
         # constraint checks and dispatch, declared and never defined by the backend.
         self.shipped_perk_impls: list['ExtendWithDef'] = []
-        # The private type names a consumer declaration took from the export closure
-        # (#761). The library's template bodies name them, so the analyzer stops before
-        # the per-unit passes measure those bodies against the consumer's layout.
+        # The private type names a consumer declaration took from a library (#761,
+        # #814): from a binary export closure here, from a source library's unit or a
+        # seeded private template in the collect pass. The library's bodies name them,
+        # so the analyzer stops before the per-unit passes measure the library's code
+        # against the consumer's layout, or the consumer's code against the library's.
         self.refused_private_types: list[str] = []
         # One collector for every re-parsed record, built on first use. A fresh
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
@@ -213,6 +215,10 @@ class LibraryRegistration:
         if self.linker is None:
             return
         yield from self.linker.loaded_libraries.items()
+
+    def library_names(self) -> set[str]:
+        """The name of every loaded library, as its visibility records carry it."""
+        return {lib_name for lib_name, _manifest in self._manifests()}
 
     def _template_records(self, key: str) -> Iterator[tuple[str, dict, dict]]:
         """Every `templates.<key>` record of every manifest, with its library."""
@@ -676,8 +682,9 @@ class LibraryRegistration:
         and the consumer's scope admits a name no unit declared. The seed runs before
         the collect loop, so a consumer that then declares the same name is filed as
         the LOSER, and a rule that reads the winner's shape asks `name_is_contested`
-        before it speaks to it (#738). A private template is the private arm's to
-        record (`_register_private_types`).
+        before it speaks to it (#738). A PRIVATE template is recorded under its
+        library, so the collect pass refuses a consumer declaration of that name with
+        CE3011, as the private arm does for a concrete type (#814).
         """
         table = getattr(self.tables, key)
         kind = "struct" if key == "generic_structs" else "enum"
@@ -703,3 +710,6 @@ class LibraryRegistration:
             node = next((d for d in declarations or [] if d.name == type_name), None)
             if getattr(node, "is_public", False):
                 self.tables.visibility.record(DeclOrigin(kind=kind, name=type_name))
+            else:
+                self.tables.visibility.record(DeclOrigin(
+                    kind=kind, name=type_name, unit_name=lib_name, is_public=False))

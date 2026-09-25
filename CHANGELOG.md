@@ -392,6 +392,18 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A function value's method call is inferred** (#771). `let i32 bad = f.clone()` with `f:
+  fn(i32) -> i32` was a backend CE0017 naming the LLVM closure struct; it is CE2002 at the
+  annotation, spelling `fn(i32) -> i32`, and `f.clone().clone()` compiles. Inference asks the
+  method registry for every receiver; the extension-target tuple answers the extension
+  question only. An extension on a function type (`extend fn(i32) -> i32 seven() i32:`) was
+  accepted and dropped in silence; it is **CE2110** at the target (ruling of the
+  maintainer), and a call of it adds nothing.
+- **A consumer type that clashes with a library's private type stops at CE3011** (#814), for
+  a source library as for a binary one, and a binary library's private generic template is
+  CE3011 naming the library instead of a CE0004/CE2027/CE2028 cascade. A struct or enum that
+  loses its name to the other type kind is contested, so its unit hears no CE3005 about the
+  winner.
 - **A wrong type-argument count inside a generic declaration is CE2062 where it is written**
   (#807). `struct S@(T): Box@(T, T) b` compiled clean with no instance, and with one it gave
   a CE2062 with no location. The written template signatures are walked once, before any
@@ -1151,6 +1163,10 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **"Is this method built in" has one home** (#812). `builtin_method_exists` asks
+  `METHOD_TYPE_REGISTRY.answers`; each family carries an `answers` hook, and the perk
+  override is subtracted in `claims`. The gate compares behaviour over a receiver-by-name
+  matrix instead of two spelled lists.
 - **One leading type-argument solver** (#809). The static-target solver and the method-level
   solver of a generic extension call `solve_leading_type_args` (`partial=True`); a lambda
   argument is typed in one place, and a gate refuses a `unify_types` call outside the solver.

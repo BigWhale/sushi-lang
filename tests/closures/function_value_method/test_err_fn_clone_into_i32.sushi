@@ -1,0 +1,14 @@
+# The typecheck pass infers a method call on a function value: `f.clone()` has the
+# type of `f`. A wrong annotation is CE2002 at the `let`, and the message spells the
+# Sushi type, not the backend's struct (#771).
+# EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign fn(i32) -> i32 to i32"
+# EXPECT_STDERR_CONTAINS: "test_err_fn_clone_into_i32.sushi:12:19:"
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 f = twice
+    let i32 bad = f.clone()
+    println("{bad}")
+    return Result.Ok(0)

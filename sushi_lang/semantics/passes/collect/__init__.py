@@ -197,6 +197,20 @@ class CollectorPass:
         finally:
             self.r.origin = previous_origin
 
+    def admit_binary_libraries(self, names: Set[str]) -> None:
+        """A binary library is no unit of the build, but a private TYPE template it ships
+        is seeded under its name before the collect loop, and a consumer's declaration
+        of that name is the CE3011 clash (#814). Only the two type collectors read it.
+        """
+        for collector in (self.struct_collector, self.enum_collector):
+            collector.library_units |= names
+
+    @property
+    def refused_library_types(self) -> list[str]:
+        """The type names a consumer declaration took from a library's PRIVATE type."""
+        return [*self.struct_collector.refused_library_types,
+                *self.enum_collector.refused_library_types]
+
     @property
     def _collectors(self) -> tuple:
         """All six, in collection order. One list, so no binding reaches five of them."""
