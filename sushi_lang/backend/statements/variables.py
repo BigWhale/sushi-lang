@@ -205,9 +205,9 @@ def _emit_dynamic_array_rebind(
             null_ptr = ir.Constant(ir.PointerType(element_type_llvm), None)
 
             from sushi_lang.backend import gep_utils
-            len_ptr = gep_utils.gep_struct_field(codegen, source_slot, 0, "len_ptr")
-            cap_ptr = gep_utils.gep_struct_field(codegen, source_slot, 1, "cap_ptr")
-            data_ptr_ptr = gep_utils.gep_struct_field(codegen, source_slot, 2, "data_ptr_ptr")
+            len_ptr = gep_utils.gep_dynamic_array_len(codegen, source_slot)
+            cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, source_slot)
+            data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, source_slot, "data_ptr_ptr")
 
             codegen.builder.store(zero_i32, len_ptr)
             codegen.builder.store(zero_i32, cap_ptr)

@@ -10,6 +10,7 @@ from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend import gep_utils
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
@@ -143,9 +144,9 @@ class DynamicArrayManager:
 
         null_ptr = ir.Constant(ir.PointerType(element_llvm_type), None)
 
-        len_ptr = self.codegen.types.get_dynamic_array_len_ptr(self.builder, alloca)
-        cap_ptr = self.codegen.types.get_dynamic_array_cap_ptr(self.builder, alloca)
-        data_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, alloca)
+        len_ptr = gep_utils.gep_dynamic_array_len(self.codegen, alloca, builder=self.builder)
+        cap_ptr = gep_utils.gep_dynamic_array_cap(self.codegen, alloca, builder=self.builder)
+        data_ptr = gep_utils.gep_dynamic_array_data(self.codegen, alloca, builder=self.builder)
 
         self.builder.store(ZERO_I32, len_ptr)
         self.builder.store(ZERO_I32, cap_ptr)
@@ -327,9 +328,9 @@ class DynamicArrayManager:
         if descriptor is None:
             raise_internal_error("CE0057", name=name)
 
-        len_ptr = self.codegen.types.get_dynamic_array_len_ptr(self.builder, descriptor.llvm_alloca)
-        cap_ptr = self.codegen.types.get_dynamic_array_cap_ptr(self.builder, descriptor.llvm_alloca)
-        data_ptr_ptr = self.codegen.types.get_dynamic_array_data_ptr(self.builder, descriptor.llvm_alloca)
+        len_ptr = gep_utils.gep_dynamic_array_len(self.codegen, descriptor.llvm_alloca, builder=self.builder)
+        cap_ptr = gep_utils.gep_dynamic_array_cap(self.codegen, descriptor.llvm_alloca, builder=self.builder)
+        data_ptr_ptr = gep_utils.gep_dynamic_array_data(self.codegen, descriptor.llvm_alloca, builder=self.builder)
 
         self.builder.store(length, len_ptr)
         self.builder.store(capacity, cap_ptr)

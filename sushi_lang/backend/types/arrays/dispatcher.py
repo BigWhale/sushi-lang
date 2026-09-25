@@ -6,6 +6,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, deref_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend import gep_utils
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -63,8 +64,8 @@ def _source_data_and_len(codegen: 'LLVMCodegen', expr, source_arg):
 
     struct_type = value.type.pointee if isinstance(value.type, ir.PointerType) else value.type
     address = as_array_address(codegen, value, struct_type, source_arg, source_type)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, address)
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, address)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, address)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, address)
     return (codegen.builder.load(data_ptr_ptr, name="copy_src_data"),
             codegen.builder.load(len_ptr, name="copy_src_len"),
             source_type.base_type)
@@ -93,8 +94,8 @@ def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
 def _dynamic_data_and_len(codegen: 'LLVMCodegen', receiver: ir.Value,
                           prefix: str) -> tuple[ir.Value, ir.Value]:
     """A `T[]` receiver address as its (data pointer, length)."""
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver)
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver)
     return (codegen.builder.load(data_ptr_ptr, name=f"{prefix}_data"),
             codegen.builder.load(len_ptr, name=f"{prefix}_len"))
 
@@ -364,8 +365,8 @@ def emit_dynamic_array_method(
                                                   element_semantic_type)
 
         case "s" | "ss":
-            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver_value)
-            len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver_value)
+            data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value)
+            len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value)
             start, extent, by_end = _slice_args(codegen, method_name, expr.args)
             return core.emit_dynamic_array_slice(
                 codegen, array_struct_type.elements[2].pointee,
