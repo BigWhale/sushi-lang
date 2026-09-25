@@ -1,0 +1,28 @@
+# Each 'expand' copy returns early, and a statement follows the expansion. The
+# unrolled copies sit in one block, but none of them was written after another,
+# so no statement is dead (#854).
+# EXPECT_STDOUT_EXACT: "first:7\nfirst:x\n"
+# EXPECT_RUNTIME_EXIT: 0
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+extend string with Display:
+    fn display() string:
+        return self.clone()
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        if (a.display() != ""):
+            return Result.Ok("first:{a.display()}")
+        return Result.Ok("empty")
+    println("no arguments")
+    return Result.Ok("none")
+
+fn main() i32:
+    println(first(7, "two").realise(""))
+    println(first("x", 3).realise(""))
+    return Result.Ok(0)

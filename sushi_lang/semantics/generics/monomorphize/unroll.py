@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import itertools
 from typing import Dict, List
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
 )
+
+
+_COPY_IDS = itertools.count(1)
 
 
 def _is_frozen_dataclass(obj) -> bool:
@@ -97,6 +101,9 @@ def _unroll_expand(
         # at) still gets its own fresh local name here.
         renamed = _rename_copy_locals(renamed, i)
         renamed = _unroll_stmt_list(renamed, pack_param_fanout)
+        copy_id = next(_COPY_IDS)
+        for stmt in renamed:
+            stmt.expand_copies = (copy_id, *stmt.expand_copies)
         out.extend(renamed)
     return out
 
