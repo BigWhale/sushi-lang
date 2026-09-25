@@ -1,0 +1,13 @@
+# A wrong type-argument count in a generic function's parameter is refused where it is
+# written, with no instance of the function (#807).
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: test_err_template_arity_fn_param.sushi:9:14: error [CE2062]
+struct Box@(T, U):
+    T a
+    U b
+
+fn first@(T)(Box@(T) b) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)

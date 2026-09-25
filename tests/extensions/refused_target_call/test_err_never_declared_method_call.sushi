@@ -1,0 +1,16 @@
+# The control for the refused-target fixtures beside it: a method that was never
+# declared on the type is still an undefined name, CE2008, while another method of
+# the same type was refused (#808).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2008
+struct Box@(T, U):
+    T a
+    U b
+
+extend Box@(i32) twice() i32:
+    return self.a * 2
+
+fn main() i32:
+    let Box@(i32, i32) b = Box(1, 2)
+    println("{b.thrice()}")
+    return Result.Ok(0)

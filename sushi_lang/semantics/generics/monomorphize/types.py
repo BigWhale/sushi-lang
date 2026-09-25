@@ -20,6 +20,9 @@ class TypeMonomorphizer:
     def __init__(self, monomorphizer):
         """Initialize type monomorphizer."""
         self.monomorphizer = monomorphizer
+        # Each (generic, count) that `refuse_template_arity` refused at a written
+        # template position, so the substituted instance does not report it again.
+        self.template_arity_refused: Set[Tuple[str, int]] = set()
 
     def monomorphize_all_enums(
         self,
@@ -222,6 +225,11 @@ class TypeMonomorphizer:
         if key in mono._refused:
             return True
         span, filename = mono.sites.get(key, (None, None))
+        if span is None and (generic.name, len(type_args)) in self.template_arity_refused:
+            # A substitution of a template position that `refuse_template_arity`
+            # reported where it is written (#807).
+            mono._refused.add(key)
+            return True
         reject_type_arg_arity(
             mono.reporter, generic.name, generic, len(type_args), span, filename,
             declared_at=mono.template_span(kind, generic.name),
@@ -229,6 +237,53 @@ class TypeMonomorphizer:
         mono._refused.add(key)
         mono.constraint_violations += 1
         return True
+
+    def refuse_template_arity(self, units) -> None:
+        """CE2062 at every position INSIDE a template whose type-argument count is wrong.
+
+        The instantiate pass collects no type that still names a type parameter, so such
+        a position has no site: a template with no instance was never checked, and an
+        instance reported with no location (#807). The count does not depend on the type
+        argument, so it is checked here, where it is written, before any instance is
+        made. A concrete type in a template is collected with its site and is not this
+        walk's.
+        """
+        from sushi_lang.semantics.ast_walk import is_written, signature_types
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_walk import walk_named_types
+
+        for unit in units:
+            if unit.ast is None or unit.provenance is not None:
+                continue
+            # A generic-target extension or perk implementation is a template too. Its
+            # TARGET is `reject_unwritable_target`'s, so the receiver site is not read.
+            generic_targets = {id(decl) for decl in (*unit.ast.generic_extensions,
+                                                     *unit.ast.generic_perk_impls)}
+            for site in signature_types(unit.ast):
+                if not is_written(site.decl):
+                    continue
+                if not (getattr(site.decl, "type_params", None)
+                        or (id(site.decl) in generic_targets
+                            and site.position != "receiver")):
+                    continue
+                for ty in walk_named_types(site.ty, through_declarations=False):
+                    if isinstance(ty, GenericTypeRef) and self._is_abstract(ty.type_args):
+                        self._refuse_written_arity(ty, site.span, str(unit.file_path))
+
+    def _refuse_written_arity(self, ref, span, filename: str) -> None:
+        """CE2062 for one written `@(...)` list in a template, when its count is wrong."""
+        mono = self.monomorphizer
+        for kind, generics in (("struct", mono.generic_structs), ("enum", mono.generic_enums)):
+            generic = generics.get(ref.base_name)
+            if generic is None:
+                continue
+            if reject_type_arg_arity(
+                    mono.reporter, ref.base_name, generic, len(ref.type_args), span,
+                    filename, declared_at=mono.template_span(kind, ref.base_name),
+                    declared_in=mono.template_file(kind, ref.base_name)):
+                self.template_arity_refused.add((ref.base_name, len(ref.type_args)))
+                mono.constraint_violations += 1
+            return
 
     def _is_abstract(self, type_args: Tuple[Type, ...]) -> bool:
         """Whether an argument still names an enclosing template's type parameter."""

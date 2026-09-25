@@ -126,6 +126,11 @@ class TypeValidator:
         for ext in program.extensions:
             self._validate_extension_method(ext)
 
+        from .perks import validate_template_header
+        for impl in program.generic_perk_impls:
+            self.reporter.leave_body()
+            validate_template_header(self, impl)
+
         for impl in program.perk_impls:
             # The header is read as written, never as a copy of a body (#800).
             self.reporter.leave_body()

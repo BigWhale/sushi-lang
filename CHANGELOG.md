@@ -392,6 +392,18 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A wrong type-argument count inside a generic declaration is CE2062 where it is written**
+  (#807). `struct S@(T): Box@(T, T) b` compiled clean with no instance, and with one it gave
+  a CE2062 with no location. The written template signatures are walked once, before any
+  instance, through the one arity seam.
+- **A call of a refused extension method is silent** (#808). A refused generic extension
+  declaration (CE2062, CE2098, CE2001, CE2064) is recorded, and a call of it no longer adds
+  CE2008 on top of the refusal.
+- **A perk header on a generic target is judged once, on the written template** (#811).
+  CE4004, CE4005 and CE0133 printed once per instance. Ruling of the maintainer: the written
+  header must match the contract for every type argument, so `fn f(T x)` against a contract
+  `fn f(i32 x)` is CE4004 even when every instance uses `T = i32` (write `extend Box@(i32)
+  with Pk` for one instance). A template with no instance is judged too.
 - **A fall-off is CE0107 in a `| E` method and in a lambda** (#845). A `~` extension or perk
   method with a `| E` channel, and a `~` lambda block body, that reached their end answered
   `Result.Err` in silence. They end with `return ~` and `return Result.Ok(~)`. A bare `~`
@@ -1139,6 +1151,9 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One leading type-argument solver** (#809). The static-target solver and the method-level
+  solver of a generic extension call `solve_leading_type_args` (`partial=True`); a lambda
+  argument is typed in one place, and a gate refuses a `unify_types` call outside the solver.
 - **`LLVMCodegen` generates code; `LLVMDriver` compiles and links** (#841). The seven
   compile and link methods moved to `backend/driver.py`, the print-frame stacks are one
   `PrintFrames` object, both build paths share one declare-and-define walk, and six

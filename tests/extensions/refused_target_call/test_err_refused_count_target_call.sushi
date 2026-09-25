@@ -1,0 +1,18 @@
+# A target with the wrong number of type arguments is refused (CE2062), and the
+# method is not filed. A call of the refused method is not an undefined name: the
+# declaration already carries the one diagnostic, so no call adds a CE2008 (#808).
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2062
+struct Box@(T, U):
+    T a
+    U b
+
+extend Box@(i32) twice() i32:
+    return self.a * 2
+
+fn main() i32:
+    let Box@(i32, i32) b = Box(1, 2)
+    println("{b.twice()}")
+    let i32 again = b.twice()
+    println(again)
+    return Result.Ok(0)
