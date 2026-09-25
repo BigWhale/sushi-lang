@@ -29,7 +29,7 @@ def _emit_generic_hash(prim_type: BuiltinType) -> Any:
     def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Generic hash() emitter created by factory."""
-        if len(call.args) != 0:
+        if call is not None and call.args:
             raise_internal_error("CE0054", got=len(call.args))
 
         builder = require_builder(codegen)

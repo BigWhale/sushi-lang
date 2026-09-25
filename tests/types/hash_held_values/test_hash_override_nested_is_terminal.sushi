@@ -1,0 +1,31 @@
+# An overridden struct is terminal: a struct that holds it combines the override's answer
+# and does not walk its fields. The outer hash then depends only on the override.
+# EXPECT_STDOUT_EXACT: "inner true\nouter true\ndeep true\n"
+# EXPECT_NO_LEAKS
+
+struct Tag:
+    string label
+    i32 n
+
+extend Tag with Hashable:
+    fn hash() u64:
+        return self.label.hash()
+
+struct Outer:
+    Tag tag
+    i32 k
+
+struct Deep:
+    Outer o
+
+fn main() i32:
+    let Tag t1 = Tag("a", 1)
+    let Tag t2 = Tag("a", 2)
+    println("inner {t1.hash() == t2.hash()}")
+    let Outer o1 = Outer(Tag("a", 1), 5)
+    let Outer o2 = Outer(Tag("a", 2), 5)
+    println("outer {o1.hash() == o2.hash()}")
+    let Deep d1 = Deep(Outer(Tag("a", 1), 5))
+    let Deep d2 = Deep(Outer(Tag("a", 9), 5))
+    println("deep {d1.hash() == d2.hash()}")
+    return Result.Ok(0)

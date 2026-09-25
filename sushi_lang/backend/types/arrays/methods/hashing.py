@@ -1,8 +1,8 @@
 """LLVM emission for the auto-derived array hash() method."""
 
-from typing import Any
-from sushi_lang.semantics.ast import MethodCall, Name
-from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, BuiltinType, StructType, EnumType
+from typing import Any, Optional
+from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
@@ -10,26 +10,25 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
+from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
     """Create a hash() emitter function for fixed array types."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
-        if len(call.args) != 0:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
-        builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
         hash_value = emit_fnv1a_init(codegen)
 
         # Two callers, two shapes. The method dispatcher hands an address down from
         # `as_fixed_array_address` (#480). The DERIVED struct hash
-        # (`backend/types/structs.py::_emit_field_hash`) hands a field value, because it
+        # (`backend/types/value_hash.py::emit_value_hash`) hands a field value, because it
         # walks a loaded struct and no field of it has an address. A hash only READS, so
         # spilling that value is sound -- the read/write split the seam draws.
         if isinstance(receiver_value.type, ir.PointerType):
@@ -45,7 +44,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
             element_value = builder.load(element_ptr, name=f"elem_{i}")
 
-            element_hash = emit_element_hash(codegen, element_value, array_type.base_type)
+            element_hash = emit_value_hash(codegen, element_value, array_type.base_type)
 
             hash_value = emit_fnv1a_combine(codegen, hash_value, element_hash)
 
@@ -59,14 +58,12 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     """Create a hash() emitter function for dynamic array types."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
-        if len(call.args) != 0:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
-        builder = codegen.builder
         i32 = ir.IntType(INT32_BIT_WIDTH)
         u64 = ir.IntType(INT64_BIT_WIDTH)
 
@@ -106,7 +103,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         element_ptr = builder.gep(data_ptr, [current_counter], name="element_ptr")
         element_value = builder.load(element_ptr, name="element")
 
-        element_hash = emit_element_hash(codegen, element_value, array_type.base_type)
+        element_hash = emit_value_hash(codegen, element_value, array_type.base_type)
 
         current_hash = builder.load(hash_value_alloca)
         new_hash = emit_fnv1a_combine(codegen, current_hash, element_hash)
@@ -127,40 +124,6 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
         return final_hash
 
     return emitter
-
-
-def emit_element_hash(codegen: Any, element_value: ir.Value, element_type: Type) -> ir.Value:
-    """The hash of ONE held value, by its semantic type.
-
-    An array element asks this, and so does a `List@(T)` element and an `Own@(T)`
-    payload (#628): a held value is a held value, and one reader keeps the three from
-    drifting apart.
-    """
-    require_builder(codegen)
-
-    if isinstance(element_type, BuiltinType):
-        if element_type == BuiltinType.STRING:
-            from sushi_lang.backend.types.primitives.hashing import _emit_string_hash_fnv1a
-            return _emit_string_hash_fnv1a(codegen, element_value)
-
-        import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-    elif not isinstance(element_type, (StructType, EnumType)):
-        raise_internal_error("CE0052", type=str(element_type))
-
-    hash_method = codegen.derived_methods.get_method(element_type, "hash")
-    if hash_method is None:
-        raise_internal_error("CE0051", type=str(element_type))
-
-    fake_call = MethodCall(
-        receiver=Name(id="element", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    return hash_method.llvm_emitter(
-        codegen, fake_call, element_value, element_value.type, False
-    )
 
 
 def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,

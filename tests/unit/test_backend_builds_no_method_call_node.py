@@ -18,13 +18,9 @@ from sushi_lang.backend.expressions.calls import generics
 
 BACKEND = Path(generics.__file__).resolve().parents[2]
 
-# The element-hash sites build a fake node for the derived hash emitter (#855). This list
-# may only get shorter.
-KNOWN_NODE_BUILDERS = {
-    ("types/arrays/methods/hashing.py", "emit_element_hash"),
-    ("types/enums.py", "_emit_associated_value_hash"),
-    ("types/structs.py", "_emit_field_hash"),
-}
+# No backend function builds a call node. The hash sites that did (#855) call
+# `emit_value_hash` and `emit_key_hash_i32` now, so the list is empty and stays empty.
+KNOWN_NODE_BUILDERS: set[tuple[str, str]] = set()
 
 
 def _node_builders(source: str) -> list[str]:

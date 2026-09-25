@@ -1,0 +1,35 @@
+# A struct field and an enum payload of an array type hash the array, and a struct that
+# holds a List@(i32[]) reaches the element hash through the List.
+# EXPECT_STDOUT_EXACT: "field=true false\npayload=true false\nheld=true false\n"
+# EXPECT_NO_LEAKS
+
+struct Row:
+    i32[] cells
+
+enum Cell:
+    Many(i32[3])
+    Empty
+
+struct Grid:
+    List@(i32[]) rows
+
+fn main() i32:
+    let Row r1 = Row(from([1, 2]))
+    let Row r2 = Row(from([1, 2]))
+    let Row r3 = Row(from([1, 5]))
+    println("field={r1.hash() == r2.hash()} {r1.hash() == r3.hash()}")
+    let Cell c1 = Cell.Many([1, 2, 3])
+    let Cell c2 = Cell.Many([1, 2, 3])
+    let Cell c3 = Cell.Many([1, 2, 9])
+    println("payload={c1.hash() == c2.hash()} {c1.hash() == c3.hash()}")
+    let List@(i32[]) rows1 = List.new()
+    rows1.push(from([1, 2]))
+    let List@(i32[]) rows2 = List.new()
+    rows2.push(from([1, 2]))
+    let List@(i32[]) rows3 = List.new()
+    rows3.push(from([1, 7]))
+    let Grid g1 = Grid(rows1)
+    let Grid g2 = Grid(rows2)
+    let Grid g3 = Grid(rows3)
+    println("held={g1.hash() == g2.hash()} {g1.hash() == g3.hash()}")
+    return Result.Ok(0)
