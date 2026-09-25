@@ -113,11 +113,14 @@ def reject_external_naming_a_defined_symbol(
             if found is None:
                 continue
             note, span, filename = found
-            er.emit_with(reporter, er.ERR.CE5013,
-                         decl.name_span or decl.loc,
-                         symbol=decl.link_name) \
-                .note(note, span, filename) \
-                .emit()
+            diagnostic = er.emit_with(reporter, er.ERR.CE5013,
+                                      decl.name_span or decl.loc,
+                                      symbol=decl.link_name)
+            if span is None:
+                diagnostic.note(note)
+            else:
+                diagnostic.note_at(note, span, filename)
+            diagnostic.emit()
 
 
 def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:

@@ -207,13 +207,13 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
         # borrow before consuming any, so both orders of `both(peek s, s)` are one
         # rule.
         if state.is_borrowed:
-            checker.err.emit_with(er.ERR.CE2401, use_span, name=name) \
-                .note("borrowed here, in the same statement",
-                      state.first_borrow_span) \
-                .help(f"the new owner frees this value while the borrow still points "
+            diag = checker.err.emit_with(er.ERR.CE2401, use_span, name=name)
+            if state.first_borrow_span is not None:
+                diag.note_at("borrowed here, in the same statement",
+                             state.first_borrow_span)
+            diag.help(f"the new owner frees this value while the borrow still points "
                       f"at it; borrow it twice, or clone what the owning position "
-                      f"needs: `{name}.clone()`") \
-                .emit()
+                      f"needs: `{name}.clone()`").emit()
             return
         # Handing the owner away leaves every binding reading out of it pointing at
         # storage the new owner frees (#242).

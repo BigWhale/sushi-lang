@@ -84,12 +84,12 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
         diag = checker.err.emit_with(er.ERR.CE2435, use_span,
                                      name=name, method=method)
         if state.moved_at_span is not None:
-            diag.note(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
+            diag.note_at(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
         diag.emit()
         return
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
     if state.moved_at_span is not None:
-        diag.note(f"'{name}' was moved here", state.moved_at_span)
+        diag.note_at(f"'{name}' was moved here", state.moved_at_span)
     diag.emit()
 
 
@@ -101,8 +101,9 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
     diag = checker.err.emit_with(er.ERR.CE2412, state.invalidated_at,
                                  owner=owner, name=name)
     if state.bound_at_span is not None:
-        diag.note(f"'{name}' borrows from '{owner}' here", state.bound_at_span)
-    diag.note(f"'{name}' is used here, after the change", use_span)
+        diag.note_at(f"'{name}' borrows from '{owner}' here", state.bound_at_span)
+    if use_span is not None:
+        diag.note_at(f"'{name}' is used here, after the change", use_span)
     diag.help(f"{what} after the last use of '{name}', "
               f"or bind an independent value with `.clone()`")
     diag.emit()
@@ -136,8 +137,8 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     owner = root_owner(expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
-        diag.note(f"'{owner}' owns this value and still frees it",
-                  state.declared_at_span)
+        diag.note_at(f"'{owner}' owns this value and still frees it",
+                     state.declared_at_span)
     # The OWNER's type answers the escape question: a read through it can only be
     # refused when what is read owns something, and it is the owner that holds it.
     owner_type = state.var_type if state is not None else None
@@ -155,7 +156,9 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
     for kind in BORROW_KINDS:
         if kind.matches(state):
             mode = getattr(state.var_type, "mutability", "")
-            diag.note(kind.note.format(name=name, mode=mode), kind.note_span(state))
+            note_span = kind.note_span(state)
+            if note_span is not None:
+                diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
     diag.help(escape_help(checker, name, state.var_type))
     diag.emit()

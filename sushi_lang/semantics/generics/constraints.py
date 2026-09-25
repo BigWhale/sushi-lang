@@ -81,7 +81,7 @@ class ConstraintValidator:
                                           ty=display_type(type_arg), perk=constraint_name)
             note_span, note_file = note if note is not None else (None, None)
             if note_span is not None:
-                diagnostic = diagnostic.note(
+                diagnostic = diagnostic.note_at(
                     f"the constraint '{constraint_name}' is declared here", note_span, note_file)
             diagnostic.emit()
             return False

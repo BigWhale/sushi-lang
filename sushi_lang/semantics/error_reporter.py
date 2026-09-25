@@ -35,6 +35,9 @@ class _NullDiagnosticBuilder:
     def note(self, *args, **kwargs) -> "_NullDiagnosticBuilder":
         return self
 
+    def note_at(self, *args, **kwargs) -> "_NullDiagnosticBuilder":
+        return self
+
     def help(self, *args, **kwargs) -> "_NullDiagnosticBuilder":
         return self
 

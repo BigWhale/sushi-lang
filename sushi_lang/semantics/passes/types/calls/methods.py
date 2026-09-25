@@ -409,8 +409,9 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     diag = er.emit_with(validator.reporter, er.ERR.CE2515, call.loc,
                         method=call.method, wrapper=display_type(receiver_type))
     receiver = call.receiver
-    if getattr(receiver, "loc", None) is not None:
-        diag.note("the unhandled channel comes from this call", receiver.loc)
+    receiver_loc = getattr(receiver, "loc", None)
+    if receiver_loc is not None:
+        diag.note_at("the unhandled channel comes from this call", receiver_loc)
     fix = ""
     if isinstance(receiver, (MethodCall, DotCall)):
         fix = f" -- e.g. '{receiver.method}()??.{call.method}()'"

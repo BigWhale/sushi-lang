@@ -96,24 +96,27 @@ def _check_tags(reporter: 'Reporter', doc: 'DocBlock', owner) -> None:
             written = tag.name or ""
             first = first_for_parameter.get(written)
             if first is not None:
-                er.emit_with(reporter, er.ERR.CE7002, tag.loc, name=written).note(
-                    f"'{written}' is documented here as well", first.loc)
+                diag = er.emit_with(reporter, er.ERR.CE7002, tag.loc, name=written)
+                if first.loc is not None:
+                    diag.note_at(f"'{written}' is documented here as well", first.loc)
                 continue
             first_for_parameter[written] = tag
             if declared is not None and written not in declared:
                 # The name span, so the note's caret lands on the callable's name
                 # rather than collapsing over the whole declaration.
                 where = getattr(owner, "name_span", None) or getattr(owner, "loc", None)
-                er.emit_with(reporter, er.ERR.CE7001, tag.loc,
-                             name=written, callable=name).note(
-                    f"'{name}' is declared here", where)
+                diag = er.emit_with(reporter, er.ERR.CE7001, tag.loc,
+                                    name=written, callable=name)
+                if where is not None:
+                    diag.note_at(f"'{name}' is declared here", where)
             continue
 
         if tag.kind in _SINGLETON_TAGS:
             first = first_singleton.get(tag.kind)
             if first is not None:
-                er.emit_with(reporter, er.ERR.CE7003, tag.loc, tag=tag.word).note(
-                    "the first one is here", first.loc)
+                diag = er.emit_with(reporter, er.ERR.CE7003, tag.loc, tag=tag.word)
+                if first.loc is not None:
+                    diag.note_at("the first one is here", first.loc)
                 continue
             first_singleton[tag.kind] = tag
 
@@ -153,9 +156,10 @@ def _check_positions(reporter: 'Reporter', program: 'Program') -> None:
     for decl in bodied(program):
         body_doc = getattr(decl.body, "doc", None)
         if decl.doc is not None and body_doc is not None and body_doc is not decl.doc:
-            er.emit_with(reporter, er.ERR.CE7006, body_doc.loc,
-                         name=decl.name).location_only().note(
-                "the other block is here", decl.doc.loc)
+            diag = er.emit_with(reporter, er.ERR.CE7006, body_doc.loc,
+                                name=decl.name).location_only()
+            if decl.doc.loc is not None:
+                diag.note_at("the other block is here", decl.doc.loc)
 
 
 # -- completeness, behind --warn-missing-docs -----------------------------------

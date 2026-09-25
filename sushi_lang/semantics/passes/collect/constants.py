@@ -139,8 +139,10 @@ class ConstantCollector:
             if (prev_unit is None
                     or prev_unit == self.current_unit_name
                     or self._shadows_a_library_export(name)):
-                er.emit_with(self.r, ERR.CE0105, name_span, name=name) \
-                    .note("first defined here", prev.name_span, prev.filename).emit()
+                diag = er.emit_with(self.r, ERR.CE0105, name_span, name=name)
+                if prev.name_span is not None:
+                    diag.note_at("first defined here", prev.name_span, prev.filename)
+                diag.emit()
                 return
 
         self.constants.declare(name, sig)

@@ -165,8 +165,8 @@ def _leaked_type(validator: 'TypeValidator', ty: Any) -> Optional[Any]:
 def _note_declaration(diagnostic, origin) -> None:
     """Point at the declaration that refused, when it can say where it lives."""
     if origin.name_span is not None and origin.filename is not None:
-        diagnostic.note("declared here, without `public`",
-                        origin.name_span, origin.filename).emit()
+        diagnostic.note_at("declared here, without `public`",
+                           origin.name_span, origin.filename).emit()
         return
     diagnostic.emit()
 

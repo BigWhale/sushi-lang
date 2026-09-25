@@ -83,7 +83,7 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     """
     prev = spans.get(name)
     if prev is not None:
-        return builder.note(what, prev, files.get(name) if files else None)
+        return builder.note_at(what, prev, files.get(name) if files else None)
     return builder.note("defined by the compiler")
 
 

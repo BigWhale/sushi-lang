@@ -183,8 +183,10 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
             code = er.ERR.CE2407
         else:
             continue
-        checker.err.emit_with(code, stmt.loc, name=owner) \
-            .note(f"'{bound_name}' binds it here", bound_span).emit()
+        diag = checker.err.emit_with(code, stmt.loc, name=owner)
+        if bound_span is not None:
+            diag.note_at(f"'{bound_name}' binds it here", bound_span)
+        diag.emit()
         return
 
     if is_poke:
@@ -209,8 +211,8 @@ def _reject_poke_through_peek(checker: 'BorrowChecker', owner: str,
     """Report CE2408 for a `poke` element binding out of a read-only borrow."""
     diag = checker.err.emit_with(er.ERR.CE2408, span, name=owner)
     if owner_state.declared_at_span is not None:
-        diag.note(f"'{owner}' is declared here as a read-only borrow",
-                  owner_state.declared_at_span)
+        diag.note_at(f"'{owner}' is declared here as a read-only borrow",
+                     owner_state.declared_at_span)
     diag.help("a `poke` element binding would write the caller's container through a "
               "read-only borrow; declare the parameter `poke` if the elements must be "
               "written, or drop the marker and bind the element by value")
@@ -279,8 +281,8 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     owner = root_owner(scrutinee) if scrutinee is not None else None
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
-        diag.note(f"'{owner}' owns this value and still frees it",
-                  state.declared_at_span)
+        diag.note_at(f"'{owner}' owns this value and still frees it",
+                     state.declared_at_span)
     diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
               f"taken here; drop the marker to read through the borrow instead")
     diag.emit()
@@ -300,8 +302,10 @@ def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,
         return
     name, span = left[0]
     diag = checker.err.emit_with(er.ERR.CE2433, span, name=name)
-    diag.note(f"'{taken[0][0]}' is taken here, which moves the whole variant",
-              taken[0][1])
+    taken_name, taken_span = taken[0]
+    if taken_span is not None:
+        diag.note_at(f"'{taken_name}' is taken here, which moves the whole variant",
+                     taken_span)
     diag.help(f"mark '{name}' `nom` as well, or drop the `nom` from '{taken[0][0]}' and "
               f"read both through the borrow")
     diag.emit()

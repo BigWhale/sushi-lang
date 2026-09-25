@@ -137,7 +137,7 @@ def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE3012, loc, name=name)
     for origin in candidates:
         if origin.name_span is not None:
-            diagnostic = diagnostic.note(
+            diagnostic = diagnostic.note_at(
                 f"unit '{origin.unit_name}' declares it here",
                 origin.name_span, origin.filename)
     first = candidates[0].unit_name

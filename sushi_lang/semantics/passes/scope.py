@@ -120,8 +120,10 @@ class ScopeAnalyzer:
         for outer_scope in self.scopes[:-1]:
             if name in outer_scope:
                 outer_var = outer_scope[name]
-                self.err.emit_with(er.ERR.CW1002, span, name=name) \
-                    .note("first declared here", outer_var.declared_at).emit()
+                diag = self.err.emit_with(er.ERR.CW1002, span, name=name)
+                if outer_var.declared_at is not None:
+                    diag.note_at("first declared here", outer_var.declared_at)
+                diag.emit()
                 break
 
         current_scope = self.scopes[-1]
