@@ -1,25 +1,5 @@
 """Type and struct size constants."""
 
-
-I8_SIZE_BYTES = 1
-I16_SIZE_BYTES = 2
-I32_SIZE_BYTES = 4
-I64_SIZE_BYTES = 8
-
-U8_SIZE_BYTES = 1
-U16_SIZE_BYTES = 2
-U32_SIZE_BYTES = 4
-U64_SIZE_BYTES = 8
-
-F32_SIZE_BYTES = 4
-F64_SIZE_BYTES = 8
-
-BOOL_SIZE_BYTES = 1
-
-
-POINTER_SIZE_BYTES = 8       # 64-bit pointers (i8*, T*)
-
-
 # String fat pointer: {i8* data, i32 size, i8 owned} -- aligned LLVM sizeof = 16 bytes
 # (data@0..8, size@8..12, owned@12, pad@13..16). MUST be the aligned sizeof, not the raw
 # 13, so a string round-tripped through an enum/Result/Maybe payload preserves the owned
