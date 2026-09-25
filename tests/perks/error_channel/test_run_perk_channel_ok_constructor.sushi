@@ -1,0 +1,20 @@
+# A perk channel body spells its success as 'return Result.Ok(x)' (#848), the same
+# rule an extension channel body obeys. This spelling was CE2091 before.
+# EXPECT_STDOUT_EXACT: "1\n"
+enum SourceError:
+    Closed
+
+perk Source:
+    fn read_one() i32 | SourceError
+
+struct Counter:
+    i32 value
+
+extend Counter with Source:
+    fn read_one() i32 | SourceError:
+        return Result.Ok(self.value)
+
+fn main() i32:
+    let Counter c = Counter(1)
+    println("{c.read_one().realise(0)}")
+    return Result.Ok(0)

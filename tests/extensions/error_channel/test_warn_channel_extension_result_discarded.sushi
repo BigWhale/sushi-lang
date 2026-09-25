@@ -3,7 +3,7 @@
 # TEST_TYPE: warning
 # EXPECT_ERROR_CODE: CW2001
 extend i32 checked_inc() i32 | StdError:
-    return self + 1
+    return Result.Ok(self + 1)
 
 fn main() i32:
     let i32 one = 1

@@ -1,0 +1,10 @@
+# A statement after a 'break' in the same block can never run (#854).
+# EXPECT_ERROR_CODE: CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_break.sushi:8:9
+fn main() i32:
+    let i32 n = 0
+    while (n < 10):
+        break
+        n := n + 1
+    println("{n}")
+    return Result.Ok(0)

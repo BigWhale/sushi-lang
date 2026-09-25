@@ -48,7 +48,7 @@ extend Box@(T) with Show:
     fn checked_show(poke self, i32 width) string | ShowError:
         if (width > 80):
             return Result.Err(ShowError.TooWide)
-        return "box"
+        return Result.Ok("box")
 
 ##: A gadget shows its base. :##
 extend Gadget with Show:
@@ -56,7 +56,7 @@ extend Gadget with Show:
     fn show() string:
         return "gadget {self.base}"
     fn checked_show(poke self, i32 width) string | ShowError:
-        return "gadget {width}"
+        return Result.Ok("gadget {width}")
 """
 
 

@@ -1,0 +1,21 @@
+# Code after an 'if' with no 'else', after a loop, and after a 'break' in a
+# nested block is live, and compiles (#854).
+# EXPECT_STDOUT_EXACT: "3 2\n"
+fn pick(i32 x) i32:
+    if (x > 5):
+        return Result.Ok(1)
+    let i32 n = 0
+    while (n < 10):
+        if (n == 3):
+            break
+        n := n + 1
+    return Result.Ok(n)
+
+fn main() i32:
+    let i32 total = 0
+    foreach(i in 0..3):
+        if (i == 1):
+            continue
+        total := total + i
+    println("{pick(0).realise(0)} {total}")
+    return Result.Ok(0)

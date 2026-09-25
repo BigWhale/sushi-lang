@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n1\n"
 extend List@(T) counted() i32 | StdError:
-    return self.len()
+    return Result.Ok(self.len())
 
 fn main() i32:
     let List@(i32) nums = List.new()

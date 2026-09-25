@@ -10,7 +10,7 @@ struct Cat:
 
 extend Cat with Loud:
     fn shout() i32 | StdError:
-        return self.n * 10
+        return Result.Ok(self.n * 10)
 
 struct Box@(T: Loud):
     T item
@@ -18,10 +18,10 @@ struct Box@(T: Loud):
 
 extend Box@(T) static holding(nom T item) Box@(T) | StdError:
     let i32 f = item.shout()??
-    return Box(nom item, f)
+    return Result.Ok(Box(nom item, f))
 
 extend Box@(T) louder() i32 | StdError:
-    return self.first + self.item.shout()??
+    return Result.Ok(self.first + self.item.shout()??)
 
 fn main() i32:
     match Box.holding(nom Cat(4)):

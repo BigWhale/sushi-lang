@@ -1,0 +1,11 @@
+# string.join takes a string[]; a List@(string) argument is refused at the argument.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected string[], got List@(string)
+use <collections/strings>
+
+fn main() i32:
+    let string sep = ", "
+    let List@(string) words = List.new()
+    words.push("a")
+    println(sep.join(words))
+    return Result.Ok(0)

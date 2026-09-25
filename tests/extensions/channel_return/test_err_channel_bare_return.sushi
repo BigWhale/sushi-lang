@@ -1,0 +1,16 @@
+# A channel body ('| E') spells its success as a free function does. A bare
+# 'return value' is refused with the free-function code (#848).
+# EXPECT_ERROR_CODE: CE2030
+# EXPECT_STDERR_CONTAINS: test_err_channel_bare_return.sushi:11:
+enum OddError:
+    TooOdd
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return self / 2
+
+fn main() i32:
+    let i32 four = 4
+    println("{four.half_checked().realise(0)}")
+    return Result.Ok(0)

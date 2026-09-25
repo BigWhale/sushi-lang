@@ -206,32 +206,22 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
 def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     """Validate return statement type compatibility."""
     if not validator.current_function:
-        # An extension or perk-impl body has no current_function -- it returns a BARE
-        # value. The expression must still be WALKED, or a generic call in it is never
+        # An extension or perk-impl body has no current_function. A bare one returns a
+        # BARE value; a `| E` one spells Result.Ok / Result.Err as a free function does
+        # (#848). The expression must still be WALKED, or a generic call in it is never
         # rewritten to its monomorphized name and reaches the backend as a CE0000 (#212).
         if getattr(validator, "in_extension_context", False) and stmt.value is not None:
             value = stmt.value
             channel = getattr(validator, "extension_channel_result", None)
+            if channel is not None:
+                _validate_channel_return(validator, value, channel)
+                return
             if (isinstance(value, DotCall)
                     and isinstance(value.receiver, Name)
                     and value.receiver.id == "Result"
                     and value.method in ("Ok", "Err")):
-                if channel is not None and value.method == "Err":
-                    # Ruling 6: the error is the ONE spelled constructor in a channel
-                    # body. Propagate the interned Result into it (the stamp the
-                    # backend constructs from) and check it as a function would.
-                    from .propagation import propagate_declared_type_to_value
-                    expected = propagate_declared_type_to_value(validator, value, channel)
-                    from .compatibility import validate_return_compatibility
-                    validate_return_compatibility(validator, expected, value, value.loc)
-                    return
-                # A bare method refuses both constructors; a channel method refuses
-                # the Ok spelling -- its success returns bare (CE2091 either way).
                 method_name = getattr(validator, "extension_method_name", None) or "<method>"
-                refused = ("Result.Ok(...)" if channel is not None
-                           else "Result.Ok(...) / Result.Err(...)")
-                er.emit(validator.reporter, er.ERR.CE2091, value.loc,
-                        name=method_name, refused=refused)
+                er.emit(validator.reporter, er.ERR.CE2091, value.loc, name=method_name)
                 return
 
             # PROPAGATE the declared return type into the value, then walk it and check
@@ -276,6 +266,25 @@ def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
     else:
         er.emit_with(validator.reporter, er.ERR.CE2030, stmt.loc) \
             .help("wrap return value: return Result.Ok(value)").emit()
+
+
+def _validate_channel_return(validator: 'TypeValidator', value, channel) -> None:
+    """A `| E` method body has the free function's rule: both constructors are spelled.
+
+    The interned channel Result is propagated into the constructor (the stamp the backend
+    builds from). A value that is not `Result.Ok(...)` / `Result.Err(...)` is CE2030,
+    because nothing wraps a bare value (#848).
+    """
+    from .result_validation import is_result_pattern
+    if not is_result_pattern(value)[0]:
+        validator.validate_expression(value)
+        er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
+            .help("wrap return value: return Result.Ok(value)").emit()
+        return
+    from .propagation import propagate_declared_type_to_value
+    expected = propagate_declared_type_to_value(validator, value, channel)
+    from .compatibility import validate_return_compatibility
+    validate_return_compatibility(validator, expected, value, value.loc)
 
 
 def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:

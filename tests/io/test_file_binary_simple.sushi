@@ -38,5 +38,3 @@ fn main() i32:
         Result.Err(_) ->
             stderr.write("Error: cannot read binary file\n")
             return Result.Err(StdError.Error)
-
-    return Result.Ok(0)

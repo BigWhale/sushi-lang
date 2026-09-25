@@ -13,7 +13,7 @@ from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
-from .control_flow import block_always_returns
+from .control_flow import block_always_returns, reject_dead_statements
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
 from sushi_lang.semantics.generics.type_display import display_type
@@ -134,6 +134,7 @@ def validate_function(self, func: FuncDef) -> None:
                            func.err_span or func.ret_span)
 
     self._validate_block(func.body)
+    reject_dead_statements(self, func.body)
 
     # A `~` function returns too (#824), and so does a lifted lambda (#845): a body
     # that reached its end answered a Result.Err that no source wrote.
@@ -212,7 +213,7 @@ def _validate_method_body(self, target_type, method) -> None:
 
     # A `| E` extension (ruling 1) validates under its CHANNEL: the interned
     # Result@(ret, E) that `??` propagates into and that `Result.Err(e)` constructs.
-    # The success still returns bare against `extension_return_type` (ruling 6).
+    # Both constructors are spelled against it, as in a free function (#848).
     self.extension_channel_result = None
     err_ty = method.err_type
     if err_ty is not None:
@@ -233,6 +234,7 @@ def _validate_method_body(self, target_type, method) -> None:
     validate_type_name(self, method.ret, method.ret_span)
 
     self._validate_block(method.body)
+    reject_dead_statements(self, method.body)
 
     # A method with a `| E` channel answers a Result, as a fn does, so a `~` body that
     # reaches its end is refused too (#845). A bare `~` method has no Result to answer.

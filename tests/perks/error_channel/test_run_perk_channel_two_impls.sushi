@@ -18,11 +18,11 @@ struct One:
 
 extend Zero with Source:
     fn read_one() i32 | SourceError:
-        return 0
+        return Result.Ok(0)
 
 extend One with Source:
     fn read_one() i32 | SourceError:
-        return 1
+        return Result.Ok(1)
 
 fn pull@(T: Source)(T s) i32 | SourceError:
     let i32 v = s.read_one()??

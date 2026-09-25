@@ -5,7 +5,7 @@
 # EXPECT_ERROR_CODE: CE2515
 # EXPECT_STDERR_CONTAINS: "is_true()??.is_false()"
 extend bool is_true() bool | StdError:
-    return self
+    return Result.Ok(self)
 
 extend bool is_false() bool:
     return not self

@@ -11,7 +11,7 @@ struct Holder:
 extend Holder take(peek self) i32 | MyErr@(i32):
     if (self.n == 0):
         return Result.Err(MyErr.Bad(9))
-    return self.n
+    return Result.Ok(self.n)
 
 fn main() i32:
     let Holder full = Holder(5)

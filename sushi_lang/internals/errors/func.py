@@ -40,7 +40,7 @@ _add(ErrorMessage("CE0106", Severity.ERROR,
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
     "{callable} must return a value on all code paths",
-    Category.FUNC, "A body that answers a Result must end in a return on every code path, and a `~` body is no exception. A `~` function and a `~` lambda block body end with `return Result.Ok(~)`; an extension or perk-implementation method with a `| E` channel ends with `return ~`. Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a BARE return (no `| E`) answers no Result, so a `~` body that reaches its end is correct there. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
+    Category.FUNC, "A body that answers a Result must end in a return on every code path, and a `~` body is no exception. A `~` function, a `~` lambda block body, and a `~` extension or perk-implementation method with a `| E` channel all end with `return Result.Ok(~)` (#848). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a BARE return (no `| E`) answers no Result, so a `~` body that reaches its end is correct there. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
@@ -142,6 +142,10 @@ _add(ErrorMessage("CE0136", Severity.ERROR,
 _add(ErrorMessage("CE0138", Severity.ERROR,
     "main() takes one parameter, `string[] args`, or no parameter",
     Category.FUNC, "The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. The parameter takes no mode: argv is a borrowed view that the runtime owns, so `nom string[] args` (main would free argv a second time at exit), `peek string[] args` and `poke string[] args` are refused too (#844). Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0."))
+
+_add(ErrorMessage("CE0140", Severity.ERROR,
+    "unreachable statement: the path ended before it",
+    Category.FUNC, "A statement that follows a statement which always ends the path can never run: a `return`, an `if` with an `else` whose every arm returns, a `match` whose every arm returns, and a `break` or a `continue` in the same block. It is an error, not a warning (#854): dead code is a statement the author thinks runs. The rule reads the predicate CE0107 reads (`block_always_returns`), so the fall-off rule and this rule cannot disagree. It is reported ONCE per block, at the first dead statement, with a note at the statement that ends the path. Until #854 the statement compiled with no diagnostic and the backend dropped it in silence. Remove the statement, or move it before the one that ends the path."))
 
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",

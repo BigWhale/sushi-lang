@@ -21,5 +21,3 @@ fn main() i32:
         Result.Err(_) ->
             stderr.write("Error: could not open file for writing\n")
             return Result.Err(StdError.Error)
-
-    return Result.Ok(0)

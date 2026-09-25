@@ -44,7 +44,7 @@ EXTENSION_CHANNEL = """enum OddError:
 extend i32 half_checked() i32 | OddError:
     if (self % 2 == 1):
         return Result.Err(OddError.TooOdd)
-    return self / 2
+    return Result.Ok(self / 2)
 
 fn main() i32:
     let i32 half = 8.half_checked()
@@ -63,7 +63,7 @@ struct Counter:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return self.value
+        return Result.Ok(self.value)
 
 fn main() i32:
     let Counter c = Counter(1)

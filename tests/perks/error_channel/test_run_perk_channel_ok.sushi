@@ -1,5 +1,5 @@
-# A perk method may declare the error channel '| E' (ruling R1). The bare success
-# return wraps into Ok at the return seam, exactly as an extension method's does.
+# A perk method may declare the error channel '| E' (ruling R1). The success is
+# spelled Result.Ok, exactly as an extension method's is (#848).
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -15,7 +15,7 @@ struct Counter:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return self.value
+        return Result.Ok(self.value)
 
 fn main() i32:
     let Counter c = Counter(42)

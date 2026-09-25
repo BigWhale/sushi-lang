@@ -13,7 +13,7 @@ struct Sink:
 extend Sink with Wr:
     fn put(string data) ~ | StdError:
         println(data)
-        return ~
+        return Result.Ok(~)
 
 fn main() i32:
     let Sink s = Sink(1)

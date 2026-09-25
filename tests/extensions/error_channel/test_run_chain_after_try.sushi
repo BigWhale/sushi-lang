@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "false\n"
 extend bool is_true() bool | StdError:
-    return self
+    return Result.Ok(self)
 
 extend bool is_false() bool:
     return not self

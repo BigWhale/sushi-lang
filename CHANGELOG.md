@@ -5,6 +5,20 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **A channel method spells its success: `return Result.Ok(value)`** (#848). An extension or
+  a perk-implementation method with a `| E` channel returned its success BARE, and the
+  backend wrapped it in `Result.Ok` in silence. Nothing is wrapped now: a bare `return value`
+  in a channel body is **CE2030**, the free-function code, and a `~` channel body ends
+  `return Result.Ok(~)`. CE2091 narrows to BARE methods, where both constructors stay
+  refused. Ruling 6 of `docs/design/ufcs-combinators.md` is reversed. 133 bare returns moved,
+  64 of them in the stdlib's Sushi sources.
+- **A statement that can never run is an error** (#854). A statement after a `return`, after
+  an `if`/`else` or a `match` whose every arm returns, or after a `break` / `continue` in the
+  same block, compiled with no diagnostic. It is **CE0140** now, once per block at the first
+  dead statement, with a note at the statement that ends the path. It reads the CE0107
+  predicate, so the fall-off rule and the dead-code rule cannot disagree. 42 dead statements
+  were in the corpus and are removed: 34 in fixtures and helpers, 2 in the stdlib's
+  `toolchain/slib.sushi`, 4 in `toolchain/src/slib_info.sushi`, 2 in doc examples.
 - **A take of a CONSTANT is refused, the rule a `var` already reads** (#726). A `nom`
   argument, a `let` bound straight from the name, a `return` of it, a `nom self` call and a
   `nom` pattern binding all hand a value away, and a constant has no owner to hand it from.
@@ -392,6 +406,11 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`string.join` checks its argument** (#850). A `join` argument that was not a `string[]`
+  crashed the backend with CE0000 (an `i32[]`, a `bool[]`, a fixed array, a `string`), and a
+  `List@(string)` was accepted in silence. Every string method argument now goes through the
+  one argument check, so each is CE2006 at the argument, rendered with `display_type` (an
+  expected integer reads `i32`, not `int`).
 - **A function value's method call is inferred** (#771). `let i32 bad = f.clone()` with `f:
   fn(i32) -> i32` was a backend CE0017 naming the LLVM closure struct; it is CE2002 at the
   annotation, spelling `fn(i32) -> i32`, and `f.clone().clone()` compiles. Inference asks the
@@ -1163,6 +1182,11 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A spelled `Result@(T, E)` return is interned in the `resolve` pass** (#857). It reached
+  the backend as the written `GenericTypeRef` with unresolved payload names, and the backend
+  had two readers for it. The pass now stamps the interned enum on the declaration
+  (`resolved_result`), and `declared_result_of` is the one reader. The emitted IR does not
+  change.
 - **A relational note takes a span** (#731). `DiagnosticBuilder.note(message)` is prose only,
   and `note_at(message, span)` is the relational note, with a span that is not optional
   (the same split on `SushiError`). 52 call sites in 26 files moved; where a span can be

@@ -1,6 +1,6 @@
 # The risk-5 probe of the UFCS epic: a Result OF AN AGGREGATE (List@(i32)) travels
-# through the extension declaration path end to end. The body uses the bare-success
-# form (ruling 6): 'return out' wraps into Ok at the seam; only Err is spelled.
+# through the extension declaration path end to end. The body spells both
+# constructors (#848): 'return Result.Ok(out)' and 'return Result.Err(e)'.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -9,7 +9,7 @@ extend List@(i32) doubled() List@(i32) | StdError:
     let List@(i32) out = List.new()
     foreach(x in self.iter()):
         out.push(x * 2)
-    return out
+    return Result.Ok(out)
 
 fn run() i32:
     let List@(i32) xs = List.new()

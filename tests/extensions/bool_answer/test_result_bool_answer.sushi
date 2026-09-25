@@ -9,7 +9,7 @@ extend Result@(T, E) bad() bool:
     return self.is_err()
 
 extend Result@(T, E) fine_ch() bool | StdError:
-    return self.is_ok()
+    return Result.Ok(self.is_ok())
 
 extend Result@(T, E) spelled() string:
     return "{self.is_ok()}"

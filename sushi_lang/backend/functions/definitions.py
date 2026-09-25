@@ -61,8 +61,8 @@ class FunctionDefinitions:
         helpers.begin_function(llvm_fn, ext)
 
         self.codegen.in_extension_method = True
-        # A channel body ('| E', ruling 6): every bare success return wraps into Ok at
-        # the return seam, Result.Err(e) passes through, and the default return is Err.
+        # A channel body ('| E') spells both constructors (#848); only the fall-off path,
+        # which CE0107 keeps unreachable, reads the channel here.
         from sushi_lang.backend.generics.result_builder import extension_result_of
         self.codegen.current_extension_result = extension_result_of(self.codegen, ext)
 

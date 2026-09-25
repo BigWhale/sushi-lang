@@ -28,7 +28,10 @@ class Node:
 
 @dataclass(slots=True)
 class Stmt(Node):
-    pass
+    # Which `expand` copies this statement was spliced from, outermost first; empty for
+    # a written statement. Two neighbours with different marks were never written one
+    # after the other, so the dead-code rule (CE0140) does not read them as a sequence.
+    expand_copies: Tuple[int, ...] = field(default=(), kw_only=True)
 
 
 @dataclass(slots=True)
@@ -226,6 +229,9 @@ class FuncDef(Node):
     # Where a `static` marker was written on a perk-implementation method. The
     # grammar admits it in that position only so the perk pass can refuse it (CE4014).
     static_span: Optional[Span] = None
+    # A spelled `Result@(T, E)` return as the interned enum, stamped by the resolve
+    # pass (#857). `ret` keeps the type as written for the typecheck pass.
+    resolved_result: Optional[Type] = None
 
 
 @dataclass(slots=True)

@@ -1,0 +1,27 @@
+# A channel body spells both constructors, as a free function does (#848). A '~'
+# channel body ends with 'return Result.Ok(~)'.
+# EXPECT_STDOUT_EXACT: "ticked\n2 0 1\n"
+enum OddError:
+    TooOdd
+
+struct Clock:
+    i32 ticks
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return Result.Ok(self / 2)
+
+extend Clock tick(poke self) ~ | OddError:
+    self.ticks := self.ticks + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32 four = 4
+    let i32 three = 3
+    let Clock c = Clock(0)
+    match c.tick():
+        Result.Ok(_) -> println("ticked")
+        Result.Err(_) -> println("stopped")
+    println("{four.half_checked().realise(0)} {three.half_checked().realise(0)} {c.ticks}")
+    return Result.Ok(0)

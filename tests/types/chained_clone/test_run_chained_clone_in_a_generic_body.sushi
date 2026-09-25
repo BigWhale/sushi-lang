@@ -11,7 +11,7 @@ extend List@(T) dup@(U)(fn(T) -> U f) List@(U) | StdError:
         let Maybe@(U) held = Maybe.Some(mapped)
         let Maybe@(U) copy = held.clone()
         out.push(copy??)
-    return out
+    return Result.Ok(out)
 
 fn main() i32:
     let List@(i32) a = List.new()

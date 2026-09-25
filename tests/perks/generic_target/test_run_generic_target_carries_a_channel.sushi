@@ -18,7 +18,7 @@ extend Cell@(T) with Step:
     fn step(i32 by) i32 | StepError:
         if (by == 0):
             return Result.Err(StepError.Zero)
-        return self.n + by
+        return Result.Ok(self.n + by)
 
 fn main() i32:
     let Cell@(string) c = Cell("towel", 5)

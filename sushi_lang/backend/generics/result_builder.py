@@ -55,11 +55,7 @@ def build_ok_variant(
     result_type: EnumType,
     ok_value: Optional[ir.Value] = None
 ) -> ir.Value:
-    """Construct a Result.Ok(value) LLVM value for a concrete Result enum.
-
-    This is the emission seam of ruling 6: a channel extension's bare success return
-    wraps here, so the body never spells the constructor.
-    """
+    """Construct a Result.Ok(value) LLVM value for a concrete Result enum."""
     return _build_payload_variant(codegen, result_type, "Ok", ok_value)
 
 

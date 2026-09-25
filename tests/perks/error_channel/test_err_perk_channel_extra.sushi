@@ -11,7 +11,7 @@ struct Robot:
 
 extend Robot with Greet:
     fn hello() string | StdError:
-        return "life, do not talk to me about life"
+        return Result.Ok("life, do not talk to me about life")
 
 fn main() i32:
     let Robot marvin = Robot(1)

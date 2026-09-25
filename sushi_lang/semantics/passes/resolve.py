@@ -129,3 +129,29 @@ def resolve_constant_types(constants, struct_table: StructTable,
     for unit_sigs in constants.by_unit.values():
         for sig in unit_sigs.values():
             resolve_one(sig)
+
+
+def resolve_function_returns(units, struct_table: StructTable,
+                             enum_table: EnumTable) -> None:
+    """Stamp each spelled `Result@(T, E)` return with its interned enum (#857).
+
+    The DECLARATION keeps the type as written, for the reason `resolve_constant_types`
+    gives: the typecheck pass rules on a qualified name in it. The stamp is what the
+    backend reads, so a Result is never read structurally there. A generic template is
+    skipped, because its payloads name type parameters and no such enum exists; each
+    instance was cut before this pass and carries its own concrete return.
+    """
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    for unit in units:
+        if unit.ast is None:
+            continue
+        for fn in unit.ast.functions:
+            ret = fn.ret
+            if (fn.type_params or not isinstance(ret, GenericTypeRef)
+                    or ret.base_name != "Result" or len(ret.type_args) != 2):
+                continue
+            fn.resolved_result = ensure_result_type_in_table(
+                enum_table, ret.type_args[0], ret.type_args[1],
+                struct_table=struct_table.by_name)

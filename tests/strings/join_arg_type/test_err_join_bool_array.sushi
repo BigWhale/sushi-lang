@@ -1,0 +1,10 @@
+# string.join takes a string[]; a bool[] argument is refused at the argument.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected string[], got bool[]
+use <collections/strings>
+
+fn main() i32:
+    let string sep = ", "
+    let bool[] flags = from([true, false])
+    println(sep.join(flags))
+    return Result.Ok(0)

@@ -1,7 +1,8 @@
 # UFCS combinators — extension methods with an error channel and method-level type parameters
 
 Status: SHIPPED (the UFCS epic, 2026-08-30). This is the decision record. The seven
-rulings here are David's (2026-08-29 and 2026-08-30) and are settled.
+rulings here are David's (2026-08-29 and 2026-08-30) and are settled. Ruling 6 was
+REVERSED on 2026-09-25 (#848): a channel body spells its success.
 
 The headline: the `<collections/iter>` combinators exist in method form, written in
 Sushi, shipped in the stdlib, on a general language feature users can also write:
@@ -11,7 +12,7 @@ extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x)??)
-    return out          # bare success; only Err is spelled (ruling 6)
+    return Result.Ok(out)   # both constructors are spelled (ruling 6, as reversed)
 ```
 
 Call site: `xs.map(|i32 x| x * 2)??`. Targets now: `List@(T)` and `T[]`. The free
@@ -75,17 +76,23 @@ method and the call that returned the wrapper) and its help spells the `??` fix.
 covers result-like AND maybe-like receivers: a `Maybe@(T)` is also more than the bare
 `T`, so `xs.find(p).len()` is the same CE2515.
 
-### 6. Return form in a channel body: bare success, explicit Err
+### 6. Return form in a channel body: both constructors are spelled
 
-`return true` auto-wraps into Ok at the emission seam. `return Result.Err(e)` is the
-ONE spelled constructor. `return Result.Ok(x)` stays refused — CE2091, narrowed to the
-Ok constructor in a channel body, while a bare body keeps refusing both constructors.
+REVERSED on 2026-09-25 (#848). The compiler does not wrap a value automatically. A
+channel body has the free function's rule and the free function's code:
 
-This is the first written rationale for the bare-return rule itself: the error is the
-exceptional path and earns its ink; the success stays as light as a bare method's. A
-body that spells `Result.Ok` around every success return says nothing the signature
-did not already say. Free functions are UNCHANGED: they spell `Result.Ok` explicitly
-(CE2030), and CW2511 for `??` in `main()` stays.
+- the success is `return Result.Ok(x)`, and a `~` success is `return Result.Ok(~)`;
+- the failure is `return Result.Err(e)`;
+- a bare `return x` (and a bare `return ~`) in a channel body is CE2030, the code a free
+  function hears for the same fault.
+
+A BARE body (no `| E`) is unchanged: it returns the value itself and refuses both
+constructors (CE2091). CW2511 for `??` in `main()` stays.
+
+The first ruling (2026-08-30) wrapped a bare success into `Ok` at the return seam, so
+that the success stayed as light as a bare method's. It was reversed because a silent
+wrap is a value the source did not write: a channel method and a free function that
+answer the same Result then spelled it two ways.
 
 ### 7. `??` on Maybe stays, and is now recorded
 

@@ -29,7 +29,6 @@ fn read_all(string path) u8[]:
             return Result.Ok(b)
         Result.Err(_) ->
             return Result.Err(StdError.Error)
-    return Result.Err(StdError.Error)
 
 # emit: replace the destination file with these bytes.
 fn emit(string dst, u8[] data) i32:
@@ -41,7 +40,6 @@ fn emit(string dst, u8[] data) i32:
         Result.Err(_) ->
             stderr.write("cannot write {dst}\n")
             return Result.Ok(2)
-    return Result.Ok(2)
 
 # decode: inflate the blob and write the result out.
 fn decode(u8[] blob, string dst, bool raw) i32:
@@ -58,7 +56,6 @@ fn decode(u8[] blob, string dst, bool raw) i32:
         Result.Err(e) ->
             stderr.write("{zlib_error_text(e)??}\n")
             return Result.Ok(1)
-    return Result.Ok(1)
 
 fn run_tool(peek string[] args) i32:
     if (args.len() < 3):
@@ -77,7 +74,6 @@ fn run_tool(peek string[] args) i32:
         Result.Err(_) ->
             stderr.write("cannot read {src_path}\n")
             return Result.Ok(2)
-    return Result.Ok(2)
 
 fn main(string[] args) i32:
     if (args.len() > 0):

@@ -6,7 +6,7 @@ extend List@(T) empty_now() bool:
     return self.is_empty()
 
 extend List@(T) empty_ch() bool | StdError:
-    return self.is_empty()
+    return Result.Ok(self.is_empty())
 
 fn main() i32:
     let List@(i32) l = List.new()

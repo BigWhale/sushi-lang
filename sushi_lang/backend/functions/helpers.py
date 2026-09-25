@@ -19,14 +19,20 @@ def callee_owns_param(param) -> bool:
 
 
 def declared_result_of(codegen: 'LLVMCodegen', fn: FuncDef) -> EnumType:
-    """The Result a function returns: `Result@(T, E)` as written, else the one `T | E` implies."""
+    """The Result a function returns: the interned enum, else the one `T | E` implies.
+
+    A spelled `Result@(T, E)` return arrives as the resolve pass's stamp (#857); the
+    declaration keeps the type as written, so it is never read here.
+    """
     from sushi_lang.semantics.generics.results import is_result_enum
-    from sushi_lang.semantics.typesys import GenericTypeRef
+    from sushi_lang.semantics.passes.collect.functions import is_explicit_result_type
     from sushi_lang.backend.generics.result_builder import implicit_result_of
+    if is_result_enum(fn.resolved_result):
+        return fn.resolved_result
     if isinstance(fn.ret, EnumType) and is_result_enum(fn.ret):
         return fn.ret
     result = None
-    if not (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result"):
+    if not is_explicit_result_type(fn.ret):
         result = implicit_result_of(codegen, fn)
     if result is None:
         raise InternalCompilerError(

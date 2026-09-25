@@ -16,7 +16,7 @@ extend Handle with Drop:
     fn drop(poke self) ~ | CloseError:
         if (self.id < 0):
             return Result.Err(CloseError.Refused)
-        return ~
+        return Result.Ok(~)
 
 fn main() i32:
     let Handle h = Handle(1)

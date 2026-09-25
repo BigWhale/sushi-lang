@@ -56,7 +56,7 @@ resolves that peer each time round.
 - Errors: NetError, when the destination is unknown or the send failed.
 :##
 extend UdpSocket send_to(u8[] data, string host, i32 port) i32 | NetError:
-    return sock_udp_send_to(self.fd, data, host, port)??
+    return Result.Ok(sock_udp_send_to(self.fd, data, host, port)??)
 
 ##:
 Waits for one datagram, and answers it with its sender.
@@ -70,7 +70,7 @@ receive: the bytes did arrive.
 - Errors: NetError, when the receive failed or its bound expired.
 :##
 extend UdpSocket recv_from(i32 max) Datagram | NetError:
-    return sock_udp_recv_from(self.fd, max)??
+    return Result.Ok(sock_udp_recv_from(self.fd, max)??)
 
 ##:
 The port a socket actually bound.
@@ -81,7 +81,7 @@ This is the only way to learn the port after binding port 0.
 - Errors: NetError, when the socket is not bound.
 :##
 extend UdpSocket local_port() i32 | NetError:
-    return sock_local_port(self.fd)??
+    return Result.Ok(sock_local_port(self.fd)??)
 
 ##:
 Bounds how long a receive and a send on a socket may wait.
@@ -96,7 +96,7 @@ A bound that expires answers NetError.TimedOut.
 extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
     sock_set_recv_timeout(self.fd, recv_ms)??
     sock_set_send_timeout(self.fd, send_ms)??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Closes a socket and writes -1 into the binding.
@@ -110,8 +110,8 @@ a socket.
 :##
 extend UdpSocket close(poke self) ~ | NetError:
     if (self.fd < 0):
-        return ~
+        return Result.Ok(~)
     let i32 fd = self.fd
     self.fd := -1
     sock_close(fd)??
-    return ~
+    return Result.Ok(~)

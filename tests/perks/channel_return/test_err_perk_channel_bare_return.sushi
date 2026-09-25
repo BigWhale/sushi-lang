@@ -1,7 +1,6 @@
-# A channel body returns its success BARE and spells Result.Err only. A spelled
-# Result.Ok is still CE2091, the same rule an extension channel body obeys.
-# TEST_TYPE: error
-# EXPECT_ERROR_CODE: CE2091
+# A perk-implementation method with a '| E' channel spells its success too. A bare
+# 'return value' is CE2030, the same rule an extension channel body obeys (#848).
+# EXPECT_ERROR_CODE: CE2030
 enum SourceError:
     Closed
 
@@ -13,7 +12,7 @@ struct Counter:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return Result.Ok(self.value)
+        return self.value
 
 fn main() i32:
     let Counter c = Counter(1)

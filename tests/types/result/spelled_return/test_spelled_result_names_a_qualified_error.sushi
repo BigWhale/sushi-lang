@@ -1,0 +1,19 @@
+# A spelled Result@(T, E) return whose error arm names a type behind an alias.
+# The resolve pass interns the return; the backend reads that one enum (#857).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42 7 worse\n"
+# EXPECT_STDERR_EMPTY: true
+use "helpers/spelled_errs" as e
+
+fn doubled(i32 x) Result@(i32, e.SpelledErr):
+    if (x < 0):
+        return Result.Err(e.SpelledErr.Worse)
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    print("{doubled(21).realise(0)} {doubled(-1).realise(7)} ")
+    match doubled(-1):
+        Result.Ok(_) -> println("ok")
+        Result.Err(e.SpelledErr.Bad) -> println("bad")
+        Result.Err(e.SpelledErr.Worse) -> println("worse")
+    return Result.Ok(0)

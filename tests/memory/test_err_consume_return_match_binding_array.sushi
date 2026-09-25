@@ -15,7 +15,6 @@ fn take(Shape s) i32[]:
     match s:
         Shape.Poly(p) -> return Result.Ok(p)
         Shape.Empty -> return Result.Ok(from([0]))
-    return Result.Ok(from([0]))
 
 fn main() i32:
     let Shape s = Shape.Poly(from([1, 2, 3]))

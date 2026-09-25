@@ -104,7 +104,7 @@ LATE = """extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x)??)
-    return out
+    return Result.Ok(out)
 
 fn to_bool(i32 x) bool:
     return Result.Ok(x > 1)

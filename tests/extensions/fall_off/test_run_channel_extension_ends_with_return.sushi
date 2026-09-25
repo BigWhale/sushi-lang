@@ -7,7 +7,7 @@ enum Why:
 
 extend i32 say() ~ | Why:
     println("in say {self}")
-    return ~
+    return Result.Ok(~)
 
 perk Sink:
     fn put(i32 v) ~ | Why
@@ -18,7 +18,7 @@ struct Printer:
 extend Printer with Sink:
     fn put(i32 v) ~ | Why:
         println("put {v}")
-        return ~
+        return Result.Ok(~)
 
 fn main() i32:
     let i32 x = 5

@@ -1,0 +1,9 @@
+# string.join over a string[] still joins; the check does not refuse the right type.
+# EXPECT_STDOUT_CONTAINS: a, b
+use <collections/strings>
+
+fn main() i32:
+    let string sep = ", "
+    let string[] words = from(["a", "b"])
+    println(sep.join(words))
+    return Result.Ok(0)

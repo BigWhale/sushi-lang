@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
-from sushi_lang.semantics.typesys import GenericTypeRef, Type as Ty
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 from sushi_lang.backend.functions.helpers import declared_result_of
 
@@ -25,18 +24,6 @@ def declaring_unit(fn: FuncDef, unit_name: str | None) -> str | None:
     if getattr(fn, "is_synthesized", False):
         return getattr(fn, "home_unit", None)
     return unit_name
-
-
-def prototype_result_of(codegen: 'LLVMCodegen', fn: FuncDef) -> Ty:
-    """The Result type a prototype declares for `fn`.
-
-    A library build can leave a spelled `Result@(T, E)` return unresolved; the prototype
-    keeps it as written, and `ll_type` resolves it. `declared_result_of` refuses that
-    form, so it answers every other return.
-    """
-    if isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result":
-        return fn.ret
-    return declared_result_of(codegen, fn)
 
 
 class FunctionDeclarations:
@@ -83,7 +70,7 @@ class FunctionDeclarations:
         else:
             params = self.codegen.functions.helpers.params_of(fn)
             ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-            ll_ret = self.codegen.types.ll_type(prototype_result_of(self.codegen, fn))
+            ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
 
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
             llvm_fn = ir.Function(self.codegen.module, fnty, name=symbol)
@@ -105,7 +92,7 @@ class FunctionDeclarations:
 
         if fn.name != 'main' and fn.ret is not None:
             self.codegen.function_return_types.declare(
-                fn.name, prototype_result_of(self.codegen, fn), unit=unit_name)
+                fn.name, declared_result_of(self.codegen, fn), unit=unit_name)
 
         return llvm_fn
 
