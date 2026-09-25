@@ -1,0 +1,14 @@
+# The rule holds in an extension method body and in a lambda block body (#854).
+# EXPECT_ERROR_CODE: CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_in_a_method.sushi:7:5
+# EXPECT_STDERR_CONTAINS: test_err_dead_in_a_method.sushi:12:9
+extend i32 twice() i32:
+    return self * 2
+    println("never")
+
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 x|:
+        return Result.Ok(x)
+        println("never")
+    println("{f(2).realise(0)} {3.twice()}")
+    return Result.Ok(0)

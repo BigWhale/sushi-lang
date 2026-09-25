@@ -52,7 +52,6 @@ fn show_err(SlibError e) string:
                     return Result.Ok("Decode(BadUtf8({off}))")
                 MpError.Trailing(p) ->
                     return Result.Ok("Decode(Trailing({p}))")
-    return Result.Ok("unknown")
 
 fn check(string path) ~:
     match read_metadata(path):

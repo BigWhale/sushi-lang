@@ -366,6 +366,11 @@ fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
 The body must return on every code path, and a `~` function is no exception: it ends with
 `return Result.Ok(~)`. A body that can reach its end is `CE0107`.
 
+A statement that can never run is an error too, `CE0140`: a statement after a `return`,
+after an `if` with an `else` whose every arm returns, after a `match` whose every arm
+returns, or after a `break` or a `continue` in the same block. It is reported once per
+block, at the first dead statement, with a note at the statement that ends the path.
+
 ### Parameters
 
 A parameter declares one of four **modes**. The mode says who frees the value, and a marked

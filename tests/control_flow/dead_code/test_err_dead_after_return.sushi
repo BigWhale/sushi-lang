@@ -1,0 +1,13 @@
+# A statement after a 'return' can never run. It is an error (#854), reported at
+# the first dead statement, with a note at the return that ends the path.
+# EXPECT_ERROR_CODE: CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_return.sushi:8:5
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_return.sushi:7:5
+fn f(i32 x) i32:
+    return Result.Ok(x)
+    println("never")
+    return Result.Ok(2)
+
+fn main() i32:
+    println("{f(1).realise(0)}")
+    return Result.Ok(0)

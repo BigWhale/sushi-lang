@@ -166,7 +166,6 @@ fn decode(u8[] blob) i32:
         Result.Err(e) ->
             println("failed: {zlib_error_text(e)??}")
             return Result.Ok(1)
-    return Result.Ok(1)
 
 fn main() i32:
     # a zlib header whose 31-check fails

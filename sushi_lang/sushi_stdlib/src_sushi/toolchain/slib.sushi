@@ -66,7 +66,6 @@ public fn read_metadata(string path) MsgValue | SlibError:
                     return Result.Err(SlibError.Decode(e))
         Result.Err(_) ->
             return Result.Err(SlibError.OpenFailed(path.clone()))
-    return Result.Err(SlibError.OpenFailed(path.clone()))
 
 # SlibSizes: the byte length of the two payload sections that follow the
 # metadata blob. A source library records no bitcode, a binary one no source.
@@ -109,7 +108,6 @@ public fn sizes(string path) SlibSizes | SlibError:
             return Result.Ok(SlibSizes(slen, bclen))
         Result.Err(_) ->
             return Result.Err(SlibError.OpenFailed(path.clone()))
-    return Result.Err(SlibError.OpenFailed(path.clone()))
 
 # bitcode_size: the u64 length of the bitcode section alone.
 public fn bitcode_size(string path) u64 | SlibError:

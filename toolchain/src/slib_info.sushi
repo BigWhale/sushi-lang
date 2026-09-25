@@ -63,7 +63,6 @@ fn ml_get(MsgValue m, string key) MsgValue:
             return Result.Ok(v.clone())
         Maybe.None() ->
             return Result.Ok(MsgValue.Nil())
-    return Result.Ok(MsgValue.Nil())
 
 fn ml_get_str(MsgValue m, string key) string:
     let MsgValue v = ml_get(m, key)??
@@ -892,7 +891,6 @@ fn report(string path, Opts o) i32:
         Result.Err(e) ->
             print_read_error(path, e)??
             return Result.Ok(2)
-    return Result.Ok(2)
 
 # run_tool: the command line, in one pass. A flag is a flag wherever it stands, and the
 # one bare word is the path. `--help` is answered the moment it is seen, so it wins over
@@ -905,7 +903,6 @@ fn env_is_set(string name) bool:
             return Result.Ok(true)
         Maybe.None() ->
             return Result.Ok(false)
-    return Result.Ok(false)
 
 # env_value: what the variable says, or "" when it is not set. Read it beside
 # `env_is_set` when the difference matters.
@@ -915,7 +912,6 @@ fn env_value(string name) string:
             return Result.Ok(v.clone())
         Maybe.None() ->
             return Result.Ok("")
-    return Result.Ok("")
 
 # want_colour: THE colour decision, in the order R41 gives it -- the same five rungs the
 # compiler applies in `internals/styling.py`. Two answers to one question is the drift
