@@ -146,61 +146,50 @@ def emit_insert_entry(codegen: Any, entry_ptr: ir.Value, key: ir.Value, value: i
     builder.store(ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), state_ptr)
 
 
+def _emit_elementwise_equality(
+    codegen: Any, element_type: Type, data1: ir.Value, data2: ir.Value, count: ir.Value, prefix: str,
+) -> ir.Value:
+    """AND the equality of every `data1[i]` / `data2[i]` pair, `i` in `0..count`, into one i1."""
+    from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
+
+    builder = codegen.builder
+    result = entry_alloca(builder, codegen.types.i1, name=f"{prefix}_equal")
+    builder.store(TRUE_I1, result)
+
+    def compare(elem1_ptr: ir.Value, index: ir.Value) -> None:
+        elem1 = builder.load(elem1_ptr, name="elem1")
+        elem2_ptr = gep_utils.gep_array_element(codegen, data2, index, "elem2_ptr")
+        elem2 = builder.load(elem2_ptr, name="elem2")
+        elem_equal = emit_key_equality_check(codegen, element_type, elem1, elem2)
+        result_val = builder.load(result, name="result_val")
+        builder.store(builder.and_(result_val, elem_equal, name="new_result"), result)
+
+    emit_container_walk(codegen, data1, count, compare, prefix=prefix)
+    return builder.load(result, name=f"{prefix}_equal")
+
+
 def emit_fixed_array_equality(codegen: Any, array_type: ArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
     """Emit element-by-element equality check for fixed arrays."""
     from sushi_lang.backend import gep_utils
 
     builder = codegen.builder
-    element_type = array_type.base_type
-    size = array_type.size
 
-    arr1_llvm_type = codegen.types.ll_type(array_type)
-    arr1_ptr = entry_alloca(builder, arr1_llvm_type, name="arr1_ptr")
+    arr_llvm_type = codegen.types.ll_type(array_type)
+    arr1_ptr = entry_alloca(builder, arr_llvm_type, name="arr1_ptr")
     builder.store(arr1, arr1_ptr)
-    arr2_ptr = entry_alloca(builder, arr1_llvm_type, name="arr2_ptr")
+    arr2_ptr = entry_alloca(builder, arr_llvm_type, name="arr2_ptr")
     builder.store(arr2, arr2_ptr)
 
-    result = entry_alloca(builder, codegen.types.i1, name="arrays_equal")
-    builder.store(TRUE_I1, result)
-
-    i_ptr = entry_alloca(builder, codegen.types.i32, name="i_ptr")
-    builder.store(ZERO_I32, i_ptr)
-
-    loop_cond_bb = builder.append_basic_block(name="array_eq_loop_cond")
-    loop_body_bb = builder.append_basic_block(name="array_eq_loop_body")
-    loop_end_bb = builder.append_basic_block(name="array_eq_loop_end")
-
-    builder.branch(loop_cond_bb)
-
-    builder.position_at_end(loop_cond_bb)
-    i_val = builder.load(i_ptr, name="i_val")
-    size_const = ir.Constant(codegen.types.i32, size)
-    cond = builder.icmp_signed("<", i_val, size_const, name="loop_cond")
-    builder.cbranch(cond, loop_body_bb, loop_end_bb)
-
-    builder.position_at_end(loop_body_bb)
-    elem1_ptr = gep_utils.gep_fixed_array_element(codegen, arr1_ptr, i_val, "elem1_ptr")
-    elem1 = builder.load(elem1_ptr, name="elem1")
-    elem2_ptr = gep_utils.gep_fixed_array_element(codegen, arr2_ptr, i_val, "elem2_ptr")
-    elem2 = builder.load(elem2_ptr, name="elem2")
-    elem_equal = emit_key_equality_check(codegen, element_type, elem1, elem2)
-    result_val = builder.load(result, name="result_val")
-    new_result = builder.and_(result_val, elem_equal, name="new_result")
-    builder.store(new_result, result)
-    i_next = builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
-    builder.store(i_next, i_ptr)
-    builder.branch(loop_cond_bb)
-
-    builder.position_at_end(loop_end_bb)
-    return builder.load(result, name="arrays_equal")
+    data1 = gep_utils.gep_fixed_array_element(codegen, arr1_ptr, ZERO_I32, "arr1_data")
+    data2 = gep_utils.gep_fixed_array_element(codegen, arr2_ptr, ZERO_I32, "arr2_data")
+    size = ir.Constant(codegen.types.i32, array_type.size)
+    return _emit_elementwise_equality(codegen, array_type.base_type, data1, data2, size, "array_eq")
 
 
 def emit_dynamic_array_equality(codegen: Any, array_type: DynamicArrayType, arr1: ir.Value, arr2: ir.Value) -> ir.Value:
     """Emit length check + element-by-element equality for dynamic arrays."""
-    from sushi_lang.backend import gep_utils
-
     builder = codegen.builder
-    element_type = array_type.base_type
 
     len1 = builder.extract_value(arr1, 0, name="len1")
     len2 = builder.extract_value(arr2, 0, name="len2")
@@ -215,45 +204,16 @@ def emit_dynamic_array_equality(codegen: Any, array_type: DynamicArrayType, arr1
     builder.position_at_end(check_elements_bb)
     data1_ptr = builder.extract_value(arr1, 2, name="data1_ptr")
     data2_ptr = builder.extract_value(arr2, 2, name="data2_ptr")
-
-    result = entry_alloca(builder, codegen.types.i1, name="elements_equal")
-    builder.store(TRUE_I1, result)
-
-    i_ptr = entry_alloca(builder, codegen.types.i32, name="i_ptr")
-    builder.store(ZERO_I32, i_ptr)
-
-    loop_cond_bb = builder.append_basic_block(name="dyn_array_loop_cond")
-    loop_body_bb = builder.append_basic_block(name="dyn_array_loop_body")
-    loop_end_bb = builder.append_basic_block(name="dyn_array_loop_end")
-
-    builder.branch(loop_cond_bb)
-
-    builder.position_at_end(loop_cond_bb)
-    i_val = builder.load(i_ptr, name="i_val")
-    cond = builder.icmp_signed("<", i_val, len1, name="loop_cond")
-    builder.cbranch(cond, loop_body_bb, loop_end_bb)
-
-    builder.position_at_end(loop_body_bb)
-    elem1_ptr = gep_utils.gep_array_element(codegen, data1_ptr, i_val, "elem1_ptr")
-    elem1 = builder.load(elem1_ptr, name="elem1")
-    elem2_ptr = gep_utils.gep_array_element(codegen, data2_ptr, i_val, "elem2_ptr")
-    elem2 = builder.load(elem2_ptr, name="elem2")
-    elem_equal = emit_key_equality_check(codegen, element_type, elem1, elem2)
-    result_val = builder.load(result, name="result_val")
-    new_result = builder.and_(result_val, elem_equal, name="new_result")
-    builder.store(new_result, result)
-    i_next = builder.add(i_val, ir.Constant(codegen.types.i32, 1), name="i_next")
-    builder.store(i_next, i_ptr)
-    builder.branch(loop_cond_bb)
-
-    builder.position_at_end(loop_end_bb)
-    elements_equal = builder.load(result, name="elements_equal")
+    elements_equal = _emit_elementwise_equality(
+        codegen, array_type.base_type, data1_ptr, data2_ptr, len1, "dyn_array_eq",
+    )
+    elements_bb = builder.block
     builder.branch(done_bb)
 
     builder.position_at_end(done_bb)
     result_phi = builder.phi(codegen.types.i1, name="arrays_equal")
-    result_phi.add_incoming(ir.Constant(codegen.types.i1, 0), lens_equal.parent)  # False if lengths differ
-    result_phi.add_incoming(elements_equal, loop_end_bb)  # Result from element comparison
+    result_phi.add_incoming(ir.Constant(codegen.types.i1, 0), lens_equal.parent)
+    result_phi.add_incoming(elements_equal, elements_bb)
     return result_phi
 
 

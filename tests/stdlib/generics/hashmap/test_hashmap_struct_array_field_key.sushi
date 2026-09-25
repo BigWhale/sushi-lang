@@ -1,0 +1,28 @@
+# A struct with a dynamic-array field is a HashMap key: the key equality compares the
+# length, then each element, so a shorter array or one different element is a miss.
+# EXPECT_STDOUT_EXACT: "one\nshort\nmiss\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+
+struct Tag:
+    i32 id
+    i32[] parts
+
+fn main() i32:
+    let HashMap@(Tag, string) m = HashMap.new()
+    m.insert(Tag(1, from([1, 2, 3])), "one")
+    m.insert(Tag(1, from([1, 2])), "short")
+    m.insert(Tag(2, from([1, 2, 3])), "two")
+    match m.get(Tag(1, from([1, 2, 3]))):
+        Maybe.Some(v) -> println(v)
+        Maybe.None -> println("miss")
+    match m.get(Tag(1, from([1, 2]))):
+        Maybe.Some(v) -> println(v)
+        Maybe.None -> println("miss")
+    match m.get(Tag(1, from([1, 2, 4]))):
+        Maybe.Some(v) -> println(v)
+        Maybe.None -> println("miss")
+    println("{m.len()}")
+    m.free()
+    return Result.Ok(0)
