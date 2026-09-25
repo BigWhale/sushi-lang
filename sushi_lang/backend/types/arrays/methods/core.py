@@ -270,7 +270,6 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     from sushi_lang.backend.memory.heap import emit_malloc
 
     zero = ir.Constant(codegen.types.i32, 0)
-    one = ir.Constant(codegen.types.i32, 1)
     initial_capacity = ir.Constant(codegen.types.i32, 8)
 
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
@@ -288,31 +287,12 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     with codegen.builder.if_then(is_not_null):
         from sushi_lang.backend.destructors import needs_cleanup, emit_value_destructor
         if needs_cleanup(codegen, element_semantic_type):
-            loop_i = entry_alloca(codegen.builder, codegen.types.i32, name="free_loop_i")
-            codegen.builder.store(zero, loop_i)
-
-            loop_cond_bb = codegen.builder.append_basic_block(name="free_loop_cond")
-            loop_body_bb = codegen.builder.append_basic_block(name="free_loop_body")
-            loop_end_bb = codegen.builder.append_basic_block(name="free_loop_end")
-
-            codegen.builder.branch(loop_cond_bb)
-
-            codegen.builder.position_at_end(loop_cond_bb)
-            i_val = codegen.builder.load(loop_i, name="i_val")
-            loop_cond = codegen.builder.icmp_unsigned("<", i_val, current_len, name="loop_cond")
-            codegen.builder.cbranch(loop_cond, loop_body_bb, loop_end_bb)
-
-            codegen.builder.position_at_end(loop_body_bb)
-            i_val = codegen.builder.load(loop_i, name="i_val")
-            element_ptr = codegen.builder.gep(old_data_ptr, [i_val], name="element_ptr")
-
-            emit_value_destructor(codegen, element_ptr, element_semantic_type)
-
-            i_next = codegen.builder.add(i_val, one, name="i_next")
-            codegen.builder.store(i_next, loop_i)
-            codegen.builder.branch(loop_cond_bb)
-
-            codegen.builder.position_at_end(loop_end_bb)
+            from sushi_lang.backend.generics.container_walk import emit_container_walk
+            emit_container_walk(
+                codegen, old_data_ptr, current_len,
+                lambda element_ptr, _i: emit_value_destructor(codegen, element_ptr,
+                                                              element_semantic_type),
+                prefix="free")
 
         void_ptr = codegen.builder.bitcast(old_data_ptr, ir.PointerType(codegen.types.i8), name="void_ptr")
         memory.emit_free_call(codegen, void_ptr)
