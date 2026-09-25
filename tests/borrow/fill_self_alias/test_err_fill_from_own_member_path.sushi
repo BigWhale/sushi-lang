@@ -1,0 +1,11 @@
+# The receiver can be a field. `b.items[1]` is a slot of `b.items`, so it is refused (#867).
+# EXPECT_ERROR_CODE: CE2430
+
+struct Bag:
+    string[] items
+
+fn main() i32:
+    let Bag b = Bag(from(["x", "y", "z"]))
+    b.items.fill(b.items[1])
+    println(b.items[2])
+    return Result.Ok(0)

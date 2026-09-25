@@ -1,0 +1,12 @@
+# A plain element is a copy and not a borrow, so `fill` from its own slot is legal (#867).
+# EXPECT_STDOUT_EXACT: "1 1 1\n7 7 7\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] b = from([1, 2, 3])
+    b.fill(b[0])
+    println("{b[0]} {b[1]} {b[2]}")
+    let i32[3] f = [5, 6, 7]
+    f.fill(f[2])
+    println("{f[0]} {f[1]} {f[2]}")
+    return Result.Ok(0)

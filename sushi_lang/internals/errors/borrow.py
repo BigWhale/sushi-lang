@@ -201,18 +201,25 @@ _add(ErrorMessage("CE2429", Severity.ERROR,
 
 
 _add(ErrorMessage("CE2430", Severity.ERROR,
-    "'{name}' cannot be the source of a bulk write into itself",
+    "'{name}' cannot be the source of a bulk write into '{target}'",
     Category.BORROW,
-    "A bulk write -- `.extend()`, `.extend_range()` -- borrows its source and grows its "
-    "destination. When the two are the same array the growth may REALLOCATE the buffer, "
-    "which leaves the source pointer dangling in the middle of the copy. That is a "
+    "A bulk write borrows its source and writes its destination, and the source may not be "
+    "storage the write changes. A growth -- `.extend()`, `.extend_range()` -- may "
+    "REALLOCATE the destination's buffer, so `a.extend(a)` would leave the source pointer "
+    "dangling in the middle of the copy. A refill -- `.fill()` -- frees each slot before it "
+    "stores a copy of the argument, so `a.fill(a[0])` frees slot 0 and then copies freed "
+    "memory into every later slot (#867). The refill is refused only when the element type "
+    "owns a resource: a plain element such as an `i32` is read by value, nothing aliases, "
+    "and `b.fill(b[0])` stays legal. A fixed array follows the same rule, and an index is "
+    "read as any slot, so `rows[i].cells.fill(rows[j].cells[0])` is refused too. That is a "
     "memory-safety hole rather than a wrong answer, so it is refused rather than defined. "
-    "The escape is `.clone()`, or `.ss(start, count)` for a range, either of which gives an "
-    "independent source. CE2412 is the neighbouring question -- may the OWNER be changed "
-    "while a `let`-borrow of it lives -- and not this one, because here the borrow is a "
-    "method argument. A copy that must read what it is writing is not this operation at "
-    "all: a DEFLATE back-reference expands a run by reading bytes the same loop just wrote, "
-    "and it stays a per-element loop for that reason."))
+    "The escape is `.clone()` (`a.fill(a[0].clone())`), or `.ss(start, count)` for a "
+    "range, either of which gives an independent source. CE2412 is the neighbouring "
+    "question -- may the OWNER be changed while a `let`-borrow of it lives -- and not this "
+    "one, because here the borrow is a method argument. A copy that must read what it is "
+    "writing is not this operation at all: a DEFLATE back-reference expands a run by "
+    "reading bytes the same loop just wrote, and it stays a per-element loop for that "
+    "reason."))
 
 _add(ErrorMessage("CE2431", Severity.ERROR,
     "cannot clone '{type}': it owns a resource, and a copy of it would be a second handle",

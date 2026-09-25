@@ -1,0 +1,18 @@
+# The escape: `.clone()` gives an independent source, so the fill is legal (#867).
+# EXPECT_STDOUT_EXACT: "ABC\nABC\nABC\nABC\nABC\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "abc"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    a.fill(a[0].clone())
+    println(a[0])
+    println(a[1])
+    println(a[2])
+    let string[2] f = [s.lower(), s.upper()]
+    f.fill(f[1].clone())
+    println(f[0])
+    println(f[1])
+    return Result.Ok(0)
