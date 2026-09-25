@@ -1,0 +1,14 @@
+# An unknown type name in the signature of an extension on a generic target is
+# CE2001 at the return type, once, when the target has an instance (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_extension_instance.sushi:8:26: error [CE2001]: unknown type 'Missing'
+struct Box@(T):
+    T item
+
+extend Box@(T) take(T v) Missing:
+    return v
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.item)
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+# An unknown type name in a method of a perk implementation on a generic target is
+# CE2001, once, when the target has an instance (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: unknown type 'Nope'
+perk Show:
+    fn show(i32 n) string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show(Nope n) string:
+        return "box"
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.item)
+    return Result.Ok(0)

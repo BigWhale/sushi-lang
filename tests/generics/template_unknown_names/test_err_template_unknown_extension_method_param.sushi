@@ -1,0 +1,10 @@
+# An unknown type name in an extension with a method-level type parameter is CE2001;
+# the method's own parameter is known (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_extension_method_param.sushi:5:26: error [CE2001]: unknown type 'Gone'
+extend i32 pick@(U)(U a, Gone b) i32:
+    return self
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)
