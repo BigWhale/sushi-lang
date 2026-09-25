@@ -23,7 +23,7 @@ each named for the stage it runs.
 | `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
-| `resolve` | struct field and enum variant types become concrete | `semantics/passes/resolve.py` |
+| `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
 | `finite-types` | reject a type that contains itself by value (CE2095) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` | `semantics/passes/derive.py` |
 | `shadowing` | reject an extension method that collides with a built-in (CE2097) | `semantics/semantic_analyzer.py` |
@@ -576,6 +576,13 @@ already in the tables.
    `EnumType`) the tables hold under that name.
 2. **Enum variants** — `resolve_enum_variant_types()` does the same for every variant's
    associated types.
+3. **Constants** — `resolve_constant_types()` resolves each constant's declared type on
+   its record.
+4. **Spelled Result returns** — `resolve_function_returns()` interns each
+   `fn f() Result@(T, E)` return through `intern_wrapper_enum` and stamps the enum on
+   `FuncDef.resolved_result` (#857). `ret` keeps the type as written, because the
+   typecheck pass rules on a qualified name in it. The backend reads the stamp through
+   `declared_result_of`, its one reader of a function's Result.
 
 ```sushi
 struct Point:

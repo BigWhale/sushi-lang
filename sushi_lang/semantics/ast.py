@@ -226,6 +226,9 @@ class FuncDef(Node):
     # Where a `static` marker was written on a perk-implementation method. The
     # grammar admits it in that position only so the perk pass can refuse it (CE4014).
     static_span: Optional[Span] = None
+    # A spelled `Result@(T, E)` return as the interned enum, stamped by the resolve
+    # pass (#857). `ret` keeps the type as written for the typecheck pass.
+    resolved_result: Optional[Type] = None
 
 
 @dataclass(slots=True)

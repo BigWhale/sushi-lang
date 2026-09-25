@@ -87,7 +87,7 @@ class SemanticAnalyzer:
             entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
             instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
             monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
-            resolve       field and variant type resolution      _resolve_types                    passes/resolve.py
+            resolve       field, variant and Result return types _resolve_types                    passes/resolve.py
             finite-types  reject by-value containment cycles     _check_finite_types               passes/finite_types.py
             derive        auto-derived hash() and clone()        _derive                           passes/derive.py
             shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
@@ -505,13 +505,16 @@ class SemanticAnalyzer:
         return concrete_extension_defs
 
     def _resolve_types(self) -> None:
-        """resolve: struct field, enum variant and constant types become concrete."""
+        """resolve: struct field, enum variant, constant and spelled Result return types."""
         # AFTER monomorphization, so every struct/enum exists in the tables.
         from sushi_lang.semantics.passes.resolve import (
-            resolve_constant_types, resolve_struct_field_types, resolve_enum_variant_types)
+            resolve_constant_types, resolve_enum_variant_types, resolve_function_returns,
+            resolve_struct_field_types)
         resolve_struct_field_types(self.tables.structs, self.tables.enums)
         resolve_enum_variant_types(self.tables.structs, self.tables.enums)
         resolve_constant_types(self.tables.constants, self.tables.structs, self.tables.enums)
+        resolve_function_returns(self.unit_manager.units.values(),
+                                 self.tables.structs, self.tables.enums)
 
     def _check_finite_types(self) -> bool:
         """finite-types: reject a type that contains itself by value (CE2095)."""
