@@ -74,7 +74,7 @@ KINDS = {
     ),
     "extension": (
         lambda arm: DECLARATIONS
-        + "extend Holder take(peek self) i32 | %s:\n    return self.n\n\n" % arm
+        + "extend Holder take(peek self) i32 | %s:\n    return Result.Ok(self.n)\n\n" % arm
         + MAIN,
         37,
     ),
@@ -88,7 +88,7 @@ KINDS = {
         lambda arm: DECLARATIONS
         + "perk Source:\n    fn read_one(peek self) i32 | %s\n\n" % arm
         + "extend Holder with Source:\n"
-        + "    fn read_one(peek self) i32 | %s:\n        return self.n\n\n" % arm
+        + "    fn read_one(peek self) i32 | %s:\n        return Result.Ok(self.n)\n\n" % arm
         + MAIN,
         34,
     ),
