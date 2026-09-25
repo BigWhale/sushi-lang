@@ -85,12 +85,8 @@ def _slice_args(codegen: 'LLVMCodegen', method_name: str, args) -> tuple:
 
 
 def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
-    """One i32 index argument, widened or narrowed like every other array index."""
-    value = codegen.expressions.emit_expr(arg)
-    if value.type != codegen.types.i32:
-        is_signed = value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
-        value = codegen.utils.convert_int_to_i32(value, is_signed=is_signed)
-    return value
+    """One i32 index argument (#870: the typecheck pass admits an i32 alone)."""
+    return codegen.utils.require_i32(codegen.expressions.emit_expr(arg))
 
 
 def emit_array_method(
@@ -125,10 +121,7 @@ def emit_array_method(
 
             case "get":
                 from .methods.safe_access import emit_fixed_array_get_maybe
-                index_value = codegen.expressions.emit_expr(expr.args[0])
-                if index_value.type != codegen.types.i32:
-                    is_signed = index_value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
-                    index_value = codegen.utils.convert_int_to_i32(index_value, is_signed=is_signed)
+                index_value = _index_arg(codegen, expr.args[0])
                 return emit_fixed_array_get_maybe(codegen, address(writable=False), fixed_ir_type,
                                                   index_value, fixed_semantic_type, to_i1)
 
@@ -232,10 +225,7 @@ def emit_array_method(
 
         case "get":
             from .methods.safe_access import emit_dynamic_array_get_maybe
-            index_value = codegen.expressions.emit_expr(expr.args[0])
-            if index_value.type != codegen.types.i32:
-                is_signed = index_value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
-                index_value = codegen.utils.convert_int_to_i32(index_value, is_signed=is_signed)
+            index_value = _index_arg(codegen, expr.args[0])
             return emit_dynamic_array_get_maybe(codegen, receiver_value, index_value, semantic_type, to_i1)
 
         case "first" | "last":

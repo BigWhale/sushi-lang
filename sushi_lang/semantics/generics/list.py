@@ -29,6 +29,10 @@ def is_builtin_list_method(method_name: str) -> bool:
 #: The methods whose ELEMENT argument is checked against T, and its position.
 _ELEMENT_ARGUMENT = {"push": 0, "insert": 1}
 
+#: The methods whose INDEX or COUNT argument is an i32 position (#870), and its position.
+#: `with_capacity` is the static twin of `reserve`, read where a static is read.
+_INDEX_ARGUMENT = {"get": 0, "remove": 0, "insert": 0, "reserve": 0}
+
 
 def validate_list_method_with_validator(
     call: MethodCall,
@@ -36,9 +40,16 @@ def validate_list_method_with_validator(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate a List<T> method call whose count is correct: the element type."""
+    """Validate a List<T> method call whose count is correct: the index, then the element."""
     if call.method not in LIST_METHOD_ARITY:
         raise_internal_error("CE0083", method=call.method)
+
+    index_arg = _INDEX_ARGUMENT.get(call.method)
+    if index_arg is not None:
+        from sushi_lang.semantics.passes.types.arrays import reject_non_i32
+        arg = call.args[index_arg]
+        reject_non_i32(validator, arg, validator.validate_expression(arg),
+                       argument=index_arg + 1)
 
     element_arg_index = _ELEMENT_ARGUMENT.get(call.method)
     if element_arg_index is not None:

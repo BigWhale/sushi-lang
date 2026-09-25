@@ -286,7 +286,7 @@ _add(ErrorMessage("CE2071", Severity.ERROR,
 
 _add(ErrorMessage("CE2072", Severity.ERROR,
     "range expression requires integer types for start and end bounds. Got {got}, expected {expected}",
-    Category.TYPE, "Range expressions (.. and ..=) can only be used with integer types (i8, i16, i32, i64, u8, u16, u32, u64)."))
+    Category.TYPE, "A range bound is an i32 position, as an index is (#870). This code is for a bound that is not a number at all (a string, a bool). A number of another type -- an i8, an i64, an f64 -- is CE2002 with the help 'as i32'; a bare literal takes i32 from the position."))
 
 _add(ErrorMessage("CE2073", Severity.ERROR,
     "literal {literal} out of range for {type}",

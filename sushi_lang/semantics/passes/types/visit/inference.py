@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.semantics.generics.interned import interned_name
-from sushi_lang.internals import errors as er
-from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 from sushi_lang.semantics.name_ladder import BareName, classify
@@ -16,7 +14,7 @@ from sushi_lang.semantics.passes.types.inference import (
 from sushi_lang.semantics.visitors import NodeVisitor
 from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType
 from sushi_lang.semantics.type_predicates import (
-    BUILTIN_NUMERIC_TYPES, is_string_convertible)
+    BUILTIN_NUMERIC_TYPES)
 from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
@@ -115,17 +113,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return BuiltinType.STRING
 
     def visit_interpolatedstring(self, node: InterpolatedString) -> Optional[Type]:
-        """Infer interpolated string type and validate expression types."""
-        for part in node.parts:
-            if not isinstance(part, str):
-                expr_type = self.type_validator.infer_expression_type(part)
-                if expr_type and not is_string_convertible(expr_type):
-                    er.emit(
-                        self.type_validator.reporter,
-                        er.ERR.CE2035,
-                        part.loc,
-                        type=display_type(expr_type)
-                    )
+        """An interpolated string is a string. Its holes are checked by the validation (#885)."""
         return BuiltinType.STRING
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> Optional[Type]:

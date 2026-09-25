@@ -1,0 +1,10 @@
+# The count of List.reserve is an i32 position (#870).
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got i64
+fn main() i32:
+    let i64 n = 4
+    let List@(i32) l = List.new()
+    l.reserve(n)
+    l.push(1)
+    println("{l.len()}")
+    return Result.Ok(0)

@@ -192,9 +192,8 @@ _add(ErrorMessage("CE0052", Severity.ERROR,
     "cannot hash value of type: {type}",
     Category.INTERNAL, "Type is not hashable - semantic analysis should prevent this."))
 
-_add(ErrorMessage("CE0053", Severity.ERROR,
-    "type '{type}' does not have a hash() method",
-    Category.INTERNAL, "Hash method not found for type - required for HashMap operations."))
+# CE0053 ("type does not have a hash() method") is retired. A HashMap key hashes through
+# `emit_value_hash` like every held value (#871, #855), and that seam answers CE0052 / CE0051.
 
 _add(ErrorMessage("CE0054", Severity.ERROR,
     "hash() expects 0 arguments, got {got}",

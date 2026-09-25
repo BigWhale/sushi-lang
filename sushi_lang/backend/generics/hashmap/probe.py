@@ -1,12 +1,17 @@
-"""The linear-probe loop, once."""
+"""The linear-probe loop, and the key lookup over it, once."""
 
 from typing import Any, Callable, NamedTuple, Optional
 
 import llvmlite.ir as ir
 
-from sushi_lang.backend.constants import ENTRY_STATE_INDICES
-from .types import ENTRY_EMPTY, ENTRY_OCCUPIED
+from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_STATE_INDICES
+from sushi_lang.semantics.typesys import Type
+from .types import ENTRY_EMPTY, ENTRY_OCCUPIED, emit_key_hash_i32
+from .utils import emit_key_equality_check
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
+from sushi_lang.internals.errors import raise_internal_error
 
 
 class ProbeSlot(NamedTuple):
@@ -25,13 +30,16 @@ def emit_probe_loop(
     capacity: ir.Value,
     hash_i32: ir.Value,
     *,
-    on_occupied: SlotFn,
     on_empty: SlotFn,
+    on_occupied: Optional[SlotFn] = None,
     on_tombstone: Optional[SlotFn] = None,
     exhausted_bb: Optional[ir.Block] = None,
     prefix: str = "probe",
 ) -> None:
-    """Linear-probe the buckets from `hash_i32`, dispatching on each slot's state."""
+    """Linear-probe the buckets from `hash_i32`, dispatching on each slot's state.
+
+    A slot state with no handler probes the next slot.
+    """
     builder = codegen.builder
     i32 = codegen.types.i32
     i8 = codegen.types.i8
@@ -82,7 +90,8 @@ def emit_probe_loop(
     _probe_on(builder, continue_bb)
 
     builder.position_at_end(occupied_bb)
-    on_occupied(slot)
+    if on_occupied is not None:
+        on_occupied(slot)
     _probe_on(builder, continue_bb)
 
     builder.position_at_end(tombstone_bb)
@@ -100,3 +109,91 @@ def _probe_on(builder: ir.IRBuilder, continue_bb: ir.Block) -> None:
     """Probe the next slot, unless the handler already left the loop."""
     if builder.block.terminator is None:
         builder.branch(continue_bb)
+
+
+class KeyLookup(NamedTuple):
+    """Where a key lookup goes. `entry_ptr` and `entry_key_ptr` are valid in `found` only."""
+    found: ir.Block
+    not_found: ir.Block
+    done: ir.Block
+    entry_ptr: ir.Value
+    entry_key_ptr: ir.Value
+
+
+def emit_find_key(
+    codegen: Any,
+    buckets_data: ir.Value,
+    capacity: ir.Value,
+    key_type: Type,
+    key_value: ir.Value,
+    op: str,
+) -> KeyLookup:
+    """Probe for `key_value` and branch to `{op}_found` or `{op}_not_found`.
+
+    Both blocks are empty; the caller fills them and joins them in `{op}_done`.
+    """
+    builder = codegen.builder
+    hash_i32 = emit_key_hash_i32(codegen, key_type, key_value)
+
+    found_bb = builder.append_basic_block(name=f"{op}_found")
+    not_found_bb = builder.append_basic_block(name=f"{op}_not_found")
+    done_bb = builder.append_basic_block(name=f"{op}_done")
+
+    # The matching slot, captured out of the probe. It dominates found_bb, because
+    # that block is only reachable from the probe.
+    matched: dict[str, ir.Value] = {}
+
+    def on_empty(slot: ProbeSlot) -> None:
+        # A never-used slot ends the chain: the key was never here.
+        builder.branch(not_found_bb)
+
+    def on_occupied(slot: ProbeSlot) -> None:
+        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
+        entry_key = builder.load(entry_key_ptr, name="entry_key")
+        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        matched["entry_ptr"] = slot.entry_ptr
+        matched["entry_key_ptr"] = entry_key_ptr
+        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
+
+    emit_probe_loop(
+        codegen, buckets_data, capacity, hash_i32,
+        on_occupied=on_occupied, on_empty=on_empty,
+        exhausted_bb=not_found_bb, prefix=f"{op}_probe",
+    )
+
+    return KeyLookup(found_bb, not_found_bb, done_bb,
+                     matched["entry_ptr"], matched["entry_key_ptr"])
+
+
+def emit_lookup_key(codegen: Any, expr: Any, key_type: Type, method: str) -> ir.Value:
+    """The one key argument of a lookup, borrowed: a lookup reads the key and keeps nothing."""
+    if len(expr.args) != 1:
+        raise_internal_error("CE0023", method=method, expected=1, got=len(expr.args))
+    return emit_borrowed_arg(codegen, expr.args[0], key_type)
+
+
+def emit_lookup_maybe(
+    codegen: Any,
+    lookup: KeyLookup,
+    value_type: Type,
+    found_value: ir.Value,
+    name: str,
+) -> ir.Value:
+    """Join a lookup into `Maybe.Some(found_value)` or `Maybe.None`.
+
+    The builder is at the end of the found path, where `found_value` is ready.
+    """
+    builder = codegen.builder
+    maybe_some = emit_maybe_some(codegen, value_type, found_value)
+    some_pred_bb = builder.block
+    builder.branch(lookup.done)
+
+    builder.position_at_end(lookup.not_found)
+    maybe_none = emit_maybe_none(codegen, value_type)
+    builder.branch(lookup.done)
+
+    builder.position_at_end(lookup.done)
+    result_phi = builder.phi(maybe_some.type, name=name)
+    result_phi.add_incoming(maybe_some, some_pred_bb)
+    result_phi.add_incoming(maybe_none, lookup.not_found)
+    return result_phi

@@ -49,4 +49,4 @@ def test_hashmap_key_hashing_calls_the_perk_implementation(tmp_path):
     called = re.search(r'call[^\n]*Point_hash', ll)
     assert called, (
         "the map's key hashing did not call the perk hash implementation -- "
-        "get_key_hash_method resolved the key's hash without consulting the perk table")
+        "emit_key_hash_i32 resolved the key's hash without consulting the perk table")

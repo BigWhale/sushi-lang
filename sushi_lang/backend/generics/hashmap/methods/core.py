@@ -1,7 +1,7 @@
 """HashMap<K, V> core method implementations."""
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import get_entry_type
@@ -11,17 +11,13 @@ from sushi_lang.backend.constants import (
     HASHMAP_CAPACITY_INDICES,
     HASHMAP_TOMBSTONES_INDICES,
     BUCKETS_DATA_INDICES,
-    ENTRY_KEY_INDICES,
     ENTRY_VALUE_INDICES,
 )
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
-from ..utils import emit_key_equality_check, emit_init_buckets_empty
-from ..probe import emit_probe_loop, ProbeSlot
-from sushi_lang.internals.errors import raise_internal_error
+from ..utils import emit_init_buckets_empty
+from ..probe import emit_find_key, emit_lookup_key, emit_lookup_maybe
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
-from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_hashmap_new(codegen: Any, hashmap_type: StructType) -> ir.Value:
@@ -87,70 +83,16 @@ def emit_hashmap_get(
     hashmap_type: StructType
 ) -> ir.Value:
     """Emit HashMap<K, V>.get(K key) -> Maybe<V>"""
-    from sushi_lang.semantics.ast import MethodCall
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
+    key_value = emit_lookup_key(codegen, expr, key_type, "get")
+    capacity, buckets_data = _load_capacity_and_buckets(builder, hashmap_value)
 
-    value_llvm = codegen.types.ll_type(value_type)
+    lookup = emit_find_key(codegen, buckets_data, capacity, key_type, key_value, "get")
 
-    if len(expr.args) != 1:
-        raise_internal_error("CE0023", method="get", expected=1, got=len(expr.args))
-
-    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
-
-    capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
-    capacity = builder.load(capacity_ptr, name="capacity")
-
-    buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
-    buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
-    buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
-
-    from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(codegen, key_type)
-    if hash_method is None:
-        raise_internal_error("CE0053", type=key_type)
-
-    fake_call = MethodCall(
-        receiver=Name(id="key", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
-    hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
-
-    found_bb = builder.append_basic_block(name="get_found")
-    not_found_bb = builder.append_basic_block(name="get_not_found")
-    get_done_bb = builder.append_basic_block(name="get_done")
-
-    # The matching slot, captured out of the probe for the found path below. It
-    # dominates found_bb -- that block is only reachable from the probe.
-    matched: dict[str, ir.Value] = {}
-
-    def on_empty(slot: ProbeSlot) -> None:
-        # A never-used slot ends the chain: the key was never here.
-        builder.branch(not_found_bb)
-
-    def on_occupied(slot: ProbeSlot) -> None:
-        matched["entry_ptr"] = slot.entry_ptr
-        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
-        entry_key = builder.load(entry_key_ptr, name="entry_key")
-        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
-
-    emit_probe_loop(
-        codegen, buckets_data, capacity, hash_i32,
-        on_occupied=on_occupied, on_empty=on_empty,
-        exhausted_bb=not_found_bb, prefix="get_probe",
-    )
-
-    builder.position_at_end(found_bb)
-    entry_ptr = matched["entry_ptr"]
-    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
+    builder.position_at_end(lookup.found)
+    entry_value_ptr = builder.gep(lookup.entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # `.get()` READS. It does not detach (#242): the entry stays OCCUPIED and `map.free()`
@@ -158,42 +100,7 @@ def emit_hashmap_get(
     # classifies it BORROWED, a `let` of it binds without owning, and a position that
     # takes ownership rejects it (CE2411) with `.clone()` as the escape. The deep copy
     # that used to happen here was the compiler inserting one the user did not ask for.
-
-    from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
-    maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
-    if maybe_enum_type is None:
-        raise_internal_error("CE0047", type=str(value_type))
-
-    maybe_llvm_type = codegen.types.get_enum_type(maybe_enum_type)
-
-    maybe_some = ir.Constant(maybe_llvm_type, ir.Undefined)
-    some_tag = ir.Constant(codegen.types.i32, 0)  # Some is first variant
-    maybe_some = builder.insert_value(maybe_some, some_tag, 0, name="maybe_some_tag")
-
-    data_array_type = maybe_llvm_type.elements[1]  # [N x i8]
-    data_ptr = entry_alloca(builder, data_array_type, name="some_data_alloc")
-    value_ptr = builder.bitcast(data_ptr, ir.PointerType(value_llvm), name="value_ptr")
-    builder.store(entry_value, value_ptr)
-    data_value = builder.load(data_ptr, name="some_data")
-    maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
-
-    some_pred_bb = builder.block
-    builder.branch(get_done_bb)
-
-    builder.position_at_end(not_found_bb)
-    maybe_none = ir.Constant(maybe_llvm_type, ir.Undefined)
-    none_tag = ir.Constant(codegen.types.i32, 1)  # None is second variant
-    maybe_none = builder.insert_value(maybe_none, none_tag, 0, name="maybe_none_tag")
-    undef_data = ir.Constant(data_array_type, ir.Undefined)
-    maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
-    builder.branch(get_done_bb)
-
-    builder.position_at_end(get_done_bb)
-    result_phi = builder.phi(maybe_llvm_type, name="get_result")
-    result_phi.add_incoming(maybe_some, some_pred_bb)
-    result_phi.add_incoming(maybe_none, not_found_bb)
-
-    return result_phi
+    return emit_lookup_maybe(codegen, lookup, value_type, entry_value, "get_result")
 
 
 def emit_hashmap_contains_key(
@@ -203,71 +110,33 @@ def emit_hashmap_contains_key(
     hashmap_type: StructType
 ) -> ir.Value:
     """Emit HashMap<K, V>.contains_key(K key) -> bool"""
-    from sushi_lang.semantics.ast import MethodCall
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
     builder = codegen.builder
 
-    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
+    key_type, _ = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
+    key_value = emit_lookup_key(codegen, expr, key_type, "contains_key")
+    capacity, buckets_data = _load_capacity_and_buckets(builder, hashmap_value)
 
-    true_val = ir.Constant(codegen.types.i32, 1)
-    false_val = ir.Constant(codegen.types.i32, 0)
+    lookup = emit_find_key(codegen, buckets_data, capacity, key_type, key_value, "contains")
 
-    if len(expr.args) != 1:
-        raise_internal_error("CE0023", method="contains_key", expected=1, got=len(expr.args))
+    builder.position_at_end(lookup.found)
+    builder.branch(lookup.done)
 
-    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
+    builder.position_at_end(lookup.not_found)
+    builder.branch(lookup.done)
 
+    builder.position_at_end(lookup.done)
+    result_phi = builder.phi(codegen.types.i32, name="contains_result")
+    result_phi.add_incoming(ir.Constant(codegen.types.i32, 1), lookup.found)
+    result_phi.add_incoming(ir.Constant(codegen.types.i32, 0), lookup.not_found)
+
+    return result_phi
+
+
+def _load_capacity_and_buckets(builder: ir.IRBuilder, hashmap_value: ir.Value) -> tuple[ir.Value, ir.Value]:
+    """Load the capacity and the bucket data pointer of a map, for a read-only lookup."""
     capacity_ptr = builder.gep(hashmap_value, HASHMAP_CAPACITY_INDICES, name="capacity_ptr")
     capacity = builder.load(capacity_ptr, name="capacity")
 
     buckets_ptr = builder.gep(hashmap_value, HASHMAP_BUCKETS_INDICES, name="buckets_ptr")
     buckets_data_ptr = builder.gep(buckets_ptr, BUCKETS_DATA_INDICES, name="buckets_data_ptr")
-    buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
-
-    from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(codegen, key_type)
-    if hash_method is None:
-        raise_internal_error("CE0053", type=key_type)
-
-    fake_call = MethodCall(
-        receiver=Name(id="key", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
-    hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
-
-    found_bb = builder.append_basic_block(name="contains_found")
-    not_found_bb = builder.append_basic_block(name="contains_not_found")
-    contains_done_bb = builder.append_basic_block(name="contains_done")
-
-    def on_empty(slot: ProbeSlot) -> None:
-        builder.branch(not_found_bb)
-
-    def on_occupied(slot: ProbeSlot) -> None:
-        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
-        entry_key = builder.load(entry_key_ptr, name="entry_key")
-        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
-
-    emit_probe_loop(
-        codegen, buckets_data, capacity, hash_i32,
-        on_occupied=on_occupied, on_empty=on_empty,
-        exhausted_bb=not_found_bb, prefix="contains_probe",
-    )
-
-    builder.position_at_end(found_bb)
-    builder.branch(contains_done_bb)
-
-    builder.position_at_end(not_found_bb)
-    builder.branch(contains_done_bb)
-
-    builder.position_at_end(contains_done_bb)
-    result_phi = builder.phi(codegen.types.i32, name="contains_result")
-    result_phi.add_incoming(true_val, found_bb)
-    result_phi.add_incoming(false_val, not_found_bb)
-
-    return result_phi
+    return capacity, builder.load(buckets_data_ptr, name="buckets_data")

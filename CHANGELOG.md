@@ -5,6 +5,17 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **An index, a count and a range bound are `i32`** (#870). The positions did not agree:
+  `arr[i]` was strict, `arr.get(i)` took any integer, a range bound took any number, and the
+  backend widened a narrow value by ZERO-extension, so `from([7; -1 as i8])` had 255
+  elements, `-2 as i8 .. 2` ran 252 times, and a `f64` bound was truncated. `List.get(i8)`
+  was the internal error CE0000. Every range bound, repeat count and built-in index or count
+  argument (`get`, `insert`, `remove`, `reserve`, `truncate`, `s`, `ss`, `extend_range`,
+  `List.with_capacity`) is now an `i32` position: a bare literal takes `i32`, a typed value of
+  another type is CE2002 (CE2006 for a method argument) with `as i32` in the help. The List
+  index and the count arguments are also walked by the typecheck pass now, so a constant
+  division by zero there is CE0112. A range bound that is not a number stays CE2072.
+  `tests/array/test_array_index_types.sushi`, which pinned the old rule, is retired by ruling.
 - **`a.fill(a[i])` is refused when the element owns a resource** (#867). `fill` destroys each
   slot before it stores its copy, so a value that was a slot of the receiver was freed by the
   first store and every later slot copied freed storage: the program printed garbage and
@@ -417,6 +428,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A held value hashes the same in every position, and a `Hashable` override wins** (#871).
+  "Hash a value of type T" had three copies (struct field, enum payload, element). The element
+  copy refused an array, so `.hash()` on a `List@(i32[])` or an `Own@(i32[3])` was the
+  internal error CE0052, and none of the three read a `Hashable` override. One
+  `emit_value_hash` (`backend/types/value_hash.py`) now serves every held position and the
+  map key, the override first; an overridden struct is not flattened into its fields. No
+  backend function builds a fake `MethodCall` node any more (#855). CE0053 is retired.
+- **An unprintable interpolation hole is CE2035 once** (#885). It was reported by inference,
+  which runs more than once over one expression, so it printed twice (three times in a `let`).
 - **`List.insert` out of bounds evaluates and destroys its element** (#869). The element was
   emitted only on the in-bounds path: its side effects did not run, a moved local leaked, the
   temporaries were freed uninitialised (SIGABRT), and the `Err` held an undefined payload.
@@ -1200,6 +1220,12 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One HashMap key hash and one key lookup** (#872). `get`, `remove` and `contains_key` share
+  `emit_find_key`; `get` and `remove` build their result through the Maybe seam; `free` and
+  `destroy` share one body; a resize walks its old buckets with `emit_container_walk`.
+- **`enum_utils` reads the one payload layout** (#873). The second offset walk and three
+  helpers with no caller are gone; `unpack_*` reads `payload_field_offsets`. The two HashMap
+  array-equality loops are counted walks now.
 - **A spelled `Result@(T, E)` return is interned in the `resolve` pass** (#857). It reached
   the backend as the written `GenericTypeRef` with unresolved payload names, and the backend
   had two readers for it. The pass now stamps the interned enum on the declaration

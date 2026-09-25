@@ -1,14 +1,15 @@
 """LLVM emission for the auto-derived enum hash() method."""
 
-from typing import Any
+from typing import Any, Optional
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import EnumType, Type, ArrayType, DynamicArrayType, BuiltinType, StructType
+from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
+from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -18,14 +19,12 @@ def _emit_enum_hash(enum_type: Type) -> Any:
     if not isinstance(enum_type, EnumType):
         raise_internal_error("CE0032", type=type(enum_type).__name__)
 
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for enum.hash() method."""
-        if len(call.args) != 0:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
-        builder = codegen.builder
         u64 = ir.IntType(INT64_BIT_WIDTH)
         i32 = codegen.types.i32
 
@@ -112,35 +111,11 @@ def _emit_variant_data_hash(codegen: Any, enum_value: ir.Value, variant: Any, in
 
         value = builder.load(value_ptr_typed, name=f"assoc{assoc_idx}_value")
 
-        value_hash = _emit_associated_value_hash(codegen, value, assoc_type)
+        value_hash = emit_value_hash(codegen, value, assoc_type)
 
         hash_value = emit_fnv1a_combine(codegen, hash_value, value_hash)
 
     return hash_value
-
-
-def _emit_associated_value_hash(codegen: Any, value: ir.Value, value_type: Type) -> ir.Value:
-    """Emit code to get the hash of an associated value."""
-    from sushi_lang.semantics.ast import MethodCall, Name
-
-    require_builder(codegen)
-    if isinstance(value_type, BuiltinType):
-        import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-    elif not isinstance(value_type, (StructType, EnumType, ArrayType, DynamicArrayType)):
-        raise_internal_error("CE0052", type=str(value_type))
-
-    hash_method = codegen.derived_methods.get_method(value_type, "hash")
-    if hash_method is None:
-        raise_internal_error("CE0051", type=str(value_type))
-
-    fake_call = MethodCall(
-        receiver=Name(id="value", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    return hash_method.llvm_emitter(codegen, fake_call, value, value.type, False)
 
 
 register_hash_emitter_factory("enum", _emit_enum_hash)

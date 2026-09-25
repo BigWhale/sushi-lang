@@ -1,0 +1,11 @@
+# The index of List.insert is an i32 position (#870).
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got u8
+fn main() i32:
+    let List@(i32) l = List.new()
+    let u8 at = 0 as u8
+    match l.insert(at, 5):
+        Result.Ok(_) -> println("in")
+        Result.Err(_) -> println("out")
+    println("{l.len()}")
+    return Result.Ok(0)

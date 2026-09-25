@@ -1,0 +1,11 @@
+# An Own@(T) whose payload is a dynamic array hashes the payload as an array.
+# EXPECT_STDOUT_EXACT: "same=true\ndifferent=false\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let Own@(i32[]) a = Own.alloc(from([1, 2]))
+    let Own@(i32[]) b = Own.alloc(from([1, 2]))
+    let Own@(i32[]) c = Own.alloc(from([2, 1]))
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+    return Result.Ok(0)

@@ -1,8 +1,9 @@
 """LLVM type helpers and constants for HashMap<K, V>."""
 
-from typing import Any, NamedTuple, Optional
-from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType
+from typing import Any, NamedTuple
+from sushi_lang.semantics.typesys import Type
 import llvmlite.ir as ir
+
 
 from sushi_lang.backend.constants import (
     HASHMAP_BUCKETS_INDICES,
@@ -86,58 +87,18 @@ def get_hashmap_field_ptrs(codegen: Any, hashmap_ptr: ir.Value) -> HashMapFields
     )
 
 
-def get_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
-    """Get the hash method for a HashMap key type, registering it on-demand if needed.
+def emit_key_hash_i32(codegen: Any, key_type: Type, key_value: ir.Value) -> ir.Value:
+    """The probe start of a key: its hash, truncated to i32.
 
-    A perk implementation wins, exactly as it does at the three dispatch layers
-    (docs/design/method-resolution.md) -- otherwise the map would probe with the
-    derived hash while `.hash()` answers the override.
+    A key is a held value, so it hashes through `emit_value_hash`: a perk
+    implementation wins, exactly as it does for `.hash()` and in every other held
+    position -- otherwise the map would probe with the derived hash while `.hash()`
+    answers the override.
     """
-    perk_method = _perk_key_hash_method(codegen, key_type)
-    if perk_method is not None:
-        return perk_method
+    from sushi_lang.backend.types.value_hash import emit_value_hash
 
-    hash_method = codegen.derived_methods.get_method(key_type, "hash")
-    if hash_method is not None:
-        return hash_method
-
-    if isinstance(key_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.generics.hashing import register_hash_if_hashable
-        if register_hash_if_hashable(key_type, codegen.derived_methods):
-            return codegen.derived_methods.get_method(key_type, "hash")
-
-    return None
-
-
-def _perk_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
-    """A BuiltinMethod-shaped adapter that calls the perk `hash` implementation."""
-    from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
-
-    if codegen.perk_impl_table.get_method(key_type, "hash") is None:
-        return None
-
-    from sushi_lang.semantics.library_templates import impl_method_symbol
-    func_name = impl_method_symbol(str(key_type), "hash")
-
-    def emit_perk_hash(codegen: Any, call: Any, receiver_value: ir.Value,
-                       receiver_ll_type: ir.Type, to_i1: bool) -> ir.Value:
-        from sushi_lang.internals.errors import raise_internal_error
-        llvm_fn = codegen.funcs.get(func_name)
-        if llvm_fn is None:
-            raise_internal_error("CE0024", method="hash", type=str(key_type))
-        param_type = list(llvm_fn.args)[0].type
-        casted = codegen.utils.cast_for_param(receiver_value, param_type)
-        return codegen.builder.call(llvm_fn, [casted])
-
-    return BuiltinMethod(
-        name="hash",
-        parameter_types=[],
-        return_type=BuiltinType.U64,
-        description="perk hash implementation used for HashMap key hashing",
-        semantic_validator=None,
-        llvm_emitter=emit_perk_hash,
-    )
+    hash_value = emit_value_hash(codegen, key_value, key_type)
+    return codegen.builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
 
 def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':
