@@ -20,24 +20,12 @@ class FormattingOperations:
     def __init__(self, codegen: LLVMCodegen) -> None:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
-
-        self.fmt_i32: ir.GlobalVariable | None = None
-        self.fmt_i64: ir.GlobalVariable | None = None
-        self.fmt_u32: ir.GlobalVariable | None = None
-        self.fmt_u64: ir.GlobalVariable | None = None
-        self.fmt_str: ir.GlobalVariable | None = None
-        self.fmt_f32: ir.GlobalVariable | None = None
-        self.fmt_f64: ir.GlobalVariable | None = None
-        self.fmt_bool_true: ir.GlobalVariable | None = None
-        self.fmt_bool_false: ir.GlobalVariable | None = None
+        self._format_strings: dict[str, ir.GlobalVariable] = {}
 
     def declare_format_strings(self) -> None:
-        """Declare global format string constants for printf operations."""
-        for name in ["i32", "str", "f32", "f64"]:
-            attr_name = f"fmt_{name}"
-            if getattr(self, attr_name, None) is None:
-                global_str = self._create_format_string(name, FORMAT_STRINGS[name])
-                setattr(self, attr_name, global_str)
+        """Declare the format strings every module uses, in one fixed order."""
+        for name in ("i32", "str", "f32", "f64"):
+            self._format_global(name)
 
     def emit_console_write(self, data_ptr: ir.Value, length: ir.Value,
                            fd: int = STDOUT_FD, builder: ir.IRBuilder | None = None) -> None:
@@ -83,14 +71,10 @@ class FormattingOperations:
     def emit_print_value(self, v: ir.Value, is_line: bool = False,
                          semantic_type=None) -> None:
         """Write one value to the console, with the newline when `is_line` asks."""
-        assert (
-            self.codegen.builder is not None
-            and self.codegen.runtime.libc_strings.sprintf is not None
-            and self.fmt_i32 is not None
-            and self.fmt_str is not None
-            and self.fmt_f32 is not None
-            and self.fmt_f64 is not None
-        )
+        if self.codegen.builder is None:
+            raise_internal_error("CE0009")
+        if self.codegen.runtime.libc_strings.sprintf is None:
+            raise_internal_error("CE0013", name="sprintf")
 
         if self.codegen.types.is_string_type(v.type):
             # The fat pointer carries its own byte count, so the string is written in
@@ -104,13 +88,13 @@ class FormattingOperations:
             return
 
         if isinstance(v.type, ir.FloatType):
-            fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_f32)
+            fmt_ptr = self.codegen.utils.cstr_ptr(self._format_global("f32"))
             f64_val = self.codegen.builder.fpext(v, self.codegen.types.f64)
             self._emit_formatted_write(fmt_ptr, f64_val, is_line)
             return
 
         if isinstance(v.type, ir.DoubleType):
-            fmt_ptr = self.codegen.utils.cstr_ptr(self.fmt_f64)
+            fmt_ptr = self.codegen.utils.cstr_ptr(self._format_global("f64"))
             self._emit_formatted_write(fmt_ptr, v, is_line)
             return
 
@@ -118,7 +102,7 @@ class FormattingOperations:
 
     def _emit_newline(self) -> None:
         """Write the one byte a `println` adds after a string."""
-        newline = self._get_format_string("newline", "\n")
+        newline = self._get_format_string("newline")
         self.emit_console_write(newline, ir.Constant(self.codegen.i32, 1))
 
     def _emit_print_integer(self, v: ir.Value, semantic_type=None,
@@ -138,7 +122,7 @@ class FormattingOperations:
             return
 
         if not isinstance(v.type, ir.IntType):
-            fmt_ptr = self._get_format_string("i32", FORMAT_STRINGS["i32"])
+            fmt_ptr = self._get_format_string("i32")
             self._emit_formatted_write(fmt_ptr, self.codegen.utils.as_i32(v), is_line)
             return
 
@@ -153,7 +137,7 @@ class FormattingOperations:
             value = v
             name = "i64" if is_signed else "u64"
 
-        fmt_ptr = self._get_format_string(name, FORMAT_STRINGS[name])
+        fmt_ptr = self._get_format_string(name)
         self._emit_formatted_write(fmt_ptr, value, is_line)
 
     def _emit_print_bool(self, v: ir.Value, is_line: bool = False) -> None:
@@ -173,14 +157,14 @@ class FormattingOperations:
             raise_internal_error("CE0013", name="sprintf")
         if bit_width <= 32:
             if is_signed:
-                fmt_str = self._get_format_string("i32", FORMAT_STRINGS["i32"])
+                fmt_str = self._get_format_string("i32")
             else:
-                fmt_str = self._get_format_string("u32", FORMAT_STRINGS["u32"])
+                fmt_str = self._get_format_string("u32")
         else:  # 64-bit
             if is_signed:
-                fmt_str = self._get_format_string("i64", FORMAT_STRINGS["i64"])
+                fmt_str = self._get_format_string("i64")
             else:
-                fmt_str = self._get_format_string("u64", FORMAT_STRINGS["u64"])
+                fmt_str = self._get_format_string("u64")
 
         buffer = self._allocate_conversion_buffer(32)
 
@@ -197,9 +181,9 @@ class FormattingOperations:
         if self.codegen.runtime.libc_strings.sprintf is None:
             raise_internal_error("CE0013", name="sprintf")
         if is_double:
-            fmt_str = self._get_format_string("f64", "%.6f")
+            fmt_str = self._get_format_string("f64")
         else:
-            fmt_str = self._get_format_string("f32", "%.6f")
+            fmt_str = self._get_format_string("f32")
             float_value = self.codegen.builder.fpext(float_value, self.codegen.types.f64)
 
         buffer = self._allocate_conversion_buffer(64)
@@ -264,18 +248,18 @@ class FormattingOperations:
         gv.initializer = ir.Constant(arr_ty, bytearray(data))
         return gv
 
-    def _get_format_string(self, name: str, format_str: str) -> ir.Value:
-        """Get or create a global format string constant."""
-        attr_name = f"fmt_{name}"
-        existing = getattr(self, attr_name, None)
-
+    def _format_global(self, name: str) -> ir.GlobalVariable:
+        """The global that holds the `FORMAT_STRINGS` text of `name`, made on first use."""
+        existing = self._format_strings.get(name)
         if existing is None:
-            global_str = self._create_format_string(name, format_str)
-            setattr(self, attr_name, global_str)
-            existing = global_str
+            existing = self._create_format_string(name, FORMAT_STRINGS[name])
+            self._format_strings[name] = existing
+        return existing
 
+    def _get_format_string(self, name: str) -> ir.Value:
+        """A pointer to the first byte of the format string of `name`."""
         zero = ir.Constant(self.codegen.i32, 0)
-        return self.codegen.builder.gep(existing, [zero, zero])
+        return self.codegen.builder.gep(self._format_global(name), [zero, zero])
 
     def _allocate_conversion_buffer(self, size: int) -> ir.Value:
         """Allocate a buffer for type-to-string conversion."""

@@ -25,6 +25,7 @@ KNOWN_HAND_LOOPS = {
     ("generics/list/methods_debug.py", "emit_list_debug"),
     ("runtime/args.py", "populate_string_array_from_argv"),
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"),
+    # A user loop body: `break`/`continue` need loop blocks that the walk does not expose.
     ("statements/loops.py", "_emit_hashmap_foreach"),
     ("types/arrays/methods/core.py", "emit_dynamic_array_free"),
     ("types/arrays/methods/core.py", "emit_dynamic_array_fill"),

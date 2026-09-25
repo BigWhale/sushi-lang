@@ -394,6 +394,15 @@ _add(ErrorMessage("CE0139", Severity.ERROR,
     "operand took the wrong sign, and the bitwise emitter extended or truncated the right "
     "operand. Both compiled a wrong value with no diagnostic (#840)."))
 
+_add(ErrorMessage("CE0141", Severity.ERROR,
+    "unknown lifecycle kind: '{kind}'",
+    Category.INTERNAL,
+    "The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per "
+    "composite kind: dynamic_array, fixed_array, struct and enum. A backend module "
+    "registered a handler under a kind that is not one of them, so no value of any type "
+    "can reach that handler. It is a compiler fault, and no user program causes it. It "
+    "was an assert statement, which `python -O` removes (#880)."))
+
 _add(ErrorMessage("CE0126", Severity.ERROR,
     "poisoned intern of '{name}': already interned as {existing}, rebuilt as {rebuilt}",
     Category.INTERNAL,

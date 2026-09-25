@@ -274,7 +274,8 @@ def try_infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional[Struct
 def infer_struct_type(codegen: 'LLVMCodegen', expr: Expr) -> StructType:
     """Infer the struct type of an expression, or raise the internal error of the miss."""
     found = _infer_struct(codegen, expr, strict=True)
-    assert found is not None, "a strict inference raises on a miss"
+    if found is None:
+        raise_internal_error("CE0067", expr=type(expr).__name__)
     return found
 
 
