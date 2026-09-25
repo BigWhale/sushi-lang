@@ -47,6 +47,25 @@ def unwrap_type_preserving_unary(expr: 'Expr') -> 'Expr':
     return expr
 
 
+def type_literal_from_sibling(validator: 'TypeValidator', first: 'Expr', second: 'Expr',
+                              infer) -> None:
+    """Stamp a bare numeric-literal operand with its concrete sibling's type.
+
+    The one rule for a pair of operands (a binary expression, the two arguments of
+    `min` / `max`): bareness is read THROUGH the unary operators that keep their operand's
+    type, two bare literals keep the default, and the operand node -- not the literal
+    under it -- is propagated, so a negated literal that does not fit is CE2073.
+    """
+    first_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(first))
+    second_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(second))
+    if first_bare == second_bare:
+        return
+    literal, sibling = (first, second) if first_bare else (second, first)
+    sibling_type = infer(sibling)
+    if isinstance(sibling_type, BuiltinType):
+        propagate_types_to_value(validator, literal, sibling_type)
+
+
 def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
                             expected: BuiltinType) -> None:
     """Push an expected numeric type into a value's literal leaves."""
