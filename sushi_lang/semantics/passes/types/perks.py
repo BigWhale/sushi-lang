@@ -65,7 +65,16 @@ def validate_perk_implementation(
     perk_def: PerkDef,
     reporter: Reporter
 ) -> bool:
-    """Validate that an implementation satisfies a perk's requirements."""
+    """Validate that an implementation satisfies a perk's requirements.
+
+    A copy the compiler cut for one instantiation of a generic target is not judged:
+    its header is the template's, and `validate_template_header` judges the template
+    once, where the source wrote it (#811).
+    """
+    from sushi_lang.semantics.ast_walk import is_written
+    if not is_written(impl):
+        return True
+
     implemented_methods = {m.name: m for m in impl.methods}
     required_methods = {m.name: m for m in perk_def.methods}
 
@@ -95,6 +104,21 @@ def validate_perk_implementation(
             valid = False
 
     return valid
+
+
+def validate_template_header(validator, impl: ExtendWithDef) -> None:
+    """The contract check on a generic-target perk implementation as WRITTEN (#811).
+
+    Each instantiation gets its own copy of the implementation, and every copy carries
+    the template's header. Judged on the copies, one written method reported its fault
+    once per instantiation, and a template with no instantiation was never judged.
+
+    A perk that does not exist is refused where the copies are read, so it is not
+    judged here.
+    """
+    perk_def = validator.perk_table.by_name.get(impl.perk_name)
+    if perk_def is not None:
+        validate_perk_implementation(impl, perk_def, validator.reporter)
 
 
 def _channel_phrase(err_type) -> str:

@@ -1,0 +1,21 @@
+# A perk implementation on a generic target whose method does not match the contract.
+# The header is written once, in the template, and it is judged there (#811). The count
+# is pinned by tests/unit/test_perk_impl_header_is_judged_once.py.
+# EXPECT_ERROR_CODE: CE4004
+
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Sz:
+    fn sz() bool:
+        return true
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("x")
+    let Box@(bool) c = Box(true)
+    println("{a.v} {b.v} {c.v}")
+    return Result.Ok(0)
