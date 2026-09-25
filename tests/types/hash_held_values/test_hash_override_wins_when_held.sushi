@@ -1,0 +1,49 @@
+# A Hashable implementation is the override, and it wins in every held position: a struct
+# field, an array element, a List, Maybe and Own element, an enum payload and a value
+# inside a map key. The override answers 7 for every P, so every holder of a P hashes
+# alike when the rest of it is equal. A map key still needs equal keys to match, so the
+# key line only shows that the insert and the probe agree through the override.
+# EXPECT_STDOUT_EXACT: "direct true\nfield true\narray true\nfixed true\nlist true\nmaybe true\nown true\npayload true\nkey true\n"
+# EXPECT_NO_LEAKS
+
+use <collections/hashmap>
+
+struct P:
+    i32 x
+
+extend P with Hashable:
+    fn hash() u64:
+        return 7
+
+struct H:
+    P p
+
+enum E:
+    Holds(P)
+
+fn main() i32:
+    println("direct {P(1).hash() == P(2).hash()}")
+    println("field {H(P(1)).hash() == H(P(2)).hash()}")
+    let P[] a = from([P(1)])
+    let P[] b = from([P(2)])
+    println("array {a.hash() == b.hash()}")
+    let P[2] fa = [P(1), P(3)]
+    let P[2] fb = [P(2), P(4)]
+    println("fixed {fa.hash() == fb.hash()}")
+    let List@(P) l1 = List.new()
+    l1.push(P(1))
+    let List@(P) l2 = List.new()
+    l2.push(P(2))
+    println("list {l1.hash() == l2.hash()}")
+    let Maybe@(P) m1 = Maybe.Some(P(1))
+    let Maybe@(P) m2 = Maybe.Some(P(2))
+    println("maybe {m1.hash() == m2.hash()}")
+    let Own@(P) o1 = Own.alloc(P(1))
+    let Own@(P) o2 = Own.alloc(P(2))
+    println("own {o1.hash() == o2.hash()}")
+    println("payload {E.Holds(P(1)).hash() == E.Holds(P(2)).hash()}")
+    let HashMap@(H, i32) m = HashMap.new()
+    m.insert(H(P(1)), 42)
+    println("key {m.get(H(P(1))).realise(0) == 42}")
+    m.free()
+    return Result.Ok(0)

@@ -1,13 +1,15 @@
 """LLVM emission for the auto-derived struct hash() method."""
 
-from typing import Any
+from typing import Any, Optional
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import StructType, Type, ArrayType, DynamicArrayType, EnumType
+from sushi_lang.semantics.typesys import StructType, Type
+from sushi_lang.semantics.generics.hashing import container_hash_kind
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
+from sushi_lang.backend.types.value_hash import emit_value_hash, hash_override, reject_hash_arguments
 
 
 def _emit_struct_hash(prim_type: Type) -> Any:
@@ -17,14 +19,12 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
     struct_type = prim_type
 
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for struct.hash() method."""
-        if len(call.args) != 0:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
-        builder = codegen.builder
 
         hash_value = emit_fnv1a_init(codegen)
 
@@ -47,22 +47,17 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
 def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> ir.Value:
     """Emit code to get the hash of a field value."""
-    from sushi_lang.semantics.ast import MethodCall, Name
-    from sushi_lang.semantics.typesys import BuiltinType
-
     builder = require_builder(codegen)
-    builder = codegen.builder
 
-    # A CONTAINER is the one struct that is not flattened. Its fields are its
-    # implementation -- `List@(T).data` is a raw pointer, and the values are not in the
-    # struct at all -- so it answers through its own registered hash, which reads what it
-    # holds. Walking it here read the pointer and answered CE0052 (#628).
-    from sushi_lang.semantics.generics.hashing import container_hash_kind
-    is_container = isinstance(field_type, StructType) and container_hash_kind(field_type) is not None
-
-    # A nested struct is walked field by field rather than through its own registered
-    # hash, so the combine order of the outer struct is one flat sequence.
-    if isinstance(field_type, StructType) and not is_container:
+    # A plain nested struct is walked field by field rather than through its own
+    # registered hash, so the combine order of the outer struct is one flat sequence.
+    # A CONTAINER is not flattened: its fields are its implementation (`List@(T).data`
+    # is a raw pointer), and it answers through its own hash, which reads what it holds
+    # (#628). A struct with a `Hashable` implementation is not flattened either: the
+    # override is terminal in every position (#871).
+    if (isinstance(field_type, StructType)
+            and container_hash_kind(field_type) is None
+            and hash_override(codegen, field_type) is None):
         nested_hash = emit_fnv1a_init(codegen)
 
         for nested_idx, (nested_name, nested_type) in enumerate(field_type.fields):
@@ -74,43 +69,7 @@ def _emit_field_hash(codegen: Any, field_value: ir.Value, field_type: Type) -> i
 
         return nested_hash
 
-    if isinstance(field_type, BuiltinType):
-        import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-    else:
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        if isinstance(field_type, GenericTypeRef) and field_type.base_name == "Result":
-            if len(field_type.type_args) >= 2:
-                from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-                ok_type = field_type.type_args[0]
-                err_type = field_type.type_args[1]
-                result_enum = ensure_result_type_in_table(codegen.enum_table, ok_type, err_type, struct_table=codegen.struct_table.by_name)
-                if result_enum is not None:
-                    field_type = result_enum
-
-        # A StructType reaching here is a container and nothing else: a plain struct
-        # returned above, from the flattening arm.
-        if not isinstance(field_type, (EnumType, ArrayType, DynamicArrayType, StructType)):
-            raise_internal_error("CE0052", type=str(field_type))
-
-    hash_method = codegen.derived_methods.get_method(field_type, "hash")
-    if hash_method is None:
-        raise_internal_error("CE0051", type=str(field_type))
-
-    fake_call = MethodCall(
-        receiver=Name(id="field", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    # IMPORTANT: an array field_value from extract_value is an array VALUE, not a
-    # pointer. The array hash emitters (_emit_fixed_array_hash and
-    # _emit_dynamic_array_hash) already handle that -- they check whether the value is
-    # a pointer or a value and allocate temporary space if needed -- so field_value
-    # goes straight through.
-    return hash_method.llvm_emitter(
-        codegen, fake_call, field_value, field_value.type, False
-    )
+    return emit_value_hash(codegen, field_value, field_type)
 
 
 register_hash_emitter_factory("struct", _emit_struct_hash)

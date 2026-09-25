@@ -5,7 +5,7 @@ A container's backing FIELDS are the wrong thing to hash: `List@(T).data` and
 value at it. Two lists with equal elements would answer two hashes, and the backend
 could not read the pointer at all -- `Own@(i32).hash()` answered CE0052 and
 `List@(i32).hash()` answered CE0042 (#628). Both emitters here read what the container
-HOLDS, through the same `emit_element_hash` an array element uses.
+HOLDS, through the same `emit_value_hash` an array element uses.
 
 `HashMap@(K, V)` has no emitter here on purpose. The semantic walk refuses it, so
 nothing reaches this module for a map: its buckets carry a state for each slot and the
@@ -20,8 +20,8 @@ from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 from sushi_lang.backend.generics.list.types import get_list_data_ptr, get_list_len_ptr
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.types.arrays.methods.hashing import emit_element_hash
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_combine, emit_fnv1a_init
+from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import StructType, Type
@@ -56,8 +56,7 @@ def _make_list_hash_emitter(list_type: Type) -> Any:
     """Build the hash() emitter for one `List@(T)`: its elements, then its length."""
     def emitter(codegen: Any, call: Any, receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-        if call.args:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -72,7 +71,7 @@ def _make_list_hash_emitter(list_type: Type) -> Any:
 
         def on_element(element_ptr: ir.Value, _index: ir.Value) -> None:
             element = codegen.builder.load(element_ptr, name="list_hash_element")
-            element_hash = emit_element_hash(codegen, element, element_type)
+            element_hash = emit_value_hash(codegen, element, element_type)
             current = codegen.builder.load(accumulator)
             codegen.builder.store(
                 emit_fnv1a_combine(codegen, current, element_hash), accumulator)
@@ -97,8 +96,7 @@ def _make_own_hash_emitter(own_type: Type) -> Any:
     """
     def emitter(codegen: Any, call: Any, receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-        if call.args:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(call)
 
         builder = require_builder(codegen)
         payload_type = _held_type(own_type, 0)
@@ -112,7 +110,7 @@ def _make_own_hash_emitter(own_type: Type) -> Any:
         payload = builder.load(value_ptr, name="own_hash_payload")
 
         return emit_fnv1a_combine(codegen, emit_fnv1a_init(codegen),
-                                  emit_element_hash(codegen, payload, payload_type))
+                                  emit_value_hash(codegen, payload, payload_type))
 
     return emitter
 

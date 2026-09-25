@@ -26,9 +26,6 @@ KNOWN_NODE_BUILDERS = {
     ("generics/hashmap/methods/mutations.py", "emit_hashmap_insert"),
     ("generics/hashmap/methods/mutations.py", "emit_hashmap_remove"),
     ("generics/hashmap/methods/mutations.py", "emit_hashmap_resize_to_capacity"),
-    ("types/arrays/methods/hashing.py", "emit_element_hash"),
-    ("types/enums.py", "_emit_associated_value_hash"),
-    ("types/structs.py", "_emit_field_hash"),
 }
 
 

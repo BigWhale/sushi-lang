@@ -1,0 +1,11 @@
+# An Own@(T) whose payload is a fixed array hashes the payload as an array.
+# EXPECT_STDOUT_EXACT: "same=true\ndifferent=false\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let Own@(i32[3]) a = Own.alloc([1, 2, 3])
+    let Own@(i32[3]) b = Own.alloc([1, 2, 3])
+    let Own@(i32[3]) c = Own.alloc([3, 2, 1])
+    println("same={a.hash() == b.hash()}")
+    println("different={a.hash() == c.hash()}")
+    return Result.Ok(0)
