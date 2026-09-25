@@ -1,4 +1,4 @@
-##: A unit that takes the type name `Acc` for a struct. :##
+# A unit that takes the type name `Acc` for a struct.
 
 struct Acc:
     i32 n
