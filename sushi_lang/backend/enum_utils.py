@@ -1,6 +1,6 @@
 """Enum manipulation utilities for LLVM codegen."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
@@ -89,30 +89,15 @@ def set_enum_data(
     return codegen.builder.insert_value(enum_value, data, 1, name=name)
 
 
-def compare_tag_to_const(
-    codegen: 'LLVMCodegen',
-    tag: ir.Value,
-    const_value: int,
-    signed: bool = True,
-    name: str = "tag_matches"
-) -> ir.Value:
-    """Compare an enum tag to a constant variant index."""
-    expected_tag = ir.Constant(codegen.types.i32, const_value)
-    return compare_enum_tags(codegen, tag, expected_tag, signed=signed, name=name)
-
-
 def unpack_variant_field(
     codegen: 'LLVMCodegen',
     data_ptr: ir.Value,
     field_type: 'Type',
     offset: int,
     name: str = "field"
-) -> Tuple[ir.Value, int]:
-    """Unpack a single field from enum variant data at a given offset."""
-    from sushi_lang.backend.types.core.sizing import align_up
+) -> ir.Value:
+    """Load one field from enum variant data at `offset`, a payload_field_offsets entry."""
     field_llvm_type = codegen.types.ll_type(field_type)
-    field_size = codegen.types.get_type_size_bytes(field_type)
-    offset = align_up(offset, codegen.types.get_type_alignment(field_type))
 
     if offset > 0:
         field_ptr = codegen.builder.gep(
@@ -129,12 +114,7 @@ def unpack_variant_field(
         ir.PointerType(field_llvm_type),
         name=f"{name}_typed_ptr"
     )
-
-    # Natural alignment: the payload base is 8-aligned (the enum's data member is an
-    # i64 array, #300 phase 2) and the offset was aligned above, so the access needs no
-    # `align=1` any more -- that workaround existed for the packed layout (#145).
-    value = codegen.builder.load(typed_ptr, name=name)
-    return value, offset + field_size
+    return codegen.builder.load(typed_ptr, name=name)
 
 
 def unpack_all_variant_fields(
@@ -143,73 +123,12 @@ def unpack_all_variant_fields(
     field_types: List['Type'],
     name_prefix: str = "field"
 ) -> List[ir.Value]:
-    """Unpack all fields from enum variant data."""
-    values = []
-    offset = 0
-
-    for i, field_type in enumerate(field_types):
-        value, offset = unpack_variant_field(
-            codegen, data_ptr, field_type, offset,
-            name=f"{name_prefix}_{i}"
-        )
-        values.append(value)
-
-    return values
-
-
-def pack_variant_field(
-    codegen: 'LLVMCodegen',
-    data_ptr: ir.Value,
-    field_value: ir.Value,
-    field_type: 'Type',
-    offset: int,
-    name: str = "field"
-) -> int:
-    """Pack a single field into enum variant data at a given offset."""
-    from sushi_lang.backend.types.core.sizing import align_up
-    field_llvm_type = codegen.types.ll_type(field_type)
-    field_size = codegen.types.get_type_size_bytes(field_type)
-    offset = align_up(offset, codegen.types.get_type_alignment(field_type))
-
-    if offset > 0:
-        field_ptr = codegen.builder.gep(
-            data_ptr,
-            [ir.Constant(codegen.types.i32, offset)],
-            inbounds=True,
-            name=f"{name}_offset_ptr"
-        )
-    else:
-        field_ptr = data_ptr
-
-    typed_ptr = codegen.builder.bitcast(
-        field_ptr,
-        ir.PointerType(field_llvm_type),
-        name=f"{name}_typed_ptr"
-    )
-
-    # Natural alignment: the payload base is 8-aligned and the offset was aligned above
-    # (#300 phase 2), so the `align=1` workaround for the packed layout (#145) is gone.
-    codegen.builder.store(field_value, typed_ptr)
-    return offset + field_size
-
-
-def pack_all_variant_fields(
-    codegen: 'LLVMCodegen',
-    data_ptr: ir.Value,
-    field_values: List[ir.Value],
-    field_types: List['Type'],
-    name_prefix: str = "field"
-) -> None:
-    """Pack all fields into enum variant data."""
-    if len(field_values) != len(field_types):
-        raise ValueError(f"Mismatch: {len(field_values)} values vs {len(field_types)} types")
-
-    offset = 0
-    for i, (value, field_type) in enumerate(zip(field_values, field_types, strict=True)):
-        offset = pack_variant_field(
-            codegen, data_ptr, value, field_type, offset,
-            name=f"{name_prefix}_{i}"
-        )
+    """Load every field of one variant's payload, at the offsets payload_field_offsets gives."""
+    offsets = codegen.types.payload_field_offsets(field_types)
+    return [
+        unpack_variant_field(codegen, data_ptr, field_type, offset, name=f"{name_prefix}_{i}")
+        for i, (field_type, offset) in enumerate(zip(field_types, offsets, strict=True))
+    ]
 
 
 def get_data_ptr(

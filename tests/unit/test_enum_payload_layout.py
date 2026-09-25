@@ -1,6 +1,12 @@
 """The enum payload layout has ONE authority, and it is naturally aligned (#300 phase 2)."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from llvmlite import ir
+
+from sushi_lang.backend.enum_utils import unpack_all_variant_fields
+from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.typesys import (
@@ -87,17 +93,33 @@ def test_enum_alignment_is_eight():
     assert sizing.get_type_alignment(enum_type) == 8
 
 
-def test_pack_unpack_walk_reproduces_the_authority():
-    """`pack/unpack_variant_field` thread a running offset and align on entry; the sequence they
-    produce must equal payload_field_offsets exactly.
-    """
-    sizing = _sizing()
-    types = (BuiltinType.I8, BuiltinType.STRING, BuiltinType.I32, BuiltinType.F64)
-    expected = sizing.payload_field_offsets(types)
-    walked = []
-    offset = 0
-    for ty in types:  # the exact rule the helpers apply on entry
-        offset = align_up(offset, sizing.get_type_alignment(ty))
-        walked.append(offset)
-        offset += sizing.get_type_size_bytes(ty)
-    assert walked == expected
+def _unpacked_offsets(types: LLVMTypeSystem, field_types) -> list[int]:
+    """Run the real `unpack_all_variant_fields` and read back the byte offset of each load."""
+    module = ir.Module()
+    fn = ir.Function(module, ir.FunctionType(ir.VoidType(), [ir.PointerType(types.i8)]), "f")
+    builder = ir.IRBuilder(fn.append_basic_block("entry"))
+    codegen = SimpleNamespace(types=types, builder=builder)
+    data_ptr = fn.args[0]
+    values = unpack_all_variant_fields(codegen, data_ptr, list(field_types))
+    offsets = []
+    for value in values:
+        address = value.operands[0]
+        while address is not data_ptr and getattr(address, "opname", "") == "bitcast":
+            address = address.operands[0]
+        offsets.append(0 if address is data_ptr else address.indices[0].constant)
+    return offsets
+
+
+def test_unpack_reads_the_authority():
+    """`unpack_all_variant_fields` loads each field at the offset payload_field_offsets gives."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I8, BuiltinType.STRING, BuiltinType.I32, BuiltinType.F64)
+    assert _unpacked_offsets(types, field_types) == types.payload_field_offsets(field_types)
+
+
+def test_unpack_has_no_layout_of_its_own():
+    """A changed authority moves every load: the helper keeps no second offset walk."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I32, BuiltinType.I32, BuiltinType.I64)
+    types.sizing.payload_field_offsets = lambda _ts: [8, 16, 24]
+    assert _unpacked_offsets(types, field_types) == [8, 16, 24]
