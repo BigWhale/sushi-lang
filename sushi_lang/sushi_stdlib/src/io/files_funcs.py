@@ -1,4 +1,4 @@
-"""The <io/files> semantic interface: one table, and the three discovery names.
+"""The <io/files> semantic interface: one table, and the two discovery names.
 
 No IR lives here. FILES_SIGNATURES is the ONE spelling of what each function takes
 and answers (#550): the registry's parameter specs, the arity check, the return type,
@@ -22,7 +22,6 @@ from sushi_lang.sushi_stdlib.src.signatures import (
     Signature,
     cstr,
     params_of,
-    validate_arity,
 )
 
 # What `use <io/files>` hands on beside its own functions (`StdlibModule.reexports`,
@@ -90,13 +89,3 @@ def get_builtin_files_function_return_type(func_name: str) -> Type:
     if sig is None:
         raise ValueError(f"Unknown files utility function: {func_name}")
     return sig.return_type()
-
-
-def validate_files_function_call(func_name: str, args: list, reporter, loc) -> None:
-    """Check the argument count against the row's own length (CE2009).
-
-    This used to emit CE0004, which is registered as "duplicate struct '{name}'" and
-    takes no `func`/`expected`/`got` -- so the message was about the wrong thing and
-    none of the parameters reached it.
-    """
-    validate_arity(func_name, FILES_SIGNATURES, args, reporter, loc)

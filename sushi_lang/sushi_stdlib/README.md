@@ -86,11 +86,10 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
 
 - **Compiled module**: add an entry to `StdlibRegistry.KNOWN_MODULES` mapping the
   Sushi module path (`"sys/env"`) to its Python import path. The target module
-  must expose the naming-convention triple `is_builtin_<name>_function`,
-  `get_builtin_<name>_function_return_type`, `validate_<name>_function_call` —
-  discovery (`_discover_module`) `getattr`s these by name rather than reading an
-  explicit function table, so a module that doesn't follow the convention is
-  silently skipped.
+  must expose the naming-convention pair `is_builtin_<name>_function` and
+  `get_builtin_<name>_function_return_type` — discovery (`_discover_module`)
+  `getattr`s these by name rather than reading an explicit function table, and
+  refuses a module that does not follow the convention with a `RuntimeError`.
 - **Source module**: add an entry to `SOURCE_STDLIB_MODULES` pointing at the
   `.sushi` file.
 

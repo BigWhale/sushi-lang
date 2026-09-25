@@ -51,7 +51,6 @@ class StdlibFunction:
     module_path: str
     is_constant: bool = False
     get_return_type: Optional[Callable] = None
-    validator: Optional[Callable] = None
     params: Optional[List] = None  # None=polymorphic, []=no args, [Type,...]=typed args
     is_variadic: bool = False  # True if the last param is a native '...T' collecting variadic
     # A constant's folded value, read once at discovery. The front end folds it and the
@@ -187,12 +186,8 @@ class StdlibRegistry:
         type_resolver_name = f"get_builtin_{module_name}_function_return_type"
         type_resolver = getattr(py_module, type_resolver_name, None)
 
-        validator_name = f"validate_{module_name}_function_call"
-        validator = getattr(py_module, validator_name, None)
-
         missing = [name for name, symbol in ((checker_name, checker),
-                                              (type_resolver_name, type_resolver),
-                                              (validator_name, validator))
+                                              (type_resolver_name, type_resolver))
                    if not symbol]
         if missing:
             raise RuntimeError(
@@ -202,7 +197,7 @@ class StdlibRegistry:
             )
 
         self._discover_functions_heuristic(
-            stdlib_module, module_name, checker, type_resolver, validator
+            stdlib_module, module_name, checker, type_resolver
         )
 
         constant_checker_name = f"is_builtin_{module_name}_constant"
@@ -218,7 +213,6 @@ class StdlibRegistry:
         module_name: str,
         checker: Callable[[str], bool],
         type_resolver: Callable,
-        validator: Callable
     ) -> None:
         """Discover functions using heuristic approach."""
         from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
@@ -254,9 +248,6 @@ class StdlibRegistry:
                         return lambda params: type_resolver(fn_name, params)
                     get_ret_type = make_type_resolver_with_params(name)
 
-                def make_validator(fn_name):
-                    return lambda sig: validator(fn_name, sig)
-
                 param_spec = _get_param_specs().get((module_name, name))
 
                 func = StdlibFunction(
@@ -264,7 +255,6 @@ class StdlibRegistry:
                     module_path=module.path,
                     is_constant=False,
                     get_return_type=get_ret_type,
-                    validator=make_validator(name),
                     params=param_spec,
                     is_variadic=(module_name, name) in _VARIADIC_STDLIB
                 )
@@ -306,7 +296,6 @@ class StdlibRegistry:
                     module_path=module.path,
                     is_constant=True,
                     get_return_type=lambda ty=const_type: ty,
-                    validator=None,  # a constant takes no arguments to check
                     value=value,
                 )
                 module.constants[name] = func
