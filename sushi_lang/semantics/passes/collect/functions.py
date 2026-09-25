@@ -374,6 +374,18 @@ class GenericExtensionTable:
     message elided the target as `Box@(...)`.
     """
     by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
+    # The `(base type name, method name)` pairs whose declaration the collect pass
+    # refused. A call of one is not an undefined name: the declaration carries the one
+    # diagnostic (#808).
+    refused: Set[Tuple[str, str]] = field(default_factory=set)
+
+    def refuse(self, base_type_name: str, method_name: str) -> None:
+        """Record a refused declaration, so that its calls add no diagnostic."""
+        self.refused.add((base_type_name, method_name))
+
+    def was_refused(self, base_type_name: str, method_name: str) -> bool:
+        """Did the collect pass refuse a declaration of this method on this base?"""
+        return (base_type_name, method_name) in self.refused
 
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""
@@ -929,20 +941,8 @@ class FunctionCollector:
         """
         shape = classify_extension_target(target_type, self.is_declared_type)
         h.ext.target_shape = shape
-        if shape.is_mixed:
-            er.emit_with(self.r, ERR.CE2098, h.target_type_span or h.name_span,
-                         target=display_type(target_type)) \
-                .help("name every type parameter, or make every argument concrete -- "
-                      "there is no partial specialization").emit()
-            return
-
-        if reject_unwritable_target(self.r, shape, self.is_declared_type,
-                                    h.target_type_span or h.name_span):
-            return
-
-        shadowed = [m for m in h.method_type_params if m in shape.param_names]
-        if shadowed:
-            er.emit(self.r, ERR.CE2064, h.name_span, name=shadowed[0])
+        if self._reject_generic_header(h, target_type, shape):
+            self.generic_extensions.refuse(target_type.base_name, h.name)
             return
 
         method = self._generic_method(
@@ -954,6 +954,26 @@ class FunctionCollector:
             return
 
         self.generic_extensions.add_method(method)
+
+    def _reject_generic_header(self, h: '_ExtensionHeader', target_type: GenericTypeRef,
+                               shape) -> bool:
+        """CE2098, CE2001, CE2062 or CE2064 for a `@(...)` header. Answers whether it refused."""
+        if shape.is_mixed:
+            er.emit_with(self.r, ERR.CE2098, h.target_type_span or h.name_span,
+                         target=display_type(target_type)) \
+                .help("name every type parameter, or make every argument concrete -- "
+                      "there is no partial specialization").emit()
+            return True
+
+        if reject_unwritable_target(self.r, shape, self.is_declared_type,
+                                    h.target_type_span or h.name_span):
+            return True
+
+        shadowed = [m for m in h.method_type_params if m in shape.param_names]
+        if shadowed:
+            er.emit(self.r, ERR.CE2064, h.name_span, name=shadowed[0])
+            return True
+        return False
 
     def _collect_array_extension(self, h: '_ExtensionHeader',
                                  target_type: DynamicArrayType) -> Optional[Type]:

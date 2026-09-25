@@ -6,6 +6,11 @@ handling and no lambda path, so a variadic or lambda call inside a generic body 
 solved by one pass and not instantiated by the next. The gate reads the source: the
 five call sites reach `solve_leading_type_args` (directly or through
 `infer_flat_type_args`), and no module on the call path unifies for itself.
+
+A generic static's target and the method-level type parameters of an extension ran the
+same loop with a partial contract (#809): an unknown argument solves nothing, a miss is
+not a failure, and the caller reads the names left unsolved. They call the solver's
+partial mode now, and no module outside the solver and the unifier calls `unify_types`.
 """
 from __future__ import annotations
 
@@ -29,7 +34,14 @@ SITES = (
     ("generics/monomorphize/functions.py", "_call_type_args"),
     ("passes/types/calls/generics.py", "resolve_generic_fn_reference"),
     ("passes/types/calls/generics.py", "_infer_type_args_from_call_site"),
+    # The PARTIAL callers (#809): a generic static's target, and the method-level type
+    # parameters of an extension. Each keeps its own contract (the stamp fill, CE2063).
+    ("statics.py", "solve_target_type_args"),
+    ("passes/types/calls/methods.py", "resolve_method_generic_extension"),
 )
+
+#: The modules that may call the unifier: the solver, and the unifier's own recursion.
+UNIFY_HOMES = {"generics/pack_inference.py", "generics/unify.py"}
 
 
 def _called_names(node: ast.AST) -> set[str]:
@@ -73,6 +85,28 @@ def test_control_the_scanner_sees_a_hand_rolled_unification():
 def test_no_module_on_the_call_path_unifies_for_itself():
     offenders = {m: _hand_rolled_unifications((ROOT / m).read_text()) for m in MODULES}
     assert {m: lines for m, lines in offenders.items() if lines} == {}
+
+
+def _unifying_modules(exempt: set[str]) -> dict[str, list[int]]:
+    found = {}
+    for path in sorted(ROOT.rglob("*.py")):
+        module = path.relative_to(ROOT).as_posix()
+        if module in exempt:
+            continue
+        lines = _hand_rolled_unifications(path.read_text())
+        if lines:
+            found[module] = lines
+    return found
+
+
+def test_control_the_tree_scan_sees_the_solver():
+    """With no exemption the scan must find the solver itself, or it proves nothing."""
+    assert "generics/pack_inference.py" in _unifying_modules(set())
+
+
+def test_no_module_unifies_call_arguments_outside_the_solver():
+    """A unify loop over call arguments lives in `pack_inference.py` and nowhere else (#809)."""
+    assert _unifying_modules(UNIFY_HOMES) == {}
 
 
 def test_every_site_reaches_the_one_solver():
