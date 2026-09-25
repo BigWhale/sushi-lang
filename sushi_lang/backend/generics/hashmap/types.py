@@ -1,10 +1,9 @@
 """LLVM type helpers and constants for HashMap<K, V>."""
 
-from typing import Any, NamedTuple, Optional
-from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType
+from typing import Any, NamedTuple
+from sushi_lang.semantics.typesys import Type
 import llvmlite.ir as ir
 
-from sushi_lang.internals.errors import raise_internal_error
 
 from sushi_lang.backend.constants import (
     HASHMAP_BUCKETS_INDICES,
@@ -88,58 +87,18 @@ def get_hashmap_field_ptrs(codegen: Any, hashmap_ptr: ir.Value) -> HashMapFields
     )
 
 
-class _HashCall(NamedTuple):
-    """What a derived hash emitter reads from its call: the argument list, which is empty."""
-    args: tuple = ()
-
-
-_HASH_CALL = _HashCall()
-
-
 def emit_key_hash_i32(codegen: Any, key_type: Type, key_value: ir.Value) -> ir.Value:
     """The probe start of a key: its hash, truncated to i32.
 
-    A perk implementation wins, exactly as it does at the three dispatch layers
-    (docs/design/method-resolution.md) -- otherwise the map would probe with the
-    derived hash while `.hash()` answers the override.
+    A key is a held value, so it hashes through `emit_value_hash`: a perk
+    implementation wins, exactly as it does for `.hash()` and in every other held
+    position -- otherwise the map would probe with the derived hash while `.hash()`
+    answers the override.
     """
-    hash_value = _emit_perk_key_hash(codegen, key_type, key_value)
-    if hash_value is None:
-        hash_method = _derived_key_hash_method(codegen, key_type)
-        if hash_method is None:
-            raise_internal_error("CE0053", type=key_type)
-        hash_value = hash_method.llvm_emitter(
-            codegen, _HASH_CALL, key_value, codegen.types.ll_type(key_type), False)
+    from sushi_lang.backend.types.value_hash import emit_value_hash
+
+    hash_value = emit_value_hash(codegen, key_value, key_type)
     return codegen.builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
-
-
-def _emit_perk_key_hash(codegen: Any, key_type: Type, key_value: ir.Value) -> Optional[ir.Value]:
-    """Call the perk `hash` implementation of the key type, or answer None when it has none."""
-    if codegen.perk_impl_table.get_method(key_type, "hash") is None:
-        return None
-
-    from sushi_lang.semantics.library_templates import impl_method_symbol
-    llvm_fn = codegen.funcs.get(impl_method_symbol(str(key_type), "hash"))
-    if llvm_fn is None:
-        raise_internal_error("CE0024", method="hash", type=str(key_type))
-    param_type = list(llvm_fn.args)[0].type
-    return codegen.builder.call(llvm_fn, [codegen.utils.cast_for_param(key_value, param_type)])
-
-
-def _derived_key_hash_method(codegen: Any, key_type: Type) -> Optional[Any]:
-    """The derived hash of a key type, registered on demand for an array key."""
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
-    hash_method = codegen.derived_methods.get_method(key_type, "hash")
-    if hash_method is not None:
-        return hash_method
-
-    if isinstance(key_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.generics.hashing import register_hash_if_hashable
-        if register_hash_if_hashable(key_type, codegen.derived_methods):
-            return codegen.derived_methods.get_method(key_type, "hash")
-
-    return None
 
 
 def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':

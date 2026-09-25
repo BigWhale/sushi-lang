@@ -18,10 +18,6 @@ BACKEND = Path(value_hash.__file__).resolve().parents[1]
 
 THE_SEAM = "types/value_hash.py"
 
-# A map KEY is looked up at its own seam, `get_key_hash_method`, which puts the perk
-# implementation first in the same way. It is not a held value.
-KEY_LOOKUP = "generics/hashmap/types.py"
-
 HOLDER_EMITTERS = (
     "types/structs.py",
     "types/enums.py",
@@ -56,7 +52,7 @@ def _modules() -> dict[str, str]:
 
 def test_only_the_seam_reads_a_derived_hash():
     readers = {name for name, source in _modules().items() if _hash_lookups(source)}
-    assert readers - {THE_SEAM, KEY_LOOKUP} == set(), sorted(readers)
+    assert readers - {THE_SEAM} == set(), sorted(readers)
     assert THE_SEAM in readers
 
 
