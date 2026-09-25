@@ -3,86 +3,29 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
-from sushi_lang.semantics.typesys import (
-    ArrayType,
-    BuiltinType,
-    DynamicArrayType,
-    EnumType,
-    FunctionType,
-    ReferenceType,
-    StructType,
-    Type,
-)
+from sushi_lang.semantics.typesys import ReferenceType, Type
 
 
 def builtin_method_exists(receiver_type: Type | None, method_name: str,
                           derived_methods: DerivedMethodTable) -> bool:
     """Is `method_name` a compiler-defined method on `receiver_type`?
 
-    `derived_methods` is the COMPILATION's auto-derived pair (hash, clone) -- one program's
-    `Point` is not another's, however alike the two names look (#601).
+    The family table answers (#812): a name is built in when a family of
+    `METHOD_TYPE_REGISTRY` defines it on this receiver. A perk implementation does not
+    change the answer -- it is the sanctioned override, and an extension of a built-in
+    name is still CE2097. `derived_methods` is the COMPILATION's auto-derived pair (hash,
+    clone) -- one program's `Point` is not another's, however alike the two names look
+    (#601).
     """
     if receiver_type is None:
         return False
-
     if isinstance(receiver_type, ReferenceType):
         receiver_type = receiver_type.referenced_type
-
-    if isinstance(receiver_type, (ArrayType, DynamicArrayType)):
-        from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method
-        return is_builtin_array_method(method_name)
-
-    if receiver_type == BuiltinType.STRING:
-        from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method
-        from sushi_lang.semantics.generics.primitives import has_primitive_method
-        return (is_builtin_string_method(method_name)
-                or has_primitive_method(receiver_type, method_name))
-
-    if isinstance(receiver_type, BuiltinType):
-        from sushi_lang.semantics.generics.primitives import has_primitive_method
-        return has_primitive_method(receiver_type, method_name)
-
-    # A function value carries clone(): a closure read out of a field or a container is a
-    # borrow, so consuming it is CE2411 and the explicit copy is the escape.
-    if isinstance(receiver_type, FunctionType):
-        from sushi_lang.semantics.generics.closures import is_builtin_function_method
-        return is_builtin_function_method(method_name)
-
-    # The generic base names the family of a built-in container (#805).
-    if isinstance(receiver_type, EnumType):
-        if is_instance_of(receiver_type, "Result"):
-            from sushi_lang.semantics.generics.results import is_builtin_result_method
-            if is_builtin_result_method(method_name):
-                return True
-        elif is_instance_of(receiver_type, "Maybe"):
-            from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method
-            if is_builtin_maybe_method(method_name):
-                return True
-        return derived_methods.get_method(receiver_type, method_name) is not None
-
-    if isinstance(receiver_type, StructType):
-        if is_instance_of(receiver_type, "Own"):
-            from sushi_lang.semantics.generics.own import is_builtin_own_method
-            if is_builtin_own_method(method_name):
-                return True
-        elif is_instance_of(receiver_type, "HashMap"):
-            from sushi_lang.semantics.generics.hashmap import is_builtin_hashmap_method
-            if is_builtin_hashmap_method(method_name):
-                return True
-        elif is_instance_of(receiver_type, "List"):
-            from sushi_lang.semantics.generics.list import is_builtin_list_method
-            if is_builtin_list_method(method_name):
-                return True
-        # A container still carries the auto-derived hash (the derive pass's registration has no
-        # container exclusion), and codegen's auto-derived step precedes the extension
-        # fallback -- so an extension of that name would be dead there too.
-        return derived_methods.get_method(receiver_type, method_name) is not None
-
-    return False
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+    return METHOD_TYPE_REGISTRY.answers(receiver_type, method_name, derived_methods)
 
 
 def reject_builtin_miscount(reporter: Any, call: Any, callee: str,
