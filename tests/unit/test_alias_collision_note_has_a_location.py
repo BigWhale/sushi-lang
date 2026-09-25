@@ -3,8 +3,9 @@
 CLAUDE.md's diagnostic ladder calls a relational error rendered with a single location
 a regression. `_names_declared_by` answers with a span per name, and the span is
 `Optional`: a declaration the source did not write has none to give. The map was typed
-as if it could not happen, and `DiagnosticBuilder.note` takes a `None` span without a
-word, so the pair would have rendered `= note: this unit declares the name here` with
+as if it could not happen, and `DiagnosticBuilder.note` took a `None` span without a
+word (#731 split the relational `note_at` out, with a span that is not optional), so the
+pair would have rendered `= note: this unit declares the name here` with
 nothing under it.
 
 No source reproduces it today -- the `namespaces` pass runs before `instantiate`, and a
