@@ -1,0 +1,22 @@
+# A perk implementation whose generic target has the wrong type-argument count
+# is refused at the target, and it is the one diagnostic: each call of the perk
+# method adds none (#860).
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: "test_err_perk_target_count_refused.sushi:13:8:"
+perk Named:
+    fn name() string
+
+struct Box@(T, U):
+    T a
+    U b
+
+extend Box@(i32) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    let Box@(i32, i32) b = Box(1, 2)
+    println(b.name())
+    let string again = b.name()
+    println(again)
+    return Result.Ok(0)

@@ -113,12 +113,15 @@ def validate_template_header(validator, impl: ExtendWithDef) -> None:
     the template's header. Judged on the copies, one written method reported its fault
     once per instantiation, and a template with no instantiation was never judged.
 
+    The name-conflict check is part of the header, so it is judged here too (#861).
+
     A perk that does not exist is refused where the copies are read, so it is not
     judged here.
     """
     perk_def = validator.perk_table.by_name.get(impl.perk_name)
     if perk_def is not None:
         validate_perk_implementation(impl, perk_def, validator.reporter)
+        _reject_template_name_conflicts(validator, impl)
 
 
 def _channel_phrase(err_type) -> str:
@@ -187,13 +190,31 @@ def check_no_conflicts_with_regular_methods(
     reporter: Reporter
 ) -> bool:
     """Ensure perk methods don't conflict with regular extension methods."""
-    existing_methods = extension_table.by_type.get(resolved_type, {})
-    if not existing_methods:
-        return True
+    return _reject_name_conflicts(
+        perk_impl, extension_table.by_type.get(resolved_type, {}), reporter)
 
-    perk_method_names = {m.name for m in perk_impl.methods}
-    conflicts = perk_method_names & set(existing_methods.keys())
 
+def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
+    """CE4007 for a generic-target implementation, judged on the template (#861).
+
+    The template covers every instantiation of its base, so an extension method of the
+    same name on that base -- a template or one concrete instantiation -- gives the name
+    a second home.
+    """
+    base_name = getattr(impl.target_type, "base_name", None)
+    if base_name is None:
+        return
+    existing = {}
+    for (name, _key), method in validator.generic_extension_table.by_type.get(
+            base_name, {}).items():
+        existing.setdefault(name, method)
+    _reject_name_conflicts(impl, existing, validator.reporter)
+
+
+def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
+                           reporter: Reporter) -> bool:
+    """One CE4007 for each perk method that an extension method of one name meets."""
+    conflicts = {m.name for m in perk_impl.methods} & set(existing_methods)
     if not conflicts:
         return True
 

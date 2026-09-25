@@ -1,0 +1,20 @@
+# A refused function-type perk implementation stays one diagnostic when the
+# perk method is called twice (#864).
+# EXPECT_ERROR_CODE: CE2110
+# EXPECT_STDERR_CONTAINS: "test_err_perk_impl_function_target_two_calls.sushi:8:8:"
+perk Seven:
+    fn seven() i32
+
+extend fn(i32) -> i32 with Seven:
+    fn seven() i32:
+        return 7
+
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 f = twice
+    println("{f.seven()}")
+    let i32 again = f.seven()
+    println(again)
+    return Result.Ok(0)

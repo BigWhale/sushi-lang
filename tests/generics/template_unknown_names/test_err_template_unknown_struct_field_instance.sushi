@@ -1,0 +1,12 @@
+# An unknown type name in a field of a generic struct is CE2001 at the field, and
+# the instance adds no CE2028 at the construction (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_struct_field_instance.sushi:6:5: error [CE2001]: unknown type 'Nope'
+struct Wrap@(T):
+    Nope@(T) b
+    T d
+
+fn main() i32:
+    let Wrap@(i32) w = Wrap(1, 2)
+    println(w.d)
+    return Result.Ok(0)

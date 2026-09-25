@@ -1,0 +1,10 @@
+# An unknown type name in a payload of a generic enum with no instance is CE2001 (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: unknown type 'Gone'
+enum Slot@(T):
+    A(Gone)
+    B(T)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

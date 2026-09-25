@@ -428,6 +428,19 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A perk implementation on a function type is refused** (#864). It compiled, and a call of the
+  perk method on a function value ran. It is CE2110 at the target now, the extension path's code,
+  and a call of the refused method adds nothing.
+- **A refused perk-implementation target speaks once** (#860). A call of a perk method whose
+  generic target was refused (CE2062, CE2098) added CE2008 per call site. The refusal is recorded
+  by base name and method name, the record the extension path already keeps, and one helper emits
+  CE2098 for both collectors; its text names the declaration kind.
+- **CE4007 on a generic perk-implementation target prints once** (#861). It printed once per
+  instance, and not at all with no instance. It is judged on the written template now.
+- **An unknown type name in a generic declaration's signature is CE2001 where it is written**
+  (#859). A template with no instance reported nothing; with an instance, the fault surfaced as
+  CE2028, CE2060, CE4004 or the internal error CE0045 at the use. The written-template walk now
+  checks each name once, with the usual help, and the analysis stops after it, as for CE2062.
 - **`continue` in a `foreach` over a HashMap no longer loops forever** (#893). Its continue
   target skipped the bucket-index increment, so a `continue` read the same bucket again and
   the program never ended. The target is the increment block now, and the `loop_frame` rule

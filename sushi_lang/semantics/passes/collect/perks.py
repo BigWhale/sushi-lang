@@ -12,7 +12,9 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
+from sushi_lang.semantics.typesys import (
+    Type, BuiltinType, StructType, EnumType, FunctionType)
+from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
 from .utils import reject_reference_in, reject_try_in_body
 
@@ -59,8 +61,12 @@ class GenericPerkImpl:
 
 
 @dataclass
-class GenericPerkImplTable:
-    """The generic-target perk implementations, by the base name of their target."""
+class GenericPerkImplTable(RefusalRecord):
+    """The generic-target perk implementations, by the base name of their target.
+
+    The refusal record holds the implementations whose target the collect pass refused,
+    by the target and each method name, so a call of one adds no CE2008.
+    """
     by_base: Dict[str, List[GenericPerkImpl]] = field(default_factory=dict)
 
     def add(self, template: GenericPerkImpl) -> None:
@@ -251,7 +257,8 @@ class PerkCollector:
             for impl in perk_impls:
                 if not isinstance(impl, ExtendWithDef):
                     continue
-                if self._reject_type_params_in_impl(impl):
+                if (self._reject_type_params_in_impl(impl)
+                        or self._reject_function_target(impl, impl.target_type)):
                     refused.append(impl)
                 elif self._collect_perk_impl(impl):
                     moved.append(impl)
@@ -453,6 +460,27 @@ class PerkCollector:
                 return True
         return False
 
+    def _refuse_methods(self, base_type_name: str, impl: ExtendWithDef) -> None:
+        """Record every method of a refused implementation, so its calls stay silent."""
+        for method in impl.methods or []:
+            self.generic_perk_impls.refuse(base_type_name, method.name)
+
+    def _reject_function_target(self, impl: ExtendWithDef,
+                                target_type: Optional[Type]) -> bool:
+        """CE2110: a function type is not a perk-implementation target (#864).
+
+        The extension path's rule (#771). The caller drops the implementation from both
+        lists, and its methods are recorded, so the one diagnostic is this.
+        """
+        if not isinstance(target_type, FunctionType):
+            return False
+        from sushi_lang.semantics.generics.type_display import display_type
+        target = display_type(target_type)
+        er.emit(self.r, ERR.CE2110, impl.target_type_span or impl.perk_name_span,
+                target=target)
+        self._refuse_methods(target, impl)
+        return True
+
     def _register_generic_template(self, impl: ExtendWithDef,
                                    target_type: Optional[Type]) -> bool:
         """Register a GENERIC-target implementation as a template. True when it is one.
@@ -462,28 +490,22 @@ class PerkCollector:
         extension method, so one substitution answers the whole signature later.
 
         True also when the target was REFUSED. The implementation then leaves
-        `perk_impls` and registers nowhere, which is what keeps one fault to one
-        diagnostic -- the CE2098 arm above reads the same way.
+        `perk_impls` and registers nowhere, and its methods are recorded by the base
+        name, which is what keeps one fault to one diagnostic: a call of one adds no
+        CE2008 (#860).
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target, reject_unwritable_target)
-        from sushi_lang.semantics.generics.type_display import display_type
+            classify_extension_target, reject_mixed_target, reject_unwritable_target)
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.passes.collect.functions import deep_type_params
 
         if not isinstance(target_type, GenericTypeRef):
             return False
         shape = classify_extension_target(target_type, self.is_declared_type)
-        if shape.is_mixed:
-            er.emit_with(self.r, ERR.CE2098,
-                         impl.target_type_span
-                         or impl.perk_name_span,
-                         target=display_type(target_type)) \
-                .help("name every type parameter, or make every argument concrete -- "
-                      "there is no partial specialization").emit()
-            return True
-        if reject_unwritable_target(self.r, shape, self.is_declared_type,
-                                    impl.target_type_span or impl.perk_name_span):
+        span = impl.target_type_span or impl.perk_name_span
+        if (reject_mixed_target(self.r, target_type, shape, span, "perk-implementation")
+                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)):
+            self._refuse_methods(target_type.base_name, impl)
             return True
         if not shape.param_names:
             return False

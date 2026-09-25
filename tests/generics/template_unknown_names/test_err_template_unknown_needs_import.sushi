@@ -1,0 +1,10 @@
+# A stdlib generic named in a template with no import is CE2001 with the import in the
+# help, as in a declaration that is not generic (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: add `use <collections/hashmap>` above to name it here
+struct Index@(T):
+    HashMap@(T, i32) seen
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

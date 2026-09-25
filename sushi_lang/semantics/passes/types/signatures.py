@@ -270,11 +270,14 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     # `self.field` in the body silently failed to resolve -- and a `??` beside one then
     # reached codegen unannotated, as a CE0124.
     from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.ast_walk import is_written
     resolved_type = impl.target_type
     if isinstance(impl.target_type, (UnknownType, GenericTypeRef)):
         resolved_type = resolve_unknown_type(
             impl.target_type, self.struct_table.by_name, self.enum_table.by_name)
-    if resolved_type is not None:
+    # A copy for one instantiation carries the template's header, and the template
+    # is judged once, where it is written (#861).
+    if resolved_type is not None and is_written(impl):
         check_no_conflicts_with_regular_methods(
             resolved_type, impl, self.extension_table, self.reporter)
 

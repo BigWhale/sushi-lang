@@ -1,0 +1,11 @@
+# An unknown type name in a parameter of a generic function is CE2001 at the
+# parameter, once, when a call makes an instance (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_fn_param_instance.sushi:5:10: error [CE2001]: unknown type 'Nope'
+fn f@(T)(Nope@(T) v, T a) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = f(1, 2).realise(0)
+    println(r)
+    return Result.Ok(0)
