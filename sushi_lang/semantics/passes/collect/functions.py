@@ -224,6 +224,8 @@ class GenericFuncDef:
     unit_name: Optional[str] = None              # Unit that declared it; a monomorphized instance goes home to it
     filename: Optional[str] = None               # The file it was declared in, for the same reason `FuncSig`
                                                  # carries one: this pass shares ONE reporter across units
+    resolved_result: Optional[Type] = None       # An instance's spelled Result return, interned
+                                                 # by the resolve pass, as on `FuncDef` (#857)
 
 
 class Redeclaration(Enum):

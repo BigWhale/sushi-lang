@@ -1,0 +1,3 @@
+public enum SpelledErr:
+    Bad
+    Worse
