@@ -1,0 +1,17 @@
+# A `continue` in a `foreach` over `values()` goes to the next bucket (#893).
+# The loop must skip value 10 and add value 20.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "total 20\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 10)
+    m.insert(2, 20)
+    let i32 total = 0
+    foreach(v in m.values()):
+        if (v == 10):
+            continue
+        total := total + v
+    println("total {total}")
+    return Result.Ok(0)

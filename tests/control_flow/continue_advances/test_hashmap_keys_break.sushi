@@ -1,0 +1,18 @@
+# A `break` in a `foreach` over `keys()` leaves the loop at once.
+# The bucket order is not specified, so the loop counts the steps up to the break.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "steps 1\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 10)
+    m.insert(2, 20)
+    m.insert(3, 30)
+    let i32 steps = 0
+    foreach(k in m.keys()):
+        steps := steps + 1
+        if (k > 0):
+            break
+    println("steps {steps}")
+    return Result.Ok(0)

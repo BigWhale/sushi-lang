@@ -1,0 +1,23 @@
+# A `continue` in a `foreach` over `entries()` goes to the next bucket (#893).
+# The value owns a string, so the skipped entry must not leak or free twice.
+# The loop must skip key 1 and add the lengths of "three" and "seven".
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "total 10 seen 2\n"
+# EXPECT_NO_LEAKS
+use <collections/hashmap>
+use <collections/strings>
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one".clone())
+    m.insert(2, "three".clone())
+    m.insert(3, "seven".clone())
+    let i32 total = 0
+    let i32 seen = 0
+    foreach(e in m.entries()):
+        if (e.key == 1):
+            continue
+        total := total + e.value.len()
+        seen := seen + 1
+    println("total {total} seen {seen}")
+    return Result.Ok(0)
