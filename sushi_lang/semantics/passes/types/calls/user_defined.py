@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
+from sushi_lang.semantics.typesys import BuiltinType
 from ..visibility import (name_is_contested, out_of_scope_help,
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..arguments import check_arguments
 from ..compatibility import types_compatible
-from ..propagation import propagate_types_to_value
+from ..propagation import (is_bare_numeric_literal, propagate_types_to_value,
+                           unwrap_type_preserving_unary)
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES, BUILTIN_NUMERIC_TYPES,
     BUILTIN_UNSIGNED_INTEGER_TYPES)
@@ -276,6 +278,8 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     args = call.args if hasattr(call, 'args') else []
 
     if stdlib_func.params is None:
+        if function_name in ("min", "max") and len(args) == 2:
+            _type_literal_from_sibling(validator, args[0], args[1])
         for arg in args:
             validator.validate_expression(arg)
         _validate_polymorphic_math(validator, call, function_name)
@@ -302,6 +306,23 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
 
     check_arguments(validator, function_name, expected_params, args, callee_loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
+
+
+def _type_literal_from_sibling(validator: 'TypeValidator', first, second) -> None:
+    """Stamp a bare numeric-literal argument with the type of the other argument.
+
+    The rule of a binary operand beside a wide sibling: `max(b, 1)` with `b: u32` is a
+    u32 compare, two literals keep the default, and a literal that does not fit is
+    CE2073 (#842).
+    """
+    first_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(first))
+    second_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(second))
+    if first_bare == second_bare:
+        return
+    literal, sibling = (first, second) if first_bare else (second, first)
+    sibling_type = validator.infer_expression_type(sibling)
+    if isinstance(sibling_type, BuiltinType):
+        propagate_types_to_value(validator, literal, sibling_type)
 
 
 def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:

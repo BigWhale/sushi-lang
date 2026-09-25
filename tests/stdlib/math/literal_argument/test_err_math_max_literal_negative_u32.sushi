@@ -1,0 +1,9 @@
+# A literal argument of max that does not fit the other argument's type is CE2073 (#842).
+# EXPECT_ERROR_CODE: CE2073
+use <math>
+
+fn main() i32:
+    let u32 b = 7
+    let u32 m = max(b, -1)
+    println("{m}")
+    return Result.Ok(0)
