@@ -43,7 +43,7 @@ from .utils import (extract_type_param_names, param_from_node, reject_reference_
                     reject_self_in_body, reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
-    reject_unwritable_target)
+    reject_mixed_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -952,11 +952,8 @@ class FunctionCollector:
     def _reject_generic_header(self, h: '_ExtensionHeader', target_type: GenericTypeRef,
                                shape) -> bool:
         """CE2098, CE2001, CE2062 or CE2064 for a `@(...)` header. Answers whether it refused."""
-        if shape.is_mixed:
-            er.emit_with(self.r, ERR.CE2098, h.target_type_span or h.name_span,
-                         target=display_type(target_type)) \
-                .help("name every type parameter, or make every argument concrete -- "
-                      "there is no partial specialization").emit()
+        if reject_mixed_target(self.r, target_type, shape,
+                               h.target_type_span or h.name_span):
             return True
 
         if reject_unwritable_target(self.r, shape, self.is_declared_type,

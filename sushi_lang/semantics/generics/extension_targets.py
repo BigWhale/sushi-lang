@@ -136,6 +136,23 @@ class RefusalRecord:
         return (base_type_name, method_name) in self.refused
 
 
+def reject_mixed_target(reporter, target: GenericTypeRef, shape: ExtensionTarget,
+                        span) -> bool:
+    """CE2098 for a target that mixes concrete arguments with type parameters.
+
+    The extension collector and the perk collector both ask here, so one header reads
+    one way.
+    """
+    if not shape.is_mixed:
+        return False
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.generics.type_display import display_type
+    er.emit_with(reporter, er.ERR.CE2098, span, target=display_type(target)) \
+        .help("name every type parameter, or make every argument concrete -- "
+              "there is no partial specialization").emit()
+    return True
+
+
 def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     """The interned name of one instantiation, which is what a concrete target matches."""
     return interned_name(base_name, type_args)

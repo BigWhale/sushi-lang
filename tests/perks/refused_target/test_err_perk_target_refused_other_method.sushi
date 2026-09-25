@@ -1,0 +1,20 @@
+# The refusal record names the methods the refused implementation declares. A
+# call of a method it never declared is still an undefined name (#860).
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: "error [CE2062]"
+# EXPECT_STDERR_CONTAINS: "'Box@(i32, i32).title'"
+perk Named:
+    fn name() string
+
+struct Box@(T, U):
+    T a
+    U b
+
+extend Box@(i32) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    let Box@(i32, i32) b = Box(1, 2)
+    println(b.title())
+    return Result.Ok(0)

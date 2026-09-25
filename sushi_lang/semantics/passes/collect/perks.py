@@ -490,28 +490,22 @@ class PerkCollector:
         extension method, so one substitution answers the whole signature later.
 
         True also when the target was REFUSED. The implementation then leaves
-        `perk_impls` and registers nowhere, which is what keeps one fault to one
-        diagnostic -- the CE2098 arm above reads the same way.
+        `perk_impls` and registers nowhere, and its methods are recorded by the base
+        name, which is what keeps one fault to one diagnostic: a call of one adds no
+        CE2008 (#860).
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target, reject_unwritable_target)
-        from sushi_lang.semantics.generics.type_display import display_type
+            classify_extension_target, reject_mixed_target, reject_unwritable_target)
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.passes.collect.functions import deep_type_params
 
         if not isinstance(target_type, GenericTypeRef):
             return False
         shape = classify_extension_target(target_type, self.is_declared_type)
-        if shape.is_mixed:
-            er.emit_with(self.r, ERR.CE2098,
-                         impl.target_type_span
-                         or impl.perk_name_span,
-                         target=display_type(target_type)) \
-                .help("name every type parameter, or make every argument concrete -- "
-                      "there is no partial specialization").emit()
-            return True
-        if reject_unwritable_target(self.r, shape, self.is_declared_type,
-                                    impl.target_type_span or impl.perk_name_span):
+        span = impl.target_type_span or impl.perk_name_span
+        if (reject_mixed_target(self.r, target_type, shape, span)
+                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)):
+            self._refuse_methods(target_type.base_name, impl)
             return True
         if not shape.param_names:
             return False

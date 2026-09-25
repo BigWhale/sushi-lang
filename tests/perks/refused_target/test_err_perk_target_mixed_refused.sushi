@@ -1,0 +1,22 @@
+# A perk implementation whose generic target mixes a concrete type argument with
+# a type parameter is refused at the target, and it is the one diagnostic: each
+# call of the perk method adds none (#860).
+# EXPECT_ERROR_CODE: CE2098
+# EXPECT_STDERR_CONTAINS: "test_err_perk_target_mixed_refused.sushi:13:8:"
+perk Named:
+    fn name() string
+
+struct Pair@(T, U):
+    T a
+    U b
+
+extend Pair@(i32, U) with Named:
+    fn name() string:
+        return "pair"
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(1, "one")
+    println(p.name())
+    let string again = p.name()
+    println(again)
+    return Result.Ok(0)
