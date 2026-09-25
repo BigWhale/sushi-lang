@@ -953,7 +953,7 @@ class FunctionCollector:
                                shape) -> bool:
         """CE2098, CE2001, CE2062 or CE2064 for a `@(...)` header. Answers whether it refused."""
         if reject_mixed_target(self.r, target_type, shape,
-                               h.target_type_span or h.name_span):
+                               h.target_type_span or h.name_span, "extension"):
             return True
 
         if reject_unwritable_target(self.r, shape, self.is_declared_type,

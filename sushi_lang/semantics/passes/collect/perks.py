@@ -503,7 +503,7 @@ class PerkCollector:
             return False
         shape = classify_extension_target(target_type, self.is_declared_type)
         span = impl.target_type_span or impl.perk_name_span
-        if (reject_mixed_target(self.r, target_type, shape, span)
+        if (reject_mixed_target(self.r, target_type, shape, span, "perk-implementation")
                 or reject_unwritable_target(self.r, shape, self.is_declared_type, span)):
             self._refuse_methods(target_type.base_name, impl)
             return True
