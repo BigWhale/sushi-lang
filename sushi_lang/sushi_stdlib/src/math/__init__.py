@@ -82,31 +82,6 @@ def get_builtin_math_function_return_type(name: str, param_types: list[Type]) ->
     return sig.return_type()
 
 
-def validate_math_function_call(name: str, signature: typing.Any) -> None:
-    """Validate a call to a built-in math function against its row or its family."""
-    params = [param.type for param in signature.params]
-    family = MATH_FAMILIES.get(name)
-    if family is not None:
-        arity, types = family
-        if len(params) != arity:
-            raise TypeError(f"{name} expects {arity} argument(s), got {len(params)}")
-        for param_type in params:
-            if param_type not in types:
-                raise TypeError(f"{name} has no row for {param_type}")
-        if len(set(params)) > 1:
-            raise TypeError(f"{name} expects every parameter to have one type, got {params}")
-        return
-
-    sig = MATH_SIGNATURES.get(name)
-    if sig is None:
-        return
-    if len(params) != sig.arity:
-        raise TypeError(f"{name} expects {sig.arity} argument(s), got {len(params)}")
-    for param_type, param in zip(params, sig.params, strict=True):
-        if param_type != param.ty:
-            raise TypeError(f"{name} expects {param.ty}, got {param_type}")
-
-
 def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for math functions."""
     from sushi_lang.sushi_stdlib.src.math import operations

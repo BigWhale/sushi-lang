@@ -13,7 +13,6 @@ The readers:
 |---|---|
 | `semantics/stdlib_registry.py` | the parameter types |
 | the module's `get_builtin_*_return_type` | the Ok type and the error enum |
-| the module's `validate_*_call` | the arity |
 | `semantics/generics/instantiate/expressions.py` | the Result (and Maybe) to intern |
 | `backend/expressions/calls/stdlib/` | the LLVM parameter types and the marshalling |
 """
@@ -87,26 +86,6 @@ def test_the_return_type_comes_from_the_table(layer, name, sig):
     assert isinstance(answered, GenericTypeRef)
     assert answered.base_name == "Result"
     assert answered.type_args[0] == sig.ok
-
-
-@pytest.mark.parametrize(("layer", "name", "sig"), EVERY_ROW, ids=ROW_IDS)
-def test_the_arity_comes_from_the_table(layer, name, sig):
-    """A wrong count is CE2009, and the count is the row's own length."""
-    from sushi_lang.internals.report import Reporter
-
-    reader = {"socket": "validate_socket_function_call",
-              "files": "validate_files_function_call"}[layer]
-    module = ("sushi_lang.sushi_stdlib.src.net.socket_funcs" if layer == "socket"
-              else "sushi_lang.sushi_stdlib.src.io.files_funcs")
-    validate = getattr(__import__(module, fromlist=[reader]), reader)
-
-    right = Reporter()
-    validate(name, [None] * len(sig.params), right, None)
-    assert not right.has_errors, f"{name} refused its own arity"
-
-    wrong = Reporter()
-    validate(name, [None] * (len(sig.params) + 1), wrong, None)
-    assert wrong.has_errors, f"{name} accepted one argument too many"
 
 
 @pytest.mark.parametrize(("layer", "name", "sig"), EVERY_ROW, ids=ROW_IDS)

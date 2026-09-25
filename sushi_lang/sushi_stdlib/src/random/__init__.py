@@ -34,19 +34,6 @@ def get_builtin_random_function_return_type(name: str) -> Type:
     return sig.return_type()
 
 
-def validate_random_function_call(name: str, signature: typing.Any) -> None:
-    """Validate a call to a built-in random function against its row."""
-    sig = RANDOM_SIGNATURES.get(name)
-    if sig is None:
-        return
-    params = [param.type for param in signature.params]
-    if len(params) != sig.arity:
-        raise TypeError(f"{name} expects {sig.arity} argument(s), got {len(params)}")
-    for param_type, param in zip(params, sig.params, strict=True):
-        if param_type != param.ty:
-            raise TypeError(f"{name} expects {param.ty}, got {param_type}")
-
-
 def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for random functions."""
     from sushi_lang.sushi_stdlib.src.random import generators

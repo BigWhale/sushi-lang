@@ -1,6 +1,5 @@
 """Environment variable module for Sushi standard library."""
 from __future__ import annotations
-import typing
 from typing import Dict
 
 from llvmlite import ir
@@ -32,31 +31,6 @@ def get_builtin_env_function_return_type(name: str) -> Type:
     if sig is None:
         raise ValueError(f"Unknown env function: {name}")
     return sig.return_type()
-
-
-def validate_env_function_call(name: str, signature: typing.Any) -> None:
-    """Validate a call to a built-in env function."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if name == 'getenv':
-        if len(signature.params) != 1:
-            raise TypeError(f"getenv expects 1 argument, got {len(signature.params)}")
-
-        param_type = signature.params[0].type
-        if param_type != BuiltinType.STRING:
-            raise TypeError(f"getenv expects string, got {param_type}")
-
-    elif name == 'setenv':
-        if len(signature.params) != 2:
-            raise TypeError(f"setenv expects 2 arguments, got {len(signature.params)}")
-
-        key_type = signature.params[0].type
-        value_type = signature.params[1].type
-
-        if key_type != BuiltinType.STRING:
-            raise TypeError(f"setenv expects string for key, got {key_type}")
-        if value_type != BuiltinType.STRING:
-            raise TypeError(f"setenv expects string for value, got {value_type}")
 
 
 def generate_module_ir() -> ir.Module:
