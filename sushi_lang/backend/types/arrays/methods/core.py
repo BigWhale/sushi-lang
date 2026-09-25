@@ -62,7 +62,7 @@ def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> i
 
 def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
     """Emit code to get the length of a dynamic array."""
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
     len_value = codegen.builder.load(len_ptr, name="array_len")
 
     return codegen.utils.as_i1(len_value) if to_i1 else len_value
@@ -70,7 +70,7 @@ def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1:
 
 def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
     """Emit code to get the capacity of a dynamic array."""
-    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
     cap_value = codegen.builder.load(cap_ptr, name="array_capacity")
 
     return codegen.utils.as_i1(cap_value) if to_i1 else cap_value
@@ -95,9 +95,9 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
                                extent_is_end=extent_is_end)
 
     b = codegen.builder
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(b, array_value)
-    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(b, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(b, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     current_len = b.load(len_ptr, name="extend_len")
     current_cap = b.load(cap_ptr, name="extend_cap")
@@ -144,9 +144,9 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     """Emit code to append an element to a dynamic array."""
     from sushi_lang.backend.expressions import memory
 
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(cap_ptr, name="current_cap")
@@ -182,8 +182,8 @@ def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_
     """
     from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
 
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
@@ -240,7 +240,7 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
     builder = codegen.builder
     zero = ir.Constant(codegen.types.i32, 0)
 
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
     current_len = builder.load(len_ptr, name="current_len")
 
     is_negative = builder.icmp_signed("<", new_len, zero, name="truncate_negative")
@@ -249,7 +249,7 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
     shrinks = builder.icmp_signed("<", kept, current_len, name="truncate_shrinks")
     with builder.if_then(shrinks):
         if needs_cleanup(codegen, element_semantic_type):
-            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_value)
+            data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
             data_ptr = builder.load(data_ptr_ptr, name="truncate_data")
             dropped_ptr = builder.gep(data_ptr, [kept], name="truncate_dropped")
             dropped_count = builder.sub(current_len, kept, name="truncate_drop_count")
@@ -272,9 +272,9 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
     zero = ir.Constant(codegen.types.i32, 0)
     initial_capacity = ir.Constant(codegen.types.i32, 8)
 
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     current_len = codegen.builder.load(len_ptr, name="current_len")
     old_data_ptr = codegen.builder.load(data_ptr_ptr, name="old_data_ptr")
@@ -313,9 +313,9 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
 def emit_dynamic_array_destroy(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                               array_semantic_type: 'Type') -> ir.Value:
     """Emit code to explicitly destroy a dynamic array (makes it unusable)."""
-    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
-    cap_ptr = codegen.types.get_dynamic_array_cap_ptr(codegen.builder, array_value)
-    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, array_value)
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
 
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 

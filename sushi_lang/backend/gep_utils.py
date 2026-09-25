@@ -11,13 +11,17 @@ def gep_struct_field(
     codegen: 'LLVMCodegen',
     struct_ptr: 'ir.Value',
     field_index: int,
-    name: str = ""
+    name: str = "",
+    builder: 'ir.IRBuilder | None' = None,
 ) -> 'ir.Value':
-    """Create a GEP instruction to access a struct field."""
+    """Create a GEP instruction to access a struct field.
+
+    `builder` is for an emitter whose builder is not `codegen.builder`.
+    """
     from llvmlite import ir
     zero = ir.Constant(codegen.types.i32, 0)
     field_idx_const = ir.Constant(codegen.types.i32, field_index)
-    return codegen.builder.gep(struct_ptr, [zero, field_idx_const], name=name)
+    return (builder or codegen.builder).gep(struct_ptr, [zero, field_idx_const], name=name)
 
 
 def gep_array_element(
@@ -45,28 +49,31 @@ def gep_fixed_array_element(
 def gep_dynamic_array_len(
     codegen: 'LLVMCodegen',
     array_struct_ptr: 'ir.Value',
-    name: str = "len_ptr"
+    name: str = "len_ptr",
+    builder: 'ir.IRBuilder | None' = None,
 ) -> 'ir.Value':
-    """Get pointer to the 'len' field of a dynamic array struct."""
-    return gep_struct_field(codegen, array_struct_ptr, 0, name)
+    """Get pointer to the 'len' field of a `T[]` descriptor."""
+    return gep_struct_field(codegen, array_struct_ptr, 0, name, builder)
 
 
 def gep_dynamic_array_cap(
     codegen: 'LLVMCodegen',
     array_struct_ptr: 'ir.Value',
-    name: str = "cap_ptr"
+    name: str = "cap_ptr",
+    builder: 'ir.IRBuilder | None' = None,
 ) -> 'ir.Value':
-    """Get pointer to the 'cap' field of a dynamic array struct."""
-    return gep_struct_field(codegen, array_struct_ptr, 1, name)
+    """Get pointer to the 'cap' field of a `T[]` descriptor."""
+    return gep_struct_field(codegen, array_struct_ptr, 1, name, builder)
 
 
 def gep_dynamic_array_data(
     codegen: 'LLVMCodegen',
     array_struct_ptr: 'ir.Value',
-    name: str = "data_ptr"
+    name: str = "data_ptr",
+    builder: 'ir.IRBuilder | None' = None,
 ) -> 'ir.Value':
-    """Get pointer to the 'data' field of a dynamic array struct."""
-    return gep_struct_field(codegen, array_struct_ptr, 2, name)
+    """Get pointer to the 'data' field of a `T[]` descriptor."""
+    return gep_struct_field(codegen, array_struct_ptr, 2, name, builder)
 
 
 def gep_byte_offset(

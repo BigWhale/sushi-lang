@@ -4,11 +4,12 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
-from sushi_lang.backend.constants.llvm_values import ZERO_I8, make_i32_const
+from sushi_lang.backend.constants.llvm_values import ZERO_I8
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend import gep_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -20,12 +21,10 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     if len(call.args) != 0:
         raise_internal_error("CE0023", method="to_string", expected=0, got=len(call.args))
 
-    zero = make_i32_const(0)
-
-    len_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(0)])
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value, "")
     byte_count = codegen.builder.load(len_ptr)
 
-    data_ptr_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(2)])
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value, "")
     data_ptr = codegen.builder.load(data_ptr_ptr)
 
     # Allocate memory for string (byte_count + 1 for null terminator). emit_malloc
@@ -62,10 +61,9 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.backend.types.arrays.methods.utf8_validate import get_or_emit_utf8_validate
 
-    zero = make_i32_const(0)
-    len_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(0)])
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value, "")
     byte_count = codegen.builder.load(len_ptr)
-    data_ptr_ptr = codegen.builder.gep(receiver_value, [zero, make_i32_const(2)])
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value, "")
     data_ptr = codegen.builder.load(data_ptr_ptr)
 
     validate_fn = get_or_emit_utf8_validate(codegen)

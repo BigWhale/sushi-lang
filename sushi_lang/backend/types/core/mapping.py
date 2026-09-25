@@ -114,13 +114,13 @@ class TypeMapper:
                 return ir.ArrayType(element_type, t.size)
             case DynamicArrayType():
                 element_type = self.ll_type(t.base_type)
-                return self._create_dynamic_array_struct_type(element_type)
+                return self.get_dynamic_array_struct_type(element_type)
             case StructType():
-                return self._get_struct_type(t)
+                return self.get_struct_type(t)
             case EnumType():
-                return self._get_enum_type(t)
+                return self.get_enum_type(t)
             case IteratorType():
-                return self._create_iterator_struct_type(t)
+                return self.get_iterator_struct_type(t)
             case ReferenceType():
                 referenced_llvm_type = self.ll_type(t.referenced_type)
                 return ir.PointerType(referenced_llvm_type)
@@ -139,8 +139,8 @@ class TypeMapper:
                     t, self.struct_table.by_name, self.enum_table.by_name
                 )
                 if isinstance(resolved, StructType):
-                    return self._get_struct_type(resolved)
-                return self._get_enum_type(resolved)
+                    return self.get_struct_type(resolved)
+                return self.get_enum_type(resolved)
             case _:
                 from sushi_lang.semantics.generics.types import TypeParameter
                 if isinstance(t, TypeParameter):
@@ -151,11 +151,11 @@ class TypeMapper:
                 )
                 if resolved is not None:
                     if isinstance(resolved, StructType):
-                        return self._get_struct_type(resolved)
-                    return self._get_enum_type(resolved)
+                        return self.get_struct_type(resolved)
+                    return self.get_enum_type(resolved)
                 raise_internal_error("CE0022", type=str(t))
 
-    def _create_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
+    def get_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
         """Create LLVM struct type for dynamic arrays: {i32 len, i32 cap, T* data}"""
         return ir.LiteralStructType([
             self.i32,
@@ -163,16 +163,11 @@ class TypeMapper:
             ir.PointerType(element_type),
         ])
 
-    def _create_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
-        """Create LLVM struct type for Iterator<T>."""
-        element_type = self.ll_type(iterator_type.element_type)
-        return ir.LiteralStructType([
-            self.i32,
-            self.i32,
-            ir.PointerType(element_type),
-        ])
+    def get_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
+        """LLVM struct type for Iterator<T>: {i32 index, i32 length, T* data}, the `T[]` shape."""
+        return self.get_dynamic_array_struct_type(self.ll_type(iterator_type.element_type))
 
-    def _get_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
+    def get_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for user-defined structs with caching."""
         cached = self.cache.get_struct(struct_type.name)
         if cached is not None:
@@ -256,7 +251,7 @@ class TypeMapper:
         self.cache.cache_struct(struct_type.name, llvm_struct)
         return llvm_struct
 
-    def _get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
+    def get_enum_type(self, enum_type: EnumType) -> ir.LiteralStructType:
         """Create LLVM struct type for enum (tagged union) with caching."""
         cached = self.cache.get_enum(enum_type.name)
         if cached is not None:

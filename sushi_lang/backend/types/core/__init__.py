@@ -100,51 +100,18 @@ class LLVMTypeSystem:
         """
         return self.sizing.payload_field_offsets(associated_types)
 
-    def _get_type_alignment(self, semantic_type: Ty) -> int:
-        """Get alignment requirement for a Sushi type."""
-        return self.sizing.get_type_alignment(semantic_type)
-
     def get_string_struct_type(self) -> ir.LiteralStructType:
         """Get LLVM struct type for strings: {i8* data, i32 size, i8 owned}."""
         return self.mapper.string_struct
 
-    def get_dynamic_array_struct_type(self, element_type: ir.Type) -> ir.LiteralStructType:
-        """Get LLVM struct type for dynamic arrays: {i32 len, i32 cap, T* data}"""
-        return self.mapper._create_dynamic_array_struct_type(element_type)
-
     def get_struct_type(self, struct_type) -> ir.LiteralStructType:
         """Get LLVM struct type for user-defined structs."""
-        return self.mapper._get_struct_type(struct_type)
+        return self.mapper.get_struct_type(struct_type)
 
     def get_enum_type(self, enum_type) -> ir.LiteralStructType:
         """Get LLVM struct type for enums (tagged unions)."""
-        return self.mapper._get_enum_type(enum_type)
+        return self.mapper.get_enum_type(enum_type)
 
     def get_iterator_struct_type(self, iterator_type) -> ir.LiteralStructType:
         """Get LLVM struct type for Iterator<T>."""
-        return self.mapper._create_iterator_struct_type(iterator_type)
-
-    def get_dynamic_array_len_ptr(self, builder: ir.IRBuilder, array_ptr: ir.Value) -> ir.Value:
-        """Get pointer to 'len' field of dynamic array struct."""
-        from llvmlite import ir
-        zero = ir.Constant(self.i32, 0)
-        field_idx = ir.Constant(self.i32, 0)
-        return builder.gep(array_ptr, [zero, field_idx], name="len_ptr")
-
-    def get_dynamic_array_cap_ptr(self, builder: ir.IRBuilder, array_ptr: ir.Value) -> ir.Value:
-        """Get pointer to 'cap' field of dynamic array struct."""
-        from llvmlite import ir
-        zero = ir.Constant(self.i32, 0)
-        field_idx = ir.Constant(self.i32, 1)
-        return builder.gep(array_ptr, [zero, field_idx], name="cap_ptr")
-
-    def get_dynamic_array_data_ptr(self, builder: ir.IRBuilder, array_ptr: ir.Value) -> ir.Value:
-        """Get pointer to 'data' field of dynamic array struct."""
-        from llvmlite import ir
-        zero = ir.Constant(self.i32, 0)
-        field_idx = ir.Constant(self.i32, 2)
-        return builder.gep(array_ptr, [zero, field_idx], name="data_ptr")
-
-    def _calculate_struct_size(self, struct_type) -> int:
-        """Calculate total size of struct accounting for padding and alignment."""
-        return self.sizing._calculate_struct_size(struct_type)
+        return self.mapper.get_iterator_struct_type(iterator_type)
