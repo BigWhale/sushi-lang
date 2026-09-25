@@ -8,7 +8,7 @@ enum MyError:
 
 extend i32 apply_checked(fn(i32) -> i32 f) i32 | MyError:
     let i32 r = f(self)??
-    return r
+    return Result.Ok(r)
 
 fn main() i32:
     let i32 five = 5

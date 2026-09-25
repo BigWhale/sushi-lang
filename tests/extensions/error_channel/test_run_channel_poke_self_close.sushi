@@ -1,6 +1,6 @@
 # 'poke self' composes with the channel: the write through the receiver is
-# visible at the call site, the second call reads it, and each bare success
-# wraps into Ok. This is the close-writes-minus-1 contract of <net/tcp>.
+# visible at the call site, the second call reads it, and each success is
+# spelled Result.Ok. This is the close-writes-minus-1 contract of <net/tcp>.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
@@ -15,7 +15,7 @@ extend Port close(poke self) ~ | PortError:
     if (self.fd == 13):
         return Result.Err(PortError.Broken)
     self.fd := -1
-    return ~
+    return Result.Ok(~)
 
 fn run() ~ | PortError:
     let Port p = Port(7)

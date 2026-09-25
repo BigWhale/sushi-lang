@@ -10,7 +10,7 @@ extend HashMap@(K, V) holds(K key) bool:
     return self.contains_key(key)
 
 extend HashMap@(K, V) empty_ch() bool | StdError:
-    return self.is_empty()
+    return Result.Ok(self.is_empty())
 
 fn main() i32:
     let HashMap@(i32, i32) m = HashMap.new()

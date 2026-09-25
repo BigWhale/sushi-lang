@@ -986,8 +986,10 @@ extend i32 fixed() i32:
 
 **The opt-in error channel `| E`**: a method that declares `| E` after its return type
 HAS a channel — the call yields `Result@(T, E)`, `??` is legal in the body, and
-`return Result.Err(e)` is the one spelled constructor. The success still returns BARE
-(`return Result.Ok(x)` stays refused): the compiler wraps it for you.
+a body that returns spells both constructors, as a free function does:
+`return Result.Ok(x)` and `return Result.Err(e)` (a `~` success is
+`return Result.Ok(~)`). The compiler wraps nothing: a bare `return x` in a channel body
+is CE2030.
 
 ```sushi
 enum OddError:
@@ -996,7 +998,7 @@ enum OddError:
 extend i32 half_checked() i32 | OddError:
     if (self % 2 == 1):
         return Result.Err(OddError.TooOdd)
-    return self / 2                     # bare success; wraps into Ok
+    return Result.Ok(self / 2)
 
 fn use_it() i32 | OddError:
     let i32 four = 4
@@ -1030,7 +1032,7 @@ extend Counter with Source:
     fn read_one() i32 | SourceError:
         if (self.closed):
             return Result.Err(SourceError.Closed)
-        return self.value           # bare success; wraps into Ok
+        return Result.Ok(self.value)
 
 fn main() i32:
     let Counter c = Counter(42, false)

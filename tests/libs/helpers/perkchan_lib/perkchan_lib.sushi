@@ -8,4 +8,4 @@ extend Gadget with Fallible:
     fn probe(i32 n) i32 | GadgetError:
         if (n < 0):
             return Result.Err(GadgetError.OutOfRange)
-        return self.base + n
+        return Result.Ok(self.base + n)

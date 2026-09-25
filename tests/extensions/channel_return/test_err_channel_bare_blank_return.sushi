@@ -1,0 +1,20 @@
+# A '~' channel body ends with 'return Result.Ok(~)'. A bare 'return ~' is the
+# refused bare form (#848).
+# EXPECT_ERROR_CODE: CE2030
+enum TickError:
+    Stopped
+
+struct Clock:
+    i32 ticks
+
+extend Clock tick(poke self) ~ | TickError:
+    self.ticks := self.ticks + 1
+    return ~
+
+fn main() i32:
+    let Clock c = Clock(0)
+    match c.tick():
+        Result.Ok(_) -> println("ticked")
+        Result.Err(_) -> println("stopped")
+    println("{c.ticks}")
+    return Result.Ok(0)

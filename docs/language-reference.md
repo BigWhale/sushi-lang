@@ -1484,8 +1484,9 @@ Writing `public` on an implementation method is `CE6103`.
 
 An extension may declare method-level type parameters and an error channel —
 `extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:` — solved and handled at
-the call site (`xs.map(f)??`). The success returns bare; `Result.Err(e)` is the one
-spelled constructor. Array targets take a concrete element (`extend i32[]`) or a bare
+the call site (`xs.map(f)??`). A channel body spells both constructors, as a free
+function does: `return Result.Ok(x)` and `return Result.Err(e)`; a bare `return x` there
+is CE2030. Array targets take a concrete element (`extend i32[]`) or a bare
 name that binds a type parameter (`extend T[]`). The design record is
 `docs/design/ufcs-combinators.md`.
 

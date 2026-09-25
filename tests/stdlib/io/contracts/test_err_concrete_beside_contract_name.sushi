@@ -6,7 +6,7 @@
 use <io/fs>
 
 extend File read() string | IoError:
-    return "shadow"
+    return Result.Ok("shadow")
 
 fn main() i32:
     println("unreachable")

@@ -212,7 +212,7 @@ def _validate_method_body(self, target_type, method) -> None:
 
     # A `| E` extension (ruling 1) validates under its CHANNEL: the interned
     # Result@(ret, E) that `??` propagates into and that `Result.Err(e)` constructs.
-    # The success still returns bare against `extension_return_type` (ruling 6).
+    # Both constructors are spelled against it, as in a free function (#848).
     self.extension_channel_result = None
     err_ty = method.err_type
     if err_ty is not None:

@@ -12,7 +12,7 @@ struct Counter:
 
 extend Counter with Source:
     fn read_one() i32 | StdError:
-        return self.value
+        return Result.Ok(self.value)
 
 fn main() i32:
     let Counter c = Counter(1)

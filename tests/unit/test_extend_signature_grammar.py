@@ -34,12 +34,12 @@ MARGS_ONLY = (
 
 ERR_ONLY = (
     "extend i32 checked() i32 | StdError:\n"
-    "    return self\n"
+    "    return Result.Ok(self)\n"
 )
 
 BOTH = (
     "extend i32 mapv@(U)(fn(i32) -> U f) U | StdError:\n"
-    "    return f(self)??\n"
+    "    return Result.Ok(f(self)??)\n"
 )
 
 
@@ -85,7 +85,7 @@ def test_existing_slots_survive_the_new_optionals(case_id, src):
 def test_err_type_is_the_declared_error_name():
     ext = _sole_extension(
         "extend i32 halve() i32 | MathError:\n"
-        "    return self / 2\n"
+        "    return Result.Ok(self / 2)\n"
     )
     assert ext.err_type is not None
     assert "MathError" in str(ext.err_type)
@@ -104,7 +104,7 @@ def test_generic_target_keeps_its_routing_with_the_new_slots():
     """A @(...) target still lands in generic_extensions with margs and | E present."""
     program, _tree = parse_to_ast(
         "extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:\n"
-        "    return List.new()\n"
+        "    return Result.Ok(List.new())\n"
     )
     assert len(program.generic_extensions) == 1
     assert not program.extensions

@@ -14,7 +14,7 @@ struct Counter:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return self.value
+        return Result.Ok(self.value)
 
 extend i32 doubled() i32:
     return self * 2

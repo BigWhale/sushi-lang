@@ -4,7 +4,7 @@ struct Holder:
     i32 n
 
 extend Holder take(peek self) i32 | Maybe@(i32):
-    return self.n
+    return Result.Ok(self.n)
 
 fn main() i32:
     return Result.Ok(0)

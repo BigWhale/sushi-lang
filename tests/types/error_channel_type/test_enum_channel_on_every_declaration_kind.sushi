@@ -14,10 +14,10 @@ perk Source:
 
 extend Holder with Source:
     fn read_one(peek self) i32 | OddError:
-        return self.n
+        return Result.Ok(self.n)
 
 extend Holder doubled(peek self) i32 | OddError:
-    return self.n * 2
+    return Result.Ok(self.n * 2)
 
 fn halved(i32 v) i32 | OddError:
     if (v % 2 == 1):

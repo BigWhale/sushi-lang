@@ -125,7 +125,7 @@ _add(ErrorMessage("CE2028", Severity.ERROR,
 # Result type errors
 _add(ErrorMessage("CE2030", Severity.ERROR,
     "return statement must use Ok() or Err()",
-    Category.TYPE, "All return statements must explicitly wrap values in Ok() or use Err()."))
+    Category.TYPE, "Every return in a body that answers a Result spells its constructor: 'return Result.Ok(value)' or 'return Result.Err(e)'. The rule holds for a function, a lambda block body, and an extension or perk-impl method with a '| E' channel alike (#848): nothing wraps a bare value, and a '~' success is 'return Result.Ok(~)'. A BARE method (no '| E') is the other way round (CE2091)."))
 
 _add(ErrorMessage("CE2031", Severity.ERROR,
     "Ok() value type mismatch: expected '{expected}', got '{got}'",
@@ -345,8 +345,8 @@ _add(ErrorMessage("CE2090", Severity.ERROR,
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
 _add(ErrorMessage("CE2091", Severity.ERROR,
-    "method '{name}' must use a bare 'return <value>', not 'return {refused}'",
-    Category.TYPE, "A method's SUCCESS is always returned bare. A bare extension or perk-impl method has an unwrapped ABI, so both Result constructors are refused. A channel extension ('| E', ruling 6 of the UFCS epic) wraps the bare success into Ok at the emission seam, so 'return Result.Ok(x)' stays refused there and 'return Result.Err(e)' is the ONE spelled constructor -- the error is the exceptional path and earns its ink; the success stays as light as a bare method's. Free functions are unchanged: they spell Result.Ok explicitly (CE2030)."))
+    "method '{name}' must use a bare 'return <value>', not 'return Result.Ok(...)' or 'return Result.Err(...)'",
+    Category.TYPE, "A BARE extension or perk-impl method (no '| E') has an unwrapped ABI: it answers the value itself and no Result, so both Result constructors are refused. A method with a '| E' channel has the free function's rule instead: it spells 'return Result.Ok(x)' and 'return Result.Err(e)', and a bare 'return x' there is CE2030. Until #848 a channel body returned its success bare and the compiler wrapped it into Ok in silence (ruling 6 of the UFCS epic, reversed); CE2091 then also refused 'Result.Ok(...)' in a channel body."))
 
 _add(ErrorMessage("CE2092", Severity.ERROR,
     "function value type mismatch: expected '{expected}', got '{actual}'",

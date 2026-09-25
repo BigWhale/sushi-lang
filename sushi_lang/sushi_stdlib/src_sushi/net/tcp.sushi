@@ -105,7 +105,7 @@ extend TcpStream with Reader:
     :##
     fn read(poke self, i32 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
-        return chunk.to_string()
+        return Result.Ok(chunk.to_string())
 
     ##:
     Reads what one read gives, as bytes.
@@ -119,7 +119,7 @@ extend TcpStream with Reader:
     :##
     fn read_bytes(poke self, i32 max) u8[] | IoError:
         match sock_recv(self.fd, max):
-            Result.Ok(nom chunk) -> return chunk
+            Result.Ok(nom chunk) -> return Result.Ok(chunk)
             Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -138,7 +138,7 @@ extend TcpStream with Writer:
         # avoids that with fd_write_str, which hands write(2) the string's own fat pointer.
         # One allocation against one syscall is not worth a new generator yet.
         match self.send_all(data.to_bytes()):
-            Result.Ok(_) -> return ~
+            Result.Ok(_) -> return Result.Ok(~)
             Result.Err(e) -> return Result.Err(e.to_io())
 
     ##:
@@ -150,7 +150,7 @@ extend TcpStream with Writer:
     :##
     fn write_bytes(poke self, u8[] data) ~ | IoError:
         match self.send_all(data):
-            Result.Ok(_) -> return ~
+            Result.Ok(_) -> return Result.Ok(~)
             Result.Err(e) -> return Result.Err(e.to_io())
 
     ##:
@@ -163,7 +163,7 @@ extend TcpStream with Writer:
     - Errors: IoError, never in practice.
     :##
     fn flush(poke self) ~ | IoError:
-        return ~
+        return Result.Ok(~)
 
 ##:
 Whether this handle still holds a descriptor.
@@ -225,7 +225,7 @@ listener a bound, in which case it answers TimedOut.
 :##
 extend TcpListener accept() TcpStream | NetError:
     let i32 fd = sock_tcp_accept(self.fd)??
-    return TcpStream(fd)
+    return Result.Ok(TcpStream(fd))
 
 ##:
 Opens a second handle over the same listening socket.
@@ -244,7 +244,7 @@ descriptor. This is the operation that means one, and its name says so.
 :##
 extend TcpListener share() TcpListener | IoError:
     match sock_dup(self.fd):
-        Result.Ok(fd) -> return TcpListener(fd)
+        Result.Ok(fd) -> return Result.Ok(TcpListener(fd))
         Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -264,7 +264,7 @@ carried nothing of its own.
 - Errors: NetError, when the write failed.
 :##
 extend TcpStream send(u8[] data) i32 | NetError:
-    return sock_send(self.fd, data)??
+    return Result.Ok(sock_send(self.fd, data)??)
 
 ##:
 Writes every byte, looping until the buffer is gone.
@@ -282,7 +282,7 @@ extend TcpStream send_all(u8[] data) ~ | NetError:
         if (sent <= 0):
             return Result.Err(NetError.Closed)
         done := done + sent
-    return ~
+    return Result.Ok(~)
 
 ##:
 Reads exactly `count` bytes, looping until they have all arrived.
@@ -301,7 +301,7 @@ extend TcpStream recv_exact(i32 count) u8[] | NetError:
         if (chunk.len() == 0):
             return Result.Err(NetError.Closed)
         out.extend(chunk)
-    return out
+    return Result.Ok(out)
 
 ##:
 The address of the peer at the other end, as text.
@@ -313,7 +313,7 @@ request.
 - Errors: NetError, when the stream has no peer.
 :##
 extend TcpStream peer_ip() string | NetError:
-    return sock_peer_ip(self.fd)??
+    return Result.Ok(sock_peer_ip(self.fd)??)
 
 ##:
 The port of the peer at the other end.
@@ -322,7 +322,7 @@ The port of the peer at the other end.
 - Errors: NetError, when the stream has no peer.
 :##
 extend TcpStream peer_port() i32 | NetError:
-    return sock_peer_port(self.fd)??
+    return Result.Ok(sock_peer_port(self.fd)??)
 
 ##:
 The port a listener actually bound.
@@ -333,7 +333,7 @@ This is the only way to learn the port after binding port 0.
 - Errors: NetError, when the socket is not bound.
 :##
 extend TcpListener local_port() i32 | NetError:
-    return sock_local_port(self.fd)??
+    return Result.Ok(sock_local_port(self.fd)??)
 
 ##:
 The port a connected stream bound at this end.
@@ -342,7 +342,7 @@ The port a connected stream bound at this end.
 - Errors: NetError, when the socket is not bound.
 :##
 extend TcpStream local_port() i32 | NetError:
-    return sock_local_port(self.fd)??
+    return Result.Ok(sock_local_port(self.fd)??)
 
 ##:
 Bounds how long a read and a write on a stream may wait.
@@ -358,7 +358,7 @@ as long as the peer stays silent.
 extend TcpStream set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
     sock_set_recv_timeout(self.fd, recv_ms)??
     sock_set_send_timeout(self.fd, send_ms)??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Bounds how long accept() may wait for a connection.
@@ -369,7 +369,7 @@ Bounds how long accept() may wait for a connection.
 :##
 extend TcpListener set_timeout(i32 accept_ms) ~ | NetError:
     sock_set_recv_timeout(self.fd, accept_ms)??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Closes a stream, and CONSUMES the handle.
@@ -383,7 +383,7 @@ close. One binding owns a socket, and this is where it stops owning it.
 :##
 extend TcpStream close(nom self) ~ | NetError:
     close_socket(poke self.fd)??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Closes a listener, and CONSUMES the handle. The same terms as TcpStream.
@@ -393,4 +393,4 @@ Closes a listener, and CONSUMES the handle. The same terms as TcpStream.
 :##
 extend TcpListener close(nom self) ~ | NetError:
     close_socket(poke self.fd)??
-    return ~
+    return Result.Ok(~)
