@@ -1,0 +1,9 @@
+# The count of List.with_capacity and of reserve is an i32 position (#870).
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got u16
+fn main() i32:
+    let u16 n = 4 as u16
+    let List@(i32) l = List.with_capacity(n)
+    l.push(1)
+    println("{l.len()}")
+    return Result.Ok(0)

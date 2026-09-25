@@ -1,0 +1,9 @@
+# A List index is an i32 position (#870). List.get with an i8 index was CE0000.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got i8
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(5)
+    let i8 n = 0 as i8
+    println("{l.get(n).realise(-7)}")
+    return Result.Ok(0)

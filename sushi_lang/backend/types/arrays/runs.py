@@ -111,7 +111,7 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
         ety = element_type if element_type is not None else alias_element_type(codegen, run.value)
 
         if run.count is None:
-            count = codegen.utils.as_i32(codegen.expressions.emit_expr(run.count_expr))
+            count = codegen.utils.require_i32(codegen.expressions.emit_expr(run.count_expr))
             count = _clamp_count(codegen, count)
         else:
             count = ir.Constant(i32, run.count)

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ErrorMessage, Span
@@ -29,7 +29,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
 from .utils import validate_constant_array_index
-from sushi_lang.semantics.type_predicates import is_integer_type
+from sushi_lang.semantics.type_predicates import is_numeric_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -82,6 +82,34 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: R
                 index=1, expected=display_type(element_type), got=display_type(arg_type))
 
 
+# ------------------------------------------------------------------ an i32 position
+
+
+def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], *,
+                   argument: Optional[int] = None) -> bool:
+    """The one rule for an index, a count and a range bound: the value is an i32 (#870).
+
+    `got` is the type the caller's walk of `expr` answered. A bare literal is already an
+    i32, because that is its default when no position gives it a type. Any other type is
+    refused, and there is no implicit widening: the backend used to zero-extend a narrow
+    value, so `-1 as i8` counted 255. A method argument reads CE2006 at its `argument`
+    position; every other position reads CE2002, as `arr[i]` did first. Answers whether
+    the value was refused.
+    """
+    if got is None or got == BuiltinType.I32:
+        return False
+    if argument is None:
+        report = er.emit_with(validator.reporter, er.ERR.CE2002, expr.loc,
+                              got=display_type(got), expected=display_type(BuiltinType.I32))
+    else:
+        report = er.emit_with(validator.reporter, er.ERR.CE2006, expr.loc, index=argument,
+                              expected=display_type(BuiltinType.I32), got=display_type(got))
+    if is_numeric_type(got):
+        report = report.help("convert it with 'as i32'")
+    report.emit()
+    return True
+
+
 # --------------------------------------------------------------------- argument rules
 #
 # Each rule reads the arguments of ONE row, and runs only once the receiver kind and the
@@ -95,14 +123,11 @@ def _accepts_anything(call: MethodCall, array_type: ArrayReceiver, reporter: Rep
 
 def _an_index(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
               validator: Optional['TypeValidator']) -> None:
-    """One integer of any width."""
+    """One index or count: an i32."""
     if validator is None:
         return
-    validator.validate_expression(call.args[0])
-    arg_type = validator.infer_expression_type(call.args[0])
-    if arg_type is not None and not is_integer_type(arg_type):
-        er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                index=1, expected="integer type", got=display_type(arg_type))
+    reject_non_i32(validator, call.args[0], validator.validate_expression(call.args[0]),
+                   argument=1)
 
 
 def _an_index_the_size_holds(call: MethodCall, array_type: ArrayReceiver,
@@ -176,14 +201,14 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
     return False
 
 
-def _reject_a_non_index(indices: Sequence[Expr], reporter: Reporter,
+def _reject_a_non_index(call: MethodCall, first: int,
                         validator: Optional['TypeValidator']) -> None:
-    """Every index position of a bulk copy is an i32."""
-    for index in indices:
-        index_type = validator.infer_expression_type(index) if validator else None
-        if index_type is not None and index_type != BuiltinType.I32:
-            er.emit(reporter, er.ERR.CE2002, index.loc,
-                    got=display_type(index_type), expected=display_type(BuiltinType.I32))
+    """Every index position of a bulk copy, from argument `first` on, is an i32."""
+    if validator is None:
+        return
+    for position, index in enumerate(call.args[first:], start=first + 1):
+        reject_non_i32(validator, index, validator.validate_expression(index),
+                       argument=position)
 
 
 def _a_source(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -197,13 +222,13 @@ def _a_source_and_a_range(call: MethodCall, array_type: ArrayReceiver, reporter:
     """`extend_range(src, start, count)`: the source, then the two indices behind it."""
     if _reject_mismatched_source(call, array_type, reporter, validator):
         return
-    _reject_a_non_index(call.args[1:], reporter, validator)
+    _reject_a_non_index(call, 1, validator)
 
 
 def _a_range(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
              validator: Optional['TypeValidator']) -> None:
     """`s(start, end)` and `ss(start, count)`: two indices and no source."""
-    _reject_a_non_index(call.args, reporter, validator)
+    _reject_a_non_index(call, 0, validator)
 
 
 # ----------------------------------------------------------------------- return rules

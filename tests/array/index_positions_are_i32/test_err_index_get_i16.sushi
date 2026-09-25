@@ -1,0 +1,10 @@
+# An array index is an i32 position (#870): an i16 index is refused, and the help
+# names the cast.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got i16
+# EXPECT_STDERR_CONTAINS: as i32
+fn main() i32:
+    let string[] arr = from(["hello", "world"])
+    let i16 n = 0 as i16
+    println(arr.get(n).realise("none"))
+    return Result.Ok(0)

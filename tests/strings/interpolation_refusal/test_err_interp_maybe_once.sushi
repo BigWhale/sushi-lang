@@ -1,0 +1,9 @@
+# An interpolation hole that cannot be printed is one fault and reads one CE2035 (#885).
+# The directive is a substring test; tests/unit/test_interpolation_refusal_is_once.py
+# counts.
+# EXPECT_ERROR_CODE: CE2035
+# EXPECT_STDERR_CONTAINS: cannot interpolate expression of type 'Maybe@(u32)' into string
+fn main() i32:
+    let u32[] a = from([1 as u32])
+    println("interp {a.get(0)}")
+    return Result.Ok(0)

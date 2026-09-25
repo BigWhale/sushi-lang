@@ -106,7 +106,17 @@ class LLVMUtils:
             return self.codegen.builder.fptosi(v, self.codegen.i32)
         raise_internal_error("CE0017", src=str(ty), dst="i32")
 
-    def cast_to_int_width(self, v: ir.Value, dst: ir.IntType, is_signed: bool = False) -> ir.Value:
+    def require_i32(self, v: ir.Value) -> ir.Value:
+        """An index, a count or a range bound: the typecheck pass admits an i32 alone (#870).
+
+        Nothing is widened here. A narrow operand is an internal error, because a
+        zero-extension turned `-1 as i8` into 255 with no diagnostic.
+        """
+        if v.type != self.codegen.i32:
+            raise_internal_error("CE0017", src=str(v.type), dst="i32")
+        return v
+
+    def cast_to_int_width(self, v: ir.Value, dst: ir.IntType) -> ir.Value:
         """Cast value to target integer width using dispatch table."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
@@ -121,10 +131,7 @@ class LLVMUtils:
 
         if isinstance(v.type, ir.IntType):
             if v.type.width < dst.width:
-                if is_signed:
-                    return self.codegen.builder.sext(v, dst)
-                else:
-                    return self.codegen.builder.zext(v, dst)
+                return self.codegen.builder.zext(v, dst)
             elif v.type.width > dst.width:
                 return self.codegen.builder.trunc(v, dst)
             else:

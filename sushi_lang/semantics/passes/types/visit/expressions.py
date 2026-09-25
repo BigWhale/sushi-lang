@@ -16,6 +16,7 @@ from sushi_lang.semantics.passes.types.expressions import (
     validate_index_access, validate_try_expression)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
 from sushi_lang.semantics.passes.types.utils import reject_named_args
@@ -365,8 +366,17 @@ class ExpressionValidator(RecursiveVisitor):
         pass
 
     def visit_interpolatedstring(self, node: InterpolatedString) -> None:
-        """Visit expressions in interpolated string."""
+        """Each hole is walked once, and a hole that cannot be printed is CE2035 (#885).
+
+        The check is here and not in the inference, because the inference runs more than
+        once over one expression and reported one fault once for each run.
+        """
         for part in node.parts:
-            if not isinstance(part, str):  # part is an Expr
-                self.visit(part)
+            if isinstance(part, str):
+                continue
+            self.visit(part)
+            part_type = self.type_validator.infer_expression_type(part)
+            if part_type is not None and not is_string_convertible(part_type):
+                er.emit(self.type_validator.reporter, er.ERR.CE2035, part.loc,
+                        type=display_type(part_type))
 

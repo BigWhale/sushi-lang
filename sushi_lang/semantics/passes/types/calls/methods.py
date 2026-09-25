@@ -535,14 +535,22 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
     family, statics = _CONTAINER_STATICS.get(type_name, ("", ()))
     if call.method in statics:
-        reject_builtin_miscount(validator.reporter, call, f"{type_name}.{call.method}",
-                                arity_of_family(family))
+        if reject_builtin_miscount(validator.reporter, call, f"{type_name}.{call.method}",
+                                   arity_of_family(family)):
+            return
+        if call.method in _CONTAINER_STATIC_COUNTS:
+            from sushi_lang.semantics.passes.types.arrays import reject_non_i32
+            count = call.args[0]
+            reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
 
 
 #: The statics a built-in container answers on its type NAME, and the family whose count
 #: row each one reads (`MethodFamily.arity`).
 _CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
                       "HashMap": ("hashmap", ("new",))}
+
+#: The container statics whose one argument is a count, an i32 position (#870).
+_CONTAINER_STATIC_COUNTS = frozenset({"with_capacity"})
 
 
 def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,

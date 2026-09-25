@@ -401,10 +401,10 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
     codegen.utils.ensure_open_block()
 
     start_value = codegen.expressions.emit_expr(range_expr.start)
-    start_i32 = codegen.utils.as_i32(start_value)
+    start_i32 = codegen.utils.require_i32(start_value)
 
     end_value = codegen.expressions.emit_expr(range_expr.end)
-    end_i32 = codegen.utils.as_i32(end_value)
+    end_i32 = codegen.utils.require_i32(end_value)
 
     start_slot = entry_alloca(codegen.builder, codegen.types.i32, name="range_start")
     codegen.builder.store(start_i32, start_slot)

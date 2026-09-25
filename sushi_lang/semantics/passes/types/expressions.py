@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExp
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from .arrays import reject_non_i32
 from .compatibility import is_valid_cast
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
@@ -27,7 +28,8 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
     for element in expr.elements:
         validator.validate_expression(element.value)
         if element.count is not None:
-            validator.validate_expression(element.count)
+            reject_non_i32(validator, element.count,
+                           validator.validate_expression(element.count))
 
     # CE2017 for a repeat count that is not a count, CE2019 for a range that yields nothing,
     # and CE2020 for a range carrying a count. A `const` never arrives here with one, because
@@ -56,12 +58,7 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
     """Validate array indexing - array must be array type, index must be int."""
     validator.validate_expression(expr.array)
 
-    validator.validate_expression(expr.index)
-
-    index_type = validator.infer_expression_type(expr.index)
-    if index_type is not None and index_type != BuiltinType.I32:
-        er.emit(validator.reporter, er.ERR.CE2002, expr.index.loc,
-               got=display_type(index_type), expected=display_type(BuiltinType.I32))
+    reject_non_i32(validator, expr.index, validator.validate_expression(expr.index))
 
     array_type = validator.infer_expression_type(expr.array)
     if array_type is not None and not isinstance(array_type, (ArrayType, DynamicArrayType)):
@@ -104,24 +101,18 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
 
 
 def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """Validate range expression - start and end must be integer types."""
-    validator.validate_expression(expr.start)
-    start_type = validator.infer_expression_type(expr.start)
+    """Validate a range expression: each bound is an i32 (#870).
 
-    validator.validate_expression(expr.end)
-    end_type = validator.infer_expression_type(expr.end)
-
-    if start_type is not None and not is_numeric_type(start_type):
-        er.emit(validator.reporter, er.ERR.CE2072, expr.start.loc,
-               got=display_type(start_type), expected="integer type")
-
-    if end_type is not None and not is_numeric_type(end_type):
-        er.emit(validator.reporter, er.ERR.CE2072, expr.end.loc,
-               got=display_type(end_type), expected="integer type")
-
-    # Note: We accept any integer type (i8, i16, i32, i64, u8, u16, u32, u64)
-    # but the backend will cast to i32 for iteration. Type compatibility
-    # checking happens during cast emission.
+    A bound that is not a number at all is the range's own refusal (CE2072). A number of
+    any other type is refused by the one i32-position rule.
+    """
+    walked = [(bound, validator.validate_expression(bound)) for bound in (expr.start, expr.end)]
+    for bound, bound_type in walked:
+        if bound_type is not None and not is_numeric_type(bound_type):
+            er.emit(validator.reporter, er.ERR.CE2072, bound.loc,
+                   got=display_type(bound_type), expected="integer type")
+            continue
+        reject_non_i32(validator, bound, bound_type)
 
 
 class _Arms(NamedTuple):
