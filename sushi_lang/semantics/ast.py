@@ -28,7 +28,10 @@ class Node:
 
 @dataclass(slots=True)
 class Stmt(Node):
-    pass
+    # Which `expand` copies this statement was spliced from, outermost first; empty for
+    # a written statement. Two neighbours with different marks were never written one
+    # after the other, so the dead-code rule (CE0140) does not read them as a sequence.
+    expand_copies: Tuple[int, ...] = field(default=(), kw_only=True)
 
 
 @dataclass(slots=True)

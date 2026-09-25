@@ -53,6 +53,10 @@ def first_dead_statement(self, block: Block) -> Optional[tuple[Stmt, Stmt]]:
     """The statement that ends the path in `block` and the first one after it, if any."""
     statements = block.statements
     for ender, dead in zip(statements, statements[1:], strict=False):
+        # Two statements from different `expand` copies, or a copy and its
+        # surroundings, were not written in sequence (#854).
+        if ender.expand_copies != dead.expand_copies:
+            continue
         if ends_the_path(self, ender):
             return ender, dead
     return None

@@ -1,0 +1,24 @@
+# A statement after a 'return' INSIDE an 'expand' body is written dead code. It
+# is CE0140, reported once, however many copies the expansion makes (#854).
+# EXPECT_ERROR_CODE: CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_inside_expand_body.sushi:19:9
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+extend string with Display:
+    fn display() string:
+        return self.clone()
+
+fn show_first@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        return Result.Ok(~)
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    show_first(1, "two", "three")
+    return Result.Ok(0)
