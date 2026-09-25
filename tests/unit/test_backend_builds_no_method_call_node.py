@@ -21,11 +21,6 @@ BACKEND = Path(generics.__file__).resolve().parents[2]
 # The element-hash sites build a fake node for the derived hash emitter (#855). This list
 # may only get shorter.
 KNOWN_NODE_BUILDERS = {
-    ("generics/hashmap/methods/core.py", "emit_hashmap_get"),
-    ("generics/hashmap/methods/core.py", "emit_hashmap_contains_key"),
-    ("generics/hashmap/methods/mutations.py", "emit_hashmap_insert"),
-    ("generics/hashmap/methods/mutations.py", "emit_hashmap_remove"),
-    ("generics/hashmap/methods/mutations.py", "emit_hashmap_resize_to_capacity"),
     ("types/arrays/methods/hashing.py", "emit_element_hash"),
     ("types/enums.py", "_emit_associated_value_hash"),
     ("types/structs.py", "_emit_field_hash"),

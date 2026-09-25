@@ -22,7 +22,6 @@ WALK_MODULE = "generics/container_walk.py"
 
 KNOWN_HAND_LOOPS = {
     ("expressions/memory.py", "clone_dynamic_array_value"),
-    ("generics/hashmap/methods/mutations.py", "emit_hashmap_resize_to_capacity"),
     ("generics/list/methods_debug.py", "emit_list_debug"),
     ("runtime/args.py", "populate_string_array_from_argv"),
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"),
