@@ -1,10 +1,10 @@
 """HashMap<K, V> mutation method implementations."""
 
 from typing import Any
-from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
-from ..types import get_entry_type, get_hashmap_field_ptrs, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
+from ..types import HashMapFields, get_entry_type, get_hashmap_field_ptrs, emit_key_hash_i32, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
 from sushi_lang.backend.constants import (
     HASHMAP_CAPACITY_INDICES,
     ENTRY_KEY_INDICES,
@@ -12,7 +12,7 @@ from sushi_lang.backend.constants import (
     ENTRY_STATE_INDICES,
 )
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
-from ..probe import emit_probe_loop, ProbeSlot
+from ..probe import emit_find_key, emit_lookup_key, emit_lookup_maybe, emit_probe_loop, ProbeSlot
 from ..utils import (
     emit_key_equality_check,
     emit_insert_entry,
@@ -22,7 +22,6 @@ from ..utils import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
-from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.destructors import destroy_old_value
 
@@ -34,14 +33,11 @@ def emit_hashmap_insert(
     hashmap_type: StructType
 ) -> ir.Value:
     """Emit HashMap<K, V>.insert(K key, V value) -> ~"""
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401 - Ensure hash methods are registered
-
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
     entry_type = get_entry_type(codegen, key_type, value_type)
-    key_llvm = codegen.types.ll_type(key_type)
 
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
@@ -96,21 +92,7 @@ def emit_hashmap_insert(
     capacity = builder.load(capacity_ptr, name="capacity_current")
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data_current")
 
-    from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(codegen, key_type)
-    if hash_method is None:
-        raise_internal_error("CE0053", type=key_type)
-
-    fake_call = MethodCall(
-        receiver=Name(id="key", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-
-    hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, key_llvm, False)
-
-    hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
+    hash_i32 = emit_key_hash_i32(codegen, key_type, key_value)
 
     insert_done_bb = builder.append_basic_block(name="insert_done")
 
@@ -203,21 +185,11 @@ def emit_hashmap_remove(
     hashmap_type: StructType
 ) -> ir.Value:
     """Emit HashMap<K, V>.remove(K key) -> Maybe<V>"""
-    from sushi_lang.semantics.ast import MethodCall, Name
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-
-    value_llvm = codegen.types.ll_type(value_type)
-
     one_i32 = ir.Constant(codegen.types.i32, 1)
-
-    if len(expr.args) != 1:
-        raise_internal_error("CE0023", method="remove", expected=1, got=len(expr.args))
-
-    key_value = emit_borrowed_arg(codegen, expr.args[0], key_type)
+    key_value = emit_lookup_key(codegen, expr, key_type, "remove")
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity
@@ -229,59 +201,19 @@ def emit_hashmap_remove(
 
     buckets_data = builder.load(buckets_data_ptr, name="buckets_data")
 
-    from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(codegen, key_type)
-    if hash_method is None:
-        raise_internal_error("CE0053", type=key_type)
+    lookup = emit_find_key(codegen, buckets_data, capacity, key_type, key_value, "remove")
 
-    fake_call = MethodCall(
-        receiver=Name(id="key", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
+    builder.position_at_end(lookup.found)
+    state_ptr = builder.gep(lookup.entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
 
-    hash_value = hash_method.llvm_emitter(codegen, fake_call, key_value, codegen.types.ll_type(key_type), False)
-    hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
-
-    found_bb = builder.append_basic_block(name="remove_found")
-    not_found_bb = builder.append_basic_block(name="remove_not_found")
-    remove_done_bb = builder.append_basic_block(name="remove_done")
-
-    # The matching slot, captured out of the probe for the found path below. It
-    # dominates found_bb -- that block is only reachable from the probe.
-    matched: dict[str, ir.Value] = {}
-
-    def on_empty(slot: ProbeSlot) -> None:
-        builder.branch(not_found_bb)
-
-    def on_occupied(slot: ProbeSlot) -> None:
-        entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
-        entry_key = builder.load(entry_key_ptr, name="entry_key")
-        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
-        matched["entry_ptr"] = slot.entry_ptr
-        matched["entry_key_ptr"] = entry_key_ptr
-        builder.cbranch(keys_equal, found_bb, slot.continue_bb)
-
-    emit_probe_loop(
-        codegen, buckets_data, capacity, hash_i32,
-        on_occupied=on_occupied, on_empty=on_empty,
-        exhausted_bb=not_found_bb, prefix="remove_probe",
-    )
-
-    builder.position_at_end(found_bb)
-    entry_ptr = matched["entry_ptr"]
-    entry_key_ptr = matched["entry_key_ptr"]
-    state_ptr = builder.gep(entry_ptr, ENTRY_STATE_INDICES, name="state_ptr")
-
-    entry_value_ptr = builder.gep(entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
+    entry_value_ptr = builder.gep(lookup.entry_ptr, ENTRY_VALUE_INDICES, name="entry_value_ptr")
     entry_value = builder.load(entry_value_ptr, name="entry_value")
 
     # Destroy the removed key (the map owned it); the value is moved out into the
     # returned Maybe.Some, so it must NOT be destroyed. Without this, a heap-owning
     # key (e.g. a string) is leaked when its entry becomes a tombstone.
     from sushi_lang.backend.destructors import emit_value_destructor
-    emit_value_destructor(codegen, entry_key_ptr, key_type)
+    emit_value_destructor(codegen, lookup.entry_key_ptr, key_type)
 
     builder.store(ir.Constant(codegen.types.i8, ENTRY_TOMBSTONE), state_ptr)
 
@@ -290,41 +222,7 @@ def emit_hashmap_remove(
     new_tombstones = builder.add(tombstones, one_i32, name="new_tombstones")
     builder.store(new_tombstones, tombstones_ptr)
 
-    from sushi_lang.backend.generics.maybe import ensure_maybe_type_exists
-    maybe_enum_type = ensure_maybe_type_exists(codegen, value_type)
-    if maybe_enum_type is None:
-        raise_internal_error("CE0047", type=str(value_type))
-
-    maybe_llvm_type = codegen.types.get_enum_type(maybe_enum_type)
-
-    maybe_some = ir.Constant(maybe_llvm_type, ir.Undefined)
-    some_tag = ir.Constant(codegen.types.i32, 0)  # Some is first variant
-    maybe_some = builder.insert_value(maybe_some, some_tag, 0, name="maybe_some_tag")
-
-    data_array_type = maybe_llvm_type.elements[1]  # [N x i8]
-    data_ptr = entry_alloca(builder, data_array_type, name="some_data_alloc")
-    value_ptr = builder.bitcast(data_ptr, ir.PointerType(value_llvm), name="value_ptr")
-    builder.store(entry_value, value_ptr)
-    data_value = builder.load(data_ptr, name="some_data")
-    maybe_some = builder.insert_value(maybe_some, data_value, 1, name="maybe_some_value")
-
-    found_pred_bb = builder.block
-    builder.branch(remove_done_bb)
-
-    builder.position_at_end(not_found_bb)
-    maybe_none = ir.Constant(maybe_llvm_type, ir.Undefined)
-    none_tag = ir.Constant(codegen.types.i32, 1)  # None is second variant
-    maybe_none = builder.insert_value(maybe_none, none_tag, 0, name="maybe_none_tag")
-    undef_data = ir.Constant(data_array_type, ir.Undefined)
-    maybe_none = builder.insert_value(maybe_none, undef_data, 1, name="maybe_none_data")
-    builder.branch(remove_done_bb)
-
-    builder.position_at_end(remove_done_bb)
-    result_phi = builder.phi(maybe_llvm_type, name="remove_result")
-    result_phi.add_incoming(maybe_some, found_pred_bb)
-    result_phi.add_incoming(maybe_none, not_found_bb)
-
-    return result_phi
+    return emit_lookup_maybe(codegen, lookup, value_type, entry_value, "remove_result")
 
 
 def emit_hashmap_resize_to_capacity(
@@ -334,9 +232,6 @@ def emit_hashmap_resize_to_capacity(
     new_capacity: ir.Value
 ) -> None:
     """Internal helper: resize HashMap to a specific capacity."""
-    from sushi_lang.semantics.ast import MethodCall, Name
-    import sushi_lang.backend.types.primitives.hashing  # noqa: F401
-
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
@@ -347,10 +242,9 @@ def emit_hashmap_resize_to_capacity(
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
-    size_ptr, capacity_ptr = fields.size, fields.capacity
+    capacity_ptr = fields.capacity
     tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
 
-    builder.load(size_ptr, name="size")
     old_capacity = builder.load(capacity_ptr, name="old_capacity")
 
     old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
@@ -363,11 +257,6 @@ def emit_hashmap_resize_to_capacity(
     new_bucket_ptr = builder.bitcast(new_bucket_ptr_i8, ir.PointerType(entry_type), name="new_buckets_ptr")
 
     emit_init_buckets_empty(codegen, new_bucket_ptr, new_capacity)
-
-    from ..types import get_key_hash_method
-    hash_method = get_key_hash_method(codegen, key_type)
-    if hash_method is None:
-        raise_internal_error("CE0053", type=key_type)
 
     old_i = entry_alloca(builder, codegen.types.i32, name="old_i")
     builder.store(zero_i32, old_i)
@@ -405,14 +294,7 @@ def emit_hashmap_resize_to_capacity(
     old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
     old_value = builder.load(old_value_ptr, name="old_value")
 
-    fake_call = MethodCall(
-        receiver=Name(id="key", loc=(0, 0)),
-        method="hash",
-        args=[],
-        loc=(0, 0)
-    )
-    hash_value = hash_method.llvm_emitter(codegen, fake_call, old_key, codegen.types.ll_type(key_type), False)
-    hash_i32 = builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
+    hash_i32 = emit_key_hash_i32(codegen, key_type, old_key)
 
     # Linear probe for an empty slot in the NEW buckets. A rehash never collides
     # with an equal key (the old table had none) and the new table has no
@@ -422,15 +304,11 @@ def emit_hashmap_resize_to_capacity(
         emit_insert_entry(codegen, slot.entry_ptr, old_key, old_value, entry_type)
         builder.branch(rehash_skip_bb)
 
-    def keep_probing(slot: ProbeSlot) -> None:
-        pass
-
     rehash_no_slot_bb = builder.append_basic_block(name="rehash_no_slot")
 
     emit_probe_loop(
         codegen, new_bucket_ptr, new_capacity, hash_i32,
-        on_occupied=keep_probing, on_empty=on_empty,
-        exhausted_bb=rehash_no_slot_bb, prefix="rehash_probe",
+        on_empty=on_empty, exhausted_bb=rehash_no_slot_bb, prefix="rehash_probe",
     )
 
     # The new table is freshly allocated and strictly larger than the live entry
@@ -480,29 +358,13 @@ def emit_hashmap_free(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.free() -> ~"""
+    """Emit HashMap<K, V>.free() -> ~ -- the map stays usable, empty, at the initial capacity."""
     builder = codegen.builder
-
-    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-
-    entry_type = get_entry_type(codegen, key_type, value_type)
 
     zero_i32 = ir.Constant(codegen.types.i32, 0)
     initial_capacity = ir.Constant(codegen.types.i32, 16)
 
-    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
-    size_ptr, capacity_ptr = fields.size, fields.capacity
-    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
-
-    old_capacity = builder.load(capacity_ptr, name="old_capacity")
-
-    old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
-
-    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type, value_type)
-
-    old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
-    free_func = codegen.get_free_func()
-    builder.call(free_func, [old_buckets_void_ptr])
+    fields, entry_type = _release_buckets(codegen, hashmap_value, hashmap_type, null_guard=False)
 
     entry_size = get_element_size_constant(codegen, entry_type)
     total_bytes = builder.mul(entry_size, initial_capacity, name="bucket_bytes")
@@ -513,10 +375,10 @@ def emit_hashmap_free(
 
     emit_init_buckets_empty(codegen, new_bucket_ptr, initial_capacity)
 
-    builder.store(zero_i32, size_ptr)
-    builder.store(initial_capacity, capacity_ptr)
-    builder.store(zero_i32, tombstones_ptr)
-    builder.store(new_bucket_ptr, buckets_data_ptr)
+    builder.store(zero_i32, fields.size)
+    builder.store(initial_capacity, fields.capacity)
+    builder.store(zero_i32, fields.tombstones)
+    builder.store(new_bucket_ptr, fields.buckets_data)
 
     return ir.Constant(codegen.types.i32, 0)
 
@@ -526,37 +388,53 @@ def emit_hashmap_destroy(
     hashmap_value: ir.Value,
     hashmap_type: StructType
 ) -> ir.Value:
-    """Emit HashMap<K, V>.destroy() -> ~"""
+    """Emit HashMap<K, V>.destroy() -> ~ -- the map keeps no buckets and capacity 0."""
     builder = codegen.builder
-
-    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-
-    entry_type = get_entry_type(codegen, key_type, value_type)
 
     zero_i32 = ir.Constant(codegen.types.i32, 0)
 
-    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
-    size_ptr, capacity_ptr = fields.size, fields.capacity
-    tombstones_ptr, buckets_data_ptr = fields.tombstones, fields.buckets_data
+    fields, entry_type = _release_buckets(codegen, hashmap_value, hashmap_type, null_guard=True)
 
-    old_capacity = builder.load(capacity_ptr, name="old_capacity")
-
-    old_buckets_data = builder.load(buckets_data_ptr, name="old_buckets_data")
-
-    null_entry_ptr = ir.Constant(ir.PointerType(entry_type), None)
-
-    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type,
-                             value_type, null_guard=True)
-
-    is_not_null = builder.icmp_unsigned("!=", old_buckets_data, null_entry_ptr)
-    with builder.if_then(is_not_null):
-        old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
-        free_func = codegen.get_free_func()
-        builder.call(free_func, [old_buckets_void_ptr])
-
-    builder.store(zero_i32, size_ptr)
-    builder.store(zero_i32, capacity_ptr)
-    builder.store(zero_i32, tombstones_ptr)
-    builder.store(null_entry_ptr, buckets_data_ptr)
+    builder.store(zero_i32, fields.size)
+    builder.store(zero_i32, fields.capacity)
+    builder.store(zero_i32, fields.tombstones)
+    builder.store(ir.Constant(ir.PointerType(entry_type), None), fields.buckets_data)
 
     return ir.Constant(codegen.types.i32, 0)
+
+
+def _release_buckets(
+    codegen: Any,
+    hashmap_value: ir.Value,
+    hashmap_type: StructType,
+    *,
+    null_guard: bool,
+) -> tuple[HashMapFields, ir.Type]:
+    """Destroy every entry of a map and free its buckets.
+
+    A destroyed map has null buckets, so a caller that can meet one sets `null_guard`.
+    """
+    builder = codegen.builder
+
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
+    entry_type = get_entry_type(codegen, key_type, value_type)
+
+    fields = get_hashmap_field_ptrs(codegen, hashmap_value)
+    old_capacity = builder.load(fields.capacity, name="old_capacity")
+    old_buckets_data = builder.load(fields.buckets_data, name="old_buckets_data")
+
+    emit_destroy_all_entries(codegen, old_buckets_data, old_capacity, key_type,
+                             value_type, null_guard=null_guard)
+
+    def free_buckets() -> None:
+        old_buckets_void_ptr = builder.bitcast(old_buckets_data, ir.PointerType(codegen.types.i8), name="old_buckets_void_ptr")
+        builder.call(codegen.get_free_func(), [old_buckets_void_ptr])
+
+    if not null_guard:
+        free_buckets()
+        return fields, entry_type
+
+    is_not_null = builder.icmp_unsigned("!=", old_buckets_data, ir.Constant(ir.PointerType(entry_type), None))
+    with builder.if_then(is_not_null):
+        free_buckets()
+    return fields, entry_type
