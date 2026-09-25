@@ -8,7 +8,6 @@ fn f(i32 n) string:
             return Result.Ok("one")
         2 ->
             return Result.Ok("two")
-    return Result.Ok("unreached")
 
 fn main() i32:
     println(f(1).realise("err"))

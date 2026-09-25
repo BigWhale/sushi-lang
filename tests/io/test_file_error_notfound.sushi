@@ -26,5 +26,3 @@ fn main() i32:
                 _ ->
                     stderr.write("Error: unexpected error type\n")
                     return Result.Err(StdError.Error)
-
-    return Result.Ok(0)

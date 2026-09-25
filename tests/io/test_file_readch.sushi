@@ -44,5 +44,3 @@ fn main() i32:
         Result.Err(_) ->
             stderr.write("Error: cannot read test file\n")
             return Result.Err(StdError.Error)
-
-    return Result.Ok(0)

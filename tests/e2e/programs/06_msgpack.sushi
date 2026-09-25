@@ -10,7 +10,6 @@ fn check_decode() bool:
             return Result.Ok(shown == want)
         Result.Err(_) ->
             return Result.Ok(false)
-    return Result.Ok(false)
 
 fn check_missing() bool:
     match read_metadata("e2e_missing_gone.slib"):
@@ -22,7 +21,6 @@ fn check_missing() bool:
                     return Result.Ok(true)
                 _ ->
                     return Result.Ok(false)
-    return Result.Ok(false)
 
 fn main() i32:
     let bool decoded = check_decode().realise(false)

@@ -42,7 +42,6 @@ fn run_tool(peek string[] args) i32:
         Result.Err(_) ->
             println("cannot open {path}")
             return Result.Ok(2)
-    return Result.Ok(0)
 
 fn main(string[] args) i32:
     if (args.len() > 0):
