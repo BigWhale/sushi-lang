@@ -7,9 +7,9 @@ compare -- is a copy of it, and a copy drifts (a signed compare, an index slot i
 wrong block). So such a function is refused outside `container_walk.py` and the list
 below.
 
-KNOWN_HAND_LOOPS may only get SHORTER. It holds the loops that were here when the gate
-came in; some are walks that can move onto the one walk, some are loops of another shape
-(two indices, a byte decoder, a bucket rehash). Move one onto the walk and delete its row.
+KNOWN_HAND_LOOPS may only get SHORTER. It holds the loops that cannot be a walk, each with
+its reason above its row (#852): a loop with no count, a decoder with a stride other than one
+element, and a user loop body that needs `break` / `continue` targets.
 """
 from __future__ import annotations
 
@@ -21,16 +21,11 @@ BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
 WALK_MODULE = "generics/container_walk.py"
 
 KNOWN_HAND_LOOPS = {
-    ("runtime/args.py", "populate_string_array_from_argv"),
     # Not a walk: it stops at the NUL byte of a C string, and no count is known.
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"),
     # A user loop body: `break`/`continue` need loop blocks that the walk does not expose.
     ("statements/loops.py", "_emit_hashmap_foreach"),
-    ("types/arrays/methods/core.py", "emit_dynamic_array_free"),
-    ("types/arrays/methods/core.py", "emit_dynamic_array_fill"),
-    ("types/arrays/methods/core.py", "emit_dynamic_array_reverse"),
-    ("types/arrays/methods/core.py", "emit_fixed_array_fill"),
-    ("types/arrays/methods/core.py", "emit_fixed_array_reverse"),
+    # Not a walk: it steps by the byte count of each code point and stops at the first bad one.
     ("types/arrays/methods/utf8_validate.py", "get_or_emit_utf8_validate"),
 }
 

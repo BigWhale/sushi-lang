@@ -428,6 +428,10 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`continue` in a `foreach` over a HashMap no longer loops forever** (#893). Its continue
+  target skipped the bucket-index increment, so a `continue` read the same bucket again and
+  the program never ended. The target is the increment block now, and the `loop_frame` rule
+  says so. Every other loop kind was checked; each was already correct.
 - **A held value hashes the same in every position, and a `Hashable` override wins** (#871).
   "Hash a value of type T" had three copies (struct field, enum payload, element). The element
   copy refused an array, so `.hash()` on a `List@(i32[])` or an `Own@(i32[3])` was the
@@ -1220,6 +1224,16 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One `fill`, one `reverse` and one `get` for both array kinds** (#876). The receiver kind
+  decides only `(data_ptr, count)`; `emit_array_method` is split into a fixed half and a
+  dynamic half, and an unknown method is an internal error. `fill`, `reverse` and the dynamic
+  `free` are counted walks. With the argv loop (#877) and the earlier moves, every hand loop
+  left in `KNOWN_HAND_LOOPS` has its reason (#852).
+- **An index slot is a closed set** (#877). `emit_element_pointer` tests the slot type once;
+  any other type is an internal error, never an unchecked GEP.
+- **The optimizer pipelines and the primitive `to_str` generator read one table each** (#882,
+  #883). O3's duplicate `global_dead_code_eliminate` is gone and an unknown mode is an internal
+  error; the twelve `to_str` wrappers are one loop, and `core/primitives.bc` is byte-identical.
 - **One growth block, one memmove, one checked Maybe for List and arrays** (#874).
   `emit_grow_to_fit` (the policy -- double or exact -- a parameter) serves `List.push`,
   `List.insert`, `List.reserve`, `T[].push` and `T[].extend`; `emit_memmove_bytes` beside

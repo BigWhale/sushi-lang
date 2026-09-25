@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
 from sushi_lang.backend.memory.heap import emit_malloc
-from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.generics.container_walk import emit_container_walk
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -40,47 +40,21 @@ def populate_string_array_from_argv(
     builder = codegen.builder
     zero_i32 = ir.Constant(codegen.i32, 0)
     one_i32 = ir.Constant(codegen.i32, 1)
-
+    two_i32 = ir.Constant(codegen.i32, 2)
     strlen_func = codegen.runtime.libc_strings.strlen
 
-    loop_cond = builder.append_basic_block(name="argv_loop_cond")
-    loop_body = builder.append_basic_block(name="argv_loop_body")
-    loop_end = builder.append_basic_block(name="argv_loop_end")
+    def store_one(argv_i_ptr: ir.Value, index: ir.Value) -> None:
+        argv_i = builder.load(argv_i_ptr, name="argv_i")
+        strlen_result = builder.call(strlen_func, [argv_i], name="strlen_result")
+        string_slot = builder.gep(target_array_data, [index], name="string_slot")
+        builder.store(argv_i, builder.gep(string_slot, [zero_i32, zero_i32], name="ptr_field"))
+        builder.store(strlen_result, builder.gep(string_slot, [zero_i32, one_i32], name="len_field"))
+        # argv strings alias C process memory - a borrowed view, never heap-owned.
+        # Leaving this byte as malloc garbage risks the RAII destructor free()ing argv.
+        builder.store(ir.Constant(codegen.i8, 0),
+                      builder.gep(string_slot, [zero_i32, two_i32], name="owned_field"))
 
-    counter = entry_alloca(builder, codegen.i32, name="argv_counter")
-    builder.store(zero_i32, counter)
-    builder.branch(loop_cond)
-
-    builder.position_at_end(loop_cond)
-    counter_val = builder.load(counter, name="counter")
-    cmp = builder.icmp_signed("<", counter_val, argc, name="loop_cond")
-    builder.cbranch(cmp, loop_body, loop_end)
-
-    builder.position_at_end(loop_body)
-    counter_val = builder.load(counter, name="counter")
-
-    argv_i_ptr = builder.gep(argv, [counter_val], name="argv_i_ptr")
-    argv_i = builder.load(argv_i_ptr, name="argv_i")
-
-    strlen_result = builder.call(strlen_func, [argv_i], name="strlen_result")
-
-    string_slot = builder.gep(target_array_data, [counter_val], name="string_slot")
-
-    two_i32 = ir.Constant(codegen.i32, 2)
-    ptr_field = builder.gep(string_slot, [zero_i32, zero_i32], name="ptr_field")
-    len_field = builder.gep(string_slot, [zero_i32, one_i32], name="len_field")
-    owned_field = builder.gep(string_slot, [zero_i32, two_i32], name="owned_field")
-    builder.store(argv_i, ptr_field)
-    builder.store(strlen_result, len_field)
-    # argv strings alias C process memory - a borrowed view, never heap-owned.
-    # Leaving this byte as malloc garbage risks the RAII destructor free()ing argv.
-    builder.store(ir.Constant(codegen.i8, 0), owned_field)
-
-    next_counter = builder.add(counter_val, one_i32, name="next_counter")
-    builder.store(next_counter, counter)
-    builder.branch(loop_cond)
-
-    builder.position_at_end(loop_end)
+    emit_container_walk(codegen, argv, argc, store_one, prefix="argv")
 
 
 def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: ir.Value) -> ir.Value:

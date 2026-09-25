@@ -71,46 +71,39 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
             if const_index >= array_size:
                 raise_internal_error("CE2057", index=const_index, size=array_size)
 
-    # Add runtime bounds checking. Both fixed and dynamic arrays trap RE2020 on
-    # an out-of-bounds direct index; the difference is only where the size comes
-    # from (a compile-time count vs. a loaded length field).
     from sushi_lang.backend import gep_utils
     from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
 
+    # An indexable slot holds a FIXED array or a DYNAMIC array's anonymous {i32, i32, T*}
+    # descriptor, and nothing else. A user struct is an identified type since #257, so it
+    # cannot match the literal arm by shape. The base pointer is emitted after the check.
     array_type = array_slot.type.pointee
-    # The LiteralStructType arms here and in the element-GEP below stay literal on purpose
-    # (#257). This is a two-way discrimination between a FIXED array (ir.ArrayType) and a
-    # DYNAMIC array's anonymous {i32, i32, T*} descriptor -- the only two things an indexable
-    # slot can hold. A user struct is never indexed with `[]`, and since #257 it is an
-    # identified type, so it cannot reach either arm by shape coincidence.
-    if isinstance(array_type, ir.ArrayType):
-        size_value = ir.Constant(codegen.i32, array_type.count)
-        emit_bounds_check(codegen, index_value, size_value, prefix="array")
-    elif isinstance(array_type, ir.LiteralStructType):
-        len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_slot, "len_ptr")
-        size_value = codegen.builder.load(len_ptr, name="array_len")
-        emit_bounds_check(codegen, index_value, size_value, prefix="dynarray")
+    match array_type:
+        case ir.ArrayType():
+            size_value: ir.Value = ir.Constant(codegen.i32, array_type.count)
+            prefix, base_of = "array", _fixed_array_base
+        case ir.LiteralStructType():
+            len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_slot, "len_ptr")
+            size_value = codegen.builder.load(len_ptr, name="array_len")
+            prefix, base_of = "dynarray", _dynamic_array_base
+        case _:
+            raise_internal_error("CE0022", type=str(array_type))
 
-    # Use GEP to get pointer to the array element
-    # llvmlite's GEP validation requires constant indices for structs and arrays
-    # Workaround: Convert to element pointer first, then use single-index GEP
+    emit_bounds_check(codegen, index_value, size_value, prefix=prefix)
+    # A single-index GEP off the base: llvmlite wants a constant index into an aggregate.
+    return gep_utils.gep_array_element(codegen, base_of(codegen, array_slot), index_value,
+                                       "elem_ptr")
+
+
+def _fixed_array_base(codegen: 'LLVMCodegen', array_slot: ir.Value) -> ir.Value:
     zero = ir.Constant(codegen.i32, 0)
+    return codegen.builder.gep(array_slot, [zero, zero], name="first_elem")
 
-    if isinstance(array_type, ir.ArrayType):
-        # Fixed array: Get pointer to first element, then use pointer arithmetic
-        # This avoids llvmlite's .constant validation for the second index
-        first_elem_ptr = codegen.builder.gep(array_slot, [zero, zero], name="first_elem")
-        element_ptr = gep_utils.gep_array_element(codegen, first_elem_ptr, index_value, "elem_ptr")
-    elif isinstance(array_type, ir.LiteralStructType):
-        # Dynamic array struct: Extract data pointer, then use pointer arithmetic
-        # This avoids llvmlite's .constant validation for struct field indices
-        data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_slot, "data_ptr")
-        data_ptr = codegen.builder.load(data_ptr_ptr, name="array_data")
-        element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "elem_ptr")
-    else:
-        element_ptr = codegen.builder.gep(array_slot, [zero, index_value])
 
-    return element_ptr
+def _dynamic_array_base(codegen: 'LLVMCodegen', array_slot: ir.Value) -> ir.Value:
+    from sushi_lang.backend import gep_utils
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_slot, "data_ptr")
+    return codegen.builder.load(data_ptr_ptr, name="array_data")
 
 
 def _finish_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, result: ir.Value,

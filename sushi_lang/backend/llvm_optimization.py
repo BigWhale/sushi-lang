@@ -2,12 +2,71 @@
 from __future__ import annotations
 
 import typing
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Callable, Dict, NamedTuple
 
 from llvmlite import binding as llvm
 from sushi_lang.internals.errors import raise_internal_error
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
+
+_F = llvm.FunctionPassManager
+_M = llvm.ModulePassManager
+_FunctionPass = Callable[[llvm.FunctionPassManager], None]
+_ModulePass = Callable[[llvm.ModulePassManager], None]
+
+
+class _Pipeline(NamedTuple):
+    speed_level: int
+    function_passes: tuple[_FunctionPass, ...]
+    module_passes: tuple[_ModulePass, ...]
+
+
+_O2_CANONICALIZE: tuple[_FunctionPass, ...] = (
+    _F.add_sroa_pass, _F.add_simplify_cfg_pass,
+    _F.add_sccp_pass, _F.add_instruction_combine_pass, _F.add_reassociate_pass,
+    _F.add_jump_threading_pass, _F.add_simplify_cfg_pass,
+    _F.add_loop_simplify_pass, _F.add_lcssa_pass, _F.add_loop_rotate_pass,
+)
+_O2_REDUNDANCY: tuple[_FunctionPass, ...] = (_F.add_instruction_combine_pass, _F.add_new_gvn_pass)
+_O2_MEMORY: tuple[_FunctionPass, ...] = (_F.add_mem_copy_opt_pass, _F.add_dead_store_elimination_pass)
+_O2_CLEANUP: tuple[_FunctionPass, ...] = (
+    _F.add_aggressive_dce_pass, _F.add_simplify_cfg_pass, _F.add_tail_call_elimination_pass,
+)
+_O2_INTERPROCEDURAL: tuple[_ModulePass, ...] = (
+    _M.add_global_opt_pass, _M.add_ipsccp_pass, _M.add_dead_arg_elimination_pass,
+)
+_O2_MODULE_CLEANUP: tuple[_ModulePass, ...] = (
+    _M.add_global_dead_code_eliminate_pass, _M.add_constant_merge_pass,
+    _M.add_strip_dead_prototype_pass,
+)
+
+# O3 is the O2 segments in the O2 order, with its own passes put between them.
+_PIPELINES: dict[str, _Pipeline] = {
+    "o1": _Pipeline(
+        1,
+        (_F.add_sroa_pass, _F.add_simplify_cfg_pass, _F.add_instruction_combine_pass,
+         _F.add_dead_code_elimination_pass),
+        (_M.add_global_dead_code_eliminate_pass, _M.add_strip_dead_prototype_pass),
+    ),
+    "o2": _Pipeline(
+        2,
+        _O2_CANONICALIZE + (_F.add_loop_deletion_pass,) + _O2_REDUNDANCY + _O2_MEMORY
+        + _O2_CLEANUP,
+        _O2_INTERPROCEDURAL + _O2_MODULE_CLEANUP,
+    ),
+    "o3": _Pipeline(
+        3,
+        _O2_CANONICALIZE
+        + (_F.add_loop_unroll_pass, _F.add_loop_deletion_pass, _F.add_loop_strength_reduce_pass)
+        + _O2_REDUNDANCY + (_F.add_aggressive_instcombine_pass,)
+        + _O2_MEMORY
+        + (_F.add_sinking_pass, _F.add_instruction_combine_pass, _F.add_simplify_cfg_pass)
+        + _O2_CLEANUP,
+        _O2_INTERPROCEDURAL + (_M.add_argument_promotion_pass, _M.add_merge_functions_pass)
+        + _O2_MODULE_CLEANUP,
+    ),
+}
 
 
 class LLVMOptimizer:
@@ -47,125 +106,27 @@ class LLVMOptimizer:
 
     @staticmethod
     def _apply_standard_optimization(llmod: llvm.ModuleRef, tm: llvm.TargetMachine, mode: str) -> None:
-        """Apply standard O1/O2/O3 optimization pipelines."""
-        levels = {"o1": 1, "o2": 2, "o3": 3}
-        level = levels.get(mode, 1)
+        """Apply the O1/O2/O3 pipeline that `_PIPELINES` holds for `mode`."""
+        pipeline = _PIPELINES.get(mode)
+        if pipeline is None:
+            raise_internal_error("CE0000", detail=f"no optimization pipeline for mode '{mode}'")
+            return
 
-        pto = llvm.PipelineTuningOptions(speed_level=level, size_level=0)
+        pto = llvm.PipelineTuningOptions(speed_level=pipeline.speed_level, size_level=0)
         pb = llvm.PassBuilder(tm, pto)
 
         fpm = llvm.create_new_function_pass_manager()
+        for add_function_pass in pipeline.function_passes:
+            add_function_pass(fpm)
         mpm = llvm.create_new_module_pass_manager()
-
-        if mode == "o1":
-            LLVMOptimizer._build_o1_pipeline(fpm, mpm)
-        elif mode == "o2":
-            LLVMOptimizer._build_o2_pipeline(fpm, mpm)
-        elif mode == "o3":
-            LLVMOptimizer._build_o3_pipeline(fpm, mpm)
+        for add_module_pass in pipeline.module_passes:
+            add_module_pass(mpm)
 
         for fn in llmod.functions:
             if not fn.is_declaration:
                 fpm.run(fn, pb)
 
         mpm.run(llmod, pb)
-
-    @staticmethod
-    def _build_o1_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O1 optimization pipeline with basic optimizations."""
-        fpm.add_sroa_pass()
-
-        fpm.add_simplify_cfg_pass()
-        fpm.add_instruction_combine_pass()
-
-        fpm.add_dead_code_elimination_pass()
-
-        mpm.add_global_dead_code_eliminate_pass()
-        mpm.add_strip_dead_prototype_pass()
-
-    @staticmethod
-    def _build_o2_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O2 optimization pipeline with moderate optimizations."""
-        fpm.add_sroa_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_sccp_pass()  # Sparse conditional constant propagation
-        fpm.add_instruction_combine_pass()
-        fpm.add_reassociate_pass()
-
-        fpm.add_jump_threading_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_loop_simplify_pass()
-        fpm.add_lcssa_pass()  # Loop-closed SSA form
-        fpm.add_loop_rotate_pass()
-        fpm.add_loop_deletion_pass()
-
-        fpm.add_instruction_combine_pass()
-        fpm.add_new_gvn_pass()  # Global value numbering (redundancy elimination)
-
-        fpm.add_mem_copy_opt_pass()
-        fpm.add_dead_store_elimination_pass()
-
-        fpm.add_aggressive_dce_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_tail_call_elimination_pass()
-
-        mpm.add_global_opt_pass()
-        mpm.add_ipsccp_pass()  # Interprocedural SCCP
-        mpm.add_dead_arg_elimination_pass()
-        mpm.add_global_dead_code_eliminate_pass()
-        mpm.add_constant_merge_pass()
-        mpm.add_strip_dead_prototype_pass()
-
-    @staticmethod
-    def _build_o3_pipeline(fpm: Any, mpm: Any) -> None:
-        """Build O3 optimization pipeline with aggressive optimizations."""
-        fpm.add_sroa_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_sccp_pass()
-        fpm.add_instruction_combine_pass()
-        fpm.add_reassociate_pass()
-
-        fpm.add_jump_threading_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_loop_simplify_pass()
-        fpm.add_lcssa_pass()
-        fpm.add_loop_rotate_pass()
-        fpm.add_loop_unroll_pass()  # Aggressive unrolling
-        fpm.add_loop_deletion_pass()
-        fpm.add_loop_strength_reduce_pass()  # Loop strength reduction
-
-        fpm.add_instruction_combine_pass()
-        fpm.add_new_gvn_pass()
-        fpm.add_aggressive_instcombine_pass()  # More aggressive than standard
-
-        fpm.add_mem_copy_opt_pass()
-        fpm.add_dead_store_elimination_pass()
-
-        fpm.add_sinking_pass()
-
-        fpm.add_instruction_combine_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_aggressive_dce_pass()
-        fpm.add_simplify_cfg_pass()
-
-        fpm.add_tail_call_elimination_pass()
-
-        mpm.add_global_opt_pass()
-        mpm.add_ipsccp_pass()
-        mpm.add_dead_arg_elimination_pass()
-        mpm.add_argument_promotion_pass()  # Promote by-reference args to by-value
-        mpm.add_merge_functions_pass()  # Merge identical functions
-        mpm.add_global_dead_code_eliminate_pass()
-        mpm.add_constant_merge_pass()
-        mpm.add_strip_dead_prototype_pass()
-
-        mpm.add_global_dead_code_eliminate_pass()
 
     @staticmethod
     def verify(llmod: llvm.ModuleRef, when: str = "unspecified") -> None:

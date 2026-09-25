@@ -1,0 +1,17 @@
+# A `continue` in a `foreach` over `keys()` goes to the next bucket (#893).
+# The loop must skip key 1 and add key 2.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "total 2\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 10)
+    m.insert(2, 20)
+    let i32 total = 0
+    foreach(k in m.keys()):
+        if (k == 1):
+            continue
+        total := total + k
+    println("total {total}")
+    return Result.Ok(0)

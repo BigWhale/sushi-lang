@@ -27,7 +27,7 @@ def emit_break(codegen: 'LLVMCodegen') -> None:
 
 
 def emit_continue(codegen: 'LLVMCodegen') -> None:
-    """Emit continue statement (jump to loop condition)."""
+    """Emit continue statement (jump to the block that advances the loop)."""
     if not codegen.loop_stack:
         raise_internal_error("CE0015", message="'continue' outside a loop reached the backend")
     cont_bb, _, scope_boundary = codegen.loop_stack[-1]
@@ -58,7 +58,8 @@ def loop_frame(codegen: 'LLVMCodegen', continue_bb: 'ir.Block', break_bb: 'ir.Bl
     """Open the frame of one loop body at the current block, and close it on exit.
 
     The loop-stack entry is the contract with `emit_break` and `emit_continue`: an early
-    exit cleans up only the scopes above the recorded depth. On exit the body scope and
+    exit cleans up only the scopes above the recorded depth. `continue_bb` must be the
+    block that advances the loop to its next element (#893). On exit the body scope and
     the entry are popped, and the back edge is added when the block has no terminator.
     """
     codegen.loop_stack.append((continue_bb, break_bb, codegen.memory.depth + 1))
@@ -347,7 +348,7 @@ def _emit_hashmap_foreach(
     codegen.builder.cbranch(is_occupied, body_bb, increment_bb)
 
     codegen.builder.position_at_end(body_bb)
-    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb,
+    with loop_frame(codegen, continue_bb=increment_bb, break_bb=end_bb,
                     back_edge=increment_bb) as frame:
         # The item binding is a read-only BORROW of the map's entry, exactly as the array
         # path is: the shallow-loaded key/value aliases the buffers the map's own
