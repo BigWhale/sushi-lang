@@ -1,0 +1,13 @@
+# The literal rule holds behind an alias as well: m.max(b, 1) is a u32 (#842).
+# EXPECT_STDOUT_EXACT: "4000000000\n1\n4000000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math> as m
+
+fn main() i32:
+    let u32 b = 4000000000
+    let u32 hi = m.max(b, 1)
+    let u32 lo = m.min(1, b)
+    println("{hi}")
+    println("{lo}")
+    println("{m.max(1, b)}")
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# A bare literal argument of min or max takes the type of the other argument (#842).
+# EXPECT_STDOUT_EXACT: "200\n3\n200\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    let u8 b = 200
+    let u8 hi = max(b, 3)
+    let u8 lo = min(3, b)
+    println("{hi}")
+    println("{lo}")
+    println("{max(3, b)}")
+    println("{min(b, 3)}")
+    return Result.Ok(0)
