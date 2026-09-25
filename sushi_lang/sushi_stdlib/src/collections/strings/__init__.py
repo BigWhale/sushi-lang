@@ -67,7 +67,6 @@ from .methods.parse import (
     emit_string_to_i64,
     emit_string_to_f64,
 )
-from sushi_lang.semantics.generics.type_display import display_type
 
 
 @dataclass(frozen=True)
@@ -145,25 +144,12 @@ METHOD_SPECS = {name: _spec(name, args, returns) for name, args, returns in (
 _INLINE_RETURNS = {"is_empty": _BOOL, "clone": _S}
 
 
-def _validate_method_signature(call: MethodCall, spec: MethodSpec, reporter: Any, validator: Any = None) -> None:
-    """Generic validation for string method signatures."""
-    if len(call.args) != spec.arg_count:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=spec.name, expected=spec.arg_count, got=len(call.args))
-        return
-
-    # Validate argument types if validator is available. Only a scalar parameter is
-    # checked here: `join`'s string[] argument is not, as before the row held it.
-    if validator:
-        for i, (arg, expected_type) in enumerate(zip(call.args, spec.arg_types, strict=True)):
-            if not isinstance(expected_type, BuiltinType):
-                continue
-            validator.validate_expression(arg)
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and arg_type != expected_type:
-                expected_name = "string" if expected_type == BuiltinType.STRING else "int"
-                er.emit(reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=expected_name, got=display_type(arg_type))
+def _validate_method_signature(call: MethodCall, spec: MethodSpec, validator: Any) -> None:
+    """Measure the call against its row: the count, then every parameter's declared type."""
+    from sushi_lang.semantics.passes.types.arguments import check_arguments
+    check_arguments(validator, spec.name, spec.arg_types, call.args, call.loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                    stop_on_arity=True)
 
 
 def is_builtin_string_method(method_name: str) -> bool:
@@ -185,7 +171,7 @@ def validate_builtin_string_method_with_validator(call: MethodCall, string_type:
 
     spec = METHOD_SPECS.get(method_name)
     if spec:
-        _validate_method_signature(call, spec, reporter, validator)
+        _validate_method_signature(call, spec, validator)
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:

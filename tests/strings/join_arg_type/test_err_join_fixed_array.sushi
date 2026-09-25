@@ -1,0 +1,10 @@
+# string.join takes a string[]; a fixed array argument is refused at the argument.
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected string[], got i32[2]
+use <collections/strings>
+
+fn main() i32:
+    let string sep = ", "
+    let i32[2] nums = [1, 2]
+    println(sep.join(nums))
+    return Result.Ok(0)
