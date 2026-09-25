@@ -225,6 +225,14 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
 
     list_alloca = list_ptr
 
+    # Both arguments are evaluated, and the element consumed, before the bounds check
+    # (#869): a refused index still owns the element, and the Err path destroys it.
+    from sushi_lang.backend.ownership import ConsumingUse, consume
+    index_value = codegen.expressions.emit_expr(expr.args[0])
+    element_value = codegen.expressions.emit_expr(expr.args[1])
+    element_value = consume(codegen, expr.args[1], element_value, element_type,
+                            ConsumingUse.CONTAINER_INSERT)
+
     len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
     capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
     data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
@@ -232,8 +240,6 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
-
-    index_value = codegen.expressions.emit_expr(expr.args[0])
 
     # Bounds check: 0 <= index <= len (note: len is valid for append-like insert)
     zero = ir.Constant(codegen.types.i32, 0)
@@ -249,12 +255,23 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
 
     codegen.builder.position_at_end(out_of_bounds_block)
     from sushi_lang.semantics.typesys import BuiltinType
-    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
+    from sushi_lang.backend.generics.result_builder import build_err_from_return_type, intern_result
+    from sushi_lang.internals.errors import raise_internal_error
+    if needs_cleanup(codegen, element_type):
+        refused_slot = codegen.memory.entry_alloca(element_llvm_type, "insert_refused")
+        codegen.builder.store(element_value, refused_slot)
+        emit_value_destructor(codegen, refused_slot, element_type)
     std_error = codegen.enum_table.by_name.get("StdError")
-    result_type = ensure_result_type_in_table(codegen.enum_table, BuiltinType.BLANK, std_error, struct_table=codegen.struct_table.by_name)
+    result_type = intern_result(codegen, BuiltinType.BLANK, std_error) if std_error is not None else None
+    error_tag = std_error.get_variant_index("Error") if std_error is not None else None
+    if result_type is None or std_error is None or error_tag is None:
+        raise_internal_error("CE0091", type="Result@(~, StdError)")
     result_llvm_type = codegen.types.ll_type(result_type)
-    err_enum = ir.Constant(result_llvm_type, ir.Undefined)
-    err_enum = codegen.builder.insert_value(err_enum, ir.Constant(codegen.types.i32, 1), 0, name="Result_Err_tag")
+    std_error_llvm_type = codegen.types.ll_type(std_error)
+    error_value = ir.Constant(std_error_llvm_type, [ir.Constant(codegen.types.i32, error_tag),
+                                                    ir.Constant(std_error_llvm_type.elements[1], None)])
+    err_enum = build_err_from_return_type(codegen, result_type, error_value)
     err_block = codegen.builder.block
     codegen.builder.branch(end_block)
 
@@ -322,11 +339,6 @@ def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Str
         is_volatile = FALSE_I1
         bytes_to_move_i64 = codegen.builder.zext(bytes_to_move, codegen.types.i64)
         codegen.builder.call(memmove_fn, [dest_i8, src_i8, bytes_to_move_i64, is_volatile])
-
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-    element_value = codegen.expressions.emit_expr(expr.args[1])
-    element_value = consume(codegen, expr.args[1], element_value, element_type,
-                            ConsumingUse.CONTAINER_INSERT)
 
     insert_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "insert_ptr")
     codegen.builder.store(element_value, insert_ptr)

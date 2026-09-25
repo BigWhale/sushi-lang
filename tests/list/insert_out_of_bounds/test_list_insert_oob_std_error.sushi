@@ -1,0 +1,16 @@
+# The Err of an out-of-bounds List.insert carries a real StdError.Error (#869).
+# EXPECT_STDOUT_EXACT: "std error\nlen 1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn main() i32:
+    let List@(string) l = List.new()
+    l.push("first".concat("!"))
+    match l.insert(7, "late".concat("!")):
+        Result.Ok(_) -> println("ok")
+        Result.Err(e) ->
+            match e:
+                StdError.Error -> println("std error")
+    println("len {l.len()}")
+    return Result.Ok(0)
