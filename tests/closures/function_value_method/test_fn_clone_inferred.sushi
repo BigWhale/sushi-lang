@@ -1,0 +1,17 @@
+# The clone of a function value has the type of the value, so it binds to the same
+# function type, and to a second clone of the clone (#771).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n43\n"
+# EXPECT_NO_LEAKS
+fn twice(i32 x) i32:
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    let i32 k = 1
+    let fn(i32) -> i32 f = twice
+    let fn(i32) -> i32 g = f.clone()
+    let fn(i32) -> i32 add = |i32 x| x + k
+    let fn(i32) -> i32 h = add.clone().clone()
+    println(g(21).realise(0))
+    println(h(42).realise(0))
+    return Result.Ok(0)

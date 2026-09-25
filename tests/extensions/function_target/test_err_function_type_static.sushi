@@ -1,0 +1,8 @@
+# A static on a function type is refused at the target like an instance method
+# (#771).
+# EXPECT_ERROR_CODE: CE2110
+extend fn(i32) -> i32 static seven() i32:
+    return 7
+
+fn main() i32:
+    return Result.Ok(0)
