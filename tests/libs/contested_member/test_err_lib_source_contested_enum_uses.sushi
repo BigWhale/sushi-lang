@@ -1,0 +1,21 @@
+# A consumer's enum `Point` beside a source library's public struct `Point` is CE0006.
+# A variant construction and a `match` on the name are not judged against the
+# library's struct (the pytest gate tests/unit/test_contested_type_name_uses.py pins
+# the complete code list).
+# EXPECT_ERROR_CODE: CE0006
+use <lib/types_lib>
+
+enum Point:
+    Empty
+    Some(i32)
+
+fn main() i32:
+    let Point p = Point.Empty
+    let Point q = Point.Some(3)
+    match p:
+        Point.Empty -> println("e")
+        Point.Some(v) -> println("{v}")
+    match q:
+        Point.Empty -> println("e")
+        Point.Some(v) -> println("{v}")
+    return Result.Ok(0)

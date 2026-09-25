@@ -1,0 +1,23 @@
+# The control for the contested-name fixtures: the same variant construction and the
+# same `match`, against an enum whose name no other unit takes, compile and run.
+# EXPECT_RUNTIME_EXIT: 3
+# EXPECT_STDOUT_EXACT: "e\n"
+use "helpers/acc_struct"
+
+enum Tally:
+    Empty
+    Some(i32)
+
+fn pick(Tally a) i32:
+    match a:
+        Tally.Empty -> return Result.Ok(0)
+        Tally.Some(v) -> return Result.Ok(v)
+
+fn main() i32:
+    let Tally p = Tally.Empty
+    let Tally q = Tally.Some(3)
+    match p:
+        Tally.Empty -> println("e")
+        Tally.Some(v) -> println("{v}")
+    let i32 r = pick(q).realise(0) + one().realise(0) - 1
+    return Result.Ok(r)

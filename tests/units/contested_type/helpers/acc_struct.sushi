@@ -1,0 +1,7 @@
+##: A unit that takes the type name `Acc` for a struct. :##
+
+struct Acc:
+    i32 n
+
+public fn one() i32:
+    return Result.Ok(1)

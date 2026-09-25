@@ -1,0 +1,24 @@
+# A unit declares an enum whose name another unit already took for a struct. The
+# declaration is the one fault (CE0006). A variant construction and a `match` on the
+# name are not judged against the other unit's struct. The pytest gate
+# tests/unit/test_contested_type_name_uses.py pins the complete code list.
+# EXPECT_ERROR_CODE: CE0006
+use "helpers/acc_struct"
+
+enum Acc:
+    Empty
+    Some(i32)
+
+fn pick(Acc a) i32:
+    match a:
+        Acc.Empty -> return Result.Ok(0)
+        Acc.Some(v) -> return Result.Ok(v)
+
+fn main() i32:
+    let Acc p = Acc.Empty
+    let Acc q = Acc.Some(3)
+    match p:
+        Acc.Empty -> println("e")
+        Acc.Some(v) -> println("{v}")
+    let i32 r = pick(q).realise(0)
+    return Result.Ok(r)

@@ -1,0 +1,20 @@
+# A unit declares a struct whose name another unit already took for a struct. The
+# declaration is the one fault (CE0004). A construction, positional or named, and a
+# field read are not judged against the other unit's fields. The pytest gate
+# tests/unit/test_contested_type_name_uses.py pins the complete code list.
+# EXPECT_ERROR_CODE: CE0004
+use "helpers/acc_struct"
+
+struct Acc:
+    string tag
+    i32 m
+
+fn show(Acc a) i32:
+    return Result.Ok(a.m)
+
+fn main() i32:
+    let Acc p = Acc("p", 3)
+    let Acc q = Acc(tag: "q", m: 4)
+    println("{p.tag} {q.m}")
+    let i32 z = show(p).realise(0)
+    return Result.Ok(z)

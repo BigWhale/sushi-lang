@@ -32,6 +32,14 @@ def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
 
     struct_type = validator.struct_table.by_name[struct_name]
 
+    # A struct name this unit lost (#863): the fields are the winner's, and the
+    # declaration's CE0004 / CE0006 is the one fault. The arguments are still checked.
+    if name_is_contested(validator, "struct", struct_name):
+        call.field_names = None
+        for arg in call.args:
+            validator.validate_expression(arg)
+        return
+
     expected_fields = list(struct_type.fields)
 
     field_names = getattr(call, 'field_names', None)
@@ -87,8 +95,7 @@ def _validate_positional_struct_constructor(
     """Validate positional struct constructor (existing logic)."""
     actual_args = call.args
 
-    if (len(actual_args) != len(expected_fields)
-            and not name_is_contested(validator, "struct", struct_type.name)):
+    if len(actual_args) != len(expected_fields):
         er.emit(validator.reporter, er.ERR.CE2027, call.callee.loc,
                name=display_type(struct_type), expected=len(expected_fields),
                got=len(actual_args))
