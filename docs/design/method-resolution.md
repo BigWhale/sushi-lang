@@ -67,21 +67,28 @@ Two rules follow, and both are load-bearing:
 ## The built-in families
 
 `builtin_method_exists(receiver_type, method_name)` in
-`semantics/generics/builtin_methods.py` is the single seam. It mirrors the family TABLE's
-receiver dispatch, family for family:
+`semantics/generics/builtin_methods.py:builtin_method_exists` is the question CE2097 asks,
+and it holds no list of its own: it asks the family TABLE
+(`semantics/passes/types/method_registry.py`). Each family carries an ANSWER -- does the
+compiler define this name on this receiver, with no perk question -- and the claim the
+typecheck pass reads is that answer, less a call that a perk implementation takes for a
+family that yields to one. So the seam and the pass read one list (#812):
 
 - **arrays** (fixed and dynamic) -- `len`, `get`, `push`, `pop`, `iter`, `clone`, `hash`, ...
 - **string** -- the stdlib string methods, plus the primitive `to_str`/`hash`
-- **stdio** (`stdin`/`stdout`/`stderr`) and **File**
-- **primitives** -- `to_str`, `hash`, and the float-only `to_bits`
+- **primitives** -- `to_str`, `hash`, `clone`, and the float-only `to_bits`
 - **containers** -- `Result`, `Maybe`, `Own`, `List`, `HashMap`
+- **function values** -- `clone`
 - **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in the derive pass for every
   struct and enum
 
-`tests/unit/test_builtin_method_seam.py` pins that list against the family table's in both
-directions. It used to read `validate_method_call`; once the arms became table rows, a gate
-left pointing there would have compared one family against ten and passed vacuously. Two places answering one question drift; that is the #248 lesson (*if the
-same question is asked in six places, the fix is a seam, not a fallback*).
+A perk implementation changes the claim and not the answer: it is the sanctioned override,
+so an extension of a built-in name is still CE2097. `tests/unit/test_builtin_method_seam.py`
+holds the seam and the table equal over a matrix of receivers and names, with the names
+read from each family's own table. It used to compare the predicate NAMES spelled in the
+two files, which a predicate reached through a helper defeated. Two places answering one
+question drift; that is the #248 lesson (*if the same question is asked in six places,
+the fix is a seam, not a fallback*).
 
 ## The family order
 

@@ -1,72 +1,180 @@
 """The built-in-method seam and the typecheck pass must recognise the same families.
 
-The pass states its families in ONE place since #751: the family table in
-`semantics/passes/types/method_registry.py`, which the inference half and the
-validation half both read. That table is what this file measures the seam against.
+`builtin_method_exists` (CE2097) and the family table in
+`semantics/passes/types/method_registry.py` answer one question: is this name a
+compiler-defined method on this receiver type. This file holds the two answers equal over
+a MATRIX of receivers and names, and reads each family's own name table to build the
+names. A family that one side knows and the other does not makes a cell disagree.
 """
 from __future__ import annotations
-
-import re
-from pathlib import Path
 
 import pytest
 
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
+from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
+from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
+from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_RETURNS
+from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
+from sushi_lang.semantics.passes.types.arrays import _ARRAY_METHODS
+from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
     DynamicArrayType,
     EnumType,
+    FunctionType,
     ReferenceType,
     StructType,
 )
+from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
 
-SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-SEAM = SOURCE_ROOT / "semantics" / "generics" / "builtin_methods.py"
-FAMILY_TABLE = SOURCE_ROOT / "semantics" / "passes" / "types" / "method_registry.py"
 
-# How a built-in family is recognised in either file.
-FAMILY_PREDICATE = re.compile(
-    r"\b(is_builtin_\w+_method|has_primitive_method|derived_methods)\b"
+class _Derived:
+    """A stand-in for a derived method: the table keys it by its name."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+def _struct(name: str, base: str | None = None) -> StructType:
+    return StructType(name=name, fields=(), generic_base=base)
+
+
+def _enum(name: str, base: str | None = None) -> EnumType:
+    return EnumType(name=name, variants=(), generic_base=base)
+
+
+_POINT = _struct("Point")
+_BARE = _struct("Bare")
+_COLOUR = _enum("Colour")
+_PLAIN = _enum("Plain")
+_LIST = _struct("List<i32>", "List")
+_HASHMAP = _struct("HashMap<i32, string>", "HashMap")
+_OWN = _struct("Own<i32>", "Own")
+_RESULT = _enum("Result<i32, StdError>", "Result")
+_MAYBE = _enum("Maybe<i32>", "Maybe")
+
+
+def _derived_table() -> DerivedMethodTable:
+    """What the `derive` pass writes: hash and clone on the user types that derive them,
+    hash on the containers that hash what they hold, and nothing on `Bare`/`Plain`."""
+    table = DerivedMethodTable()
+    for ty in (_POINT, _COLOUR, _RESULT, _MAYBE):
+        table.register_method(ty, _Derived("hash"))
+        table.register_method(ty, _Derived("clone"))
+    for ty in (_LIST, _OWN):
+        table.register_method(ty, _Derived("hash"))
+    return table
+
+
+DERIVED = _derived_table()
+
+
+class _NoPerks:
+    """No perk implementation: the claim and the seam then ask the same question."""
+
+    def get_method(self, target_type, method_name):
+        return None
+
+
+class _Validator:
+    perk_impl_table = _NoPerks()
+    derived_methods = DERIVED
+
+
+#: Every built-in family, a user struct and enum with and without a derived method, a
+#: reference, and an array of each kind.
+RECEIVERS = (
+    DynamicArrayType(BuiltinType.I32),
+    ArrayType(BuiltinType.I32, 3),
+    BuiltinType.STRING,
+    BuiltinType.I32,
+    BuiltinType.U8,
+    BuiltinType.F32,
+    BuiltinType.F64,
+    BuiltinType.BOOL,
+    _RESULT, _MAYBE, _OWN, _HASHMAP, _LIST,
+    _POINT, _BARE, _COLOUR, _PLAIN,
+    FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,
+                 err_type=BuiltinType.I32),
+    ReferenceType(referenced_type=DynamicArrayType(BuiltinType.I32)),
+    ReferenceType(referenced_type=_POINT),
+    ReferenceType(referenced_type=_LIST),
 )
 
-# Families the family table consults that the seam deliberately does not.
-#
-# Perk implementations are the sanctioned override -- they win at all three layers on
-# purpose, and CE2097's help text points users at them. Treating a perk method as a
-# shadowing built-in would remove the only escape hatch, since Sushi has no opt-out from
-# auto-derivation.
-SEAM_EXEMPT: frozenset[str] = frozenset()
+#: Each family's own names, read from the family's own table, plus a miss.
+NAMES = tuple(sorted(
+    set(_ARRAY_METHODS) | set(METHOD_SPECS) | {"is_empty", "clone", "hash"}
+    | set(RESULT_METHOD_ARITY) | set(MAYBE_METHOD_ARITY) | set(OWN_METHOD_ARITY)
+    | set(HASHMAP_METHOD_ARITY) | set(LIST_METHOD_ARITY) | set(PRIMITIVE_METHOD_RETURNS)
+    | {"no_such_method"}))
 
 
-def _families(path: Path) -> set[str]:
-    return set(FAMILY_PREDICATE.findall(path.read_text(encoding="utf-8")))
+def _deref(receiver):
+    if isinstance(receiver, ReferenceType):
+        return receiver.referenced_type
+    return receiver
 
 
-def test_seam_covers_every_family_validation_dispatches_on():
-    """A family the pass knows about but the seam does not means silent shadowing."""
-    missing = sorted(_families(FAMILY_TABLE) - _families(SEAM) - SEAM_EXEMPT)
-    assert not missing, (
-        f"the family table recognises these built-in families but the seam does not: "
-        f"{missing}. An extension method with one of those names would be compiled and "
-        f"then never called -- add it to builtin_method_exists."
-    )
+def _claimed(receiver, name):
+    """The families of the table that claim this pair. Both callers of the table deref a
+    borrow before they ask, so the matrix does the same."""
+    return [family.name for family in METHOD_TYPE_REGISTRY.families
+            if family.claims(_deref(receiver), name, _Validator())]
 
 
-def test_seam_claims_no_family_validation_does_not_have():
-    """The converse: a seam-only family would reject an extension that in fact works."""
-    extra = sorted(_families(SEAM) - _families(FAMILY_TABLE))
-    assert not extra, (
-        f"the seam recognises these built-in families but the family table does not: "
-        f"{extra}. CE2097 would reject an extension method that would have dispatched fine."
-    )
+def test_the_seam_and_the_family_table_agree_on_every_cell():
+    """One question, one answer: the seam says yes exactly where a family claims."""
+    disagree = []
+    for receiver in RECEIVERS:
+        for name in NAMES:
+            seam = builtin_method_exists(receiver, name, DERIVED)
+            table = bool(_claimed(receiver, name))
+            if seam != table:
+                disagree.append(f"{receiver}.{name}(): seam={seam} table={table}")
+    assert not disagree, (
+        "builtin_method_exists and METHOD_TYPE_REGISTRY disagree:\n  "
+        + "\n  ".join(disagree))
 
 
-def test_the_gate_can_actually_see_families():
-    """Guard against both sides silently reading as empty (a typo'd path, a renamed file)."""
-    assert len(_families(SEAM)) >= 8
-    assert len(_families(FAMILY_TABLE)) >= 8
+def test_the_matrix_reaches_every_family():
+    """The always-fires control: a family no cell reaches is a family the check above
+    asserted nothing about."""
+    seen = set()
+    for receiver in RECEIVERS:
+        for name in NAMES:
+            seen.update(_claimed(receiver, name))
+    unreached = sorted({family.name for family in METHOD_TYPE_REGISTRY.families} - seen)
+    assert not unreached, "the matrix never reaches: " + ", ".join(unreached)
+
+
+def test_the_matrix_holds_misses_as_well_as_hits():
+    """A matrix of hits alone cannot see a seam that says yes to everything."""
+    answers = {builtin_method_exists(r, n, DERIVED) for r in RECEIVERS for n in NAMES}
+    assert answers == {True, False}
+
+
+def test_a_perk_override_is_still_a_builtin_to_the_seam():
+    """A perk implementation is the sanctioned override: the TABLE yields to it, so the
+    call goes to the perk, but the name stays a compiler-defined method, and an
+    extension of that name is still CE2097."""
+
+    class _PerkOnEverything:
+        def get_method(self, target_type, method_name):
+            return object()
+
+    class _PerkValidator(_Validator):
+        perk_impl_table = _PerkOnEverything()
+
+    for receiver, name in ((BuiltinType.I32, "to_str"), (_POINT, "hash"),
+                           (_POINT, "clone")):
+        claimed = [family.name for family in METHOD_TYPE_REGISTRY.families
+                   if family.claims(receiver, name, _PerkValidator())]
+        assert claimed == []
+        assert builtin_method_exists(receiver, name, DERIVED) is True
 
 
 # Behaviour, per family
