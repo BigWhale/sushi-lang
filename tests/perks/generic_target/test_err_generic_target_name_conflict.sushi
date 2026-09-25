@@ -1,0 +1,19 @@
+# A perk method beside an extension method of one name on a generic target is CE4007.
+# The template is judged where it is written, so no instantiation is needed (#861).
+# EXPECT_ERROR_CODE: CE4007
+
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) sz() i32:
+    return 1
+
+extend Box@(T) with Sz:
+    fn sz() i32:
+        return 2
+
+fn main() i32:
+    return Result.Ok(0)
