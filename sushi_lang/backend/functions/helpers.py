@@ -91,7 +91,8 @@ class FunctionHelpers:
         zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
         self.codegen.builder.ret(zero_value)
 
-    def begin_function(self, llvm_fn: ir.Function, fn_def: FuncDef | None = None) -> None:
+    def begin_function(self, llvm_fn: ir.Function,
+                       fn_def: FuncDef | ExtendDef | None = None) -> None:
         """Initialize function emission context."""
         self.codegen.func = llvm_fn
         # The borrow pass stamps the names whose moves do not dominate their scope exit on the

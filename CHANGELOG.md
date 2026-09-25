@@ -1139,6 +1139,21 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **`LLVMCodegen` generates code; `LLVMDriver` compiles and links** (#841). The seven
+  compile and link methods moved to `backend/driver.py`, the print-frame stacks are one
+  `PrintFrames` object, both build paths share one declare-and-define walk, and six
+  forwarding properties with no reader are gone (`codegen_llvm.py` 1180 -> 726 lines). The
+  IR and the per-unit objects are unchanged over every fixture and every library helper.
+- **The clone-state maps are declared with the destructor twins** (#836), not made at first
+  use, and a multi-unit build saves and restores them the same way.
+- **One extension symbol** (#832). The perk-method call and the library templates spell the
+  symbol through `extension_symbol` (gate `tests/unit/test_extension_symbol_is_one.py`).
+- **The function manager takes no callbacks** (#837). The three collaborators read each
+  other through `codegen.functions`; one `emit_main` builds both `main` shapes with one
+  exit-code tail, and the user `main` and every other function share one body emitter.
+- **The operators refuse a width mismatch** (#840). The comparison and bitwise emitters
+  widened or squeezed mixed-width integers on a path the typecheck pass already closes (0
+  hits); a mixed pair is now the internal CE0139.
 - **No dead merge block, and no fake default return** (#849). An `if` or `match` whose every
   arm returns no longer leaves a merge block that nothing reaches. Such a block used to be
   closed with a declared-type `Result.Err` that no source line produced; now there is no

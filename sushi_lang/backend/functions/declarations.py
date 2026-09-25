@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
+from sushi_lang.semantics.typesys import GenericTypeRef, Type as Ty
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
+from sushi_lang.backend.functions.helpers import declared_result_of
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -25,6 +27,18 @@ def declaring_unit(fn: FuncDef, unit_name: str | None) -> str | None:
     return unit_name
 
 
+def prototype_result_of(codegen: 'LLVMCodegen', fn: FuncDef) -> Ty:
+    """The Result type a prototype declares for `fn`.
+
+    A library build can leave a spelled `Result@(T, E)` return unresolved; the prototype
+    keeps it as written, and `ll_type` resolves it. `declared_result_of` refuses that
+    form, so it answers every other return.
+    """
+    if isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result":
+        return fn.ret
+    return declared_result_of(codegen, fn)
+
+
 class FunctionDeclarations:
     """Handles LLVM function prototype generation."""
 
@@ -32,8 +46,7 @@ class FunctionDeclarations:
         """Initialize declarations handler with reference to main codegen instance."""
         self.codegen = codegen
 
-    def emit_func_decl(self, fn: FuncDef, params_of_fn, helpers,
-                       unit_name: str | None = None) -> ir.Function:
+    def emit_func_decl(self, fn: FuncDef, unit_name: str | None = None) -> ir.Function:
         """Create LLVM function prototype for regular function.
 
         `unit_name` is the unit whose declaration this is, and it decides the LLVM
@@ -68,23 +81,9 @@ class FunctionDeclarations:
                 llvm_fn.args[0].name = "argc"
                 llvm_fn.args[1].name = "argv"
         else:
-            params = params_of_fn(fn)
+            params = self.codegen.functions.helpers.params_of(fn)
             ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-            from sushi_lang.semantics.typesys import GenericTypeRef
-
-            from sushi_lang.semantics.generics.results import is_result_enum
-            from sushi_lang.backend.generics.result_builder import implicit_result_of
-
-            # An explicit `fn foo() Result<T, E>` is used as-is; anything else is implicitly
-            # wrapped. The interned enum counts as explicit -- wrapping it again would produce
-            # Result<Result<T, E>, StdError>.
-            is_explicit_result = (
-                is_result_enum(fn.ret) or
-                (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result")
-            )
-
-            result_ty = fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn)
-            ll_ret = self.codegen.types.ll_type(result_ty)
+            ll_ret = self.codegen.types.ll_type(prototype_result_of(self.codegen, fn))
 
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
             llvm_fn = ir.Function(self.codegen.module, fnty, name=symbol)
@@ -105,21 +104,14 @@ class FunctionDeclarations:
         self.codegen.funcs.declare(fn.name, llvm_fn, unit=unit_name)
 
         if fn.name != 'main' and fn.ret is not None:
-            is_explicit_result = (
-                is_result_enum(fn.ret) or
-                (isinstance(fn.ret, GenericTypeRef) and fn.ret.base_name == "Result")
-            )
             self.codegen.function_return_types.declare(
-                fn.name,
-                fn.ret if is_explicit_result else implicit_result_of(self.codegen, fn),
-                unit=unit_name,
-            )
+                fn.name, prototype_result_of(self.codegen, fn), unit=unit_name)
 
         return llvm_fn
 
-    def emit_extension_method_decl(self, ext: ExtendDef, get_name_fn) -> ir.Function:
+    def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
         """Create LLVM function prototype for extension method."""
-        func_name = get_name_fn(ext)
+        func_name = self.codegen.functions.helpers.get_extension_method_name(ext)
 
         param_types = []
         param_names = []

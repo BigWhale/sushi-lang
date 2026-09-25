@@ -365,10 +365,7 @@ def _emit_composite_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: T
     """Deep-clone a composite type, breaking self-referential cycles."""
     from sushi_lang.backend import lifecycle
     key = lifecycle.composite_type_key(value_type)
-    stack = getattr(codegen, "_clone_inprogress", None)
-    if stack is None:
-        stack = []
-        codegen._clone_inprogress = stack
+    stack = codegen._clone_inprogress
 
     if key in stack:
         fn = lifecycle.get_or_emit_lifecycle_func(codegen, value_type, "clone")

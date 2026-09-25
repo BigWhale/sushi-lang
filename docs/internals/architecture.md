@@ -524,7 +524,7 @@ Each unit's fingerprint is a SHA-256 hash of:
 - `compiler/pipeline.py` — orchestrates monolithic vs incremental compilation paths
 - `compiler/cache.py` — `CacheManager` class: directory management, manifest, staleness detection
 - `compiler/fingerprint.py` — `compute_unit_fingerprint()`, `compute_stdlib_fingerprint()`, `compute_lib_fingerprint()`
-- `backend/codegen_llvm.py` — `build_module_single_unit()`, `compile_single_unit_to_object()`, `link_object_files()`
+- `backend/codegen_llvm.py` — `build_module_single_unit()`; `backend/driver.py` — `compile_single_unit_to_object()`, `link_object_files()`
 
 ## Backend Architecture
 

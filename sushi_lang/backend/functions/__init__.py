@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
+from sushi_lang.semantics.typesys import Type as Ty
 
 from .helpers import FunctionHelpers, declare_stdlib_function
 from .declarations import FunctionDeclarations
@@ -29,48 +30,23 @@ class LLVMFunctionManager:
     def emit_func_decl(self, fn: FuncDef,
                        unit_name: str | None = None) -> ir.Function:
         """Create LLVM function prototype for regular function."""
-        return self.declarations.emit_func_decl(
-            fn,
-            params_of_fn=self.helpers.params_of,
-            helpers=self.helpers,
-            unit_name=unit_name,
-        )
+        return self.declarations.emit_func_decl(fn, unit_name)
 
     def emit_func_def(self, fn: FuncDef,
                       unit_name: str | None = None) -> ir.Function:
         """Define the body of a regular function."""
-        return self.definitions.emit_func_def(
-            fn,
-            unit_name=unit_name,
-            emit_func_decl_fn=self.emit_func_decl,
-            begin_function_fn=self.helpers.begin_function,
-            end_function_fn=self.helpers.end_function,
-            emit_default_return_fn=self.helpers.emit_default_return,
-            main_wrapper=self.main_wrapper
-        )
+        return self.definitions.emit_func_def(fn, unit_name)
 
     def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
         """Create LLVM function prototype for extension method."""
-        return self.declarations.emit_extension_method_decl(
-            ext,
-            get_name_fn=self.helpers.get_extension_method_name
-        )
+        return self.declarations.emit_extension_method_decl(ext)
 
     def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
         """Define the body of an extension method."""
-        return self.definitions.emit_extension_method_def(
-            ext,
-            get_name_fn=self.helpers.get_extension_method_name,
-            begin_function_fn=self.helpers.begin_function,
-            end_function_fn=self.helpers.end_function,
-            emit_default_return_for_extension_fn=self.helpers.emit_default_return_for_extension
-        )
+        return self.definitions.emit_extension_method_def(ext)
 
-    def _get_extension_method_name(self, ext: ExtendDef) -> str:
-        """Generate unique function name for extension method."""
-        return self.helpers.get_extension_method_name(ext)
-
-    def _extract_value_from_result_enum(self, result_enum, value_type, semantic_type):
+    def extract_value_from_result_enum(self, result_enum: ir.Value, value_type: ir.Type,
+                                       semantic_type: Ty) -> tuple[ir.Value, ir.Value]:
         """Extract the Ok value from a Result<T> enum."""
         return self.main_wrapper.extract_value_from_result_enum(
             result_enum, value_type, semantic_type

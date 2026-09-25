@@ -192,7 +192,7 @@ def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Val
     # The payload is read HERE and not in the condition block: on the last iteration the
     # answer is a None, whose payload bytes are zeroed and mean nothing.
     item_ll_type = codegen.types.ll_type(node.item_type)
-    _is_some, item_value = codegen.functions._extract_value_from_result_enum(
+    _is_some, item_value = codegen.functions.extract_value_from_result_enum(
         answer, item_ll_type, node.item_type)
 
     # The item is the Maybe's payload, and the Maybe is a temporary nobody else frees --

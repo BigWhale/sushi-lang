@@ -478,7 +478,9 @@ def codegen_for(analyzer: SemanticAnalyzer,
 def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                         is_library, stdlib_units, library_imports, library_linker) -> int:
     """Original single-module compilation path."""
+    from sushi_lang.backend.driver import LLVMDriver
     cg = codegen_for(analyzer, library_linker)
+    driver = LLVMDriver(cg)
 
     effective_cwd = get_effective_cwd()
     if args.out:
@@ -531,11 +533,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
         if kind == "source":
             bitcode = b""
         else:
-            bitcode = cg.compile_to_bitcode(compilation_order,
-                                            debug=bool(args.dump_ll), opt=args.opt,
-                                            verify=not args.no_verify,
-                                            monomorphized_extensions=monomorphized_extensions,
-                                            exported_private_functions=closure_fn_symbols)
+            bitcode = driver.compile_to_bitcode(compilation_order,
+                                                debug=bool(args.dump_ll), opt=args.opt,
+                                                verify=not args.no_verify,
+                                                monomorphized_extensions=monomorphized_extensions,
+                                                exported_private_functions=closure_fn_symbols)
 
         source = collect_unit_source(compilation_order) if kind != "binary" else None
 
@@ -557,11 +559,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
 
         print(f"Success! Wrote library: {out_path}")
     else:
-        cg.compile_multi_unit(compilation_order, out=out_path, cc="cc",
-                              debug=bool(args.dump_ll), opt=args.opt,
-                              verify=not args.no_verify, keep_object=args.keep_object,
-                              main_expects_args=analyzer.main_expects_args,
-                              monomorphized_extensions=monomorphized_extensions)
+        driver.compile_multi_unit(compilation_order, out=out_path, cc="cc",
+                                  debug=bool(args.dump_ll), opt=args.opt,
+                                  verify=not args.no_verify, keep_object=args.keep_object,
+                                  main_expects_args=analyzer.main_expects_args,
+                                  monomorphized_extensions=monomorphized_extensions)
 
         if args.write_ll:
             try:
@@ -604,7 +606,9 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
+    from sushi_lang.backend.driver import LLVMDriver
     cg = codegen_for(analyzer, library_linker)
+    driver = LLVMDriver(cg)
     cg.main_expects_args = analyzer.main_expects_args
     cg.monomorphized_extensions = monomorphized_extensions
 
@@ -643,7 +647,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             cached.append(unit.name)
             print(f"  {unit.name:<30s} [cached]")
         else:
-            obj_bytes = cg.compile_single_unit_to_object(
+            obj_bytes = driver.compile_single_unit_to_object(
                 unit, compilation_order,
                 opt=args.opt, verify=not args.no_verify,
             )
@@ -663,7 +667,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
         if cache.has_cached_stdlib(stdlib_unit, fp):
             obj_paths.append(cache.stdlib_object_path(stdlib_unit, fp))
         else:
-            obj_bytes = cg.compile_stdlib_to_object(stdlib_unit, opt=args.opt)
+            obj_bytes = driver.compile_stdlib_to_object(stdlib_unit, opt=args.opt)
             obj_path = cache.store_stdlib_object(stdlib_unit, obj_bytes, fp)
             obj_paths.append(obj_path)
 
@@ -675,14 +679,14 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
             if cache.has_cached_lib(lib_name, fp):
                 obj_paths.append(cache.lib_object_path(lib_name, fp))
             else:
-                obj_bytes = cg.compile_library_to_object(lib_path, library_linker, opt=args.opt)
+                obj_bytes = driver.compile_library_to_object(lib_path, library_linker, opt=args.opt)
                 obj_path = cache.store_lib_object(lib_name, obj_bytes, fp)
                 obj_paths.append(obj_path)
 
     codegen_time = time.monotonic() - t0
 
     t1 = time.monotonic()
-    cg.link_object_files(obj_paths, out_path, cc="cc", debug=bool(getattr(args, 'dump_ll', False)))
+    driver.link_object_files(obj_paths, out_path, cc="cc", debug=bool(getattr(args, 'dump_ll', False)))
     link_time = time.monotonic() - t1
 
     total_units = len(compilation_order)

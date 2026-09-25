@@ -28,7 +28,7 @@ class MoveTracker:
 
     def arm_if_conditional(self, name: str, slot: 'ir.Instruction') -> None:
         """Arm a drop flag iff the borrow pass stamped `name` as conditionally moved (#414)."""
-        if name in getattr(self.codegen, 'current_conditional_moves', ()):
+        if name in self.codegen.current_conditional_moves:
             self.arm(slot)
 
     def arm(self, slot: 'ir.Instruction') -> None:
