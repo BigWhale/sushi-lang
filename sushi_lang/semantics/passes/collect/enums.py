@@ -83,6 +83,8 @@ class EnumCollector:
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
         self.library_units: Set[str] = set()
+        # The names this collector refused with CE3011 (#814): the analyzer stops on them.
+        self.refused_library_types: list[str] = []
         self.visibility: Optional[VisibilityTable] = None
         self.enums = enums
         self.generic_enums = generic_enums
@@ -112,6 +114,7 @@ class EnumCollector:
             return False  # A public library type stays the plain duplicate (CE0004).
         reject_library_clash(self.r, clash, name_span, kind="enum", name=name,
                              filename=self.current_unit_file)
+        self.refused_library_types.append(name)
         return True
 
     def _collect_enum_def(self, enum: EnumDef) -> None:

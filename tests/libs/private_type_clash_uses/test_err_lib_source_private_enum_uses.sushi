@@ -1,0 +1,18 @@
+# A consumer ENUM beside a SOURCE library's PRIVATE struct of the same name is the
+# same clash: one namespace holds both kinds. CE3011 is the one fault; the consumer's
+# variant, its binding and its match are not measured against the library's struct
+# (#814; the pytest gate tests/unit/test_private_type_clash_uses.py pins the
+# absence of CE3005, CE2105 and CE2048).
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "enum 'Tally'"
+use <lib/private_names_lib>
+
+enum Tally:
+    Empty
+
+fn main() i32:
+    let Tally mine = Tally.Empty
+    match mine:
+        Tally.Empty -> println("empty")
+    println("{lib_tally(1).realise(0)}")
+    return Result.Ok(0)
