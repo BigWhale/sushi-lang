@@ -1,0 +1,13 @@
+# An unknown type name in the signature of an extension on a generic target with no
+# instance is CE2001 at the parameter (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_extension.sushi:8:21: error [CE2001]: unknown type 'Nope'
+struct Box@(T):
+    T item
+
+extend Box@(T) take(Nope v) i32:
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

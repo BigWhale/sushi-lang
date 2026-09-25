@@ -1,0 +1,11 @@
+# An unknown type name in a field of a generic struct with no instance is CE2001 at
+# the field that wrote it (#859).
+# EXPECT_ERROR_CODE: CE2001
+# EXPECT_STDERR_CONTAINS: test_err_template_unknown_struct_field.sushi:6:5: error [CE2001]: unknown type 'Missing'
+struct Wrap@(T):
+    Missing c
+    T d
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

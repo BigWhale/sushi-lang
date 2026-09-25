@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Dict, Tuple, Set
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
-from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType
+from sushi_lang.internals.report import in_source_order
+from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType, UnknownType
 from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.type_predicates import is_abstract_type
@@ -239,22 +240,26 @@ class TypeMonomorphizer:
         return True
 
     def refuse_template_arity(self, units) -> None:
-        """CE2062 at every position INSIDE a template whose type-argument count is wrong.
+        """The written-template walk: CE2062 and CE2001 at every position INSIDE a template.
 
         The instantiate pass collects no type that still names a type parameter, so such
         a position has no site: a template with no instance was never checked, and an
-        instance reported with no location (#807). The count does not depend on the type
-        argument, so it is checked here, where it is written, before any instance is
-        made. A concrete type in a template is collected with its site and is not this
-        walk's.
+        instance reported with no location (#807). The type-argument count does not
+        depend on the type argument, and neither does whether a name names a type (#859),
+        so both are checked here, where they are written, before any instance is made. A
+        refusal stops the analysis after this pass, so no instance reports it again. A
+        concrete type in a template is collected with its site and is not this walk's
+        count.
         """
         from sushi_lang.semantics.ast_walk import is_written, signature_types
         from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.passes.types.utils import reject_unknown_template_name
         from sushi_lang.semantics.type_walk import walk_named_types
 
         for unit in units:
             if unit.ast is None or unit.provenance is not None:
                 continue
+            validator = self._template_validator(unit)
             # A generic-target extension or perk implementation is a template too. Its
             # TARGET is `reject_unwritable_target`'s, so the receiver site is not read.
             generic_targets = {id(decl) for decl in (*unit.ast.generic_extensions,
@@ -266,9 +271,51 @@ class TypeMonomorphizer:
                         or (id(site.decl) in generic_targets
                             and site.position != "receiver")):
                     continue
+                known = self._template_params(site)
                 for ty in walk_named_types(site.ty, through_declarations=False):
-                    if isinstance(ty, GenericTypeRef) and self._is_abstract(ty.type_args):
+                    if validator is not None and reject_unknown_template_name(
+                            validator, ty, site.span, known):
+                        self.monomorphizer.constraint_violations += 1
+                    elif isinstance(ty, GenericTypeRef) and self._is_abstract(ty.type_args):
                         self._refuse_written_arity(ty, site.span, str(unit.file_path))
+            if validator is not None:
+                self.monomorphizer.reporter.items.extend(
+                    in_source_order(validator.reporter.items))
+
+    def _template_validator(self, unit):
+        """A validator in one unit's scope and file, for the names of its templates.
+
+        None on a unit-test path with no whole-program tables. The unit's own reporter
+        gives each diagnostic the unit's file, as the per-unit passes do.
+        """
+        tables = self.monomorphizer.tables
+        if tables is None:
+            return None
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.passes.types import TypeValidator
+
+        reporter = Reporter(source=unit.read_source(), filename=str(unit.file_path),
+                            provenance=unit.provenance)
+        return TypeValidator(reporter, tables, current_unit_name=unit.name,
+                             namespaces=tables.namespaces.get(unit.name))
+
+    @staticmethod
+    def _template_params(site) -> frozenset:
+        """The type parameters a template position may name.
+
+        The declaration's own and the method's own, and for a generic-target extension
+        or perk implementation the names its target writes as parameters: `Box@(T)`
+        and the element of `T[]` alike.
+        """
+        params = [*(getattr(site.decl, "type_params", None) or ()),
+                  *(getattr(site.at, "type_params", None) or ())]
+        from sushi_lang.semantics.type_walk import walk_named_types
+
+        names = {param.name for param in params}
+        target = getattr(site.decl, "target_type", None)
+        names.update(ty.name for ty in walk_named_types(target, through_declarations=False)
+                     if isinstance(ty, UnknownType))
+        return frozenset(names)
 
     def _refuse_written_arity(self, ref, span, filename: str) -> None:
         """CE2062 for one written `@(...)` list in a template, when its count is wrong."""

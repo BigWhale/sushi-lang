@@ -1,6 +1,6 @@
 """Shared utilities for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.interned import interned_name
@@ -186,6 +186,53 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             _check_type_names(validator, type_obj.pointee_type, span)
         elif isinstance(type_obj, IteratorType):
             _check_type_names(validator, type_obj.element_type, span)
+
+
+def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
+                                 span: Optional[Span], known: AbstractSet[str]) -> bool:
+    """CE2001 for one name in a TEMPLATE signature that names no type here (#859).
+
+    `validate_type_name` reads an instance, and a template with no instance has none, so
+    the template's written names are read here. The rule is the same one: an alias that
+    does not hold the name, a type this unit did not import, and a name that no table
+    holds. `known` is the declaration's own type parameters. Only the unknown name is
+    refused here: every other rule reads the instance, and one fault is reported once.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    generics = (validator.generic_struct_table.by_name, validator.generic_enum_table.by_name)
+    if isinstance(type_obj, GenericTypeRef):
+        name = type_obj.base_name
+        tables = generics
+        declared = name == "Result"
+    elif isinstance(type_obj, UnknownType):
+        name = type_obj.name
+        tables = (validator.struct_table.by_name, validator.enum_table.by_name, *generics)
+        declared = False
+    else:
+        return False
+    declared = declared or any(name in table for table in tables)
+
+    namespace = getattr(type_obj, "namespace", None)
+    if namespace is not None:
+        namespaces = validator.namespaces
+        if (namespaces.is_namespace(namespace)
+                and namespaces.lookup(namespace, name) is not None):
+            return False
+        from .qualified import reject_qualified_name
+        return reject_qualified_name(validator, namespace, name, span, kind="type")
+
+    if name in known:
+        return False
+    from .visibility import reject_out_of_scope_type
+    if reject_out_of_scope_type(validator, name, span):
+        return True
+    if declared:
+        return False
+    if reject_private_kept(validator, name, span, kinds=_KEPT_TYPE_KINDS):
+        return True
+    er.emit(validator.reporter, er.ERR.CE2001, span, name=name)
+    return True
 
 
 def read_constant_index(expr: 'Expr') -> Optional[int]:
