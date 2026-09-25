@@ -82,7 +82,10 @@ def emit_exception(r: Reporter, exc: SushiError) -> None:
         builder = r.warn_with(exc.code, text, exc.span, filename=exc.filename)
 
     for message, span, filename in exc.notes:
-        builder.note(message, span, filename)
+        if span is None:
+            builder.note(message)
+        else:
+            builder.note_at(message, span, filename)
     for message in exc.helps:
         builder.help(message)
 

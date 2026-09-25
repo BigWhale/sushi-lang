@@ -52,7 +52,7 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
                 b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
                        got=display_type(inferred_type), expected=display_type(declared_type))
                 if declared_span:
-                    b.note("declared here", declared_span)
+                    b.note_at("declared here", declared_span)
                 b.emit()
             return
 
@@ -64,7 +64,7 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
         b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
                got=display_type(value_type), expected=display_type(declared_type))
         if declared_span:
-            b.note("declared here", declared_span)
+            b.note_at("declared here", declared_span)
         b.emit()
 
 
@@ -96,8 +96,12 @@ def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayT
                      got=got, expected=declared_type.size)
     if array_runs.has_run(literal.elements):
         for number, run in enumerate(runs, start=1):
-            b.note(f"run {number} fills {run.start}..{run.end} "
-                   f"({run.count} element{'' if run.count == 1 else 's'})", run.loc)
+            fills = (f"run {number} fills {run.start}..{run.end} "
+                     f"({run.count} element{'' if run.count == 1 else 's'})")
+            if run.loc is None:
+                b.note(fills)
+            else:
+                b.note_at(fills, run.loc)
     b.emit()
     return True
 

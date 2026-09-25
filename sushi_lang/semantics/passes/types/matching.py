@@ -204,7 +204,7 @@ def reject_other_enum(validator: 'TypeValidator', written: str,
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE2107, span,
                               got=written, expected=spelling)
     if subject_span is not None:
-        diagnostic.note(f"{subject_label} '{spelling}'", subject_span)
+        diagnostic.note_at(f"{subject_label} '{spelling}'", subject_span)
     diagnostic.emit()
 
 

@@ -150,7 +150,7 @@ def _reject_channel_mismatch(impl: FuncDef, required: PerkMethodSignature,
     contract_span = (getattr(required, "name_span", None)
                      or getattr(required, "loc", None))
     if contract_span is not None:
-        diag.note(f"perk '{perk_def.name}' declares '{impl.name}' here", contract_span)
+        diag.note_at(f"perk '{perk_def.name}' declares '{impl.name}' here", contract_span)
     diag.emit()
     return True
 
@@ -206,7 +206,7 @@ def check_no_conflicts_with_regular_methods(
                                 method=method.name, perk=perk_impl.perk_name)
             prev_span = existing.name_span or existing.loc
             if prev_span is not None:
-                diag.note(f"extension method '{method.name}' is defined here", prev_span)
+                diag.note_at(f"extension method '{method.name}' is defined here", prev_span)
             diag.emit()
 
     return False

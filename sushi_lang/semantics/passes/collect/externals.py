@@ -92,10 +92,11 @@ class ExternalCollector:
 
         existing = self.externals.lookup(block.namespace, decl.name)
         if existing is not None:
-            er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
-                         name=f"{block.namespace}.{decl.name}") \
-                .note("first defined here", existing.name_span,
-                      existing.filename).emit()
+            diag = er.emit_with(self.r, er.ERR.CE0101, decl.name_span,
+                                name=f"{block.namespace}.{decl.name}")
+            if existing.name_span is not None:
+                diag.note_at("first defined here", existing.name_span, existing.filename)
+            diag.emit()
             return
 
         # CE5001: clash with a reserved built-in extern of a DIFFERENT signature.

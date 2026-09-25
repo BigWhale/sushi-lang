@@ -86,8 +86,10 @@ def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[
 def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
               span: Optional[Span]) -> bool:
     """Report a borrow the live borrows forbid, pointing at the one already held."""
-    checker.err.emit_with(code, span, name=state.name) \
-        .note("first borrowed here", state.first_borrow_span).emit()
+    diag = checker.err.emit_with(code, span, name=state.name)
+    if state.first_borrow_span is not None:
+        diag.note_at("first borrowed here", state.first_borrow_span)
+    diag.emit()
     return False
 
 

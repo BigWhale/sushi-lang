@@ -190,7 +190,7 @@ def _reject_use_below_declaration(reporter: Reporter, unit: Unit,
     for use_stmt in program.uses or ():
         if use_stmt.loc is not None and use_stmt.loc.line > first.line:
             er.emit_with(reporter, er.ERR.CE3014, use_stmt.loc) \
-                .note("this declaration comes first", first).emit()
+                .note_at("this declaration comes first", first).emit()
 
 
 def _names_declared_by(program: Program) -> Dict[str, Optional[Span]]:
@@ -236,7 +236,7 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
         diagnostic = er.emit_with(reporter, er.ERR.CE3013, span, alias=alias)
         bound_at = table.bound_at(alias)
         if bound_at is not None:
-            diagnostic = diagnostic.note("first bound here", bound_at)
+            diagnostic = diagnostic.note_at("first bound here", bound_at)
         else:
             diagnostic = diagnostic.help(
                 "an `unsafe external` block already binds this namespace")
@@ -246,7 +246,7 @@ def _reject_alias_collision(reporter: Reporter, table: NamespaceTable,
         diagnostic = er.emit_with(reporter, er.ERR.CE3013, span, alias=alias)
         declared_at = declared[alias]
         if declared_at is not None:
-            diagnostic = diagnostic.note(
+            diagnostic = diagnostic.note_at(
                 "this unit declares the name here", declared_at)
         else:
             diagnostic = diagnostic.help("this unit already declares the name")

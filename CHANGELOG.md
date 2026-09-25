@@ -1163,6 +1163,12 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **A relational note takes a span** (#731). `DiagnosticBuilder.note(message)` is prose only,
+  and `note_at(message, span)` is the relational note, with a span that is not optional
+  (the same split on `SushiError`). 52 call sites in 26 files moved; where a span can be
+  missing, the caller decides -- a note that says "here" is dropped, a note that states a
+  fact stays prose. The rendered output of every diagnostic fixture is unchanged (gate
+  `tests/unit/test_relational_note_takes_a_span.py`).
 - **"Is this method built in" has one home** (#812). `builtin_method_exists` asks
   `METHOD_TYPE_REGISTRY.answers`; each family carries an `answers` hook, and the perk
   override is subtracted in `claims`. The gate compares behaviour over a receiver-by-name

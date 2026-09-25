@@ -358,7 +358,7 @@ class PerkCollector:
             prev_span = prev.name_span if prev else None
             diag = er.emit_with(self.r, ERR.CE4001, name_span, name=name)
             if prev_span is not None:
-                diag.note("first defined here", prev_span, self.perks.files.get(name))
+                diag.note_at("first defined here", prev_span, self.perks.files.get(name))
             diag.emit()
             return
 
@@ -447,8 +447,8 @@ class PerkCollector:
                 diag = er.emit_with(self.r, ERR.CE4012, span,
                                     type=declared_name, owner=origin.unit_name)
                 if origin.name_span is not None:
-                    diag.note(f"'{declared_name}' is declared here",
-                              origin.name_span, origin.filename)
+                    diag.note_at(f"'{declared_name}' is declared here",
+                                 origin.name_span, origin.filename)
                 diag.emit()
                 return True
         return False
