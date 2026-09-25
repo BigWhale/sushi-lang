@@ -100,10 +100,6 @@ class LLVMTypeSystem:
         """
         return self.sizing.payload_field_offsets(associated_types)
 
-    def get_string_struct_type(self) -> ir.LiteralStructType:
-        """Get LLVM struct type for strings: {i8* data, i32 size, i8 owned}."""
-        return self.mapper.string_struct
-
     def get_struct_type(self, struct_type) -> ir.LiteralStructType:
         """Get LLVM struct type for user-defined structs."""
         return self.mapper.get_struct_type(struct_type)

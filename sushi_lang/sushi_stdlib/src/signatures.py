@@ -84,14 +84,3 @@ def param_specs(module: str, table: Dict[str, Signature]) -> Dict[Tuple[str, str
     """The registry's `(module, name) -> [Sushi type]` view of a whole layer."""
     return {(module, name): [param.ty for param in sig.params]
             for name, sig in table.items()}
-
-
-def validate_arity(name: str, table: Dict[str, Signature], args: list,
-                   reporter, loc) -> None:
-    """CE2009 against the row's own length, for every function of a layer."""
-    from sushi_lang.internals import errors as er
-
-    sig = table.get(name)
-    if sig is None or len(args) == sig.arity:
-        return
-    er.emit(reporter, er.ERR.CE2009, loc, name=name, expected=sig.arity, got=len(args))
