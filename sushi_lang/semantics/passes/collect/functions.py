@@ -42,7 +42,8 @@ from sushi_lang.semantics.visibility import (
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_self_in_body, reject_try_in_body)
 from sushi_lang.semantics.generics.extension_targets import (
-    CONCRETE_EXTENSION_TARGETS, classify_extension_target, reject_unwritable_target)
+    CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
+    reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -368,7 +369,7 @@ class GenericExtensionMethod:
 
 
 @dataclass
-class GenericExtensionTable:
+class GenericExtensionTable(RefusalRecord):
     """Generic extension methods by base type name, then by (method, target key).
 
     The target key is what makes `extend Box@(i32)` and `extend Box@(string)` two methods
@@ -377,18 +378,6 @@ class GenericExtensionTable:
     message elided the target as `Box@(...)`.
     """
     by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
-    # The `(base type name, method name)` pairs whose declaration the collect pass
-    # refused. A call of one is not an undefined name: the declaration carries the one
-    # diagnostic (#808).
-    refused: Set[Tuple[str, str]] = field(default_factory=set)
-
-    def refuse(self, base_type_name: str, method_name: str) -> None:
-        """Record a refused declaration, so that its calls add no diagnostic."""
-        self.refused.add((base_type_name, method_name))
-
-    def was_refused(self, base_type_name: str, method_name: str) -> bool:
-        """Did the collect pass refuse a declaration of this method on this base?"""
-        return (base_type_name, method_name) in self.refused
 
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""

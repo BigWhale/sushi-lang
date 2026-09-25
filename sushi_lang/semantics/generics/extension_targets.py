@@ -19,8 +19,8 @@ and the disagreement would be silent.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Mapping, Optional, Protocol, Tuple
+from dataclasses import dataclass, field
+from typing import Callable, Mapping, Optional, Protocol, Set, Tuple
 
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.statics import names_a_type
@@ -114,6 +114,26 @@ class ExtensionTarget:
     def is_mixed(self) -> bool:
         """Some arguments are types and some are parameters -- rejected (CE2098)."""
         return bool(self.param_names) and len(self.param_names) != len(self.args)
+
+
+@dataclass
+class RefusalRecord:
+    """The `(base type name, method name)` pairs whose declaration the collect pass refused.
+
+    A call of one is not an undefined name: the declaration carries the one diagnostic
+    (#808, #860). The extension table and the generic perk-implementation table both
+    carry one, and one predicate reads both (`calls/methods.py:_was_refused`).
+    """
+
+    refused: Set[Tuple[str, str]] = field(default_factory=set)
+
+    def refuse(self, base_type_name: str, method_name: str) -> None:
+        """Record a refused declaration, so that its calls add no diagnostic."""
+        self.refused.add((base_type_name, method_name))
+
+    def was_refused(self, base_type_name: str, method_name: str) -> bool:
+        """Did the collect pass refuse a declaration of this method on this base?"""
+        return (base_type_name, method_name) in self.refused
 
 
 def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:

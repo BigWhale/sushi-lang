@@ -1,0 +1,17 @@
+# A function type is not a perk-implementation target. The implementation is
+# refused at its target, and it is the one diagnostic: a call of the perk
+# method adds none (#864).
+# EXPECT_ERROR_CODE: CE2110
+# EXPECT_STDERR_CONTAINS: "test_err_perk_impl_function_target.sushi:10:8:"
+# EXPECT_STDERR_CONTAINS: "'fn(i32) -> i32'"
+perk Seven:
+    fn seven() i32
+
+extend fn(i32) -> i32 with Seven:
+    fn seven() i32:
+        return 7
+
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 x| x + 1
+    println("{f.seven()}")
+    return Result.Ok(0)

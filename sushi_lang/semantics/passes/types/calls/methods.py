@@ -609,10 +609,16 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
 
 
 def _was_refused(validator: 'TypeValidator', receiver_type, method_name: str) -> bool:
-    """The collect pass refused this method's declaration, and said so there (#808)."""
+    """The collect pass refused this method's declaration, and said so there.
+
+    An extension (#808) and a perk implementation (#860, #864) keep one record each,
+    by the same key.
+    """
     from sushi_lang.semantics.type_predicates import generic_base_of
     base = generic_base_of(receiver_type) or display_type(receiver_type)
-    return validator.generic_extension_table.was_refused(base, method_name)
+    return any(record.was_refused(base, method_name)
+               for record in (validator.generic_extension_table,
+                              validator.tables.generic_perk_impls))
 
 
 def _check_user_method(validator: 'TypeValidator', call: MethodCall, receiver_type,
