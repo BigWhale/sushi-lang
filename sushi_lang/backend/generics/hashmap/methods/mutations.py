@@ -18,7 +18,9 @@ from ..utils import (
     emit_insert_entry,
     emit_destroy_all_entries,
     emit_init_buckets_empty,
+    emit_entry_state_check,
 )
+from sushi_lang.backend.generics.container_walk import emit_container_walk
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import get_element_size_constant
@@ -239,7 +241,6 @@ def emit_hashmap_resize_to_capacity(
     entry_type = get_entry_type(codegen, key_type, value_type)
 
     zero_i32 = ir.Constant(codegen.types.i32, 0)
-    one_i32 = ir.Constant(codegen.types.i32, 1)
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     capacity_ptr = fields.capacity
@@ -258,72 +259,42 @@ def emit_hashmap_resize_to_capacity(
 
     emit_init_buckets_empty(codegen, new_bucket_ptr, new_capacity)
 
-    old_i = entry_alloca(builder, codegen.types.i32, name="old_i")
-    builder.store(zero_i32, old_i)
+    def occupied(old_entry_ptr: ir.Value, _index: ir.Value) -> ir.Value:
+        return emit_entry_state_check(codegen, old_entry_ptr, ENTRY_OCCUPIED, "is_occupied")
 
-    rehash_loop_cond_bb = builder.append_basic_block(name="rehash_loop_cond")
-    rehash_loop_body_bb = builder.append_basic_block(name="rehash_loop_body")
-    rehash_check_occupied_bb = builder.append_basic_block(name="rehash_check_occupied")
-    rehash_reinsert_bb = builder.append_basic_block(name="rehash_reinsert")
-    rehash_skip_bb = builder.append_basic_block(name="rehash_skip")
-    rehash_loop_end_bb = builder.append_basic_block(name="rehash_loop_end")
+    def reinsert(old_entry_ptr: ir.Value, _index: ir.Value) -> None:
+        old_key_ptr = builder.gep(old_entry_ptr, ENTRY_KEY_INDICES, name="old_key_ptr")
+        old_key = builder.load(old_key_ptr, name="old_key")
+        old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
+        old_value = builder.load(old_value_ptr, name="old_value")
 
-    builder.branch(rehash_loop_cond_bb)
+        hash_i32 = emit_key_hash_i32(codegen, key_type, old_key)
+        inserted_bb = builder.append_basic_block(name="rehash_inserted")
+        no_slot_bb = builder.append_basic_block(name="rehash_no_slot")
 
-    builder.position_at_end(rehash_loop_cond_bb)
-    old_i_val = builder.load(old_i, name="old_i_val")
-    rehash_cond = builder.icmp_unsigned("<", old_i_val, old_capacity, name="rehash_cond")
-    builder.cbranch(rehash_cond, rehash_loop_body_bb, rehash_loop_end_bb)
+        # Linear probe for an empty slot in the NEW buckets. A rehash never collides
+        # with an equal key (the old table had none) and the new table has no
+        # tombstones, so only the empty case does anything.
+        def on_empty(slot: ProbeSlot) -> None:
+            emit_insert_entry(codegen, slot.entry_ptr, old_key, old_value, entry_type)
+            builder.branch(inserted_bb)
 
-    builder.position_at_end(rehash_loop_body_bb)
-    old_i_val = builder.load(old_i, name="old_i_val")
-    old_entry_ptr = builder.gep(old_buckets_data, [old_i_val], name="old_entry_ptr")
-    old_state_ptr = builder.gep(old_entry_ptr, ENTRY_STATE_INDICES, name="old_state_ptr")
-    old_state = builder.load(old_state_ptr, name="old_state")
+        emit_probe_loop(
+            codegen, new_bucket_ptr, new_capacity, hash_i32,
+            on_empty=on_empty, exhausted_bb=no_slot_bb, prefix="rehash_probe",
+        )
 
-    builder.branch(rehash_check_occupied_bb)
+        # The new table is freshly allocated and strictly larger than the live entry
+        # count, so it always has room. Unreachable in a correct compiler; guarded so a
+        # bug here cannot become an unbounded loop.
+        builder.position_at_end(no_slot_bb)
+        codegen.runtime.errors.emit_runtime_error("RE2022")
+        builder.unreachable()
 
-    builder.position_at_end(rehash_check_occupied_bb)
-    is_occupied = builder.icmp_unsigned("==", old_state, ir.Constant(codegen.types.i8, ENTRY_OCCUPIED), name="is_occupied")
-    builder.cbranch(is_occupied, rehash_reinsert_bb, rehash_skip_bb)
+        builder.position_at_end(inserted_bb)
 
-    builder.position_at_end(rehash_reinsert_bb)
-
-    old_key_ptr = builder.gep(old_entry_ptr, ENTRY_KEY_INDICES, name="old_key_ptr")
-    old_key = builder.load(old_key_ptr, name="old_key")
-    old_value_ptr = builder.gep(old_entry_ptr, ENTRY_VALUE_INDICES, name="old_value_ptr")
-    old_value = builder.load(old_value_ptr, name="old_value")
-
-    hash_i32 = emit_key_hash_i32(codegen, key_type, old_key)
-
-    # Linear probe for an empty slot in the NEW buckets. A rehash never collides
-    # with an equal key (the old table had none) and the new table has no
-    # tombstones, so only the empty case does anything -- and it exits into the
-    # enclosing rehash loop's continue block rather than out of the function.
-    def on_empty(slot: ProbeSlot) -> None:
-        emit_insert_entry(codegen, slot.entry_ptr, old_key, old_value, entry_type)
-        builder.branch(rehash_skip_bb)
-
-    rehash_no_slot_bb = builder.append_basic_block(name="rehash_no_slot")
-
-    emit_probe_loop(
-        codegen, new_bucket_ptr, new_capacity, hash_i32,
-        on_empty=on_empty, exhausted_bb=rehash_no_slot_bb, prefix="rehash_probe",
-    )
-
-    # The new table is freshly allocated and strictly larger than the live entry
-    # count, so it always has room. Unreachable in a correct compiler; guarded so a
-    # bug here cannot become an unbounded loop.
-    builder.position_at_end(rehash_no_slot_bb)
-    codegen.runtime.errors.emit_runtime_error("RE2022")
-    builder.unreachable()
-
-    builder.position_at_end(rehash_skip_bb)
-    old_i_next = builder.add(old_i_val, one_i32, name="old_i_next")
-    builder.store(old_i_next, old_i)
-    builder.branch(rehash_loop_cond_bb)
-
-    builder.position_at_end(rehash_loop_end_bb)
+    emit_container_walk(codegen, old_buckets_data, old_capacity, reinsert,
+                        should_visit=occupied, prefix="rehash")
 
     builder.store(new_bucket_ptr, buckets_data_ptr)
 
