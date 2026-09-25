@@ -162,9 +162,9 @@ def backend_predicate_names() -> set[str]:
 
 
 def backend_dispatch_arms() -> list[set[str]]:
-    """The names each `match` in `emit_array_method` claims: the fixed half, then the dynamic."""
-    matches = sorted((node for node in ast.walk(_function("emit_array_method"))
-                      if isinstance(node, ast.Match)), key=lambda node: node.lineno)
+    """The names each half of `emit_array_method` claims: the fixed half, then the dynamic."""
+    matches = [node for half in ("emit_fixed_array_method", "emit_dynamic_array_method")
+               for node in ast.walk(_function(half)) if isinstance(node, ast.Match)]
     return [{value for case in node.cases for value in _strings(case.pattern)}
             for node in matches]
 

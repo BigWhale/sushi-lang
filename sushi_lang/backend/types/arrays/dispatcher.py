@@ -6,6 +6,7 @@ from llvmlite import ir
 from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, deref_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -89,6 +90,15 @@ def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
     return codegen.utils.require_i32(codegen.expressions.emit_expr(arg))
 
 
+def _dynamic_data_and_len(codegen: 'LLVMCodegen', receiver: ir.Value,
+                          prefix: str) -> tuple[ir.Value, ir.Value]:
+    """A `T[]` receiver address as its (data pointer, length)."""
+    data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder, receiver)
+    len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, receiver)
+    return (codegen.builder.load(data_ptr_ptr, name=f"{prefix}_data"),
+            codegen.builder.load(len_ptr, name=f"{prefix}_len"))
+
+
 def emit_array_method(
     codegen: 'LLVMCodegen',
     expr: MethodCall | DotCall,
@@ -97,103 +107,123 @@ def emit_array_method(
     semantic_type: 'Type',
     to_i1: bool
 ) -> ir.Value:
-    """Emit LLVM IR for built-in array method calls."""
-    method_name = expr.method
-
+    """Emit LLVM IR for built-in array method calls: the receiver kind picks the half."""
     fixed_ir_type = _as_fixed_ir_type(receiver_type)
     if fixed_ir_type is not None:
-        # The element type drives the per-slot deep copy of an owning element, and it is the
-        # iterator's item type. Dereferenced here rather than per arm, the way the dynamic
-        # path below unwraps once for all of its arms.
-        fixed_semantic_type = deref_type(semantic_type)
-        if not isinstance(fixed_semantic_type, ArrayType):
-            raise_internal_error("CE0042", type=type(fixed_semantic_type).__name__)
+        return emit_fixed_array_method(codegen, expr, receiver_value, fixed_ir_type,
+                                       semantic_type, to_i1)
+    return emit_dynamic_array_method(codegen, expr, receiver_value, receiver_type,
+                                     semantic_type, to_i1)
 
-        def address(*, writable: bool) -> ir.Value:
-            """This receiver as an address. ONE rule, where the arms had nine (#480)."""
-            return as_fixed_array_address(codegen, expr.receiver, receiver_value,
-                                          fixed_ir_type, semantic_type, writable=writable)
 
-        match method_name:
-            case "len":
-                len_value = ir.Constant(codegen.types.i32, fixed_ir_type.count)
-                return codegen.utils.as_i1(len_value) if to_i1 else len_value
+def emit_fixed_array_method(
+    codegen: 'LLVMCodegen',
+    expr: MethodCall | DotCall,
+    receiver_value: ir.Value,
+    fixed_ir_type: ir.ArrayType,
+    semantic_type: 'Type',
+    to_i1: bool
+) -> ir.Value:
+    """The `T[N]` half. The count is the constant `N`, the data the first element's address."""
+    method_name = expr.method
 
-            case "get":
-                from .methods.safe_access import emit_fixed_array_get_maybe
-                index_value = _index_arg(codegen, expr.args[0])
-                return emit_fixed_array_get_maybe(codegen, address(writable=False), fixed_ir_type,
-                                                  index_value, fixed_semantic_type, to_i1)
+    # The element type drives the per-slot deep copy of an owning element, and it is the
+    # iterator's item type. Dereferenced once here rather than per arm.
+    fixed_semantic_type = deref_type(semantic_type)
+    if not isinstance(fixed_semantic_type, ArrayType):
+        raise_internal_error("CE0042", type=type(fixed_semantic_type).__name__)
+    element_semantic_type = fixed_semantic_type.base_type
+    count = ir.Constant(codegen.types.i32, fixed_ir_type.count)
 
-            case "first" | "last":
-                # `get()` with the index built in. A fixed array is never empty, so
-                # the bounds check folds away; the Maybe stays for one shape with the
-                # dynamic twin.
-                from .methods.safe_access import emit_fixed_array_get_maybe
-                index = 0 if method_name == "first" else fixed_ir_type.count - 1
-                return emit_fixed_array_get_maybe(codegen, address(writable=False),
-                                                  fixed_ir_type,
-                                                  ir.Constant(codegen.types.i32, index),
-                                                  fixed_semantic_type, to_i1)
+    def address(*, writable: bool) -> ir.Value:
+        """This receiver as an address. ONE rule, where the arms had nine (#480)."""
+        return as_fixed_array_address(codegen, expr.receiver, receiver_value,
+                                      fixed_ir_type, semantic_type, writable=writable)
 
-            case "contains" | "index_of":
-                # The needle is a BORROW (#475), like fill's value.
-                from .methods import search
-                from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-                zero = ir.Constant(codegen.types.i32, 0)
-                data = codegen.builder.gep(address(writable=False), [zero, zero],
-                                           name="search_data")
-                count = ir.Constant(codegen.types.i32, fixed_ir_type.count)
-                needle = emit_borrowed_arg(codegen, expr.args[0],
-                                           fixed_semantic_type.base_type)
-                if method_name == "contains":
-                    return search.emit_array_contains(codegen, data, count, needle,
-                                                      fixed_semantic_type.base_type, to_i1)
-                return search.emit_array_index_of(codegen, data, count, needle,
-                                                  fixed_semantic_type.base_type)
+    def data(prefix: str, *, writable: bool = False) -> ir.Value:
+        zero = ir.Constant(codegen.types.i32, 0)
+        return codegen.builder.gep(address(writable=writable), [zero, zero],
+                                   name=f"{prefix}_data")
 
-            case "iter":
-                return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
-                                                       fixed_ir_type,
-                                                       fixed_semantic_type.base_type, to_i1)
+    match method_name:
+        case "len":
+            return codegen.utils.as_i1(count) if to_i1 else count
 
-            case "hash":
-                return hashing.emit_fixed_array_hash_direct(codegen, expr, address(writable=False),
-                                                            fixed_ir_type, fixed_semantic_type,
-                                                            to_i1)
+        case "get":
+            from .methods.safe_access import emit_array_get_maybe
+            index_value = _index_arg(codegen, expr.args[0])
+            return emit_array_get_maybe(codegen, data("get"), count, index_value,
+                                        element_semantic_type)
 
-            case "clone":
-                # A fixed array is a value, so the clone is value-in / value-out. It routes
-                # through the SAME emitter the struct-field and `let` sinks use, which is
-                # what makes it the exact structural inverse of the destructor -- the
-                # property a hand-written element loop here would be free to break.
-                from sushi_lang.backend.ownership import copy_out
-                return copy_out(codegen, address(writable=False), fixed_semantic_type)
+        case "first" | "last":
+            # `get()` with the index built in. A fixed array is never empty, so the
+            # bounds check folds away; the Maybe stays for one shape with the dynamic twin.
+            from .methods.safe_access import emit_array_get_maybe
+            index = 0 if method_name == "first" else fixed_ir_type.count - 1
+            return emit_array_get_maybe(codegen, data("get"), count,
+                                        ir.Constant(codegen.types.i32, index),
+                                        element_semantic_type)
 
-            case "fill":
-                # A borrow, so an owning temporary needs an owner (#475).
-                from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-                fill_value = emit_borrowed_arg(codegen, expr.args[0],
-                                               fixed_semantic_type.base_type)
-                return core.emit_fixed_array_fill(codegen, address(writable=True), fixed_ir_type,
-                                                  fill_value, fixed_semantic_type.base_type)
+        case "contains" | "index_of":
+            # The needle is a BORROW (#475), like fill's value.
+            from .methods import search
+            from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+            search_data = data("search")
+            needle = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
+            if method_name == "contains":
+                return search.emit_array_contains(codegen, search_data, count, needle,
+                                                  element_semantic_type, to_i1)
+            return search.emit_array_index_of(codegen, search_data, count, needle,
+                                              element_semantic_type)
 
-            case "reverse":
-                return core.emit_fixed_array_reverse(codegen, address(writable=True), fixed_ir_type)
+        case "iter":
+            return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
+                                                   fixed_ir_type, element_semantic_type, to_i1)
 
-            case "s" | "ss":
-                zero = ir.Constant(codegen.types.i32, 0)
-                data = codegen.builder.gep(address(writable=False), [zero, zero],
-                                           name="slice_src_data")
-                start, extent, by_end = _slice_args(codegen, method_name, expr.args)
-                return core.emit_dynamic_array_slice(
-                    codegen, fixed_ir_type.element, data,
-                    ir.Constant(codegen.types.i32, fixed_ir_type.count),
-                    start, extent, fixed_semantic_type.base_type,
-                    extent_is_end=by_end)
+        case "hash":
+            return hashing.emit_fixed_array_hash_direct(codegen, expr, address(writable=False),
+                                                        fixed_ir_type, fixed_semantic_type,
+                                                        to_i1)
 
-            case _:
-                raise NotImplementedError(f"Fixed array method not implemented: {method_name}")
+        case "clone":
+            # A fixed array is a value, so the clone is value-in / value-out. It routes
+            # through the SAME emitter the struct-field and `let` sinks use, which is what
+            # makes it the exact structural inverse of the destructor.
+            from sushi_lang.backend.ownership import copy_out
+            return copy_out(codegen, address(writable=False), fixed_semantic_type)
+
+        case "fill":
+            # A borrow, so an owning temporary needs an owner (#475).
+            from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+            fill_value = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
+            return core.emit_array_fill(codegen, data("fill", writable=True), count,
+                                        fill_value, element_semantic_type)
+
+        case "reverse":
+            return core.emit_array_reverse(codegen, data("reverse", writable=True), count)
+
+        case "s" | "ss":
+            slice_data = data("slice_src")
+            start, extent, by_end = _slice_args(codegen, method_name, expr.args)
+            return core.emit_dynamic_array_slice(
+                codegen, fixed_ir_type.element, slice_data, count,
+                start, extent, element_semantic_type, extent_is_end=by_end)
+
+        case _:
+            raise_internal_error("CE0024", method=method_name,
+                                 type=display_type(fixed_semantic_type))
+
+
+def emit_dynamic_array_method(
+    codegen: 'LLVMCodegen',
+    expr: MethodCall | DotCall,
+    receiver_value: ir.Value,
+    receiver_type: ir.Type,
+    semantic_type: 'Type',
+    to_i1: bool
+) -> ir.Value:
+    """The `T[]` half. The count and the data are loaded from the descriptor."""
+    method_name = expr.method
 
     if isinstance(receiver_type, ir.PointerType):
         array_struct_type = receiver_type.pointee
@@ -224,36 +254,31 @@ def emit_array_method(
             return core.emit_dynamic_array_capacity(codegen, receiver_value, to_i1)
 
         case "get":
-            from .methods.safe_access import emit_dynamic_array_get_maybe
+            from .methods.safe_access import emit_array_get_maybe
             index_value = _index_arg(codegen, expr.args[0])
-            return emit_dynamic_array_get_maybe(codegen, receiver_value, index_value, semantic_type, to_i1)
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "get")
+            return emit_array_get_maybe(codegen, data, count, index_value,
+                                        element_semantic_type)
 
         case "first" | "last":
             # `get()` with the index built in: 0, or len - 1. An empty array gives the
             # last index -1, which the bounds check turns into `Maybe.None()` -- the
             # same road a `get(-1)` takes.
-            from .methods.safe_access import emit_dynamic_array_get_maybe
+            from .methods.safe_access import emit_array_get_maybe
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "get")
             if method_name == "first":
                 index_value = ir.Constant(codegen.types.i32, 0)
             else:
-                len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder,
-                                                                  receiver_value)
-                length = codegen.builder.load(len_ptr, name="len_for_last")
-                index_value = codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
+                index_value = codegen.builder.sub(count, ir.Constant(codegen.types.i32, 1),
                                                   name="last_index")
-            return emit_dynamic_array_get_maybe(codegen, receiver_value, index_value,
-                                                semantic_type, to_i1)
+            return emit_array_get_maybe(codegen, data, count, index_value,
+                                        element_semantic_type)
 
         case "contains" | "index_of":
             # The needle is a BORROW (#475), like fill's value.
             from .methods import search
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-            data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(codegen.builder,
-                                                                    receiver_value)
-            len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder,
-                                                              receiver_value)
-            data = codegen.builder.load(data_ptr_ptr, name="search_data")
-            count = codegen.builder.load(len_ptr, name="search_len")
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "search")
             needle = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
             if method_name == "contains":
                 return search.emit_array_contains(codegen, data, count, needle,
@@ -263,8 +288,7 @@ def emit_array_method(
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming
-            # use like List.push and HashMap.insert. The reference unwrap this arm used to
-            # do for itself now happens once, above.
+            # use like List.push and HashMap.insert.
             from sushi_lang.backend.ownership import ConsumingUse, consume
             element_value = consume(
                 codegen, expr.args[0], codegen.expressions.emit_expr(expr.args[0]),
@@ -319,11 +343,13 @@ def emit_array_method(
             # A borrow, so the temporary behind `arr.fill(s.s(2, 5))` needs an owner (#475).
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
             fill_value = emit_borrowed_arg(codegen, expr.args[0], element_semantic_type)
-            return core.emit_dynamic_array_fill(codegen, receiver_value, array_struct_type,
-                                                fill_value, element_semantic_type)
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "fill")
+            return core.emit_array_fill(codegen, data, count, fill_value,
+                                        element_semantic_type)
 
         case "reverse":
-            return core.emit_dynamic_array_reverse(codegen, receiver_value, array_struct_type)
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "reverse")
+            return core.emit_array_reverse(codegen, data, count)
 
         case "extend" | "extend_range":
             source_data, source_len, _ = _source_data_and_len(codegen, expr, expr.args[0])
@@ -348,4 +374,5 @@ def emit_array_method(
                 start, extent, element_semantic_type, extent_is_end=by_end)
 
         case _:
-            raise NotImplementedError(f"Dynamic array method not implemented: {method_name}")
+            raise_internal_error("CE0024", method=method_name,
+                                 type=display_type(semantic_type))
