@@ -15,6 +15,7 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ExtendDef, Block, Stmt, Expr
 )
+from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
@@ -140,7 +141,7 @@ class TypeValidator:
     @property
     def drop_type_names(self) -> frozenset:
         """The types that implement `Drop`, the second way a type can own something."""
-        return frozenset(self.perk_impl_table.by_perk.get("Drop", ()))
+        return drop_type_names(self.perk_impl_table)
 
     def func_sig(self, name: str) -> Optional['FuncSig']:
         """What the name of a function means INSIDE the unit being validated.
