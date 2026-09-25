@@ -104,20 +104,12 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
     needed = b.add(current_len, count, name="extend_needed")
 
     element_llvm_type = array_type.elements[2].pointee
-    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-
-    need_growth = b.icmp_signed(">", needed, current_cap, name="extend_need_growth")
-    with b.if_then(need_growth):
-        # Grown to exactly what is needed. A doubling schedule buys nothing here, because
-        # the whole length is known before the copy starts.
-        total_bytes = b.mul(needed, element_size, name="extend_total_bytes")
-        old_data = b.load(data_ptr_ptr, name="extend_old_data")
-        raw = memory.emit_realloc_call(codegen, b.bitcast(old_data, ir.PointerType(codegen.types.i8)),
-                                       total_bytes)
-        b.store(b.bitcast(raw, ir.PointerType(element_llvm_type)), data_ptr_ptr)
-        b.store(needed, cap_ptr)
-
-    data_ptr = b.load(data_ptr_ptr, name="extend_data")
+    # Grown to exactly what is needed. A doubling schedule buys nothing here, because the
+    # whole length is known before the copy starts.
+    data_ptr = memory.emit_grow_to_fit(
+        codegen, data_ptr=b.load(data_ptr_ptr, name="extend_data"), data_ptr_ptr=data_ptr_ptr,
+        cap_ptr=cap_ptr, current_cap=current_cap, count=needed,
+        element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.EXACT)
     dest = gep_utils.gep_array_element(codegen, data_ptr, current_len, "extend_dest")
     emit_range_copy(codegen, dest, source_data, start, count, element_type,
                     element_llvm_type, prefix="extend")
@@ -160,37 +152,10 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     current_cap = codegen.builder.load(cap_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    need_growth = codegen.builder.icmp_unsigned(">=", current_len, current_cap)
-
-    func = codegen.func
-    before_if = codegen.builder.block
-
-    with codegen.builder.if_then(need_growth):
-        zero = ir.Constant(codegen.types.i32, 0)
-        one = ir.Constant(codegen.types.i32, 1)
-        two = ir.Constant(codegen.types.i32, 2)
-
-        cap_is_zero = codegen.builder.icmp_unsigned("==", current_cap, zero)
-        double_cap = codegen.builder.mul(current_cap, two)
-        new_cap = codegen.builder.select(cap_is_zero, one, double_cap, name="new_cap")
-
-        element_type = array_type.elements[2].pointee
-        element_size = memory.get_element_size_constant(codegen, element_type)
-        new_total_size = codegen.builder.mul(new_cap, element_size, name="new_total_size")
-
-        new_data_ptr = memory.emit_realloc_call(codegen, data_ptr, new_total_size)
-
-        typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")
-
-        codegen.builder.store(new_cap, cap_ptr)
-        codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
-        after_if = codegen.builder.block
-
-    phi = codegen.builder.phi(data_ptr.type, name="data_ptr_phi")
-    phi.add_incoming(data_ptr, before_if)
-    if 'after_if' in locals():
-        phi.add_incoming(typed_new_data_ptr, after_if)
-    data_ptr = phi
+    data_ptr = memory.emit_grow_to_fit(
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
+        current_cap=current_cap, count=current_len,
+        element_llvm_type=array_type.elements[2].pointee, policy=memory.GrowPolicy.DOUBLE)
 
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
     codegen.builder.store(element_value, element_ptr)

@@ -34,21 +34,10 @@ def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: St
 
     needed_cap = codegen.builder.add(current_len, additional, name="needed_cap")
 
-    need_growth = codegen.builder.icmp_unsigned(">", needed_cap, current_cap)
-
-    with codegen.builder.if_then(need_growth):
-        element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-        new_total_size = codegen.builder.mul(needed_cap, element_size, name="new_total_size")
-
-        new_data_ptr = memory.emit_realloc_call(codegen, data_ptr, new_total_size)
-        typed_new_data_ptr = codegen.builder.bitcast(
-            new_data_ptr,
-            ir.PointerType(element_llvm_type),
-            name="typed_new_data_ptr"
-        )
-
-        codegen.builder.store(needed_cap, capacity_ptr)
-        codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
+    memory.emit_grow_to_fit(
+        codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=capacity_ptr,
+        current_cap=current_cap, count=needed_cap, element_llvm_type=element_llvm_type,
+        policy=memory.GrowPolicy.EXACT)
 
     return codegen.builder.load(list_alloca, name="updated_list")
 

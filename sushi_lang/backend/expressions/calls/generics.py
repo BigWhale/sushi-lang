@@ -87,9 +87,10 @@ def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def _try_emit_container_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                                 to_i1: bool, *, base: str, is_builtin: Callable[[str], bool],
-                                statics: frozenset[str], emit: Callable) -> Optional[ir.Value]:
+                                emit: Callable) -> Optional[ir.Value]:
     """The ONE body behind the `HashMap@(K, V)` and `List@(T)` method emitters."""
     from sushi_lang.backend.expressions.calls.utils import infer_semantic_type, emit_receiver_as_pointer
+    from sushi_lang.semantics.statics import is_builtin_static
 
     if not is_builtin(expr.method):
         return None
@@ -102,7 +103,7 @@ def _try_emit_container_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, D
     # A static (`List.new()`) has the type NAME as its receiver, not a value. Every
     # other method mutates or probes the container and wants a POINTER; a receiver
     # with no address (a call result) falls back to the value.
-    if expr.method in statics:
+    if is_builtin_static(base, expr.method):
         receiver_value = None
     else:
         receiver_value = emit_receiver_as_pointer(
@@ -118,7 +119,7 @@ def try_emit_hashmap_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     from sushi_lang.backend.generics.hashmap import is_builtin_hashmap_method, emit_hashmap_method
     return _try_emit_container_method(
         codegen, expr, to_i1, base="HashMap", is_builtin=is_builtin_hashmap_method,
-        statics=frozenset({"new"}), emit=emit_hashmap_method)
+        emit=emit_hashmap_method)
 
 
 def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:
@@ -127,4 +128,4 @@ def try_emit_list_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     from sushi_lang.backend.generics.list import emit_list_method
     return _try_emit_container_method(
         codegen, expr, to_i1, base="List", is_builtin=is_builtin_list_method,
-        statics=frozenset({"new", "with_capacity"}), emit=emit_list_method)
+        emit=emit_list_method)

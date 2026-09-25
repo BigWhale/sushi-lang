@@ -120,9 +120,8 @@ class RuntimeErrors:
         """Get the current errno value."""
         if self.codegen.builder is None:
             raise_internal_error("CE0009")
-        assert (
-            self.codegen.runtime.libc_process.errno_location is not None
-        ), "errno_location function not declared"
+        if self.codegen.runtime.libc_process.errno_location is None:
+            raise_internal_error("CE0013", name="errno_location")
 
         errno_ptr = self.codegen.builder.call(self.codegen.runtime.libc_process.errno_location, [])
 

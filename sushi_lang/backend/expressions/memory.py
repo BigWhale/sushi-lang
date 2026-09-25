@@ -1,5 +1,6 @@
 """Memory management operations for the Sushi language compiler."""
 from __future__ import annotations
+import enum
 import itertools
 from collections import defaultdict
 from typing import TYPE_CHECKING, Iterator, Optional
@@ -13,6 +14,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.generics.container_walk import emit_container_walk
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -158,35 +160,18 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     new_data_ptr_i8 = emit_malloc(codegen, codegen.builder, total_bytes)
     new_data_ptr = codegen.builder.bitcast(new_data_ptr_i8, ir.PointerType(element_llvm_type))
 
-    copy_index = entry_alloca(codegen.builder, codegen.types.i32, name="copy_idx")
-    codegen.builder.store(zero, copy_index)
-
-    copy_loop_head = codegen.builder.append_basic_block('copy_loop_head')
-    copy_loop_body = codegen.builder.append_basic_block('copy_loop_body')
-    copy_loop_exit = codegen.builder.append_basic_block('copy_loop_exit')
-
-    codegen.builder.branch(copy_loop_head)
-
-    codegen.builder.position_at_end(copy_loop_head)
-    idx = codegen.builder.load(copy_index)
-    cond = codegen.builder.icmp_unsigned('<', idx, source_len)
-    codegen.builder.cbranch(cond, copy_loop_body, copy_loop_exit)
-
     # An owning element must get its OWN buffers, or the clone and the source share them
     # and both free at scope exit. `emit_value_clone` is a no-op for a non-owning element
     # and recursion-safe for a self-referential one.
-    codegen.builder.position_at_end(copy_loop_body)
-    src_elem_ptr = codegen.builder.gep(source_data_ptr, [idx])
-    elem = codegen.builder.load(src_elem_ptr)
-    elem = emit_value_clone(codegen, elem, element_type)
-    dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
-    codegen.builder.store(elem, dst_elem_ptr)
+    def copy_element(src_elem_ptr: ir.Value, idx: ir.Value) -> None:
+        elem = codegen.builder.load(src_elem_ptr)
+        elem = emit_value_clone(codegen, elem, element_type)
+        dst_elem_ptr = codegen.builder.gep(new_data_ptr, [idx])
+        codegen.builder.store(elem, dst_elem_ptr)
 
-    next_idx = codegen.builder.add(idx, ir.Constant(codegen.types.i32, 1))
-    codegen.builder.store(next_idx, copy_index)
-    codegen.builder.branch(copy_loop_head)
+    emit_container_walk(codegen, source_data_ptr, source_len, copy_element, prefix="copy")
+    copy_exit = codegen.builder.block
 
-    codegen.builder.position_at_end(copy_loop_exit)
     new_array = ir.Constant(array_struct_type, ir.Undefined)
     new_array = codegen.builder.insert_value(new_array, source_len, 0)
     new_array = codegen.builder.insert_value(new_array, source_cap, 1)
@@ -196,7 +181,7 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     codegen.builder.position_at_end(clone_merge_bb)
     result_phi = codegen.builder.phi(array_struct_type, name="cloned_array")
     result_phi.add_incoming(empty_array, empty_clone_bb)
-    result_phi.add_incoming(new_array, copy_loop_exit)
+    result_phi.add_incoming(new_array, copy_exit)
 
     return result_phi
 
@@ -386,6 +371,26 @@ def _declare_memcpy(codegen: 'LLVMCodegen'):
     )
 
 
+def _declare_memmove(codegen: 'LLVMCodegen'):
+    """Declare the i64-length llvm.memmove intrinsic (see #149)."""
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    return codegen.module.declare_intrinsic(
+        'llvm.memmove', [i8_ptr, i8_ptr, ir.IntType(INT64_BIT_WIDTH)]
+    )
+
+
+def _emit_mem_transfer(codegen: 'LLVMCodegen', intrinsic, dest: ir.Value, source: ir.Value,
+                       byte_count: ir.Value) -> None:
+    b = codegen.builder
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    count_i64 = byte_count
+    if byte_count.type != ir.IntType(INT64_BIT_WIDTH):
+        count_i64 = b.zext(byte_count, ir.IntType(INT64_BIT_WIDTH), name="copy_bytes_i64")
+    b.call(intrinsic,
+           [b.bitcast(dest, i8_ptr), b.bitcast(source, i8_ptr), count_i64,
+            ir.Constant(ir.IntType(1), 0)])
+
+
 def emit_memcpy_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
                       byte_count: ir.Value) -> None:
     """`byte_count` bytes from `source` to `dest`, whatever the pointee types are.
@@ -393,14 +398,59 @@ def emit_memcpy_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
     The i64-length form with a zero-extended count, never the raw i32: the upper half of a
     64-bit length register is otherwise garbage that glibc's memcpy reads (#149).
     """
+    _emit_mem_transfer(codegen, _declare_memcpy(codegen), dest, source, byte_count)
+
+
+def emit_memmove_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
+                       byte_count: ir.Value) -> None:
+    """`emit_memcpy_bytes` for two ranges that can overlap (an element shift)."""
+    _emit_mem_transfer(codegen, _declare_memmove(codegen), dest, source, byte_count)
+
+
+class GrowPolicy(enum.Enum):
+    """How far `emit_grow_to_fit` grows a buffer that is too small."""
+    DOUBLE = "double"
+    EXACT = "exact"
+
+
+def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr: ir.Value,
+                     cap_ptr: ir.Value, current_cap: ir.Value, count: ir.Value,
+                     element_llvm_type: ir.Type, policy: GrowPolicy) -> ir.Value:
+    """Grow a contiguous buffer so that it holds enough elements; answer its data pointer.
+
+    DOUBLE: `count` elements are in the buffer and one more must fit. The capacity
+    doubles (0 becomes 1). EXACT: `count` elements must fit, and the capacity becomes
+    exactly `count`. The new capacity and data pointer are stored through `cap_ptr` and
+    `data_ptr_ptr`; the answer is `data_ptr` or the grown pointer, whichever is live.
+    """
     b = codegen.builder
-    i8_ptr = ir.PointerType(codegen.types.i8)
-    count_i64 = byte_count
-    if byte_count.type != ir.IntType(INT64_BIT_WIDTH):
-        count_i64 = b.zext(byte_count, ir.IntType(INT64_BIT_WIDTH), name="copy_bytes_i64")
-    b.call(_declare_memcpy(codegen),
-           [b.bitcast(dest, i8_ptr), b.bitcast(source, i8_ptr), count_i64,
-            ir.Constant(ir.IntType(1), 0)])
+    if policy is GrowPolicy.DOUBLE:
+        need_growth = b.icmp_unsigned(">=", count, current_cap)
+    else:
+        need_growth = b.icmp_unsigned(">", count, current_cap)
+
+    before_growth = b.block
+    with b.if_then(need_growth):
+        if policy is GrowPolicy.DOUBLE:
+            i32 = codegen.types.i32
+            cap_is_zero = b.icmp_unsigned("==", current_cap, ir.Constant(i32, 0))
+            double_cap = b.mul(current_cap, ir.Constant(i32, 2))
+            new_cap = b.select(cap_is_zero, ir.Constant(i32, 1), double_cap, name="new_cap")
+        else:
+            new_cap = count
+        element_size = get_element_size_constant(codegen, element_llvm_type)
+        new_total_size = b.mul(new_cap, element_size, name="new_total_size")
+        new_data_ptr = emit_realloc_call(codegen, data_ptr, new_total_size)
+        typed_new_data_ptr = b.bitcast(new_data_ptr, ir.PointerType(element_llvm_type),
+                                       name="typed_new_data_ptr")
+        b.store(new_cap, cap_ptr)
+        b.store(typed_new_data_ptr, data_ptr_ptr)
+        after_growth = b.block
+
+    phi = b.phi(data_ptr.type, name="data_ptr_phi")
+    phi.add_incoming(data_ptr, before_growth)
+    phi.add_incoming(typed_new_data_ptr, after_growth)
+    return phi
 
 
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
@@ -411,8 +461,7 @@ def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:
 
     size_i64 = b.zext(size, ir.IntType(INT64_BIT_WIDTH))
     new_data = emit_malloc(codegen, codegen.builder, size_i64)  # i8*
-    b.call(_declare_memcpy(codegen),
-           [new_data, data, size_i64, ir.Constant(ir.IntType(1), 0)])
+    emit_memcpy_bytes(codegen, new_data, data, size_i64)
     cloned = b.insert_value(fat, new_data, 0)
     cloned = b.insert_value(cloned, ir.Constant(codegen.types.i8, 1), 2)
     return cloned
@@ -489,8 +538,7 @@ def _clone_list_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: Struc
         len_i64 = b.zext(length, ir.IntType(INT64_BIT_WIDTH))
         bytes_to_copy = b.mul(len_i64, elem_size_i64)
         old_i8 = b.bitcast(data, ir.PointerType(codegen.types.i8), name="list_old_i8")
-        b.call(_declare_memcpy(codegen),
-               [new_raw, old_i8, bytes_to_copy, ir.Constant(ir.IntType(1), 0)])
+        emit_memcpy_bytes(codegen, new_raw, old_i8, bytes_to_copy)
 
         if needs_cleanup(codegen, elem_ty):
             def clone_element(element_ptr: ir.Value, _index: ir.Value) -> None:
@@ -537,8 +585,7 @@ def _clone_hashmap_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: St
 
         old_i8 = codegen.builder.bitcast(data, ir.PointerType(codegen.types.i8),
                                          name="hm_old_i8")
-        codegen.builder.call(_declare_memcpy(codegen),
-                             [new_raw, old_i8, total_bytes, ir.Constant(ir.IntType(1), 0)])
+        emit_memcpy_bytes(codegen, new_raw, old_i8, total_bytes)
 
         def occupied(entry_ptr: ir.Value, _index: ir.Value) -> ir.Value:
             return emit_entry_state_check(codegen, entry_ptr, ENTRY_OCCUPIED, "hm_occupied")

@@ -1,11 +1,12 @@
 """Built-in extension methods for List<T> generic struct."""
 
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.generics.container_table import ContainerMethod, emit_from_table
 
 from .methods_simple import (
     emit_list_clone,
@@ -39,6 +40,31 @@ from .methods_iter import (
 )
 
 
+
+#: Every built-in `List@(T)` method and its emitter. The key set is the key set of
+#: `LIST_METHOD_ARITY`; `tests/unit/test_container_emitters_match_the_table.py` holds it.
+LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
+    "new": ContainerMethod(lambda c, e, v, t: emit_list_new(c, t)),
+    "with_capacity": ContainerMethod(lambda c, e, v, t: emit_list_with_capacity(c, e, t)),
+    "len": ContainerMethod(lambda c, e, v, t: emit_list_len(c, v)),
+    "capacity": ContainerMethod(lambda c, e, v, t: emit_list_capacity(c, v)),
+    "is_empty": ContainerMethod(lambda c, e, v, t: emit_list_is_empty(c, v), answers_bool=True),
+    "push": ContainerMethod(emit_list_push),
+    "pop": ContainerMethod(lambda c, e, v, t: emit_list_pop(c, v, t)),
+    "get": ContainerMethod(emit_list_get),
+    "clear": ContainerMethod(lambda c, e, v, t: emit_list_clear(c, v, t)),
+    "insert": ContainerMethod(emit_list_insert),
+    "remove": ContainerMethod(emit_list_remove),
+    "reserve": ContainerMethod(emit_list_reserve),
+    "shrink_to_fit": ContainerMethod(lambda c, e, v, t: emit_list_shrink_to_fit(c, v, t)),
+    "destroy": ContainerMethod(lambda c, e, v, t: emit_list_destroy(c, v, t)),
+    "free": ContainerMethod(lambda c, e, v, t: emit_list_free(c, v, t)),
+    "debug": ContainerMethod(lambda c, e, v, t: emit_list_debug(c, v, t)),
+    "iter": ContainerMethod(emit_list_iter),
+    "clone": ContainerMethod(lambda c, e, v, t: emit_list_clone(c, v, t)),
+})
+
+
 def emit_list_method(
     codegen: Any,
     expr: MethodCall | DotCall,
@@ -47,50 +73,4 @@ def emit_list_method(
     to_i1: bool
 ) -> ir.Value:
     """Emit LLVM IR for List<T> method calls."""
-    method = expr.method
-
-    if method == "new":
-        result = emit_list_new(codegen, receiver_type)
-    elif method == "with_capacity":
-        result = emit_list_with_capacity(codegen, expr, receiver_type)
-    elif method == "len":
-        result = emit_list_len(codegen, receiver_value)
-    elif method == "capacity":
-        result = emit_list_capacity(codegen, receiver_value)
-    elif method == "is_empty":
-        result = emit_list_is_empty(codegen, receiver_value)
-    elif method == "push":
-        result = emit_list_push(codegen, expr, receiver_value, receiver_type)
-    elif method == "pop":
-        result = emit_list_pop(codegen, receiver_value, receiver_type)
-    elif method == "get":
-        result = emit_list_get(codegen, expr, receiver_value, receiver_type)
-    elif method == "clear":
-        result = emit_list_clear(codegen, receiver_value, receiver_type)
-    elif method == "insert":
-        result = emit_list_insert(codegen, expr, receiver_value, receiver_type)
-    elif method == "remove":
-        result = emit_list_remove(codegen, expr, receiver_value, receiver_type)
-    elif method == "reserve":
-        result = emit_list_reserve(codegen, expr, receiver_value, receiver_type)
-    elif method == "shrink_to_fit":
-        result = emit_list_shrink_to_fit(codegen, receiver_value, receiver_type)
-    elif method == "destroy":
-        result = emit_list_destroy(codegen, receiver_value, receiver_type)
-    elif method == "free":
-        result = emit_list_free(codegen, receiver_value, receiver_type)
-    elif method == "debug":
-        result = emit_list_debug(codegen, receiver_value, receiver_type)
-    elif method == "iter":
-        result = emit_list_iter(codegen, expr, receiver_value, receiver_type)
-    elif method == "clone":
-        result = emit_list_clone(codegen, receiver_value, receiver_type)
-    else:
-        raise_internal_error("CE0083", method=method)
-
-    if method == "is_empty":
-        result = codegen.utils.bool_answer(result, to_i1)
-
-    return result
-
-
+    return emit_from_table(LIST_EMITTERS, "CE0083", codegen, expr, receiver_value, receiver_type, to_i1)
