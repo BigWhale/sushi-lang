@@ -13,7 +13,7 @@ extend Maybe@(i32) here_here() bool:
     return self.is_some()
 
 extend Maybe@(T) here_ch() bool | StdError:
-    return self.is_some()
+    return Result.Ok(self.is_some())
 
 extend Maybe@(T) spelled() string:
     return "{self.is_some()}"

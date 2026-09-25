@@ -7,7 +7,7 @@ struct Half:
     i32 n
 
 extend Half take(peek self) i32 | i32:
-    return self.n
+    return Result.Ok(self.n)
 
 fn main() i32:
     return Result.Ok(0)

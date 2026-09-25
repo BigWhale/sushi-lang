@@ -31,7 +31,6 @@ fn write_fixture(string path, u8[] bytes) i32:
             return Result.Ok(0)
         Result.Err(_) ->
             return Result.Ok(1)
-    return Result.Ok(1)
 
 fn show_err(SlibError e) string:
     match e:
@@ -53,7 +52,6 @@ fn show_err(SlibError e) string:
                     return Result.Ok("Decode(BadUtf8({off}))")
                 MpError.Trailing(p) ->
                     return Result.Ok("Decode(Trailing({p}))")
-    return Result.Ok("unknown")
 
 fn check(string path) ~:
     match read_metadata(path):

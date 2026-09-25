@@ -17,7 +17,7 @@ extend Pipe with Sink:
     fn flush() ~ | SinkError:
         if (self.broken):
             return Result.Err(SinkError.Broken)
-        return ~
+        return Result.Ok(~)
 
 fn main() i32:
     let Pipe good = Pipe(false)

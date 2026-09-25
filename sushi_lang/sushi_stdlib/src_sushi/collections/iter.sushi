@@ -59,7 +59,7 @@ extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x)??)
-    return out
+    return Result.Ok(out)
 
 ##:
 Keeps the elements of the list for which `pred` answers true.
@@ -73,7 +73,7 @@ extend List@(T) filter(fn(T) -> bool pred) List@(T) | StdError:
     foreach(x in self.iter()):
         if (pred(x)??):
             out.push(x.clone())
-    return out
+    return Result.Ok(out)
 
 ##:
 Reduces the list left to right, threading the accumulator through `f`.
@@ -87,7 +87,7 @@ extend List@(T) fold@(U)(U init, fn(U, T) -> U f) U | StdError:
     let U acc = init
     foreach(x in self.iter()):
         acc := f(acc, x)??
-    return acc
+    return Result.Ok(acc)
 
 ##:
 Applies `f` to every element of the array, collecting the results into a new list.
@@ -100,7 +100,7 @@ extend T[] map@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x)??)
-    return out
+    return Result.Ok(out)
 
 ##:
 Keeps the elements of the array for which `pred` answers true.
@@ -114,7 +114,7 @@ extend T[] filter(fn(T) -> bool pred) List@(T) | StdError:
     foreach(x in self.iter()):
         if (pred(x)??):
             out.push(x.clone())
-    return out
+    return Result.Ok(out)
 
 ##:
 Reduces the array left to right, threading the accumulator through `f`.
@@ -128,4 +128,4 @@ extend T[] fold@(U)(U init, fn(U, T) -> U f) U | StdError:
     let U acc = init
     foreach(x in self.iter()):
         acc := f(acc, x)??
-    return acc
+    return Result.Ok(acc)

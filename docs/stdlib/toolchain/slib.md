@@ -62,7 +62,6 @@ fn library_name(string path) string:
                     return Result.Ok("missing")
         Result.Err(_) ->
             return Result.Ok("read error")
-    return Result.Ok("read error")
 
 fn main() i32:
     println(library_name("mylib.slib").realise("error"))

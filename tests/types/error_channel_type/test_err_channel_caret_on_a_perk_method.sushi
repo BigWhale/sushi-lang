@@ -12,7 +12,7 @@ perk Source:
 
 extend Holder with Source:
     fn read_one(peek self) i32 | NoSuchError:
-        return self.n
+        return Result.Ok(self.n)
 
 fn main() i32:
     return Result.Ok(0)

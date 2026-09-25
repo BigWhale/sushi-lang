@@ -1,0 +1,17 @@
+# An exhaustive 'match' whose every arm returns ends the path, so the next
+# statement is dead (#854).
+# EXPECT_ERROR_CODE: CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_match.sushi:13:5
+enum Sign:
+    Plus
+    Minus
+
+fn h(Sign s) i32:
+    match s:
+        Sign.Plus -> return Result.Ok(1)
+        Sign.Minus -> return Result.Ok(-1)
+    return Result.Ok(0)
+
+fn main() i32:
+    println("{h(Sign.Plus).realise(0)}")
+    return Result.Ok(0)

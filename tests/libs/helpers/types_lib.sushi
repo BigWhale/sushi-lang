@@ -31,4 +31,3 @@ public fn color_name(Color c) string:
         Color.Red -> return Result.Ok("red")
         Color.Green -> return Result.Ok("green")
         Color.Blue(intensity) -> return Result.Ok("blue {intensity}")
-    return Result.Ok("unknown")

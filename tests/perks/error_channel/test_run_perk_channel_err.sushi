@@ -18,7 +18,7 @@ extend Counter with Source:
     fn read_one() i32 | SourceError:
         if (self.closed):
             return Result.Err(SourceError.Closed)
-        return self.value
+        return Result.Ok(self.value)
 
 fn take(Counter c) i32 | SourceError:
     let i32 v = c.read_one()??

@@ -10,7 +10,7 @@ enum OddError:
 extend i32 half_checked() i32 | OddError:
     if (self % 2 == 1):
         return Result.Err(OddError.TooOdd)
-    return self / 2
+    return Result.Ok(self / 2)
 
 fn run() i32 | OddError:
     let i32 eight = 8

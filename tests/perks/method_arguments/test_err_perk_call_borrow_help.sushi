@@ -13,7 +13,7 @@ struct Horn:
 extend Horn with Shout:
     fn say(peek string data) ~ | StdError:
         println(data)
-        return ~
+        return Result.Ok(~)
 
 fn main() i32:
     let Horn h = Horn(1)

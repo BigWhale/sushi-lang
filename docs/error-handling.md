@@ -104,6 +104,24 @@ fn divide(i32 a, i32 b) i32 | MathError:
 
 **Important:** `Result.Err()` without error data is a **compile error** (**CE2050** — wrong argument count for the `Err` variant), not a deprecation. Always include the error value.
 
+**Every constructor is spelled.** The compiler never wraps a bare value into `Ok`. A
+`return value` in a body that answers a Result is **CE2030**, and a `~` success is
+`return Result.Ok(~)`. The rule is the same for a function, a lambda block body, and an
+extension or perk method that declares an error channel `| E`:
+
+```sushi
+enum OddError:
+    TooOdd
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return Result.Ok(self / 2)          # `return self / 2` is CE2030
+```
+
+A method with NO channel is the other way round: it returns the value itself, and both
+constructors are refused there (**CE2091**).
+
 ### Handling Results
 
 #### Using `.realise(default)`
@@ -585,7 +603,7 @@ fn main() i32:
 # ERROR CE2508: Using ?? outside Result-returning function
 extend i32 squared() i32:
     # let i32 x = might_fail()??  # Not allowed here
-    return Result.Ok(self * self)
+    return self * self
 
 # ERROR CE2511: Error type mismatch in propagation
 enum ErrorA:

@@ -47,7 +47,7 @@ struct Cell:
 
 extend List@(T) grab@(U)(fn(T) -> U f) U | StdError:
     foreach(x in self.iter()):
-        return f(x)??
+        return Result.Ok(f(x)??)
     return Result.Err(StdError.Error)
 
 fn main() i32:

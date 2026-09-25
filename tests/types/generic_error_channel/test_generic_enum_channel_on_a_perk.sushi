@@ -13,7 +13,7 @@ struct Holder:
 
 extend Holder with Source:
     fn read_one(peek self) i32 | MyErr@(i32):
-        return self.n
+        return Result.Ok(self.n)
 
 fn main() i32:
     let Holder h = Holder(4)

@@ -1,0 +1,11 @@
+# A channel body spells its success as 'return Result.Ok(x)' (#848, which reversed
+# ruling 6 of the UFCS epic: this spelling was CE2091 before).
+# EXPECT_STDOUT_EXACT: "2\n"
+extend i32 checked_inc() i32 | StdError:
+    return Result.Ok(self + 1)
+
+fn main() i32:
+    let i32 one = 1
+    let i32 two = one.checked_inc().realise(0)
+    println("{two}")
+    return Result.Ok(0)

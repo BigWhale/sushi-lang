@@ -51,7 +51,7 @@ CHANNEL_SOURCES = {
         "    i32 n\n"
         "\n"
         "extend Half take(peek self) i32 | OddError:\n"
-        "    return self.n\n"
+        "    return Result.Ok(self.n)\n"
     ),
     "perk method": (
         "enum OddError:\n"
@@ -86,7 +86,7 @@ CONTRACT_AND_IMPLEMENTATION = (
     "\n"
     "extend Counter with Source:\n"
     "    fn read_one(peek self) i32 | OddError:\n"
-    "        return self.value\n"
+    "        return Result.Ok(self.value)\n"
 )
 
 _PARSER = build_parser()

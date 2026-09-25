@@ -303,7 +303,7 @@ a method named `static` are not writable.
 
 Everything in the right column that is not about the receiver is unchanged. A static's
 parameters BORROW unless marked `nom`; its owning return is the caller's; its `| E`
-channel wraps a bare success at the return seam. The one thing it lacks is a receiver,
+channel spells `Result.Ok(...)` and `Result.Err(...)` as a free function does (#848). The one thing it lacks is a receiver,
 and the two positions that could name one are one fault with one code:
 
 - a receiver MODE in the signature -- `extend Vec static at(poke self)`,
@@ -464,7 +464,7 @@ perk Source:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return self.value          # the success returns BARE; the seam wraps it
+        return Result.Ok(self.value)   # both constructors are spelled (#848)
 ```
 
 The channel is part of the signature, so the contract and the implementation must

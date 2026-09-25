@@ -312,7 +312,7 @@ extend File with Reader:
     :##
     fn read(poke self, i32 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
-        return chunk.to_string()
+        return Result.Ok(chunk.to_string())
 
     ##:
     Reads what one read gives, as bytes.
@@ -326,7 +326,7 @@ extend File with Reader:
     :##
     fn read_bytes(poke self, i32 max) u8[] | IoError:
         match fd_read(self.fd, max):
-            Result.Ok(nom chunk) -> return chunk
+            Result.Ok(nom chunk) -> return Result.Ok(chunk)
             Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -344,7 +344,7 @@ extend File with Writer:
     :##
     fn write(poke self, string data) ~ | IoError:
         match fd_write_str(self.fd, data):
-            Result.Ok(_) -> return ~
+            Result.Ok(_) -> return Result.Ok(~)
             Result.Err(e) -> return Result.Err(e.to_io())
 
     ##:
@@ -356,7 +356,7 @@ extend File with Writer:
     :##
     fn write_bytes(poke self, u8[] data) ~ | IoError:
         match fd_write(self.fd, data):
-            Result.Ok(_) -> return ~
+            Result.Ok(_) -> return Result.Ok(~)
             Result.Err(e) -> return Result.Err(e.to_io())
 
     ##:
@@ -373,7 +373,7 @@ extend File with Writer:
     - Errors: IoError, never in practice.
     :##
     fn flush(poke self) ~ | IoError:
-        return ~
+        return Result.Ok(~)
 
 ##:
 Moves the file position. A socket does not implement this perk, because a stream has no
@@ -390,7 +390,7 @@ extend File with Seek:
     :##
     fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError:
         match fd_seek(self.fd, offset, origin.whence()):
-            Result.Ok(at) -> return at
+            Result.Ok(at) -> return Result.Ok(at)
             Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -411,7 +411,7 @@ extend File read_all(poke self) string | IoError:
             done := true
         else:
             all.extend(chunk)
-    return all.to_string()
+    return Result.Ok(all.to_string())
 
 ##:
 Reads one line, without its newline.
@@ -428,7 +428,7 @@ by line wants BufReader from <io/buf>.
 :##
 extend File readln() Maybe@(string) | IoError:
     match fd_readln(self.fd):
-        Result.Ok(nom line) -> return line
+        Result.Ok(nom line) -> return Result.Ok(line)
         Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -439,7 +439,7 @@ Reads one byte, as text.
 :##
 extend File readch(poke self) string | IoError:
     let u8[] one = self.read_bytes(1)??
-    return one.to_string()
+    return Result.Ok(one.to_string())
 
 ##:
 Writes text and a newline.
@@ -454,7 +454,7 @@ and a file descriptor takes the second write for nothing.
 extend File writeln(poke self, string data) ~ | IoError:
     self.write(data)??
     self.write("\n")??
-    return ~
+    return Result.Ok(~)
 
 ##:
 The current file position, in bytes from the start.
@@ -463,7 +463,7 @@ The current file position, in bytes from the start.
 - Errors: IoError, when the descriptor cannot seek.
 :##
 extend File tell(poke self) i64 | IoError:
-    return self.seek(0 as i64, SeekFrom.Current)??
+    return Result.Ok(self.seek(0 as i64, SeekFrom.Current)??)
 
 ##:
 Reads bytes at an offset, without moving the file position.
@@ -480,7 +480,7 @@ the file.
 :##
 extend File read_at(i64 offset, i32 count) u8[] | IoError:
     match fd_pread(self.fd, offset, count):
-        Result.Ok(nom chunk) -> return chunk
+        Result.Ok(nom chunk) -> return Result.Ok(chunk)
         Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -497,7 +497,7 @@ caller's, exactly as it is for a socket's send().
 :##
 extend File write_at(i64 offset, u8[] data) i32 | IoError:
     match fd_pwrite(self.fd, offset, data):
-        Result.Ok(n) -> return n
+        Result.Ok(n) -> return Result.Ok(n)
         Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -518,7 +518,7 @@ descriptor. This is the operation that means one, and its name says so.
 :##
 extend File share() File | IoError:
     match fd_dup(self.fd):
-        Result.Ok(fd) -> return File(fd: fd, owned: true)
+        Result.Ok(fd) -> return Result.Ok(File(fd: fd, owned: true))
         Result.Err(e) -> return Result.Err(e.to_io())
 
 ##:
@@ -557,4 +557,4 @@ of the wrapper that holds it with into_inner().
 :##
 extend File close(nom self) ~ | IoError:
     close_handle(poke self)??
-    return ~
+    return Result.Ok(~)

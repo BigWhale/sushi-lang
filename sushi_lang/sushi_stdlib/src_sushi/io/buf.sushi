@@ -64,7 +64,7 @@ extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R) | IoError:
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return BufReader(src, empty, 0, size, false)
+    return Result.Ok(BufReader(src, empty, 0, size, false))
 
 ##:
 Reads the next window from the handle, replacing the one held.
@@ -83,14 +83,14 @@ length.
 :##
 extend BufReader@(R) fill(poke self) bool | IoError:
     if (self.at_end):
-        return false
+        return Result.Ok(false)
     let u8[] chunk = self.inner.read_bytes(self.cap)??
     let bool got = chunk.len() > 0
     self.window := chunk
     self.pos := 0
     if (not got):
         self.at_end := true
-    return got
+    return Result.Ok(got)
 
 ##:
 A BufReader is a Reader: the two contract methods answer from the window.
@@ -114,18 +114,18 @@ extend BufReader@(R) with Reader:
     fn read_bytes(poke self, i32 max) u8[] | IoError:
         if (max < 1):
             let u8[] none = from([])
-            return none
+            return Result.Ok(none)
         if (self.pos >= self.window.len()):
             if (not self.fill()??):
                 let u8[] ended = from([])
-                return ended
+                return Result.Ok(ended)
         let i32 avail = self.window.len() - self.pos
         let i32 take = max
         if (take > avail):
             take := avail
         let u8[] out = self.window.ss(self.pos, take)
         self.pos := self.pos + take
-        return out
+        return Result.Ok(out)
 
     ##:
     Reads what the window still has, as text.
@@ -139,7 +139,7 @@ extend BufReader@(R) with Reader:
     :##
     fn read(poke self, i32 max) string | IoError:
         let u8[] chunk = self.read_bytes(max)??
-        return chunk.to_string()
+        return Result.Ok(chunk.to_string())
 
 ##:
 Reads one line, without its newline.
@@ -179,9 +179,9 @@ extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
                 done := true
     if (not saw_any):
         let Maybe@(string) ended = Maybe.None()
-        return ended
+        return Result.Ok(ended)
     let Maybe@(string) got = Maybe.Some(line.to_string())
-    return got
+    return Result.Ok(got)
 
 ##:
 Reads everything left, as text.
@@ -201,7 +201,7 @@ extend BufReader@(R) read_all(poke self) string | IoError:
             done := true
         else:
             all.extend(chunk)
-    return all.to_string()
+    return Result.Ok(all.to_string())
 
 ##:
 Hands the handle back and ends the reader.
@@ -316,7 +316,7 @@ extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W) | IoError:
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return BufWriter(dst, empty, size)
+    return Result.Ok(BufWriter(dst, empty, size))
 
 ##:
 A BufWriter is a Writer: the three contract methods fill and drain the buffer.
@@ -338,11 +338,11 @@ extend BufWriter@(W) with Writer:
     :##
     fn flush(poke self) ~ | IoError:
         if (self.buf.len() == 0):
-            return ~
+            return Result.Ok(~)
         self.sink.write_bytes(self.buf)??
         self.buf.clear()
         self.sink.flush()??
-        return ~
+        return Result.Ok(~)
 
     ##:
     Writes bytes into the buffer.
@@ -357,7 +357,7 @@ extend BufWriter@(W) with Writer:
     fn write_bytes(poke self, u8[] data) ~ | IoError:
         self.buf.extend(data)
         self.drain_if_full()??
-        return ~
+        return Result.Ok(~)
 
     ##:
     Writes text into the buffer.
@@ -369,7 +369,7 @@ extend BufWriter@(W) with Writer:
     fn write(poke self, string data) ~ | IoError:
         self.buf.extend(data.to_bytes())
         self.drain_if_full()??
-        return ~
+        return Result.Ok(~)
 
 ##:
 Drains the buffer if it has reached its size. Every write goes through this one call.
@@ -380,7 +380,7 @@ Drains the buffer if it has reached its size. Every write goes through this one 
 extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
     if (self.buf.len() >= self.cap):
         self.flush()??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Writes text and a newline into the buffer.
@@ -396,7 +396,7 @@ extend BufWriter@(W) write_line(poke self, string data) ~ | IoError:
     self.buf.extend(data.to_bytes())
     self.buf.push(10)
     self.drain_if_full()??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Ends the writer, sending everything waiting first.
@@ -413,7 +413,7 @@ the last drain's failure cannot be lost.
 :##
 extend BufWriter@(W) finish(nom self) ~ | IoError:
     self.flush()??
-    return ~
+    return Result.Ok(~)
 
 ##:
 Sends everything waiting, then hands the handle back and ends the writer.
@@ -426,7 +426,7 @@ while compiling.
 :##
 extend BufWriter@(W) into_inner(nom self) W | IoError:
     self.flush()??
-    return nom self.sink
+    return Result.Ok(nom self.sink)
 
 ##:
 Sends whatever is waiting when the writer is destroyed, and drops the error.

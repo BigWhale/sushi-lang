@@ -1,4 +1,4 @@
-# A blank return in a channel body wraps into Ok(~) at the return seam, and
+# A blank success in a channel body is spelled Result.Ok(~) (#848), and
 # the spelled Err reaches the call site untouched.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
@@ -10,7 +10,7 @@ enum ParityError:
 extend i32 must_be_even() ~ | ParityError:
     if (self % 2 == 1):
         return Result.Err(ParityError.Odd)
-    return ~
+    return Result.Ok(~)
 
 fn main() i32:
     let i32 two = 2

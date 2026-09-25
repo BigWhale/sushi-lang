@@ -42,7 +42,6 @@ fn write_fixture(string path, u8[] bytes) i32:
             return Result.Ok(0)
         Result.Err(_) ->
             return Result.Ok(1)
-    return Result.Ok(1)
 
 fn run_test() i32:
     let u8[] bytes = fixture()??
