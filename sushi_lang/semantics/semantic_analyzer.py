@@ -159,9 +159,10 @@ class SemanticAnalyzer:
         # as CE2095 does below. CE4006 stands at the type that named the refused
         # instantiation, no copy was cut for it, and the per-unit passes would only
         # read the same fault back as a CE2008 from inside a template body. A private
-        # type a consumer declaration took from a binary library's closure stops it for
-        # the same reason: CE3011 stands at the declaration, and the library's template
-        # bodies name the library's type, not the consumer's (#761).
+        # type a consumer declaration took from a library stops it for the same reason:
+        # CE3011 stands at the declaration, and one name means two shapes to the two
+        # sides, so a later pass measures one side's code against the other's (#761,
+        # #814 -- binary and source alike).
         if monomorphizer.constraint_violations or libraries.refused_private_types:
             return
 
@@ -208,6 +209,7 @@ class SemanticAnalyzer:
         if self.library_linker is not None:
             libraries.seed_perks(global_tables.perks)
             libraries.seed_generic_types()
+            collector.admit_binary_libraries(libraries.library_names())
 
         for unit in compilation_order:
             if unit.ast is None:
@@ -227,6 +229,7 @@ class SemanticAnalyzer:
                     unit.ast.perk_impls = [i for i in unit.ast.perk_impls
                                            if id(i) not in dropped]
 
+        libraries.refused_private_types.extend(collector.refused_library_types)
         self.tables = global_tables
         return libraries
 

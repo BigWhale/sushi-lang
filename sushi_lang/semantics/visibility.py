@@ -115,6 +115,14 @@ def origin_of(kind: str, record: Any) -> DeclOrigin:
     )
 
 
+# The two kinds that share one TYPE name for the whole program.
+TYPE_KINDS: tuple[str, ...] = ("struct", "enum")
+
+
+def _other_type_kind(kind: str) -> str:
+    return "enum" if kind == "struct" else "struct"
+
+
 @dataclass
 class VisibilityTable:
     """Every declaration the collect pass saw, keyed by kind and name.
@@ -148,6 +156,14 @@ class VisibilityTable:
         """
         key = (origin.kind, origin.name)
         kept = self.by_key.get(key)
+        if kept is None and origin.kind in TYPE_KINDS:
+            # A struct and an enum share ONE name: a type another unit already took
+            # under the other kind is a loss too (CE0006, CE3011), and the loser does
+            # not take the winner's slot of its own kind (#814).
+            sibling = self.by_key.get((_other_type_kind(origin.kind), origin.name))
+            if sibling is not None and origin.unit_name is not None \
+                    and origin.unit_name != sibling.unit_name:
+                kept = sibling
         if kept is not None:
             # Only a loss to ANOTHER unit is contested. Recording the same unit again is
             # either the same declaration replayed -- the collect pass builds one table
@@ -183,8 +199,10 @@ class VisibilityTable:
         """
         if unit is None:
             return False
+        kinds = TYPE_KINDS if kind in TYPE_KINDS else (kind,)
         return any(other.unit_name == unit
-                   for other in self.contested.get((kind, name), ()))
+                   for each in kinds
+                   for other in self.contested.get((each, name), ()))
 
     def candidates(self, kind: str, name: str, unit: Optional[str],
                    scope: Any = None) -> list[DeclOrigin]:

@@ -1,0 +1,18 @@
+# A consumer generic struct beside a BINARY library's PRIVATE generic template of the
+# same name. The template is seeded before the collect pass, so the consumer's
+# declaration is refused where it stands, with CE3011 naming the library, and the
+# consumer's own uses are not measured against the library's template (#814; the
+# pytest gate tests/unit/test_private_type_clash_uses.py pins the one diagnostic).
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "private_generic_type_lib"
+use <lib/private_generic_type_lib>
+
+struct Cell@(T):
+    string label
+    T mine
+
+fn main() i32:
+    let Cell@(i32) c = Cell("x", 4)
+    println("{c.mine}")
+    println("{boxed(nom 7).realise(0)}")
+    return Result.Ok(0)

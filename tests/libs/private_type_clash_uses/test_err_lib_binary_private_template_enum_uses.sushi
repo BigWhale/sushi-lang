@@ -1,0 +1,17 @@
+# A consumer ENUM beside a BINARY library's PRIVATE generic struct template of the
+# same name is the same clash: CE3011, and nothing about the consumer's own variant,
+# binding or match (#814; the pytest gate tests/unit/test_private_type_clash_uses.py
+# pins the one diagnostic).
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "enum 'Cell'"
+use <lib/private_generic_type_lib>
+
+enum Cell:
+    Empty
+
+fn main() i32:
+    let Cell c = Cell.Empty
+    match c:
+        Cell.Empty -> println("empty")
+    println("{boxed(nom 7).realise(0)}")
+    return Result.Ok(0)

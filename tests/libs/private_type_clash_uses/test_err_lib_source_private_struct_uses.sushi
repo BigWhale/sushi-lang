@@ -1,0 +1,17 @@
+# A consumer struct beside a SOURCE library's PRIVATE struct of the same name is
+# CE3011, and that is the one fault. The consumer's own construction and field read
+# are not measured against the library's shape (#814; the pytest gate
+# tests/unit/test_private_type_clash_uses.py pins the absence of CE2028 and CE2106).
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "private_names_lib"
+use <lib/private_names_lib>
+
+struct Tally:
+    string name
+    i32 a
+
+fn main() i32:
+    let Tally mine = Tally("x", 5)
+    println("{mine.a}")
+    println("{lib_tally(1).realise(0)}")
+    return Result.Ok(0)
