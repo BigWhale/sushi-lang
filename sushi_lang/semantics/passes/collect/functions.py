@@ -607,10 +607,11 @@ class FunctionCollector:
         prev_unit = prev.unit_name
         if may_coexist and prev_unit is not None and prev_unit != self.current_unit_name:
             return Redeclaration.COEXIST
-        er.emit_with(self.r, ERR.CE0101, name_span,
-                     filename=self.current_unit_file, name=name) \
-            .note("first defined here", prev.name_span,
-                  prev.filename).emit()
+        diag = er.emit_with(self.r, ERR.CE0101, name_span,
+                            filename=self.current_unit_file, name=name)
+        if prev.name_span is not None:
+            diag.note_at("first defined here", prev.name_span, prev.filename)
+        diag.emit()
         return Redeclaration.REFUSED
 
     def _warn_shadowed_export(self, name: str, name_span: Optional[Span],
@@ -626,7 +627,7 @@ class FunctionCollector:
             name=name, kind=clash.kind, owner=clash.unit_name,
         )
         if clash.name_span is not None and clash.filename is not None:
-            diagnostic = diagnostic.note("exported here", clash.name_span, clash.filename)
+            diagnostic = diagnostic.note_at("exported here", clash.name_span, clash.filename)
         diagnostic.emit()
 
     @staticmethod
@@ -1144,17 +1145,19 @@ class FunctionCollector:
             return False
         if not any(v.name == name for v in enum_ty.variants):
             return False
-        er.emit_with(self.r, ERR.CE2103, name_span, method=name, enum=base) \
-            .note("the variant is declared here",
-                  self.enums.spans.get(base) or self.generic_enums.spans.get(base),
-                  filename=(self.enums.files.get(base)
-                            or self.generic_enums.files.get(base))) \
-            .help("a name behind a type's dot is a variant or a static, never both -- "
+        diag = er.emit_with(self.r, ERR.CE2103, name_span, method=name, enum=base)
+        declared_at = self.enums.spans.get(base) or self.generic_enums.spans.get(base)
+        if declared_at is not None:
+            diag.note_at("the variant is declared here", declared_at,
+                         filename=(self.enums.files.get(base)
+                                   or self.generic_enums.files.get(base)))
+        diag.help("a name behind a type's dot is a variant or a static, never both -- "
                   "rename the static").emit()
         return True
 
-    def _emit_duplicate_extension(self, name_text, name_span,
-                                  other_unit, other_span, other_filename) -> None:
+    def _emit_duplicate_extension(self, name_text, name_span: Optional[Span],
+                                  other_unit, other_span: Optional[Span],
+                                  other_filename) -> None:
         """CE0101 for a second extension of one method name on one target.
 
         One unit wrote both: the second is the duplicate, and the note points
@@ -1166,15 +1169,17 @@ class FunctionCollector:
                             filename=self.current_unit_file, name=name_text)
         if (other_unit and self.current_unit_name
                 and other_unit != self.current_unit_name):
-            diag.note(f"unit '{other_unit}' declares it here",
-                      other_span, other_filename)
-            diag.note(f"unit '{self.current_unit_name}' declares it here",
-                      name_span, self.current_unit_file)
+            if other_span is not None:
+                diag.note_at(f"unit '{other_unit}' declares it here",
+                             other_span, other_filename)
+            if name_span is not None:
+                diag.note_at(f"unit '{self.current_unit_name}' declares it here",
+                             name_span, self.current_unit_file)
             diag.help("a method is found on the receiver's type, so no alias "
                       "can choose between the two; rename one of them, or put "
                       "the method behind a perk")
-        else:
-            diag.note("first defined here", other_span, other_filename)
+        elif other_span is not None:
+            diag.note_at("first defined here", other_span, other_filename)
         diag.emit()
 
     def _reject_overlapping_target(self, method: GenericExtensionMethod,
@@ -1203,8 +1208,9 @@ class FunctionCollector:
             diag = er.emit_with(
                 self.r, ERR.CE0101, name_span,
                 name=f"extension method '{method.name}' for '{display_type(target_type)}'")
-            diag.note("this declaration already covers that target",
-                      existing.name_span)
+            if existing.name_span is not None:
+                diag.note_at("this declaration already covers that target",
+                             existing.name_span)
             diag.help("Sushi has no specialization: make both targets fully concrete, "
                       "or implement a perk on the concrete target -- a perk "
                       "implementation outranks an extension method by design.")

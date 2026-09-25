@@ -184,13 +184,34 @@ def span_of(t: Any) -> Optional[Span]:
 
 
 class DiagnosticBuilder:
-    """Builder for attaching sub-diagnostics (notes, help) before emitting."""
+    """Builder for attaching sub-diagnostics (notes, help) before emitting.
+
+    A note has two entry points, and the name is the contract (#731):
+
+    - `note_at(message, span)` is a RELATIONAL note. It points at a second place, and the
+      span is not optional. A caller that holds an `Optional[Span]` must decide what the
+      `None` means before it calls: a span gives a note, and no span gives no note, or a
+      `help` when the message still says something without a location.
+    - `note(message)` is PROSE. It carries no location, by design.
+
+    There is no blanket guard that refuses a note with no location, and none must be
+    added. Many notes are prose and correct as prose: the four suspended guarantees of an
+    `unsafe external` block, "'x.len()' is a method, not a field", a library record that
+    carries no span. A guard would refuse those. The fault to prevent is a relational note
+    that loses its location without a decision, and the split signature prevents it: mypy
+    refuses an `Optional[Span]` at `note_at`, and `note` has no place for a span.
+    """
 
     def __init__(self, reporter: Reporter, diagnostic: Diagnostic):
         self._reporter = reporter
         self._diagnostic = diagnostic
 
-    def note(self, message: str, span: Optional[Span] = None, filename: Optional[str] = None) -> DiagnosticBuilder:
+    def note(self, message: str) -> DiagnosticBuilder:
+        check_spelling(self._diagnostic.code, message)
+        self._diagnostic.sub.append(SubDiagnostic("note", message))
+        return self
+
+    def note_at(self, message: str, span: Span, filename: Optional[str] = None) -> DiagnosticBuilder:
         check_spelling(self._diagnostic.code, message)
         self._diagnostic.sub.append(SubDiagnostic("note", message, span, filename))
         return self

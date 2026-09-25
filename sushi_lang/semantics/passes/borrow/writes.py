@@ -152,8 +152,8 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
     boundary = chain_call_boundary(receiver) if receiver is not None else None
     if boundary is not None:
         diag = checker.err.emit_with(er.ERR.CE2429, span)
-        diag.note("the value past this expression is a temporary copy, not the "
-                  "owner's storage", boundary)
+        diag.note_at("the value past this expression is a temporary copy, not the "
+                     "owner's storage", boundary)
         diag.help(f"the write ({what}) would land on the copy and be lost; bind a "
                   "clone, mutate it, and rebuild the owner -- or mutate in place "
                   "through a nested `Own(poke ...)` reference binding where the "
@@ -173,7 +173,7 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         diag = checker.err.emit_with(kind.code, span, name=name)
         note_span = kind.note_span(state)
         if note_span is not None:
-            diag.note(kind.note.format(name=name), note_span)
+            diag.note_at(kind.note.format(name=name), note_span)
         diag.help(kind.help.format(name=name, what=what,
                                    escape=escape_help(checker, name, state.var_type)))
         diag.emit()

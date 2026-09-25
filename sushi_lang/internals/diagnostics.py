@@ -23,8 +23,14 @@ class SushiError(Exception):
         self.notes: List[Note] = []
         self.helps: List[str] = []
 
-    def note(self, message: str, span: Optional[Span] = None,
-             filename: Optional[str] = None) -> "SushiError":
+    def note(self, message: str) -> "SushiError":
+        """A prose note, with no location. The builder has the same split (#731)."""
+        self.notes.append((message, None, None))
+        return self
+
+    def note_at(self, message: str, span: Span,
+                filename: Optional[str] = None) -> "SushiError":
+        """A relational note: it points at a second place, so the span is required."""
         self.notes.append((message, span, filename))
         return self
 

@@ -53,6 +53,6 @@ def reject_type_arg_arity(reporter, name: str, generic, n_args: int, span,
     builder = er.emit_with(reporter, er.ERR.CE2062, span, filename=filename,
                            name=name, expected=expected, got=n_args)
     if declared_at is not None:
-        builder.note(f"'{name}' is declared here", declared_at, declared_in)
+        builder.note_at(f"'{name}' is declared here", declared_at, declared_in)
     builder.emit()
     return True

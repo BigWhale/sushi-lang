@@ -56,7 +56,7 @@ def _reject_nested_doc_open(token: Token) -> Token:
         col = len(line) - len(line.lstrip()) + 1
         inner = Span(start_line + offset, col, start_line + offset, col + len(DOC_OPEN))
         outer = Span(start_line, start_col, start_line, start_col + len(DOC_OPEN))
-        raise SyntaxDiagnostic("CE6013", span=inner).note(
+        raise SyntaxDiagnostic("CE6013", span=inner).note_at(
             "the enclosing documentation block opens here", outer)
 
     return token

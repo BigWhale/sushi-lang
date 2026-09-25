@@ -279,7 +279,7 @@ def reject_private_cross_unit_use(
     # with no file of its own renders against whichever file the reporter is pointing at
     # (#473). A record that cannot say where it lives gets the head line alone.
     if origin.name_span is not None and origin.filename is not None:
-        diagnostic = diagnostic.note(
+        diagnostic = diagnostic.note_at(
             "declared here, without `public`", origin.name_span, origin.filename)
     diagnostic.emit()
     return True
@@ -402,7 +402,7 @@ def reject_library_clash(
         filename=filename, kind=kind, name=name, owner=origin.unit_name,
     )
     if origin.name_span is not None and origin.filename is not None:
-        diagnostic = diagnostic.note("declared here", origin.name_span, origin.filename)
+        diagnostic = diagnostic.note_at("declared here", origin.name_span, origin.filename)
     diagnostic.emit()
 
 
@@ -433,7 +433,7 @@ def reject_private_perk_contract(
         current_unit=current_unit, owner=origin.unit_name,
     )
     if origin.name_span is not None and origin.filename is not None:
-        diagnostic = diagnostic.note(
+        diagnostic = diagnostic.note_at(
             "declared here, without `public`", origin.name_span, origin.filename)
     diagnostic.emit()
     return True
