@@ -138,4 +138,5 @@ FORMAT_STRINGS = {
     "f64": "%g",
     "bool_true": "true",
     "bool_false": "false",
+    "newline": "\n",
 }
