@@ -1,0 +1,9 @@
+# The index of List.remove is an i32 position (#870).
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: expected i32, got i16
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(5)
+    let i16 at = 0 as i16
+    println("{l.remove(at).realise(-1)}")
+    return Result.Ok(0)

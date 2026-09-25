@@ -38,8 +38,8 @@ def emit_range(codegen: 'LLVMCodegen', expr: 'RangeExpr') -> EmittedRange:
     b = codegen.builder
     i32 = codegen.types.i32
 
-    first = codegen.utils.as_i32(codegen.expressions.emit_expr(expr.start))
-    end = codegen.utils.as_i32(codegen.expressions.emit_expr(expr.end))
+    first = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.start))
+    end = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.end))
 
     span = b.sub(end, first, name="range_span")
     descending = b.icmp_signed("<", span, ir.Constant(i32, 0), name="range_descending")

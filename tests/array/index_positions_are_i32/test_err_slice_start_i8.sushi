@@ -1,0 +1,9 @@
+# A slice index is an i32 method argument (#870), so it reads CE2006 like get().
+# EXPECT_ERROR_CODE: CE2006
+# EXPECT_STDERR_CONTAINS: argument type mismatch at position 1: expected i32, got i8
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i8 n = 1 as i8
+    let i32[] b = a.s(n, 3)
+    println("{b.len()}")
+    return Result.Ok(0)
