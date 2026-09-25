@@ -11,29 +11,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-def _infer_semantic_type_from_ir(ir_type: ir.Type) -> 'Type':
-    """Infer semantic type from LLVM IR type."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if isinstance(ir_type, ir.IntType):
-        bit_width = ir_type.width
-        if bit_width == 1:
-            return BuiltinType.BOOL
-        elif bit_width == 8:
-            return BuiltinType.I8  # Default to signed for inference
-        elif bit_width == 16:
-            return BuiltinType.I16
-        elif bit_width == 32:
-            return BuiltinType.I32
-        elif bit_width == 64:
-            return BuiltinType.I64
-    elif isinstance(ir_type, ir.PointerType):
-        if isinstance(ir_type.pointee, ir.IntType) and ir_type.pointee.width == 8:
-            return BuiltinType.STRING
-
-    return BuiltinType.I32
-
-
 def emit_fixed_array_get_maybe(
     codegen: 'LLVMCodegen',
     array_ptr: ir.Value,
@@ -48,14 +25,10 @@ def emit_fixed_array_get_maybe(
 
     actual_type = deref_type(semantic_type)
 
-    if isinstance(actual_type, ArrayType):
-        element_semantic_type = actual_type.base_type
-    elif semantic_type is None:
-        element_ir_type = array_type.element
-        element_semantic_type = _infer_semantic_type_from_ir(element_ir_type)
-    else:
+    if not isinstance(actual_type, ArrayType):
         from sushi_lang.internals.errors import raise_internal_error
         raise_internal_error("CE0042", type=type(semantic_type).__name__)
+    element_semantic_type = actual_type.base_type
 
     array_size = ir.Constant(codegen.types.i32, array_type.count)
     zero = ir.Constant(codegen.types.i32, 0)
@@ -96,7 +69,6 @@ def emit_fixed_array_get_maybe(
 def emit_dynamic_array_get_maybe(
     codegen: 'LLVMCodegen',
     array_value: ir.Value,
-    array_type: ir.LiteralStructType,
     index_value: ir.Value,
     semantic_type: 'Type',
     to_i1: bool
@@ -107,22 +79,10 @@ def emit_dynamic_array_get_maybe(
 
     actual_type = deref_type(semantic_type)
 
-    if isinstance(actual_type, DynamicArrayType):
-        element_semantic_type = actual_type.base_type
-    elif semantic_type is None:
-        # When semantic_type is None (e.g., in string interpolation),
-        # infer element type from the LLVM array struct type
-        # array_type.elements[0] is the data pointer (e.g., i32*)
-        # We need to get its pointee to get the element type (e.g., i32)
-        data_ptr_type = array_type.elements[0]
-        if isinstance(data_ptr_type, ir.PointerType):
-            element_ir_type = data_ptr_type.pointee
-        else:
-            element_ir_type = data_ptr_type
-        element_semantic_type = _infer_semantic_type_from_ir(element_ir_type)
-    else:
+    if not isinstance(actual_type, DynamicArrayType):
         from sushi_lang.internals.errors import raise_internal_error
         raise_internal_error("CE0042", type=type(semantic_type).__name__)
+    element_semantic_type = actual_type.base_type
 
     len_ptr = codegen.types.get_dynamic_array_len_ptr(codegen.builder, array_value)
     current_len = codegen.builder.load(len_ptr, name="array_len")

@@ -1,0 +1,18 @@
+# A `from()` literal as an index base has no declared type, so the typecheck pass
+# stamps the element type it infers from the elements (#868).
+# EXPECT_STDOUT_EXACT: "4000000000\n2.25\nHARMLESS\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn main() i32:
+    let u32 big = 4000000000
+    let string s = "harmless"
+    let u32 a = from([big, 1 as u32])[0]
+    let f32 b = from([1.5 as f32, 2.25 as f32])[1]
+    let string c = from([s.upper()])[0].clone()
+    println(a)
+    println(b)
+    println(c)
+    return Result.Ok(0)

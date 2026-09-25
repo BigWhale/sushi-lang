@@ -257,8 +257,17 @@ class ExpressionValidator(RecursiveVisitor):
         pass
 
     def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> None:
-        """from(array_literal) - validate the array literal."""
+        """from(array_literal) - validate the array literal, then make sure it is stamped.
+
+        Propagation stamps a declared position before validation reads it. A non-empty
+        literal in any other position takes the type inference stamps. An empty one has
+        no source for its element type, and that is CE2111 at the literal (#868).
+        """
         self.type_validator.validate_expression(node.elements)
+        if node.resolved_type is None:
+            self.type_validator.infer_expression_type(node)
+        if node.resolved_type is None and not node.elements.elements:
+            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc)
 
     def visit_castexpr(self, node: CastExpr) -> None:
         """Cast expression - validate the source expression and check cast validity."""

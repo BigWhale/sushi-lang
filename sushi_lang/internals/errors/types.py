@@ -433,3 +433,7 @@ _add(ErrorMessage("CE2108", Severity.ERROR,
 _add(ErrorMessage("CE2109", Severity.ERROR,
     "Own(...) pattern needs an Own@(T) value, got '{got}'",
     Category.TYPE, "An `Own(...)` pattern reads through an owning pointer, so the value it reads must be an `Own@(T)`. A plain payload is not one, and neither is a malformed `Own@(i32, i32)`, whose payload cannot be read -- that one arrives behind a CE2001 for the type itself. It answered CE2048 until #741, which put the whole explanation inside the quoted type slot: 'got 'Own(...) pattern requires Own@(T) type, got i32''."))
+
+_add(ErrorMessage("CE2111", Severity.ERROR,
+    "cannot infer the element type of an empty from([])",
+    Category.TYPE, "An empty `from([])` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return (#544). A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. It reached the backend with no stamp, and the backend answered the internal error CE0042 with the note that says the fault is in the compiler (#868). Declare the array first: `let i32[] xs = from([])`, then use `xs`."))

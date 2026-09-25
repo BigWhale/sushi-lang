@@ -1,0 +1,7 @@
+# An empty `from([])` as an index base has no element type either (#868).
+# EXPECT_ERROR_CODE: CE2111
+
+fn main() i32:
+    let i32 n = from([])[0]
+    println(n)
+    return Result.Ok(0)

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.passes.types.inference import (
     infer_array_literal_type, infer_dynamic_array_from_type, infer_index_access_type)
 from sushi_lang.semantics.visitors import NodeVisitor
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType
+from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_NUMERIC_TYPES, is_string_convertible)
 from sushi_lang.semantics.ast import (
@@ -510,8 +510,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return None
 
     def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> Optional[Type]:
-        """from(array_literal) can infer type from array literal elements."""
-        return infer_dynamic_array_from_type(self.type_validator, node)
+        """from(array_literal) infers its type from the elements, and stamps it (#868).
+
+        A declared position stamps first, through propagation. A position with no type
+        stamps nothing, so the inferred type is the stamp there: the backend reads the
+        stamp and never the LLVM layout.
+        """
+        inferred = infer_dynamic_array_from_type(self.type_validator, node)
+        if node.resolved_type is None and isinstance(inferred, DynamicArrayType):
+            node.resolved_type = inferred
+        return inferred
 
     def visit_castexpr(self, node: CastExpr) -> Optional[Type]:
         """Cast expression - return the target type."""
