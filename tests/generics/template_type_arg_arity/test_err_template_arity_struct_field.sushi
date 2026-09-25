@@ -1,0 +1,13 @@
+# A wrong type-argument count in a generic struct's field is refused where it is
+# written, with no instance of the struct (#807).
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: test_err_template_arity_struct_field.sushi:10:5: error [CE2062]
+struct Box@(T, U):
+    T a
+    U b
+
+struct Wrap@(T):
+    Box@(T) b
+
+fn main() i32:
+    return Result.Ok(0)

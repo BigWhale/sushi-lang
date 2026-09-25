@@ -1,0 +1,14 @@
+# An instance of a generic struct whose field has a wrong type-argument count reads one
+# CE2062, at the field that wrote it (#807).
+# EXPECT_ERROR_CODE: CE2062
+# EXPECT_STDERR_CONTAINS: test_err_template_arity_with_an_instance.sushi:10:5: error [CE2062]
+struct Box@(T, U):
+    T a
+    U b
+
+struct Wrap@(T):
+    Box@(T) b
+
+fn main() i32:
+    let Wrap@(i32) w = Wrap(Box(1, 2))
+    return Result.Ok(0)
