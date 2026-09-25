@@ -12,7 +12,8 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, DA_DATA_INDEX
+from sushi_lang.backend.constants import INT8_BIT_WIDTH
+from sushi_lang.backend import gep_utils
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
 
 if TYPE_CHECKING:
@@ -136,10 +137,7 @@ def _emit_dynamic_array_destructor(
     """Emit destructor code for a dynamic array."""
     # Load the dynamic array struct
     builder = codegen.builder
-    data_ptr_ptr = builder.gep(value_ptr, [
-        ZERO_I32,
-        make_i32_const(DA_DATA_INDEX)
-    ], name="array_data_ptr")
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, value_ptr, "array_data_ptr")
     data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
     is_not_null = builder.icmp_unsigned(
@@ -151,10 +149,7 @@ def _emit_dynamic_array_destructor(
         # Check if element type needs cleanup (resolving a named/generic element first --
         # an unresolved name answers False and the elements are silently leaked)
         if needs_cleanup(codegen, value_type.base_type):
-            len_ptr = builder.gep(value_ptr, [
-                ZERO_I32,
-                ZERO_I32  # len is first field
-            ], name="array_len_ptr")
+            len_ptr = gep_utils.gep_dynamic_array_len(codegen, value_ptr, "array_len_ptr")
             array_len = builder.load(len_ptr, name="array_len")
             _destroy_elements(codegen, data_ptr, array_len, value_type.base_type,
                               "array_cleanup")

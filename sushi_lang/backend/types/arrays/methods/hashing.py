@@ -7,6 +7,7 @@ import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend import gep_utils
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
@@ -77,10 +78,10 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
             array_struct_ptr = entry_alloca(builder, receiver_type, name="array_struct_temp")
             builder.store(receiver_value, array_struct_ptr)
 
-        len_ptr = codegen.types.get_dynamic_array_len_ptr(builder, array_struct_ptr)
+        len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_struct_ptr)
         current_len = builder.load(len_ptr, name="array_len")
 
-        data_ptr_ptr = codegen.types.get_dynamic_array_data_ptr(builder, array_struct_ptr)
+        data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_struct_ptr)
         data_ptr = builder.load(data_ptr_ptr, name="array_data")
 
         counter = entry_alloca(builder, i32, name="counter")

@@ -1224,6 +1224,14 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One seam computes a `T[]` descriptor field address** (#878). The `LLVMTypeSystem` trio is
+  gone; every descriptor field GEP -- 32 facade call sites and 12 raw-index sites, four of them
+  in files the ticket did not name -- goes through `gep_utils`. The facade calls only public
+  members of its collaborators. A gate compiles a probe and records every GEP on the
+  descriptor shape. The IR of all 3229 fixtures is identical.
+- **The dead backend constants and stdlib validators are gone** (#879, #851). 40 unused names of
+  `backend/constants` (with `indices.py` and its wrong layout comments), and the seven
+  `validate_<module>_function_call` functions the stdlib registry required but never called.
 - **One `fill`, one `reverse` and one `get` for both array kinds** (#876). The receiver kind
   decides only `(data_ptr, count)`; `emit_array_method` is split into a fixed half and a
   dynamic half, and an unknown method is an internal error. `fill`, `reverse` and the dynamic

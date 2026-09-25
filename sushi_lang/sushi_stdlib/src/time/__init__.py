@@ -1,6 +1,5 @@
 """Time module for Sushi standard library."""
 from __future__ import annotations
-import typing
 from typing import Dict
 
 from llvmlite import ir
@@ -36,35 +35,6 @@ def get_builtin_time_function_return_type(name: str) -> Type:
     if sig is None:
         raise ValueError(f"Unknown time function: {name}")
     return sig.return_type()
-
-
-def validate_time_function_call(name: str, signature: typing.Any) -> None:
-    """Validate a call to a built-in time function."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if name == 'nanosleep':
-        if len(signature.params) != 2:
-            raise TypeError(f"nanosleep expects 2 arguments, got {len(signature.params)}")
-
-        param1_type = signature.params[0].type
-        param2_type = signature.params[1].type
-
-        if param1_type != BuiltinType('i64'):
-            raise TypeError(f"nanosleep expects i64 for seconds, got {param1_type}")
-        if param2_type != BuiltinType('i64'):
-            raise TypeError(f"nanosleep expects i64 for nanoseconds, got {param2_type}")
-
-    elif name in {'sleep', 'msleep', 'usleep'}:
-        if len(signature.params) != 1:
-            raise TypeError(f"{name} expects 1 argument, got {len(signature.params)}")
-
-        param_type = signature.params[0].type
-        if param_type != BuiltinType('i64'):
-            raise TypeError(f"{name} expects i64, got {param_type}")
-
-    elif name in {'now', 'monotonic_ns'}:
-        if len(signature.params) != 0:
-            raise TypeError(f"{name} expects no arguments, got {len(signature.params)}")
 
 
 def generate_module_ir() -> ir.Module:

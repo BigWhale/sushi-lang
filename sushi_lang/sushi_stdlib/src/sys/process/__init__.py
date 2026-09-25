@@ -43,44 +43,6 @@ def get_builtin_process_function_return_type(name: str) -> Type:
     return sig.return_type()
 
 
-def validate_process_function_call(name: str, signature) -> None:
-    """Validate process function call parameters."""
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    if name == 'getcwd':
-        if len(signature.params) != 0:
-            raise TypeError(f"getcwd() takes no arguments, got {len(signature.params)}")
-
-    elif name == 'run':
-        if len(signature.params) != 2:
-            raise TypeError(f"run() takes 2 arguments (string cmd, string[] args), got {len(signature.params)}")
-        if signature.params[0].param_type != BuiltinType.STRING:
-            raise TypeError(f"run() first argument must be string, got {signature.params[0].param_type}")
-
-    elif name == 'chdir':
-        if len(signature.params) != 1:
-            raise TypeError(f"chdir() takes 1 argument (string path), got {len(signature.params)}")
-        if signature.params[0].param_type != BuiltinType.STRING:
-            raise TypeError(f"chdir() argument must be string, got {signature.params[0].param_type}")
-
-    elif name == 'exit':
-        if len(signature.params) != 1:
-            raise TypeError(f"exit() takes 1 argument (i32 code), got {len(signature.params)}")
-        if signature.params[0].param_type != BuiltinType.I32:
-            raise TypeError(f"exit() argument must be i32, got {signature.params[0].param_type}")
-
-    elif name == 'getpid':
-        if len(signature.params) != 0:
-            raise TypeError(f"getpid() takes no arguments, got {len(signature.params)}")
-
-    elif name == 'getuid':
-        if len(signature.params) != 0:
-            raise TypeError(f"getuid() takes no arguments, got {len(signature.params)}")
-
-    else:
-        raise ValueError(f"Unknown process function: {name}")
-
-
 def generate_module_ir() -> ir.Module:
     """Generate LLVM IR module for process control functions."""
     module = create_stdlib_module("sys.process")

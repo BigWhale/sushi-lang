@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.generics.container_walk import emit_container_walk
+from sushi_lang.backend import gep_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -17,7 +18,7 @@ def allocate_string_array_data(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Va
     # Formula: aligned_size = ((size + align - 1) / align) * align
     # Size is 12 bytes, alignment is 8 bytes, so stride is 16 bytes
     size_bytes = codegen.types.get_type_size_bytes(BuiltinType.STRING)  # 12
-    alignment = codegen.types._get_type_alignment(BuiltinType.STRING)   # 8
+    alignment = codegen.types.get_type_alignment(BuiltinType.STRING)   # 8
     element_size = ((size_bytes + alignment - 1) // alignment) * alignment  # 16
 
     total_bytes = codegen.builder.mul(count, ir.Constant(codegen.i32, element_size), name="total_bytes")
@@ -60,19 +61,15 @@ def populate_string_array_from_argv(
 def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: ir.Value) -> ir.Value:
     """Convert C-style argc/argv to Sushi string[] dynamic array."""
     builder = codegen.builder
-    zero_i32 = ir.Constant(codegen.i32, 0)
-    one_i32 = ir.Constant(codegen.i32, 1)
-    two_i32 = ir.Constant(codegen.i32, 2)
-
     string_array_type = DynamicArrayType(BuiltinType.STRING)
 
     args_array_alloca = codegen.dynamic_arrays.declare_dynamic_array("cmd_args", string_array_type)
 
     typed_data_ptr = allocate_string_array_data(codegen, argc)
 
-    len_ptr = builder.gep(args_array_alloca, [zero_i32, zero_i32], name="len_ptr")
-    cap_ptr = builder.gep(args_array_alloca, [zero_i32, one_i32], name="cap_ptr")
-    data_ptr_ptr = builder.gep(args_array_alloca, [zero_i32, two_i32], name="data_ptr_ptr")
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, args_array_alloca)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, args_array_alloca)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, args_array_alloca, "data_ptr_ptr")
 
     builder.store(argc, len_ptr)           # length = argc
     builder.store(argc, cap_ptr)           # capacity = argc

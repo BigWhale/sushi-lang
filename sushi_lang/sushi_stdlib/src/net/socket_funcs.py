@@ -1,9 +1,8 @@
-"""The <net/socket> semantic interface: one table, and the three discovery names.
+"""The <net/socket> semantic interface: one table, and the two discovery names.
 
 No IR lives here. The StdlibRegistry discovers a module by looking for these
-three names, built from the module path's last segment, so <net/socket> needs
-is_builtin_socket_function, get_builtin_socket_function_return_type and
-validate_socket_function_call.
+two names, built from the module path's last segment, so <net/socket> needs
+is_builtin_socket_function and get_builtin_socket_function_return_type.
 
 Every function answers Result@(T, NetError). The prefix names the transport:
 sock_* works on any descriptor this module produced, tcp_* wants a stream
@@ -27,7 +26,6 @@ from sushi_lang.sushi_stdlib.src.signatures import (
     Signature,
     cstr,
     params_of,
-    validate_arity,
 )
 
 I32 = BuiltinType.I32
@@ -75,8 +73,3 @@ def get_builtin_socket_function_return_type(func_name: str) -> Type:
     if sig is None:
         raise ValueError(f"Unknown socket function: {func_name}")
     return sig.return_type()
-
-
-def validate_socket_function_call(func_name: str, args: list, reporter, loc) -> None:
-    """Check the argument count against the row's own length."""
-    validate_arity(func_name, SOCKET_SIGNATURES, args, reporter, loc)
