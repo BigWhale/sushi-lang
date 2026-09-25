@@ -21,7 +21,6 @@ BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
 WALK_MODULE = "generics/container_walk.py"
 
 KNOWN_HAND_LOOPS = {
-    ("runtime/args.py", "populate_string_array_from_argv"),
     # Not a walk: it stops at the NUL byte of a C string, and no count is known.
     ("runtime/strings.py", "_declare_and_define_utf8_char_count"),
     # A user loop body: `break`/`continue` need loop blocks that the walk does not expose.
