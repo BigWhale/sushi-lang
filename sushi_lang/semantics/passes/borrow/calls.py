@@ -5,8 +5,10 @@ from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Borrow, Call, CallLike, DotCall, Expr, MemberAccess, MethodLike, Name, Spread,
+    Borrow, Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
+    MethodLike, Name, Spread,
 )
+from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import FunctionType
 from sushi_lang.semantics.param_modes import (
@@ -15,8 +17,9 @@ from sushi_lang.semantics.param_modes import (
 
 from .borrows import register_implicit_borrow
 from .consume import consume, consume_each
-from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS
-from .reads import called_on, read_type
+from .diagnostics import expr_to_string
+from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
+from .reads import OWNER_STEPS, called_on, read_type
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -46,15 +49,60 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
 
     Growing the destination may REALLOCATE its buffer, which leaves the source pointer
     dangling in the middle of the copy. The check compares PLACES rather than values,
-    because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does.
+    because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does. A refill
+    (`a.fill(a[0])`) is the same fault one slot down; see `_reject_refill_from_own_slot`.
     """
+    if effect_of(expr.method).refills:
+        _reject_refill_from_own_slot(checker, expr)
+        return
     receiver = called_on(expr, *BULK_WRITE_METHODS)
     if receiver is None or not expr.args:
         return
     place = _place_of(receiver)
     if place is None or place != _place_of(expr.args[0]):
         return
-    er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc, name=place)
+    er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc, name=place, target=place)
+
+
+def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> None:
+    """CE2430: a refill may not read a slot of the array it refills, when the slot owns.
+
+    The refill frees each slot before it stores the copy, so the slot that is the argument
+    is freed and every later slot is copied from freed memory. A plain element is read by
+    value and nothing aliases, so only an element type that owns a resource is refused.
+    """
+    if not expr.args or checker.types.type_class(checker.types.element_type(
+            read_type(checker, expr.receiver))) is not TypeClass.MOVE:
+        return
+    target = _slot_path(expr.receiver)
+    source = _slot_path(expr.args[0])
+    if target is None or source is None or source[:len(target)] != target:
+        return
+    er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc,
+            name=expr_to_string(expr.args[0]), target=expr_to_string(expr.receiver))
+
+
+_ANY_SLOT = "[]"
+_SLOT_GET_OUTS = frozenset({"get", "first", "last"})
+
+
+def _slot_path(expr: Expr) -> Optional[tuple[str, ...]]:
+    """The storage an expression names, root first, with every slot read as ANY slot.
+
+    Two index steps may name one slot, so an index and an element get-out both read as
+    `_ANY_SLOT`, and a place off a slot is judged as if it were off every slot.
+    """
+    walked = walk_place(expr, OWNER_STEPS,
+                        crosses_call=lambda call: call.method in _SLOT_GET_OUTS)
+    if walked.name is None:
+        return None
+    steps: list[str] = [walked.name.id]
+    for step in reversed(walked.path):
+        if isinstance(step, MemberAccess):
+            steps.append(step.member)
+        elif isinstance(step, (IndexAccess, MethodCall, DotCall)):
+            steps.append(_ANY_SLOT)
+    return tuple(steps)
 
 
 def _place_of(expr: Expr) -> Optional[str]:

@@ -1,0 +1,28 @@
+# `List@(string[2])` -- a List whose element is a fixed array of an OWNING type (#884).
+# The element size is the array's padded size; each slot owns two strings, and the
+# clone and the scope exit must copy and free both.
+# EXPECT_STDOUT_EXACT: "len=2\nget=c d\nrow=a b\nrow=c d\npop=c d len=1\nclone=1 a b\n"
+# EXPECT_NO_LEAKS
+
+fn run_test() i32:
+    let List@(string[2]) pairs = List.new()
+    pairs.push(["a".clone(), "b".clone()])
+    pairs.push(["c", "d"])
+    println("len={pairs.len()}")
+
+    let string[2] g = pairs.get(1)??
+    println("get={g[0]} {g[1]}")
+
+    foreach(row in pairs.iter()):
+        println("row={row[0]} {row[1]}")
+
+    let string[2] p = pairs.pop()??
+    println("pop={p[0]} {p[1]} len={pairs.len()}")
+
+    let List@(string[2]) copy = pairs.clone()
+    let string[2] c = copy.get(0)??
+    println("clone={copy.len()} {c[0]} {c[1]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(1))

@@ -80,7 +80,7 @@ def emit_empty_dynamic_array(codegen: 'LLVMCodegen', element_llvm_type: ir.Type)
     return _descriptor(codegen, element_llvm_type, zero_i32, zero_i32, null_ptr)
 
 
-def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_type, element_llvm_type: ir.Type,
+def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
                                        elements) -> ir.Value:
     """Create a dynamic array struct value from emitted runs."""
     from sushi_lang.backend.expressions import memory

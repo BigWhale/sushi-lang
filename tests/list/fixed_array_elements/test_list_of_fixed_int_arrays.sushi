@@ -1,0 +1,36 @@
+# `List@(i32[3])` -- a List whose element is a FIXED array (#884). The element size
+# came from a helper with no arm for an LLVM array type, so the first push was CE0079.
+# push, get, pop, clone, reserve and iterate each size the element.
+# EXPECT_STDOUT_EXACT: "len=3\nget=4 5 6\nsum=6\nsum=15\nsum=24\npop=7 8 9 len=2\nclone=2 first=1 last=6\nreserve=2 row=4\n"
+# EXPECT_NO_LEAKS
+
+fn run_test() i32:
+    let List@(i32[3]) rows = List.new()
+    rows.push([1, 2, 3])
+    rows.push([4, 5, 6])
+    let i32[3] last = [7, 8, 9]
+    rows.push(last)
+    println("len={rows.len()}")
+
+    let i32[3] g = rows.get(1)??
+    println("get={g[0]} {g[1]} {g[2]}")
+
+    foreach(row in rows.iter()):
+        let i32 total = row[0] + row[1] + row[2]
+        println("sum={total}")
+
+    let i32[3] p = rows.pop()??
+    println("pop={p[0]} {p[1]} {p[2]} len={rows.len()}")
+
+    let List@(i32[3]) copy = rows.clone()
+    let i32[3] c0 = copy.get(0)??
+    let i32[3] c1 = copy.get(1)??
+    println("clone={copy.len()} first={c0[0]} last={c1[2]}")
+
+    rows.reserve(16)
+    let i32[3] r = rows.get(1)??
+    println("reserve={rows.len()} row={r[0]}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(run_test().realise(1))

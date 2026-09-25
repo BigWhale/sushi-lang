@@ -236,7 +236,7 @@ def emit_array_method(
             if index_value.type != codegen.types.i32:
                 is_signed = index_value.type in (codegen.types.i8, codegen.types.i16, codegen.types.i64)
                 index_value = codegen.utils.convert_int_to_i32(index_value, is_signed=is_signed)
-            return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type, index_value, semantic_type, to_i1)
+            return emit_dynamic_array_get_maybe(codegen, receiver_value, index_value, semantic_type, to_i1)
 
         case "first" | "last":
             # `get()` with the index built in: 0, or len - 1. An empty array gives the
@@ -251,8 +251,8 @@ def emit_array_method(
                 length = codegen.builder.load(len_ptr, name="len_for_last")
                 index_value = codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
                                                   name="last_index")
-            return emit_dynamic_array_get_maybe(codegen, receiver_value, array_struct_type,
-                                                index_value, semantic_type, to_i1)
+            return emit_dynamic_array_get_maybe(codegen, receiver_value, index_value,
+                                                semantic_type, to_i1)
 
         case "contains" | "index_of":
             # The needle is a BORROW (#475), like fill's value.

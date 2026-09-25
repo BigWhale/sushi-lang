@@ -1,0 +1,14 @@
+# List.insert evaluates its element before the bounds check (#869).
+# The side effect of the argument runs when the index is out of bounds too.
+# EXPECT_STDOUT_EXACT: "tick ran\nerr\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn tick() i32:
+    println("tick ran")
+    return Result.Ok(1)
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    match l.insert(5, tick().realise(0)):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# A slot of ANOTHER field of the same struct is no alias of the receiver (#867).
+# EXPECT_STDOUT_EXACT: "q\nq\n"
+# EXPECT_NO_LEAKS
+
+struct Pair:
+    string[] left
+    string[] right
+
+fn main() i32:
+    let Pair p = Pair(from(["a", "b"]), from(["q"]))
+    p.left.fill(p.right[0])
+    println(p.left[0])
+    println(p.left[1])
+    return Result.Ok(0)

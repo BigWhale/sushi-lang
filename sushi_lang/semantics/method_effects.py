@@ -15,11 +15,13 @@ class MethodEffect:
     mutates: bool = False        # changes or releases what the receiver holds (CE2412, CE2408)
     consumes_args: bool = False  # stores each argument, so each is a consuming use
     bulk_writes: bool = False    # grows the receiver from a borrowed source (CE2430)
+    refills: bool = False        # frees each slot, then stores a copy of its argument (CE2430)
 
 
 _MUTATES = MethodEffect(mutates=True)
 _INSERTS = MethodEffect(mutates=True, consumes_args=True)
 _BULK_WRITES = MethodEffect(mutates=True, bulk_writes=True)
+_REFILLS = MethodEffect(mutates=True, refills=True)
 _NO_EFFECT = MethodEffect()
 
 # Only the METHOD NAME is matched here. A caller that acts on `consumes_args` checks that
@@ -38,7 +40,7 @@ METHOD_EFFECTS: dict[str, MethodEffect] = {
     "rehash": _MUTATES,
     "destroy": _MUTATES,
     "free": _MUTATES,
-    "fill": _MUTATES,
+    "fill": _REFILLS,
     "reverse": _MUTATES,
 }
 

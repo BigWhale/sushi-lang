@@ -1,0 +1,23 @@
+# The in-bounds control for #869: List.insert of owning strings, front, middle and end.
+# EXPECT_STDOUT_EXACT: "b a c d\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn main() i32:
+    let List@(string) l = List.new()
+    let string s = "a".concat("")
+    match l.insert(0, s):
+        Result.Ok(_) -> print("")
+        Result.Err(_) -> println("err")
+    match l.insert(0, "b".concat("")):
+        Result.Ok(_) -> print("")
+        Result.Err(_) -> println("err")
+    match l.insert(2, "d".concat("")):
+        Result.Ok(_) -> print("")
+        Result.Err(_) -> println("err")
+    match l.insert(2, "c".concat("")):
+        Result.Ok(_) -> print("")
+        Result.Err(_) -> println("err")
+    println("{l.get(0).realise('?')} {l.get(1).realise('?')} {l.get(2).realise('?')} {l.get(3).realise('?')}")
+    return Result.Ok(0)

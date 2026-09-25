@@ -230,6 +230,11 @@ reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy
 read what it is writing is a different operation: a DEFLATE back-reference expands a run by
 reading bytes the same loop just wrote, and it stays a per-element loop.
 
+`fill` reads the same code for its own reason: a borrowed value that is a slot of the
+receiver (`a.fill(a[0])`) is destroyed by the first store, and every later slot copies
+freed storage. It is refused when the element type owns a resource; a plain element is a
+copy and has no alias.
+
 ## The type-argument reader
 
 `List@(i32[])` and `HashMap@(K, V[])` failed for a second, independent reason. A container
