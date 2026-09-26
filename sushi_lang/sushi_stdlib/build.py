@@ -19,11 +19,6 @@ def init_llvm():
     llvm.initialize_native_asmprinter()
 
 
-def create_module(name: str) -> ir.Module:
-    """Create a new LLVM module."""
-    return ir.Module(name=name)
-
-
 def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = False) -> list[str]:
     """Compile LLVM module to bitcode file, and return the symbols it DEFINES.
 

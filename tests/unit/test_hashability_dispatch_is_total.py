@@ -160,3 +160,37 @@ def test_a_plain_struct_is_still_hashable():
                        fields=(("x", BuiltinType.I32), ("y", BuiltinType.I32)))
     assert hashing.can_struct_be_hashed(point) == (True, "all fields are hashable")
     assert hashing.can_array_be_hashed(ArrayType(base_type=point, size=2))[0]
+
+
+def _overridden_holder_kinds():
+    """F holds a function value and implements `Hashable`; each holder names it once."""
+    fn_type = FunctionType(param_types=(BuiltinType.I32,),
+                           ok_type=BuiltinType.I32, err_type=BuiltinType.I32)
+    f = StructType(name="F", fields=(("f", fn_type), ("n", BuiltinType.I32)))
+    holders = {
+        "field": StructType(name="H", fields=(("inner", f),)),
+        "payload": EnumType(name="Slot", variants=(
+            EnumVariantInfo(name="Holds", associated_types=(f,)),)),
+        "dynamic array": DynamicArrayType(base_type=f),
+        "fixed array": ArrayType(base_type=f, size=2),
+    }
+    return f, holders
+
+
+@pytest.mark.parametrize("position", ["field", "payload", "dynamic array", "fixed array"])
+def test_an_overridden_type_is_terminal_in_every_held_position(position):
+    """A `Hashable` implementation wins where the type is HELD, and its fields are not read.
+
+    The control is the same holder with no override: the function value refuses it.
+    """
+    f, holders = _overridden_holder_kinds()
+    holder = holders[position]
+    assert not hashing.hashability_of(holder)[0], "the control must refuse"
+    can_hash, reason = hashing.hashability_of(holder, overridden=lambda ty: ty == f)
+    assert can_hash, reason
+
+
+def test_the_override_does_not_give_the_type_itself_a_derived_hash():
+    """The override answers for F; a DERIVED hash of F still reads F's fields."""
+    f, _holders = _overridden_holder_kinds()
+    assert not hashing.can_struct_be_hashed(f, overridden=lambda ty: ty == f)[0]

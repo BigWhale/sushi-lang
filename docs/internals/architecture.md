@@ -248,7 +248,6 @@ sushi/
     │   ├── ir_common.py       # Common IR patterns
     │   ├── libc_declarations.py # Centralized libc declarations
     │   ├── string_helpers.py  # String operation helpers
-    │   ├── type_converters.py # Type conversion utilities
     │   ├── type_definitions.py # Type definition helpers
     │   ├── collections/
     │   │   ├── strings/       # String operations (organized)

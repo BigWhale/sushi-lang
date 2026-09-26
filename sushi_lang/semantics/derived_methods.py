@@ -1,7 +1,7 @@
 """The tables of compiler-defined methods: the process's, and one compilation's."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
@@ -42,7 +42,15 @@ class DerivedMethodTable(BuiltinMethodRegistry):
 
     The compilation owns one (`SymbolTables.derived_methods`). A lookup that misses
     falls through to the process-wide built-ins, so one call answers both.
+
+    `hash_override` is the compilation's `Hashable` override predicate, set by
+    `SymbolTables` over its perk-implementation tables. Every registration of a derived
+    hash reads it, so a holder of an overridden type is hashable (#891).
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.hash_override: Optional[Callable[['Type'], bool]] = None
 
     def get_method(self, target_type: 'Type',
                    method_name: str) -> Optional['BuiltinMethod']:

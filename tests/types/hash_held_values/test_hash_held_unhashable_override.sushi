@@ -1,0 +1,63 @@
+# A Hashable implementation is the override, and an overridden type is terminal: its
+# fields are not read. So a holder of a type whose fields cannot be hashed (here a
+# function value) is hashable when the rest of the holder is. Two F values with the same
+# n and a different function hash alike, and so does every holder of them. An array of
+# F inside a List is hashed through the override too.
+# EXPECT_STDOUT_EXACT: "direct 5\nholder 12638147618137026400\nfield true\nlist true\nempty 12638153115695167455\nempty true\nmaybe true\npayload true\narray true\nfixed true\nheld array true\nheld fixed true\n"
+# EXPECT_NO_LEAKS
+
+struct F:
+    fn(i32) -> i32 f
+    i32 n
+
+extend F with Hashable:
+    fn hash() u64:
+        return self.n as u64
+
+struct H:
+    F inner
+
+struct Row:
+    F[] cells
+    i32 k
+
+enum Slot:
+    Holds(F)
+
+fn main() i32:
+    let F a = F(|i32 x| x + 1, 5)
+    println("direct {a.hash()}")
+    let H h1 = H(F(|i32 x| x + 1, 5))
+    let H h2 = H(F(|i32 x| x * 3, 5))
+    println("holder {h1.hash()}")
+    println("field {h1.hash() == h2.hash()}")
+    let List@(F) l1 = List.new()
+    l1.push(F(|i32 x| x + 1, 5))
+    let List@(F) l2 = List.new()
+    l2.push(F(|i32 x| x - 1, 5))
+    println("list {l1.hash() == l2.hash()}")
+    let List@(F) e1 = List.new()
+    let List@(i32) e2 = List.new()
+    println("empty {e1.hash()}")
+    println("empty {e1.hash() == e2.hash()}")
+    let Maybe@(F) m1 = Maybe.Some(F(|i32 x| x + 1, 5))
+    let Maybe@(F) m2 = Maybe.Some(F(|i32 x| x + 2, 5))
+    println("maybe {m1.hash() == m2.hash()}")
+    println("payload {Slot.Holds(F(|i32 x| x, 5)).hash() == Slot.Holds(F(|i32 x| x + 9, 5)).hash()}")
+    let Row r1 = Row(from([F(|i32 x| x, 1), F(|i32 x| x, 2)]), 3)
+    let Row r2 = Row(from([F(|i32 x| x + 4, 1), F(|i32 x| x + 5, 2)]), 3)
+    println("array {r1.hash() == r2.hash()}")
+    let F[2] fa = [F(|i32 x| x, 1), F(|i32 x| x, 2)]
+    let F[2] fb = [F(|i32 x| x + 7, 1), F(|i32 x| x + 8, 2)]
+    println("fixed {fa.hash() == fb.hash()}")
+    let List@(F[]) la = List.new()
+    la.push(from([F(|i32 x| x, 1)]))
+    let List@(F[]) lb = List.new()
+    lb.push(from([F(|i32 x| x + 1, 1)]))
+    println("held array {la.hash() == lb.hash()}")
+    let List@(F[2]) lc = List.new()
+    lc.push([F(|i32 x| x, 1), F(|i32 x| x, 2)])
+    let List@(F[2]) ld = List.new()
+    ld.push([F(|i32 x| x + 3, 1), F(|i32 x| x + 4, 2)])
+    println("held fixed {lc.hash() == ld.hash()}")
+    return Result.Ok(0)

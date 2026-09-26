@@ -1,0 +1,8 @@
+# sinh and cosh of a large magnitude are inf, and the small values are unchanged (#905).
+# EXPECT_STDOUT_EXACT: "inf inf -inf 0.462117 5\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    println("{sinh(1000.0)} {cosh(1000.0)} {sinh(-1000.0)} {tanh(0.5)} {hypot(3.0, 4.0)}")
+    return Result.Ok(0)

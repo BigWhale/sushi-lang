@@ -3,7 +3,7 @@
 from typing import Dict, Optional, Callable, Any
 from dataclasses import dataclass
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import Type, ArrayType, DynamicArrayType, BuiltinType
+from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.derived_methods import builtin_registry
 import llvmlite.ir as ir
 
@@ -72,36 +72,3 @@ def register_clone_emitter_factory(kind: str, factory: Callable[[Type], Callable
 def get_clone_emitter_factory(kind: str) -> Optional[Callable[[Type], Callable]]:
     """Get the clone() emitter factory for a type kind, or None if unregistered."""
     return _clone_emitter_factories.get(kind)
-
-
-def matches_fixed_array_type(target_type: Type) -> bool:
-    """Check if type is a fixed array type."""
-    return isinstance(target_type, ArrayType)
-
-
-def matches_dynamic_array_type(target_type: Type) -> bool:
-    """Check if type is a dynamic array type."""
-    return isinstance(target_type, DynamicArrayType)
-
-
-def matches_any_array_type(target_type: Type) -> bool:
-    """Check if type is any array type (fixed or dynamic)."""
-    return isinstance(target_type, (ArrayType, DynamicArrayType))
-
-
-def matches_string_type(target_type: Type) -> bool:
-    """Check if type is string type."""
-    return target_type == BuiltinType.STRING
-
-
-def matches_int_type(target_type: Type) -> bool:
-    """Check if type is an integer type (signed or unsigned)."""
-    return target_type in {
-        BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-        BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64
-    }
-
-
-def matches_bool_type(target_type: Type) -> bool:
-    """Check if type is bool type."""
-    return target_type == BuiltinType.BOOL

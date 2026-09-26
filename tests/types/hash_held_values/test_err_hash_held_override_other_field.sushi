@@ -1,0 +1,20 @@
+# The override answers for the overridden field alone. A holder whose OTHER field cannot
+# be hashed (a function value) still has no derived hash.
+# EXPECT_ERROR_CODE: CE2008
+
+struct F:
+    fn(i32) -> i32 f
+    i32 n
+
+extend F with Hashable:
+    fn hash() u64:
+        return self.n as u64
+
+struct H:
+    F inner
+    fn(i32) -> i32 g
+
+fn main() i32:
+    let H h = H(F(|i32 x| x + 1, 5), |i32 x| x)
+    println("{h.hash()}")
+    return Result.Ok(0)

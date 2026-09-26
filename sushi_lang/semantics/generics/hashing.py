@@ -4,7 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
@@ -67,6 +67,35 @@ CONTAINER_HASH_KINDS: Dict[str, str] = {
     "Own": "own",
 }
 
+#: "Does this type carry a `Hashable` implementation?" -- the override, read at every
+#: held position of the walk.
+HashOverride = Callable[[Type], bool]
+
+
+def hash_override_of(perk_impls: Any, generic_perk_impls: Any = None) -> HashOverride:
+    """The one override predicate, over the perk-implementation tables (#891).
+
+    An explicit implementation answers, and so does a generic-target template whose
+    copy for this instantiation is not cut yet. The tables fill in place, so the
+    predicate reads them when it is asked and not when it is built.
+    """
+    from sushi_lang.semantics.passes.collect.perks import PerkCollector, _get_type_name
+    hashable = PerkCollector.HASHABLE_PERK
+
+    def overridden(ty: Type) -> bool:
+        type_name = _get_type_name(ty)
+        if type_name is not None and perk_impls.implements(type_name, hashable):
+            return True
+        base = getattr(ty, "generic_base", None)
+        args = getattr(ty, "generic_args", None)
+        if not generic_perk_impls or not base or not args:
+            return False
+        return any(template.impl.perk_name == hashable
+                   and len(template.type_params) == len(args)
+                   for template in generic_perk_impls.templates(base))
+
+    return overridden
+
 
 @dataclass
 class _Walk:
@@ -87,6 +116,9 @@ class _Walk:
     resolve pass: the constraint check in monomorphize asks about a struct whose
     fields still spell their types (#696). The derive pass runs after that pass and
     hands over none.
+
+    `overridden` is the `Hashable` override (#891): a held type that implements it is
+    terminal and hashable, and its fields are not read.
     """
 
     path: List[str] = field(default_factory=list)
@@ -94,6 +126,7 @@ class _Walk:
     decided: Dict[Tuple[str, str], Tuple[bool, str]] = field(default_factory=dict)
     cycles: int = 0
     resolve: Optional[Callable[[Type], Type]] = None
+    overridden: Optional[HashOverride] = None
 
 
 @contextmanager
@@ -133,7 +166,8 @@ def _decide(walk: _Walk, kind: str, name: str,
 
 
 def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
-                   resolve: Optional[Callable[[Type], Type]] = None) -> tuple[bool, str]:
+                   resolve: Optional[Callable[[Type], Type]] = None,
+                   overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Can a derived hash read a value of `ty`? One reader for every position.
 
     A struct field, an enum payload and an array element all ask this, so a kind is
@@ -143,10 +177,16 @@ def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
     `resolve` is for a reader that runs BEFORE the resolve pass -- the `Hashable`
     constraint check (#696): it maps a written name to its table entry at every step
     of the walk, so a field that spells `Point` is read as the struct it names.
+
+    `overridden` is asked first: a `Hashable` implementation wins in every position
+    and is terminal, so a type that has one is hashable whatever its fields hold.
     """
-    walk = walk if walk is not None else _Walk(resolve=resolve)
+    walk = walk if walk is not None else _Walk(resolve=resolve, overridden=overridden)
     if walk.resolve is not None:
         ty = walk.resolve(ty)
+
+    if walk.overridden is not None and walk.overridden(ty):
+        return True, "a Hashable implementation (the override)"
 
     if isinstance(ty, UnknownType):
         return False, f"unresolved type '{ty.name}'"
@@ -177,10 +217,10 @@ def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
     return False, f"unsupported type kind '{kind}'"
 
 
-def can_struct_be_hashed(struct_type: StructType,
-                         walk: Optional[_Walk] = None) -> tuple[bool, str]:
+def can_struct_be_hashed(struct_type: StructType, walk: Optional[_Walk] = None, *,
+                         overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if a struct type can have an auto-derived hash method."""
-    walk = walk if walk is not None else _Walk()
+    walk = walk if walk is not None else _Walk(overridden=overridden)
     return _decide(walk, "struct", struct_type.name,
                    lambda: _struct_fields_are_hashable(struct_type, walk))
 
@@ -233,10 +273,10 @@ def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[b
     return True, "all fields are hashable"
 
 
-def can_enum_be_hashed(enum_type: EnumType,
-                       walk: Optional[_Walk] = None) -> tuple[bool, str]:
+def can_enum_be_hashed(enum_type: EnumType, walk: Optional[_Walk] = None, *,
+                       overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if an enum type can have an auto-derived hash method."""
-    walk = walk if walk is not None else _Walk()
+    walk = walk if walk is not None else _Walk(overridden=overridden)
     return _decide(walk, "enum", enum_type.name,
                    lambda: _enum_payloads_are_hashable(enum_type, walk))
 
@@ -255,8 +295,8 @@ def _enum_payloads_are_hashable(enum_type: EnumType, walk: _Walk) -> tuple[bool,
     return True, "all variant types are hashable"
 
 
-def can_array_be_hashed(array_type: Type,
-                        walk: Optional[_Walk] = None) -> tuple[bool, str]:
+def can_array_be_hashed(array_type: Type, walk: Optional[_Walk] = None, *,
+                        overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if an array type can have an auto-derived hash method.
 
     An array has no name of its own, so there is nothing here to memoize or to stand
@@ -265,7 +305,7 @@ def can_array_be_hashed(array_type: Type,
     if not isinstance(array_type, (ArrayType, DynamicArrayType)):
         return False, f"not an array type: {type(array_type).__name__}"
 
-    walk = walk if walk is not None else _Walk()
+    walk = walk if walk is not None else _Walk(overridden=overridden)
     element_type = array_type.base_type
 
     if isinstance(element_type, (ArrayType, DynamicArrayType)):
@@ -289,14 +329,15 @@ def register_hash_if_hashable(target_type: Type, derived: DerivedMethodTable) ->
     yes registers through the one derived-method seam. Answers whether the type now has
     a derived hash. Any other kind answers False and registers nothing.
     """
+    overridden = derived.hash_override
     if isinstance(target_type, (ArrayType, DynamicArrayType)):
-        can_hash, _ = can_array_be_hashed(target_type)
+        can_hash, _ = can_array_be_hashed(target_type, overridden=overridden)
         kind = "array"
     elif isinstance(target_type, EnumType):
-        can_hash, _ = can_enum_be_hashed(target_type)
+        can_hash, _ = can_enum_be_hashed(target_type, overridden=overridden)
         kind = "enum"
     elif isinstance(target_type, StructType):
-        can_hash, _ = can_struct_be_hashed(target_type)
+        can_hash, _ = can_struct_be_hashed(target_type, overridden=overridden)
         kind = container_hash_kind(target_type) or "struct"
     else:
         return False
@@ -306,4 +347,18 @@ def register_hash_if_hashable(target_type: Type, derived: DerivedMethodTable) ->
         derived.register_method(target_type, derived_method(
             target_type, name="hash", kind=kind, return_type=BuiltinType.U64,
             factory_getter=get_hash_emitter_factory, ice=er.ERR.CE0123))
+    if kind in CONTAINER_HASH_KINDS.values():
+        _hash_held_arrays(target_type, derived)
     return True
+
+
+def _hash_held_arrays(container: StructType, derived: DerivedMethodTable) -> None:
+    """A container's held ARRAY argument gets its hash with the container's.
+
+    No struct field and no enum payload names that array, so the derive pass never
+    meets it, and the backend's registration on demand has no override predicate to
+    read: an array of an overridden type was refused there (CE0052, #891).
+    """
+    for arg in container.generic_args or ():
+        if isinstance(arg, (ArrayType, DynamicArrayType)):
+            register_hash_if_hashable(arg, derived)

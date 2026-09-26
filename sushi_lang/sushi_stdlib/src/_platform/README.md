@@ -37,12 +37,9 @@ _platform/
 ├── darwin/             # macOS platform implementations
 │   ├── __init__.py
 │   └── time.py         # POSIX time declarations (nanosleep)
-├── linux/              # Linux platform implementations (future)
-│   ├── __init__.py
-│   └── time.py         # POSIX time declarations
-└── windows/            # Windows platform implementations (future)
+└── linux/              # Linux platform implementations
     ├── __init__.py
-    └── time.py         # Windows time declarations (kernel32 Sleep)
+    └── time.py         # POSIX time declarations
 ```
 
 ## Usage
@@ -50,9 +47,9 @@ _platform/
 Stdlib modules use `get_platform_module()` to dynamically load the correct platform implementation:
 
 ```python
-from stdlib.src._platform import get_platform_module
+from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-# Automatically selects darwin/linux/windows based on build platform
+# Selects darwin or linux from the build platform; any other platform is a RuntimeError
 platform_time = get_platform_module('time')
 declare_nanosleep = platform_time.declare_nanosleep
 ```
