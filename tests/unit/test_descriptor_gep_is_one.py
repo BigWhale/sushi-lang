@@ -13,8 +13,9 @@ compiles one probe program in-process, records every GEP `[0, k]` (k = 0, 1 or 2
 pointer to `{i32, i32, T*}`, and accepts it only when the `gep_utils` trio made it, or
 when the Python function that made it is on the SAME_SHAPE list, which names the struct
 it indexes. A new raw descriptor GEP in a function that is not on the list fails here.
-The gate sees only what the probe reaches, and the stdlib generators run when the stdlib
-is built and not when a program is compiled, so their GEPs are not in it.
+The gate sees only what the probe reaches. A stdlib generator runs in the probe only
+when the stdlib bitcode is stale (the compile rebuilds it in process), so a generator
+must follow the rule too, or the gate fails on a stale tree and passes on a fresh one.
 """
 from __future__ import annotations
 
