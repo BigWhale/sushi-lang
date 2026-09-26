@@ -566,6 +566,8 @@ class Match(Stmt):
     # owned by construction and needs no marker.
     consumes_scrutinee: bool = False
     consumes_span: Optional[Span] = None
+    # The typecheck pass refused the arms as not exhaustive (CE2040 / CE2074, #886).
+    not_exhaustive: bool = False
 
 
 @dataclass(slots=True)

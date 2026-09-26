@@ -1,46 +1,73 @@
 """Return-reachability analysis for type validation (the typecheck pass)."""
 from __future__ import annotations
 
-from typing import Optional
+from enum import Enum
+from typing import Iterable, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import Block, Break, Continue, Lambda, Stmt, Return, If, Match
 
 
-def block_always_returns(self, block: Block) -> bool:
-    """Check if a block always returns on all code paths."""
+class Reach(Enum):
+    """Where the path through a statement or a block goes."""
+    ENDS = "ends"            # it returns on every path
+    FALLS = "falls"          # some path reaches the statement after it
+    UNDECIDED = "undecided"  # a `match` refused as not exhaustive decides it (#886)
+
+
+def _branches(reaches: Iterable[Reach]) -> Reach:
+    """The reach of a statement whose paths are these branches."""
+    found = set(reaches)
+    if Reach.FALLS in found:
+        return Reach.FALLS
+    if Reach.UNDECIDED in found:
+        return Reach.UNDECIDED
+    return Reach.ENDS
+
+
+def block_reach(self, block: Block) -> Reach:
+    undecided = False
     for stmt in block.statements:
-        if statement_always_returns(self, stmt):
-            return True
-    return False
+        reach = statement_reach(self, stmt)
+        if reach is Reach.ENDS:
+            return Reach.ENDS
+        undecided = undecided or reach is Reach.UNDECIDED
+    return Reach.UNDECIDED if undecided else Reach.FALLS
+
+
+def statement_reach(self, stmt: Stmt) -> Reach:
+    if isinstance(stmt, Return):
+        return Reach.ENDS
+
+    if isinstance(stmt, If):
+        if stmt.else_block is None:
+            return Reach.FALLS
+        blocks = [block for _, block in stmt.arms] + [stmt.else_block]
+        return _branches(block_reach(self, block) for block in blocks)
+
+    if isinstance(stmt, Match):
+        reach = _branches(
+            block_reach(self, arm.body) if isinstance(arm.body, Block) else Reach.FALLS
+            for arm in stmt.arms
+        )
+        # A value that no arm covers goes past the `match`, but the missing arm is
+        # already an error, and the arm that the author adds decides the path.
+        if stmt.not_exhaustive and reach is Reach.ENDS:
+            return Reach.UNDECIDED
+        return reach
+
+    # A loop may not run, or may break. Every other statement goes on to the next.
+    return Reach.FALLS
+
+
+def block_always_returns(self, block: Block) -> bool:
+    """The fall-off rule's question (CE0107): no path certainly reaches the block end."""
+    return block_reach(self, block) is not Reach.FALLS
 
 
 def statement_always_returns(self, stmt: Stmt) -> bool:
-    """Check if a statement always returns on all code paths."""
-    from sushi_lang.semantics.ast import Foreach, While
-
-    if isinstance(stmt, Return):
-        return True
-
-    if isinstance(stmt, If):
-        all_arms_return = all(block_always_returns(self, block) for _, block in stmt.arms)
-        if stmt.else_block:
-            return all_arms_return and block_always_returns(self, stmt.else_block)
-        return False  # No else block means some paths don't return
-
-    if isinstance(stmt, Match):
-        return all(
-            block_always_returns(self, arm.body) if isinstance(arm.body, Block) else False
-            for arm in stmt.arms
-        )
-
-    # Loops never guarantee a return (they might not execute or might break)
-    if isinstance(stmt, (While, Foreach)):
-        return False
-
-    # Everything else -- a let, a rebind, an expression statement, a print, a break, a
-    # continue -- does not return either, so the answer is the same.
-    return False
+    """The statement returns on every path, so no statement after it can run."""
+    return statement_reach(self, stmt) is Reach.ENDS
 
 
 def ends_the_path(self, stmt: Stmt) -> bool:
