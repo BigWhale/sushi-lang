@@ -170,7 +170,9 @@ fn File.read_all() string | IoError
 a caller that must not cut one reads bytes with `read_bytes()`, accumulates them, and
 converts once. An EMPTY answer is the end of input -- a SHORT answer is not, because a
 pipe hands over whatever has arrived so far. `read_all()` holds the whole answer in memory
-at once; a large file wants `read()` in a loop, or [`BufReader`](buf.md).
+at once; a large file wants `read()` in a loop, or [`BufReader`](buf.md). The method
+forwards to the generic [`read_all`](contracts.md#read_all) of `<io/contracts>`, which takes
+any `Reader`.
 
 **Example:** the whole file, in a helper that carries the channel.
 

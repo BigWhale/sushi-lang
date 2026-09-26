@@ -10,9 +10,9 @@ use <io/contracts>
 
 ## Overview
 
-The module declares three perks and nothing else -- no struct, no function, no constant. A
-consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`, or anything later that
-satisfies the contract.
+The module declares three perks and one function over them, [`read_all`](#read_all) -- no
+struct and no constant. A consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`,
+or anything later that satisfies the contract.
 
 It is also the HOME of one predefined enum, `SeekFrom`, the origin `Seek.seek` takes, and
 it re-exports [`<io/error>`](error.md), the home of `IoError` -- the one channel every
@@ -120,6 +120,35 @@ have to add it back.
 Getting bytes onto the DISK is `fsync`, a much stronger promise, and not what `flush` ever
 meant.
 
+## read_all
+
+```sushi
+public fn read_all@(R: Reader)(poke R r) string | IoError
+```
+
+Reads everything left in a reader, from its position to the end of input, as text. The
+function takes `read_bytes()` until the answer is empty, keeps the bytes, and converts them
+once at the end, so a multi-byte character that one read splits is joined again. The whole
+answer is held in memory at once.
+
+This is the one copy of the loop. `File.read_all()` and `BufReader.read_all()` forward to
+it, so `f.read_all()` and `read_all(poke f)` give the same answer, and a user type that
+implements `Reader` gets the function for nothing.
+
+```sushi
+use <io/fs>
+
+fn slurp(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    return Result.Ok(read_all(poke f)??)
+
+fn main() i32:
+    match slurp("/no/such/file"):
+        Result.Ok(text) -> println(text)
+        Result.Err(_) -> println("Mostly Harmless: no such file")
+    return Result.Ok(0)
+```
+
 ## Examples
 
 ### One function, two kinds of handle
@@ -163,7 +192,8 @@ fn main() i32:
 ## Limitations
 
 - A perk has no default implementations, so a convenience above these methods is a free
-  generic function rather than a provided method.
+  generic function rather than a provided method -- `read_all` is the one this module
+  ships.
 - A perk cannot carry a type parameter (CE4010), so there is no `Reader@(T)`.
 - A perk method beside a concrete method of the same name on one type is CE4007. Each name
   has exactly one home.

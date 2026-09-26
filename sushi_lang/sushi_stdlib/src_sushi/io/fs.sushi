@@ -401,15 +401,7 @@ buffered reader.
 - Errors: IoError, when a read failed.
 :##
 extend File read_all(poke self) string | IoError:
-    let u8[] all = from([])
-    let bool done = false
-    while (not done):
-        let u8[] chunk = self.read_bytes(65536)??
-        if (chunk.len() == 0):
-            done := true
-        else:
-            all.extend(chunk)
-    return Result.Ok(all.to_string())
+    return Result.Ok(read_all(poke self)??)
 
 ##:
 Reads one line, without its newline.
