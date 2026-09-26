@@ -232,7 +232,12 @@ _add(ErrorMessage("CE2054", Severity.ERROR,
 
 _add(ErrorMessage("CE2055", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' does not support equality comparison",
-    Category.TYPE, "HashMap keys must support equality comparison (==). This is required for collision resolution."))
+    Category.TYPE,
+    "HashMap keys must support equality comparison (==). This is required for collision "
+    "resolution. The probe compares two keys field by field, and a function value, a "
+    "`ptr`, a `List@(T)` and an `Own@(T)` have no equality. A `Hashable` override gives "
+    "a hash only; it does not make a type comparable, so a type that holds one of these "
+    "is not a key with or without an override (ruling on #936)."))
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
