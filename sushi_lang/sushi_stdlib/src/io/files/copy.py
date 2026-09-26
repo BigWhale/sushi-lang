@@ -5,7 +5,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_file_error_tag
-from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result, emit_err_result
+from sushi_lang.sushi_stdlib.src.results import emit_ok_result, emit_err_result
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 

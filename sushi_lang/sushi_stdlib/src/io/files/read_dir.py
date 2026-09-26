@@ -10,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc, declare_realloc, declare_strlen,
 )
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_errno_err_result
-from sushi_lang.sushi_stdlib.src.io.files.results import emit_ok_result
+from sushi_lang.sushi_stdlib.src.results import emit_ok_result
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 

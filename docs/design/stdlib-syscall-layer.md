@@ -62,3 +62,37 @@ C string.
 
 `fd_readln` is under `File.readln()`, the UNBUFFERED read. To read a whole file line by
 line, use `BufReader@(R)` and its `lines()` in `<io/buf>` (`docs/stdlib/io/buf.md`).
+
+## errno to an error tag
+
+A failed libc call answers -1 (or a null pointer) and puts the cause in `errno`. The
+generators turn that cause into the tag of a unit-variant error enum -- `FileError` for
+`<io/files>`, `NetError` for `<net/socket>` -- and build a `Result.Err` with it.
+
+- **One emitter.** `emit_errno_tag(builder, module, table, default)` in
+  `sushi_lang/sushi_stdlib/src/errno_tags.py` reads `errno` and maps it through `table`,
+  and an unmapped value maps to `default`. `emit_errno_err_result` adds the `Result.Err`.
+  The module is under `src/` and not under `io/` or `net/`, because neither of those may
+  import the other.
+- **The tables.** `errno_to_file_error_table` and `errno_to_net_error_table` in
+  `sushi_lang/backend/runtime/constants.py` are the only tables, with their defaults
+  `ERRNO_DEFAULT_FILE_ERROR` and `ERRNO_DEFAULT_NET_ERROR`. `io/files/errno.py` and
+  `net/errno.py` each give the emitter their table and their default, and nothing more.
+- **The layout.** The `Result` bytes are built in `src/results.py` and nowhere else, and
+  `errno` is read through `declare_errno_location` in `src/libc_declarations.py`, so the
+  two error families read one `errno` through one declaration.
+- **`NetError.ResolveFailed`** is the one `NetError` tag that no `errno` reaches. A
+  `getaddrinfo` failure answers its own code, and only `EAI_SYSTEM` means "read `errno`";
+  every other code is `ResolveFailed`.
+
+### The order of the calls
+
+`close()`, `free()` and `freeaddrinfo()` can all overwrite `errno`. This is the largest
+single cause of a wrong variant. So every failure edge reads the tag FIRST, directly after
+the failed call, and keeps it; then it cleans up; then it builds the `Err`.
+
+### EINTR
+
+A `read` or a `write` that a signal interrupts before a byte moves answers -1 with `EINTR`,
+and the correct response is to ask again. `emit_is_eintr` (`io/files/errno.py`) is the
+test, and the read and write loops go back to the call when it is true.
