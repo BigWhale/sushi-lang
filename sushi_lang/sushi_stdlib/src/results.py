@@ -9,7 +9,10 @@ The error payload is written as a bare i32 tag, so these two work for any
 unit-variant error enum -- FileError, NetError, ProcessError -- and the
 generator picks the table that turns an errno into that tag.
 """
+from functools import lru_cache
+
 from llvmlite import ir
+from sushi_lang.internals.errors import InternalCompilerError
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_memcpy
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -17,6 +20,20 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 # Maybe<T>'s two variant tags, in declaration order.
 MAYBE_SOME_TAG = 0
 MAYBE_NONE_TAG = 1
+
+
+@lru_cache(maxsize=None)
+def result_tag(variant: str) -> int:
+    """The tag of a Result variant, read from the interned Result enum."""
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    from sushi_lang.semantics.passes.collect.enums import EnumTable
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    result = ensure_result_type_in_table(EnumTable(), BuiltinType.I32, BuiltinType.I32)
+    tag = result.get_variant_index(variant) if result is not None else None
+    if tag is None:
+        raise InternalCompilerError("CE0035", variant=variant, enum="Result")
+    return tag
 
 
 def emit_ok_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
@@ -39,7 +56,8 @@ def emit_ok_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     data_value = builder.load(data_alloca, name="ok_data_value")
 
     ok_result = ir.Constant(result_type, ir.Undefined)
-    ok_result = builder.insert_value(ok_result, ir.Constant(i32, 0), 0, name="ok_with_tag")
+    ok_result = builder.insert_value(ok_result, ir.Constant(i32, result_tag("Ok")), 0,
+                                   name="ok_with_tag")
     ok_result = builder.insert_value(ok_result, data_value, 1, name="ok_result")
     return ok_result
 
@@ -61,7 +79,8 @@ def emit_err_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     data_value = builder.load(data_alloca, name="err_data_value")
 
     err_result = ir.Constant(result_type, ir.Undefined)
-    err_result = builder.insert_value(err_result, ir.Constant(i32, 1), 0, name="err_with_tag")
+    err_result = builder.insert_value(err_result, ir.Constant(i32, result_tag("Err")), 0,
+                                    name="err_with_tag")
     err_result = builder.insert_value(err_result, data_value, 1, name="err_result")
     return err_result
 
