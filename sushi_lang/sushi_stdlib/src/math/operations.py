@@ -4,7 +4,7 @@ from llvmlite import ir
 
 
 def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
-    """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic."""
+    """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic or libc function."""
     f64 = ir.DoubleType()
     sig = ir.FunctionType(f64, [f64] * len(arg_names))
     intrinsic = module.globals.get(llvm_name)
@@ -323,93 +323,18 @@ def generate_atan2(module: ir.Module) -> None:
 
 
 def generate_sinh(module: ir.Module) -> None:
-    """Generate sinh function: sinh(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    exp_intrinsic = module.globals.get("llvm.exp.f64")
-    if exp_intrinsic is None:
-        exp_type = ir.FunctionType(f64, [f64])
-        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_sinh")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
-
-    neg_x = builder.fneg(x_param, name="neg_x")
-
-    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
-
-    diff = builder.fsub(exp_x, exp_neg_x, name="diff")
-
-    two = ir.Constant(f64, 2.0)
-    result = builder.fdiv(diff, two, name="sinh_x")
-    builder.ret(result)
+    """Generate sushi_sinh(f64 x) -> f64 via the libc sinh."""
+    _generate_f64_intrinsic_wrapper(module, "sinh", "sushi_sinh", ('x',))
 
 
 def generate_cosh(module: ir.Module) -> None:
-    """Generate cosh function: cosh(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    exp_intrinsic = module.globals.get("llvm.exp.f64")
-    if exp_intrinsic is None:
-        exp_type = ir.FunctionType(f64, [f64])
-        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_cosh")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
-    neg_x = builder.fneg(x_param, name="neg_x")
-    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
-
-    sum_val = builder.fadd(exp_x, exp_neg_x, name="sum")
-
-    two = ir.Constant(f64, 2.0)
-    result = builder.fdiv(sum_val, two, name="cosh_x")
-    builder.ret(result)
+    """Generate sushi_cosh(f64 x) -> f64 via the libc cosh."""
+    _generate_f64_intrinsic_wrapper(module, "cosh", "sushi_cosh", ('x',))
 
 
 def generate_tanh(module: ir.Module) -> None:
-    """Generate tanh function: tanh(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    exp_intrinsic = module.globals.get("llvm.exp.f64")
-    if exp_intrinsic is None:
-        exp_type = ir.FunctionType(f64, [f64])
-        exp_intrinsic = ir.Function(module, exp_type, name="llvm.exp.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_tanh")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    exp_x = builder.call(exp_intrinsic, [x_param], name="exp_x")
-    neg_x = builder.fneg(x_param, name="neg_x")
-    exp_neg_x = builder.call(exp_intrinsic, [neg_x], name="exp_neg_x")
-
-    numer = builder.fsub(exp_x, exp_neg_x, name="numer")
-
-    denom = builder.fadd(exp_x, exp_neg_x, name="denom")
-
-    result = builder.fdiv(numer, denom, name="tanh_x")
-    builder.ret(result)
+    """Generate sushi_tanh(f64 x) -> f64 via the libc tanh."""
+    _generate_f64_intrinsic_wrapper(module, "tanh", "sushi_tanh", ('x',))
 
 
 def generate_log(module: ir.Module) -> None:
@@ -438,30 +363,5 @@ def generate_exp2(module: ir.Module) -> None:
 
 
 def generate_hypot(module: ir.Module) -> None:
-    """Generate hypot function: hypot(f64 x, f64 y) -> f64"""
-    f64 = ir.DoubleType()
-
-    sqrt_intrinsic = module.globals.get("llvm.sqrt.f64")
-    if sqrt_intrinsic is None:
-        sqrt_type = ir.FunctionType(f64, [f64])
-        sqrt_intrinsic = ir.Function(module, sqrt_type, name="llvm.sqrt.f64")
-
-    func_type = ir.FunctionType(f64, [f64, f64])
-    func = ir.Function(module, func_type, name="sushi_hypot")
-
-    x_param = func.args[0]
-    y_param = func.args[1]
-    x_param.name = "x"
-    y_param.name = "y"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    x_sq = builder.fmul(x_param, x_param, name="x_sq")
-
-    y_sq = builder.fmul(y_param, y_param, name="y_sq")
-
-    sum_sq = builder.fadd(x_sq, y_sq, name="sum_sq")
-
-    result = builder.call(sqrt_intrinsic, [sum_sq], name="hypot")
-    builder.ret(result)
+    """Generate sushi_hypot(f64 x, f64 y) -> f64 via the libc hypot."""
+    _generate_f64_intrinsic_wrapper(module, "hypot", "sushi_hypot", ('x', 'y'))

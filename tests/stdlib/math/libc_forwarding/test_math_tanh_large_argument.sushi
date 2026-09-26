@@ -1,0 +1,8 @@
+# tanh of a large magnitude is 1 or -1, the value of the C library tanh (#905).
+# EXPECT_STDOUT_EXACT: "1 -1\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    println("{tanh(1000.0)} {tanh(-1000.0)}")
+    return Result.Ok(0)
