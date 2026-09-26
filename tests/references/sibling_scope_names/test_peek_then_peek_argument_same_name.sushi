@@ -1,0 +1,18 @@
+# A `let peek` binding in one block leaves no state that a later `peek` argument of the
+# same name reads (#941).
+# EXPECT_STDOUT_EXACT: ab\n2\n1\n
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn look(peek string s) i32:
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let string[] xs = from(["ab", "c"])
+    if (xs.len() > 0):
+        let peek string e = xs[0]
+        println(e)
+    foreach(e in xs.iter()):
+        let i32 n = look(peek e).realise(0)
+        println(n)
+    return Result.Ok(0)
