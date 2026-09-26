@@ -46,6 +46,7 @@ from .calls import (
     settle_method_args,
     settle_namespaced_args,
     settle_receiver,
+    unchanged_borrowed_roots,
 )
 from .consume import consume, consume_each, consume_named, name_provenance, unwrap_place
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
@@ -134,6 +135,7 @@ def _check_name(checker: 'BorrowChecker', expr: Name) -> None:
 
 def _check_call(checker: 'BorrowChecker', expr: Call) -> None:
     """A direct or indirect call: walk it, then apply the callee's declared modes."""
+    unchanged = unchanged_borrowed_roots(checker, expr)
     check_expr(checker, expr.callee)
     for arg in expr.args:
         check_expr(checker, arg)
@@ -141,6 +143,7 @@ def _check_call(checker: 'BorrowChecker', expr: Call) -> None:
     # consume. The callee's kind decides where the declaration is read from
     # (docs/design/borrow-model.md S5); the mode decides what happens.
     consume_call_args(checker, expr)
+    reject_borrow_read_by_the_change(checker, expr, unchanged)
     # A callee that destroys its `poke` parameter destroys the CALLER's value (#168).
     # CE2406 still fires from the Name arm above -- no new emit site.
     apply_destroy_effects(checker, expr)
@@ -148,14 +151,15 @@ def _check_call(checker: 'BorrowChecker', expr: Call) -> None:
 
 def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     """`x.m(args)`: gate the write, then apply the method's declared modes."""
+    unchanged = unchanged_borrowed_roots(checker, expr)
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
-    reject_borrow_read_by_the_change(checker, expr)
     reject_self_aliasing_copy(checker, expr)
     settle_receiver(checker, expr)
     settle_method_args(checker, expr)
     maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
+    reject_borrow_read_by_the_change(checker, expr, unchanged)
 
 
 def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
@@ -165,9 +169,9 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
     # only for an enum constructor, an indirect call and a container insert. Do NOT add
     # a blanket `consume(arg, CALL_ARG)` loop -- it would make every `libc.*(s)` call
     # site a false CE2405. `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate.
+    unchanged = unchanged_borrowed_roots(checker, expr)
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
-    reject_borrow_read_by_the_change(checker, expr)
     reject_self_aliasing_copy(checker, expr)
     if is_enum_constructor(checker, expr):
         # `Box.Full(a)` arrives here as a DotCall, not an EnumConstructor.
@@ -185,6 +189,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         settle_method_args(checker, expr)
         maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
+    reject_borrow_read_by_the_change(checker, expr, unchanged)
 
 
 def _check_lambda(checker: 'BorrowChecker', expr: Lambda) -> None:
