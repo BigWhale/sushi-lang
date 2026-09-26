@@ -14,7 +14,9 @@ from sushi_lang.sushi_stdlib.src.io.files.errno import (
     emit_errno_err_result, emit_file_error_tag, emit_is_eintr)
 from sushi_lang.sushi_stdlib.src.results import (
     emit_err_result, emit_none, emit_ok_result, emit_some)
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
+from sushi_lang.sushi_stdlib.src.libc_declarations import (
+    declare_free, declare_malloc, declare_realloc,
+)
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -228,7 +230,7 @@ def generate_fd_readln(module: ir.Module) -> None:
     pread_fn = platform_files.declare_pread(module)
     lseek_fn = platform_files.declare_lseek(module)
     malloc_fn = declare_malloc(module)
-    realloc_fn = _declare_realloc(module)
+    realloc_fn = declare_realloc(module)
     free_fn = declare_free(module)
 
     string_ty = get_string_type()
@@ -598,11 +600,3 @@ def generate_fd_isatty(module: ir.Module) -> None:
         builder.icmp_signed("!=", answer, ir.Constant(i32, 0), name="is_terminal"),
         i8, name="as_bool"))
 
-
-def _declare_realloc(module: ir.Module) -> ir.Function:
-    """Declare libc realloc(). `fd_readln` is the only generator here that grows a buffer."""
-    _i8, i8_ptr, _i32, i64 = get_basic_types()
-    try:
-        return module.get_global("realloc")
-    except KeyError:
-        return ir.Function(module, ir.FunctionType(i8_ptr, [i8_ptr, i64]), name="realloc")

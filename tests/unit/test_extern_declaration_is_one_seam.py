@@ -15,8 +15,7 @@ the same job in `sushi_lang/sushi_stdlib/src/**`:
 A "define once" guard (`if not func.is_declaration: return func`) defines a body, and a
 guard in front of an `ir.GlobalVariable` declares a variable: neither is matched.
 
-KNOWN_HAND_DECLARATIONS may only get SHORTER. It holds the files that still declare by hand;
-each entry must still offend, so a file that is moved must leave the list.
+The gate has no exceptions (#911).
 """
 from __future__ import annotations
 
@@ -26,19 +25,6 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[2] / "sushi_lang" / "sushi_stdlib" / "src"
 
 SEAM_MODULE = "libc_declarations.py"
-
-KNOWN_HAND_DECLARATIONS = frozenset({
-    "collections/strings/intrinsics/__init__.py",
-    "io/files/read_dir.py",
-    "io/files/sequential.py",
-    "math/operations.py",
-    "net/dns.py",
-    "net/stream.py",
-    "net/udp.py",
-    "results.py",
-    "sys/env/functions.py",
-})
-
 
 def _is_ir_function_call(node: ast.AST) -> bool:
     return (isinstance(node, ast.Call)
@@ -131,16 +117,9 @@ def _offending_files() -> dict[str, list[tuple[int, str]]]:
 
 def test_no_hand_written_declaration_outside_the_seam():
     offending = _offending_files()
-    new = {f: h for f, h in offending.items() if f not in KNOWN_HAND_DECLARATIONS}
-    assert not new, (
+    assert not offending, (
         "declare an external function with libc_declarations.declare_extern: "
-        + "; ".join(f"{f}:{line} {kind}" for f, hits in new.items() for line, kind in hits))
-
-
-def test_the_ratchet_only_shrinks():
-    offending = _offending_files()
-    stale = sorted(KNOWN_HAND_DECLARATIONS - offending.keys())
-    assert not stale, f"these files declare through the seam now; remove them from the list: {stale}"
+        + "; ".join(f"{f}:{line} {kind}" for f, hits in offending.items() for line, kind in hits))
 
 
 def test_the_seam_module_exists():

@@ -10,6 +10,7 @@ from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc,
+    declare_memcpy,
     declare_realloc,
     declare_strlen,
 )
@@ -162,7 +163,7 @@ def generate_resolve(module: ir.Module) -> None:
     length = builder.call(strlen_fn, [host_buf], name="answer_len")
     length64 = builder.zext(length, i64, name="answer_len64")
     owned = builder.call(malloc_fn, [length64], name="answer_buf")
-    memcpy_fn = builder.module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+    memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
 

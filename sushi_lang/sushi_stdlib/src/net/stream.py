@@ -6,6 +6,7 @@ from sushi_lang.sushi_stdlib.src.net import addr
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_free,
     declare_malloc,
+    declare_memcpy,
     declare_strlen,
 )
 from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
@@ -346,7 +347,7 @@ def generate_peer_ip(module: ir.Module) -> None:
     length = builder.call(strlen_fn, [host_buf], name="ip_len")
     length64 = builder.zext(length, i64, name="ip_len64")
     owned = builder.call(malloc_fn, [length64], name="ip_buf")
-    memcpy_fn = builder.module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+    memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
     builder.ret(emit_ok_result(builder, result_type, text, 16))

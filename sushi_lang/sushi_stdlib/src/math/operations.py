@@ -2,14 +2,14 @@
 from __future__ import annotations
 from llvmlite import ir
 
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
+
 
 def _forward_f64(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
     """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic or libc function."""
     f64 = ir.DoubleType()
     sig = ir.FunctionType(f64, [f64] * len(arg_names))
-    callee = module.globals.get(llvm_name)
-    if callee is None:
-        callee = ir.Function(module, sig, name=llvm_name)
+    callee = declare_extern(module, llvm_name, f64, [f64] * len(arg_names))
 
     func = ir.Function(module, sig, name=sushi_name)
     for arg, name in zip(func.args, arg_names, strict=True):
@@ -59,9 +59,7 @@ def generate_abs_functions(module: ir.Module) -> None:
     ]
 
     for float_type, type_name in float_types:
-        intrinsic_name = f"llvm.fabs.{type_name}"
-        intrinsic_type = ir.FunctionType(float_type, [float_type])
-        intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+        intrinsic = declare_extern(module, f"llvm.fabs.{type_name}", float_type, [float_type])
 
         func_type = ir.FunctionType(float_type, [float_type])
         func = ir.Function(module, func_type, name=f"sushi_abs_{type_name}")
@@ -136,9 +134,8 @@ def generate_min_max_functions(module: ir.Module) -> None:
         builder.ret(result)
 
     for float_type, type_name in float_types:
-        intrinsic_name = f"llvm.minnum.{type_name}"
-        intrinsic_type = ir.FunctionType(float_type, [float_type, float_type])
-        min_intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+        min_intrinsic = declare_extern(
+            module, f"llvm.minnum.{type_name}", float_type, [float_type, float_type])
 
         func_type = ir.FunctionType(float_type, [float_type, float_type])
         min_func = ir.Function(module, func_type, name=f"sushi_min_{type_name}")
@@ -154,8 +151,8 @@ def generate_min_max_functions(module: ir.Module) -> None:
         result = builder.call(min_intrinsic, [a_param, b_param])
         builder.ret(result)
 
-        intrinsic_name = f"llvm.maxnum.{type_name}"
-        max_intrinsic = ir.Function(module, intrinsic_type, name=intrinsic_name)
+        max_intrinsic = declare_extern(
+            module, f"llvm.maxnum.{type_name}", float_type, [float_type, float_type])
 
         max_func = ir.Function(module, func_type, name=f"sushi_max_{type_name}")
 
