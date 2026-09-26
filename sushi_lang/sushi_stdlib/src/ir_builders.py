@@ -34,37 +34,6 @@ class IRStructBuilder:
         size = builder.extract_value(fat_ptr, 1, name="size")
         return data, size
 
-    @staticmethod
-    def build_iterator(
-        builder: ir.IRBuilder,
-        iterator_type: ir.LiteralStructType,
-        index: ir.Value,
-        length: ir.Value,
-        data_ptr: ir.Value
-    ) -> ir.Value:
-        """Build an iterator struct { i32, i32, ptr }."""
-        undef_struct = ir.Constant(iterator_type, ir.Undefined)
-        struct_with_index = builder.insert_value(undef_struct, index, 0, name="with_index")
-        struct_with_length = builder.insert_value(struct_with_index, length, 1, name="with_length")
-        struct_complete = builder.insert_value(struct_with_length, data_ptr, 2, name="iterator")
-        return struct_complete
-
-    @staticmethod
-    def build_dynamic_array(
-        builder: ir.IRBuilder,
-        array_type: ir.LiteralStructType,
-        length: ir.Value,
-        capacity: ir.Value,
-        data_ptr: ir.Value
-    ) -> ir.Value:
-        """Build a dynamic array struct { i32 len, i32 cap, ptr data }."""
-        undef_struct = ir.Constant(array_type, ir.Undefined)
-        struct_with_len = builder.insert_value(undef_struct, length, 0, name="with_len")
-        struct_with_cap = builder.insert_value(struct_with_len, capacity, 1, name="with_cap")
-        struct_complete = builder.insert_value(struct_with_cap, data_ptr, 2, name="array")
-        return struct_complete
-
-
 class IRLoopBuilder:
     """Helper for building common loop patterns."""
 
@@ -144,64 +113,6 @@ class IRLoopBuilder:
         builder = ir.IRBuilder(exit_block)
         result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
         builder.ret(result)
-
-
-class IRConditionalBuilder:
-    """Helper for building conditional structures."""
-
-    @staticmethod
-    def build_simple_conditional(
-        func: ir.Function,
-        builder: ir.IRBuilder,
-        condition: ir.Value,
-        then_fn: Callable[[ir.IRBuilder], None],
-        else_fn: Optional[Callable[[ir.IRBuilder], None]] = None,
-        merge_block: Optional[Any] = None
-    ) -> Any:
-        """Build if-then-else structure."""
-        then_block = func.append_basic_block("then")
-        if else_fn:
-            else_block = func.append_basic_block("else")
-        if merge_block is None:
-            merge_block = func.append_basic_block("merge")
-
-        if else_fn:
-            builder.cbranch(condition, then_block, else_block)
-        else:
-            builder.cbranch(condition, then_block, merge_block)
-
-        builder = ir.IRBuilder(then_block)
-        then_fn(builder)
-        if not builder.block.is_terminated:
-            builder.branch(merge_block)
-
-        if else_fn:
-            builder = ir.IRBuilder(else_block)
-            else_fn(builder)
-            if not builder.block.is_terminated:
-                builder.branch(merge_block)
-
-        return merge_block
-
-    @staticmethod
-    def build_early_return_check(
-        func: ir.Function,
-        builder: ir.IRBuilder,
-        condition: ir.Value,
-        return_value: ir.Value,
-        continue_block: Optional[Any] = None
-    ) -> Any:
-        """Build early return pattern: if (condition) return value; else continue."""
-        return_block = func.append_basic_block("early_return")
-        if continue_block is None:
-            continue_block = func.append_basic_block("continue")
-
-        builder.cbranch(condition, return_block, continue_block)
-
-        builder = ir.IRBuilder(return_block)
-        builder.ret(return_value)
-
-        return continue_block
 
 
 class IRMemoryBuilder:

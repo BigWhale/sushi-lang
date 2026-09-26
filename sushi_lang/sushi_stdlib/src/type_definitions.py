@@ -34,19 +34,6 @@ def get_string_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntTy
     return i8, i8_ptr, i32, i64, string_type
 
 
-def get_iterator_type(element_type: ir.Type) -> ir.LiteralStructType:
-    """The iterator struct `{i32 index, i32 length, T* data}`; length -1 means streaming."""
-    i32 = ir.IntType(32)
-    element_ptr = element_type.as_pointer()
-    return ir.LiteralStructType([i32, i32, element_ptr])
-
-
-def get_string_iterator_type() -> ir.LiteralStructType:
-    """Get the iterator type for iterating over strings."""
-    string_type = get_string_type()
-    return get_iterator_type(string_type)
-
-
 def get_dynamic_array_type(element_type: ir.Type) -> ir.LiteralStructType:
     """Get the dynamic array struct type for a given element type."""
     i32 = ir.IntType(32)
@@ -58,11 +45,6 @@ def get_byte_array_type() -> ir.LiteralStructType:
     """Get the dynamic array type for byte arrays (u8[])."""
     i8 = ir.IntType(8)
     return get_dynamic_array_type(i8)
-
-
-def get_file_type() -> ir.PointerType:
-    """Get the FILE* type (opaque pointer)."""
-    return ir.IntType(8).as_pointer()
 
 
 def get_process_output_type() -> ir.LiteralStructType:
@@ -180,24 +162,3 @@ def get_timespec_type() -> ir.LiteralStructType:
     """Get the POSIX timespec struct type."""
     i64 = ir.IntType(64)
     return ir.LiteralStructType([i64, i64])
-
-
-# ==============================================================================
-# Legacy Compatibility
-# ==============================================================================
-# These functions maintain compatibility with existing code.
-# New code should use the specific get_*_type() functions above.
-
-def get_types_bundle() -> dict:
-    """Get a dictionary of commonly used types."""
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    return {
-        'i8': i8,
-        'i8_ptr': i8_ptr,
-        'i32': i32,
-        'i64': i64,
-        'string': get_string_type(),
-        'file': get_file_type(),
-        'string_iterator': get_string_iterator_type(),
-        'byte_array': get_byte_array_type(),
-    }
