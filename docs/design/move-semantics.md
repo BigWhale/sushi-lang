@@ -324,7 +324,7 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
   plus `tests/unit/test_cleanup_predicates_agree.py` for the DECLARED half.
 
 **Tests that flip (copy → move):**
-- `tests/unit/test_struct_raii.py::test_byvalue_struct_param_freed_by_callee` and
+- `test_struct_raii.py::test_byvalue_struct_param_freed_by_callee` and
   `::test_byvalue_struct_arg_deep_copied_at_call_site` — rewritten to assert move semantics.
 - `tests/types/test_struct_nested_deep_copy.sushi` (+ `_stress`) — constructor field values
   become moves; rewrite to use `.clone()` where the test genuinely wants two copies (which also

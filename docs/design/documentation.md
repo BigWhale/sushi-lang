@@ -511,8 +511,7 @@ body that is not its first item is an orphan too, and a different code, because 
 there is no declaration it could plausibly have meant.
 
 That is O(1) bookkeeping and total by construction: every block ends up attached, lifted, or
-in `orphan_docs`. `tests/unit/test_doc_block_attachment.py` is the gate, and it asserts the
-totality rather than any one of the three outcomes.
+in `orphan_docs`.
 
 ---
 
@@ -717,7 +716,7 @@ stdlib and the toolchain.
 
 CW7003, CW7004 and CW7005 report nothing because no bundled module carries a block yet.
 They are self-limiting by R33, and they are what makes the flag useful once the blocks
-exist. `tests/unit/test_stdlib_doc_blocks.py` holds the 114 as a shrink-only budget.
+exist.
 
 ---
 
@@ -1127,12 +1126,8 @@ reports:
 - Python, `print_library_info` in `sushi_lang/compiler/cli.py`
 - Sushi, `toolchain/src/slib_info.sushi`
 
-`tests/unit/test_slib_info_parity.py` locks them with
-`assert py_run.stdout.endswith(tool_run.stdout)`, and `toolchain/README.md` states the
-contract: error messages may differ between the tool and the fallback, the success report
-may not. `tests/unit/test_slib_info_docs.py` locks the same thing on a DOCUMENTED library,
-and the older module keeps an undocumented one, which is the regression that says a report
-with no docs in it is unchanged.
+`toolchain/README.md` states the contract: error messages may differ between the tool and
+the fallback, the success report may not.
 
 So every rendering change here is two implementations plus a rebuild through
 `toolchain/build.py`. This is the real cost of the requirement, and it is worth paying —

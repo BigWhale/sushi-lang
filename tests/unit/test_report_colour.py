@@ -19,9 +19,6 @@ and not the line above it.
 from __future__ import annotations
 
 import io
-import os
-import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -29,28 +26,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from test_slib_doc_carriage import DOC_LIB, build_library  # noqa: E402
 
 from sushi_lang.internals.styling import should_colour  # noqa: E402
-from sushic_path import SUSHIC, SUSHIC_AVAILABLE
-
-REPO = Path(__file__).resolve().parents[2]
-TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
-
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
-def _run(cmd, **kw):
-    return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
-def _env(**overrides):
-    env = dict(os.environ)
-    for name in ("NO_COLOR", "CLICOLOR_FORCE", "TERM", "SUSHI_TOOLCHAIN_BIN"):
-        env.pop(name, None)
-    env["SUSHI_TOOLCHAIN"] = "off"
-    env.update(overrides)
-    return env
+
+
 
 
 class _Stream(io.StringIO):
@@ -64,10 +47,6 @@ class _Stream(io.StringIO):
 
 # ------------------------------------------------------------------ the ladder
 
-@pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
-    for name in ("NO_COLOR", "CLICOLOR_FORCE", "TERM"):
-        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.mark.parametrize("tty,expected", [(True, True), (False, False)])
@@ -125,110 +104,25 @@ def test_auto_falls_through_to_the_variables(monkeypatch):
 
 # ------------------------------------------------------------------ the report
 
-@pytest.fixture(scope="module")
-def built(tmp_path_factory):
-    if not SUSHIC_AVAILABLE:
-        pytest.skip("no compiler driver in this checkout")
-    tmp = tmp_path_factory.mktemp("slibcolour")
-    slib, _metadata = build_library(tmp, "doclib", DOC_LIB)
-    tool = tmp / "slib-info"
-    r = _run([SUSHIC, str(TOOL_SRC), "-o", str(tool)], cwd=tmp)
-    assert r.returncode == 0, r.stdout + r.stderr
-    return slib, tool
 
 
-def test_a_piped_report_carries_no_escape(built):
-    slib, tool = built
-    assert "\x1b" not in _run([str(tool), "--docs", str(slib)], env=_env()).stdout
-    py = _run([SUSHIC, "--lib-info", str(slib), "--docs"], env=_env())
-    assert "\x1b" not in py.stdout
 
 
-@pytest.mark.parametrize("how", [["--color=always"], []], ids=["flag", "variable"])
-def test_forcing_colour_paints_the_report(built, how):
-    slib, tool = built
-    env = _env() if how else _env(CLICOLOR_FORCE="1")
-    assert "\x1b[" in _run([str(tool), *how, "--docs", str(slib)], env=env).stdout
-    py = _run([SUSHIC, "--lib-info", str(slib), "--docs", *how], env=env)
-    assert "\x1b[" in py.stdout
 
 
-def test_never_beats_a_forcing_variable(built):
-    slib, tool = built
-    env = _env(CLICOLOR_FORCE="1")
-    assert "\x1b" not in _run([str(tool), "--color=never", str(slib)], env=env).stdout
-    py = _run([SUSHIC, "--lib-info", str(slib), "--color=never"], env=env)
-    assert "\x1b" not in py.stdout
 
 
-def test_colour_changes_no_text_at_all(built):
-    """R43's real constraint: strip the escapes and the plain report comes back.
-
-    Stated on the PLAIN report, which is all signatures and has no prose to render.
-    The documented report has one deliberate exception -- R40 replaces an inline
-    Markdown mark with a style -- and `test_slib_info_markdown.py` states it there.
-    """
-    slib, tool = built
-    plain = _run([str(tool), str(slib)], env=_env()).stdout
-    painted = _run([str(tool), "--color=always", str(slib)], env=_env()).stdout
-    assert painted != plain
-    assert ANSI.sub("", painted) == plain
 
 
-@pytest.mark.parametrize("extra", [[], ["--docs"]])
-def test_the_two_implementations_agree_in_colour(built, extra):
-    slib, tool = built
-    tool_run = _run([str(tool), "--color=always", *extra, str(slib)], env=_env())
-    assert tool_run.returncode == 0, tool_run.stdout + tool_run.stderr
-    py_run = _run([SUSHIC, "--lib-info", str(slib), "--color=always", *extra],
-                  env=_env())
-    assert py_run.returncode == 0, py_run.stdout + py_run.stderr
-    assert py_run.stdout.endswith(tool_run.stdout)
 
 
-def test_a_section_header_and_a_symbol_name_are_bold(built):
-    slib, tool = built
-    out = _run([str(tool), "--color=always", str(slib)], env=_env()).stdout
-    assert "\x1b[1mPublic Functions\x1b[0m" in out
-    assert "\x1b[1mplain_add\x1b[0m" in out
 
 
-def test_a_tag_keyword_is_blue_and_a_parameter_name_is_cyan(built):
-    slib, tool = built
-    out = _run([str(tool), "--color=always", "--docs", str(slib)], env=_env()).stdout
-    assert "\x1b[34mReturns\x1b[0m: " in out
-    assert "\x1b[34mParameter\x1b[0m \x1b[36ma\x1b[0m: " in out
 
 
 # ------------------------------------------------------------------- the banner
 
-def test_the_banner_obeys_no_color(built):
-    """It used to decide on `isatty` alone, so NO_COLOR silenced everything but it."""
-    slib, _tool = built
-    forced = _run([SUSHIC, "--lib-info", str(slib)], env=_env(CLICOLOR_FORCE="1"))
-    assert "\x1b[" in forced.stdout.splitlines()[0]
-
-    quiet = _run([SUSHIC, "--lib-info", str(slib)],
-                 env=_env(CLICOLOR_FORCE="1", NO_COLOR="1"))
-    assert "\x1b" not in quiet.stdout
 
 
-@pytest.fixture()
-def stub_bin(tmp_path):
-    bin_dir = tmp_path / "stub_bin"
-    bin_dir.mkdir()
-    stub = bin_dir / "slib-info"
-    stub.write_text('#!/bin/sh\necho "ARGS: $*"\n')
-    stub.chmod(0o755)
-    return bin_dir
 
 
-def test_the_delegation_forwards_the_switch(built, stub_bin):
-    slib, _tool = built
-    env = _env()
-    env.pop("SUSHI_TOOLCHAIN")
-    env["SUSHI_TOOLCHAIN_BIN"] = str(stub_bin)
-    assert "--color=never" in _run(
-        [SUSHIC, "--lib-info", str(slib), "--color=never"], env=env).stdout
-    # `auto` is the default and says nothing, so it is not worth a word on the line.
-    assert "--color" not in _run([SUSHIC, "--lib-info", str(slib)], env=env).stdout

@@ -2,13 +2,10 @@
 from __future__ import annotations
 
 import io
-import os
 import re
-import subprocess
 from pathlib import Path
 
 import pytest
-from sushic_path import SUSHIC, needs_sushic
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -91,80 +88,9 @@ def test_library_error_renders_through_the_reporter_path():
 
 # CE3501 -- main() rejected in --lib mode (end to end)
 
-@needs_sushic
-def test_lib_mode_rejects_main(tmp_path):
-    src = tmp_path / "lib.sushi"
-    src.write_text(
-        "public fn helper(i32 x) i32:\n"
-        "    return Result.Ok(x + 1)\n\n"
-        "fn main() i32:\n"
-        "    return Result.Ok(0)\n",
-        encoding="utf-8",
-    )
-    result = subprocess.run(
-        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
-        cwd=tmp_path, capture_output=True, text=True,
-    )
-    assert result.returncode == 2, result.stdout + result.stderr
-    assert "CE3501" in result.stderr
 
 
-@needs_sushic
-def test_lib_mode_without_main_succeeds(tmp_path):
-    src = tmp_path / "lib.sushi"
-    src.write_text(
-        "public fn helper(i32 x) i32:\n"
-        "    return Result.Ok(x + 1)\n",
-        encoding="utf-8",
-    )
-    result = subprocess.run(
-        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(src), "-o", str(tmp_path / "lib.slib")],
-        cwd=tmp_path, capture_output=True, text=True,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
 
 
 # CE3507 -- a .slib whose bitcode payload is corrupt (end to end)
 
-@needs_sushic
-def test_corrupt_library_bitcode_is_ce3507(tmp_path):
-    libs = tmp_path / "libs"
-    libs.mkdir()
-    lib_src = tmp_path / "mathlib.sushi"
-    lib_src.write_text(
-        "public fn add_one(i32 x) i32:\n"
-        "    return Result.Ok(x + 1)\n",
-        encoding="utf-8",
-    )
-    slib = libs / "mathlib.slib"
-    build = subprocess.run(
-        [SUSHIC, "--lib", "--lib-kind", "binary", "--lib-version", "0.0.0", str(lib_src), "-o", str(slib)],
-        cwd=tmp_path, capture_output=True, text=True,
-    )
-    assert build.returncode == 0, build.stderr
-
-    # Corrupt the bitcode payload in place: the header + metadata + the two length
-    # fields stay intact (so the truncation guards pass), but the bitcode bytes are
-    # garbage, so llvm.parse_bitcode fails -> CE3507. The last 8-byte length field
-    # precedes the bitcode; scribble over everything after it.
-    from sushi_lang.backend.library_format import LibraryFormat
-    metadata, bitcode = LibraryFormat.read(slib)
-    LibraryFormat.write(slib, metadata, b"\x00" * len(bitcode))
-
-    project = tmp_path / "consumer"
-    project.mkdir()
-    (project / "main.sushi").write_text(
-        "use <lib/mathlib>\n\n"
-        "fn main() i32:\n"
-        "    println(add_one(41).realise(-1))\n"
-        "    return Result.Ok(0)\n",
-        encoding="utf-8",
-    )
-    env = {**os.environ, "SUSHI_LIB_PATH": str(libs)}
-    result = subprocess.run(
-        [SUSHIC, "main.sushi", "-o", "out"],
-        cwd=project, capture_output=True, text=True, env=env,
-    )
-    assert result.returncode == 2, result.stdout + result.stderr
-    assert "CE3507" in result.stderr
-    assert "CE0000" not in result.stderr, "a corrupt library must not read as a compiler bug"

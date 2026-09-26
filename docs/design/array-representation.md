@@ -154,7 +154,7 @@ allocation with a different filler.
 
 **A readable count never pays for the run-time mechanism.** llvmlite does not fold, so a
 readable range must be turned into values by the front end; at `--opt none` there is no
-second chance. Three tiers, gated by `tests/unit/test_range_fill_tiers.py`: a readable range
+second chance. Three tiers: a readable range
 under `UNROLL_LIMIT` stores literals and emits no arithmetic, a longer one walks a constant
 trip count, and an unreadable one walks with `first`, `step` and `count` computed.
 

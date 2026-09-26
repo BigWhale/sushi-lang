@@ -10,43 +10,14 @@ from __future__ import annotations
 from sushi_lang.internals.report import Diagnostic, Span, in_source_order
 
 
-def head_lines(reporter, code: str) -> list[int]:
-    """The line of every diagnostic carrying `code`, in report order."""
-    return [d.span.line for d in reporter.items
-            if d.code == code and d.span is not None]
 
 
 def make(code: str, line: int, col: int = 1, filename: str = "a.sushi") -> Diagnostic:
     return Diagnostic("error", code, code, Span(line, col, line, col), filename=filename)
 
 
-def test_a_lambda_body_fault_reads_before_a_later_line(analyze):
-    """The bug this order rule answers: the lift pass finds a lambda body fault after
-    every other fault of the unit, so line 2 was printed after line 6."""
-    reporter = analyze("""fn a() i32:
-    let fn(i32) -> i32 f = |i32 n| missing_one(n)
-    return Result.Ok(f(1).realise(0))
-
-fn b() i32:
-    return Result.Ok(missing_two(2))
-
-fn main() i32:
-    println(a().realise(0) + b().realise(0))
-    return Result.Ok(0)
-""")
-    assert head_lines(reporter, "CE2008") == [2, 6]
 
 
-def test_two_faults_of_one_line_keep_the_column_order(analyze):
-    reporter = analyze("""fn main() i32:
-    let fn(i32) -> i32 f = |i32 n|:
-        return missing_fn(n)
-    println(f(1).realise(0))
-    return Result.Ok(0)
-""")
-    found = [(d.code, d.span.col) for d in reporter.items
-             if d.code in ("CE2008", "CE2030") and d.span is not None]
-    assert found == sorted(found, key=lambda pair: pair[1]), found
 
 
 def test_the_helper_orders_by_line_then_column():

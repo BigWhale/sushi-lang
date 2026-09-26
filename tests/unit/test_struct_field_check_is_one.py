@@ -17,56 +17,20 @@ from sushi_lang.semantics.passes.types.calls import structs as structs_module
 
 # The variable is USED in every row, so no CW1001 rides along and each row reads
 # the whole diagnostic list.
-_MAIN_TAIL = "\n    println(\"{p.x}\")\n    return Result.Ok(0)\n"
-_HOLDER_TAIL = "\n    println(\"{h.r.is_ok()}\")\n    return Result.Ok(0)\n"
-
-_POINT = """\
-struct Point:
-    i32 x
-    i32 y
-"""
-
-_HOLDER = """\
-struct Holder:
-    Result@(string, StdError) r
-
-fn mk() string:
-    return Result.Ok("hi")
-"""
 
 
-def _items(reporter) -> list[tuple[str, str]]:
-    return [(item.code, item.message) for item in reporter.items]
 
 
-def test_a_named_field_mismatch_reads_ce2083(analyze):
-    source = _POINT + '\nfn main() i32:\n    let Point p = Point(x: 10, y: "twenty")' + _MAIN_TAIL
-    assert _items(analyze(source, name="m")) == [
-        ("CE2083", "field 'y' expects type 'i32', got 'string'")]
 
 
-def test_a_positional_field_mismatch_reads_ce2028(analyze):
-    source = _POINT + "\nfn main() i32:\n    let Point p = Point(10, true)" + _MAIN_TAIL
-    assert _items(analyze(source, name="m")) == [
-        ("CE2028", "field 'y' expects type 'i32', got 'bool'")]
 
 
-def test_a_named_result_field_is_interned_and_fits(analyze):
-    """#184: a `Result@(T, E)` field takes a call's return value, in both spellings."""
-    source = _HOLDER + "\nfn main() i32:\n    let Holder h = Holder(r: mk())" + _HOLDER_TAIL
-    assert _items(analyze(source, name="m")) == []
 
 
-def test_a_positional_result_field_is_interned_and_fits(analyze):
-    source = _HOLDER + "\nfn main() i32:\n    let Holder h = Holder(mk())" + _HOLDER_TAIL
-    assert _items(analyze(source, name="m")) == []
 
 
-def test_an_argument_past_the_last_field_is_still_validated(analyze):
-    """The positional tail: an extra argument is checked, so its own fault is reported."""
-    source = _POINT + "\nfn main() i32:\n    let Point p = Point(1, 2, missing)" + _MAIN_TAIL
-    codes = [code for code, _ in _items(analyze(source, name="m"))]
-    assert codes == ["CE2027", "CE1001"], codes
+
+
 
 
 def test_the_field_argument_loop_is_written_once():

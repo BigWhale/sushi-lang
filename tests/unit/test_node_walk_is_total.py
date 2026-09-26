@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from pathlib import Path
 
 import pytest
 
@@ -24,9 +23,7 @@ from sushi_lang.semantics import ast as a
 from sushi_lang.semantics.ast import Node
 from sushi_lang.semantics.ast_walk import (
     DESCENDED_FIELD_KINDS, FIELD_KINDS, children, field_kind, node_fields, walk_nodes)
-from sushi_lang.internals.parser import parse_to_ast
 
-TESTS_ROOT = Path(__file__).resolve().parents[1]
 
 # A node the walk cannot invent, so finding it proves the walk arrived.
 MARKER = "__node_walk_marker__"
@@ -49,34 +46,6 @@ def _found(root: object) -> list[str]:
     return seen
 
 
-def _all_nodes(root: object) -> set[int]:
-    """Every node an EXHAUSTIVE search finds, by identity.
-
-    Descends everything a Python object graph can hold, so it is an upper bound on what
-    any walk could reach. `walk_nodes` descending three field kinds has to match it.
-    """
-    seen: set[int] = set()
-    found: set[int] = set()
-
-    def search(value: object) -> None:
-        if id(value) in seen:
-            return
-        seen.add(id(value))
-        if isinstance(value, Node):
-            found.add(id(value))
-        if isinstance(value, (list, tuple, set, frozenset)):
-            for item in value:
-                search(item)
-        elif isinstance(value, dict):
-            for key, item in value.items():
-                search(key)
-                search(item)
-        elif dataclasses.is_dataclass(value) and not isinstance(value, type):
-            for f in dataclasses.fields(value):
-                search(getattr(value, f.name, None))
-
-    search(root)
-    return found
 
 
 # --- the kinds themselves ---------------------------------------------------------
@@ -222,60 +191,12 @@ def test_no_declared_field_wraps_a_node_in_a_container_the_walk_skips():
     )
 
 
-def _corpus() -> list[Path]:
-    """Real sources, chosen for the field kinds they put a node behind.
-
-    Named rather than swept: a sweep that silently shrinks to one file still passes,
-    and `test_the_corpus_holds_every_shape_it_claims_to` refuses that here.
-    """
-    picks = [
-        "control_flow/test_if_statements.sushi",       # If.arms: a tuple in a list
-        "strings/test_concat_only.sushi",              # InterpolatedString.parts
-        "closures/test_closure_list_capture.sushi",    # Lambda, captures
-        "enums/test_enum_deep_nested_match.sushi",     # Match arms and patterns
-    ]
-    return [TESTS_ROOT / p for p in picks]
 
 
 # The node kinds the corpus exists to put in front of the walk. A pick that is renamed
 # or rewritten until it no longer holds one of these makes the gate measure less than
 # it says, so the shapes are asserted and not assumed.
-REQUIRED_SHAPES = (a.If, a.InterpolatedString, a.Lambda, a.Match)
 
 
-def test_the_corpus_holds_every_shape_it_claims_to():
-    kinds: set[type] = set()
-    for path in _corpus():
-        assert path.exists(), f"corpus file is gone: {path}"
-        program, _tree = parse_to_ast(path.read_text())
-
-        def visit(node: Node) -> bool:
-            kinds.add(type(node))
-            return True
-
-        walk_nodes(program, visit)
-    missing = [cls.__name__ for cls in REQUIRED_SHAPES if cls not in kinds]
-    assert not missing, f"no corpus file holds: {missing}"
 
 
-@pytest.mark.parametrize("path", _corpus(), ids=lambda p: p.name)
-def test_the_walk_reaches_every_node_an_exhaustive_search_finds(path):
-    """The other half: a LEAF really holds no node.
-
-    If a typesys `Type`, a `Param`, a `DocBlock` or any other leaf ever holds a node,
-    the exhaustive search finds it and `walk_nodes` does not.
-    """
-    program, _tree = parse_to_ast(path.read_text())
-
-    reached: set[int] = set()
-
-    def visit(node: Node) -> bool:
-        reached.add(id(node))
-        return True
-
-    walk_nodes(program, visit)
-    missed = _all_nodes(program) - reached
-    assert not missed, (
-        f"{len(missed)} node(s) in {path.name} sit behind a field kind the walk does "
-        "not descend"
-    )

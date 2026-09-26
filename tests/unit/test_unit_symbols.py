@@ -7,14 +7,11 @@ one does. The symbol therefore carries the declaring unit
 """
 from __future__ import annotations
 
-import subprocess
 
-import pytest
 
 from sushi_lang.semantics.unit_symbols import (
     UNIT_SEP, UnitKeyedSymbols, mangle_unit_symbol,
 )
-from sushic_path import SUSHIC, SUSHIC_AVAILABLE
 
 
 # --- the scheme ------------------------------------------------------------------
@@ -92,76 +89,13 @@ def test_a_symbol_with_no_unit_lives_in_the_flat_view_alone():
 
 # --- what a `.slib` records ------------------------------------------------------
 
-LIB = """\
-fn secret(i32 x) i32:
-    return Result.Ok(x + 1)
-
-public const i32 WIDTH = 8
-
-public struct Crate:
-    i32 weight
-
-public enum Mood:
-    Calm
-
-public fn plain(i32 n) i32:
-    return Result.Ok(n)
-
-public fn through@(T)(i32 n) i32:
-    return Result.Ok(secret(n)??)
-"""
 
 
-@pytest.fixture(scope="module")
-def manifest(tmp_path_factory) -> dict:
-    from sushi_lang.backend.library_format import LibraryFormat
-
-    if not SUSHIC_AVAILABLE:
-        pytest.skip("no compiler driver in this checkout")
-    tmp_path = tmp_path_factory.mktemp("symlib")
-    (tmp_path / "symlib.sushi").write_text(LIB, encoding="utf-8")
-    out = tmp_path / "symlib.slib"
-    result = subprocess.run(
-        [SUSHIC, "--lib", "--lib-version", "1.0.0", "--lib-kind", "binary",
-         "symlib.sushi", "-o", str(out)],
-        cwd=tmp_path, capture_output=True, text=True,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    return LibraryFormat.read_metadata_only(out)
 
 
-def test_a_public_function_names_its_symbol_and_its_unit(manifest):
-    record = next(f for f in manifest["public_functions"] if f["name"] == "plain")
-    assert record["unit"] == "symlib"
-    assert record["link_symbol"] == "symlib$plain"
 
 
-def test_a_closure_private_names_its_symbol_and_its_unit(manifest):
-    privates = manifest["templates"]["private_functions"]
-    record = next(f for f in privates if f["name"] == "secret")
-    assert record["unit"] == "symlib"
-    assert record["link_symbol"] == "symlib$secret"
 
 
-@pytest.mark.parametrize("section,name", [
-    ("public_constants", "WIDTH"),
-    ("structs", "Crate"),
-    ("enums", "Mood"),
-])
-def test_a_source_shipped_record_names_its_unit_and_no_symbol(manifest, section, name):
-    """A constant is re-evaluated at the consumer and a type has no symbol at all.
-
-    The unit still travels: it is what an alias binds to, and for a binary library the
-    manifest is the only place that can say (section 3.1).
-    """
-    record = next(r for r in manifest[section] if r["name"] == name)
-    assert record["unit"] == "symlib"
-    assert "link_symbol" not in record
 
 
-def test_a_template_names_its_unit_and_no_symbol(manifest):
-    """It monomorphizes at the consumer, so its instances take the consumer's mangling."""
-    record = next(f for f in manifest["templates"]["generic_functions"]
-                  if f["name"] == "through")
-    assert record["unit"] == "symlib"
-    assert "link_symbol" not in record

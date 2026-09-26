@@ -836,9 +836,8 @@ non-returning, so the code after each call site was unreachable; each caller now
 explicitly, which keeps the one-diagnostic-per-build behaviour the raise used to give.
 And the producer's **CE5002 is unreachable from a CLI build**: the typecheck pass's public-fn
 `ptr` fence (`passes/types/signatures.py`, CE5008) tests the identical condition and exits
-earlier. The site is kept as the backstop for a direct producer call, and
-`tests/unit/test_lib_rejection_diagnostics.py` pins the shadowing so a missing CE5002 is
-never read as a regression.
+earlier. The site is kept as the backstop for a direct producer call, so a missing CE5002
+is not a regression.
 
 ## Rejected alternatives
 

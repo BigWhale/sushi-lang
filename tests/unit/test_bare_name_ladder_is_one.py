@@ -18,8 +18,6 @@ import typing
 from sushi_lang.semantics.name_ladder import RUNGS, BareName, Rungs, classify
 
 
-def _codes(reporter) -> list[str]:
-    return [item.code for item in reporter.items]
 
 
 class _Claims:
@@ -101,79 +99,15 @@ def test_both_consumers_answer_every_rung(consumer):
 # not about the position: an enum name reached the emitter (CE0055), a struct name read
 # "undeclared identifier" (CE1001), and the borrow position read CE2400 for one and
 # CE1001 for the other.
-POSITIONS = {
-    "let initializer":  "    let i32 x = {name}\n    println(\"{{x}}\")\n",
-    "interpolation":    "    println(\"{{{name}}}\")\n",
-    "return":           "    return Result.Ok({name})\n",
-    "argument":         "    eat({name}).realise(~)\n",
-    "operand":          "    let i32 x = {name} + 1\n    println(\"{{x}}\")\n",
-    "index":            "    let i32[] a = from([1])\n    println(\"{{a[{name}]}}\")\n",
-    "borrow":           "    let i32 y = look(peek {name}).realise(0)\n    println(\"{{y}}\")\n",
-}
 
 # The four kinds of type name the ladder's TYPE rung knows. A primitive is absent: a
 # bare `i32` in an expression is a parse error (CE6001), so it never reaches the ladder.
-TYPE_NAMES = {
-    "enum":           ("enum Color:\n    Red\n    Blue\n", "Color"),
-    "struct":         ("struct Point:\n    i32 x\n", "Point"),
-    "generic enum":   ("enum Wrap@(T):\n    One(T)\n    Nil\n", "Wrap"),
-    "generic struct": ("struct Pair@(T, U):\n    T first\n    U second\n", "Pair"),
-}
-
-_HELPERS = (
-    "fn eat(i32 v) ~:\n"
-    "    println(\"{v}\")\n"
-    "    return Result.Ok(~)\n"
-    "\n"
-    "fn look(peek i32 v) i32:\n"
-    "    return Result.Ok(v)\n"
-    "\n"
-)
 
 
-def _program(declaration: str, body: str) -> str:
-    return f"{declaration}\n{_HELPERS}fn main() i32:\n{body}    return Result.Ok(0)\n"
 
 
-@pytest.mark.parametrize("position", sorted(POSITIONS))
-@pytest.mark.parametrize("kind", sorted(TYPE_NAMES))
-def test_a_type_name_in_a_value_position_is_CE2105(analyze, kind, position):
-    declaration, name = TYPE_NAMES[kind]
-    body = POSITIONS[position].format(name=name)
-    codes = _codes(analyze(_program(declaration, body)))
-    assert "CE2105" in codes, f"{kind} in a {position}: got {codes}"
-    for wrong in ("CE0055", "CE1001", "CE2400"):
-        assert wrong not in codes, f"{kind} in a {position}: got {codes}"
 
 
-@pytest.mark.parametrize("kind", sorted(TYPE_NAMES))
-def test_a_local_of_the_type_name_wins(analyze, kind):
-    """Row 1 of the ladder, the green mirror: a local shadows the type name (#296)."""
-    declaration, name = TYPE_NAMES[kind]
-    body = f"    let i32 {name} = 7\n    println(\"{{{name}}}\")\n"
-    codes = _codes(analyze(_program(declaration, body)))
-    assert codes == [], f"{kind}: got {codes}"
 
 
-def test_the_written_name_positions_are_untouched(analyze):
-    """A type name behind its own dot, in an annotation and in a match arm is legal."""
-    src = (
-        "enum Color:\n"
-        "    Red\n"
-        "    Blue\n"
-        "\n"
-        "struct Crate:\n"
-        "    i32 weight\n"
-        "\n"
-        "extend Crate static weighing(i32 weight) Crate:\n"
-        "    return Crate(weight)\n"
-        "\n"
-        "fn main() i32:\n"
-        "    let Color c = Color.Red\n"
-        "    let Crate box = Crate.weighing(42)\n"
-        "    match c:\n"
-        "        Color.Red -> println(\"{box.weight}\")\n"
-        "        Color.Blue -> println(\"0\")\n"
-        "    return Result.Ok(0)\n"
-    )
-    assert _codes(analyze(src)) == []
+

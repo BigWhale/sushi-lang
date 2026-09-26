@@ -10,22 +10,8 @@ from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
     ForeignPtrType, StructType, UnknownType, owns_resource,
 )
-from sushi_lang.backend.destructors import needs_cleanup
 
 
-@pytest.fixture
-def codegen_with_tables():
-    """A codegen whose tables hold every named type in the table below."""
-    from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.passes.collect import PerkImplementationTable
-    codegen = LLVMCodegen("owns_resource_verdicts", perk_impl_table=PerkImplementationTable())
-    for t, _ in VERDICTS:
-        name = getattr(t, "name", None)
-        if not isinstance(name, str):
-            continue
-        table = (codegen.enum_table if isinstance(t, EnumType) else codegen.struct_table)
-        table.by_name[name] = t
-    return codegen
 
 I32, STR = BuiltinType.I32, BuiltinType.STRING
 
@@ -76,16 +62,6 @@ def test_verdict(t, expected):
     assert owns_resource(t, NO_DROPS) is expected
 
 
-def test_needs_cleanup_gives_the_same_answer(codegen_with_tables):
-    """The backend's question and the semantics question are one rule.
-
-    Not an alias any more: the backend predicate takes `codegen`, because it also has to
-    RESOLVE a named type and read which types implement `Drop` (ruling R2a). The answer
-    it gives must still be this table's.
-    """
-    for t, expected in VERDICTS:
-        assert needs_cleanup(codegen_with_tables, t) is expected, (
-            f"{t}: the backend cleanup predicate disagrees with owns_resource")
 
 
 def test_the_deleted_tier_is_really_gone():

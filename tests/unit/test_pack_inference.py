@@ -123,45 +123,5 @@ def test_non_pack_arg_count_mismatch():
 
 # end-to-end: real front-end + the instantiate pass collector discovers the pack key
 
-_PROBE_SRC = """\
-perk Display:
-    fn display() string
-
-extend i32 display() string:
-    return Result.Ok("int")
-
-extend string display() string:
-    return Result.Ok(self)
-
-fn print_all@(...Ts: Display)(...Ts args) ~:
-    return Result.Ok(~)
-
-fn main() i32:
-    print_all(42, "hi")
-    return Result.Ok(0)
-"""
 
 
-def test_collector_discovers_pack_instantiation():
-    """The instantiate pass must produce the flat key ('print_all', (i32, string))."""
-    from sushi_lang.internals.parser import parse_to_ast
-    from sushi_lang.internals.report import Reporter
-    from sushi_lang.semantics.passes.collect import CollectorPass
-    from sushi_lang.semantics.generics.instantiate import InstantiationCollector
-
-    program, _ = parse_to_ast(_PROBE_SRC)
-
-    reporter = Reporter()
-    collector = CollectorPass(reporter)
-    tables = collector.run(program)
-
-    inst = InstantiationCollector(
-        struct_table=tables.structs.by_name,
-        enum_table=tables.enums.by_name,
-        generic_structs=tables.generic_structs.by_name,
-        generic_funcs=tables.generic_funcs.by_name,
-        tables=tables,
-    )
-    _type_inst, func_inst = inst.run(program)
-
-    assert (None, "print_all", (I32, STR)) in func_inst

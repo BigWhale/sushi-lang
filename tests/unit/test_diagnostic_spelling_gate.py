@@ -120,7 +120,7 @@ def test_the_gate_is_not_catchable_as_an_ordinary_error(armed):
 # --- The retired borrow spelling (#759) ------------------------------------------------
 #
 # `&peek x` / `&poke x` was the borrow spelling before borrow-by-default. The parser
-# refuses it now (`tests/unit/test_borrow_mode_syntax.py` pins that), so a diagnostic
+# refuses it now, so a diagnostic
 # that prints one hands the user a repair the compiler then rejects (#744). Three help
 # sites and a registry message carried it; this is what stops a fourth.
 

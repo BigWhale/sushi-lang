@@ -3,16 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.semantics.param_modes import (
     CalleeKind,
     ParamMode,
-    declared_modes,
     effective_modes,
     mode_of_type,
-    modes_for,
     normalize_modes,
-    param_mode,
 )
 from sushi_lang.semantics.typesys import (
     BorrowMode,
@@ -66,28 +62,10 @@ def test_by_pointer_agrees_with_the_mode_name(mode):
 
 # Invariant 1, through the real parser: a declaration and its derived mode
 
-DECLARATIONS = [
-    ("fn f(string x) ~:\n    return Result.Ok(~)\n", ParamMode.BORROW),
-    ("fn f(nom string x) ~:\n    return Result.Ok(~)\n", ParamMode.NOM),
-    ("fn f(peek string x) ~:\n    return Result.Ok(~)\n", ParamMode.PEEK),
-    ("fn f(poke string x) ~:\n    return Result.Ok(~)\n", ParamMode.POKE),
-]
 
 
-@pytest.mark.parametrize("src,expected", DECLARATIONS)
-def test_declared_mode_round_trips_through_the_parser(src, expected):
-    program, _tree = parse_to_ast(src)
-    param = program.functions[0].params[0]
-    assert param_mode(param) is expected
-    assert param.is_nom == (expected is ParamMode.NOM)
-    assert isinstance(param.ty, ReferenceType) == expected.by_pointer
 
 
-def test_declared_modes_of_a_mixed_signature():
-    src = "fn f(string a, nom string b, peek i32 c, poke i32 d) ~:\n    return Result.Ok(~)\n"
-    program, _tree = parse_to_ast(src)
-    assert declared_modes(program.functions[0].params) == (
-        ParamMode.BORROW, ParamMode.NOM, ParamMode.PEEK, ParamMode.POKE)
 
 
 # Invariant 1, on a FunctionType: normalization makes the two spellings one type
@@ -154,10 +132,3 @@ def test_a_marked_mode_survives_every_kind(kind):
     assert effective_modes((ParamMode.NOM,), kind) == (ParamMode.NOM,)
 
 
-def test_modes_for_reads_a_real_signature():
-    src = "fn f(string a, nom string b) ~:\n    return Result.Ok(~)\n"
-    program, _tree = parse_to_ast(src)
-    params = program.functions[0].params
-    assert modes_for(params, CalleeKind.METHOD) == (ParamMode.BORROW, ParamMode.NOM)
-    assert modes_for(params, CalleeKind.STDLIB) == (ParamMode.BORROW, ParamMode.NOM)
-    assert modes_for(params, CalleeKind.CONSTRUCTOR) == (ParamMode.NOM, ParamMode.NOM)

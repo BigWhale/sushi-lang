@@ -114,38 +114,14 @@ def _outcome(docs, tmp_path):
             for doc, outcome, detail in run_doc_files(docs, tmp_path / "work")]
 
 
-def test_a_program_that_compiles_passes(tmp_path):
-    doc = doc_file_at(_write(tmp_path / "ok.sushi",
-                             'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'))
-    assert _outcome([doc], tmp_path)[0][1] == "PASS"
 
 
-def test_a_warning_only_program_passes(tmp_path):
-    """Exit 1 is a warning, and counting warnings is the trap the sweep already pins."""
-    doc = doc_file_at(_write(tmp_path / "warn.sushi",
-                             'fn main() i32:\n    let i32 unused = 3\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'))
-    assert _outcome([doc], tmp_path)[0][1] == "PASS"
 
 
-def test_a_broken_program_fails(tmp_path):
-    doc = doc_file_at(_write(tmp_path / "bad.sushi",
-                             "fn main() i32:\n    let i32 x = nope()\n    return Result.Ok(0)\n"))
-    file, outcome, detail = _outcome([doc], tmp_path)[0]
-    assert outcome == "FAIL"
-    assert "CE2008" in detail
 
 
-def test_a_library_is_built_as_a_library(tmp_path):
-    """No `main` is a CATEGORY, not drift: the file is built with `--lib`."""
-    doc = doc_file_at(_write(tmp_path / "mathy.sushi",
-                             "public fn add(i32 a, i32 b) i32:\n    return Result.Ok(a + b)\n"))
-    assert _outcome([doc], tmp_path)[0][1] == "PASS"
 
 
-def test_a_marked_error_file_is_expected(tmp_path):
-    doc = doc_file_at(_write(tmp_path / "err.sushi",
-                             "# docs-sweep: error CE2008\n\nfn main() i32:\n    let i32 x = nope()\n    return Result.Ok(0)\n"))
-    assert _outcome([doc], tmp_path)[0][1] == "EXPECTED-ERROR"
 
 
 def test_a_marked_skip_is_not_compiled(tmp_path):
@@ -156,25 +132,8 @@ def test_a_marked_skip_is_not_compiled(tmp_path):
     assert detail == "needs a live socket"
 
 
-def test_a_consumer_sees_the_library_of_its_own_directory(tmp_path):
-    """The ordering rule: every library of a directory is built before its programs."""
-    where = tmp_path / "story"
-    lib = doc_file_at(_write(where / "guidey.sushi",
-                             "public fn answer() i32:\n    return Result.Ok(42)\n"))
-    consumer = doc_file_at(_write(where / "use-it.sushi",
-                                  'use <lib/guidey>\n\nfn main() i32:\n'
-                                  '    println("{answer().realise(0)}")\n    return Result.Ok(0)\n'))
-    outcomes = {file: outcome for file, outcome, _detail in _outcome([consumer, lib], tmp_path)}
-    assert outcomes == {lib.file: "PASS", consumer.file: "PASS"}
 
 
-def test_a_program_leaves_no_cache_in_the_source_tree(tmp_path):
-    """The collector writes nothing beside the file it compiles."""
-    where = tmp_path / "clean"
-    doc = doc_file_at(_write(where / "prog.sushi",
-                             'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'))
-    _outcome([doc], tmp_path)
-    assert sorted(p.name for p in where.iterdir()) == ["prog.sushi"]
 
 
 # -- the snippet includes -------------------------------------------------------

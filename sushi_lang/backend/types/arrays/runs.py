@@ -15,7 +15,6 @@ about the optimizer: llvmlite does not fold, so `builder.add` of two constants e
 | readable, `count > UNROLL_LIMIT` | one walk with a CONSTANT trip count |
 | not readable | the same walk, with computed `first`, `step` and `count` |
 
-`tests/unit/test_range_fill_tiers.py` is the gate on that table.
 
 A CURSOR, not a constant start: a run-time count makes every later start a run-time value,
 and the cursor is shorter than the constant arithmetic it replaces. It is also why a

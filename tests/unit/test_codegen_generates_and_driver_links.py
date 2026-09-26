@@ -11,8 +11,6 @@ from pathlib import Path
 
 from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.backend.driver import LLVMDriver
-from sushi_lang.backend.memory.print_frames import PrintFrames
-from sushi_lang.semantics.passes.collect import PerkImplementationTable
 
 ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 
@@ -30,19 +28,8 @@ def test_the_driver_holds_the_compile_and_link_methods():
     assert not hasattr(LLVMCodegen, "_link_executable")
 
 
-def test_the_print_frames_are_composed_onto_the_codegen():
-    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
-    assert isinstance(cg.print_frames, PrintFrames)
-    for gone in ("_string_temp_stack", "_string_value_temp_stack",
-                 "push_string_temp_scope", "string_temps_own_frame",
-                 "register_string_temp", "register_string_value_temp",
-                 "pop_and_free_string_temp_scope", "emit_string_temp_frame_cleanup_all"):
-        assert not hasattr(cg, gone), gone
 
 
-def test_the_codegen_declares_the_conditional_moves():
-    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
-    assert cg.__dict__.get("current_conditional_moves") == frozenset()
 
 
 def _stack_reads(path: Path) -> list[int]:

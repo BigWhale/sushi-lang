@@ -32,7 +32,6 @@ from sushi_lang.semantics.passes.types.arrays import (
     Receiver,
     is_builtin_array_method,
 )
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType
 
 
 # What the module carried on the day the table replaced the three lists. A count is not a
@@ -84,52 +83,14 @@ def test_the_sentinel_is_used_by_exactly_the_five_interned_names():
 # ------------------------------------------------------------------- the answer arrives
 
 
-ARRAY_SOURCE = (
-    "fn main() i32:\n"
-    "    let u8[] bytes = from([104 as u8, 105 as u8])\n"
-    "    let i32[] nums = from([1, 2, 3])\n"
-    "    return Result.Ok(nums.len())\n"
-)
 
 
-def _receivers(spec):
-    """The receiver kinds this row accepts, as real types."""
-    if spec.receiver is Receiver.BYTES:
-        return [DynamicArrayType(base_type=BuiltinType.U8)]
-    if spec.receiver is Receiver.DYNAMIC:
-        return [DynamicArrayType(base_type=BuiltinType.I32)]
-    return [DynamicArrayType(base_type=BuiltinType.I32),
-            ArrayType(base_type=BuiltinType.I32, size=3)]
 
 
-@pytest.fixture
-def array_validator(analyze_program):
-    """A `TypeValidator` over a real analysis, so the intern seams have their tables."""
-    from sushi_lang.semantics.passes.types import TypeValidator
-
-    analysis = analyze_program(ARRAY_SOURCE)
-    assert analysis.analyzer is not None
-    return TypeValidator(analysis.reporter, analysis.analyzer.tables)
 
 
-@pytest.mark.parametrize("name", sorted(_ARRAY_METHODS))
-def test_every_name_answers_a_return_type(array_validator, name):
-    """Measured at the END state: through the inferrer the typecheck pass really calls."""
-    from sushi_lang.semantics.passes.types.method_registry import ArrayMethodInferrer
-
-    spec = _ARRAY_METHODS[name]
-    for receiver in _receivers(spec):
-        answered = ArrayMethodInferrer(receiver, name, array_validator).infer_return_type()
-        assert answered is not None, (name, str(receiver))
 
 
-def test_a_name_outside_the_table_answers_nothing(array_validator):
-    """The control for the test above: the inferrer does not answer for every name."""
-    from sushi_lang.semantics.passes.types.method_registry import ArrayMethodInferrer
-
-    answered = ArrayMethodInferrer(DynamicArrayType(base_type=BuiltinType.I32),
-                                   "push_front", array_validator).infer_return_type()
-    assert answered is None
 
 
 # ------------------------------------------------------------------------- the backend

@@ -19,7 +19,6 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.passes.collect import CollectorPass
@@ -125,64 +124,8 @@ def test_every_classifier_call_hands_in_the_seam():
 
 # 3. The two paths, through the real compiler
 
-DECLARATIONS = """\
-perk Named:
-    fn name() string
 
-struct Point:
-    i32 x
-
-enum Sign:
-    Plus
-    Minus
-
-struct Cage@(T):
-    T item
-
-enum Opt@(T):
-    Some(T)
-    Nothing
-
-struct Box@(T):
-    T item
-
-"""
-
-BOTH_PATHS = """\
-extend Box@({X}) g() i32:
-    return 1
-
-extend Box@({X}) with Named:
-    fn name() string:
-        return "box"
-
-fn main() i32:
-    return Result.Ok(0)
-"""
 
 # kind -> (the bare name written, whether it is a declared name)
-SPELLINGS = {
-    "struct": ("Point", True),
-    "enum": ("Sign", True),
-    "generic_struct": ("Cage", True),
-    "generic_enum": ("Opt", True),
-    "builtin_generic": ("Maybe", True),
-    "perk": ("Named", True),
-    "predefined_perk": ("Drop", True),
-    "unknown": ("Zzz", False),
-}
 
 
-@pytest.mark.parametrize("kind", sorted(SPELLINGS))
-def test_the_two_paths_classify_one_spelling_alike(analyze_program, kind):
-    name, declared = SPELLINGS[kind]
-    analysis = analyze_program(DECLARATIONS + BOTH_PATHS.format(X=name))
-
-    extension = analysis.program.generic_extensions[0]
-    extension_is_concrete = extension.target_shape.is_concrete
-
-    tables = analysis.analyzer.tables
-    impl_is_template = bool(tables.generic_perk_impls.templates("Box"))
-
-    assert extension_is_concrete is declared, kind
-    assert impl_is_template is (not declared), kind

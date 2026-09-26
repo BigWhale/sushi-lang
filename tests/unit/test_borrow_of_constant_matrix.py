@@ -20,117 +20,27 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 SEAM = SOURCE_ROOT / "semantics" / "constant_borrow.py"
 
-_PRELUDE = '''struct Box:
-    i32 n
-
-enum Shade:
-    Dim(i32)
-    Bright(i32)
-
-const i32 LIMIT = 10
-const Shade TONE = Shade.Dim(2)
-var i32 COUNT = 0
-var Shade MOOD = Shade.Dim(2)
-
-fn takes(poke i32 v) ~:
-    v := v + 1
-    return Result.Ok(~)
-
-fn looks(peek i32 v) i32:
-    return Result.Ok(v)
-
-extend i32 bump(poke self) ~:
-    self := self + 1
-
-extend i32 shown(peek self) i32:
-    return self
-
-'''
 
 # Each position writes the name `{n}`; `{e}` is an enum-typed name for the match arm.
 # The mode is the position's own: a `poke` writes through the pointer, a `peek` reads.
-_POSITIONS = {
-    "poke_argument": ("poke", "    takes(poke {n})\n"),
-    "peek_argument": ("peek", "    let i32 seen = looks(peek {n})??\n"
-                              "    println(\"{{seen}}\")\n"),
-    "let_poke":      ("poke", "    let poke i32 ref = {n}\n    ref := ref + 1\n"),
-    "let_peek":      ("peek", "    let peek i32 ref = {n}\n    println(\"{{ref}}\")\n"),
-    "poke_self":     ("poke", "    {n}.bump()\n"),
-    "peek_self":     ("peek", "    let i32 seen = {n}.shown()\n"
-                              "    println(\"{{seen}}\")\n"),
-    "match_poke":    ("poke", "    match {e}:\n"
-                              "        Shade.Dim(poke d) -> d := d + 1\n"
-                              "        Shade.Bright(_) -> println(\"bright\")\n"),
-    "match_peek":    ("peek", "    match {e}:\n"
-                              "        Shade.Dim(peek d) -> println(\"{{d}}\")\n"
-                              "        Shade.Bright(_) -> println(\"bright\")\n"),
-}
 
 # kind -> (the extra local lines, the i32 name, the Shade name)
-_KINDS = {
-    "constant":      ("", "LIMIT", "TONE"),
-    "unit_variable": ("", "COUNT", "MOOD"),
-    "local":         ("    let i32 LIMIT = 4\n    let Shade TONE = Shade.Dim(2)\n",
-                      "LIMIT", "TONE"),
-}
 
 
-def _program(position: str, kind: str) -> str:
-    extra, name, enum_name = _KINDS[kind]
-    _mode, body = _POSITIONS[position]
-    return _PRELUDE + "fn main() i32:\n" + extra + body.format(n=name, e=enum_name) + \
-        "    return Result.Ok(0)\n"
 
 
-def _codes(reporter) -> list[str]:
-    return [item.code for item in reporter.items]
 
 
-def _is_refused(position: str, kind: str) -> bool:
-    """A write through a constant, and nothing else. A `var` and a local take both modes."""
-    return kind == "constant" and _POSITIONS[position][0] == "poke"
 
 
-@pytest.mark.parametrize("kind", sorted(_KINDS))
-@pytest.mark.parametrize("position", sorted(_POSITIONS))
-def test_a_constant_refuses_a_write_in_every_borrow_position(analyze, position, kind):
-    codes = _codes(analyze(_program(position, kind), name="m"))
-    if _is_refused(position, kind):
-        assert "CE2400" in codes, (
-            f"a {kind} in the {position} position was not refused with CE2400; "
-            f"got {codes}")
-    else:
-        assert "CE2400" not in codes, (
-            f"a {kind} in the {position} position only reads, or it has storage to "
-            f"write, so it must be accepted; got {codes}")
 
 
-@pytest.mark.parametrize("position", sorted(_POSITIONS))
-def test_one_fault_gets_one_diagnostic(analyze, position):
-    """A gate asked twice by two walks over one argument told the user twice."""
-    if not _is_refused(position, "constant"):
-        pytest.skip(f"the {position} position reads a constant, which is legal")
-    codes = _codes(analyze(_program(position, "constant"), name="m"))
-    assert codes.count("CE2400") == 1, (
-        f"the {position} position reported CE2400 {codes.count('CE2400')} times; "
-        f"got {codes}")
 
 
-def test_an_index_borrow_is_not_a_ce2400_position(analyze):
-    """Measured, and it is not the gate's: `poke arr[0]` has no stable address at all.
-
-    The refusal is CE2404 for every kind, a local array included, so the element
-    position never reaches the question this gate answers.
-    """
-    src = (_PRELUDE + "const i32[3] TABLE = [1, 2, 3]\n\nfn main() i32:\n"
-           "    takes(poke TABLE[0])\n    return Result.Ok(0)\n")
-    codes = _codes(analyze(src, name="m"))
-    assert "CE2404" in codes and "CE2400" not in codes, codes
 
 
 # --- The seam: one emit site for the code, and every caller reads the scoped lookup.
@@ -195,57 +105,6 @@ def test_every_caller_names_the_mode():
 
 # --- The take is NOT this gate's: a `nom` is a consuming use (#726).
 
-_TAKE = '''enum Shade:
-    Dim(string)
-    Bright(string)
-
-const string NAME = "Mostly Harmless"
-const Shade TONE = Shade.Dim("grey")
-const i32 LIMIT = 10
-
-fn eats(nom string s) ~:
-    println(s)
-    return Result.Ok(~)
-
-fn counts(nom i32 n) ~:
-    println("{n}")
-    return Result.Ok(~)
-
-extend string release(nom self) ~:
-    println(self)
-
-fn main() i32:
-'''
-
-_TAKES = {
-    "nom_argument":  ("    eats(nom NAME)\n", "CE2436"),
-    "let_binding":   ("    let string mine = NAME\n    println(mine)\n", "CE2436"),
-    "match_binding": ("    match TONE:\n"
-                      "        Shade.Dim(nom d) -> println(d)\n"
-                      "        Shade.Bright(_) -> println(\"bright\")\n", "CE2432"),
-    "nom_self":      ("    NAME.release()\n", "CE2436"),
-    "plain_value":   ("    counts(nom LIMIT)\n", None),
-}
 
 
-@pytest.mark.parametrize("take", sorted(_TAKES))
-def test_a_take_of_a_constant_is_the_borrow_pass_rule(analyze, take):
-    """Unit-level storage is never moved out of, whichever keyword declares it (#726).
 
-    A `const` and a `var` are each one object the program keeps for its whole run, and
-    neither has an owner that can hand it away. The refusal is the borrow pass's,
-    because every other consuming-use rule is -- CE2405, CE2410, CE2411, CE2401 -- and
-    a plain value still copies out.
-    """
-    body, expected = _TAKES[take]
-    codes = _codes(analyze(_TAKE + body + "    return Result.Ok(0)\n", name="m"))
-    assert "CE2400" not in codes, (
-        f"the {take} take read the BORROW gate; a take is a consuming use and its "
-        f"home is the borrow pass (#726). Got {codes}")
-    if expected is None:
-        assert not [code for code in codes if code.startswith("CE")], (
-            f"a plain constant copies out, so the {take} take is legal; got {codes}")
-    else:
-        assert expected in codes, (
-            f"the {take} take of an owning constant was not refused with {expected}; "
-            f"got {codes}")

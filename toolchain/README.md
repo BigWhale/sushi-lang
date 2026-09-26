@@ -29,13 +29,8 @@ implementation when one does not. The contract:
 - `sushic --lib-info FILE` runs `toolchain/bin/slib-info FILE` and returns its
   exit code. The tool owns the full report; the Python fallback
   (`print_library_info` in `sushi_lang/compiler/cli.py`) prints the same body.
-  Six parity tests lock the two together: `tests/unit/test_slib_info_parity.py`
-  on an undocumented library, `tests/unit/test_slib_info_docs.py` on a documented
-  one, `tests/unit/test_slib_info_sections.py` and `test_slib_info_layout.py` on
-  what the report says and how it is spaced, `test_slib_info_flags.py` on both
-  modes of `--docs`, and `test_report_colour.py` on both modes of `--color`. All
-  of them compile `src/slib_info.sushi` themselves, so none reads `bin/`: a stale
-  binary is caught by nothing but this section.
+  The parity of the two is not gated today: pytest runs no compiler, and no
+  fixture compares the tool with the fallback yet.
 - **A switch is spelled the same at both ends.** `sushic --lib-info FILE --docs`
   passes `--docs` through to the tool as itself, and `--color=always|never` the
   same way (`auto` is the default and says nothing, so it is not passed). The
@@ -46,7 +41,7 @@ implementation when one does not. The contract:
   then `NO_COLOR`, then `CLICOLOR_FORCE`, then `TERM=dumb`, then whether stdout
   is a terminal. Python has it in `internals/styling.py:should_colour`, the tool
   in `want_colour`. `tests/unit/test_report_colour.py` locks each rung on the
-  Python side and both implementations' coloured reports against each other.
+  Python side; nothing compares the two coloured reports today.
 - A wheel install has no `toolchain/` directory, so it always uses the fallback.
 - Error messages can differ between the tool and the fallback; the success
   report cannot.

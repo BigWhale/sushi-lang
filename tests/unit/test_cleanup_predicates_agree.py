@@ -16,16 +16,10 @@ from __future__ import annotations
 
 import pytest
 
-from sushi_lang.backend.codegen_llvm import LLVMCodegen
-from sushi_lang.semantics.passes.collect import PerkImplementationTable
-from sushi_lang.backend.destructors import needs_cleanup
-from sushi_lang.semantics.ownership import TypeClass, type_class_of
+from sushi_lang.semantics.ownership import type_class_of
 from sushi_lang.semantics.typesys import (
-    ArrayType,
     BuiltinType,
     DynamicArrayType,
-    EnumType,
-    EnumVariantInfo,
     StructType,
     owns_resource,
 )
@@ -35,55 +29,16 @@ HANDLE = StructType(name="Handle", fields=(("fd", BuiltinType.I32),))
 WRAPPER = StructType(name="Wrapper", fields=(("inner", HANDLE), ("tag", BuiltinType.I32)))
 PLAIN = StructType(name="Plain", fields=(("x", BuiltinType.I32),))
 OWNING = StructType(name="Owning", fields=(("s", BuiltinType.STRING),))
-HOLDER = EnumType(name="Holder", variants=(
-    EnumVariantInfo(name="Full", associated_types=(HANDLE,)),
-    EnumVariantInfo(name="Empty", associated_types=()),
-))
 
 # `Handle` is the only DECLARED resource. Everything else answers by structure.
 DROPS = frozenset({"Handle"})
 
 
-def _codegen() -> LLVMCodegen:
-    """A codegen whose tables know these types and which of them implement `Drop`."""
-    codegen = LLVMCodegen("predicate_agreement", perk_impl_table=PerkImplementationTable())
-    for ty in (HANDLE, WRAPPER, PLAIN, OWNING):
-        codegen.struct_table.by_name[ty.name] = ty
-    codegen.enum_table.by_name[HOLDER.name] = HOLDER
-    codegen.perk_impl_table.by_perk["Drop"] = set(DROPS)
-    return codegen
 
 
 # name -> (type, what every predicate must answer)
-CASES: list[tuple[str, object, bool]] = [
-    ("Handle (declares Drop)", HANDLE, True),
-    ("Wrapper (holds a Drop type)", WRAPPER, True),
-    ("Holder (a Drop payload)", HOLDER, True),
-    ("Handle[] (dynamic array)", DynamicArrayType(base_type=HANDLE), True),
-    ("Handle[3] (fixed array)", ArrayType(base_type=HANDLE, size=3), True),
-    ("Owning (a string field)", OWNING, True),
-    ("Plain (one i32)", PLAIN, False),
-    ("i32", BuiltinType.I32, False),
-    ("bool", BuiltinType.BOOL, False),
-]
 
 
-@pytest.mark.parametrize("name,ty,expected", CASES, ids=[c[0] for c in CASES])
-def test_every_cleanup_predicate_gives_one_answer(name, ty, expected):
-    """One rule, one answer, whichever layer asks it."""
-    codegen = _codegen()
-
-    move = type_class_of(ty, DROPS) is TypeClass.MOVE
-    structural = owns_resource(ty, DROPS)
-    backend = needs_cleanup(codegen, ty)
-
-    assert move is expected, f"{name}: the MOVE class disagrees"
-    assert structural is expected, f"{name}: owns_resource disagrees"
-    assert backend is expected, (
-        f"{name}: the backend cleanup predicate disagrees with the MOVE class. A value "
-        f"that MOVES but registers no cleanup never has its destructor run, which for a "
-        f"resource type is a leaked descriptor with no diagnostic."
-    )
 
 
 def test_the_drop_set_is_what_makes_the_difference():

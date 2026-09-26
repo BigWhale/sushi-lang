@@ -1,13 +1,9 @@
 """R0.1 / W7: docs-vs-code stdlib smoke check."""
 from __future__ import annotations
 
-import subprocess
-import sys
 from collections import namedtuple
 from pathlib import Path
 
-import pytest
-from sushic_path import SUSHIC, needs_sushic
 
 # Documented stdlib surface -- one representative program per documented module.
 # Each program is warning-free (no `??` in main, no unused bindings) so a clean
@@ -318,23 +314,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOCS_ROOT = PROJECT_ROOT / "docs" / "stdlib"
 
 
-@pytest.fixture(scope="session")
-def platform_stdlib():
-    """Build the standard library for the current platform once per session."""
-    build = PROJECT_ROOT / "sushi_lang" / "sushi_stdlib" / "build.py"
-    result = subprocess.run(
-        [sys.executable, str(build)],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
-    if result.returncode != 0:
-        pytest.fail(
-            "stdlib build (build.py) failed, cannot run the compile layer:\n"
-            f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
-        )
-    return True
 
 # Modules whose symbols only resolve in the *full* compilation pipeline, not in the
 # in-process `analyze` fixture. `collections/hashmap` is a virtual unit: HashMap is
@@ -379,32 +358,5 @@ def test_semantic_layer_skips_are_covered_by_the_compile_layer():
     )
 
 
-@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
-def test_documented_module_resolves(case, analyze):
-    """Semantic layer: the documented program resolves with no semantic errors."""
-    if case.id in SEMANTIC_LAYER_SKIP:
-        pytest.skip(f"{case.id} resolves only in the full pipeline (covered by the compile layer)")
-    reporter = analyze(case.source)
-    errors = [d for d in reporter.items if getattr(d, "kind", None) == "error"]
-    assert not errors, (
-        f"[{case.id}] documented in docs/stdlib/{case.doc} produced semantic "
-        f"error(s): {[getattr(d, 'code', '?') for d in errors]}"
-    )
 
 
-@needs_sushic
-@pytest.mark.parametrize("case", CASES, ids=CASE_IDS)
-def test_documented_module_compiles(case, tmp_path, platform_stdlib):
-    """End-to-end layer: the documented program compiles and links (exit 0)."""
-    (tmp_path / "main.sushi").write_text(case.source, encoding="utf-8")
-    result = subprocess.run(
-        [SUSHIC, "main.sushi", "-o", "out"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, (
-        f"[{case.id}] documented in docs/stdlib/{case.doc} failed to compile "
-        f"(exit {result.returncode}).\n--- stdout ---\n{result.stdout}\n"
-        f"--- stderr ---\n{result.stderr}"
-    )

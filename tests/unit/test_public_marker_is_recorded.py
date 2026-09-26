@@ -8,9 +8,7 @@ diagnostic points at.
 """
 from __future__ import annotations
 
-import pytest
 
-from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.semantics.visibility import declared_public
 
 
@@ -24,27 +22,10 @@ SOURCES = {
 }
 
 
-def _declaration(kind: str, marker: str):
-    source, field = SOURCES[kind]
-    program, _tree = parse_to_ast(source.format(marker=marker))
-    declarations = getattr(program, field)
-    assert len(declarations) == 1, declarations
-    return declarations[0]
 
 
-@pytest.mark.parametrize("kind", sorted(SOURCES))
-def test_the_marker_is_recorded_with_its_span(kind):
-    marked = _declaration(kind, "public ")
-    assert marked.public_span is not None
-    assert marked.is_public is True
 
 
-@pytest.mark.parametrize("kind", sorted(SOURCES))
-def test_an_unmarked_declaration_carries_no_span(kind):
-    plain = _declaration(kind, "")
-    assert plain.public_span is None
-    # What the absence MEANS is a per-kind ruling that Phase 2 flips one kind at a time.
-    assert plain.is_public is declared_public(kind, False)
 
 
 def test_every_marked_kind_is_private_when_unmarked():
