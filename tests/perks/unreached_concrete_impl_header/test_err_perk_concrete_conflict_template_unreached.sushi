@@ -1,0 +1,20 @@
+# An extension TEMPLATE covers every instantiation, so it meets a perk
+# implementation on one instantiation, with no instance of it (#898).
+# EXPECT_ERROR_CODE: CE4007
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) sz() i32:
+    return 1
+
+extend Box@(i32) with Sz:
+    fn sz() i32:
+        return 2
+
+fn main() i32:
+    let Box@(string) b = Box("x")
+    println(b.v)
+    return Result.Ok(0)

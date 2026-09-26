@@ -1,0 +1,9 @@
+# A `<math>` call behind an alias has the type of its row, the same as the
+# bare call (#926).
+# EXPECT_ERROR_CODE: CE2002
+use <math> as m
+
+fn main() i32:
+    let i32 a = m.sin(1.0)
+    println("{a}")
+    return Result.Ok(0)

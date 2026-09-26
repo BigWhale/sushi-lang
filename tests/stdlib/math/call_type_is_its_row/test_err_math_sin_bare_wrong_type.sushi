@@ -1,0 +1,9 @@
+# A bare `<math>` call has the type of its row, so an f64 result in an i32
+# declaration is a type mismatch (#926).
+# EXPECT_ERROR_CODE: CE2002
+use <math>
+
+fn main() i32:
+    let i32 a = sin(1.0)
+    println("{a}")
+    return Result.Ok(0)

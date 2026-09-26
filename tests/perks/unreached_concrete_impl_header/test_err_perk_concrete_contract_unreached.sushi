@@ -1,0 +1,17 @@
+# The contract check is part of the header, so a perk implementation on one
+# instantiation is judged against its perk with no instance of it (#898).
+# EXPECT_ERROR_CODE: CE4004
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(i32) with Sz:
+    fn sz() string:
+        return "two"
+
+fn main() i32:
+    let Box@(string) b = Box("x")
+    println(b.v)
+    return Result.Ok(0)

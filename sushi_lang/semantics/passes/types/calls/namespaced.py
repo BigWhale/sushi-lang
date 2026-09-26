@@ -288,20 +288,11 @@ def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
         node.inferred_return_type = inferred
         return inferred
 
-    # math: the return depends on the arguments, so the same rule the bare form uses.
-    from sushi_lang.sushi_stdlib.src import math as math_module
-    if not math_module.is_builtin_math_function(binding.name):
-        return None
-    if binding.name in {"abs", "min", "max"}:
-        arg_types = [validator.infer_expression_type(arg) for arg in node.args]
-        answer = math_module.get_builtin_math_function_return_type(
-            binding.name, [ty for ty in arg_types if ty is not None])
-        if answer is not None:
-            node.inferred_return_type = answer
-        return answer
-    from sushi_lang.semantics.typesys import BuiltinType
-    node.inferred_return_type = BuiltinType.F64
-    return BuiltinType.F64
+    from sushi_lang.semantics.passes.types.visit.inference import math_call_return_type
+    answer = math_call_return_type(validator, binding.name, node.args)
+    if answer is not None:
+        node.inferred_return_type = answer
+    return answer
 
 
 def _materialize(validator: 'TypeValidator', declared) -> Optional[Type]:
