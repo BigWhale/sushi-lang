@@ -1,11 +1,4 @@
-"""errno access and FileError mapping for the <io/files> generators.
-
-Read errno after a failed libc call and map it to a FileError variant tag. The
-mapping table is shared with the compiler-inline open() path
-(backend/runtime/constants.py); the Result byte layout lives in src/results.py
-and the errno accessor in src/libc_declarations.py, so <net/socket> reads the
-same errno through the same declaration.
-"""
+"""errno to a FileError tag for the <io/files> generators, over `src/errno_tags.py`."""
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_errno_location
@@ -15,32 +8,23 @@ from sushi_lang.backend.runtime.constants import (
     ERRNO_DEFAULT_FILE_ERROR,
     ERRNO_EINTR,
 )
-from sushi_lang.sushi_stdlib.src.io.files.results import emit_err_result
+from sushi_lang.sushi_stdlib.src import errno_tags
 
 
 def emit_file_error_tag(builder: ir.IRBuilder, module: ir.Module) -> ir.Value:
-    """Read errno and map it to a FileError variant tag (i32).
-
-    Call this directly after the failed libc call; a later libc call (close,
-    free) can overwrite errno.
-    """
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    errno_fn = declare_errno_location(module)
-    errno_ptr = builder.call(errno_fn, [], name="errno_ptr")
-    errno_value = builder.load(errno_ptr, name="errno_value")
-
-    result = ir.Constant(i32, ERRNO_DEFAULT_FILE_ERROR)
-    table = errno_to_file_error_table(get_current_platform().is_linux)
-    for errno_val, tag in reversed(list(table.items())):
-        is_match = builder.icmp_signed("==", errno_value, ir.Constant(i32, errno_val))
-        result = builder.select(is_match, ir.Constant(i32, tag), result)
-    return result
+    """Read errno and map it to a FileError variant tag (i32)."""
+    return errno_tags.emit_errno_tag(
+        builder, module, errno_to_file_error_table(get_current_platform().is_linux),
+        ERRNO_DEFAULT_FILE_ERROR)
 
 
 def emit_errno_err_result(builder: ir.IRBuilder, module: ir.Module,
                           result_type: ir.LiteralStructType) -> ir.Value:
     """The whole failure path: read errno, map it, build Result.Err(FileError)."""
-    return emit_err_result(builder, result_type, emit_file_error_tag(builder, module))
+    return errno_tags.emit_errno_err_result(
+        builder, module, result_type,
+        errno_to_file_error_table(get_current_platform().is_linux),
+        ERRNO_DEFAULT_FILE_ERROR)
 
 
 def emit_is_eintr(builder: ir.IRBuilder, module: ir.Module) -> ir.Value:
