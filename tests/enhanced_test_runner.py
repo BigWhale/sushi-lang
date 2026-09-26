@@ -25,7 +25,8 @@ from test_metadata import (parse_test_metadata, get_test_category, should_run_ru
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
-                       arm_spelling_gate, spelling_gate_tripped)
+                       arm_spelling_gate, spelling_gate_tripped,
+                       DocGateResult, stdlib_doc_gate)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -326,6 +327,8 @@ class TestRunner:
         self.leaks_checked: List[str] = []
         self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
+        # The stdlib doc-block gate's verdict (#953), set by main before the run.
+        self.doc_gate: Optional[DocGateResult] = None
         # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
         # can tell whether output has to be routed around it.
         self._pbar = None
@@ -365,6 +368,20 @@ class TestRunner:
             parts.append("--compile-only")
         return ", ".join(parts) if parts else "the whole corpus"
 
+    def doc_gate_failed(self) -> bool:
+        return self.doc_gate is not None and not self.doc_gate.passed
+
+    def _doc_gate_json(self) -> Optional[dict]:
+        return None if self.doc_gate is None else self.doc_gate.as_json()
+
+    def _print_doc_gate(self) -> None:
+        if self.doc_gate is None:
+            return
+        colour = (YELLOW if not self.doc_gate.ran
+                  else RED if self.doc_gate_failed() else GREEN)
+        for line in self.doc_gate.report():
+            print(tint(line, colour))
+
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
         """Run every fixture this run selected.
 
@@ -392,8 +409,10 @@ class TestRunner:
                     "leak_skips_allowed": self.allow_leak_skips,
                     "selected_nothing": True,
                     "selection": selection,
+                    "stdlib_doc_gate": self._doc_gate_json(),
                 }, indent=2))
             else:
+                self._print_doc_gate()
                 print(f"No fixture matched this selection: {selection}.")
                 print("A run that covered nothing is a failure, not a pass.")
             return {}
@@ -879,6 +898,7 @@ class TestRunner:
                     for name, reason in sorted(self.leaks_skipped)
                 ],
                 "leak_skips_allowed": self.allow_leak_skips,
+                "stdlib_doc_gate": self._doc_gate_json(),
             }
             print(json.dumps(json_output, indent=2))
         else:
@@ -910,9 +930,13 @@ class TestRunner:
                         "Pass --allow-leak-skips where a skip is expected.", RED))
                 else:
                     print("    " + tint("Excused by --allow-leak-skips.", YELLOW))
+            self._print_doc_gate()
 
+            if self.doc_gate_failed():
+                print("\n" + tint("The stdlib doc-block gate failed!", RED, BOLD))
             if failed_tests == 0 and not unexcused:
-                print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
+                if not self.doc_gate_failed():
+                    print("\n" + tint("All tests passed! ✓", GREEN, BOLD))
             elif failed_tests == 0:
                 print("\n" + tint(
                     f"{len(unexcused)} leak assertion(s) were not evaluated! ✗",
@@ -1038,6 +1062,9 @@ def main():
 
     with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only) as runner:
+        # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
+        runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
+                                          leaks_only=args.leaks_only)
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code. Two things besides a failed test count here, and both
@@ -1046,7 +1073,7 @@ def main():
     # at all is the other (#765), and an empty result dict would otherwise read as
     # "nothing failed".
     failed_count = sum(1 for r in results.values() if not r.total_success)
-    if runner.selected_nothing:
+    if runner.selected_nothing or runner.doc_gate_failed():
         return 1
     return 0 if failed_count == 0 and not runner.unexcused_leak_skips() else 1
 
