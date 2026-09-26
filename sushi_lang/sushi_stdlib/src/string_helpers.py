@@ -1,19 +1,7 @@
 """String Helper Functions"""
 
 import llvmlite.ir as ir
-from .libc_declarations import declare_malloc
-
-
-def declare_strlen(module: ir.Module) -> ir.Function:
-    """Declare strlen as external (implementation emitted during final compilation)."""
-    func_name = "llvm_strlen"
-    if func_name in module.globals:
-        return module.globals[func_name]
-
-    i32 = ir.IntType(32)
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name=func_name)
+from .libc_declarations import declare_malloc, declare_strlen
 
 
 def create_string_constant(module: ir.Module, builder: ir.IRBuilder, value: str, name: str = "str") -> ir.Value:
@@ -47,12 +35,9 @@ def cstr_to_fat_pointer(
     """Convert null-terminated C string to fat pointer struct {i8*, i32, i8 owned}."""
     strlen_fn = declare_strlen(module)
 
-    size_i64 = builder.call(strlen_fn, [c_str], name="str_len")
+    size_i32 = builder.call(strlen_fn, [c_str], name="str_len")
 
-    i32 = ir.IntType(32)
-    size = builder.trunc(size_i64, i32, name="str_size")
-
-    return cstr_to_fat_pointer_with_len(builder, c_str, size, owned)
+    return cstr_to_fat_pointer_with_len(builder, c_str, size_i32, owned)
 
 
 def cstr_to_fat_pointer_with_len(

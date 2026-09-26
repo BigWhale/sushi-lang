@@ -2,6 +2,7 @@
 from __future__ import annotations
 import typing
 from llvmlite import ir
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 
 if typing.TYPE_CHECKING:
@@ -10,34 +11,15 @@ if typing.TYPE_CHECKING:
 
 def declare_random(module: ir.Module) -> ir.Function:
     """Declare random: long random(void)"""
-    if "random" in module.globals:
-        return module.globals["random"]
-
     _, _, _, i64 = get_basic_types()
-
-    # long random(void)
-    # Note: long is i64 on 64-bit systems, i32 on 32-bit systems
-    # We use i64 for consistency with Sushi's u64 return type
-    fn_ty = ir.FunctionType(i64, [])
-
-    func = ir.Function(module, fn_ty, name="random")
-
-    return func
+    # long is i64 on 64-bit systems, which also matches Sushi's u64 return type
+    return declare_extern(module, "random", i64, [])
 
 
 def declare_srandom(module: ir.Module) -> ir.Function:
     """Declare srandom: void srandom(unsigned int seed)"""
-    if "srandom" in module.globals:
-        return module.globals["srandom"]
-
     _, _, i32, _ = get_basic_types()
-    void = ir.VoidType()
-
-    fn_ty = ir.FunctionType(void, [i32])
-
-    func = ir.Function(module, fn_ty, name="srandom")
-
-    return func
+    return declare_extern(module, "srandom", ir.VoidType(), [i32])
 
 
 def generate_module_ir() -> ir.Module:

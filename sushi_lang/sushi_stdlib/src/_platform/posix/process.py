@@ -1,63 +1,38 @@
 """POSIX process control function declarations."""
 
 from llvmlite import ir
-from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_exit, declare_extern
+
+_i8_ptr = ir.IntType(8).as_pointer()
+_i32 = ir.IntType(32)
+_i64 = ir.IntType(64)
+
+__all__ = [
+    "declare_getcwd", "declare_chdir", "declare_exit", "declare_getpid", "declare_getuid",
+    "declare_tmpfile", "declare_fileno", "declare_waitpid", "declare_posix_spawnp",
+    "declare_posix_spawn_file_actions_init", "declare_posix_spawn_file_actions_adddup2",
+    "declare_posix_spawn_file_actions_destroy", "get_environ",
+]
 
 
 def declare_getcwd(module: ir.Module) -> ir.Function:
     """Declare getcwd: char* getcwd(char *buf, size_t size)"""
-    if "getcwd" in module.globals:
-        return module.globals["getcwd"]
-
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i8_ptr, [i8_ptr, i64])
-    func = ir.Function(module, fn_ty, name="getcwd")
-    return func
+    return declare_extern(module, "getcwd", _i8_ptr, [_i8_ptr, _i64])
 
 
 def declare_chdir(module: ir.Module) -> ir.Function:
     """Declare chdir: int chdir(const char *path)"""
-    if "chdir" in module.globals:
-        return module.globals["chdir"]
-
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    func = ir.Function(module, fn_ty, name="chdir")
-    return func
-
-
-def declare_exit(module: ir.Module) -> ir.Function:
-    """Declare exit: void exit(int status)"""
-    if "exit" in module.globals:
-        return module.globals["exit"]
-
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    void = ir.VoidType()
-    fn_ty = ir.FunctionType(void, [i32])
-    func = ir.Function(module, fn_ty, name="exit")
-    return func
+    return declare_extern(module, "chdir", _i32, [_i8_ptr])
 
 
 def declare_getpid(module: ir.Module) -> ir.Function:
     """Declare getpid: pid_t getpid(void)"""
-    if "getpid" in module.globals:
-        return module.globals["getpid"]
-
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [])
-    func = ir.Function(module, fn_ty, name="getpid")
-    return func
+    return declare_extern(module, "getpid", _i32, [])
 
 
 def declare_getuid(module: ir.Module) -> ir.Function:
     """Declare getuid: uid_t getuid(void)"""
-    if "getuid" in module.globals:
-        return module.globals["getuid"]
-
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [])
-    func = ir.Function(module, fn_ty, name="getuid")
-    return func
+    return declare_extern(module, "getuid", _i32, [])
 
 
 # ==============================================================================
@@ -73,66 +48,39 @@ def declare_getuid(module: ir.Module) -> ir.Function:
 
 def declare_tmpfile(module: ir.Module) -> ir.Function:
     """Declare tmpfile: FILE* tmpfile(void). Auto-unlinked on fclose."""
-    if "tmpfile" in module.globals:
-        return module.globals["tmpfile"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i8_ptr, [])
-    return ir.Function(module, fn_ty, name="tmpfile")
+    return declare_extern(module, "tmpfile", _i8_ptr, [])
 
 
 def declare_fileno(module: ir.Module) -> ir.Function:
     """Declare fileno: int fileno(FILE*)."""
-    if "fileno" in module.globals:
-        return module.globals["fileno"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name="fileno")
+    return declare_extern(module, "fileno", _i32, [_i8_ptr])
 
 
 def declare_waitpid(module: ir.Module) -> ir.Function:
     """Declare waitpid: pid_t waitpid(pid_t pid, int *status, int options)."""
-    if "waitpid" in module.globals:
-        return module.globals["waitpid"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i32, i32.as_pointer(), i32])
-    return ir.Function(module, fn_ty, name="waitpid")
+    return declare_extern(module, "waitpid", _i32, [_i32, _i32.as_pointer(), _i32])
 
 
 def declare_posix_spawnp(module: ir.Module) -> ir.Function:
     """Declare posix_spawnp:"""
-    if "posix_spawnp" in module.globals:
-        return module.globals["posix_spawnp"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    char_pp = i8_ptr.as_pointer()
-    fn_ty = ir.FunctionType(i32, [i32.as_pointer(), i8_ptr, i8_ptr, i8_ptr, char_pp, char_pp])
-    return ir.Function(module, fn_ty, name="posix_spawnp")
+    char_pp = _i8_ptr.as_pointer()
+    return declare_extern(module, "posix_spawnp", _i32,
+                          [_i32.as_pointer(), _i8_ptr, _i8_ptr, _i8_ptr, char_pp, char_pp])
 
 
 def declare_posix_spawn_file_actions_init(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_init(posix_spawn_file_actions_t *)."""
-    if "posix_spawn_file_actions_init" in module.globals:
-        return module.globals["posix_spawn_file_actions_init"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name="posix_spawn_file_actions_init")
+    return declare_extern(module, "posix_spawn_file_actions_init", _i32, [_i8_ptr])
 
 
 def declare_posix_spawn_file_actions_adddup2(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *, int fd, int newfd)."""
-    if "posix_spawn_file_actions_adddup2" in module.globals:
-        return module.globals["posix_spawn_file_actions_adddup2"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i8_ptr, i32, i32])
-    return ir.Function(module, fn_ty, name="posix_spawn_file_actions_adddup2")
+    return declare_extern(module, "posix_spawn_file_actions_adddup2", _i32, [_i8_ptr, _i32, _i32])
 
 
 def declare_posix_spawn_file_actions_destroy(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *)."""
-    if "posix_spawn_file_actions_destroy" in module.globals:
-        return module.globals["posix_spawn_file_actions_destroy"]
-    i8, i8_ptr, i32, i64 = get_basic_types()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name="posix_spawn_file_actions_destroy")
+    return declare_extern(module, "posix_spawn_file_actions_destroy", _i32, [_i8_ptr])
 
 
 def get_environ(module: ir.Module) -> ir.GlobalVariable:

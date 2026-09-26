@@ -2,6 +2,7 @@
 from __future__ import annotations
 import typing
 from llvmlite import ir
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
 
 if typing.TYPE_CHECKING:
     pass
@@ -9,33 +10,15 @@ if typing.TYPE_CHECKING:
 
 def declare_getenv(module: ir.Module) -> ir.Function:
     """Declare getenv: char* getenv(const char* name)"""
-    if "getenv" in module.globals:
-        return module.globals["getenv"]
-
-    i8 = ir.IntType(8)
-    i8_ptr = i8.as_pointer()
-
-    fn_ty = ir.FunctionType(i8_ptr, [i8_ptr])
-
-    func = ir.Function(module, fn_ty, name="getenv")
-
-    return func
+    i8_ptr = ir.IntType(8).as_pointer()
+    return declare_extern(module, "getenv", i8_ptr, [i8_ptr])
 
 
 def declare_setenv(module: ir.Module) -> ir.Function:
     """Declare setenv: int setenv(const char* name, const char* value, int overwrite)"""
-    if "setenv" in module.globals:
-        return module.globals["setenv"]
-
-    i8 = ir.IntType(8)
     i32 = ir.IntType(32)
-    i8_ptr = i8.as_pointer()
-
-    fn_ty = ir.FunctionType(i32, [i8_ptr, i8_ptr, i32])
-
-    func = ir.Function(module, fn_ty, name="setenv")
-
-    return func
+    i8_ptr = ir.IntType(8).as_pointer()
+    return declare_extern(module, "setenv", i32, [i8_ptr, i8_ptr, i32])
 
 
 def generate_module_ir() -> ir.Module:
