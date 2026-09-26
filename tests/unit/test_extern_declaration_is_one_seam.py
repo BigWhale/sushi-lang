@@ -6,6 +6,8 @@ otherwise. Outside `libc_declarations.py`, this gate refuses the hand-written sp
 the same job in `sushi_lang/sushi_stdlib/src/**`:
 
 - a function that constructs an `ir.Function(...)` and appends no basic block;
+- an `ir.Function(...)` whose own value gets no basic block, in a function that appends one
+  to another value;
 - a `get_global(...)` in a `try` that catches `KeyError`;
 - an `if` that reads `.globals` and constructs an `ir.Function(...)` in a branch;
 - `if X in <m>.globals: return <m>.globals[...]` in a function that constructs an
@@ -74,6 +76,27 @@ def _is_return_of_globals(stmts: list[ast.stmt]) -> bool:
             and stmts[0].value.value.attr == "globals")
 
 
+def _bodyless_functions(fn: ast.AST) -> list[tuple[int, str]]:
+    """Every `ir.Function(...)` in `fn` whose own value gets no basic block."""
+    nodes = list(ast.walk(fn))
+    with_body = {n.func.value.id for n in nodes
+                 if _is_method_call(n, "append_basic_block")
+                 and isinstance(n.func, ast.Attribute)
+                 and isinstance(n.func.value, ast.Name)}
+    bound = set()
+    found: list[tuple[int, str]] = []
+    for n in nodes:
+        if (isinstance(n, ast.Assign) and _is_ir_function_call(n.value)
+                and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)):
+            bound.add(id(n.value))
+            if n.targets[0].id not in with_body:
+                found.append((n.lineno, f"ir.Function {n.targets[0].id} with no body"))
+    for n in nodes:
+        if _is_ir_function_call(n) and id(n) not in bound:
+            found.append((n.lineno, "ir.Function with no name to append a body to"))
+    return found
+
+
 def offences_in(source: str) -> list[tuple[int, str]]:
     """Every hand-written declaration in one module, as (line, kind)."""
     found: list[tuple[int, str]] = []
@@ -91,6 +114,7 @@ def offences_in(source: str) -> list[tuple[int, str]]:
         builds = any(_is_ir_function_call(n) for n in nodes)
         if builds and not any(_is_method_call(n, "append_basic_block") for n in nodes):
             found.append((fn.lineno, f"ir.Function with no body in {fn.name}"))
+        found.extend(_bodyless_functions(fn))
         from_get = _names_bound_from_globals_get(fn)
         for n in nodes:
             if not (isinstance(n, ast.If) and _reads_globals(n.test, from_get)):
@@ -190,3 +214,11 @@ def test_every_declaration_spelling_is_matched():
 def test_a_definition_or_a_variable_is_not_matched():
     for source in _NOT_DECLARATIONS:
         assert not offences_in(source), (source, offences_in(source))
+
+
+def test_a_declaration_beside_a_definition_is_matched():
+    source = ('def f(module):\n'
+              '    intrinsic = ir.Function(module, ty, name="llvm.fabs.f64")\n'
+              '    func = ir.Function(module, ty, name="sushi_abs_f64")\n'
+              '    func.append_basic_block("entry")\n')
+    assert offences_in(source) == [(2, "ir.Function intrinsic with no body")]
