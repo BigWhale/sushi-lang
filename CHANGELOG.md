@@ -428,6 +428,15 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Every `<math>` call has the type of its signature row** (#926). A bare `sin(1.0)` had no
+  inferred type, so `let i32 a = sin(1.0)` compiled with no diagnostic and printed `0`. Sixteen
+  functions (`sin`, `cos`, `tan`, `exp`, `log`, `hypot`, ...) were outside a hand-kept list of
+  nine names. The bare and the aliased paths read one resolver now, behind the module import
+  check, so each such `let` is CE2002.
+- **An unreached concrete perk implementation is still judged** (#898). `extend Box@(i32) with
+  Sz` beside an extension method of the same name was CE4007 only when the program built a
+  `Box@(i32)`; with no instance it compiled clean, and so did a contract mismatch (CE4004). The
+  header is judged on the written declaration now, as for a template target.
 - **A refused `<math>` family call is one diagnostic** (#907). `let f64 a = max("a", "b")` gave
   the two argument errors (CE2006) and a cascade CE2002, because the return type was the first
   argument's type whether or not the family takes it. The resolver answers no type now, and the
@@ -1281,6 +1290,16 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One accessor for a stdlib extern declaration** (#910). `declare_extern` in
+  `libc_declarations.py` replaces the hand-written guard-and-declare shape in the libc module and
+  the POSIX platform modules; a gate refuses a new hand declaration and ratchets the rest down.
+  Two duplicate declarations (`strlen`, `isatty`) are gone. The IR is byte-identical.
+- **The stdlib builder is one table** (#912). The nine `build_*` functions are one row each in
+  `STDLIB_BITCODE_UNITS`; `build_all` is one loop. The bitcode is byte-identical.
+- **One errno-to-tag emitter** (#913), `errno_tags.py`, for the file and the network error
+  families; the `io/files/results.py` re-export shim is gone.
+- **The line reader helpers take one frame** (#914) instead of 15 and 17 positional parameters.
+  The design prose of the descriptor layer moved to `docs/design/stdlib-syscall-layer.md`.
 - **One string search skeleton** (#909). `contains`, `find`, `count` and `find_last` were four
   copies of one byte loop; they are one emitter with hooks now. `count("")` stays `0`. The IR is
   byte-identical.

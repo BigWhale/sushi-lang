@@ -1,198 +1,116 @@
-"""C Library Function Declarations"""
+"""C Library Function Declarations
+
+`declare_extern` is the one accessor that declares an external function in a stdlib
+module (#910); tests/unit/test_extern_declaration_is_one_seam.py refuses a hand-written
+declaration anywhere else under sushi_stdlib/src/.
+"""
+
+from typing import Sequence
 
 import llvmlite.ir as ir
 
+_i8 = ir.IntType(8)
+_i8_ptr = _i8.as_pointer()
+_i32 = ir.IntType(32)
+_i64 = ir.IntType(64)  # size_t and long are i64 on 64-bit systems
+_f64 = ir.DoubleType()
+_void = ir.VoidType()
+
+
+def declare_extern(
+    module: ir.Module,
+    name: str,
+    ret: ir.Type,
+    args: Sequence[ir.Type],
+    var_arg: bool = False,
+) -> ir.Function:
+    """Return the global `name` of the module, or declare it as `ret name(args...)`."""
+    existing = module.globals.get(name)
+    if existing is not None:
+        return existing
+    return ir.Function(module, ir.FunctionType(ret, list(args), var_arg=var_arg), name=name)
+
 
 def declare_malloc(module: ir.Module) -> ir.Function:
-    """Declare malloc: void* malloc(size_t size)"""
-    if "malloc" in module.globals:
-        return module.globals["malloc"]
-
-    i64 = ir.IntType(64)  # size_t is i64 on 64-bit systems
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i8_ptr, [i64])
-    return ir.Function(module, fn_ty, name="malloc")
+    """void* malloc(size_t size)"""
+    return declare_extern(module, "malloc", _i8_ptr, [_i64])
 
 
 def declare_free(module: ir.Module) -> ir.Function:
-    """Declare free: void free(void* ptr)"""
-    if "free" in module.globals:
-        return module.globals["free"]
-
-    i8_ptr = ir.IntType(8).as_pointer()
-    void = ir.VoidType()
-    fn_ty = ir.FunctionType(void, [i8_ptr])
-    return ir.Function(module, fn_ty, name="free")
+    """void free(void* ptr)"""
+    return declare_extern(module, "free", _void, [_i8_ptr])
 
 
 def declare_realloc(module: ir.Module) -> ir.Function:
-    """Declare realloc: void* realloc(void* ptr, size_t size)"""
-    if "realloc" in module.globals:
-        return module.globals["realloc"]
-
-    i64 = ir.IntType(64)  # size_t is i64 on 64-bit systems
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i8_ptr, [i8_ptr, i64])
-    return ir.Function(module, fn_ty, name="realloc")
+    """void* realloc(void* ptr, size_t size)"""
+    return declare_extern(module, "realloc", _i8_ptr, [_i8_ptr, _i64])
 
 
 def declare_memcpy(module: ir.Module) -> ir.Function:
-    """Declare LLVM memcpy intrinsic (replaces libc memcpy)."""
-    i8 = ir.IntType(8)
-    i64 = ir.IntType(64)
-
-    return module.declare_intrinsic(
-        'llvm.memcpy',
-        [ir.PointerType(i8), ir.PointerType(i8), i64]
-    )
+    """The LLVM memcpy intrinsic: void llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i1)."""
+    operands = [_i8_ptr, _i8_ptr, _i64]
+    name = ".".join(["llvm.memcpy"] + [t.intrinsic_name for t in operands])
+    return declare_extern(module, name, _void, operands + [ir.IntType(1)])
 
 
 def declare_strlen(module: ir.Module) -> ir.Function:
-    """Declare strlen as external (implementation emitted during final compilation)."""
-    func_name = "llvm_strlen"
-    if func_name in module.globals:
-        return module.globals[func_name]
-
-    i32 = ir.IntType(32)
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name=func_name)
+    """i32 llvm_strlen(i8*); the body is emitted during the final compilation."""
+    return declare_extern(module, "llvm_strlen", _i32, [_i8_ptr])
 
 
 def declare_strtol(module: ir.Module) -> ir.Function:
-    """Declare strtol: long strtol(const char* str, char** endptr, int base)"""
-    if "strtol" in module.globals:
-        return module.globals["strtol"]
-
-    i32 = ir.IntType(32)
-    i64 = ir.IntType(64)  # long is i64 on 64-bit systems
-    i8_ptr = ir.IntType(8).as_pointer()
-    i8_ptr_ptr = i8_ptr.as_pointer()
-    fn_ty = ir.FunctionType(i64, [i8_ptr, i8_ptr_ptr, i32])
-    return ir.Function(module, fn_ty, name="strtol")
+    """long strtol(const char* str, char** endptr, int base)"""
+    return declare_extern(module, "strtol", _i64, [_i8_ptr, _i8_ptr.as_pointer(), _i32])
 
 
 def declare_strtoll(module: ir.Module) -> ir.Function:
-    """Declare strtoll: long long strtoll(const char* str, char** endptr, int base)"""
-    if "strtoll" in module.globals:
-        return module.globals["strtoll"]
-
-    i32 = ir.IntType(32)
-    i64 = ir.IntType(64)  # long long is i64
-    i8_ptr = ir.IntType(8).as_pointer()
-    i8_ptr_ptr = i8_ptr.as_pointer()
-    fn_ty = ir.FunctionType(i64, [i8_ptr, i8_ptr_ptr, i32])
-    return ir.Function(module, fn_ty, name="strtoll")
+    """long long strtoll(const char* str, char** endptr, int base)"""
+    return declare_extern(module, "strtoll", _i64, [_i8_ptr, _i8_ptr.as_pointer(), _i32])
 
 
 def declare_strtod(module: ir.Module) -> ir.Function:
-    """Declare strtod: double strtod(const char* str, char** endptr)"""
-    if "strtod" in module.globals:
-        return module.globals["strtod"]
-
-    f64 = ir.DoubleType()
-    i8_ptr = ir.IntType(8).as_pointer()
-    i8_ptr_ptr = i8_ptr.as_pointer()
-    fn_ty = ir.FunctionType(f64, [i8_ptr, i8_ptr_ptr])
-    return ir.Function(module, fn_ty, name="strtod")
-
-
-def declare_isatty(module: ir.Module) -> ir.Function:
-    """Declare isatty: int isatty(int fd)"""
-    if "isatty" in module.globals:
-        return module.globals["isatty"]
-
-    i32 = ir.IntType(32)
-    fn_ty = ir.FunctionType(i32, [i32])
-    return ir.Function(module, fn_ty, name="isatty")
+    """double strtod(const char* str, char** endptr)"""
+    return declare_extern(module, "strtod", _f64, [_i8_ptr, _i8_ptr.as_pointer()])
 
 
 def declare_sprintf(module: ir.Module) -> ir.Function:
-    """Declare sprintf: int sprintf(char* str, const char* format, ...)"""
-    if "sprintf" in module.globals:
-        return module.globals["sprintf"]
-
-    i32 = ir.IntType(32)
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr, i8_ptr], var_arg=True)
-    return ir.Function(module, fn_ty, name="sprintf")
+    """int sprintf(char* str, const char* format, ...)"""
+    return declare_extern(module, "sprintf", _i32, [_i8_ptr, _i8_ptr], var_arg=True)
 
 
 def declare_fprintf(module: ir.Module) -> ir.Function:
-    """Declare fprintf: int fprintf(FILE* stream, const char* format, ...)"""
-    if "fprintf" in module.globals:
-        return module.globals["fprintf"]
-
-    i32 = ir.IntType(32)
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr, i8_ptr], var_arg=True)
-    return ir.Function(module, fn_ty, name="fprintf")
+    """int fprintf(FILE* stream, const char* format, ...)"""
+    return declare_extern(module, "fprintf", _i32, [_i8_ptr, _i8_ptr], var_arg=True)
 
 
 def declare_fread(module: ir.Module) -> ir.Function:
-    """Declare fread: size_t fread(void* ptr, size_t size, size_t nmemb, FILE* stream)"""
-    if "fread" in module.globals:
-        return module.globals["fread"]
-
-    i64 = ir.IntType(64)  # size_t
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i64, [i8_ptr, i64, i64, i8_ptr])
-    return ir.Function(module, fn_ty, name="fread")
+    """size_t fread(void* ptr, size_t size, size_t nmemb, FILE* stream)"""
+    return declare_extern(module, "fread", _i64, [_i8_ptr, _i64, _i64, _i8_ptr])
 
 
 def declare_fclose(module: ir.Module) -> ir.Function:
-    """Declare fclose: int fclose(FILE* stream)"""
-    if "fclose" in module.globals:
-        return module.globals["fclose"]
-
-    i32 = ir.IntType(32)
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr])
-    return ir.Function(module, fn_ty, name="fclose")
+    """int fclose(FILE* stream)"""
+    return declare_extern(module, "fclose", _i32, [_i8_ptr])
 
 
 def declare_fseek(module: ir.Module) -> ir.Function:
-    """Declare fseek: int fseek(FILE* stream, long offset, int whence)"""
-    if "fseek" in module.globals:
-        return module.globals["fseek"]
-
-    i32 = ir.IntType(32)
-    i64 = ir.IntType(64)  # long is i64 on 64-bit systems
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i32, [i8_ptr, i64, i32])
-    return ir.Function(module, fn_ty, name="fseek")
+    """int fseek(FILE* stream, long offset, int whence)"""
+    return declare_extern(module, "fseek", _i32, [_i8_ptr, _i64, _i32])
 
 
 def declare_ftell(module: ir.Module) -> ir.Function:
-    """Declare ftell: long ftell(FILE* stream)"""
-    if "ftell" in module.globals:
-        return module.globals["ftell"]
-
-    i64 = ir.IntType(64)  # long is i64 on 64-bit systems
-    i8_ptr = ir.IntType(8).as_pointer()
-    fn_ty = ir.FunctionType(i64, [i8_ptr])
-    return ir.Function(module, fn_ty, name="ftell")
+    """long ftell(FILE* stream)"""
+    return declare_extern(module, "ftell", _i64, [_i8_ptr])
 
 
 def declare_exit(module: ir.Module) -> ir.Function:
-    """Declare exit: void exit(int status)"""
-    if "exit" in module.globals:
-        return module.globals["exit"]
-
-    void = ir.VoidType()
-    i32 = ir.IntType(32)
-    fn_ty = ir.FunctionType(void, [i32])
-    return ir.Function(module, fn_ty, name="exit")
+    """void exit(int status)"""
+    return declare_extern(module, "exit", _void, [_i32])
 
 
 def declare_errno_location(module: ir.Module) -> ir.Function:
-    """Declare the errno accessor: int* __error() (macOS) / __errno_location() (Linux)."""
+    """int* __error() (macOS) / __errno_location() (Linux)."""
     from sushi_lang.backend.platform_detect import get_current_platform
 
     name = "__errno_location" if get_current_platform().is_linux else "__error"
-    if name in module.globals:
-        return module.globals[name]
-
-    i32 = ir.IntType(32)
-    fn_ty = ir.FunctionType(i32.as_pointer(), [])
-    return ir.Function(module, fn_ty, name=name)
+    return declare_extern(module, name, _i32.as_pointer(), [])

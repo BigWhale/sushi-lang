@@ -11,6 +11,7 @@ ones that DISAGREE live in _platform/darwin/net.py and _platform/linux/net.py.
 """
 from llvmlite import ir
 
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 from sushi_lang.sushi_stdlib.src._platform.posix.files import declare_close, declare_dup
 
@@ -51,107 +52,99 @@ TIMEVAL_SIZE = 16
 TIMEVAL_USEC_OFFSET = 8
 
 
-def _declare(module: ir.Module, name: str, ret, args) -> ir.Function:
-    """Declare one libc symbol once per module."""
-    try:
-        return module.get_global(name)
-    except KeyError:
-        return ir.Function(module, ir.FunctionType(ret, args), name=name)
-
-
 def declare_socket(module: ir.Module) -> ir.Function:
     """int socket(int domain, int type, int protocol)"""
     _i8, _i8p, i32, _i64 = get_basic_types()
-    return _declare(module, "socket", i32, [i32, i32, i32])
+    return declare_extern(module, "socket", i32, [i32, i32, i32])
 
 
 def declare_connect(module: ir.Module) -> ir.Function:
     """int connect(int fd, const struct sockaddr *addr, socklen_t len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "connect", i32, [i32, i8_ptr, i32])
+    return declare_extern(module, "connect", i32, [i32, i8_ptr, i32])
 
 
 def declare_bind(module: ir.Module) -> ir.Function:
     """int bind(int fd, const struct sockaddr *addr, socklen_t len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "bind", i32, [i32, i8_ptr, i32])
+    return declare_extern(module, "bind", i32, [i32, i8_ptr, i32])
 
 
 def declare_listen(module: ir.Module) -> ir.Function:
     """int listen(int fd, int backlog)"""
     _i8, _i8p, i32, _i64 = get_basic_types()
-    return _declare(module, "listen", i32, [i32, i32])
+    return declare_extern(module, "listen", i32, [i32, i32])
 
 
 def declare_accept(module: ir.Module) -> ir.Function:
     """int accept(int fd, struct sockaddr *addr, socklen_t *len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "accept", i32, [i32, i8_ptr, i32.as_pointer()])
+    return declare_extern(module, "accept", i32, [i32, i8_ptr, i32.as_pointer()])
 
 
 def declare_send(module: ir.Module) -> ir.Function:
     """ssize_t send(int fd, const void *buf, size_t n, int flags)"""
     _i8, i8_ptr, i32, i64 = get_basic_types()
-    return _declare(module, "send", i64, [i32, i8_ptr, i64, i32])
+    return declare_extern(module, "send", i64, [i32, i8_ptr, i64, i32])
 
 
 def declare_recv(module: ir.Module) -> ir.Function:
     """ssize_t recv(int fd, void *buf, size_t n, int flags)"""
     _i8, i8_ptr, i32, i64 = get_basic_types()
-    return _declare(module, "recv", i64, [i32, i8_ptr, i64, i32])
+    return declare_extern(module, "recv", i64, [i32, i8_ptr, i64, i32])
 
 
 def declare_sendto(module: ir.Module) -> ir.Function:
     """ssize_t sendto(int fd, const void *buf, size_t n, int flags,
                       const struct sockaddr *to, socklen_t tolen)"""
     _i8, i8_ptr, i32, i64 = get_basic_types()
-    return _declare(module, "sendto", i64, [i32, i8_ptr, i64, i32, i8_ptr, i32])
+    return declare_extern(module, "sendto", i64, [i32, i8_ptr, i64, i32, i8_ptr, i32])
 
 
 def declare_recvfrom(module: ir.Module) -> ir.Function:
     """ssize_t recvfrom(int fd, void *buf, size_t n, int flags,
                         struct sockaddr *from, socklen_t *fromlen)"""
     _i8, i8_ptr, i32, i64 = get_basic_types()
-    return _declare(module, "recvfrom", i64,
-                    [i32, i8_ptr, i64, i32, i8_ptr, i32.as_pointer()])
+    return declare_extern(module, "recvfrom", i64,
+                          [i32, i8_ptr, i64, i32, i8_ptr, i32.as_pointer()])
 
 
 def declare_setsockopt(module: ir.Module) -> ir.Function:
     """int setsockopt(int fd, int level, int name, const void *val, socklen_t len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "setsockopt", i32, [i32, i32, i32, i8_ptr, i32])
+    return declare_extern(module, "setsockopt", i32, [i32, i32, i32, i8_ptr, i32])
 
 
 def declare_getsockname(module: ir.Module) -> ir.Function:
     """int getsockname(int fd, struct sockaddr *addr, socklen_t *len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "getsockname", i32, [i32, i8_ptr, i32.as_pointer()])
+    return declare_extern(module, "getsockname", i32, [i32, i8_ptr, i32.as_pointer()])
 
 
 def declare_getpeername(module: ir.Module) -> ir.Function:
     """int getpeername(int fd, struct sockaddr *addr, socklen_t *len)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "getpeername", i32, [i32, i8_ptr, i32.as_pointer()])
+    return declare_extern(module, "getpeername", i32, [i32, i8_ptr, i32.as_pointer()])
 
 
 def declare_shutdown(module: ir.Module) -> ir.Function:
     """int shutdown(int fd, int how)"""
     _i8, _i8p, i32, _i64 = get_basic_types()
-    return _declare(module, "shutdown", i32, [i32, i32])
+    return declare_extern(module, "shutdown", i32, [i32, i32])
 
 
 def declare_getaddrinfo(module: ir.Module) -> ir.Function:
     """int getaddrinfo(const char *node, const char *service,
                        const struct addrinfo *hints, struct addrinfo **res)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "getaddrinfo", i32,
-                    [i8_ptr, i8_ptr, i8_ptr, i8_ptr.as_pointer()])
+    return declare_extern(module, "getaddrinfo", i32,
+                          [i8_ptr, i8_ptr, i8_ptr, i8_ptr.as_pointer()])
 
 
 def declare_freeaddrinfo(module: ir.Module) -> ir.Function:
     """void freeaddrinfo(struct addrinfo *res)"""
     _i8, i8_ptr, _i32, _i64 = get_basic_types()
-    return _declare(module, "freeaddrinfo", ir.VoidType(), [i8_ptr])
+    return declare_extern(module, "freeaddrinfo", ir.VoidType(), [i8_ptr])
 
 
 def declare_getnameinfo(module: ir.Module) -> ir.Function:
@@ -159,8 +152,8 @@ def declare_getnameinfo(module: ir.Module) -> ir.Function:
                        char *host, socklen_t hostlen,
                        char *serv, socklen_t servlen, int flags)"""
     _i8, i8_ptr, i32, _i64 = get_basic_types()
-    return _declare(module, "getnameinfo", i32,
-                    [i8_ptr, i32, i8_ptr, i32, i8_ptr, i32, i32])
+    return declare_extern(module, "getnameinfo", i32,
+                          [i8_ptr, i32, i8_ptr, i32, i8_ptr, i32, i32])
 
 
 __all__ = [

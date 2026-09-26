@@ -26,9 +26,25 @@ from sushi_lang.semantics.passes.types.visit.helpers import (
 
 
 # Stdlib modules whose registry declares a return type outright. `math` is absent on
-# purpose: its return type depends on the argument types, so it keeps its own branch.
+# purpose: a family's return type depends on the argument types, so it has its own reader.
 _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files",
                                   "net/socket")
+
+
+def math_call_return_type(validator: 'TypeValidator', name: str,
+                          args) -> Optional[Type]:
+    """What a `<math>` call yields, from its signature row; None when `name` is no row.
+
+    The bare call and the call behind an alias both read this, so they cannot drift.
+    """
+    from sushi_lang.sushi_stdlib.src import math as math_module
+    if not math_module.is_builtin_math_function(name):
+        return None
+    arg_types = [validator.infer_expression_type(arg) for arg in args]
+    if name in math_module.MATH_FAMILIES and arg_types and arg_types[0] is None:
+        return None
+    return math_module.get_builtin_math_function_return_type(
+        name, [ty for ty in arg_types if ty is not None])
 
 
 class _InferenceRungs:
@@ -362,23 +378,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             if stdlib_func is not None and not stdlib_func.is_constant:
                 return self._materialize_wrapper(stdlib_func.get_return_type())
 
-        if function_name in {'abs', 'min', 'max', 'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
-            from sushi_lang.sushi_stdlib.src import math as math_module
-            if math_module.is_builtin_math_function(function_name):
-                param_types = []
-                for arg in node.args:
-                    arg_type = self.type_validator.infer_expression_type(arg)
-                    if arg_type is not None:
-                        param_types.append(arg_type)
-
-                if function_name in {'abs', 'min', 'max'}:
-                    return math_module.get_builtin_math_function_return_type(
-                        function_name, param_types)
-
-                if function_name in {'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
-                    return BuiltinType.F64
-
-            return None
+        if self.type_validator.scope.holds_module("math"):
+            return math_call_return_type(self.type_validator, function_name, node.args)
 
         return None
 

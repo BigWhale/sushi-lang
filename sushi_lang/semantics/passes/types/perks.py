@@ -211,6 +211,29 @@ def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
     _reject_name_conflicts(impl, existing, validator.reporter)
 
 
+def validate_unreached_header(tables, impl: ExtendWithDef, reporter: Reporter) -> None:
+    """The header of a perk implementation on one instantiation that no unit reaches (#898).
+
+    Such an implementation is dropped before the typecheck pass, and the header is
+    judged here on the way out: the contract check, and CE4007 against the extension
+    method that applies to the same instantiation, a concrete one or a template. A
+    reached one is judged in the typecheck pass, so the two answers agree.
+    """
+    from sushi_lang.semantics.generics.extension_targets import instantiation_key
+    perk_def = tables.perks.by_name.get(impl.perk_name)
+    if perk_def is None:
+        return
+    validate_perk_implementation(impl, perk_def, reporter)
+    target = impl.target_type
+    key = instantiation_key(target.base_name, tuple(target.type_args))
+    existing = {}
+    for method in impl.methods:
+        found = tables.generic_extensions.find_applicable(target.base_name, method.name, key)
+        if found is not None:
+            existing[method.name] = found
+    _reject_name_conflicts(impl, existing, reporter)
+
+
 def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
                            reporter: Reporter) -> bool:
     """One CE4007 for each perk method that an extension method of one name meets."""

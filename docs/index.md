@@ -55,6 +55,7 @@ compiler internals in one place.
 - [Backend](internals/backend.md) — LLVM code generation
 - [Stdlib Build](internals/stdlib-build.md) — building the standard library
 - [Variadics (design)](design/variadics.md) — the variadics design note
+- [Stdlib syscall layer (design)](design/stdlib-syscall-layer.md) — the descriptor layer, the line reader, errno to an error tag
 
 ## Philosophy
 

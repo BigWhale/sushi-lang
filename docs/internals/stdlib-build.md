@@ -92,10 +92,10 @@ precompile.
 python sushi_lang/sushi_stdlib/build.py [--platform darwin|linux]
 ```
 
-This calls `build_all(platform_name)`, which initializes LLVM's native target, runs
-every `build_@(unit)()` function (each: import the generator, call
+This calls `build_all(platform_name)`, which initializes LLVM's native target, loops
+over the rows of `STDLIB_BITCODE_UNITS` (for each row: import the generator, call
 `generate_module_ir()`, `llvm.parse_assembly()` the IR, write `.as_bitcode()` to
-`dist/<platform>/...`), then writes the freshness marker described below. `--platform`
+`dist/<platform>/<unit>.bc`), then writes the freshness marker described below. `--platform`
 only affects which `dist/` subdirectory the output lands in; without it, the platform
 is auto-detected via `platform_detect.get_current_platform()`. Cross-compilation is not
 supported — build on the target OS.

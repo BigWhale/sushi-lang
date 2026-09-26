@@ -711,18 +711,28 @@ class SemanticAnalyzer:
         """
         from sushi_lang.semantics.generics.types import GenericTypeRef
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        from sushi_lang.semantics.passes.types.perks import validate_unreached_header
+
+        def unreached(impl) -> bool:
+            return (isinstance(impl.target_type, GenericTypeRef)
+                    and isinstance(
+                        resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
+                                             self.tables.enums.by_name),
+                        GenericTypeRef))
 
         for unit in compilation_order:
             impls = unit.ast.perk_impls if unit.ast is not None else None
             if not impls:
                 continue
-            unit.ast.perk_impls = [
-                impl for impl in impls
-                if not isinstance(impl.target_type, GenericTypeRef)
-                or not isinstance(
-                    resolve_unknown_type(impl.target_type, self.tables.structs.by_name,
-                                         self.tables.enums.by_name),
-                    GenericTypeRef)]
+            dropped = [impl for impl in impls if unreached(impl)]
+            if not dropped:
+                continue
+            unit.ast.perk_impls = [impl for impl in impls if not unreached(impl)]
+            # The header of a dropped one is still a written declaration (#898).
+            unit_reporter = self._unit_reporter(unit)
+            for impl in dropped:
+                validate_unreached_header(self.tables, impl, unit_reporter)
+            self._merge_unit(unit_reporter)
 
     def _monomorphize_generic_perk_impls(self, monomorphizer, compilation_order,
                                          struct_instantiations, concrete_structs,
