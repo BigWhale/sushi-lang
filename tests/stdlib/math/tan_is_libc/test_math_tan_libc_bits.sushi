@@ -1,0 +1,14 @@
+# tan gives the bits of the C library tan, not the quotient sin(x) / cos(x) (#925).
+# EXPECT_STDOUT_EXACT: "true true true\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+unsafe external "C" as libc because "compare the stdlib tan with the C library tan":
+    fn tan(f64 x) f64 = "tan"
+
+fn main() i32:
+    let bool a = tan(10.0).to_bits() == libc.tan(10.0).to_bits()
+    let bool b = tan(-1.0112971496820904).to_bits() == libc.tan(-1.0112971496820904).to_bits()
+    let bool c = tan(1e10).to_bits() == libc.tan(1e10).to_bits()
+    println("{a} {b} {c}")
+    return Result.Ok(0)

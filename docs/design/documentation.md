@@ -861,8 +861,8 @@ facts compose: the slice starts at the declaration keyword, so the doc block is 
 A generic's docs are lost unless the record carries them.
 
 State it as an invariant in both directions. The slice excludes the block; the record carries
-it. And the consumer's re-parse — `deserialize_generic_function` runs `parse_to_ast` and
-asserts exactly one declaration — must tolerate a doc block should one ever land inside a
+it. And the consumer's re-parse — `LibraryRegistration._collect_snippet` runs `parse_to_ast` over
+the slice — must tolerate a doc block should one ever land inside a
 slice, because a grammar that refused one there would turn a slicing bug into a parse failure
 at the consumer.
 

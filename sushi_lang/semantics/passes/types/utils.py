@@ -420,13 +420,3 @@ def is_array_destroyed(validator: 'TypeValidator', name: str) -> bool:
             return True
     return False
 
-
-def push_destroyed_scope(validator: 'TypeValidator') -> None:
-    """Push a new scope for tracking destroyed arrays."""
-    validator.destroyed_arrays.append(set())
-
-
-def pop_destroyed_scope(validator: 'TypeValidator') -> None:
-    """Pop the current scope for tracking destroyed arrays."""
-    if validator.destroyed_arrays:
-        validator.destroyed_arrays.pop()
