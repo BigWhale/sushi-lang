@@ -1,0 +1,21 @@
+# The escape: `.clone()` gives `fill` an independent value, so the call is legal (#888).
+# EXPECT_STDOUT_EXACT: "ABC\nABC\nABC\nABC\nABC\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "abc"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    let string first = a[0]
+    a.fill(first.clone())
+    println(a[0])
+    println(a[1])
+    println(a[2])
+    let string[] b = from([s.upper(), s.lower()])
+    match b.get(0):
+        Maybe.Some(v) -> b.fill(v.clone())
+        Maybe.None -> println("none")
+    println(b[0])
+    println(b[1])
+    return Result.Ok(0)

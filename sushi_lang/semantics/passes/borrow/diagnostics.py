@@ -95,17 +95,26 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
 
 def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
                                    use_span: Optional[Span],
-                                   state: BorrowState) -> None:
-    """Report CE2412 at the change, and name the later use that makes it wrong."""
+                                   state: BorrowState, *, by_the_change: bool = False) -> None:
+    """Report CE2412 at the change, and name the use that makes it wrong.
+
+    `by_the_change` is the use that IS an argument of the change: the call reads it while
+    it changes the owner (#888), so the use is not later and the escape is a clone.
+    """
     owner, what = state.invalidated_by
     diag = checker.err.emit_with(er.ERR.CE2412, state.invalidated_at,
                                  owner=owner, name=name)
     if state.bound_at_span is not None:
         diag.note_at(f"'{name}' borrows from '{owner}' here", state.bound_at_span)
     if use_span is not None:
-        diag.note_at(f"'{name}' is used here, after the change", use_span)
-    diag.help(f"{what} after the last use of '{name}', "
-              f"or bind an independent value with `.clone()`")
+        diag.note_at(f"'{name}' is read here, by the call that changes '{owner}'"
+                     if by_the_change else f"'{name}' is used here, after the change",
+                     use_span)
+    if by_the_change:
+        diag.help(f"pass an independent value: `{name}.clone()`")
+    else:
+        diag.help(f"{what} after the last use of '{name}', "
+                  f"or bind an independent value with `.clone()`")
     diag.emit()
     # Report once per binding. A suppressed (loop-discovery) pass reported nothing, so it
     # must consume nothing -- clearing there erases the real pass's invalidation.

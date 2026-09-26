@@ -252,6 +252,8 @@ def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: P
                 pass                      # an explicit discard binds nothing
             case str():
                 scope.bind_value(binding, payload_type, span)
+                _freeze_for_a_view(checker, scope, binding, payload_type, span,
+                                   scrutinee, kind)
             case NomBinding():
                 # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
                 # only do out of a scrutinee the match owns. A take out of an `Own(...)`
@@ -271,6 +273,22 @@ def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: P
             case _:
                 _register_own_pattern(checker, scope, binding, payload_type, span,
                                       scrutinee)
+
+
+def _freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
+                       ty: Optional[Type], span: Optional[Span],
+                       scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
+    """A bare binding of an owning payload views the owner's storage (#888).
+
+    The copy is shallow, so the owner is frozen for the arm exactly as for a `let`-borrow:
+    a change to the owner while the binding is still used is CE2412. A plain payload is a
+    copy, and a scrutinee the match owns has no other owner to change.
+    """
+    if kind is not ScrutineeKind.BORROWED or scrutinee is None:
+        return
+    if checker.types.type_class(ty) is not TypeClass.MOVE:
+        return
+    scope.freeze_owner(checker.borrow_state[name], scrutinee, span)
 
 
 def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,

@@ -68,7 +68,7 @@ _add(ErrorMessage("CE2408", Severity.ERROR,
 
 _add(ErrorMessage("CE2412", Severity.ERROR,
     "cannot mutate '{owner}' while '{name}' borrows from it",
-    Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502."))
+    Category.BORROW, "A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. A bare `match` payload binding of an owning payload views the owner's storage the same way, for the arm. A borrowed argument is read DURING its call, so a binding passed to a call that changes its owner (`a.fill(first)`) is a use while the owner changes (#888). The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502."))
 
 _add(ErrorMessage("CE2414", Severity.ERROR,
     "cannot write to binding '{name}': a match/foreach binding is a read-only view",
