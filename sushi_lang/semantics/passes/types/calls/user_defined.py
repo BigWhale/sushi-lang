@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
-from ..visibility import (name_is_contested, out_of_scope_help,
+from ..visibility import (name_is_contested, out_of_scope_help, type_name_is_contested,
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..arguments import check_arguments
@@ -135,7 +135,10 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_generic_function_call(validator, call, function_name)
         return
 
-    if function_name in validator.struct_table.by_name:
+    # A type name this unit lost is a construction of the unit's own type (#921), even
+    # when the name that won is an enum and the struct table has no such name.
+    if (function_name in validator.struct_table.by_name
+            or type_name_is_contested(validator, function_name)):
         from .structs import validate_struct_constructor
         validate_struct_constructor(validator, call)
         return

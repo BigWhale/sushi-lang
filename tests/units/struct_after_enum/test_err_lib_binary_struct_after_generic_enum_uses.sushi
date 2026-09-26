@@ -1,0 +1,16 @@
+# A consumer declares a struct `Opt`, and a BINARY library's public generic enum
+# `Opt@(T)` holds the name. The struct is refused at its declaration (CE0006). The
+# constructions and the field reads that follow read the lost name and are silent:
+# CE0006 is the one diagnostic.
+# EXPECT_ERROR_CODE: CE0006
+# EXPECT_STDERR_CONTAINS: "struct 'Opt' already defined as enum"
+use <lib/binary_api_lib>
+
+struct Opt:
+    i32 m
+
+fn main() i32:
+    let Opt p = Opt(3)
+    let Opt q = Opt(m: 4)
+    println("{p.m} {q.m}")
+    return Result.Ok(0)

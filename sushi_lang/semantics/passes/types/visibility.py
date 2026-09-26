@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.namespaces import GENERIC_UNIT_TYPES, import_help
+from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
     origin_of,
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 __all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
            "reject_out_of_scope_type", "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
-           "reject_private_type"]
+           "reject_private_type", "type_is_contested", "type_name_is_contested"]
 
 
 # Which kinds one written type name could be. `struct` and `enum` share one namespace,
@@ -116,6 +117,23 @@ def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
     if table is None:
         return False
     return table.contested_by(kind, name, validator.current_unit_name)
+
+
+def type_name_is_contested(validator: 'TypeValidator', name: str) -> bool:
+    """Did the unit being validated declare the TYPE `name` and lose it?
+
+    A struct and an enum share one name, so the kinds of the loser and the winner do
+    not matter: the unit that lost the name has heard CE0004, CE0006 or CE3011 at its
+    declaration, and every use of the name in that unit is silent (#921).
+    """
+    return name_is_contested(validator, "struct", name)
+
+
+def type_is_contested(validator: 'TypeValidator', ty: Any) -> bool:
+    """Is `ty` a named type whose name the unit being validated declared and lost?"""
+    if not isinstance(ty, (StructType, EnumType)):
+        return False
+    return type_name_is_contested(validator, ty.generic_base or ty.name)
 
 
 def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
