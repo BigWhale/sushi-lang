@@ -1,0 +1,27 @@
+# A `??` on a foreach binder is a propagation too, so its span covers the whole binder,
+# from the item name to the end of `??`, as `<expr>??` does everywhere else.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2511
+# EXPECT_STDERR_CONTAINS: "test_err_try_binder_span_whole_binder.sushi:21:13: error [CE2511]"
+# EXPECT_STDERR_CONTAINS: "  |     foreach(x?? in Items(0)):\n  `             -+-\n"
+enum E1:
+    A
+
+struct Items:
+    i32 n
+
+extend Items next(poke self) Maybe@(Result@(i32, E1)):
+    if (self.n >= 2):
+        return Maybe.None()
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
+
+fn total() i32:
+    let i32 sum = 0
+    foreach(x?? in Items(0)):
+        sum := sum + x
+    return Result.Ok(sum)
+
+fn main() i32:
+    println(total().realise(0))
+    return Result.Ok(0)
