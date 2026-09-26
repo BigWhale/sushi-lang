@@ -2,13 +2,18 @@
 """Comprehensive test runner for Sushi language compiler."""
 
 import argparse
+import json
+import re
 import subprocess
 import sys
 import os
 import shutil
+import tempfile
+import time
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -172,6 +177,180 @@ def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
         print(f"  Libraries compiled to {bin_dir}")
 
     return True
+
+
+DOC_GATE_MODULES_ENV = "SUSHI_DOC_GATE_MODULES"
+# `path[:line:col]: warning|error [CODE]: ...` -- the head line of one diagnostic.
+_DIAGNOSTIC_HEAD = re.compile(
+    r"^(?P<path>[^:\s][^:]*?)(?::\d+:\d+)?: (?:warning|error) \[(?P<code>C[EW]\d{4})\]")
+_DOC_CODE = re.compile(r"^C[EW]70\d\d$")
+# A synthetic module of the runner tests is not in the registry, so the compiler must be
+# told about it. This bootstrap adds it to the registry of ONE compiler process and runs
+# that compiler; only the SUSHI_DOC_GATE_MODULES override uses it.
+_OVERRIDE_BOOTSTRAP = """\
+import json, sys
+from pathlib import Path
+from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
+from sushi_lang.backend.stdlib_linker import StdlibLinker
+for name, path in json.loads(sys.argv[1]).items():
+    SOURCE_STDLIB_MODULES[name] = Path(path)
+    StdlibLinker._virtual_units.add(name)
+sys.argv = ["sushic", *sys.argv[2:]]
+from sushi_lang.compiler import main
+sys.exit(main())
+"""
+
+
+@dataclass
+class DocGateResult:
+    """What the stdlib doc-block gate found, or why it did not run."""
+    modules: List[str] = field(default_factory=list)
+    failures: Dict[str, List[str]] = field(default_factory=dict)
+    skip_reason: Optional[str] = None
+    duration: float = 0.0
+
+    @property
+    def ran(self) -> bool:
+        return self.skip_reason is None
+
+    @property
+    def passed(self) -> bool:
+        return not self.failures
+
+    def as_json(self) -> dict:
+        return {"ran": self.ran, "skip_reason": self.skip_reason,
+                "modules": self.modules, "failures": self.failures,
+                "duration_seconds": round(self.duration, 2)}
+
+    def report(self) -> List[str]:
+        """The lines the text report prints."""
+        if not self.ran:
+            return [f"Stdlib doc-block gate SKIPPED: {self.skip_reason}."]
+        lines = [f"Stdlib doc-block gate: {len(self.modules)} module(s), "
+                 f"{len(self.failures)} failed ({self.duration:.2f}s)"]
+        for name, findings in sorted(self.failures.items()):
+            lines.append(f"  {name}: {len(findings)} finding(s)")
+            lines.extend(f"    {f}" for f in findings)
+        return lines
+
+
+def doc_gate_modules() -> Tuple[Dict[str, Path], bool]:
+    """The modules the doc-block gate checks, and whether they are the test override.
+
+    The default is SOURCE_STDLIB_MODULES. The override is a list of `.sushi` paths
+    separated by `os.pathsep`, each module named `doc_gate/<file stem>`. Only the runner
+    tests set it.
+    """
+    override = os.environ.get(DOC_GATE_MODULES_ENV)
+    if override:
+        paths = [Path(p).resolve() for p in override.split(os.pathsep) if p]
+        return {f"doc_gate/{p.stem}": p for p in paths}, True
+    from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
+    return dict(SOURCE_STDLIB_MODULES), False
+
+
+def _doc_gate_selection(modules: Dict[str, Path], project_root: Path,
+                        filter_pattern: Optional[str], leaks_only: bool
+                        ) -> Tuple[Dict[str, Path], Optional[str]]:
+    """The modules a narrowed run checks, and the skip reason when it checks none.
+
+    A `--filter` selects a module when the pattern is a substring of its registry name
+    or of its path under the project root. `--leaks-only` selects no module, because the
+    gate asserts no leak.
+    """
+    if leaks_only:
+        return {}, "--leaks-only selects no stdlib module"
+    if not filter_pattern:
+        return modules, None
+
+    def spelled(path: Path) -> str:
+        try:
+            return path.resolve().relative_to(project_root.resolve()).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+    chosen = {name: path for name, path in modules.items()
+              if filter_pattern in name or filter_pattern in spelled(path)}
+    if not chosen:
+        return {}, f"--filter {filter_pattern!r} selects no stdlib module"
+    return chosen, None
+
+
+def doc_gate_program(modules: Dict[str, Path]) -> str:
+    """ONE program that imports every module, each behind an alias so no bare name clashes."""
+    uses = [f"use <{name}> as dg_{name.replace('/', '_')}" for name in sorted(modules)]
+    return "\n".join(["##: Imports every module the stdlib doc-block gate checks. :##", "",
+                      *uses, "", "fn main() i32:", "    return Result.Ok(0)", ""])
+
+
+def _doc_findings(output: str, cwd: Path,
+                  modules: Dict[str, Path]) -> Dict[str, List[str]]:
+    """Every doc-pass diagnostic whose location is one of the checked module files.
+
+    The compiler prints a location relative to its working directory, so `cwd` must hold
+    every module file; outside it the compiler prints the bare file name.
+    """
+    owner = {path.resolve(): name for name, path in modules.items()}
+    found: Dict[str, List[str]] = {}
+    for line in output.splitlines():
+        head = _DIAGNOSTIC_HEAD.match(line.strip())
+        if head is None or not _DOC_CODE.match(head["code"]):
+            continue
+        name = owner.get((cwd / head["path"]).resolve())
+        if name is not None:
+            found.setdefault(name, []).append(line.strip())
+    return found
+
+
+def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
+                    leaks_only: bool = False) -> DocGateResult:
+    """Check the doc blocks of every bundled Sushi-source stdlib module (#953).
+
+    The compiler does not lint an injected stdlib unit, and a stdlib module is never
+    built alone. So the gate compiles ONE program that imports every module, with
+    SUSHI_STDLIB_DOC_GATE set: the `docs` pass then checks the bundled units too.
+    """
+    from sushi_lang.semantics.semantic_analyzer import STDLIB_DOC_GATE_ENV
+
+    every, is_override = doc_gate_modules()
+    chosen, skip = _doc_gate_selection(every, project_root, filter_pattern, leaks_only)
+    if skip is not None:
+        return DocGateResult(skip_reason=skip)
+
+    start = time.time()
+    result = DocGateResult(modules=sorted(chosen))
+    with tempfile.TemporaryDirectory(prefix="sushi_doc_gate_") as tmp:
+        program = Path(tmp) / "doc_gate.sushi"
+        program.write_text(doc_gate_program(chosen), encoding="utf-8")
+        flags = ["--warn-missing-docs", str(program), "-o", str(Path(tmp) / "doc_gate"),
+                 "--cache-dir", str(Path(tmp) / "cache")]
+        env = {**os.environ, STDLIB_DOC_GATE_ENV: "1"}
+        cwd = project_root
+        if is_override:
+            command = [sys.executable, "-c", _OVERRIDE_BOOTSTRAP,
+                       json.dumps({n: str(p) for n, p in chosen.items()}), *flags]
+            cwd = Path(os.path.commonpath([p.parent for p in chosen.values()]))
+            env["PYTHONPATH"] = os.pathsep.join(
+                [str(project_root), *filter(None, [env.get("PYTHONPATH")])])
+        else:
+            command = [str(project_root / "sushic"), *flags]
+        try:
+            done = subprocess.run(command, cwd=cwd, capture_output=True,
+                                  text=True, timeout=600, env=env)
+        except subprocess.TimeoutExpired:
+            result.failures["(the gate program)"] = ["the compilation timed out"]
+            result.duration = time.time() - start
+            return result
+    output = done.stdout + done.stderr
+    result.failures.update(_doc_findings(output, cwd, chosen))
+    if done.returncode not in (0, 1):
+        # A program that does not compile is a program whose doc blocks were not all checked.
+        errors = [line.strip() for line in output.splitlines() if " error [" in line]
+        result.failures["(the gate program)"] = [
+            f"the compilation failed with exit {done.returncode}: "
+            f"{errors[0] if errors else 'no diagnostic printed'}"]
+    result.duration = time.time() - start
+    return result
 
 
 def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:

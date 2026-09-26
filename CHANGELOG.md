@@ -436,6 +436,18 @@ All notable changes to Sushi Lang will be documented in this file.
   every module (#934), and the reserved `.slib` header bit `FLAG_SOURCE_COMPRESSED` is kept by a
   whitelist entry with its reason (#938). The dead-code ratchet is empty.
 
+### Changed
+- **Every Sushi stdlib module and `slib-info` carries its doc blocks** (#953): zlib, msgpack,
+  toolchain/slib and collections/iter reach 0 missing blocks, and the design records of
+  `slib-info` move to `docs/design/slib-info.md`.
+
+### Testing
+- **The test runner gates the stdlib doc blocks.** A full run and `--compile-only` compile one
+  program that imports every Sushi-source stdlib module with `--warn-missing-docs` and the internal
+  variable `SUSHI_STDLIB_DOC_GATE=1`, which makes the `docs` pass check the bundled stdlib units too
+  (a user's source library stays unchecked; unset, nothing changes). A missing or malformed block
+  in a stdlib module fails the run.
+
 ### Fixed
 - **A struct that loses its name to an enum no longer cascades at its uses** (#921). A consumer's
   struct refused with CE0006 also gave CE2001, CE2008, CE6104 and CE2106 at every construction,

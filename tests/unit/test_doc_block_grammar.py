@@ -35,10 +35,13 @@ SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchai
 #                                        is to carry one, so the directory is named whole:
 #                                        one module at a time only turned each new doc
 #                                        block into a red gate.
+#   toolchain/src/                    -- the repository's Sushi tools; each declaration
+#                                        carries a doc block like a stdlib one.
 DOC_SOURCES = (
     "tests/docs",
     "tests/libs/helpers/doc_lib.sushi",
     "sushi_lang/sushi_stdlib/src_sushi/",
+    "toolchain/src/",
 )
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry

@@ -57,3 +57,6 @@ Environment variables:
 | tool | source | does |
 |---|---|---|
 | `slib-info` | `src/slib_info.sushi` | print the metadata report of a `.slib` library (`--docs` adds every documentation block, `--color` forces or forbids colour, `--help` explains itself) |
+
+The design of `slib-info` (the report shape, the renderer rules, the error lines) is in
+`docs/design/slib-info.md`.

@@ -1,8 +1,11 @@
-# slib-info: print the metadata report of a .slib library.
-#
-# The report mirrors the Python fallback (print_library_info in
-# sushi_lang/compiler/cli.py) line for line on the success path.
-# Exit codes: 0 report printed or --help answered, 2 usage or read error.
+##:
+The `slib-info` tool: it prints the metadata report of a `.slib` library.
+
+On the success path, the report is the same as the report of the Python fallback
+(`print_library_info` in `sushi_lang/compiler/cli.py`), line for line. The exit code is 0
+for a report or for `--help`, and 2 for a usage error or a read error. The design records
+are in `docs/design/slib-info.md`.
+:##
 
 use <io/fs>
 use <collections/strings>
@@ -10,47 +13,60 @@ use <encoding/msgpack>
 use <sys/env>
 use <toolchain/slib>
 
-# The sixteen-colour palette, and nothing wider. The report has six kinds of thing in it,
-# so 256-colour and truecolor would buy nothing and cost a `COLORTERM` reading; every
-# terminal that does colour at all does these. The Python side spells the same eight in
-# `internals/styling.py`.
+##: The escape that ends a style. :##
 const string ESC_RESET = "\x1b[0m"
+##: The escape for bold text. :##
 const string ESC_BOLD = "\x1b[1m"
+##: The escape for dim text. :##
 const string ESC_DIM = "\x1b[2m"
+##: The escape for italic text. :##
 const string ESC_ITALIC = "\x1b[3m"
+##: The escape for blue text. :##
 const string ESC_BLUE = "\x1b[34m"
+##: The escape for cyan text. :##
 const string ESC_CYAN = "\x1b[36m"
 
-# Opts: what one run was asked for -- the doc blocks, and whether to paint. Every
-# printer takes it by borrow, and it owns its six style strings.
-#
-# The styles are STRINGS and never a branch at the call site, so a painted line and a
-# plain one are written once. That is also what makes R43's constraint hold by
-# construction: strip the escapes from a coloured report and the plain report comes back.
+##:
+The options of one run: the doc blocks, and the six style strings.
+
+Each style is an escape, or `""` in plain mode.
+:##
 struct Opts:
+    ##: True to print the doc blocks. :##
     bool docs
+    ##: The style for bold text. :##
     string bold
+    ##: The style for dim text. :##
     string dim
+    ##: The style for italic text. :##
     string italic
+    ##: The style for a tag keyword. :##
     string blue
+    ##: The style for a parameter name and for inline code. :##
     string cyan
+    ##: The escape that ends a style. It is `""` in plain mode. :##
     string reset
 
-# make_opts: the palette, or six empty strings.
+##:
+Makes the options of a run: the palette, or six empty strings.
+
+- Parameter docs: True to print the doc blocks.
+- Parameter colour: True to print in colour.
+- Returns: The options.
+:##
 fn make_opts(bool docs, bool colour) Opts:
     if (colour):
-        # A constant is unit-level storage and is never moved out of (CE2436), so the
-        # struct takes a value of its own.
         return Result.Ok(Opts(docs, ESC_BOLD.clone(), ESC_DIM.clone(),
                               ESC_ITALIC.clone(), ESC_BLUE.clone(), ESC_CYAN.clone(),
                               ESC_RESET.clone()))
     return Result.Ok(Opts(docs, "", "", "", "", "", ""))
 
-# The manifest is read IN PLACE. A function cannot return a borrow, so no reader hands a
-# subtree back: a printer finds a key with `map_index` and passes `vals[at]` down as a
-# borrow, and only a leaf string is copied. An absent key prints as a Nil value does.
+##:
+Gives the payload of a `Str` value.
 
-# ml_str: the payload of a Str value, empty for any other kind.
+- Parameter v: The value to read.
+- Returns: The string, or `""` for a value of a different kind.
+:##
 fn ml_str(MsgValue v) string:
     match v:
         MsgValue.Str(s) ->
@@ -58,17 +74,32 @@ fn ml_str(MsgValue v) string:
         _ ->
             return Result.Ok("")
 
-# ml_get_str: the Str under a string key, empty when the key is absent or holds another
-# kind.
+##:
+Gives the `Str` value under a string key.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Returns: The string, or `""` when the key is absent or its value is not a `Str`.
+:##
 fn ml_get_str(MsgValue m, string key) string:
     return Result.Ok(map_get_str(m, key)??.realise(""))
 
-# ml_get_bool: the Bool under a string key, false when the key is absent or holds another
-# kind.
+##:
+Gives the `Bool` value under a string key.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Returns: The bool, or false when the key is absent or its value is not a `Bool`.
+:##
 fn ml_get_bool(MsgValue m, string key) bool:
     return Result.Ok(map_get_bool(m, key)??.realise(false))
 
-# ml_len: the element count of an Arr value, 0 for any other kind.
+##:
+Gives the number of elements of an `Arr` value.
+
+- Parameter v: The value to read.
+- Returns: The count, or 0 for a value of a different kind.
+:##
 fn ml_len(MsgValue v) i32:
     match v:
         MsgValue.Arr(items) ->
@@ -76,7 +107,13 @@ fn ml_len(MsgValue v) i32:
         _ ->
             return Result.Ok(0)
 
-# ml_len_at: the element count of the Arr under a string key, 0 when the key is absent.
+##:
+Gives the number of elements of the `Arr` value under a string key.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Returns: The count, or 0 when the key is absent.
+:##
 fn ml_len_at(MsgValue m, string key) i32:
     match m:
         MsgValue.Map(_, vals) ->
@@ -86,7 +123,12 @@ fn ml_len_at(MsgValue m, string key) i32:
         _ ->
             return Result.Ok(0)
 
-# join_strs: the Str elements of an Arr value, joined with ", ".
+##:
+Joins the `Str` elements of an `Arr` value with `", "`.
+
+- Parameter list: The `Arr` value.
+- Returns: The joined text, or `""` for a value that is not an `Arr`.
+:##
 fn join_strs(MsgValue list) string:
     match list:
         MsgValue.Arr(items) ->
@@ -97,7 +139,13 @@ fn join_strs(MsgValue list) string:
         _ ->
             return Result.Ok("")
 
-# join_at: the Str elements of the Arr under a string key, joined with ", ".
+##:
+Joins the `Str` elements of the `Arr` value under a string key with `", "`.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Returns: The joined text, or `""` when the key is absent.
+:##
 fn join_at(MsgValue m, string key) string:
     match m:
         MsgValue.Map(_, vals) ->
@@ -107,8 +155,12 @@ fn join_at(MsgValue m, string key) string:
         _ ->
             return Result.Ok("")
 
-# ml_is_nil: whether a value is the Nil kind. `ml_get_str` gives "" for an absent key
-# and for an empty string alike, so a doc record is tested for Nil before it is read.
+##:
+Tells if a value is `Nil`.
+
+- Parameter v: The value to read.
+- Returns: True for a `Nil` value.
+:##
 fn ml_is_nil(MsgValue v) bool:
     match v:
         MsgValue.Nil() ->
@@ -116,10 +168,14 @@ fn ml_is_nil(MsgValue v) bool:
         _ ->
             return Result.Ok(false)
 
-# to_surface: an interned identity name in the surface `@(...)` spelling a reader is
-# owed. The manifest carries `List<i32>` because a consumer parses that string back, so
-# the spelling is a wire format; angle brackets are never user-visible text. The four
-# rules are the Python side's four, in `display_type_name`.
+##:
+Changes an interned type name to the `@(...)` spelling that a user reads.
+
+The four rules are in `docs/design/slib-info.md` section 5.
+
+- Parameter name: The interned name.
+- Returns: The name in the surface spelling.
+:##
 fn to_surface(string name) string:
     if (not name.contains("<")):
         return Result.Ok(name.clone())
@@ -130,17 +186,27 @@ fn to_surface(string name) string:
     let string opened = name.replace("<", "@(")
     return Result.Ok(opened.replace(">", ")"))
 
-# section: open a section, or answer false when it holds nothing. A section with no
-# members prints no header, and one function is what keeps every section obeying it --
-# and what writes the header's style once.
+##:
+Prints the header of a section, when the section has members.
+
+- Parameter title: The title of the section.
+- Parameter n: The number of members.
+- Parameter o: The options of the run.
+- Returns: False when the section is empty and prints nothing.
+:##
 fn section(string title, i32 n, Opts o) bool:
     if (n == 0):
         return Result.Ok(false)
     println("{o.bold}{title}{o.reset} {o.dim}({n}){o.reset}:")
     return Result.Ok(true)
 
-# mark_at: the mark that opens at `i`, or "". Longest opener first: `**` has to be tried
-# before `*`, or every bold run would read as two empty italics.
+##:
+Finds the Markdown mark that opens at `i`. The longest mark is tried first.
+
+- Parameter line: The line of prose.
+- Parameter i: The index to look at.
+- Returns: The mark, or `""`.
+:##
 fn mark_at(string line, i32 i) string:
     let i32 n = line.len()
     if (i + 2 <= n):
@@ -153,7 +219,13 @@ fn mark_at(string line, i32 i) string:
         return Result.Ok("*")
     return Result.Ok("")
 
-# style_of: the escape a mark asks for.
+##:
+Gives the escape for a Markdown mark.
+
+- Parameter mark: The mark.
+- Parameter o: The options of the run.
+- Returns: The escape.
+:##
 fn style_of(string mark, Opts o) string:
     if (mark == "**"):
         return Result.Ok(o.bold.clone())
@@ -161,7 +233,14 @@ fn style_of(string mark, Opts o) string:
         return Result.Ok(o.cyan.clone())
     return Result.Ok(o.italic.clone())
 
-# close_at: where `mark` next occurs at or after `start`, or -1.
+##:
+Finds the next position of `mark`, at `start` or after it.
+
+- Parameter line: The line of prose.
+- Parameter start: The index where the search starts.
+- Parameter mark: The mark.
+- Returns: The position, or -1.
+:##
 fn close_at(string line, i32 start, string mark) i32:
     let i32 n = line.len()
     let i32 mlen = mark.len()
@@ -172,11 +251,16 @@ fn close_at(string line, i32 start, string mark) i32:
         probe := probe + 1
     return Result.Ok(0 - 1)
 
-# is_span: is this a span, or is it punctuation the author meant literally? A span that
-# does not close is punctuation, and so is an EMPTY one. An emphasis span must also hug
-# its text -- `2 * 3 * 4` is arithmetic and not an italic ` 3 ` -- which is CommonMark's
-# flanking rule in the one form this subset needs. Inline code is exempt, because a code
-# span may legitimately hold spaces.
+##:
+Tells if a mark and its text are a span, or punctuation.
+
+The rules are in `docs/design/slib-info.md` section 6.
+
+- Parameter mark: The mark.
+- Parameter inner: The text between the two marks.
+- Parameter close: The index of the closing mark, or -1.
+- Returns: True for a span.
+:##
 fn is_span(string mark, string inner, i32 close) bool:
     if (close < 0):
         return Result.Ok(false)
@@ -189,12 +273,13 @@ fn is_span(string mark, string inner, i32 close) bool:
         return Result.Ok(false)
     return Result.Ok(true)
 
-# render_inline: one line of prose with its Markdown marks turned into styles (R44).
-#
-# PLAIN mode returns the line untouched, which is R40: a captured report keeps the marks,
-# so it loses no information and `spin_up` still reads as a symbol. The subset is CLOSED:
-# a link, a table, a heading and a nested list print as the author wrote them, which is
-# what every construct outside it has always done.
+##:
+Changes the Markdown marks of one line of prose into styles.
+
+- Parameter line: The line of prose.
+- Parameter o: The options of the run.
+- Returns: The line. In plain mode the line does not change.
+:##
 fn render_inline(string line, Opts o) string:
     if (o.reset == ""):
         return Result.Ok(line.clone())
@@ -222,18 +307,17 @@ fn render_inline(string line, Opts o) string:
                 i := i + mlen
     return Result.Ok(out)
 
-# print_lines: one println per line of `text`, each one indented. A blank line prints
-# EMPTY, so the report carries no trailing whitespace. `.split("\n")` agrees with
-# Python's `str.split("\n")` on every edge case, which is what the parity gate needs.
-#
-# `opener` prefixes the FIRST line only, and every line after it is indented past the
-# opener rather than under it -- the hanging indent a tag needs (R38 rule 3). The text is
-# re-indented and never reflowed (R39): it breaks where the author wrote a newline, which
-# is what keeps a fenced example intact.
-#
-# `opener_width` is the opener's VISIBLE width, which is not its length once it carries
-# escapes: an alignment measured in bytes would indent a coloured continuation by the
-# width of the escapes as well.
+##:
+Prints each line of a text with its indent, and an opener before the first line.
+
+The lines after the first have a hanging indent past the opener.
+
+- Parameter indent: The indent of each line.
+- Parameter text: The text to print.
+- Parameter opener: The text before the first line.
+- Parameter opener_width: The visible width of the opener.
+- Parameter o: The options of the run.
+:##
 fn print_lines(string indent, string text, string opener, i32 opener_width,
                Opts o) ~:
     let string pad = " ".repeat(opener_width)
@@ -251,20 +335,15 @@ fn print_lines(string indent, string text, string opener, i32 opener_width,
                 println("{hang}{line}")
     return Result.Ok(~)
 
-# print_doc_record: one doc record -- the summary, the body, then the tags -- and whether
-# it printed anything.
-#
-# A blank line separates every part from the one above it: the body from the summary, the
-# first tag from the prose (R38 rule 1), and each tag from the last (rule 4). One
-# predicate does all three, because "something is already above me" is the whole
-# condition.
-#
-# The ANSWER is what rule 2 needs: a caller prints a blank line before the next record
-# when this one left a block behind, and nothing extra when it did not.
-#
-# Parameters print in DECLARATION order, read from the owner's own `params` array and
-# looked up by name: a map's wire order is not the signature's order. An owner with no
-# `params` array -- a unit, a struct, a generic type -- renders no parameter line.
+##:
+Prints one doc record: the summary, the body, the tags and the examples.
+
+- Parameter doc: The doc record.
+- Parameter owner: The manifest record of the declaration that the doc record documents.
+- Parameter indent: The indent of each line.
+- Parameter o: The options of the run.
+- Returns: True when the record printed something.
+:##
 fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     if (not o.docs):
         return Result.Ok(false)
@@ -294,14 +373,20 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
             println("")
         print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len(), o)??
         printed := true
-    # An example is the LAST thing a record says: a parameter is a contract and an
-    # example is a demonstration. Its body is CODE, so it is indented rather than hung,
-    # and dim rather than rendered -- a backtick inside a program is a program's own.
     printed := print_examples_at(doc, indent, printed, o)??
     return Result.Ok(printed)
 
-# print_param_tags_at: the `- Parameter` tags of a doc record, in the order of the
-# owner's `params` array, and whether anything is printed above the next part.
+##:
+Prints the `- Parameter` tags of a doc record, in the order of the parameters of the
+owner.
+
+- Parameter owner: The manifest record of the declaration that the doc record documents.
+- Parameter doc: The doc record.
+- Parameter indent: The indent of each line.
+- Parameter printed: True when a part is already above the next part.
+- Parameter o: The options of the run.
+- Returns: True when a part is above the next part.
+:##
 fn print_param_tags_at(MsgValue owner, MsgValue doc, string indent, bool printed,
                        Opts o) bool:
     match owner:
@@ -313,6 +398,16 @@ fn print_param_tags_at(MsgValue owner, MsgValue doc, string indent, bool printed
         _ ->
             return Result.Ok(printed)
 
+##:
+Prints a `- Parameter` tag for each declared parameter that the doc record documents.
+
+- Parameter declared: The `params` array of the owner.
+- Parameter doc: The doc record.
+- Parameter indent: The indent of each line.
+- Parameter printed: True when a part is already above the next part.
+- Parameter o: The options of the run.
+- Returns: True when a part is above the next part.
+:##
 fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed,
                     Opts o) bool:
     match declared:
@@ -333,8 +428,13 @@ fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed
         _ ->
             return Result.Ok(printed)
 
-# param_text: the text of one `- Parameter` tag, read by name from the record's `params`
-# map.
+##:
+Gives the text of one `- Parameter` tag.
+
+- Parameter doc: The doc record.
+- Parameter name: The name of the parameter.
+- Returns: The text, or `""` when the record does not document the parameter.
+:##
 fn param_text(MsgValue doc, string name) string:
     match doc:
         MsgValue.Map(_, vals) ->
@@ -344,6 +444,15 @@ fn param_text(MsgValue doc, string name) string:
         _ ->
             return Result.Ok("")
 
+##:
+Prints the examples of a doc record.
+
+- Parameter doc: The doc record.
+- Parameter indent: The indent of each line.
+- Parameter printed: True when a part is already above the next part.
+- Parameter o: The options of the run.
+- Returns: True when a part is above the next part.
+:##
 fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool:
     match doc:
         MsgValue.Map(_, vals) ->
@@ -353,6 +462,15 @@ fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool:
         _ ->
             return Result.Ok(printed)
 
+##:
+Prints each example: its caption, then its code.
+
+- Parameter examples: The `examples` array.
+- Parameter indent: The indent of each line.
+- Parameter printed: True when a part is already above the next part.
+- Parameter o: The options of the run.
+- Returns: True when a part is above the next part.
+:##
 fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
     match examples:
         MsgValue.Arr(items) ->
@@ -364,7 +482,6 @@ fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
                 if (caption == ""):
                     println("{indent}- {o.blue}Example{o.reset}:")
                 else:
-                    # A caption is a tag's text like any other, so it hangs and it renders.
                     print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
                                 "- Example: ".len(), o)??
                 print_code(indent, ml_get_str(ex, "code")??, o)??
@@ -373,8 +490,13 @@ fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
         _ ->
             return Result.Ok(printed)
 
-# print_code: an example's program, indented four past its tag and dim. Not rendered: a
-# backtick inside a program is a program's own.
+##:
+Prints the code of an example, dim and indented four spaces past its tag.
+
+- Parameter indent: The indent of each line.
+- Parameter code: The code.
+- Parameter o: The options of the run.
+:##
 fn print_code(string indent, string code, Opts o) ~:
     let string[] lines = code.split("\n")
     foreach(line in lines.iter()):
@@ -384,11 +506,27 @@ fn print_code(string indent, string code, Opts o) ~:
             println("{indent}    {o.dim}{line}{o.reset}")
     return Result.Ok(~)
 
-# print_doc: the doc record of one manifest entry, when it carries one.
+##:
+Prints the doc record of one manifest record, when it has one.
+
+- Parameter owner: The manifest record of the declaration that the doc record documents.
+- Parameter indent: The indent of each line.
+- Parameter o: The options of the run.
+- Returns: True when something printed.
+:##
 fn print_doc(MsgValue owner, string indent, Opts o) bool:
     return Result.Ok(print_doc_at(owner, "doc", owner, indent, o)??)
 
-# print_doc_at: the doc record under a string key of `m`, for the declaration `owner`.
+##:
+Prints the doc record under a string key of a map.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Parameter owner: The manifest record of the declaration that the doc record documents.
+- Parameter indent: The indent of each line.
+- Parameter o: The options of the run.
+- Returns: True when something printed.
+:##
 fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) bool:
     match m:
         MsgValue.Map(_, vals) ->
@@ -399,18 +537,24 @@ fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) b
         _ ->
             return Result.Ok(false)
 
-# open_record: the blank line rule 2 puts BEFORE a record whose predecessor left a block
-# behind, never after one -- an after-rule would double with the blank line every section
-# already prints when it closes. A run of bare signatures has no block to close, so it
-# stays as dense as the plain report is. The answer is the caller's new `pending`.
+##:
+Prints the blank line before a record, when the record before it printed a block.
+
+- Parameter pending: True when the record before this one printed a block.
+- Returns: False, the new `pending` value.
+:##
 fn open_record(bool pending) bool:
     if (pending):
         println("")
     return Result.Ok(false)
 
+##:
+Writes the parameter list of a function record, with the receiver mode first.
+
+- Parameter f: The function record.
+- Returns: The parameter list.
+:##
 fn render_params(MsgValue f) string:
-    # A perk method's receiver mode is the record's own field too, and it prints first,
-    # where the declaration wrote it: `(poke self, i32 width)`. Absent, it prints nothing.
     let string head = ml_get_str(f, "self_mode")??
     if (head != ""):
         head := "{head} self"
@@ -422,6 +566,13 @@ fn render_params(MsgValue f) string:
         _ ->
             return Result.Ok(head)
 
+##:
+Writes each parameter of a `params` array after the receiver text.
+
+- Parameter ps: The `params` array.
+- Parameter out: The receiver text, or `""`.
+- Returns: The parameter list.
+:##
 fn render_param_list(MsgValue ps, nom string out) string:
     match ps:
         MsgValue.Arr(items) ->
@@ -431,8 +582,6 @@ fn render_param_list(MsgValue ps, nom string out) string:
             foreach(p in items.iter()):
                 let string t = to_surface(ml_get_str(p, "type")??)??
                 let string pn = ml_get_str(p, "name")??
-                # `nom` is the one mode a TYPE cannot spell, so it comes from the record's
-                # own field. `peek` and `poke` are part of the type string already.
                 let string declared = ml_get_str(p, "mode")??
                 let string mode = ""
                 if (declared == "nom"):
@@ -442,10 +591,13 @@ fn render_param_list(MsgValue ps, nom string out) string:
         _ ->
             return Result.Ok(out)
 
-# render_signature: one function's whole signature, concrete or generic. ONE renderer,
-# so a template prints what a concrete function prints -- a generic used to print
-# `(template)` where its parameters belong, which is why its `- Parameter` tags were
-# stored and never rendered.
+##:
+Writes the signature of one function record, concrete or generic.
+
+- Parameter f: The function record.
+- Parameter o: The options of the run.
+- Returns: The signature.
+:##
 fn render_signature(MsgValue f, Opts o) string:
     let string bare = ml_get_str(f, "name")??
     let string name = "{o.bold}{bare}{o.reset}"
@@ -453,14 +605,19 @@ fn render_signature(MsgValue f, Opts o) string:
     let string params = render_params(f)??
     let string ret = to_surface(ml_get_str(f, "return_type")??)??
     let string err = ml_get_str(f, "error_type")??
-    # The default error type is StdError and a signature that takes it does not say so,
-    # so a record with no `error_type` prints no arm either.
     if (err == ""):
         return Result.Ok("fn {name}{generic}({params}) {ret}")
     let string serr = to_surface(err)??
     return Result.Ok("fn {name}{generic}({params}) {ret} | {serr}")
 
-# print_signatures_at: one section of function records, concrete or generic.
+##:
+Prints one section of function records.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Parameter title: The title of the section.
+- Parameter o: The options of the run.
+:##
 fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~:
     match m:
         MsgValue.Map(_, vals) ->
@@ -471,6 +628,13 @@ fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each function record of an array, with its doc record.
+
+- Parameter funcs: The array of function records.
+- Parameter title: The title of the section.
+- Parameter o: The options of the run.
+:##
 fn print_signatures(MsgValue funcs, string title, Opts o) ~:
     if (not section(title, ml_len(funcs)??, o)??):
         return Result.Ok(~)
@@ -487,6 +651,12 @@ fn print_signatures(MsgValue funcs, string title, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+##:
+Writes the `@(...)` type parameters of a generic record.
+
+- Parameter gf: The generic record.
+- Returns: The text, or `""` when there are none.
+:##
 fn render_type_params(MsgValue gf) string:
     match gf:
         MsgValue.Map(_, vals) ->
@@ -496,6 +666,12 @@ fn render_type_params(MsgValue gf) string:
         _ ->
             return Result.Ok("")
 
+##:
+Writes a `type_params` array as `@(...)`, with the constraints.
+
+- Parameter tps: The `type_params` array.
+- Returns: The text, or `""` for an empty array.
+:##
 fn render_type_param_list(MsgValue tps) string:
     match tps:
         MsgValue.Arr(items) ->
@@ -516,8 +692,15 @@ fn render_type_param_list(MsgValue tps) string:
         _ ->
             return Result.Ok("")
 
-# print_bindings_at: one section of constant or variable records. The two have the
-# same shape and differ by the keyword.
+##:
+Prints one section of constant or variable records.
+
+- Parameter m: The map to read.
+- Parameter key: The key to find.
+- Parameter title: The title of the section.
+- Parameter keyword: The keyword at the start of each line.
+- Parameter o: The options of the run.
+:##
 fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts o) ~:
     match m:
         MsgValue.Map(_, vals) ->
@@ -528,6 +711,14 @@ fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts 
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each constant or variable record of an array, with its doc record.
+
+- Parameter list: The array of records.
+- Parameter title: The title of the section.
+- Parameter keyword: The keyword at the start of each line.
+- Parameter o: The options of the run.
+:##
 fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~:
     if (not section(title, ml_len(list)??, o)??):
         return Result.Ok(~)
@@ -545,7 +736,12 @@ fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# render_named_type_params: the `@(T, U)` suffix of a generic struct or enum record.
+##:
+Writes the `@(T, U)` suffix of a generic struct or enum record.
+
+- Parameter rec: The struct or enum record.
+- Returns: The suffix, or `""`.
+:##
 fn render_named_type_params(MsgValue rec) string:
     if (not ml_get_bool(rec, "is_generic")??):
         return Result.Ok("")
@@ -554,6 +750,12 @@ fn render_named_type_params(MsgValue rec) string:
     let string body = join_at(rec, "type_params")??
     return Result.Ok("@({body})")
 
+##:
+Prints the section of public structs.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_structs(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -564,6 +766,12 @@ fn print_structs(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each struct record, with its doc record and its fields.
+
+- Parameter structs: The array of struct records.
+- Parameter o: The options of the run.
+:##
 fn print_struct_list(MsgValue structs, Opts o) ~:
     if (not section("Public Structs", ml_len(structs)??, o)??):
         return Result.Ok(~)
@@ -575,8 +783,6 @@ fn print_struct_list(MsgValue structs, Opts o) ~:
                 let string name = ml_get_str(s, "name")??
                 let string generic = render_named_type_params(s)??
                 println("  struct {name}{generic}:")
-                # A FIELD is a record too, and the struct's own block is the record above
-                # the first one -- so one flag covers the struct and its members alike.
                 pending := print_doc(s, "    ", o)??
                 pending := print_fields_at(s, pending, o)??
         _ ->
@@ -584,6 +790,14 @@ fn print_struct_list(MsgValue structs, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+##:
+Prints the fields of a struct record.
+
+- Parameter s: The struct record.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_fields_at(MsgValue s, bool pending, Opts o) bool:
     match s:
         MsgValue.Map(_, vals) ->
@@ -593,6 +807,14 @@ fn print_fields_at(MsgValue s, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
+##:
+Prints each field record, with its doc record.
+
+- Parameter fields: The array of field records.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_fields(MsgValue fields, bool pending, Opts o) bool:
     match fields:
         MsgValue.Arr(items) ->
@@ -607,6 +829,12 @@ fn print_fields(MsgValue fields, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
+##:
+Prints the section of public enums.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_enums(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -617,6 +845,12 @@ fn print_enums(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each enum record, with its doc record and its variants.
+
+- Parameter enums: The array of enum records.
+- Parameter o: The options of the run.
+:##
 fn print_enum_list(MsgValue enums, Opts o) ~:
     if (not section("Public Enums", ml_len(enums)??, o)??):
         return Result.Ok(~)
@@ -635,6 +869,14 @@ fn print_enum_list(MsgValue enums, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+##:
+Prints the variants of an enum record.
+
+- Parameter e: The enum record.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
     match e:
         MsgValue.Map(_, vals) ->
@@ -644,6 +886,14 @@ fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
+##:
+Prints each variant record, with its doc record.
+
+- Parameter variants: The array of variant records.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_variants(MsgValue variants, bool pending, Opts o) bool:
     match variants:
         MsgValue.Arr(items) ->
@@ -661,10 +911,15 @@ fn print_variants(MsgValue variants, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
-# print_generic_named: one section of generic structs, or one of generic enums. The two
-# records have the same shape -- a name, its type parameters and its own block -- so they
-# share a printer and differ by the keyword. A generic struct's FIELD blocks are not in
-# the index at all (documentation.md S8, R3), so neither record has members to print.
+##:
+Prints one section of generic structs or of generic enums.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter key: The key to find.
+- Parameter title: The title of the section.
+- Parameter keyword: The keyword at the start of each line.
+- Parameter o: The options of the run.
+:##
 fn print_generic_named(MsgValue templates, string key, string title, string keyword,
                        Opts o) ~:
     match templates:
@@ -676,6 +931,14 @@ fn print_generic_named(MsgValue templates, string key, string title, string keyw
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each generic struct or enum record, with its doc record.
+
+- Parameter list: The array of records.
+- Parameter title: The title of the section.
+- Parameter keyword: The keyword at the start of each line.
+- Parameter o: The options of the run.
+:##
 fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o) ~:
     if (not section(title, ml_len(list)??, o)??):
         return Result.Ok(~)
@@ -693,9 +956,14 @@ fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o)
     println("")
     return Result.Ok(~)
 
-# print_methods: the method records of a perk or an implementation, one signature per
-# line. ONE printer for the contract and its implementations, so a method prints the
-# same way wherever it stands; each method is a record of its own for rule 2's spacing.
+##:
+Prints the method records of a perk or of an implementation.
+
+- Parameter owner: The manifest record of the declaration that the doc record documents.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_methods(MsgValue owner, bool pending, Opts o) bool:
     match owner:
         MsgValue.Map(_, vals) ->
@@ -705,6 +973,14 @@ fn print_methods(MsgValue owner, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
+##:
+Prints each method record, with its doc record.
+
+- Parameter methods: The array of method records.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_method_list(MsgValue methods, bool pending, Opts o) bool:
     match methods:
         MsgValue.Arr(items) ->
@@ -718,9 +994,12 @@ fn print_method_list(MsgValue methods, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
-# print_perks: the contracts a consumer can be asked to satisfy -- every public perk,
-# plus any perk an exported template names -- each with the method signatures that
-# satisfying it means.
+##:
+Prints the section of perks.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter o: The options of the run.
+:##
 fn print_perks(MsgValue templates, Opts o) ~:
     match templates:
         MsgValue.Map(_, vals) ->
@@ -731,6 +1010,12 @@ fn print_perks(MsgValue templates, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each perk record, with its doc record and its methods.
+
+- Parameter perks: The array of perk records.
+- Parameter o: The options of the run.
+:##
 fn print_perk_list(MsgValue perks, Opts o) ~:
     if (not section("Perks", ml_len(perks)??, o)??):
         return Result.Ok(~)
@@ -748,9 +1033,12 @@ fn print_perk_list(MsgValue perks, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# render_impl_target: an implementation's target -- `Gadget`, or `Box@(T)` for a
-# generic-target template, whose record carries the base name and the parameters as
-# written, so the header is rebuilt here and never parsed out of the source slice.
+##:
+Writes the target of an implementation record, for example `Box@(T)`.
+
+- Parameter r: The implementation record.
+- Returns: The target.
+:##
 fn render_impl_target(MsgValue r) string:
     let string target = to_surface(ml_get_str(r, "type")??)??
     if (ml_len_at(r, "type_args")?? == 0):
@@ -758,7 +1046,15 @@ fn render_impl_target(MsgValue r) string:
     let string body = join_at(r, "type_args")??
     return Result.Ok("{target}@({body})")
 
-# print_impls_at: one list of implementation records, concrete or template.
+##:
+Prints one array of implementation records.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter key: The key to find.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool:
     match templates:
         MsgValue.Map(_, vals) ->
@@ -768,6 +1064,14 @@ fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
+##:
+Prints each implementation record, with its doc record and its methods.
+
+- Parameter impls: The array of implementation records.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
 fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
     match impls:
         MsgValue.Arr(items) ->
@@ -775,7 +1079,6 @@ fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
             foreach(r in items.iter()):
                 p := open_record(p)??
                 let string target = render_impl_target(r)??
-                # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
                 let string contract = ml_get_str(r, "perk")??
                 println("  extend {target} with {contract}:")
                 p := print_doc(r, "    ", o)??
@@ -784,9 +1087,12 @@ fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
         _ ->
             return Result.Ok(pending)
 
-# print_perk_impls: which types satisfy which contract -- the concrete implementations,
-# then the generic-target templates, in ONE section: a reader asking "who implements
-# Show" wants one list, and `extend Box@(T) with Show` answers for every `Box`.
+##:
+Prints the concrete and the generic-target implementations of perks, in one section.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter o: The options of the run.
+:##
 fn print_perk_impls(MsgValue templates, Opts o) ~:
     let i32 concrete_n = ml_len_at(templates, "perk_impls")??
     let i32 generic_n = ml_len_at(templates, "generic_perk_impls")??
@@ -798,9 +1104,12 @@ fn print_perk_impls(MsgValue templates, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# print_foreign_extensions: the types this library claims methods on and does
-# not declare -- the consumer's half of CW3003. The key is absent for a library
-# that extends only what it declares, and then the section prints nothing.
+##:
+Prints the section of the types that the library extends and does not declare.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_foreign_extensions(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -811,6 +1120,12 @@ fn print_foreign_extensions(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each foreign extension record.
+
+- Parameter claims: The array of foreign extension records.
+- Parameter o: The options of the run.
+:##
 fn print_foreign_list(MsgValue claims, Opts o) ~:
     if (not section("Foreign Extensions", ml_len(claims)??, o)??):
         return Result.Ok(~)
@@ -825,7 +1140,12 @@ fn print_foreign_list(MsgValue claims, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# print_units: the unit index a v4 library carries.
+##:
+Prints the section of the units that the library holds.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_units(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -836,6 +1156,13 @@ fn print_units(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each unit name, with its doc record.
+
+- Parameter units: The array of unit names.
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~:
     if (not section("Units", ml_len(units)??, o)??):
         return Result.Ok(~)
@@ -852,7 +1179,14 @@ fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# print_unit_doc: the doc record of one unit, read by name from the `unit_docs` map.
+##:
+Prints the doc record of one unit from the `unit_docs` map.
+
+- Parameter meta: The metadata map.
+- Parameter name: The name of the unit.
+- Parameter o: The options of the run.
+- Returns: True when something printed.
+:##
 fn print_unit_doc(MsgValue meta, string name, Opts o) bool:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -863,10 +1197,12 @@ fn print_unit_doc(MsgValue meta, string name, Opts o) bool:
         _ ->
             return Result.Ok(false)
 
-# print_reexports: what each unit hands on (#585). One record per `public use`,
-# rendered as the statement that produced it: a unit target is quoted, and a stdlib
-# or library target is angled. The key is absent for a library that re-exports
-# nothing, and then the section prints nothing.
+##:
+Prints the section of re-exports.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_reexports(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -877,6 +1213,12 @@ fn print_reexports(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each re-export record as the `public use` statement that made it.
+
+- Parameter records: The array of re-export records.
+- Parameter o: The options of the run.
+:##
 fn print_reexport_list(MsgValue records, Opts o) ~:
     if (not section("Re-exports", ml_len(records)??, o)??):
         return Result.Ok(~)
@@ -895,6 +1237,12 @@ fn print_reexport_list(MsgValue records, Opts o) ~:
     println("")
     return Result.Ok(~)
 
+##:
+Prints the section of dependencies.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_dependencies(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -905,6 +1253,12 @@ fn print_dependencies(MsgValue meta, Opts o) ~:
             return Result.Ok(~)
     return Result.Ok(~)
 
+##:
+Prints each dependency.
+
+- Parameter deps: The array of dependency names.
+- Parameter o: The options of the run.
+:##
 fn print_dependency_list(MsgValue deps, Opts o) ~:
     if (not section("Dependencies", ml_len(deps)??, o)??):
         return Result.Ok(~)
@@ -918,8 +1272,13 @@ fn print_dependency_list(MsgValue deps, Opts o) ~:
     println("")
     return Result.Ok(~)
 
-# print_declarations: every declaration section, in the order of the report. `templates`
-# is the `templates` map, or Nil when the library carries none.
+##:
+Prints each declaration section, in the order of the report.
+
+- Parameter meta: The metadata map.
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter o: The options of the run.
+:##
 fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_signatures_at(meta, "public_functions", "Public Functions", o)??
     print_signatures_at(templates, "generic_functions", "Generic Functions", o)??
@@ -934,6 +1293,12 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_foreign_extensions(meta, o)??
     return Result.Ok(~)
 
+##:
+Prints each declaration section, with the `templates` map when the library has one.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
 fn print_declarations_at(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
@@ -944,7 +1309,12 @@ fn print_declarations_at(MsgValue meta, Opts o) ~:
             print_declarations(meta, MsgValue.Nil(), o)??
     return Result.Ok(~)
 
-# group_thousands: render a u64 with comma separators, as Python's {n:,}.
+##:
+Writes an integer with comma separators, as the Python `{n:,}` does.
+
+- Parameter n: The integer.
+- Returns: The text.
+:##
 fn group_thousands(u64 n) string:
     if (n < 1000):
         return Result.Ok("{n}")
@@ -957,10 +1327,15 @@ fn group_thousands(u64 n) string:
         return Result.Ok("{hs},0{tail}")
     return Result.Ok("{hs},{tail}")
 
-# print_report: the header block, then one section per declaration kind, then
-# the size of every payload section the kind actually has. A field that the kind
-# makes meaningless does not print: a source library has no platform, and a
-# binary one has no source.
+##:
+Prints the whole report: the header, the sections, then the payload sizes.
+
+A field that the kind of the library makes meaningless does not print.
+
+- Parameter meta: The metadata map.
+- Parameter sizes: The lengths of the payload sections.
+- Parameter o: The options of the run.
+:##
 fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     let string libname = ml_get_str(meta, "library_name")??
     let string libver = ml_get_str(meta, "library_version")??
@@ -993,8 +1368,12 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
         println("Bitcode: {o.dim}{bc}{o.reset} bytes")
     return Result.Ok(~)
 
-# io_cause: the words for an I/O error. The Python fallback of `sushic --lib-info` maps
-# errno to the same words, so both halves print the same line.
+##:
+Gives the words for an I/O error. The Python fallback gives the same words.
+
+- Parameter e: The error.
+- Returns: The words.
+:##
 fn io_cause(IoError e) string:
     match e:
         IoError.NotFound -> return Result.Ok("file not found")
@@ -1006,6 +1385,12 @@ fn io_cause(IoError e) string:
         IoError.InvalidInput -> return Result.Ok("invalid path")
         _ -> return Result.Ok("input/output error")
 
+##:
+Prints the error line for a library that the tool cannot read.
+
+- Parameter path: The path of the library.
+- Parameter e: The error.
+:##
 fn print_read_error(string path, SlibError e) ~:
     match e:
         SlibError.Io(IoError.NotFound) ->
@@ -1022,12 +1407,10 @@ fn print_read_error(string path, SlibError e) ~:
             stderr.write("Error: {path} carries metadata that does not decode\n")
     return Result.Ok(~)
 
-# USAGE: the one spelling of the summary line, printed by --help and by every usage
-# error. Two spellings drift the moment one of them is edited.
+##: The summary line of the command, for `--help` and for each usage error. :##
 const string USAGE = "usage: slib-info [--docs] [--color=WHEN] <file.slib>"
 
-# print_help: what the tool is and what it takes. Goes to stdout and exits 0, because
-# help that was asked for is an answer and not an error.
+##: Prints the help text to stdout. :##
 fn print_help() ~:
     println(USAGE)
     println("")
@@ -1042,11 +1425,23 @@ fn print_help() ~:
     println("CLICOLOR_FORCE, then TERM=dumb, then whether stdout is a terminal.")
     return Result.Ok(~)
 
+##:
+Prints a usage error and the summary line to stderr.
+
+- Parameter message: The error message.
+:##
 fn print_usage_error(string message) ~:
     stderr.write("Error: {message}\n")
     stderr.write("{USAGE}\n")
     return Result.Ok(~)
 
+##:
+Reads a library and prints its report.
+
+- Parameter path: The path of the library.
+- Parameter o: The options of the run.
+- Returns: The exit code: 0 for a report, 2 for a read error.
+:##
 fn report(string path, Opts o) i32:
     match read_metadata(path):
         Result.Ok(meta) ->
@@ -1061,11 +1456,12 @@ fn report(string path, Opts o) i32:
             print_read_error(path, e)??
             return Result.Ok(2)
 
-# run_tool: the command line, in one pass. A flag is a flag wherever it stands, and the
-# one bare word is the path. `--help` is answered the moment it is seen, so it wins over
-# whatever else was typed.
-# env_is_set: is this variable in the environment at all? `NO_COLOR` and `CLICOLOR_FORCE`
-# both answer to their PRESENCE, so the empty string is a value and not an absence.
+##:
+Tells if an environment variable is set. An empty value is set.
+
+- Parameter name: The name of the variable.
+- Returns: True when the variable is set.
+:##
 fn env_is_set(string name) bool:
     match getenv(name):
         Maybe.Some(_) ->
@@ -1073,8 +1469,12 @@ fn env_is_set(string name) bool:
         Maybe.None() ->
             return Result.Ok(false)
 
-# env_value: what the variable says, or "" when it is not set. Read it beside
-# `env_is_set` when the difference matters.
+##:
+Gives the value of an environment variable.
+
+- Parameter name: The name of the variable.
+- Returns: The value, or `""` when the variable is not set.
+:##
 fn env_value(string name) string:
     match getenv(name):
         Maybe.Some(v) ->
@@ -1082,16 +1482,17 @@ fn env_value(string name) string:
         Maybe.None() ->
             return Result.Ok("")
 
-# want_colour: THE colour decision, in the order R41 gives it -- the same five rungs the
-# compiler applies in `internals/styling.py`. Two answers to one question is the drift
-# every one-seam rule in this project exists to stop.
+##:
+Makes the colour decision, with the five rungs of the colour ladder.
+
+- Parameter choice: The value of `--color`: `always`, `never` or `auto`.
+- Returns: True to print in colour.
+:##
 fn want_colour(string choice) bool:
     if (choice == "always"):
         return Result.Ok(true)
     if (choice == "never"):
         return Result.Ok(false)
-    # no-color.org's rule: the variable's PRESENCE is the signal, never its value, so an
-    # empty NO_COLOR still turns colour off.
     if (env_is_set("NO_COLOR")??):
         return Result.Ok(false)
     if (env_is_set("CLICOLOR_FORCE")??):
@@ -1101,6 +1502,15 @@ fn want_colour(string choice) bool:
         return Result.Ok(false)
     return Result.Ok(stdout.is_terminal())
 
+##:
+Reads the command line in one pass, then prints the report or the help.
+
+A flag can be in each position, and the one bare word is the path. `--help` wins over
+each other word.
+
+- Parameter args: The command line. The first element is the name of the program.
+- Returns: The exit code: 0 for a report or the help, 2 for a usage error or a read error.
+:##
 fn run_tool(peek string[] args) i32:
     let string path = ""
     let bool show_docs = false
