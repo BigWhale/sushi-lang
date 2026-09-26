@@ -1,15 +1,11 @@
 """Random module for Sushi standard library."""
 from __future__ import annotations
-import typing
 from typing import Dict
 
 from llvmlite import ir
 
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.signatures import Signature, params_of
-
-if typing.TYPE_CHECKING:
-    from sushi_lang.semantics.typesys import Type
 
 
 # The ONE spelling of what each `<random>` function takes and answers (#827).
@@ -19,19 +15,6 @@ RANDOM_SIGNATURES: Dict[str, Signature] = {
     'srand':      Signature(params_of(BuiltinType.U64), bare=BuiltinType.BLANK),
     'rand_f64':   Signature(bare=BuiltinType.F64),
 }
-
-
-def is_builtin_random_function(name: str) -> bool:
-    """Check if name is a built-in random module function."""
-    return name in RANDOM_SIGNATURES
-
-
-def get_builtin_random_function_return_type(name: str) -> Type:
-    """The declared return type, from the row."""
-    sig = RANDOM_SIGNATURES.get(name)
-    if sig is None:
-        raise ValueError(f"Unknown random function: {name}")
-    return sig.return_type()
 
 
 def generate_module_ir() -> ir.Module:

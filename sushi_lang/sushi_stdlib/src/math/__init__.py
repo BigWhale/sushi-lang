@@ -70,12 +70,16 @@ def get_builtin_math_constant_value(name: str) -> tuple[str, float]:
     return constants[name]
 
 
-def get_builtin_math_function_return_type(name: str, param_types: list[Type]) -> Type:
-    """The declared return type, from the row (a family answers its argument type)."""
+def get_builtin_math_function_return_type(name: str,
+                                          param_types: list[Type]) -> Optional[Type]:
+    """The declared return type, from the row.
+
+    A family answers the row of its first argument's type, and None when that type has
+    no row: the refused call has no type, so its receiver adds no second fault (#907).
+    """
     if name in MATH_FAMILIES:
-        if not param_types:
-            raise TypeError(f"{name} requires at least one parameter")
-        return param_types[0]
+        row = family_row(name, param_types[0]) if param_types else None
+        return row.return_type() if row is not None else None
     sig = MATH_SIGNATURES.get(name)
     if sig is None:
         raise ValueError(f"Unknown math function: {name}")

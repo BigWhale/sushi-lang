@@ -1,0 +1,9 @@
+# A math family call with refused arguments has no type of its own, so the
+# declaration that receives it reports nothing more (#907).
+# EXPECT_ERROR_CODE: CE2006
+use <math>
+
+fn main() i32:
+    let f64 a = max("a", "b")
+    println("{a}")
+    return Result.Ok(0)

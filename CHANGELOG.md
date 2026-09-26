@@ -428,6 +428,13 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A refused `<math>` family call is one diagnostic** (#907). `let f64 a = max("a", "b")` gave
+  the two argument errors (CE2006) and a cascade CE2002, because the return type was the first
+  argument's type whether or not the family takes it. The resolver answers no type now, and the
+  two inference sites read the resolver instead of their own copy of the rule.
+- **Constraint and arity diagnostics print in source order** (#899). The monomorphizer walked its
+  instantiations as a hash set, so two CE4006 / CE2090 / CE2062 diagnostics changed order with
+  `PYTHONHASHSEED`. It walks them in the order of their first site now.
 - **`tanh`, `sinh`, `cosh` and `hypot` give the C library's value** (#905). `tanh(1000.0)` was
   `nan`, `hypot(1e200, 1e200)` was `inf` and `sinh(1e-20)` was `0`: the generators computed the
   textbook formulas in IR, and the intermediate values overflowed or cancelled. The four
@@ -1274,6 +1281,14 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **One string search skeleton** (#909). `contains`, `find`, `count` and `find_last` were four
+  copies of one byte loop; they are one emitter with hooks now. `count("")` stays `0`. The IR is
+  byte-identical.
+- **One forwarder for the libc math functions** (#906). `asin`, `acos`, `atan` and `atan2` go
+  through `_forward_f64`, as `sinh`, `cosh`, `tanh` and `hypot` do. The IR is byte-identical.
+- **The stdlib registry reads the signature rows** (#908). The hand-shaped `common_names` table,
+  the per-module special case and the reflective wrapper lookup are gone; a gate checks that every
+  generated `sushi_*` function has a row.
 - **The dead code in the stdlib generators is deleted** (#915). 13 unused libc declarations, the
   array-type matchers, the whole `type_converters` module, the unused type getters and IR
   builders, three string intrinsic declarations and `build.create_module`: 444 lines. The

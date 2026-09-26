@@ -1,0 +1,9 @@
+# `abs` takes no unsigned and no string: a refused first argument gives the
+# declaration no type to refuse (#907).
+# EXPECT_ERROR_CODE: CE2006
+use <math>
+
+fn main() i32:
+    let i32 a = abs("x")
+    println("{a}")
+    return Result.Ok(0)

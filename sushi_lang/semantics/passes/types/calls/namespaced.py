@@ -293,12 +293,12 @@ def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
     if not math_module.is_builtin_math_function(binding.name):
         return None
     if binding.name in {"abs", "min", "max"}:
-        for arg in node.args:
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None:
-                node.inferred_return_type = arg_type
-                return arg_type
-        return None
+        arg_types = [validator.infer_expression_type(arg) for arg in node.args]
+        answer = math_module.get_builtin_math_function_return_type(
+            binding.name, [ty for ty in arg_types if ty is not None])
+        if answer is not None:
+            node.inferred_return_type = answer
+        return answer
     from sushi_lang.semantics.typesys import BuiltinType
     node.inferred_return_type = BuiltinType.F64
     return BuiltinType.F64

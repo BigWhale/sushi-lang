@@ -80,25 +80,21 @@ def test_no_reader_spells_a_stdlib_function_name(path):
 
 @pytest.mark.parametrize("module_path", sorted(REGISTRY_MODULES))
 def test_a_registry_module_reads_its_own_table(module_path):
-    import importlib
+    from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
-    python_path, short = REGISTRY_MODULES[module_path]
-    module = importlib.import_module(python_path)
+    _python_path, short = REGISTRY_MODULES[module_path]
     table = signature_tables()[module_path]
-    checker = getattr(module, f"is_builtin_{short}_function")
-    returns = getattr(module, f"get_builtin_{short}_function_return_type")
+    registry = get_stdlib_registry()
     specs = _get_param_specs()
 
     assert table
     for name, sig in table.items():
-        assert checker(name)
-        if short == "math":
-            assert returns(name, [param.ty for param in sig.params]) == sig.return_type()
-        else:
-            assert returns(name) == sig.return_type()
+        record = registry.get_function(module_path, name)
+        assert record is not None and not record.is_constant
+        assert record.get_return_type([param.ty for param in sig.params]) == sig.return_type()
         assert specs[(short, name)] == [param.ty for param in sig.params]
         assert stdlib_signature(module_path, name) is sig
-    assert not checker("mostly_harmless")
+    assert registry.get_function(module_path, "mostly_harmless") is None
 
 
 def _generated_rows():
@@ -133,6 +129,63 @@ def test_every_row_declares_the_function_its_generator_built():
         assert str(llvm_function_type(sig)) == str(generated[symbol]), symbol
         checked += 1
     assert checked >= 50
+
+
+# Every registry module's generator, and the prefix its generated symbols carry.
+GENERATORS = {
+    "time": ("sushi_lang.sushi_stdlib.src.time", "sushi_"),
+    "sys/env": ("sushi_lang.sushi_stdlib.src.sys.env", "sushi_"),
+    "sys/process": ("sushi_lang.sushi_stdlib.src.sys.process", "sushi_"),
+    "math": ("sushi_lang.sushi_stdlib.src.math", "sushi_"),
+    "random": ("sushi_lang.sushi_stdlib.src.random", "sushi_"),
+    "io/files": ("sushi_lang.sushi_stdlib.src.io.files", "sushi_io_files_"),
+    "net/socket": ("sushi_lang.sushi_stdlib.src.net", "sushi_net_"),
+}
+
+
+def _row_symbols(module_path: str, prefix: str) -> set[str]:
+    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
+
+    symbols = {f"{prefix}{name}" for name in signature_tables()[module_path]}
+    if module_path == "math":
+        symbols |= {f"{prefix}{name}_{ty}"
+                    for name, (_arity, types) in MATH_FAMILIES.items() for ty in types}
+    return symbols
+
+
+def _rowless(module_path: str, module) -> list[str]:
+    """The functions a generated module DEFINES that no row names."""
+    _python_path, prefix = GENERATORS[module_path]
+    defined = {f.name for f in module.functions if not f.is_declaration}
+    return sorted(defined - _row_symbols(module_path, prefix))
+
+
+def test_every_registry_module_has_a_generator():
+    assert set(GENERATORS) == set(signature_tables())
+
+
+@pytest.mark.parametrize("module_path", sorted(GENERATORS))
+def test_every_generated_function_has_a_row(module_path):
+    """The missing direction: a generated function no row names cannot be called."""
+    import importlib
+
+    module = importlib.import_module(GENERATORS[module_path][0]).generate_module_ir()
+    assert [f for f in module.functions if not f.is_declaration]
+    assert not _rowless(module_path, module), (
+        f"{module_path} generates functions with no row: {_rowless(module_path, module)}")
+
+
+def test_a_generated_function_with_no_row_is_found():
+    """The control: a function the generator adds and no row names is reported."""
+    import importlib
+
+    from llvmlite import ir
+
+    module = importlib.import_module(GENERATORS["time"][0]).generate_module_ir()
+    orphan = ir.Function(module, ir.FunctionType(ir.VoidType(), []), "sushi_mostly_harmless")
+    orphan.append_basic_block().name = "entry"
+    ir.IRBuilder(orphan.blocks[0]).ret_void()
+    assert _rowless("time", module) == ["sushi_mostly_harmless"]
 
 
 def test_a_math_family_row_is_one_type_throughout():

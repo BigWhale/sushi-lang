@@ -10,6 +10,8 @@ from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.type_predicates import is_abstract_type
 from sushi_lang.semantics.type_resolution import TypeResolver
 
+from .order import types_in_site_order
+
 
 class MonomorphizationDepthExceeded(Exception):
     """Raised when a generic type nests without bound during monomorphization."""
@@ -35,7 +37,8 @@ class TypeMonomorphizer:
 
         concrete_enums: Dict[str, EnumType] = {}
 
-        for base_name, type_args in instantiations:
+        for base_name, type_args in types_in_site_order(
+                instantiations, self.monomorphizer.sites):
             if base_name not in generic_enums:
                 continue
 
@@ -132,7 +135,8 @@ class TypeMonomorphizer:
 
         concrete_structs: Dict[str, StructType] = {}
 
-        for base_name, type_args in instantiations:
+        for base_name, type_args in types_in_site_order(
+                instantiations, self.monomorphizer.sites):
             if base_name not in generic_structs:
                 continue
 
