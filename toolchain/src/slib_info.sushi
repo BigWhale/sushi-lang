@@ -1148,6 +1148,9 @@ fn run_tool(peek string[] args) i32:
 
 fn main(string[] args) i32:
     if (args.len() > 0):
-        let i32 r = run_tool(peek args).realise(99)
-        return Result.Ok(r)
+        match run_tool(peek args):
+            Result.Ok(r) -> return Result.Ok(r)
+            Result.Err(_) ->
+                stderr.write("Error: internal: the tool stopped on an unexpected StdError\n")
+                return Result.Ok(2)
     return Result.Ok(2)
