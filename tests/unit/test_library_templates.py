@@ -16,13 +16,9 @@ from sushi_lang.semantics.passes.collect import (
 from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.semantics.library_templates import (
     serialize_generic_function,
-    deserialize_generic_function,
     serialize_perk,
-    deserialize_perk,
     serialize_generic_struct,
-    deserialize_generic_struct,
     serialize_generic_enum,
-    deserialize_generic_enum,
     serialize_perk_impl,
     deserialize_perk_impl,
     impl_method_symbol,
@@ -121,7 +117,6 @@ def test_round_trip_structural_equality():
     direct = _collect_generic(orig_program, "max")
 
     record = serialize_generic_function(orig_program.functions[0], MAX_SRC)
-    rebuilt_func = deserialize_generic_function(record)
 
     # Wrap the rebuilt FuncDef back into a Program and collect it.
     rebuilt_program, _ = parse_to_ast(record["source"])
@@ -149,9 +144,6 @@ def test_round_trip_structural_equality():
     direct_stmts = [type(s).__name__ for s in direct.body.statements]
     rebuilt_stmts = [type(s).__name__ for s in rebuilt.body.statements]
     assert rebuilt_stmts == direct_stmts
-
-    # The standalone deserialize path returns the same single FuncDef.
-    assert rebuilt_func.name == "max"
 
 
 def test_closure_check_accepts_self_contained_generic(tmp_path):
@@ -211,7 +203,7 @@ PACK_SRC = (
 
 
 def test_pack_type_param_carries_is_pack_across_round_trip():
-    """Phase 3 (G2): a '...Ts' type-pack survives serialize -> deserialize."""
+    """Phase 3 (G2): the record of a '...Ts' type pack carries `is_pack`."""
     program, _ = parse_to_ast(PACK_SRC)
     func = next(f for f in program.functions if f.name == "show_all")
 
@@ -219,11 +211,6 @@ def test_pack_type_param_carries_is_pack_across_round_trip():
     assert record["type_params"] == [
         {"name": "Ts", "constraints": ["Display"], "is_pack": True}
     ]
-
-    rebuilt = deserialize_generic_function(record)
-    assert rebuilt.type_params[-1].is_pack is True
-    # The value pack parameter ('...Ts args') is reconstructed as a pack too.
-    assert rebuilt.params[-1].is_pack is True
 
 
 def test_v2_pack_public_function_allowed_as_template(tmp_path):
@@ -383,17 +370,6 @@ def test_serialize_perk_record_shape():
     assert "extend" not in record["source"]
 
 
-def test_perk_round_trip_reparses_to_single_perk():
-    """serialize_perk -> deserialize_perk yields the same PerkDef contract."""
-    program, _ = parse_to_ast(PERK_SRC)
-    record = serialize_perk(program.perks[0], PERK_SRC)
-
-    rebuilt = deserialize_perk(record)
-
-    assert rebuilt.name == "Ord"
-    assert [m.name for m in rebuilt.methods] == ["gt"]
-
-
 def test_extract_templates_ships_only_referenced_perks(tmp_path):
     """Only perks named by an exported generic's constraints are shipped."""
     from sushi_lang.backend.library_manifest import LibraryManifestGenerator
@@ -409,10 +385,6 @@ def test_extract_templates_ships_only_referenced_perks(tmp_path):
     assert perk_names == ["Ord"]
     # This library defines no `extend ... with` blocks, so nothing ships.
     assert templates["perk_impls"] == []
-    # The shipped perk round-trips back to its contract.
-    rebuilt = deserialize_perk(templates["perks"][0])
-    assert rebuilt.name == "Ord"
-    assert [m.name for m in rebuilt.methods] == ["gt"]
 
 
 def test_extract_templates_perks_empty_without_constrained_generics(tmp_path):
@@ -526,30 +498,6 @@ def test_serialize_generic_struct_record_shape():
     assert record["free_perks"] == ["Ord"]
     assert record["source"].startswith("struct Ranked@(T: Ord)")
     assert record["source"].endswith("\n")
-
-
-def test_generic_struct_round_trip_structural_equality():
-    """The struct source slice re-parses into a structurally identical struct."""
-    program, _ = parse_to_ast(BOX_SRC)
-    struct = program.structs[0]
-
-    rebuilt = deserialize_generic_struct(serialize_generic_struct(struct, BOX_SRC))
-
-    assert rebuilt.name == "Box"
-    assert [tp.name for tp in rebuilt.type_params] == ["T"]
-    assert [f.name for f in rebuilt.fields] == ["value"]
-
-
-def test_generic_enum_round_trip_structural_equality():
-    """The enum source slice re-parses into a structurally identical enum."""
-    program, _ = parse_to_ast(OPT_SRC)
-    enum = program.enums[0]
-
-    rebuilt = deserialize_generic_enum(serialize_generic_enum(enum, OPT_SRC))
-
-    assert rebuilt.name == "Opt"
-    assert [tp.name for tp in rebuilt.type_params] == ["T"]
-    assert [v.name for v in rebuilt.variants] == ["Nope", "Yep"]
 
 
 def test_generic_types_route_to_templates_only(tmp_path):

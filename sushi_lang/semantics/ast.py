@@ -565,7 +565,6 @@ class Match(Stmt):
     # which is what makes a `nom` payload binding legal on it. A temporary scrutinee is
     # owned by construction and needs no marker.
     consumes_scrutinee: bool = False
-    consumes_span: Optional[Span] = None
     # The typecheck pass refused the arms as not exhaustive (CE2040 / CE2074, #886).
     not_exhaustive: bool = False
 
@@ -848,7 +847,6 @@ class TryExpr(Node):
     inferred_unwrapped_type: "Optional[Type]" = None
     inferred_success_tag: "Optional[int]" = None
     inferred_error_type: "Optional[Type]" = None
-    inferred_error_tag: "Optional[int]" = None
     inferred_func_return_type: "Optional[Type]" = None
 
 @dataclass(slots=True)

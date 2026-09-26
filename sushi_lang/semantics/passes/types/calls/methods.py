@@ -97,7 +97,6 @@ RESOLUTION_REPORTED = object()
 class ResolvedMethod:
     """A user-written method a receiver answers to, and which table answered."""
     method: object
-    is_perk: bool
 
 
 def resolve_extension_method(validator: 'TypeValidator', receiver_type,
@@ -157,7 +156,7 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
     if not static:
         perk_method = validator.perk_impl_table.get_method(receiver_type, method_name)
         if perk_method is not None:
-            return ResolvedMethod(method=perk_method, is_perk=True)
+            return ResolvedMethod(method=perk_method)
 
     method = resolve_extension_method(validator, receiver_type, method_name,
                                       call=call, report=report, static=static)
@@ -165,7 +164,7 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
         return RESOLUTION_REPORTED
     if method is None:
         return None
-    return ResolvedMethod(method=method, is_perk=False)
+    return ResolvedMethod(method=method)
 
 
 def _find_method_generic_template(validator: 'TypeValidator', receiver_type,

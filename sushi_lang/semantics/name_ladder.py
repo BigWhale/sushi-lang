@@ -87,9 +87,3 @@ def classify(name: str, rungs: Rungs) -> BareName:
     if rungs.is_type(name):
         return BareName.TYPE
     return BareName.NOTHING
-
-
-# The rungs that are not a value. A name at one of them is declared, so "undeclared
-# identifier" is the wrong word for it, and a pass that walks an expression has to say
-# what the name IS instead of falling through to the back end.
-NOT_A_VALUE: frozenset[BareName] = frozenset({BareName.NAMESPACE, BareName.TYPE})
