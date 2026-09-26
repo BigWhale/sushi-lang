@@ -427,6 +427,15 @@ All notable changes to Sushi Lang will be documented in this file.
   `slib-info` tool change together, and `--docs` prints a perk method's block under its
   signature, which the record could not carry before.
 
+### Changed
+- **`foreach` replaces the counter loops of the Sushi stdlib and of `slib-info`** (#949, #950),
+  where the bound cannot fall below the start. A loop whose body does not read its counter stays a
+  `while` loop (#968).
+- **The file errno table reads `ENAMETOOLONG` and `ELOOP` from the platform module** (#937); the
+  values are no longer written twice. The 16 libc declarations no emitter called are removed from
+  every module (#934), and the reserved `.slib` header bit `FLAG_SOURCE_COMPRESSED` is kept by a
+  whitelist entry with its reason (#938). The dead-code ratchet is empty.
+
 ### Fixed
 - **Every string-method allocation is checked** (#964). The 23 string-method sites that allocated
   with a bare `malloc` go through the checked seam (RE2021 on failure), and every `Maybe` tag of
