@@ -205,38 +205,6 @@ class FormattingOperations:
 
         return self.codegen.builder.select(bool_value, true_str, false_str)
 
-    def emit_character_case_conversion(self, char_value: ir.Value, to_upper: bool) -> ir.Value:
-        """Generate toupper/tolower call for character case conversion."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        if to_upper:
-            if self.codegen.runtime.libc_ctype.toupper is None:
-                raise_internal_error("CE0013", name="toupper")
-            return self.codegen.builder.call(self.codegen.runtime.libc_ctype.toupper, [char_value])
-        else:
-            if self.codegen.runtime.libc_ctype.tolower is None:
-                raise_internal_error("CE0013", name="tolower")
-            return self.codegen.builder.call(self.codegen.runtime.libc_ctype.tolower, [char_value])
-
-    def emit_character_classification(self, char_value: ir.Value, classification: str) -> ir.Value:
-        """Generate character classification call (isspace, isdigit, isalpha, isalnum)."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        classification_funcs = {
-            "space": self.codegen.runtime.libc_ctype.isspace,
-            "digit": self.codegen.runtime.libc_ctype.isdigit,
-            "alpha": self.codegen.runtime.libc_ctype.isalpha,
-            "alnum": self.codegen.runtime.libc_ctype.isalnum,
-        }
-
-        if classification not in classification_funcs:
-            raise_internal_error("CE0096", operation=classification)
-
-        func = classification_funcs[classification]
-        if func is None:
-            raise_internal_error("CE0013", name=classification)
-        return self.codegen.builder.call(func, [char_value])
-
     def _create_format_string(self, name: str, format_str: str) -> ir.GlobalVariable:
         """Generic method to create a global format string constant."""
         data = format_str.encode('utf-8') + b'\0'

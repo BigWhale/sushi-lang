@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.internals.report import Span
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -62,19 +61,6 @@ class LLVMUtils:
             if v.type.width == 32:
                 return self.codegen.builder.trunc(v, self.codegen.i8)
         raise_internal_error("CE0017", src=str(v.type), dst="i8")
-
-    def is_signed_int_type(self, llvm_type: ir.Type) -> bool:
-        """Determine if an LLVM integer type represents a signed Sushi type."""
-        if not isinstance(llvm_type, ir.IntType):
-            return False
-
-        if llvm_type.width == 1:
-            return False
-
-        # For other types, we assume signed by default since most operations
-        # in the language use signed integers
-        # Note: The caller should know the actual signedness from context
-        return True
 
     def convert_int_to_i32(self, v: ir.Value, is_signed: bool = True) -> ir.Value:
         """Convert any integer type to i32 with proper signed/unsigned handling."""
@@ -228,13 +214,6 @@ class LLVMUtils:
         fn = self.codegen.builder.function
         nxt = fn.append_basic_block(name="unreachable")
         self.codegen.builder.position_at_end(nxt)
-
-    @staticmethod
-    def loc_str(span: Span | None) -> str:
-        """Format source location span as human-readable string."""
-        if not span:
-            return ""
-        return f" at {span.line}:{span.col}"
 
     def block_statements(self, blk) -> List:
         """Extract statement list from a block node."""

@@ -16,7 +16,6 @@ KIND_BINARY = 2
 KIND_HYBRID = 3
 
 KIND_BY_NAME = {"source": KIND_SOURCE, "binary": KIND_BINARY, "hybrid": KIND_HYBRID}
-KIND_BY_CODE = {code: name for name, code in KIND_BY_NAME.items()}
 
 
 def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:

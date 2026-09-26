@@ -9,11 +9,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-def is_pointer_type(llvm_type: ir.Type) -> bool:
-    """Check if an LLVM type is a pointer type."""
-    return isinstance(llvm_type, ir.PointerType)
-
-
 def is_reference_parameter(codegen: 'LLVMCodegen', var_name: str) -> bool:
     """Check if a variable is a reference parameter."""
     if var_name not in codegen.variable_types:
@@ -21,11 +16,6 @@ def is_reference_parameter(codegen: 'LLVMCodegen', var_name: str) -> bool:
 
     var_type = codegen.variable_types[var_name]
     return isinstance(var_type, ReferenceType)
-
-
-def get_semantic_type(codegen: 'LLVMCodegen', var_name: str) -> Optional[Type]:
-    """Get the semantic type for a variable."""
-    return codegen.variable_types.get(var_name)
 
 
 def load_with_reference_handling(

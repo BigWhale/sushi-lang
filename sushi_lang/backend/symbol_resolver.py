@@ -59,20 +59,3 @@ class SymbolResolver:
         candidates_sorted = sorted(candidates, key=lambda s: s.source.value)
 
         return candidates_sorted[0]
-
-    def get_conflicts(self) -> list[tuple[str, list['SymbolInfo']]]:
-        """Get list of all symbol conflicts that were resolved."""
-        return self.conflicts
-
-    def get_conflict_summary(self) -> str:
-        """Get a human-readable summary of resolved conflicts."""
-        if not self.conflicts:
-            return "No symbol conflicts detected."
-
-        lines = [f"Resolved {len(self.conflicts)} symbol conflict(s):"]
-        for symbol_name, defs in self.conflicts:
-            chosen = self.resolution_map[symbol_name]
-            sources = [f"{d.module_name}({d.source.name})" for d in defs]
-            lines.append(f"  {symbol_name}: {' vs '.join(sources)} -> {chosen.module_name}")
-
-        return '\n'.join(lines)

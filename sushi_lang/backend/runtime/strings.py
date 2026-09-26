@@ -4,7 +4,7 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT32_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.expressions.memory import emit_memcpy_bytes
 from sushi_lang.internals.errors import raise_internal_error
@@ -20,8 +20,6 @@ class StringOperations:
     def __init__(self, codegen: LLVMCodegen) -> None:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
-
-        self.utf8_char_count: ir.Function
 
     def declare_utf8_functions(self) -> None:
         """Declare UTF-8 support functions."""
@@ -144,15 +142,6 @@ class StringOperations:
         return self.codegen.builder.icmp_signed(op, diff,
                                                 ir.Constant(self.codegen.i32, 0))
 
-    def emit_string_null_termination(self, string_ptr: ir.Value, offset: ir.Value) -> None:
-        """Add null terminator to string at specified offset."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        null_pos_ptr = self.codegen.builder.gep(string_ptr, [offset])
-
-        null_char = ir.Constant(self.codegen.i8, 0)
-        self.codegen.builder.store(null_char, null_pos_ptr)
-
     def emit_string_concat(self, str1: ir.Value, str2: ir.Value) -> ir.Value:
         """Generate string concatenation by allocating new memory and copying both strings."""
         if self.codegen.builder is None:
@@ -241,38 +230,14 @@ class StringOperations:
         s = b.insert_value(s, ir.Constant(self.codegen.i8, 1), 2)
         return s
 
-    def emit_string_byte_count(self, string_ptr: ir.Value) -> ir.Value:
-        """Generate call to strlen for string BYTE count (not character count)."""
-        return self.codegen.builder.call(self.codegen.runtime.libc_strings.strlen, [string_ptr])
-
-    def emit_string_length(self, string_ptr: ir.Value) -> ir.Value:
-        """DEPRECATED: Use emit_string_byte_count() for clarity."""
-        return self.emit_string_byte_count(string_ptr)
-
-    def emit_string_allocation(self, size: ir.Value) -> ir.Value:
-        """Generate call to malloc for string allocation."""
-        if isinstance(size.type, ir.IntType) and size.type.width == 32:
-            size_i64 = self.codegen.builder.zext(size, ir.IntType(INT64_BIT_WIDTH))
-        else:
-            size_i64 = size
-        return emit_malloc(self.codegen, self.codegen.builder, size_i64)
-
-    def emit_string_char_count(self, string_ptr: ir.Value) -> ir.Value:
-        """Generate call to utf8_char_count for Unicode-aware CHARACTER counting."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        return self.codegen.builder.call(self.utf8_char_count, [string_ptr])
-
     def _declare_and_define_utf8_char_count(self) -> None:
         """Declare and define the utf8_char_count function for Unicode-aware string length."""
         existing = self.codegen.module.globals.get("utf8_char_count")
         if isinstance(existing, ir.Function):
-            self.utf8_char_count = existing
             return
 
         fn_ty = ir.FunctionType(self.codegen.i32, [self.codegen.i8.as_pointer()])
         func = ir.Function(self.codegen.module, fn_ty, name="utf8_char_count")
-        self.utf8_char_count = func
 
         entry_block = func.append_basic_block("entry")
         loop_head = func.append_basic_block("loop_head")
@@ -334,17 +299,3 @@ class StringOperations:
 
         if saved_builder and saved_block:
             saved_builder.position_at_end(saved_block)
-
-
-def emit_utf8_count(builder: ir.IRBuilder, module: ir.Module, string_ptr: ir.Value) -> ir.Value:
-    """Emit inline UTF-8 character count for stdlib fallback."""
-    i32 = ir.IntType(INT32_BIT_WIDTH)
-    i8_ptr = ir.IntType(INT8_BIT_WIDTH).as_pointer()
-
-    if "utf8_char_count" in module.globals:
-        utf8_char_count_fn = module.globals["utf8_char_count"]
-    else:
-        fn_ty = ir.FunctionType(i32, [i8_ptr])
-        utf8_char_count_fn = ir.Function(module, fn_ty, name="utf8_char_count")
-
-    return builder.call(utf8_char_count_fn, [string_ptr])

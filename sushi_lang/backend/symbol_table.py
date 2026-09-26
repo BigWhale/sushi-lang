@@ -21,22 +21,6 @@ class SymbolSource(Enum):
     RUNTIME = 4   # Lowest priority - runtime functions
 
 
-RUNTIME_FUNCTIONS = frozenset({
-    "utf8_char_count", "llvm_strlen", "strcmp", "strlen",
-    "printf", "sprintf", "fprintf", "puts", "putchar", "getchar",
-    "memcmp", "memcpy", "memset", "memmove",
-    "toupper", "tolower", "isspace", "isdigit", "isalpha", "isalnum",
-    "exit", "abort",
-    "fopen", "fclose", "fgets", "fgetc", "fputc", "fputs",
-    "fread", "fwrite", "fseek", "ftell", "rewind", "feof", "ferror",
-    "malloc", "calloc", "realloc", "free",
-    "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-    "sinh", "cosh", "tanh", "exp", "log", "log10", "pow", "sqrt",
-    "ceil", "floor", "fabs", "fmod",
-    "time", "nanosleep", "usleep", "sleep",
-})
-
-
 @dataclass
 class SymbolInfo:
     """Metadata about a single symbol in a module."""
@@ -51,18 +35,6 @@ class SymbolInfo:
     def is_definition(self) -> bool:
         """Check if this is a definition (has body) vs declaration."""
         return not self.is_declaration
-
-    def is_runtime_function(self) -> bool:
-        """Check if this is a common runtime/libc function."""
-        return self.name in RUNTIME_FUNCTIONS
-
-    def is_internal_linkage(self) -> bool:
-        """Check if this symbol has internal linkage (not exported)."""
-        return self.linkage in ("internal", "private")
-
-    def is_external_linkage(self) -> bool:
-        """Check if this symbol has external linkage (exported)."""
-        return self.linkage in ("external", "linkonce_odr", "weak_odr")
 
 
 class SymbolTable:
@@ -83,15 +55,6 @@ class SymbolTable:
     def add_symbol(self, symbol: SymbolInfo) -> None:
         """Add a symbol to the table."""
         self.symbols[symbol.name] = symbol
-
-    def get_symbol(self, name: str) -> SymbolInfo | None:
-        """Look up a symbol by name."""
-        return self.symbols.get(name)
-
-    def has_definition(self, name: str) -> bool:
-        """Check if this table has a definition (not declaration) for a symbol."""
-        symbol = self.symbols.get(name)
-        return symbol is not None and symbol.is_definition()
 
     def get_definitions(self) -> list[SymbolInfo]:
         """Get all symbols that are definitions (not declarations)."""
