@@ -1,0 +1,20 @@
+# A generic-target Hashable implementation is the override for every instance, and a
+# holder of an instance is hashable although the instance holds a function value.
+# EXPECT_STDOUT_EXACT: "same true\n"
+
+struct Box@(T):
+    T v
+    fn(i32) -> i32 f
+
+extend Box@(T) with Hashable:
+    fn hash() u64:
+        return 9
+
+struct H:
+    Box@(i32) b
+
+fn main() i32:
+    let H h1 = H(Box(1, |i32 x| x))
+    let H h2 = H(Box(2, |i32 x| x + 1))
+    println("same {h1.hash() == h2.hash()}")
+    return Result.Ok(0)
