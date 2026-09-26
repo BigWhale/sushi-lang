@@ -9,7 +9,6 @@ the bytes and the sender together -- rather than with bytes alone.
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_free,
     declare_malloc,
@@ -24,7 +23,9 @@ from sushi_lang.sushi_stdlib.src.net.errno import (
 )
 from sushi_lang.sushi_stdlib.src.net.tcp import _emit_addrinfo_walk
 from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc,
+)
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types,
     get_byte_array_type,
@@ -188,17 +189,7 @@ def generate_recv_from(module: ir.Module) -> None:
     ip_len_slot = entry_alloca(builder, i32, name="ip_len_slot")
 
     max64 = builder.zext(maximum, i64, name="max64")
-    buffer = builder.call(malloc_fn, [max64], name="recv_buf")
-    is_null = builder.icmp_unsigned("==", buffer, null, name="alloc_failed")
-
-    alloc_fail_bb = func.append_basic_block(name="alloc_fail")
-    do_recv_bb = func.append_basic_block(name="do_recv")
-    builder.cbranch(is_null, alloc_fail_bb, do_recv_bb)
-
-    builder.position_at_end(alloc_fail_bb)
-    emit_runtime_error(module, builder, "RE2021")
-
-    builder.position_at_end(do_recv_bb)
+    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="recv_buf")
     got = builder.call(recvfrom_fn, [
         fd, buffer, max64, zero, storage, len_slot,
     ], name="got")
@@ -232,7 +223,7 @@ def generate_recv_from(module: ir.Module) -> None:
     builder.position_at_end(rendered_bb)
     ip_len = builder.call(strlen_fn, [host_buf], name="ip_len")
     ip_len64 = builder.zext(ip_len, i64, name="ip_len64")
-    owned = builder.call(malloc_fn, [ip_len64], name="ip_buf")
+    owned = emit_checked_malloc(builder, malloc_fn, ip_len64, name="ip_buf")
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, ip_len64, ir.Constant(ir.IntType(1), 0)])
     builder.store(owned, ip_slot)
@@ -243,7 +234,8 @@ def generate_recv_from(module: ir.Module) -> None:
     # are what the caller asked for; an owned zero-length buffer keeps the
     # field's ownership rule the same on both edges.
     builder.position_at_end(anonymous_bb)
-    builder.store(builder.call(malloc_fn, [ir.Constant(i64, 1)], name="empty_ip"), ip_slot)
+    builder.store(emit_checked_malloc(builder, malloc_fn, ir.Constant(i64, 1), name="empty_ip"),
+                  ip_slot)
     builder.store(zero, ip_len_slot)
     builder.branch(build_bb)
 

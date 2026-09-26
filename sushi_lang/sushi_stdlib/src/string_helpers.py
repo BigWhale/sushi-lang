@@ -19,11 +19,41 @@ def create_string_constant(module: ir.Module, builder: ir.IRBuilder, value: str,
     return builder.gep(global_str, [zero, zero], inbounds=True)
 
 
+ALLOC_FAIL_BLOCK = "alloc_fail"
+
+
+def alloc_fail_block(func: ir.Function) -> ir.Block:
+    """The one RE2021 block of `func`. The first request emits it."""
+    for block in func.blocks:
+        if block.name == ALLOC_FAIL_BLOCK:
+            return block
+    from .error_emission import emit_runtime_error
+    block = func.append_basic_block(name=ALLOC_FAIL_BLOCK)
+    emit_runtime_error(func.module, ir.IRBuilder(block), "RE2021")
+    return block
+
+
+def emit_checked_malloc(builder: ir.IRBuilder, malloc_fn: ir.Function, size: ir.Value,
+                        name: str = "") -> ir.Value:
+    """Call malloc(size), and go to the RE2021 block of the function on a null answer.
+
+    The builder continues at the end of a new block, so a phi after this call must name
+    `builder.block` as its predecessor, not the block the call started in.
+    """
+    raw = builder.call(malloc_fn, [size], name=name)
+    func = builder.function
+    fail = alloc_fail_block(func)
+    ok = func.append_basic_block(name="alloc_ok")
+    failed = builder.icmp_unsigned("==", raw, ir.Constant(raw.type, None), name="alloc_failed")
+    builder.cbranch(failed, fail, ok)
+    builder.position_at_end(ok)
+    return raw
+
+
 def allocate_string_buffer(builder: ir.IRBuilder, malloc_fn: ir.Function, size: int) -> ir.Value:
     """Allocate a string buffer on the heap."""
     i64 = ir.IntType(64)  # malloc takes size_t (i64 on 64-bit systems)
-    size_val = ir.Constant(i64, size)
-    return builder.call(malloc_fn, [size_val], name="str_buffer")
+    return emit_checked_malloc(builder, malloc_fn, ir.Constant(i64, size), name="str_buffer")
 
 
 def cstr_to_fat_pointer(
@@ -80,7 +110,7 @@ def fat_pointer_to_cstr(
     one = ir.Constant(i32, 1)
     cstr_size = builder.add(size, one, name="cstr_size")
     cstr_size_i64 = builder.zext(cstr_size, i64, name="cstr_size_i64")
-    cstr = builder.call(malloc_fn, [cstr_size_i64], name="cstr")
+    cstr = emit_checked_malloc(builder, malloc_fn, cstr_size_i64, name="cstr")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [cstr, data, builder.zext(size, ir.IntType(64)), is_volatile])
