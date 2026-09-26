@@ -4,7 +4,7 @@
 # TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE4006
 # EXPECT_STDERR_CONTAINS: "./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:26:9: error [CE4006]"
-# EXPECT_STDERR_CONTAINS: "    | struct Box@(T: Named):\n    `             ----+---\n./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:27:8: error [CE4006]"
+# EXPECT_STDERR_CONTAINS: "    | struct Box@(T: Named):\n    `             ----+---\n./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:27:5: error [CE4006]"
 # EXPECT_STDERR_CONTAINS: "    | fn one@(T: Named)(T x) ~:\n    `         ----+---\n./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:28:9: error [CE4006]"
 perk Named:
     fn name() string

@@ -120,7 +120,7 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 result_expr = members.index_access_from_parts(result_expr, call_node, ast_builder)
 
             elif call_node.data == "try_op":
-                result_expr = TryExpr(expr=result_expr, loc=span_of(call_node))
+                result_expr = TryExpr(expr=result_expr, loc=_span_through(t, call_node))
 
             else:
                 unhandled(call_node)

@@ -1,7 +1,7 @@
-# CW2511: a `??` nested inside the returned expression warns at the `??`.
+# CW2511: a `??` nested inside the returned expression warns at the whole `compute()??`.
 # The warning had a second emit site that cared the whole `Result.Ok(...)` span (#743).
 # EXPECT_ERROR_CODE: CW2511
-# EXPECT_STDERR_CONTAINS: 9:31: warning [CW2511]
+# EXPECT_STDERR_CONTAINS: 9:22: warning [CW2511]
 fn compute() i32:
     return Result.Ok(7)
 

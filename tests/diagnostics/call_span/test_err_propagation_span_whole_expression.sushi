@@ -1,0 +1,21 @@
+# A propagation `<expr>??` has one span, from the start of its operand to the end of
+# `??`. Every diagnostic on it starts at the operand: the CE2511 of the propagation and
+# the CE2002 of the assignment alike.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2511
+# EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: "test_err_propagation_span_whole_expression.sushi:17:20: error [CE2511]"
+# EXPECT_STDERR_CONTAINS: "test_err_propagation_span_whole_expression.sushi:17:20: error [CE2002]"
+# EXPECT_STDERR_CONTAINS: "  |     let string s = f()??\n  `                    --+--\n"
+enum E1:
+    A
+
+fn f() i32 | E1:
+    return Result.Ok(1)
+
+fn h() i32:
+    let string s = f()??
+    return Result.Ok(0)
+
+fn main() i32:
+    return Result.Ok(0)
