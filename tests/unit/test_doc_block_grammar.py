@@ -30,22 +30,15 @@ SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchai
 #   tests/libs/helpers/doc_lib.sushi  -- phase 3's documented helper library. It has to
 #                                        live beside the other helpers, because
 #                                        `build_test_helpers` globs that directory.
-#   src_sushi/io/, src_sushi/net/,
-#   src_sushi/toolchain/              -- bundled stdlib modules born after the
-#                                        feature; the missing-docs budget gate
-#                                        REQUIRES their doc blocks. Named by DIRECTORY
-#                                        rather than one file at a time: every module
-#                                        under either is younger than doc blocks, so a
-#                                        new one is exempt for the same reason its
-#                                        neighbours are, and listing them singly only
-#                                        turned a new module into a red gate.
+#   src_sushi/                        -- the bundled stdlib modules. Every one is younger
+#                                        than doc blocks, and a public stdlib declaration
+#                                        is to carry one, so the directory is named whole:
+#                                        one module at a time only turned each new doc
+#                                        block into a red gate.
 DOC_SOURCES = (
     "tests/docs",
     "tests/libs/helpers/doc_lib.sushi",
-    "sushi_lang/sushi_stdlib/src_sushi/io/",
-    "sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi",
-    "sushi_lang/sushi_stdlib/src_sushi/net/",
-    "sushi_lang/sushi_stdlib/src_sushi/toolchain/",
+    "sushi_lang/sushi_stdlib/src_sushi/",
 )
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry
