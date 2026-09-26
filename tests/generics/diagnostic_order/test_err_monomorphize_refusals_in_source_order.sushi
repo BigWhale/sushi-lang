@@ -1,0 +1,29 @@
+# The monomorphize stage refuses a type instantiation and a function instantiation in
+# the order of their lines in the source, not the type refusals first. The work order
+# stays: the types are cut before the functions.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE4006
+# EXPECT_STDERR_CONTAINS: "./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:26:9: error [CE4006]"
+# EXPECT_STDERR_CONTAINS: "    | struct Box@(T: Named):\n    `             ----+---\n./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:27:8: error [CE4006]"
+# EXPECT_STDERR_CONTAINS: "    | fn one@(T: Named)(T x) ~:\n    `         ----+---\n./tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi:28:9: error [CE4006]"
+perk Named:
+    fn name() string
+
+extend i32 with Named:
+    fn name() string:
+        return "i32"
+
+struct Box@(T: Named):
+    T v
+
+struct Tag@(T: Named):
+    T v
+
+fn one@(T: Named)(T x) ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    let Box@(bool) a = Box(true)
+    one(true)
+    let Tag@(bool) b = Tag(true)
+    return Result.Ok(0)

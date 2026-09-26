@@ -3,9 +3,18 @@ from __future__ import annotations
 
 from typing import Callable, Iterable, List, Tuple, TypeVar
 
+from sushi_lang.internals.report import Diagnostic
 from sushi_lang.semantics.generics.extension_targets import instantiation_key
 
 Item = TypeVar("Item")
+
+
+def _file_ranks(sites: dict) -> dict:
+    """Each file of `sites`, ranked by the first site that names it."""
+    files: dict = {}
+    for _span, filename in sites.values():
+        files.setdefault(filename, len(files))
+    return files
 
 
 def in_site_order(items: Iterable[Item], sites: dict,
@@ -18,9 +27,7 @@ def in_site_order(items: Iterable[Item], sites: dict,
     each item a text key, so two items at one site, or two items with no site, still
     have one order.
     """
-    files: dict = {}
-    for _span, filename in sites.values():
-        files.setdefault(filename, len(files))
+    files = _file_ranks(sites)
 
     def key(item: Item) -> tuple:
         span, filename = sites.get(site_key(item), (None, None))
@@ -48,3 +55,24 @@ def functions_in_site_order(instantiations: Iterable[Tuple[object, str, tuple]],
 
     return in_site_order(instantiations, sites, lambda item: ("fn", name(item)),
                          lambda item: (name(item), str(item[0])))
+
+
+def diagnostics_in_site_order(items: Iterable[Diagnostic], sites: dict) -> List[Diagnostic]:
+    """The monomorphize stage's diagnostics, in the order of their sites (#927).
+
+    The stage cuts the types before the functions, so it finds the faults in work order.
+    The files rank as they do for the instantiations; a file that no site names follows
+    them, in the order of its first diagnostic. In a file the order is the line, then
+    the column, and a diagnostic with no span follows the others. The sort is stable.
+    """
+    items = list(items)
+    files = _file_ranks(sites)
+    for d in items:
+        files.setdefault(d.filename, len(files))
+
+    def key(d: Diagnostic) -> tuple:
+        if d.span is None:
+            return (files[d.filename], 1, 0, 0)
+        return (files[d.filename], 0, d.span.line, d.span.col)
+
+    return sorted(items, key=key)
