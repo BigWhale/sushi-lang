@@ -144,53 +144,35 @@ distinct darwin/linux implementations.
 
 ### Platform Module Helper
 
-**File:** `sushi_stdlib/src/_platform/__init__.py`
+**File:** `sushi_lang/sushi_stdlib/src/_platform/__init__.py`
 
 ```python
-def get_platform_module(module_name: str):
-    """
-    Dynamically import the correct platform-specific module.
-
-    Args:
-        module_name: Name of the module (e.g., 'time')
-
-    Returns:
-        The platform-specific module
-
-    Example:
-        platform_time = get_platform_module('time')
-        declare_nanosleep = platform_time.declare_nanosleep
-    """
+def get_platform_module(module_name: str) -> ModuleType:
+    """Import the platform-specific module of the build platform."""
     platform = get_current_platform()
 
     if platform.is_darwin:
         platform_name = 'darwin'
     elif platform.is_linux:
         platform_name = 'linux'
-    elif platform.is_windows:
-        platform_name = 'windows'
     else:
         raise RuntimeError(f"Unsupported platform: {platform.os}")
 
-    # Dynamic import: from sushi_lang.sushi_stdlib.src._platform.{platform_name}.{module_name}
-    import importlib
-    module_path = f"sushi_stdlib.src._platform.{platform_name}.{module_name}"
+    module_path = f"{__name__}.{platform_name}.{module_name}"
 
     try:
         return importlib.import_module(module_path)
     except ModuleNotFoundError:
         raise NotImplementedError(
             f"Platform module '{module_name}' not implemented for {platform_name}. "
-            f"Expected: sushi_stdlib/src/_platform/{platform_name}/{module_name}.py"
+            f"Expected: sushi_lang/sushi_stdlib/src/_platform/{platform_name}/{module_name}.py"
         ) from None
 ```
 
-Note the `is_windows` branch: the code *tries* to route to `_platform/windows/`, but
-because that package does not exist, every lookup fails `importlib.import_module` with
-`ModuleNotFoundError`, which is converted into a `NotImplementedError` naming the missing
-file. Windows is therefore not silently mishandled — any stdlib module that calls
-`get_platform_module()` on a Windows host fails loudly and immediately, before any IR is
-generated.
+The module path is built from the package's own `__name__`, so a platform module is imported under
+one name only (`sushi_lang.sushi_stdlib.src._platform.<os>.<module>`), and the loader changes no
+`sys.path`. A platform that is not macOS or Linux is one `RuntimeError`; there is no `windows`
+branch (#904).
 
 ### Usage in Standard Library Modules
 
@@ -332,9 +314,8 @@ error rather than silently picking a wrong platform's bitcode.
 There is no `sushi_stdlib/src/_platform/windows/` directory, and no path through the
 compiler currently produces a working Windows build:
 
-- `get_platform_module()` has an `is_windows` branch, but it always fails with
-  `NotImplementedError` (the target package does not exist to import) — see
-  [Platform Module Helper](#platform-module-helper) above.
+- `get_platform_module()` has no Windows branch: a Windows host is a `RuntimeError`
+  ("Unsupported platform") — see [Platform Module Helper](#platform-module-helper) above.
 - `StdlibLinker._detect_platform()` (`backend/stdlib_linker.py`) has no Windows case at
   all; a Windows host resolves to `"unknown"`.
 - `sushi_stdlib/build.py`'s `--platform` argument only accepts `darwin` or `linux` as
