@@ -1,0 +1,22 @@
+# A UdpSocket owns its descriptor: it implements Drop, so a socket that leaves
+# scope closes itself. Each call binds a socket and drops it on return, so the
+# kernel gives the next call the same descriptor, and no descriptor stays open.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+use <net/udp>
+
+fn once() i32:
+    match bind("127.0.0.1", 0):
+        Result.Ok(s) -> return Result.Ok(s.fd)
+        Result.Err(_) -> return Result.Ok(-1)
+
+fn main() i32:
+    let i32 first = once().realise(-2)
+    let i32 second = once().realise(-3)
+    let i32 third = once().realise(-4)
+    println("{first >= 0}")
+    println("{first == second and second == third}")
+    return Result.Ok(0)
