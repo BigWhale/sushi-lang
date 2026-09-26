@@ -371,8 +371,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                     if arg_type is not None:
                         param_types.append(arg_type)
 
-                if function_name in {'abs', 'min', 'max'} and param_types:
-                    return param_types[0]
+                if function_name in {'abs', 'min', 'max'}:
+                    return math_module.get_builtin_math_function_return_type(
+                        function_name, param_types)
 
                 if function_name in {'sqrt', 'pow', 'floor', 'ceil', 'round', 'trunc'}:
                     return BuiltinType.F64

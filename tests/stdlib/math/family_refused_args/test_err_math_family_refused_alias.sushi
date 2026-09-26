@@ -1,0 +1,9 @@
+# The same rule behind an alias: `m.min` with refused arguments is CE2006
+# alone, and the declaration adds no type mismatch (#907).
+# EXPECT_ERROR_CODE: CE2006
+use <math> as m
+
+fn main() i32:
+    let f64 a = m.min("a", "b")
+    println("{a}")
+    return Result.Ok(0)

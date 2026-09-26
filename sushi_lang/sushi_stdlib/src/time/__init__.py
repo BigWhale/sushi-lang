@@ -4,7 +4,7 @@ from typing import Dict
 
 from llvmlite import ir
 
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.signatures import BareOk, Signature, params_of
 
 
@@ -22,19 +22,6 @@ TIME_SIGNATURES: Dict[str, Signature] = {
     "now":          Signature(ok=I64, error="StdError", bare_ok=_ALWAYS),
     "monotonic_ns": Signature(ok=I64, error="StdError", bare_ok=_ALWAYS),
 }
-
-
-def is_builtin_time_function(name: str) -> bool:
-    """Check if name is a built-in time module function."""
-    return name in TIME_SIGNATURES
-
-
-def get_builtin_time_function_return_type(name: str) -> Type:
-    """The declared return type, from the row."""
-    sig = TIME_SIGNATURES.get(name)
-    if sig is None:
-        raise ValueError(f"Unknown time function: {name}")
-    return sig.return_type()
 
 
 def generate_module_ir() -> ir.Module:

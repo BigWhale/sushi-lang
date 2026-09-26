@@ -85,15 +85,16 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
 `use <module_path>` becomes importable in one of two ways:
 
 - **Compiled module**: add an entry to `StdlibRegistry.KNOWN_MODULES` mapping the
-  Sushi module path (`"sys/env"`) to its Python import path. The target module
-  must expose the naming-convention pair `is_builtin_<name>_function` and
-  `get_builtin_<name>_function_return_type` — discovery (`_discover_module`)
-  `getattr`s these by name rather than reading an explicit function table, and
-  refuses a module that does not follow the convention with a `RuntimeError`.
+  Sushi module path (`"sys/env"`) to its Python import path, and add the
+  module's signature table to `signature_tables()` in
+  `semantics/stdlib_registry.py`. Discovery (`_discover_functions`) registers
+  one function per row of that table (and per family in `family_tables()`), and
+  refuses a module with no table with a `RuntimeError`.
 - **Source module**: add an entry to `SOURCE_STDLIB_MODULES` pointing at the
   `.sushi` file.
 
-Validators/type-resolvers throughout `semantics/` locate stdlib functions the
-same `is_builtin_*_function`-style way (e.g. `math_module.is_builtin_math_function`
-in `semantics/passes/types/visitor.py`) — grep for `is_builtin_.*_function` to
-find all call sites before changing the convention.
+The typecheck pass reads a function's return type from its registry record.
+Two readers still ask the `<math>` module directly
+(`is_builtin_math_function`, `get_builtin_math_function_return_type`), in
+`semantics/passes/types/visit/inference.py` and
+`semantics/passes/types/calls/namespaced.py`.
