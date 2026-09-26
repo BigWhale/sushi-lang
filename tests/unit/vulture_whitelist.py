@@ -100,26 +100,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_HAS_LEN", _PLATFORM_ABI),
 )
 
-_EXTERN = ("declared into every module and read by no emitter; deleting the "
-           "declaration changes the emitted IR, so it needs its own decision")
-
 RATCHET: tuple[tuple[str, str, str], ...] = (
-    ("sushi_lang/backend/runtime/externs/libc_ctype.py", "isalpha", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_process.py", "errno_location", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_strings.py", "strcmp", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "printf", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fopen", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fclose", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fgets", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fgetc", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "getline", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fputc", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fread", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "fseek", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "ftell", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "rewind", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "feof", _EXTERN),
-    ("sushi_lang/backend/runtime/externs/libc_stdio.py", "ferror", _EXTERN),
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a header bit docs/design/libraries.md section 2 defines; nothing sets or reads it"),
 )
