@@ -10,16 +10,17 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.typesys import FunctionType
+from sushi_lang.semantics.typesys import BorrowMode, FunctionType
 from sushi_lang.semantics.param_modes import (
-    CalleeKind, ParamMode, effective_modes, receiver_mode,
+    CalleeKind, ParamMode, borrow_mode, effective_modes, receiver_mode,
 )
 
 from .borrows import register_implicit_borrow
 from .consume import consume, consume_each
-from .diagnostics import expr_to_string
+from .diagnostics import emit_use_of_invalidated_borrow, expr_to_string
 from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
 from .reads import OWNER_STEPS, called_on, read_type
+from .writes import changes_its_receiver
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -42,6 +43,41 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
     if receiver is None or not checker.types.is_container(read_type(checker, receiver)):
         return
     consume_each(checker, expr.args)
+
+
+def reject_borrow_read_by_the_change(checker: 'BorrowChecker', expr: MethodLike) -> None:
+    """CE2412: a borrowed argument is read DURING the call that changes the receiver (#888).
+
+    The change invalidates every binding that reads out of the receiver's owner. A binding
+    that is also a borrowed argument of that call is used while the change runs, so it is
+    the use after the change. A consumed argument has its own refusal (CE2411).
+    """
+    if not changes_its_receiver(expr):
+        return
+    for arg in _borrowed_args(checker, expr):
+        root = walk_place(arg, Step.MEMBER | Step.INDEX).name
+        state = checker.borrow_state.get(root.id) if root is not None else None
+        # Only the invalidation THIS call made: an older one is the ordinary later use.
+        if state is None or state.invalidated_at is not expr.loc:
+            continue
+        emit_use_of_invalidated_borrow(checker, root.id, arg.loc, state,
+                                       by_the_change=True)
+
+
+def _borrowed_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
+    """The arguments a method call reads without taking them, `peek` ones unwrapped."""
+    modes = expr.callee_param_modes
+    if modes is not None:
+        args = [arg for i, arg in enumerate(expr.args)
+                if not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
+    elif (called_on(expr, *CONTAINER_INSERT_METHODS) is not None
+          and checker.types.is_container(read_type(checker, expr.receiver))):
+        args = []
+    else:
+        args = list(expr.args)
+    return [arg.expr if isinstance(arg, Borrow) else arg for arg in args
+            if not (isinstance(arg, Borrow)
+                    and borrow_mode(arg.mutability) is BorrowMode.POKE)]
 
 
 def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> None:

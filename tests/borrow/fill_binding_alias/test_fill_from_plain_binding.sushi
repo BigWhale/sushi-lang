@@ -1,0 +1,16 @@
+# A plain element is a copy and not a borrow, so `fill` from a binding of its own slot is
+# legal (#888).
+# EXPECT_STDOUT_EXACT: "1 1 1\n7 7\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32 first = a[0]
+    a.fill(first)
+    println("{a[0]} {a[1]} {a[2]}")
+    let i32[] b = from([7, 8])
+    match b.get(0):
+        Maybe.Some(v) -> b.fill(v)
+        Maybe.None -> println("none")
+    println("{b[0]} {b[1]}")
+    return Result.Ok(0)
