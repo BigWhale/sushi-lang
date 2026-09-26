@@ -428,6 +428,24 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A borrow passed to a call that changes its owner is CE2412** (#888). `a.fill(first)`, where
+  `first` is a `let` binding or a `match` payload binding of a slot of `a`, read freed memory: the
+  call destroys each slot while it reads its argument. A borrowed argument is now a use DURING the
+  change, so the existing CE2412 rule sees it. A bare pattern binding of an owning payload now
+  also freezes its owner for the arm, as a `let`-borrow does (a `b.clear()` in the arm read the
+  freed payload). The escape is `.clone()`; a plain element stays legal.
+- **An array literal or `new()` with no position type** (#889). `[a, b].len()`, a literal as a
+  `println` argument, a parameter or a `List.push` element was the internal error CE0000 or
+  CE0042. Every fixed array literal carries its type stamp from the typecheck pass now, and an
+  empty `new()` with no position type is CE2111, the empty `from([])` code.
+- **A type name is one per program, whatever its kind** (#901, #902). A struct declared in a later
+  unit beside an enum of the same name compiled and ran with two types under one name; it is
+  CE0006 at the struct now, with a note at the enum. A consumer type against a binary library's
+  public type of the other kind cascaded into "cannot assign Crate to Crate"; it is CE3011 at the
+  declaration, and the analysis stops after it, as for the same kind.
+- **A non-exhaustive `match` ends no path** (#886). A `match` whose arms all return but do not
+  cover every value made the next statement a false CE0140. The exhaustiveness error (CE2040,
+  CE2074) is the one diagnostic now; CE0107 and CE0140 read one reach answer.
 - **A literal argument of `min` / `max` takes the other argument's type** (#842). `max(b, 1)` with
   `b: u32` was a false CE2006; it is a `u32` compare now, bare and behind `use <math> as m`, and a
   literal that does not fit is CE2073. The rule and the binary-operand rule share one helper.
