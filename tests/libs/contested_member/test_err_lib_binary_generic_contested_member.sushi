@@ -1,7 +1,7 @@
 # A consumer's generic struct beside a BINARY library's public one of the same name is
 # the duplicate, CE0004, and that is the one fault. A read of the consumer's own field
-# is not measured against the library's shape (the pytest gate
-# tests/unit/test_contested_type_member_read.py pins the absence of CE2106).
+# is not measured against the library's shape. The exact code set is not pinned:
+# the runner has no exact-code directive yet (#959).
 # EXPECT_ERROR_CODE: CE0004
 use <lib/generic_ext_bin_lib>
 

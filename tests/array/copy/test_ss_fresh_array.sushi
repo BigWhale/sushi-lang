@@ -1,5 +1,5 @@
 # `.ss(start, count)` is a fresh array of a range, named for `string.ss(start, length)`
-# so the two modules keep one vocabulary (#462). `ztake` and `zlib_uncompress` want this.
+# so the two modules keep one vocabulary (#462). `zinflate_lengths` and `zlib_uncompress` want this.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 30 40 50\n6 10 60\n1 10\n"

@@ -1,6 +1,6 @@
 # A perk implementation on a generic target whose method does not match the contract.
-# The header is written once, in the template, and it is judged there (#811). The count
-# is pinned by tests/unit/test_perk_impl_header_is_judged_once.py.
+# The header is written once, in the template, and it is judged there (#811). The
+# exact code set is not pinned: the runner has no exact-code directive yet (#959).
 # EXPECT_ERROR_CODE: CE4004
 
 perk Sz:

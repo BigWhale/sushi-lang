@@ -1,6 +1,6 @@
 # An interpolation hole that cannot be printed is one fault and reads one CE2035 (#885).
-# The directive is a substring test; tests/unit/test_interpolation_refusal_is_once.py
-# counts.
+# The directive is a substring test. The exact code set is not pinned: the runner
+# has no exact-code directive yet (#959).
 # EXPECT_ERROR_CODE: CE2035
 # EXPECT_STDERR_CONTAINS: cannot interpolate expression of type 'Maybe@(u32)' into string
 fn main() i32:

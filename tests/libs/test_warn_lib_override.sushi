@@ -6,7 +6,7 @@
 # Symbol priority: Main (1) > Library (2) > Stdlib (3) > Runtime (4).
 # A warning test's binary is not executed, so the runtime half of this
 # contract -- the consumer's call gets 500 and the library's body still gets
-# 200 -- is asserted in tests/unit/test_library_shadow_warning.py.
+# 200 -- is not asserted by any test now (#959).
 
 use <lib/override_lib>
 
