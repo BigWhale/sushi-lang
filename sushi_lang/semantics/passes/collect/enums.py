@@ -27,7 +27,8 @@ from sushi_lang.semantics.visibility import (
 )
 
 from .utils import (
-    TakenName, extract_type_param_names, reject_duplicate_type_name, reject_reference_in)
+    extract_type_param_names, reject_duplicate_type_name, reject_reference_in,
+    type_name_rules)
 
 
 @dataclass
@@ -131,13 +132,9 @@ class EnumCollector:
         type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if reject_duplicate_type_name(self.r, name, name_span, (
-            TakenName(self.enums, ERR.CE2046),
-            TakenName(self.structs, ERR.CE0006, "already defined as a struct here"),
-            TakenName(self.generic_structs, ERR.CE0006,
-                      "already defined as a generic struct here"),
-            TakenName(self.generic_enums, ERR.CE2046,
-                      "first defined here, as a generic enum"),
+        if reject_duplicate_type_name(self.r, "enum", name, name_span, type_name_rules(
+            "enum", structs=self.structs, generic_structs=self.generic_structs,
+            enums=self.enums, generic_enums=self.generic_enums,
         ), library_clash=self._reject_library_clash):
             return
 

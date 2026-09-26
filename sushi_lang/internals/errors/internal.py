@@ -453,5 +453,5 @@ _add(ErrorMessage("CE0005", Severity.ERROR,
     Category.TYPE, "A struct declares the same field name more than once."))
 
 _add(ErrorMessage("CE0006", Severity.ERROR,
-    "enum '{name}' already defined as struct",
-    Category.TYPE, "An enum is declared with the same name as a struct."))
+    "{kind} '{name}' already defined as {other}",
+    Category.TYPE, "A struct and an enum share one type name for the whole program. The second declaration of a name, in collection order and of either kind, is refused where it is written, and the note points at the first. Structs are collected before enums in one unit, but across units the order is the unit order, so a struct can be the second declaration too (#901). Rename one of the two types."))

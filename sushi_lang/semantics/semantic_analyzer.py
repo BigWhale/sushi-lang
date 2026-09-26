@@ -158,12 +158,12 @@ class SemanticAnalyzer:
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
         # as CE2095 does below. CE4006 stands at the type that named the refused
         # instantiation, no copy was cut for it, and the per-unit passes would only
-        # read the same fault back as a CE2008 from inside a template body. A private
+        # read the same fault back as a CE2008 from inside a template body. A library
         # type a consumer declaration took from a library stops it for the same reason:
         # CE3011 stands at the declaration, and one name means two shapes to the two
         # sides, so a later pass measures one side's code against the other's (#761,
-        # #814 -- binary and source alike).
-        if monomorphizer.constraint_violations or libraries.refused_private_types:
+        # #814, #902 -- binary and source alike).
+        if monomorphizer.constraint_violations or libraries.refused_types:
             return
 
         self._resolve_types()
@@ -229,7 +229,7 @@ class SemanticAnalyzer:
                     unit.ast.perk_impls = [i for i in unit.ast.perk_impls
                                            if id(i) not in dropped]
 
-        libraries.refused_private_types.extend(collector.refused_library_types)
+        libraries.refused_types.extend(collector.refused_library_types)
         self.tables = global_tables
         return libraries
 

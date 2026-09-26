@@ -1,0 +1,8 @@
+# A unit that takes the type name `Acc` for a generic enum.
+
+enum Acc@(T):
+    Empty
+    Some(T)
+
+public fn one() i32:
+    return Result.Ok(1)

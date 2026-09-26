@@ -107,6 +107,8 @@ class CollectorPass:
             reporter=reporter,
             structs=self.structs,
             generic_structs=self.generic_structs,
+            enums=self.enums,
+            generic_enums=self.generic_enums,
         )
 
         self.enum_collector = EnumCollector(

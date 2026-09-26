@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -18,9 +18,12 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash,
 )
 
+if TYPE_CHECKING:
+    from .enums import EnumTable, GenericEnumTable
+
 from .utils import (
-    TakenName, extract_type_param_names, note_first_declaration, reject_duplicate_type_name,
-    reject_reference_in)
+    extract_type_param_names, note_first_declaration, reject_duplicate_type_name,
+    reject_reference_in, type_name_rules)
 
 
 @dataclass
@@ -57,6 +60,8 @@ class StructCollector:
         reporter: Reporter,
         structs: StructTable,
         generic_structs: GenericStructTable,
+        enums: 'EnumTable',
+        generic_enums: 'GenericEnumTable',
     ) -> None:
         """Initialize struct collector."""
         self.r = reporter
@@ -70,6 +75,8 @@ class StructCollector:
         self.visibility: Optional[VisibilityTable] = None
         self.structs = structs
         self.generic_structs = generic_structs
+        self.enums = enums
+        self.generic_enums = generic_enums
 
     def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
         """CE3011 when a library already took this name. True when it was refused."""
@@ -141,10 +148,9 @@ class StructCollector:
         type_params_raw = struct.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if reject_duplicate_type_name(self.r, name, name_span, (
-            TakenName(self.structs, ERR.CE0004),
-            TakenName(self.generic_structs, ERR.CE0004,
-                      "first defined here, as a generic struct"),
+        if reject_duplicate_type_name(self.r, "struct", name, name_span, type_name_rules(
+            "struct", structs=self.structs, generic_structs=self.generic_structs,
+            enums=self.enums, generic_enums=self.generic_enums,
         ), library_clash=self._reject_library_clash):
             return
 
