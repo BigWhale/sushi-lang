@@ -18,7 +18,7 @@ The import brings `NetError`, the channel every method answers: the module re-ex
 
 A datagram socket has no peer of its own, so every send names its destination and every receive answers with a `Datagram`: the bytes, and who sent them. That is not a convenience — an unconnected socket cannot be asked afterwards, because the sender exists only at the instant its datagram arrives.
 
-**One binding owns a socket.** `s.close()` ends it and writes `-1` back; the receiver is `poke self` here, because a `UdpSocket` does not implement `Drop` yet — so the guarded second close stays reachable, which is not true of `<net/tcp>`'s handles.
+**A socket owns its descriptor.** `UdpSocket` implements `Drop`, so it moves to one owner and closes itself when that owner leaves scope. Handing a socket to a `nom` parameter transfers it; a later use of the old name is CE2405. `s.close()` is for the caller who has to see a failed close: it writes `-1` back, so the drop that follows does nothing. The receiver is `poke self` here, so a second close is reachable and is a success, which is not true of `<net/tcp>`'s handles.
 
 `bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
 
@@ -83,7 +83,7 @@ fn main() i32:
 
 ### `s.local_port() i32 | NetError`, `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError`, `s.close() ~ | NetError`
 
-The port that was bound, the bounds on a wait, and the close. The close takes `poke self` and writes `-1` into the binding.
+The port that was bound, the bounds on a wait, and the close. The close takes `poke self` and writes `-1` into the binding. Without a call to `close()`, the socket closes at scope exit and a failure there is lost.
 
 ## Limitations
 

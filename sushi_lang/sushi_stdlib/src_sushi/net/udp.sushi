@@ -10,9 +10,13 @@ and every receive answers with a Datagram: the bytes, and who sent them. That
 is not an ergonomic choice -- an unconnected socket cannot be asked afterwards,
 because the sender exists only at the instant its datagram arrives.
 
-The close rule is <net/tcp>'s: one binding owns a socket, s.close()
-ends it and writes -1 back, and a copy taken before the close holds a
-descriptor the kernel may have given to somebody else.
+A socket OWNS its descriptor. UdpSocket implements the Drop perk, so it moves
+to exactly one owner and closes itself when that owner leaves scope. Handing a
+socket to a `nom` parameter is what transfers it.
+
+close() stays, for the caller who has to SEE that the close failed -- a
+destructor cannot answer a Result. It writes -1 into the binding, so the drop
+that follows is a no-op and the descriptor is released exactly once.
 
 Limitations: blocking sockets only. A datagram longer than the maximum asked
 for is truncated and the rest is lost, which is how the protocol works. Every
@@ -23,10 +27,46 @@ time round.
 use <net/socket>
 public use <net/error>
 
-##: One bound UDP socket. :##
+##:
+One bound UDP socket.
+
+It owns its descriptor: the socket moves to one owner and closes when that
+owner leaves scope. Call close() when the failure has to be seen.
+:##
 public struct UdpSocket:
     ##: The descriptor, or -1 once close() has run. :##
     i32 fd
+
+##:
+Closes the socket when its owner leaves scope.
+:##
+extend UdpSocket with Drop:
+    ##:
+    Closes the descriptor.
+
+    A destructor has nowhere to put a Result, so a close that fails here is lost.
+    Call close() to see it.
+    :##
+    fn drop(poke self) ~:
+        close_socket(poke self.fd)
+
+##:
+Releases a descriptor exactly once, and writes -1 over it.
+
+Private to this module, and the ONE place the guard and the sock_close() call
+are spelled, so close() and the destructor share it.
+
+- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
+- Returns: Nothing.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+fn close_socket(poke i32 fd) ~ | NetError:
+    if (fd < 0):
+        return Result.Ok(~)
+    let i32 held = fd
+    fd := -1
+    sock_close(held)??
+    return Result.Ok(~)
 
 ##:
 Binds a datagram socket to an address and port.
@@ -101,17 +141,12 @@ extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
 ##:
 Closes a socket and writes -1 into the binding.
 
-The binding is marked so that closing it again is a success. A COPY of the
-socket taken before this call still holds the old descriptor; one binding owns
-a socket.
+The binding is marked so that closing it again is a success, and the drop at
+scope exit is then a no-op.
 
 - Returns: Nothing. The binding reads -1 afterwards.
 - Errors: NetError, when the descriptor could not be closed.
 :##
 extend UdpSocket close(poke self) ~ | NetError:
-    if (self.fd < 0):
-        return Result.Ok(~)
-    let i32 fd = self.fd
-    self.fd := -1
-    sock_close(fd)??
+    close_socket(poke self.fd)??
     return Result.Ok(~)
