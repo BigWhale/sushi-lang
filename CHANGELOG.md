@@ -428,6 +428,19 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Every stdlib allocation site the generators listed is checked** (#931). A failed `malloc` in
+  `getcwd`, `getenv`, `run`, `read_dir`, the DNS and UDP peer buffers, the string case and trim
+  helpers and the number-to-string conversions went on with a null pointer. It is RE2021 now,
+  through one seam (`emit_checked_malloc`).
+
+### Changed
+- **`read_all` is one generic function over the `Reader` perk** (#946). `<io/contracts>` exports
+  `read_all@(R: Reader)(poke R r)`; `File.read_all` and `BufReader.read_all` forward to it.
+- **`slib-info` reads the manifest through borrows** (#948). A string leaf is copied once, not three
+  times, and a subtree is not copied. `<encoding/msgpack>` adds `map_index`, `map_get_str` and
+  `map_get_bool`.
+- **The stdlib generators read a `Result` tag by name** (#932), and `net/ip.sushi` has no cast on a
+  bare literal (#952).
 - **`UdpSocket` closes its descriptor on drop** (#940). It had no `Drop`, so a socket that went out
   of scope kept its descriptor. It implements `Drop` now, as `TcpStream` does; it moves, and a use
   after `nom` is CE2405.
