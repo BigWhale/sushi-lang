@@ -1,8 +1,7 @@
 # slib-info: print the metadata report of a .slib library.
 #
 # The report mirrors the Python fallback (print_library_info in
-# sushi_lang/compiler/cli.py) line for line on the success path;
-# tests/unit/test_slib_info_parity.py locks the two together.
+# sushi_lang/compiler/cli.py) line for line on the success path.
 # Exit codes: 0 report printed or --help answered, 2 usage or read error.
 
 use <io/fs>

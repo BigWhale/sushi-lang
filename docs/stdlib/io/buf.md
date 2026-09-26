@@ -37,6 +37,7 @@ is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE400
 ```sushi
 use <io/fs>
 use <io/buf>
+use <collections/strings>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
