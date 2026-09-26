@@ -1,0 +1,16 @@
+# EXPECT_STDOUT_EXACT: "5\n42\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# The argument of `Own.alloc` is typechecked like any other argument, so a lambda in
+# it gets its function type (#923).
+
+struct F:
+    fn(i32) -> i32 f
+    i32 n
+
+fn main() i32:
+    let Own@(F) o1 = Own.alloc(F(|i32 x| x + 1, 5))
+    println("{o1.get().n}")
+    println("{o1.get().f(41).realise(0)}")
+    return Result.Ok(0)

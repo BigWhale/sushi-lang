@@ -541,15 +541,26 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
             from sushi_lang.semantics.passes.types.arrays import reject_non_i32
             count = call.args[0]
             reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
+        elif call.method == "alloc":
+            _validate_own_alloc_payload(validator, call)
 
 
 #: The statics a built-in container answers on its type NAME, and the family whose count
 #: row each one reads (`MethodFamily.arity`).
 _CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
-                      "HashMap": ("hashmap", ("new",))}
+                      "HashMap": ("hashmap", ("new",)),
+                      "Own": ("own", ("alloc",))}
 
 #: The container statics whose one argument is a count, an i32 position (#870).
 _CONTAINER_STATIC_COUNTS = frozenset({"with_capacity"})
+
+
+def _validate_own_alloc_payload(validator: 'TypeValidator', call: MethodCall) -> None:
+    """`Own.alloc(v)`: the payload is an argument like any other, against the stamped `T`."""
+    from sushi_lang.semantics.generics.own import own_payload_type
+    payload = own_payload_type(getattr(call, "resolved_struct_type", None))
+    check_arguments(validator, "Own.alloc", [payload], call.args, call.loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
 def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,

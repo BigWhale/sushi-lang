@@ -1,0 +1,11 @@
+# EXPECT_STDOUT_EXACT: "8\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# TEST_TYPE: runtime
+# A lambda that is the payload of `Own.alloc` itself (#923).
+
+fn main() i32:
+    let Own@(fn(i32) -> i32) o1 = Own.alloc(|i32 x| x * 2)
+    let fn(i32) -> i32 g = o1.get()
+    println("{g(4).realise(0)}")
+    return Result.Ok(0)
