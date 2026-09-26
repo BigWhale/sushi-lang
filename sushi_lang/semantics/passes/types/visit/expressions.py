@@ -227,16 +227,19 @@ class ExpressionValidator(RecursiveVisitor):
             copy_callee_stamps(node, target.method_call)
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
-        """Validate array literal."""
+        """Validate array literal, then make sure it is stamped (#889)."""
         validate_array_literal(self.type_validator, node)
+        if node.resolved_type is None:
+            self.type_validator.infer_expression_type(node)
 
     def visit_indexaccess(self, node: IndexAccess) -> None:
         """Validate index access."""
         validate_index_access(self.type_validator, node)
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> None:
-        """new() constructor - no subexpressions to validate."""
-        pass
+        """new() takes its type from its position alone. With none, it is CE2111 (#889)."""
+        if node.resolved_type is None:
+            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc, form="new()")
 
     def visit_dynamicarrayfrom(self, node: DynamicArrayFrom) -> None:
         """from(array_literal) - validate the array literal, then make sure it is stamped.
@@ -249,7 +252,7 @@ class ExpressionValidator(RecursiveVisitor):
         if node.resolved_type is None:
             self.type_validator.infer_expression_type(node)
         if node.resolved_type is None and not node.elements.elements:
-            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc)
+            er.emit(self.type_validator.reporter, er.ERR.CE2111, node.loc, form="from([])")
 
     def visit_castexpr(self, node: CastExpr) -> None:
         """Cast expression - validate the source expression and check cast validity."""

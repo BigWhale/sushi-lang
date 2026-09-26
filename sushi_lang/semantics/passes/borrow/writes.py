@@ -120,12 +120,17 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 )
 
 
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
+def changes_its_receiver(expr: MethodLike) -> bool:
+    """Does this call change the value it is called on?"""
     # A call to a `poke self` method (#327) IS a write to the receiver root --
     # the typecheck pass stamps the resolution on the node, so this pass never re-resolves.
-    is_poke_self_call = receiver_mode(expr.callee_self_mode) is ParamMode.POKE
-    if not effect_of(expr.method).mutates and not is_poke_self_call:
+    return (effect_of(expr.method).mutates
+            or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
+
+
+def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
+    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
+    if not changes_its_receiver(expr):
         return
     receiver = expr.receiver
     root = root_owner(receiver)

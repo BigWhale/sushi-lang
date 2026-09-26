@@ -19,14 +19,6 @@ def emit_array_literal_elements(codegen: 'LLVMCodegen', elements, element_type):
     return runs.emit_runs(codegen, elements, element_type)
 
 
-def alias_element_type(codegen: 'LLVMCodegen', elem):
-    """Best-effort semantic type of a bare-Name array-literal element (for alias cloning)."""
-    from sushi_lang.semantics.ast import Name
-    if isinstance(elem, Name):
-        return codegen.memory.get_semantic_type(elem.id)
-    return None
-
-
 def emit_dynamic_array_of_length(codegen: 'LLVMCodegen', element_llvm_type: ir.Type,
                                  length: ir.Value) -> tuple[ir.Value, ir.Value]:
     """A `T[]` of a RUN-TIME length, allocated and sized but not filled (#478, Phase 3).

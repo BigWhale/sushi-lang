@@ -566,6 +566,8 @@ class Match(Stmt):
     # owned by construction and needs no marker.
     consumes_scrutinee: bool = False
     consumes_span: Optional[Span] = None
+    # The typecheck pass refused the arms as not exhaustive (CE2040 / CE2074, #886).
+    not_exhaustive: bool = False
 
 
 @dataclass(slots=True)
@@ -620,6 +622,9 @@ class ArrayElement(Node):
 @dataclass(slots=True)
 class ArrayLiteral(Node):
     elements: List["ArrayElement"]
+    # The `T[N]` this literal is, stamped by the typecheck pass: the declared type of its
+    # position, else the type inferred from its elements (#889). The backend reads it.
+    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class IndexAccess(Node):

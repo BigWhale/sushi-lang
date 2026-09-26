@@ -1,0 +1,8 @@
+# An `f32` element literal as a method receiver takes the element type it infers (#889).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let f32 x = 1.5
+    println([x, x, x].len())
+    return Result.Ok(0)

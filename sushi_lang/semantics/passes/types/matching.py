@@ -194,6 +194,7 @@ def validate_integer_match(validator: 'TypeValidator', stmt: Match,
         _walk_arm_body(validator, arm)
 
     if not has_wildcard:
+        stmt.not_exhaustive = True
         er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
 
 
@@ -310,6 +311,7 @@ def check_match_exhaustiveness(
 
         if missing_variants:
             missing_list = ", ".join(sorted(missing_variants))
+            stmt.not_exhaustive = True
             er.emit(validator.reporter, er.ERR.CE2040, stmt.loc, variants=missing_list)
 
 

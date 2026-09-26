@@ -1,0 +1,10 @@
+# A `string` element literal as a method receiver: the literal elements and a name mixed
+# (#889).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string s = "harmless"
+    println(["mostly", s, "mostly"].len())
+    return Result.Ok(0)

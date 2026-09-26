@@ -25,7 +25,7 @@ from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
-from sushi_lang.semantics.visibility import DeclOrigin, reject_library_clash
+from sushi_lang.semantics.visibility import TYPE_KINDS, DeclOrigin, reject_library_clash
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendWithDef, Program
@@ -101,12 +101,13 @@ class LibraryRegistration:
         # The concrete perk implementations a library ships: registered here for the
         # constraint checks and dispatch, declared and never defined by the backend.
         self.shipped_perk_impls: list['ExtendWithDef'] = []
-        # The private type names a consumer declaration took from a library (#761,
-        # #814): from a binary export closure here, from a source library's unit or a
-        # seeded private template in the collect pass. The library's bodies name them,
-        # so the analyzer stops before the per-unit passes measure the library's code
-        # against the consumer's layout, or the consumer's code against the library's.
-        self.refused_private_types: list[str] = []
+        # The type names a consumer declaration took from a library (#761, #814, #902):
+        # a binary library's export or export closure here, a source library's private
+        # unit type or a seeded private template in the collect pass. The library's
+        # bodies name them, so the analyzer stops before the per-unit passes measure the
+        # library's code against the consumer's layout, or the consumer's code against
+        # the library's.
+        self.refused_types: list[str] = []
         # One collector for every re-parsed record, built on first use. A fresh
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
@@ -306,18 +307,32 @@ class LibraryRegistration:
 
         CE3011 and not the plain duplicate: the consumer cannot SEE a binary library's
         declaration, so a note has nowhere to point and the head line has to say which
-        library holds the name. The visibility table is what tells the two apart -- the
-        consumer's own declaration carries one of this build's units, a library's
-        private type carries the library.
+        library holds the name. The consumer's declaration may be of either kind: a
+        struct and an enum share one name (#902).
         """
-        origin = self.tables.visibility.origin(kind, name)
-        if origin is None or origin.unit_name not in build_units:
+        origin = self._build_declaration(name, build_units)
+        if origin is None:
             return False
         reject_library_clash(
             self.reporter,
             DeclOrigin(kind=kind, name=name, unit_name=self._owning_library(kind, name)),
-            origin.name_span, kind=kind, name=name, filename=origin.filename)
+            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+        self.refused_types.append(name)
         return True
+
+    def _build_declaration(self, name: str,
+                           build_units: set[str]) -> Optional[DeclOrigin]:
+        """The declaration of this type name one of THIS build's units made, or None.
+
+        Either kind answers, because a struct and an enum share one type name. The
+        visibility table tells the two sides apart: the consumer's own declaration
+        carries one of this build's units, a library's type carries the library.
+        """
+        for kind in TYPE_KINDS:
+            origin = self.tables.visibility.origin(kind, name)
+            if origin is not None and origin.unit_name in build_units:
+                return origin
+        return None
 
     def _owning_library(self, kind: str, name: str) -> Optional[str]:
         """Which loaded library exports this type, by the name the manifest carries.
@@ -510,16 +525,14 @@ class LibraryRegistration:
         private struct takes the name from a consumer enum as firmly as from a struct.
         A name another library already registered is not this build's, and is no clash.
         """
-        for kind in ("struct", "enum"):
-            origin = self.tables.visibility.origin(kind, name)
-            if origin is None or origin.unit_name not in build_units:
-                continue
-            reject_library_clash(
-                self.reporter,
-                DeclOrigin(kind=kind, name=name, unit_name=lib_name),
-                origin.name_span, kind=kind, name=name, filename=origin.filename)
-            self.refused_private_types.append(name)
+        origin = self._build_declaration(name, build_units)
+        if origin is None:
             return
+        reject_library_clash(
+            self.reporter,
+            DeclOrigin(kind=origin.kind, name=name, unit_name=lib_name),
+            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+        self.refused_types.append(name)
 
     def _register_perk_impls(self) -> None:
         """Register the concrete perk IMPLEMENTATIONS the libraries ship."""

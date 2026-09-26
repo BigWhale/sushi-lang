@@ -1,0 +1,15 @@
+# A consumer's struct `Mood` against a BINARY library's public enum `Mood`. The
+# consumer's declaration is refused where it stands (CE3011), and the library that
+# holds the name is named. The pytest gate
+# tests/unit/test_lib_binary_other_kind_clash.py pins the complete code list.
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "binary_api_lib"
+use <lib/binary_api_lib>
+
+struct Mood:
+    i32 m
+
+fn main() i32:
+    let Mood c = Mood(3)
+    println("{c.m}")
+    return Result.Ok(0)

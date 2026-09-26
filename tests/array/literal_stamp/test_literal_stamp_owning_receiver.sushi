@@ -1,0 +1,12 @@
+# A literal of heap strings as a method receiver: the elements move into the temporary,
+# and the temporary is freed once (#889).
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let string s = "mostly".concat(" harmless")
+    let string t = "so long".concat(" and thanks")
+    println([s, t].len())
+    return Result.Ok(0)
