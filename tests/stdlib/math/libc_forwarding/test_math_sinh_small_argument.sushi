@@ -1,0 +1,8 @@
+# sinh of a small value keeps its precision: sinh(1e-20) is 1e-20, not 0 (#905).
+# EXPECT_STDOUT_EXACT: "1e-20\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    println("{sinh(1e-20)}")
+    return Result.Ok(0)

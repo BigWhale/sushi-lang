@@ -1,0 +1,8 @@
+# hypot of two large values does not overflow, as the C library hypot does not (#905).
+# EXPECT_STDOUT_EXACT: "1.41421e+200\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    println("{hypot(1e200, 1e200)}")
+    return Result.Ok(0)
