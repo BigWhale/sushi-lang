@@ -1,0 +1,21 @@
+# A perk implementation on one instantiation meets an extension method of the
+# same name on that instantiation. The name has two homes, and the conflict is
+# judged where it is written, with no instance of the target (#898).
+# EXPECT_ERROR_CODE: CE4007
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(i32) sz() i32:
+    return 1
+
+extend Box@(i32) with Sz:
+    fn sz() i32:
+        return 2
+
+fn main() i32:
+    let Box@(string) b = Box("x")
+    println(b.v)
+    return Result.Ok(0)

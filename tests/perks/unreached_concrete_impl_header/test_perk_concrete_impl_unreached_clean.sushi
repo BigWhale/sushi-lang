@@ -1,0 +1,21 @@
+# The control: a perk implementation on one instantiation with no conflict and
+# no instance compiles clean. An extension on ANOTHER instantiation is no
+# second home (#898).
+# EXPECT_STDOUT_EXACT: "x\n"
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(string) sz() i32:
+    return 1
+
+extend Box@(i32) with Sz:
+    fn sz() i32:
+        return 2
+
+fn main() i32:
+    let Box@(string) b = Box("x")
+    println(b.v)
+    return Result.Ok(0)

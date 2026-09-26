@@ -1,0 +1,20 @@
+# The same conflict with an instance of the target: the same one diagnostic
+# (#898).
+# EXPECT_ERROR_CODE: CE4007
+perk Sz:
+    fn sz() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(i32) sz() i32:
+    return 1
+
+extend Box@(i32) with Sz:
+    fn sz() i32:
+        return 2
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println("{b.v}")
+    return Result.Ok(0)
