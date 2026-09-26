@@ -1,0 +1,14 @@
+# A bare `foreach` item over a `List@(string)` views a slot of the list. A change to the
+# list while the item is still used is refused (#919).
+# EXPECT_ERROR_CODE: CE2412
+
+use <collections/strings>
+
+fn main() i32:
+    let List@(string) l = List.new()
+    l.push("one".upper())
+    l.push("two".upper())
+    foreach(x in l.iter()):
+        l.clear()
+        println(x)
+    return Result.Ok(0)

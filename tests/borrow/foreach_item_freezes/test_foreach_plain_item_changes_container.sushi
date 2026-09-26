@@ -1,0 +1,12 @@
+# A plain element is a copy, so the item views nothing and a change to the array in the
+# body stays legal (#919).
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n4\n4\n4\n"
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    foreach(x in a.iter()):
+        println(x)
+        a.fill(x + 1)
+    foreach(y in a.iter()):
+        println(y)
+    return Result.Ok(0)

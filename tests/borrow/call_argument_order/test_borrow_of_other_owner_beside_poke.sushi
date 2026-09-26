@@ -1,0 +1,22 @@
+# A borrow of a DIFFERENT owner beside a `poke a` stays legal: nothing it views changes
+# (#920).
+# EXPECT_STDOUT_EXACT: "ok\nABC\nABC\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn put(string v, poke string[] dst) ~:
+    dst.fill(v)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string s = "abc"
+    let string[] a = from([s.lower(), s.lower()])
+    let string[] b = from([s.upper()])
+    let string first = b[0]
+    match put(first, poke a):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    println(a[0])
+    println(a[1])
+    return Result.Ok(0)

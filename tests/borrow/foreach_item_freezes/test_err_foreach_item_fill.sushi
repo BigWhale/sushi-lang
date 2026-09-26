@@ -1,0 +1,14 @@
+# A bare `foreach` item over `a.iter()` views a slot that `a` owns. `fill` destroys that
+# slot while it reads the item, so the call is refused, as for a `let`-borrow (#919).
+# EXPECT_ERROR_CODE: CE2412
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "abcdefghijklmnopqrstuvwxyz0123456789"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    foreach(x in a.iter()):
+        a.fill(x)
+        break
+    println(a[1])
+    return Result.Ok(0)

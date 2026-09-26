@@ -1,0 +1,19 @@
+# A `let`-borrow of a slot of `a` is an argument of the same call that takes `poke a`.
+# The callee changes `a` while it reads the borrow, whatever the argument order (#920).
+# EXPECT_ERROR_CODE: CE2412
+
+use <collections/strings>
+
+fn put(string v, poke string[] dst) ~:
+    dst.fill(v)
+    return Result.Ok(~)
+
+fn main() i32:
+    let string s = "abcdefghijklmnopqrstuvwxyz0123456789"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    let string first = a[0]
+    match put(first, poke a):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    println(a[1])
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# A `let`-borrow of a slot of `a` is an argument of the same call, after `nom a`. The
+# callee owns `a` and may free it while it reads the borrow (#920).
+# EXPECT_ERROR_CODE: CE2412
+
+use <collections/strings>
+
+fn keep(nom string[] dst, string v) i32:
+    return Result.Ok(v.len() + dst.len())
+
+fn main() i32:
+    let string s = "abc"
+    let string[] a = from([s.upper(), s.lower()])
+    let string first = a[0]
+    println(keep(nom a, first).realise(0))
+    return Result.Ok(0)
