@@ -16,14 +16,12 @@ class LibCStrings:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        self.strcmp: ir.Function
         self.strlen: ir.Function
         self.sprintf: ir.Function
         self.memcmp: ir.Function
 
     def declare_all(self) -> None:
         """Declare all string functions."""
-        self._declare_strcmp()
         self._declare_strlen()
         self._declare_sprintf()
         self._declare_memcmp()
@@ -46,15 +44,6 @@ class LibCStrings:
         func = ir.Function(self.codegen.module, fn_ty, name=func_name)
         setattr(self, attr_name, func)
         return func
-
-    def _declare_strcmp(self) -> None:
-        """Declare strcmp: int strcmp(const char* s1, const char* s2)"""
-        self.strcmp = self._declare_extern(
-            "strcmp",
-            "strcmp",
-            self.codegen.i32,
-            [self.codegen.i8.as_pointer(), self.codegen.i8.as_pointer()]
-        )
 
     def _declare_strlen(self) -> None:
         """Declare strlen: i32 llvm_strlen(i8* s)"""
