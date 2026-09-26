@@ -98,7 +98,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_OFFSET", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_BITS", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_HAS_LEN", _PLATFORM_ABI),
-    ("sushi_lang/sushi_stdlib/src/_platform/*/files.py", "ELOOP", _PLATFORM_ABI),
 )
 
 _EXTERN = ("declared into every module and read by no emitter; deleting the "
@@ -123,8 +122,4 @@ RATCHET: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/backend/runtime/externs/libc_stdio.py", "ferror", _EXTERN),
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a header bit docs/design/libraries.md section 2 defines; nothing sets or reads it"),
-    ("sushi_lang/sushi_stdlib/src/_platform/darwin/files.py", "ENAMETOOLONG",
-     "no reader; the platform ABI ruling names its sibling ELOOP and not this constant"),
-    ("sushi_lang/sushi_stdlib/src/_platform/linux/files.py", "ENAMETOOLONG",
-     "no reader; the platform ABI ruling names its sibling ELOOP and not this constant"),
 )
