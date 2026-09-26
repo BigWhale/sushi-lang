@@ -51,19 +51,6 @@ def save_token(repository: str, token: str) -> None:
     _write_credentials(data)
 
 
-def remove_token(repository: str) -> bool:
-    """Remove the token for a repository. Returns True if a token was removed."""
-    if not CREDENTIALS_FILE.exists():
-        return False
-    with open(CREDENTIALS_FILE, "rb") as f:
-        data = tomllib.load(f)
-    if repository not in data:
-        return False
-    del data[repository]
-    _write_credentials(data)
-    return True
-
-
 def _write_credentials(data: dict[str, dict]) -> None:
     """Write credentials dict to TOML file with 0600 permissions."""
     CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)

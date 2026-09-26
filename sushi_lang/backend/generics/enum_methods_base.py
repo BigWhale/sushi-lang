@@ -36,7 +36,6 @@ def emit_enum_realise(
     enum_value: ir.Value,
     enum_type: EnumType,
     success_variant_name: str,
-    enum_type_name: str
 ) -> ir.Value:
     """Emit LLVM code for enum.realise(default) pattern."""
     if len(call.args) != 1:

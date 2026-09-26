@@ -2,21 +2,12 @@
 
 from typing import Any
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
-from sushi_lang.semantics.generics.type_display import display_type
-
-
-def _validate_to_bits(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate to_bits() method call on float primitive types (takes no arguments)."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-                name=f"{display_type(target_type)}.to_bits", expected=0, got=len(call.args))
 
 
 def _emit_to_bits(prim_type: BuiltinType) -> Any:
@@ -44,10 +35,8 @@ for _prim_type, _return_type in _TO_BITS_RETURN.items():
         _prim_type,
         BuiltinMethod(
             name="to_bits",
-            parameter_types=[],
             return_type=_return_type,
             description=f"Reinterpret the IEEE-754 bit pattern of {_prim_type} as {_return_type}",
-            semantic_validator=_validate_to_bits,
             llvm_emitter=_emit_to_bits(_prim_type),
         ),
     )

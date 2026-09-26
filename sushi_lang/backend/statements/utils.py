@@ -1,7 +1,6 @@
 """Shared utilities for statement emission in the Sushi language compiler."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from sushi_lang.backend.utils import require_function
 
 if TYPE_CHECKING:
     from llvmlite import ir
@@ -25,39 +24,3 @@ def emit_scope_cleanup(codegen: 'LLVMCodegen') -> None:
     # A `??` inside a print argument leaves through here, not the frame's straight-line
     # pop, so the buffers built before the propagation had no free at all (#295).
     codegen.print_frames.free_all_on_early_exit()
-
-
-def create_loop_blocks(codegen: 'LLVMCodegen', prefix: str = "loop") -> tuple['ir.Block', 'ir.Block', 'ir.Block']:
-    """Create standard loop basic blocks (condition, body, end)."""
-    require_function(codegen)
-    cond_bb = codegen.func.append_basic_block(name=f"{prefix}.cond")
-    body_bb = codegen.func.append_basic_block(name=f"{prefix}.body")
-    end_bb = codegen.func.append_basic_block(name=f"{prefix}.end")
-    return cond_bb, body_bb, end_bb
-
-
-def create_conditional_blocks(
-    codegen: 'LLVMCodegen',
-    prefix: str,
-    num_arms: int,
-    has_else: bool = False
-) -> tuple[list['ir.Block'], 'ir.Block', 'ir.Block | None']:
-    """Create basic blocks for conditional statements (if/match)."""
-    require_function(codegen)
-    arm_blocks = [codegen.func.append_basic_block(name=f"{prefix}.arm{i}") for i in range(num_arms)]
-    end_block = codegen.func.append_basic_block(name=f"{prefix}.end")
-    else_block = codegen.func.append_basic_block(name=f"{prefix}.else") if has_else else None
-    return arm_blocks, end_block, else_block
-
-
-def emit_block_with_scope(codegen: 'LLVMCodegen', block, emit_func=None) -> None:
-    """Emit a block with automatic scope management."""
-    codegen.memory.push_scope()
-    if emit_func:
-        emit_func(block)
-    else:
-        from sushi_lang.backend.statements import StatementEmitter
-        emitter = StatementEmitter(codegen)
-        emitter.emit_block(block)
-    codegen.memory.pop_scope()
-

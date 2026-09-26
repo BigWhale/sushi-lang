@@ -17,18 +17,6 @@ def package_dir(name: str) -> Path:
     return BENTO_DIR / name
 
 
-def package_lib_dir(name: str) -> Path:
-    return BENTO_DIR / name / "lib"
-
-
-def package_bin_dir(name: str) -> Path:
-    return BENTO_DIR / name / "bin"
-
-
-def package_data_dir(name: str) -> Path:
-    return BENTO_DIR / name / "data"
-
-
 def store_package_dir(name: str, version: str) -> Path:
     return STORE_DIR / f"{name}-{version}"
 

@@ -33,8 +33,6 @@ class FunctionDefinitions:
         helpers = self.codegen.functions.helpers
         helpers.begin_function(llvm_fn, fn)
 
-        self.codegen.current_function_ast = fn
-
         for param in fn.params:
             if param.ty is not None:
                 self.codegen.variable_types[param.name] = param.ty
@@ -45,8 +43,6 @@ class FunctionDefinitions:
             helpers.emit_default_return(fn)
 
         helpers.end_function()
-
-        self.codegen.current_function_ast = None
 
     def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
         """Define the body of an extension method."""
@@ -60,7 +56,6 @@ class FunctionDefinitions:
         # OWNED by the body and leaks unless registered (borrow-model.md S1).
         helpers.begin_function(llvm_fn, ext)
 
-        self.codegen.in_extension_method = True
         # A channel body ('| E') spells both constructors (#848); only the fall-off path,
         # which CE0107 keeps unreachable, reads the channel here.
         from sushi_lang.backend.generics.result_builder import extension_result_of
@@ -118,7 +113,6 @@ class FunctionDefinitions:
             else:
                 helpers.emit_default_return_for_extension(ext.ret)
 
-        self.codegen.in_extension_method = False
         self.codegen.current_extension_result = None
         helpers.end_function()
         return llvm_fn

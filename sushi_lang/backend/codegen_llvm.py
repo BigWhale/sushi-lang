@@ -6,7 +6,7 @@ from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
-    from sushi_lang.semantics.ast import ExtendWithDef, FuncDef
+    from sushi_lang.semantics.ast import ExtendWithDef
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
@@ -125,7 +125,6 @@ class LLVMCodegen:
 
         self.builder: Optional[ir.IRBuilder] = None
         self.func: Optional[ir.Function] = None
-        self.in_extension_method: bool = False  # Track if compiling extension method
         # The interned Result a CHANNEL extension body ('| E') returns; None in a bare
         # body. Set and cleared by emit_extension_method_def, read by emit_return.
         self.current_extension_result = None
@@ -170,7 +169,6 @@ class LLVMCodegen:
         # Used for inferring Result<T> types from function call expressions
         self.function_return_types: UnitKeyedSymbols['Type'] = UnitKeyedSymbols()
 
-        self.current_function_ast: Optional['FuncDef'] = None
         # The names the borrow pass stamped as conditionally moved in the body being
         # emitted (#414); `begin_function` sets it.
         self.current_conditional_moves: frozenset[str] = frozenset()

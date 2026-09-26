@@ -72,14 +72,6 @@ class ScopeManager:
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
     @staticmethod
-    def _stack_peek_slot(reg: Dict[str, List], name: str) -> Optional[ir.AllocaInstr]:
-        """Return the innermost registered slot for `name` in a stacked cleanup registry."""
-        entries = reg.get(name)
-        if entries:
-            return entries[-1][-1]
-        return None
-
-    @staticmethod
     def _stack_pop_at_depth(reg: Dict[str, List], name: str, depth: int) -> None:
         """Drop `name`'s top entry from a stacked cleanup registry if it is at `depth`."""
         entries = reg.get(name)
@@ -205,11 +197,6 @@ class ScopeManager:
         free_fn = self.codegen.get_free_func()
         for ptr in ptrs:
             builder.call(free_fn, [ptr])
-
-    def register_closure_temp(self, fat_value: 'ir.Value') -> None:
-        """Register an inline-closure argument temp ({fn,env,drop} value) for scope-exit free."""
-        if self._closure_temp_cleanup:
-            self._closure_temp_cleanup[-1].append(fat_value)
 
     def _free_closure_temp_list(self, fat_values: List['ir.Value']) -> None:
         """Emit the runtime-guarded env free for a list of closure temps, if the block is live."""

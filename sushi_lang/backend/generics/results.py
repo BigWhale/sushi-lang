@@ -2,7 +2,7 @@
 
 from typing import Any
 from sushi_lang.semantics.ast import DotCall, MethodCall
-from sushi_lang.semantics.typesys import EnumType, Type
+from sushi_lang.semantics.typesys import EnumType
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -24,7 +24,7 @@ def emit_builtin_result_method(
         return codegen.utils.bool_answer(
             emit_enum_tag_check(codegen, result_value, 1, "is_err"), to_i1)
     elif call.method == "realise":
-        return emit_enum_realise(codegen, call, result_value, result_type, "Ok", "Result")
+        return emit_enum_realise(codegen, call, result_value, result_type, "Ok")
     elif call.method == "expect":
         return _emit_result_expect(codegen, call, result_value, result_type)
     elif call.method == "err":
@@ -96,17 +96,3 @@ def _emit_result_err(
     phi.add_incoming(some_value, err_block)
 
     return phi
-
-
-def _extract_ok_type_from_result(result_type: EnumType) -> Type:
-    """Extract the T type from Result<T, E> enum."""
-    ok_variant = result_type.get_variant("Ok")
-    if ok_variant is None:
-        raise_internal_error("CE0089", enum=result_type.name)
-
-    if len(ok_variant.associated_types) != 1:
-        raise_internal_error("CE0090", got=len(ok_variant.associated_types))
-
-    return ok_variant.associated_types[0]
-
-

@@ -7,7 +7,6 @@ import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_RETURNS
-from sushi_lang.semantics.generics.primitives import validate_primitive_method
 from sushi_lang.sushi_stdlib.src.common import BuiltinMethod, register_builtin_method
 
 
@@ -26,10 +25,8 @@ for _prim_type, _return_type in PRIMITIVE_METHOD_RETURNS["clone"].items():
         _prim_type,
         BuiltinMethod(
             name="clone",
-            parameter_types=[],
             return_type=_return_type,
             description=f"Return an independent copy of a {_prim_type} (a plain copy)",
-            semantic_validator=validate_primitive_method,
             llvm_emitter=_emit_clone,
         ),
     )
