@@ -1,0 +1,4 @@
+use <collections/strings>
+
+public fn begins_with_a(string s) bool:
+    return Result.Ok(s.starts_with("a"))
