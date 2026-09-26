@@ -18,21 +18,8 @@ class LibCStdio:
         """Initialize with reference to main codegen instance."""
         self.codegen = codegen
 
-        self.printf: ir.Function
         self.fprintf: ir.Function
-        self.fopen: ir.Function
-        self.fclose: ir.Function
-        self.fgets: ir.Function
-        self.fgetc: ir.Function
-        self.getline: ir.Function
-        self.fputc: ir.Function
-        self.fread: ir.Function
         self.fwrite: ir.Function
-        self.fseek: ir.Function
-        self.ftell: ir.Function
-        self.rewind: ir.Function
-        self.feof: ir.Function
-        self.ferror: ir.Function
         # POSIX write(2), not stdio. It is the ONE route a print statement takes to a
         # descriptor (HANDLES.md, Phase 5). The name says `fd_` so that a reader never
         # mistakes it for `fwrite`, which buffers and which the console no longer uses.
@@ -45,21 +32,8 @@ class LibCStdio:
 
     def declare_all(self) -> None:
         """Declare all stdio functions and globals."""
-        self._declare_printf()
         self._declare_fprintf()
-        self._declare_fopen()
-        self._declare_fclose()
-        self._declare_fgets()
-        self._declare_fgetc()
-        self._declare_getline()
-        self._declare_fputc()
-        self._declare_fread()
         self._declare_fwrite()
-        self._declare_fseek()
-        self._declare_ftell()
-        self._declare_rewind()
-        self._declare_feof()
-        self._declare_ferror()
         self._declare_fd_write()
         self._declare_setvbuf()
         self._declare_stdio_handles()
@@ -90,19 +64,6 @@ class LibCStdio:
         else:
             self.setvbuf = ir.Function(self.codegen.module, fn_ty, name="setvbuf")
 
-    def _declare_printf(self) -> None:
-        """Declare printf: int printf(const char* format, ...)"""
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [self.codegen.i8.as_pointer()],
-            var_arg=True
-        )
-        existing = self.codegen.module.globals.get("printf")
-        if isinstance(existing, ir.Function):
-            self.printf = existing
-        else:
-            self.printf = ir.Function(self.codegen.module, fn_ty, name="printf")
-
     def _declare_fprintf(self) -> None:
         """Declare fprintf: int fprintf(FILE* stream, const char* format, ...)"""
         file_ptr_ty = self.codegen.i8.as_pointer()
@@ -117,99 +78,6 @@ class LibCStdio:
         else:
             self.fprintf = ir.Function(self.codegen.module, fn_ty, name="fprintf")
 
-    def _declare_fopen(self) -> None:
-        """Declare fopen: FILE* fopen(const char* filename, const char* mode)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            file_ptr_ty,
-            [self.codegen.i8.as_pointer(), self.codegen.i8.as_pointer()]
-        )
-        existing = self.codegen.module.globals.get("fopen")
-        if isinstance(existing, ir.Function):
-            self.fopen = existing
-        else:
-            self.fopen = ir.Function(self.codegen.module, fn_ty, name="fopen")
-
-    def _declare_fclose(self) -> None:
-        """Declare fclose: int fclose(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fclose")
-        if isinstance(existing, ir.Function):
-            self.fclose = existing
-        else:
-            self.fclose = ir.Function(self.codegen.module, fn_ty, name="fclose")
-
-    def _declare_fgets(self) -> None:
-        """Declare fgets: char* fgets(char* str, int size, FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i8.as_pointer(),
-            [self.codegen.i8.as_pointer(), self.codegen.i32, file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fgets")
-        if isinstance(existing, ir.Function):
-            self.fgets = existing
-        else:
-            self.fgets = ir.Function(self.codegen.module, fn_ty, name="fgets")
-
-    def _declare_getline(self) -> None:
-        """Declare getline: ssize_t getline(char **lineptr, size_t *n, FILE *stream)"""
-        i8_ptr = self.codegen.i8.as_pointer()
-        size_t_ty = ir.IntType(INT64_BIT_WIDTH)
-        fn_ty = ir.FunctionType(
-            size_t_ty,
-            [i8_ptr.as_pointer(), size_t_ty.as_pointer(), i8_ptr]
-        )
-        existing = self.codegen.module.globals.get("getline")
-        if isinstance(existing, ir.Function):
-            self.getline = existing
-        else:
-            self.getline = ir.Function(self.codegen.module, fn_ty, name="getline")
-
-    def _declare_fgetc(self) -> None:
-        """Declare fgetc: int fgetc(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fgetc")
-        if isinstance(existing, ir.Function):
-            self.fgetc = existing
-        else:
-            self.fgetc = ir.Function(self.codegen.module, fn_ty, name="fgetc")
-
-    def _declare_fputc(self) -> None:
-        """Declare fputc: int fputc(int c, FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [self.codegen.i32, file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fputc")
-        if isinstance(existing, ir.Function):
-            self.fputc = existing
-        else:
-            self.fputc = ir.Function(self.codegen.module, fn_ty, name="fputc")
-
-    def _declare_fread(self) -> None:
-        """Declare fread: size_t fread(void* ptr, size_t size, size_t nmemb, FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        size_t_ty = ir.IntType(INT64_BIT_WIDTH)
-        fn_ty = ir.FunctionType(
-            size_t_ty,
-            [self.codegen.i8.as_pointer(), size_t_ty, size_t_ty, file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fread")
-        if isinstance(existing, ir.Function):
-            self.fread = existing
-        else:
-            self.fread = ir.Function(self.codegen.module, fn_ty, name="fread")
-
     def _declare_fwrite(self) -> None:
         """Declare fwrite: size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream)"""
         file_ptr_ty = self.codegen.i8.as_pointer()
@@ -223,71 +91,6 @@ class LibCStdio:
             self.fwrite = existing
         else:
             self.fwrite = ir.Function(self.codegen.module, fn_ty, name="fwrite")
-
-    def _declare_fseek(self) -> None:
-        """Declare fseek: int fseek(FILE* stream, long offset, int whence)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty, ir.IntType(INT64_BIT_WIDTH), self.codegen.i32]
-        )
-        existing = self.codegen.module.globals.get("fseek")
-        if isinstance(existing, ir.Function):
-            self.fseek = existing
-        else:
-            self.fseek = ir.Function(self.codegen.module, fn_ty, name="fseek")
-
-    def _declare_ftell(self) -> None:
-        """Declare ftell: long ftell(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            ir.IntType(INT64_BIT_WIDTH),
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("ftell")
-        if isinstance(existing, ir.Function):
-            self.ftell = existing
-        else:
-            self.ftell = ir.Function(self.codegen.module, fn_ty, name="ftell")
-
-    def _declare_rewind(self) -> None:
-        """Declare rewind: void rewind(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            ir.VoidType(),
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("rewind")
-        if isinstance(existing, ir.Function):
-            self.rewind = existing
-        else:
-            self.rewind = ir.Function(self.codegen.module, fn_ty, name="rewind")
-
-    def _declare_feof(self) -> None:
-        """Declare feof: int feof(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("feof")
-        if isinstance(existing, ir.Function):
-            self.feof = existing
-        else:
-            self.feof = ir.Function(self.codegen.module, fn_ty, name="feof")
-
-    def _declare_ferror(self) -> None:
-        """Declare ferror: int ferror(FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("ferror")
-        if isinstance(existing, ir.Function):
-            self.ferror = existing
-        else:
-            self.ferror = ir.Function(self.codegen.module, fn_ty, name="ferror")
 
     def _declare_stdio_handles(self) -> None:
         """Declare global variables for stdin, stdout, stderr FILE* handles."""

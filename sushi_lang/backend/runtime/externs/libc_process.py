@@ -17,12 +17,10 @@ class LibCProcess:
         self.codegen = codegen
 
         self.exit: ir.Function
-        self.errno_location: ir.Function
 
     def declare_all(self) -> None:
         """Declare all process control functions."""
         self._declare_exit()
-        self._declare_errno_location()
 
     def _declare_exit(self) -> None:
         """Declare exit: void exit(int status)"""
@@ -35,30 +33,3 @@ class LibCProcess:
             self.exit = existing
         else:
             self.exit = ir.Function(self.codegen.module, fn_ty, name="exit")
-
-    def _declare_errno_location(self) -> None:
-        """Declare errno access function: int* __error() or int* __errno_location()"""
-        fn_ty = ir.FunctionType(
-            self.codegen.i32.as_pointer(),  # Returns int* (pointer to errno)
-            []  # No parameters
-        )
-
-        existing = self.codegen.module.globals.get("__error")
-        if isinstance(existing, ir.Function):
-            self.errno_location = existing
-            return
-
-        existing = self.codegen.module.globals.get("__errno_location")
-        if isinstance(existing, ir.Function):
-            self.errno_location = existing
-            return
-
-        from sushi_lang.backend.platform_detect import get_current_platform
-        platform = get_current_platform()
-
-        if platform.is_linux:
-            function_name = "__errno_location"
-        else:  # macOS, BSD, etc.
-            function_name = "__error"
-
-        self.errno_location = ir.Function(self.codegen.module, fn_ty, name=function_name)

@@ -74,10 +74,12 @@ generators turn that cause into the tag of a unit-variant error enum -- `FileErr
   and an unmapped value maps to `default`. `emit_errno_err_result` adds the `Result.Err`.
   The module is under `src/` and not under `io/` or `net/`, because neither of those may
   import the other.
-- **The tables.** `errno_to_file_error_table` and `errno_to_net_error_table` in
-  `sushi_lang/backend/runtime/constants.py` are the only tables, with their defaults
-  `ERRNO_DEFAULT_FILE_ERROR` and `ERRNO_DEFAULT_NET_ERROR`. `io/files/errno.py` and
-  `net/errno.py` each give the emitter their table and their default, and nothing more.
+- **The tables.** There are two tables, one for each family. `errno_to_file_error_table` and
+  `ERRNO_DEFAULT_FILE_ERROR` are in `sushi_lang/sushi_stdlib/src/io/files/errno.py`, because
+  the file table reads the platform values of `ENAMETOOLONG` and `ELOOP` from the platform
+  module. `errno_to_net_error_table` and `ERRNO_DEFAULT_NET_ERROR` are in
+  `sushi_lang/backend/runtime/constants.py`, beside the shared `ERRNO_*` constants.
+  `io/files/errno.py` and `net/errno.py` each give the emitter their table and their default.
 - **The layout.** The `Result` bytes are built in `src/results.py` and nowhere else, and
   `errno` is read through `declare_errno_location` in `src/libc_declarations.py`, so the
   two error families read one `errno` through one declaration.

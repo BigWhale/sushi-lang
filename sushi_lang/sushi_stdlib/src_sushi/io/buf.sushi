@@ -163,12 +163,10 @@ extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
         if (not done):
             let i32 stop = self.window.len()
             let i32 at = -1
-            let i32 i = self.pos
-            while (i < stop):
+            foreach(i in self.pos..stop):
                 if (self.window[i] == 10):
                     at := i
                     break
-                i := i + 1
             saw_any := true
             if (at < 0):
                 line.extend_range(self.window, self.pos, stop - self.pos)

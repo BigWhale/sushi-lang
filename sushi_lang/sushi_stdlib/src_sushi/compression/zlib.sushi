@@ -118,39 +118,31 @@ fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
 fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
     let i32[] count = from([0; 16])
 
-    let i32 sym = 0
-    while (sym < n):
+    foreach(sym in 0..n):
         let i32 l = lengths[sym]
         if (l > 15):
             return Result.Err(ZError.BadCode())
         count[l] := count[l] + 1
-        sym := sym + 1
 
     # count how many codes of each length are still unassigned
     let i32 left = 1
-    let i32 len = 1
-    while (len < 16):
+    foreach(len in 1..16):
         left := left * 2
         left := left - count[len]
         if (left < 0):
             return Result.Err(ZError.BadCode())
-        len := len + 1
 
     # the first symbol slot for each code length
     let i32[] offs = from([0; 16])
-    len := 1
-    while (len < 15):
+    foreach(len in 1..15):
         offs[len + 1] := offs[len] + count[len]
-        len := len + 1
 
     let i32[] symbol = from([0; n])
-    sym := 0
-    while (sym < n):
+    foreach(sym in 0..n):
         let i32 sl = lengths[sym]
         if (sl != 0):
             symbol[offs[sl]] := sym
             offs[sl] := offs[sl] + 1
-        sym := sym + 1
 
     return Result.Ok(ZHuff(count, symbol, left))
 
@@ -160,8 +152,7 @@ fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
     let i32 code = 0
     let i32 first = 0
     let i32 index = 0
-    let i32 len = 1
-    while (len < 16):
+    foreach(len in 1..16):
         code := code | (zbits_get(peek src, poke s, 1)?? as i32)
         let i32 count = h.count[len]
         if ((code - count) < first):
@@ -169,7 +160,6 @@ fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
         index := index + count
         first := (first + count) * 2
         code := code * 2
-        len := len + 1
     return Result.Err(ZError.BadCode())
 
 # zfixed_lit: the fixed literal/length code of RFC 1951 3.2.6.
@@ -244,10 +234,8 @@ fn zinflate_fixed(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
 # carries. Its own lengths arrive in the permuted ZLIB_CLEN_ORDER.
 fn zinflate_clen(peek u8[] src, poke ZBits s, i32 ncode) ZHuff | ZError:
     let i32[] clen = from([0; 19])
-    let i32 i = 0
-    while (i < ncode):
+    foreach(i in 0..ncode):
         clen[ZLIB_CLEN_ORDER[i]] := zbits_get(peek src, poke s, 3)?? as i32
-        i := i + 1
     return Result.Ok(zhuff_build(peek clen, 19)??)
 
 # zinflate_lengths: read nlen + ndist code lengths through the code-length code.
@@ -340,11 +328,9 @@ fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~ | ZError:
 # zput_code: append a Huffman code, high bit first. Codes go in the opposite
 # order from plain values, which is the one asymmetry in the format.
 fn zput_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
-    let i32 i = n - 1
-    while (i >= 0):
+    foreach(i in (n - 1)..=0):
         let u32 bit = (code >> i) & 1
         zput_bits(poke out, poke w, bit, 1)??
-        i := i - 1
     return Result.Ok(~)
 
 # zflush: pad the last partial byte with zeros.
@@ -414,14 +400,12 @@ fn zhash3(peek u8[] src, i32 i) i32 | ZError:
 # zmatch_len: how many bytes agree at a and b, capped at 258 and at the end of
 # the input.
 fn zmatch_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
-    let i32 l = 0
-    while (l < 258):
+    foreach(l in 0..258):
         if ((b + l) >= n):
             return Result.Ok(l)
         if (src[a + l] != src[b + l]):
             return Result.Ok(l)
-        l := l + 1
-    return Result.Ok(l)
+    return Result.Ok(258)
 
 # zdeflate_stored: level 0. One block per 65535 bytes, each byte-aligned and
 # copied through. An empty input still emits one final empty block.
@@ -488,14 +472,12 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
         if (best_len >= 3):
             zemit_match(poke out, poke w, best_len, best_dist)??
             # register the positions the match covers, so later matches see them
-            let i32 k = 1
-            while (k < best_len):
+            foreach(k in 1..best_len):
                 let i32 p = pos + k
                 if ((p + 3) <= n):
                     let i32 hh = zhash3(peek src, p)??
                     prev[p] := head[hh]
                     head[hh] := p
-                k := k + 1
             pos := pos + best_len
         else:
             let ZCode c = zfixed_code(src[pos] as i32)??
@@ -513,12 +495,9 @@ public fn adler32(u8[] data) u32:
     let u32 base = 65521
     let u32 a = 1
     let u32 b = 0
-    let i32 n = data.len()
-    let i32 i = 0
-    while (i < n):
-        a := (a + (data[i] as u32)) % base
+    foreach(byte in data.iter()):
+        a := (a + (byte as u32)) % base
         b := (b + a) % base
-        i := i + 1
     return Result.Ok((b << 16) | a)
 
 # deflate_raw: encode a raw DEFLATE stream (RFC 1951), with no container.

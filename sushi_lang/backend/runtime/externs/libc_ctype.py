@@ -20,7 +20,6 @@ class LibCCType:
         self.tolower: ir.Function
         self.isspace: ir.Function
         self.isdigit: ir.Function
-        self.isalpha: ir.Function
         self.isalnum: ir.Function
 
     def declare_all(self) -> None:
@@ -29,7 +28,6 @@ class LibCCType:
         self._declare_tolower()
         self._declare_isspace()
         self._declare_isdigit()
-        self._declare_isalpha()
         self._declare_isalnum()
 
     def _declare_ctype_func(self, name: str) -> ir.Function:
@@ -59,10 +57,6 @@ class LibCCType:
     def _declare_isdigit(self) -> None:
         """Declare isdigit: int isdigit(int c)"""
         self.isdigit = self._declare_ctype_func("isdigit")
-
-    def _declare_isalpha(self) -> None:
-        """Declare isalpha: int isalpha(int c)"""
-        self.isalpha = self._declare_ctype_func("isalpha")
 
     def _declare_isalnum(self) -> None:
         """Declare isalnum: int isalnum(int c)"""
