@@ -1,0 +1,35 @@
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[abc] [] contains=true find=0 find_last=3 count=0\n[] [] contains=true find=0 find_last=0 count=0\n[] [a] contains=false find=-1 find_last=-1 count=0\n[ab] [abc] contains=false find=-1 find_last=-1 count=0\n[aaa] [aa] contains=true find=0 find_last=1 count=1\n[aaaa] [aa] contains=true find=0 find_last=2 count=2\n[héllo héllo] [llo] contains=true find=2 find_last=8 count=2\n[héllo] [é] contains=true find=1 find_last=1 count=1\n[日本語日本] [本] contains=true find=1 find_last=4 count=2\n[日本語] [] contains=true find=0 find_last=3 count=0\n"
+# EXPECT_NO_LEAKS: true
+# The edge cases of the four string searches: an empty needle, an empty text, a needle
+# longer than the text, overlapping matches and multi-byte UTF-8. An empty needle
+# matches for contains, find and find_last, and count gives 0 for it. The value -1
+# stands for Maybe.None.
+use <collections/strings>
+
+fn index_of(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(i) -> return Result.Ok(i)
+        Maybe.None -> return Result.Ok(-1)
+
+fn probe(string text, string needle) ~:
+    let bool has = text.contains(needle)
+    let i32 first = index_of(text.find(needle)).realise(-2)
+    let i32 last = index_of(text.find_last(needle)).realise(-2)
+    let i32 n = text.count(needle)
+    println("[{text}] [{needle}] contains={has} find={first} find_last={last} count={n}")
+    return Result.Ok(~)
+
+fn main() i32:
+    probe("abc", "")
+    probe("", "")
+    probe("", "a")
+    probe("ab", "abc")
+    probe("aaa", "aa")
+    probe("aaaa", "aa")
+    probe("héllo héllo", "llo")
+    probe("héllo", "é")
+    probe("日本語日本", "本")
+    probe("日本語", "")
+    return Result.Ok(0)
