@@ -212,32 +212,8 @@ def generate_cos(module: ir.Module) -> None:
 
 
 def generate_tan(module: ir.Module) -> None:
-    """Generate tan function: tan(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    sin_intrinsic = module.globals.get("llvm.sin.f64")
-    if sin_intrinsic is None:
-        sin_type = ir.FunctionType(f64, [f64])
-        sin_intrinsic = ir.Function(module, sin_type, name="llvm.sin.f64")
-
-    cos_intrinsic = module.globals.get("llvm.cos.f64")
-    if cos_intrinsic is None:
-        cos_type = ir.FunctionType(f64, [f64])
-        cos_intrinsic = ir.Function(module, cos_type, name="llvm.cos.f64")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_tan")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    sin_x = builder.call(sin_intrinsic, [x_param], name="sin_x")
-    cos_x = builder.call(cos_intrinsic, [x_param], name="cos_x")
-    result = builder.fdiv(sin_x, cos_x, name="tan_x")
-    builder.ret(result)
+    """Generate sushi_tan(f64 x) -> f64 via the libc tan."""
+    _forward_f64(module, "tan", "sushi_tan", ('x',))
 
 
 def generate_asin(module: ir.Module) -> None:
