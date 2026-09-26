@@ -17,6 +17,8 @@ REPO = Path(__file__).parents[2]
 TOOL_SRC = REPO / "toolchain" / "src" / "slib_info.sushi"
 
 CLAIMING_LIB = """\
+use <collections/strings>
+
 public struct Crate:
     i32 weight
 

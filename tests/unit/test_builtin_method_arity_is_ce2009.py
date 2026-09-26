@@ -14,6 +14,7 @@ from __future__ import annotations
 import pytest
 
 _PRELUDE = """use <collections/hashmap>
+use <collections/strings>
 
 struct Point:
     i32 x
