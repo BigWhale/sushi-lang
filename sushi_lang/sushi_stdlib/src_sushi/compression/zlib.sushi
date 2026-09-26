@@ -270,10 +270,6 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                 k := k + 1
     return Result.Ok(lengths)
 
-# ztake: the run of n lengths that starts at `start`, as a fresh array.
-fn ztake(peek i32[] lengths, i32 start, i32 n) i32[] | ZError:
-    return Result.Ok(lengths.ss(start, n))
-
 # zinflate_dynamic: a BTYPE=10 block. Only a code with at most one used symbol
 # may be incomplete, which is the rule puff.c applies.
 fn zinflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
@@ -288,13 +284,13 @@ fn zinflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     let ZHuff clencode = zinflate_clen(peek src, poke s, ncode)??
     let i32[] lengths = zinflate_lengths(peek src, poke s, peek clencode, nlen + ndist)??
 
-    let i32[] litlen = ztake(peek lengths, 0, nlen)??
+    let i32[] litlen = lengths.ss(0, nlen)
     let ZHuff lencode = zhuff_build(peek litlen, nlen)??
     if (lencode.left != 0):
         if (nlen != (lencode.count[0] + lencode.count[1])):
             return Result.Err(ZError.BadCode())
 
-    let i32[] distlen = ztake(peek lengths, nlen, ndist)??
+    let i32[] distlen = lengths.ss(nlen, ndist)
     let ZHuff distcode = zhuff_build(peek distlen, ndist)??
     if (distcode.left != 0):
         if (ndist != (distcode.count[0] + distcode.count[1])):
@@ -315,8 +311,8 @@ struct ZCode:
     i32 len
 
 # zput_bits: append n bits of v, low bit first, the way DEFLATE packs plain
-# values. It cannot fail; it shares the ZError channel so ?? composes.
-fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~ | ZError:
+# values.
+fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~:
     w.acc := w.acc | (v << w.cnt)
     w.cnt := w.cnt + n
     while (w.cnt >= 8):
@@ -330,11 +326,11 @@ fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~ | ZError:
 fn zput_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
     foreach(i in (n - 1)..=0):
         let u32 bit = (code >> i) & 1
-        zput_bits(poke out, poke w, bit, 1)??
+        zput_bits(poke out, poke w, bit, 1)
     return Result.Ok(~)
 
 # zflush: pad the last partial byte with zeros.
-fn zflush(poke u8[] out, poke ZOut w) ~ | ZError:
+fn zflush(poke u8[] out, poke ZOut w) ~:
     if (w.cnt > 0):
         out.push((w.acc & 255) as u8)
         w.acc := 0
@@ -381,12 +377,12 @@ fn zemit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~ | ZError:
     zput_code(poke out, poke w, lc.bits, lc.len)??
     let i32 lextra = ZLIB_LEN_EXTRA[li]
     if (lextra > 0):
-        zput_bits(poke out, poke w, (length - ZLIB_LEN_BASE[li]) as u32, lextra)??
+        zput_bits(poke out, poke w, (length - ZLIB_LEN_BASE[li]) as u32, lextra)
     let i32 di = zdist_index(dist)??
     zput_code(poke out, poke w, di as u32, 5)??
     let i32 dextra = ZLIB_DIST_EXTRA[di]
     if (dextra > 0):
-        zput_bits(poke out, poke w, (dist - ZLIB_DIST_BASE[di]) as u32, dextra)??
+        zput_bits(poke out, poke w, (dist - ZLIB_DIST_BASE[di]) as u32, dextra)
     return Result.Ok(~)
 
 # zhash3: a 15-bit hash of the three bytes at i. The matcher uses it to bucket
@@ -409,7 +405,7 @@ fn zmatch_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
 
 # zdeflate_stored: level 0. One block per 65535 bytes, each byte-aligned and
 # copied through. An empty input still emits one final empty block.
-fn zdeflate_stored(peek u8[] src, poke u8[] out) ~ | ZError:
+fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
     let i32 n = src.len()
     let i32 pos = 0
     let i32 done = 0
@@ -437,8 +433,8 @@ fn zdeflate_stored(peek u8[] src, poke u8[] out) ~ | ZError:
 # how far down a chain the search walks.
 fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
     let ZOut w = ZOut(0, 0)
-    zput_bits(poke out, poke w, 1, 1)??
-    zput_bits(poke out, poke w, 1, 2)??
+    zput_bits(poke out, poke w, 1, 1)
+    zput_bits(poke out, poke w, 1, 2)
 
     let i32 n = src.len()
     let i32[] head = from([-1; 32768])
@@ -486,7 +482,7 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
 
     let ZCode eob = zfixed_code(256)??
     zput_code(poke out, poke w, eob.bits, eob.len)??
-    zflush(poke out, poke w)??
+    zflush(poke out, poke w)
     return Result.Ok(~)
 
 # adler32: the RFC 1950 checksum. Two running sums modulo 65521, high sum
@@ -510,7 +506,7 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
         return Result.Err(ZError.BadLevel(level))
     let u8[] out = new()
     if (level == 0):
-        zdeflate_stored(peek src, poke out)??
+        zdeflate_stored(peek src, poke out)
         return Result.Ok(out)
 
     zdeflate_fixed(peek src, poke out, level)??
@@ -523,7 +519,7 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
     if (out.len() <= stored_size):
         return Result.Ok(out)
     let u8[] plain = new()
-    zdeflate_stored(peek src, poke plain)??
+    zdeflate_stored(peek src, poke plain)
     return Result.Ok(plain)
 
 # zlib_flg: the second header byte. Bits 6 and 7 are the level hint, and the

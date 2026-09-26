@@ -1,7 +1,7 @@
 # A unit declares an enum whose name another unit already took for a struct. The
 # declaration is the one fault (CE0006). A variant construction and a `match` on the
-# name are not judged against the other unit's struct. The pytest gate
-# tests/unit/test_contested_type_name_uses.py pins the complete code list.
+# name are not judged against the other unit's struct. The exact code set is not
+# pinned: the runner has no exact-code directive yet (#959).
 # EXPECT_ERROR_CODE: CE0006
 use "helpers/acc_struct"
 

@@ -1,0 +1,17 @@
+# A unit declares a GENERIC struct whose name a unit collected before it took for an
+# enum. The struct is refused at its declaration (CE0006), with a note at the enum. The
+# type names, the constructions and the field reads that follow read the lost name and
+# are silent: CE0006 is the one diagnostic.
+# EXPECT_ERROR_CODE: CE0006
+# EXPECT_STDERR_CONTAINS: "already defined as an enum here"
+# EXPECT_STDERR_CONTAINS: "helpers/acc_enum.sushi:3:6"
+use "helpers/acc_enum"
+
+struct Acc@(T):
+    T m
+
+fn main() i32:
+    let Acc@(i32) p = Acc(3)
+    let Acc@(i32) q = Acc(m: 4)
+    println("{p.m} {q.m}")
+    return Result.Ok(one().realise(0))

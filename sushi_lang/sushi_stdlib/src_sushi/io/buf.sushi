@@ -26,7 +26,6 @@ to_bytes() and once into the buffer.
 :##
 
 public use <io/contracts>
-use <io/fs>
 
 ##:
 A reader that holds the last refill whole and hands lines and chunks out of it.

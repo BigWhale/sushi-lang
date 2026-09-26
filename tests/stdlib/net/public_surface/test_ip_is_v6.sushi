@@ -1,0 +1,21 @@
+# IpAddr.is_v6() answers the family, the opposite of is_v4(). A v4-mapped
+# address is of the IPv6 family.
+# EXPECT_STDOUT_EXACT: "127.0.0.1 false\n0.0.0.0 false\n::1 true\n:: true\n::ffff:1.2.3.4 true\nfe80::1 true\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn family(string text) ~:
+    match parse_ip(text):
+        Result.Ok(a) -> println("{text} {a.is_v6()}")
+        Result.Err(_) -> println("{text} does not parse")
+    return Result.Ok(~)
+
+fn main() i32:
+    family("127.0.0.1")
+    family("0.0.0.0")
+    family("::1")
+    family("::")
+    family("::ffff:1.2.3.4")
+    family("fe80::1")
+    return Result.Ok(0)

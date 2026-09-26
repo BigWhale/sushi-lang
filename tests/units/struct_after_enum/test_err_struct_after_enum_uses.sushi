@@ -1,8 +1,8 @@
 # A unit declares a struct whose name a unit collected before it took for an enum.
 # A type name is one per program, so the struct is refused at its declaration (CE0006),
-# with a note at the enum. The pytest gate tests/unit/test_struct_after_enum_is_refused.py
-# holds the complete code list: the construction and the field reads that follow must
-# be silent too.
+# with a note at the enum. The construction and the field reads that follow must be
+# silent too. The exact code set is not pinned: the runner has no exact-code directive
+# yet (#959).
 # EXPECT_ERROR_CODE: CE0006
 use "helpers/acc_enum"
 

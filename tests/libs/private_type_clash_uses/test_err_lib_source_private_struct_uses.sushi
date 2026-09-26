@@ -1,7 +1,7 @@
 # A consumer struct beside a SOURCE library's PRIVATE struct of the same name is
 # CE3011, and that is the one fault. The consumer's own construction and field read
-# are not measured against the library's shape (#814; the pytest gate
-# tests/unit/test_private_type_clash_uses.py pins the absence of CE2028 and CE2106).
+# are not measured against the library's shape (#814). The exact code set is not
+# pinned: the runner has no exact-code directive yet (#959).
 # EXPECT_ERROR_CODE: CE3011
 # EXPECT_STDERR_CONTAINS: "private_names_lib"
 use <lib/private_names_lib>

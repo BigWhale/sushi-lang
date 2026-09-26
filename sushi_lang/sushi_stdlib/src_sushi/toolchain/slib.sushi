@@ -11,7 +11,6 @@
 # reader targets metadata below 2 GiB; a hostile length casts to a negative
 # count, reads nothing, and reports a decode error on the empty blob.
 
-use <io/files>
 use <io/fs>
 public use <io/error>
 use <encoding/msgpack>

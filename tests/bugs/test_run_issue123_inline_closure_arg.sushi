@@ -3,8 +3,7 @@
 # A capturing closure created directly as a call argument heap-allocates an
 # environment that was never freed (~16 bytes/closure) because it was not bound to
 # a local and thus never registered for RAII cleanup. This is a runtime-behaviour
-# guard; the leak itself is asserted in tests/unit/test_closure_temp_raii.py (the
-# corpus runner has no leak detector).
+# guard. No test asserts the leak itself now (#959).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "17\n"
 

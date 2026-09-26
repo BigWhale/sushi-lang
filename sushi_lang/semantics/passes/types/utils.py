@@ -83,11 +83,17 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
     # A name this unit did not import is not a type here (section 6.1). Checked once,
     # for the two shapes a written type name takes, and never for a QUALIFIED one: the
     # namespace seam above has already said where that name may be written.
-    from .visibility import reject_out_of_scope_type
+    from .visibility import reject_out_of_scope_type, type_name_is_contested
     written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
-    if (getattr(type_obj, "namespace", None) is None and isinstance(written, str)
-            and reject_out_of_scope_type(validator, written, span)):
-        return
+    if getattr(type_obj, "namespace", None) is None and isinstance(written, str):
+        # A type name this unit declared and lost (#921): the declaration's CE0004 /
+        # CE0006 / CE3011 is the one fault. The type arguments are still the unit's own.
+        if type_name_is_contested(validator, written):
+            for type_arg in getattr(type_obj, "type_args", None) or ():
+                _check_type_names(validator, type_arg, span)
+            return
+        if reject_out_of_scope_type(validator, written, span):
+            return
 
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
