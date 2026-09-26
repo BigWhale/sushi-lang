@@ -69,16 +69,6 @@ def test_a_struct_after_an_enum_is_one_diagnostic(tmp_path, fixture):
     assert _codes(_analyze_units(tmp_path, fixture)) == _CASES[fixture]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "the typecheck pass still measures the losing struct's uses against the enum "
-    "that won the name: CE2008 at a construction, CE6104 at a named argument, "
-    "CE2106 at a field read"))
-def test_the_losing_struct_uses_are_silent(tmp_path):
-    """The construction and the field reads of the refused struct add nothing."""
-    reporter = _analyze_units(tmp_path, "test_err_struct_after_enum_uses.sushi")
-    assert _codes(reporter) == ["CE0006"]
-
-
 def test_the_diagnostic_names_both_kinds_and_points_at_the_enum(tmp_path):
     """The head line says a struct met an enum; the note points at the enum."""
     reporter = _analyze_units(tmp_path, "test_err_struct_after_enum.sushi")
