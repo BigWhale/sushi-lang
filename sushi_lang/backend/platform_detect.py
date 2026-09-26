@@ -13,11 +13,6 @@ class TargetPlatform:
     abi: str       # (empty), gnu, musl, etc.
 
     @property
-    def is_unix(self) -> bool:
-        """Returns True if target is Unix-like (macOS, Linux, BSD)."""
-        return self.os in {'darwin', 'linux', 'freebsd', 'openbsd', 'netbsd'}
-
-    @property
     def is_darwin(self) -> bool:
         """Returns True if target is macOS."""
         return self.os == 'darwin'
@@ -26,11 +21,6 @@ class TargetPlatform:
     def is_linux(self) -> bool:
         """Returns True if target is Linux."""
         return self.os == 'linux'
-
-    @property
-    def is_windows(self) -> bool:
-        """Returns True if target is Windows."""
-        return self.os == 'windows'
 
     @property
     def triple(self) -> str:

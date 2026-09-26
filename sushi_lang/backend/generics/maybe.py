@@ -28,7 +28,7 @@ def emit_builtin_maybe_method(
         return codegen.utils.bool_answer(
             emit_enum_tag_check(codegen, maybe_value, 1, "is_none"), to_i1)
     elif call.method == "realise":
-        return emit_enum_realise(codegen, call, maybe_value, maybe_type, "Some", "Maybe")
+        return emit_enum_realise(codegen, call, maybe_value, maybe_type, "Some")
     elif call.method == "expect":
         return _emit_maybe_expect(codegen, call, maybe_value, maybe_type)
     else:

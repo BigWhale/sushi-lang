@@ -66,9 +66,6 @@ def _fmt(code: str, **kwargs) -> str:
 
 
 class _ErrorCatalog:
-    def __init__(self, backing: Dict[str, ErrorMessage]) -> None:
-        self._registry = backing
-
     def __getattr__(self, name: str) -> ErrorMessage:
         return _get(name)
 
@@ -76,4 +73,4 @@ class _ErrorCatalog:
         return _get(code)
 
 
-ERR = _ErrorCatalog(REGISTRY)
+ERR = _ErrorCatalog()

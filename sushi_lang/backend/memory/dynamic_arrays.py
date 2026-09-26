@@ -228,13 +228,6 @@ class DynamicArrayManager:
 
         self._update_array_fields(name, initial_len, initial_capacity, typed_data_ptr)
 
-    def emit_destroy_call(self, name: str) -> None:
-        """Emit explicit .destroy() method call."""
-        self.emit_array_destructor(name)
-        descriptor = self._array(name)
-        if descriptor is not None:
-            descriptor.destroyed = True
-
     def mark_as_moved(self, name: str) -> None:
         """Mark a dynamic array as moved (ownership transferred)."""
         descriptor = self._array(name)
@@ -250,12 +243,6 @@ class DynamicArrayManager:
         self._enter(self.lists, var_name,
                     ListDescriptor(name=var_name, list_type=list_type, llvm_alloca=slot))
         self.codegen.moves.arm_if_conditional(var_name, slot)
-
-    def mark_list_destroyed(self, var_name: str) -> None:
-        """Mark a List<T> as explicitly destroyed/freed; skip redundant RAII cleanup."""
-        descriptor = self._list(var_name)
-        if descriptor is not None:
-            descriptor.destroyed = True
 
     def _destroy_list(self, descriptor: ListDescriptor) -> None:
         """Emit the destructor of a local List<T>, with no move gate."""
@@ -351,4 +338,3 @@ class DynamicArrayManager:
         if n <= 1:
             return 1
         return 1 << (n - 1).bit_length()
-

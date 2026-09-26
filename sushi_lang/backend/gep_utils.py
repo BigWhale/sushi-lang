@@ -100,13 +100,3 @@ def gep_dynamic_array_data(
 ) -> 'ir.Value':
     """Get pointer to the 'data' field of a `T[]` descriptor."""
     return _descriptor_field(codegen, array_struct_ptr, _DESCRIPTOR_DATA, name, builder)
-
-
-def gep_byte_offset(
-    codegen: 'LLVMCodegen',
-    ptr: 'ir.Value',
-    offset: 'ir.Value',
-    name: str = ""
-) -> 'ir.Value':
-    """Create a GEP instruction for byte-level pointer arithmetic."""
-    return codegen.builder.gep(ptr, [offset], name=name)

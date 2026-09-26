@@ -8,11 +8,7 @@ from llvmlite import ir
 
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I32
-from sushi_lang.backend.runtime.constants import (
-    errno_to_file_error_table,
-    ERRNO_DEFAULT_FILE_ERROR,
-)
-from sushi_lang.internals.errors import message_for, raise_internal_error
+from sushi_lang.internals.errors import message_for
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -115,33 +111,3 @@ class RuntimeErrors:
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr] + list(values))
 
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
-
-    def get_errno(self) -> ir.Value:
-        """Get the current errno value."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        if self.codegen.runtime.libc_process.errno_location is None:
-            raise_internal_error("CE0013", name="errno_location")
-
-        errno_ptr = self.codegen.builder.call(self.codegen.runtime.libc_process.errno_location, [])
-
-        return self.codegen.builder.load(errno_ptr, name="errno_value")
-
-    def map_errno_to_file_error(self, errno_value: ir.Value) -> ir.Value:
-        """Map errno value to FileError enum variant tag."""
-        if self.codegen.builder is None:
-            raise_internal_error("CE0009")
-        builder = self.codegen.builder
-
-        result = ir.Constant(self.codegen.i32, ERRNO_DEFAULT_FILE_ERROR)
-
-        from sushi_lang.backend.platform_detect import get_current_platform
-        table = errno_to_file_error_table(get_current_platform().is_linux)
-        for errno_val, file_error_tag in reversed(list(table.items())):
-            errno_const = ir.Constant(self.codegen.i32, errno_val)
-            file_error_const = ir.Constant(self.codegen.i32, file_error_tag)
-
-            is_match = builder.icmp_signed('==', errno_value, errno_const)
-            result = builder.select(is_match, file_error_const, result)
-
-        return result

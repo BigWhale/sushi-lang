@@ -183,33 +183,3 @@ class LLVMOptimizer:
     def get_default_triple() -> str:
         """Get the default target triple for this platform."""
         return llvm.get_default_triple()
-
-    def clear_cache(self) -> None:
-        """Clear the target machine cache."""
-        self._tm_cache.clear()
-
-    def get_cached_targets(self) -> list[str]:
-        """Get list of cached target triples."""
-        return list(self._tm_cache.keys())
-
-    def is_llvm_initialized(self) -> bool:
-        """Check if LLVM native support has been initialized."""
-        return self._llvm_init
-
-    @staticmethod
-    def get_optimization_level_description(level: str) -> str:
-        """Get a human-readable description of an optimization level."""
-        descriptions = {
-            "none": "No optimizations - fastest compilation",
-            "o0": "No optimizations - fastest compilation",
-            "mem2reg": "Basic SROA (memory-to-register promotion) - minimal optimization for SSA",
-            "o1": "Basic optimizations - quick compile time with essential improvements",
-            "o2": "Moderate optimizations - balanced compile time and performance",
-            "o3": "Aggressive optimizations - maximum performance, longer compile time"
-        }
-        return descriptions.get(level.lower(), "Unknown optimization level")
-
-    @staticmethod
-    def list_available_levels() -> list[str]:
-        """Get list of available optimization levels."""
-        return ["none", "o0", "mem2reg", "o1", "o2", "o3"]

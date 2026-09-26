@@ -19,27 +19,6 @@ ENTRY_OCCUPIED = 1   # Slot contains valid key-value pair
 ENTRY_TOMBSTONE = 2  # Slot was deleted (marks probe chain)
 
 
-# Power-of-two capacities for HashMap (fast bitwise AND indexing)
-# With strong hash functions (FxHash, FNV-1a), power-of-two provides:
-# - 3-10x faster indexing (AND vs modulo)
-# - Excellent distribution (hash quality matters, not capacity)
-# - Simpler implementation
-POWER_OF_TWO_CAPACITIES = [
-    16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192,
-    16384, 32768, 65536, 131072, 262144, 524288, 1048576,
-    2097152, 4194304, 8388608, 16777216
-]
-
-
-def get_next_capacity(current: int) -> int:
-    """Get the next power-of-two capacity >= 2 * current."""
-    target = current * 2
-    for capacity in POWER_OF_TWO_CAPACITIES:
-        if capacity >= target:
-            return capacity
-    return target
-
-
 def get_entry_type(codegen: Any, key_type: Type, value_type: Type) -> ir.Type:
     """Get LLVM struct type for Entry<K, V>."""
     key_llvm = codegen.types.ll_type(key_type)
@@ -47,24 +26,6 @@ def get_entry_type(codegen: Any, key_type: Type, value_type: Type) -> ir.Type:
     state_llvm = codegen.types.i8
 
     return ir.LiteralStructType([key_llvm, value_llvm, state_llvm])
-
-
-def get_hashmap_llvm_type(codegen: Any, key_type: Type, value_type: Type) -> ir.Type:
-    """Get LLVM struct type for HashMap<K, V>."""
-    entry_type = get_entry_type(codegen, key_type, value_type)
-
-    buckets_type = ir.LiteralStructType([
-        codegen.types.i32,                    # len
-        codegen.types.i32,                    # cap
-        ir.PointerType(entry_type)            # data (Entry<K, V>*)
-    ])
-
-    return ir.LiteralStructType([
-        buckets_type,         # Entry<K, V>[] buckets
-        codegen.types.i32,    # i32 size
-        codegen.types.i32,    # i32 capacity
-        codegen.types.i32,    # i32 tombstones
-    ])
 
 
 class HashMapFields(NamedTuple):

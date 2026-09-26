@@ -78,11 +78,6 @@ FILES_SIGNATURES: Dict[str, Signature] = {
 FILE_UTILITY_FUNCTIONS: List[str] = list(FILES_SIGNATURES)
 
 
-def is_builtin_files_function(name: str) -> bool:
-    """Check if a function name is a built-in files utility function."""
-    return name in FILES_SIGNATURES
-
-
 def get_builtin_files_function_return_type(func_name: str) -> Type:
     """The declared return type, from the row: a Result, or a bare value."""
     sig = FILES_SIGNATURES.get(func_name)

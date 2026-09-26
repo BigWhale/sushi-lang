@@ -1,7 +1,7 @@
 """String constant management and deduplication."""
 from __future__ import annotations
 import hashlib
-from typing import TYPE_CHECKING, Dict, Tuple
+from typing import TYPE_CHECKING, Dict
 
 from llvmlite import ir
 
@@ -69,20 +69,9 @@ class StringConstantManager:
         self._cache[key_str] = global_var
         return global_var
 
-    def get_or_create_string_constant(self, value: str) -> ir.GlobalVariable:
-        """Get existing or create new null-terminated string constant."""
-        return self.get_or_create(value, null_terminated=True)
-
     def get_or_create_raw(self, value: str) -> ir.GlobalVariable:
         """Get existing or create new string constant WITHOUT null terminator."""
         return self.get_or_create(value, null_terminated=False)
-
-    def get_string_ptr(self, value: str, null_terminated: bool = False) -> Tuple[ir.GlobalVariable, ir.Value]:
-        """Get string constant and a pointer to its first element."""
-        global_var = self.get_or_create(value, null_terminated)
-        zero = ir.Constant(self.codegen.i32, 0)
-        ptr = self.codegen.builder.gep(global_var, [zero, zero], name="str_ptr")
-        return global_var, ptr
 
     def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:
         """Create a named string constant (uses deduplication)."""
@@ -91,8 +80,3 @@ class StringConstantManager:
     def clear(self):
         """Clear the string cache."""
         self._cache.clear()
-
-    @property
-    def stats(self) -> Dict[str, int]:
-        """Return deduplication statistics."""
-        return {'unique_strings': len(self._cache)}

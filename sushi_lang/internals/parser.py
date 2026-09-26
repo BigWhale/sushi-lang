@@ -22,7 +22,6 @@ GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
 # postlexer to chain in front of it.
 
 DOC_OPEN = "##:"
-DOC_CLOSE = ":##"
 
 
 def _delimiter_span(token: Token) -> Optional[Span]:

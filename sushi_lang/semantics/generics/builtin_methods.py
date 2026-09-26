@@ -61,9 +61,7 @@ def derived_method(target_type: Type, *, name: str, kind: str, return_type: Type
     from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
     return BuiltinMethod(
         name=name,
-        parameter_types=[],
         return_type=return_type,
         description=f"Auto-derived {name} for {kind} {target_type}",
-        semantic_validator=None,
         llvm_emitter=emit,
     )

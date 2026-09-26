@@ -202,8 +202,7 @@ class DiagnosticBuilder:
     refuses an `Optional[Span]` at `note_at`, and `note` has no place for a span.
     """
 
-    def __init__(self, reporter: Reporter, diagnostic: Diagnostic):
-        self._reporter = reporter
+    def __init__(self, diagnostic: Diagnostic):
         self._diagnostic = diagnostic
 
     def note(self, message: str) -> DiagnosticBuilder:
@@ -308,12 +307,12 @@ class Reporter:
     def error_with(self, code: str, msg: str, span: Optional[Span],
                    filename: Optional[str] = None) -> DiagnosticBuilder:
         d = self._record(Diagnostic("error", code, msg, span, filename=filename or self.filename))
-        return DiagnosticBuilder(self, d)
+        return DiagnosticBuilder(d)
 
     def warn_with(self, code: str, msg: str, span: Optional[Span],
                   filename: Optional[str] = None) -> DiagnosticBuilder:
         d = self._record(Diagnostic("warning", code, msg, span, filename=filename or self.filename))
-        return DiagnosticBuilder(self, d)
+        return DiagnosticBuilder(d)
 
     @property
     def has_errors(self) -> bool:
