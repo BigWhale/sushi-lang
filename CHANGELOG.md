@@ -428,6 +428,22 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **Every string-method allocation is checked** (#964). The 23 string-method sites that allocated
+  with a bare `malloc` go through the checked seam (RE2021 on failure), and every `Maybe` tag of
+  the string methods is written by name.
+- **The monomorphize refusals print in source order** (#927). They printed the type refusals first,
+  then the function ones.
+- **A bare call's span starts at its callee, and a propagation's span covers the whole
+  expression** (#929). `f(x)` pointed at the parenthesis; `f()??` and a `foreach(x?? in ...)`
+  binder pointed at `??`. Every diagnostic on `<expr>??` now starts at its operand.
+- **`slib-info` reports an internal error and exits 2** (#951). It exited 99 with no message.
+
+### Changed
+- **One string fat-pointer builder** (#939): the unused `IRMemoryBuilder` and the second builder
+  are removed; the IR is byte-identical.
+- **`slib-info` and `show` use the string `join`, and a msgpack str/bin payload is copied in one
+  step** (#951).
+- **The HashMap key rules say that a `Hashable` override gives a hash, not equality** (#936).
 - **Every stdlib allocation site the generators listed is checked** (#931). A failed `malloc` in
   `getcwd`, `getenv`, `run`, `read_dir`, the DNS and UDP peer buffers, the string case and trim
   helpers and the number-to-string conversions went on with a null pointer. It is RE2021 now,
