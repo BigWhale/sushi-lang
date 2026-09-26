@@ -552,6 +552,7 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | CE3511 | Bitcode section truncated |
 | CE3512 | Invalid MessagePack metadata |
 | CE3513 | File exceeds maximum size (1GB) |
+| CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 
 One truncation code per section rather than one shared code: the message names which
 section is short, and that is what tells a reader where the file was cut.

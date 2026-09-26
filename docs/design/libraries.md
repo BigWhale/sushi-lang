@@ -91,6 +91,7 @@ Integrity is checked strictly in order, one code per failure mode, all in
   which is what tells a reader where the file was cut.
 - **CE3512** — a blob is present but is not valid MessagePack
 - **CE3513** — total file size exceeds the 1 GiB sanity limit
+- **CE3515** — the operating system refuses to open or to read the file (a directory, no read permission, an I/O failure)
 
 ### Compression
 
