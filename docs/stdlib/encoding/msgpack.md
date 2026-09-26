@@ -2,8 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A MessagePack decoder, written in Sushi: `decode`, `map_get`, and `show`.
-Decode-only — there is no encoder.
+A MessagePack decoder, written in Sushi: `decode`, the map readers (`map_index`,
+`map_get`, `map_get_str`, `map_get_bool`), and `show`. Decode-only — there is no encoder.
 
 ## Import
 
@@ -76,7 +76,8 @@ fn main() i32:
 ### `map_get(MsgValue m, string key) -> Maybe@(MsgValue)`
 
 Scan a `Map` in wire order for a string key. The found value comes back as a clone, so
-the tree stays intact. A missing key, a non-string key match, or a non-map argument gives
+the tree stays intact. To read a string or a bool, use a typed leaf reader; to walk a
+subtree, borrow it through `map_index`. A missing key, a non-string key match, or a non-map argument gives
 `Maybe.None`.
 
 ```sushi
@@ -95,6 +96,63 @@ fn main() i32:
     match decode(buf):
         Result.Ok(m) ->
             println(lookup(m, "k").realise("error"))    # 42
+        Result.Err(_) ->
+            println("decode error")
+    return Result.Ok(0)
+```
+
+### `map_index(MsgValue m, string key) -> Maybe@(i32)`
+
+The position of a string key in a `Map`, in wire order; the first key that matches wins.
+A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the
+position to borrow the value in place, inside a `MsgValue.Map(keys, vals)` arm.
+
+```sushi
+use <encoding/msgpack>
+
+fn count_items(MsgValue m, string key) i32:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(i) ->
+                    match vals[i]:
+                        MsgValue.Arr(items) -> return Result.Ok(items.len())
+                        _ -> return Result.Ok(0)
+                Maybe.None() -> return Result.Ok(0)
+        _ ->
+            return Result.Ok(0)
+
+fn main() i32:
+    let u8[] buf = from([0x81, 0xa1, 0x61, 0x92, 0x01, 0x02])
+    match decode(buf):
+        Result.Ok(m) ->
+            println(count_items(m, "a").realise(0 - 1))    # 2
+        Result.Err(_) ->
+            println("decode error")
+    return Result.Ok(0)
+```
+
+### `map_get_str(MsgValue m, string key) -> Maybe@(string)`
+
+### `map_get_bool(MsgValue m, string key) -> Maybe@(bool)`
+
+The typed leaf readers. Each one copies only the leaf, never the map. A missing key, a
+value of a different kind, or a non-map argument gives `Maybe.None`.
+
+```sushi
+use <encoding/msgpack>
+
+fn describe(MsgValue m) string:
+    let string name = map_get_str(m, "name")??.realise("")
+    let bool on = map_get_bool(m, "on")??.realise(false)
+    return Result.Ok("{name} {on}")
+
+fn main() i32:
+    let u8[] buf = from([0x82, 0xa4, 0x6e, 0x61, 0x6d, 0x65, 0xa2, 0x6f, 0x6b,
+                         0xa2, 0x6f, 0x6e, 0xc3])
+    match decode(buf):
+        Result.Ok(m) ->
+            println(describe(m).realise("error"))    # ok true
         Result.Err(_) ->
             println("decode error")
     return Result.Ok(0)
