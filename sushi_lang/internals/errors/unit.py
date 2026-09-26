@@ -72,7 +72,7 @@ _add(ErrorMessage("CE3014", Severity.ERROR,
 
 _add(ErrorMessage("CE3015", Severity.ERROR,
     "{name} needs the stdlib module <{module}>",
-    Category.UNIT, "A built-in method whose body lives in a stdlib module is callable only where that module is imported. The refusal used to be CE0096, an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501)."))
+    Category.UNIT, "A built-in method whose body lives in a stdlib module is callable only where that module is imported. The refusal used to be CE0096, an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501). The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit (#942)."))
 
 _add(ErrorMessage("CE3016", Severity.ERROR,
     "a `public use` takes no `as`",
