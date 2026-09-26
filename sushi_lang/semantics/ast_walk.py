@@ -73,15 +73,6 @@ if TYPE_CHECKING:
 Declaration = Tuple[str, object]
 
 
-# Every slot a declared type can sit in. Two facts decide whether a rule polices a
-# position -- WHAT declares it and WHERE in the declaration it sits -- and a rule that
-# conflates them gets one of them wrong. `RECEIVER` is the extension or perk-implementation
-# target type; it is a position because the `ptr` rule exempts it and a leak rule does not.
-POSITIONS = frozenset({
-    "type", "receiver", "return", "error", "parameter", "field", "variant",
-})
-
-
 @dataclass(frozen=True)
 class TypeSite:
     """One place a declaration's SIGNATURE names a type, and where to point at it.

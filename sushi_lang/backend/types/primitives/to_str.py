@@ -4,23 +4,14 @@ bool).
 
 from typing import Any, Callable, Optional
 from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
-from sushi_lang.internals import errors as er
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
 from sushi_lang.sushi_stdlib.src import conversions, ir_common
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.diagnostics import InternalCompilerError
-from sushi_lang.semantics.generics.type_display import display_type
-
-
-def _validate_to_str(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate to_str() method call on primitive types."""
-    if call.args:
-        er.emit(reporter, er.ERR.CE2009, call.loc,
-               name=f"{display_type(target_type)}.to_str", expected=0, got=len(call.args))
 
 
 _TYPE_CONVERSION_SPECS = {
@@ -80,10 +71,8 @@ for prim_type in primitive_types:
         prim_type,
         BuiltinMethod(
             name="to_str",
-            parameter_types=[],
             return_type=BuiltinType.STRING,
             description=f"Convert {prim_type} to string representation",
-            semantic_validator=_validate_to_str,
             llvm_emitter=emitters[prim_type],
         )
     )

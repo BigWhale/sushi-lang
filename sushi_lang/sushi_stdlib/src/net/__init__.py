@@ -14,7 +14,6 @@ from sushi_lang.sushi_stdlib.src.ir_common import create_stdlib_module
 from sushi_lang.sushi_stdlib.src.net.socket_funcs import (  # noqa: F401
     SOCKET_FUNCTIONS,
     get_builtin_socket_function_return_type,
-    is_builtin_socket_function,
 )
 
 

@@ -12,10 +12,8 @@ import llvmlite.ir as ir
 class BuiltinMethod:
     """Metadata for a built-in extension method."""
     name: str
-    parameter_types: list[Type]
     return_type: Optional[Type]
     description: str
-    semantic_validator: Callable[[MethodCall, Type], None]
     llvm_emitter: Callable[[Any, MethodCall, ir.Value, ir.Type, bool], ir.Value]
 
 

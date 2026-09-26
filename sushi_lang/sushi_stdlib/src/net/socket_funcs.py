@@ -1,8 +1,7 @@
-"""The <net/socket> semantic interface: one table, and the two discovery names.
+"""The <net/socket> semantic interface: one table.
 
-No IR lives here. The StdlibRegistry discovers a module by looking for these
-two names, built from the module path's last segment, so <net/socket> needs
-is_builtin_socket_function and get_builtin_socket_function_return_type.
+No IR lives here. The StdlibRegistry reads SOCKET_SIGNATURES through
+signature_tables().
 
 Every function answers Result@(T, NetError). The prefix names the transport:
 sock_* works on any descriptor this module produced, tcp_* wants a stream
@@ -60,11 +59,6 @@ SOCKET_SIGNATURES: Dict[str, Signature] = {
 }
 
 SOCKET_FUNCTIONS: List[str] = list(SOCKET_SIGNATURES)
-
-
-def is_builtin_socket_function(name: str) -> bool:
-    """Whether a bare name is one of the <net/socket> primitives."""
-    return name in SOCKET_SIGNATURES
 
 
 def get_builtin_socket_function_return_type(func_name: str) -> Type:
