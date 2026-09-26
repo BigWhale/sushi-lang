@@ -1,9 +1,11 @@
 """Binary library format (.slib) for Sushi libraries."""
 from __future__ import annotations
 
+import errno
 import struct
+from contextlib import contextmanager
 from pathlib import Path
-from typing import BinaryIO, Dict, Optional, Tuple
+from typing import BinaryIO, Dict, Iterator, Optional, Tuple
 
 import msgpack
 
@@ -16,6 +18,35 @@ KIND_BINARY = 2
 KIND_HYBRID = 3
 
 KIND_BY_NAME = {"source": KIND_SOURCE, "binary": KIND_BINARY, "hybrid": KIND_HYBRID}
+
+
+# The words for an OS error, one row per IoError variant the Sushi reader can answer.
+# toolchain/src/slib_info.sushi (`io_cause`) prints the same words for the same errno.
+_OS_ERROR_WORDS = {
+    errno.ENOENT: "file not found",
+    errno.EPERM: "permission denied",
+    errno.EACCES: "permission denied",
+    errno.EEXIST: "already exists",
+    errno.EISDIR: "is a directory",
+    errno.ENOSPC: "no space left on device",
+    errno.EMFILE: "too many open files",
+    errno.ENAMETOOLONG: "invalid path",
+    errno.ENOTDIR: "invalid path",
+    errno.ELOOP: "invalid path",
+}
+
+
+@contextmanager
+def _open_for_read(library_path: Path) -> Iterator[BinaryIO]:
+    """Open a library for reading; an OSError of the open or of a read is CE3515."""
+    from sushi_lang.backend.library_errors import LibraryError
+
+    try:
+        with open(library_path, 'rb') as f:
+            yield f
+    except OSError as e:
+        reason = _OS_ERROR_WORDS.get(e.errno or 0, "input/output error")
+        raise LibraryError("CE3515", path=str(library_path), reason=reason) from e
 
 
 def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
@@ -137,7 +168,7 @@ class LibraryFormat:
 
         path = str(library_path)
 
-        with open(library_path, 'rb') as f:
+        with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
             _skip_source_section(f, path)
 
@@ -155,7 +186,7 @@ class LibraryFormat:
     def read_source_only(library_path: Path) -> Tuple[dict, Dict[str, str]]:
         """Read (metadata, unit source) without touching the bitcode section."""
         path = str(library_path)
-        with open(library_path, 'rb') as f:
+        with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
             return metadata, _read_source_section(f, path)
 
@@ -169,7 +200,7 @@ class LibraryFormat:
         the two must agree byte for byte.
         """
         path = str(library_path)
-        with open(library_path, 'rb') as f:
+        with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
             source_len = len(_skip_source_section(f, path))
             bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
@@ -178,5 +209,5 @@ class LibraryFormat:
     @staticmethod
     def read_metadata_only(library_path: Path) -> dict:
         """Read only metadata from .slib file (for introspection)."""
-        with open(library_path, 'rb') as f:
+        with _open_for_read(library_path) as f:
             return _read_header_and_metadata(f, str(library_path))
