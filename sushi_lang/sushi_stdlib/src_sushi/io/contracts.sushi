@@ -3,9 +3,9 @@ io/contracts -- Reader, Writer and Seek: what a handle can do, named apart from 
 handle IS.
 
 The module ships as bundled .sushi source and is merged as a compilation unit when
-imported (`use <io/contracts>`). It declares three perks and nothing else: no struct, no
-function, no constant. A consumer writes `@(R: Reader)` and takes a File, a TcpStream or
-anything later that satisfies the contract.
+imported (`use <io/contracts>`). It declares three perks and one function over them,
+read_all(); no struct and no constant. A consumer writes `@(R: Reader)` and takes a File,
+a TcpStream or anything later that satisfies the contract.
 
 Every contract method answers IoError, and it has to: a perk contract carries ONE
 signature, and there is no Self type and no associated type, so a method cannot answer
@@ -14,8 +14,8 @@ the detailed enum -- open() and connect() -- while the data path is one channel 
 generic can propagate with ??.
 
 Limitations: a perk has no default implementations, so a convenience above these methods is
-a free generic function rather than a provided method. A perk cannot carry a type
-parameter, so there is no generic Reader@(T).
+a free generic function rather than a provided method -- read_all() is the one this module
+ships. A perk cannot carry a type parameter, so there is no generic Reader@(T).
 :##
 
 public use <io/error>
@@ -57,6 +57,28 @@ public perk Reader:
     - Errors: IoError, when the read failed.
     :##
     fn read_bytes(poke self, i32 max) u8[] | IoError
+
+##:
+Reads everything left in a reader, as text.
+
+The loop takes read_bytes() until the answer is empty, keeps the bytes, and converts them
+once at the end, so a multi-byte sequence that a chunk splits is joined again. The whole
+answer is held in memory at once. File.read_all() and BufReader.read_all() forward here.
+
+- Parameter r: The reader to take the rest of.
+- Returns: Everything from the reader's position to the end of input.
+- Errors: IoError, when a read failed.
+:##
+public fn read_all@(R: Reader)(poke R r) string | IoError:
+    let u8[] all = from([])
+    let bool done = false
+    while (not done):
+        let u8[] chunk = r.read_bytes(65536)??
+        if (chunk.len() == 0):
+            done := true
+        else:
+            all.extend(chunk)
+    return Result.Ok(all.to_string())
 
 ##:
 A handle bytes can be written to.

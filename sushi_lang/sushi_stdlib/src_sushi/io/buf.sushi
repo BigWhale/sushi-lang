@@ -193,15 +193,7 @@ read() in a loop instead.
 - Errors: IoError, when a refill failed.
 :##
 extend BufReader@(R) read_all(poke self) string | IoError:
-    let u8[] all = from([])
-    let bool done = false
-    while (not done):
-        let u8[] chunk = self.read_bytes(65536)??
-        if (chunk.len() == 0):
-            done := true
-        else:
-            all.extend(chunk)
-    return Result.Ok(all.to_string())
+    return Result.Ok(read_all(poke self)??)
 
 ##:
 Hands the handle back and ends the reader.

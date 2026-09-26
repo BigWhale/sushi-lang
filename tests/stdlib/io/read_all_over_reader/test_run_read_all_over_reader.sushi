@@ -1,0 +1,73 @@
+# The free function read_all() takes anything that satisfies Reader: a File, a
+# BufReader@(File) and a user type alike. The methods File.read_all() and
+# BufReader.read_all() give the same answer.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "file: Mostly Harmless\nbuffered: Mostly Harmless\nsource: Mostly Harmless\nmethod: Mostly Harmless\nbuffered method: Mostly Harmless\nmissing: IoError\n"
+use <io/fs>
+use <io/buf>
+use <collections/strings>
+
+const string PATH = "/tmp/sushi_read_all_over_reader.txt"
+
+struct Chunks:
+    u8[] data
+    i32 pos
+
+extend Chunks with Reader:
+    fn read(poke self, i32 max) string | IoError:
+        let u8[] got = self.read_bytes(max)??
+        return Result.Ok(got.to_string())
+
+    fn read_bytes(poke self, i32 max) u8[] | IoError:
+        let i32 step = 4
+        if (max < step):
+            step := max
+        let u8[] out = self.data.ss(self.pos, step)
+        self.pos := self.pos + out.len()
+        return Result.Ok(out)
+
+fn run() ~ | IoError:
+    let File out = open(PATH, FileMode.Write())??
+    out.write("Mostly Harmless")??
+    out.close()??
+
+    let File plain = open(PATH, FileMode.Read())??
+    let string a = read_all(poke plain)??
+    println("file: {a}")
+
+    let BufReader@(File) r = BufReader.new(nom open(PATH, FileMode.Read())??, 4)??
+    let string b = read_all(poke r)??
+    println("buffered: {b}")
+
+    let Chunks src = Chunks("Mostly Harmless".to_bytes(), 0)
+    let string c = read_all(poke src)??
+    println("source: {c}")
+
+    let File again = open(PATH, FileMode.Read())??
+    let string d = again.read_all()??
+    println("method: {d}")
+
+    let BufReader@(File) rb = BufReader.new(nom open(PATH, FileMode.Read())??, 4)??
+    let string e = rb.read_all()??
+    println("buffered method: {e}")
+    return Result.Ok(~)
+
+fn missing() string | IoError:
+    let File f = open("/tmp/sushi_read_all_over_reader_absent.txt", FileMode.Read())??
+    return Result.Ok(read_all(poke f)??)
+
+fn main() i32:
+    let i32 code = 0
+    match run():
+        Result.Ok(_) ->
+            code := 0
+        Result.Err(_) ->
+            code := 1
+    match missing():
+        Result.Ok(_) -> println("missing: read")
+        Result.Err(_) -> println("missing: IoError")
+    remove_all(PATH)
+    return Result.Ok(code)
