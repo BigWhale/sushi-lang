@@ -38,7 +38,6 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
     scrutinee = ast_builder._expr(scrutinee_tree)
     return Match(scrutinee=scrutinee, arms=arms,
                  consumes_scrutinee=nom_token is not None,
-                 consumes_span=None if nom_token is None else span_of(nom_token),
                  loc=span_of(node))
 
 

@@ -148,19 +148,6 @@ def _type_param_records(node) -> List[dict]:
     ]
 
 
-def _reconcile_type_params(parsed_node, record: dict) -> None:
-    """Reconcile a re-parsed declaration's type-param constraints / pack marker against the
-    authoritative manifest record (the source of truth).
-    """
-    rec_tps = record.get("type_params") or []
-    parsed_tps = parsed_node.type_params or []
-    if len(rec_tps) == len(parsed_tps):
-        for parsed_tp, rec_tp in zip(parsed_tps, rec_tps, strict=False):
-            parsed_tp.constraints = list(rec_tp.get("constraints") or [])
-            if "is_pack" in rec_tp:
-                parsed_tp.is_pack = bool(rec_tp["is_pack"])
-
-
 def slice_decl_source(node, source_text: str) -> str:
     """Slice the full, self-contained source text of one top-level declaration."""
     loc = getattr(node, "loc", None)
@@ -210,23 +197,6 @@ def serialize_generic_function(func: "FuncDef", source_text: str) -> dict:
     }, func)
 
 
-def deserialize_generic_function(record: dict) -> "FuncDef":
-    """Reconstruct a ``FuncDef`` from a manifest record by re-parsing its source."""
-    from sushi_lang.internals.parser import parse_to_ast
-
-    program, _tree = parse_to_ast(record["source"])
-
-    funcs = program.functions or []
-    if len(funcs) != 1:
-        raise ValueError(
-            f"template source for '{record.get('name')}' parsed to "
-            f"{len(funcs)} functions, expected exactly 1"
-        )
-    func = funcs[0]
-    _reconcile_type_params(func, record)
-    return func
-
-
 def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic struct."""
     return with_doc({
@@ -237,23 +207,6 @@ def serialize_generic_struct(struct: "StructDef", source_text: str) -> dict:
     }, struct)
 
 
-def deserialize_generic_struct(record: dict) -> "StructDef":
-    """Reconstruct a ``StructDef`` from a manifest record by re-parsing source."""
-    from sushi_lang.internals.parser import parse_to_ast
-
-    program, _tree = parse_to_ast(record["source"])
-
-    structs = program.structs or []
-    if len(structs) != 1:
-        raise ValueError(
-            f"template source for struct '{record.get('name')}' parsed to "
-            f"{len(structs)} structs, expected exactly 1"
-        )
-    struct = structs[0]
-    _reconcile_type_params(struct, record)
-    return struct
-
-
 def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic enum."""
     return with_doc({
@@ -262,23 +215,6 @@ def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
         "source": slice_decl_source(enum, source_text),
         "free_perks": _free_perks_of(enum),
     }, enum)
-
-
-def deserialize_generic_enum(record: dict) -> "EnumDef":
-    """Reconstruct an ``EnumDef`` from a manifest record by re-parsing source."""
-    from sushi_lang.internals.parser import parse_to_ast
-
-    program, _tree = parse_to_ast(record["source"])
-
-    enums = program.enums or []
-    if len(enums) != 1:
-        raise ValueError(
-            f"template source for enum '{record.get('name')}' parsed to "
-            f"{len(enums)} enums, expected exactly 1"
-        )
-    enum = enums[0]
-    _reconcile_type_params(enum, record)
-    return enum
 
 
 def impl_method_symbol(type_name: str, method_name: str) -> str:
@@ -368,21 +304,6 @@ def serialize_perk(perk: "PerkDef", source_text: str) -> dict:
         "source": slice_decl_source(perk, source_text),
         "methods": [method_record(m) for m in perk.methods],
     }, perk)
-
-
-def deserialize_perk(record: dict) -> "PerkDef":
-    """Reconstruct a ``PerkDef`` from a manifest record by re-parsing its source."""
-    from sushi_lang.internals.parser import parse_to_ast
-
-    program, _tree = parse_to_ast(record["source"])
-
-    perks = program.perks or []
-    if len(perks) != 1:
-        raise ValueError(
-            f"template source for perk '{record.get('name')}' parsed to "
-            f"{len(perks)} perks, expected exactly 1"
-        )
-    return perks[0]
 
 
 def apply_template_bindings(body, bindings: dict) -> None:

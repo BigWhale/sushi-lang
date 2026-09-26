@@ -62,7 +62,6 @@ class StdlibFunction:
 class StdlibModule:
     """Metadata for a stdlib module."""
     path: str
-    python_module: any  # The imported Python module
     functions: Dict[str, StdlibFunction] = field(default_factory=dict)
     constants: Dict[str, StdlibFunction] = field(default_factory=dict)
     # The stdlib modules this one RE-EXPORTS (`docs/design/unit-namespaces.md` section
@@ -195,7 +194,6 @@ class StdlibRegistry:
 
         stdlib_module = StdlibModule(
             path=module_path,
-            python_module=py_module,
             reexports=tuple(getattr(py_module, "REEXPORTS", ())),
         )
 
@@ -284,19 +282,9 @@ class StdlibRegistry:
                 module.constants[name] = func
                 self._function_lookup[(module.path, name)] = func
 
-    def register_module(self, module_path: str, imported_units: List[str]) -> None:
-        """Register a module that was imported via 'use <module>'."""
-        if module_path not in self._modules and module_path in self.KNOWN_MODULES:
-            python_path = self.KNOWN_MODULES[module_path]
-            self._discover_module(module_path, python_path)
-
     def get_function(self, module_path: str, function_name: str) -> Optional[StdlibFunction]:
         """Get function metadata by module and name."""
         return self._function_lookup.get((module_path, function_name))
-
-    def is_stdlib_function(self, module_path: str, function_name: str) -> bool:
-        """Check if a function is a stdlib function."""
-        return (module_path, function_name) in self._function_lookup
 
     def get_module(self, module_path: str) -> Optional[StdlibModule]:
         """Get module metadata by path."""

@@ -120,10 +120,9 @@ class _Arms(NamedTuple):
     value_type: Optional['Type']       # the payload the success arm carries
     success_tag: Optional[int]         # that arm's variant index
     error_type: Optional['Type']       # the failure arm's payload, if it has one
-    error_tag: Optional[int]           # that arm's variant index
 
 
-_NO_ARMS = _Arms(None, None, None, None)
+_NO_ARMS = _Arms(None, None, None)
 
 
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
@@ -172,7 +171,6 @@ def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
             success_tag=inner_type.get_variant_index("Ok"),
             error_type=(err_variant.associated_types[0]
                         if err_variant.associated_types else None),
-            error_tag=inner_type.get_variant_index("Err"),
         )
 
     # A Maybe-like wrapper has no failure payload: `??` still propagates, as an Err.
@@ -184,7 +182,6 @@ def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
             value_type=some_variant.associated_types[0],
             success_tag=inner_type.get_variant_index("Some"),
             error_type=None,
-            error_tag=None,
         )
 
     er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
@@ -313,7 +310,6 @@ def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
     expr.inferred_unwrapped_type = arms.value_type
     expr.inferred_success_tag = arms.success_tag
     expr.inferred_error_type = arms.error_type
-    expr.inferred_error_tag = arms.error_tag
     expr.inferred_func_return_type = channel
 
 
