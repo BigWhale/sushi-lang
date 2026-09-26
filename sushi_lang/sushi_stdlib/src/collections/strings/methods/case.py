@@ -2,9 +2,52 @@
 
 import llvmlite.ir as ir
 from ..intrinsics.char_ops import emit_toupper_intrinsic, emit_tolower_intrinsic
-from ..common import declare_malloc
+from ..common import build_string_struct, declare_malloc
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.ir_builders import IRLoopBuilder, IRStructBuilder
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
+
+
+def _emit_char_transform_loop(
+    func: ir.Function,
+    builder: ir.IRBuilder,
+    data: ir.Value,
+    size: ir.Value,
+    transform_fn: ir.Function,
+    malloc_fn: ir.Function,
+    i8: ir.IntType,
+    i32: ir.IntType,
+    i64: ir.IntType,
+    string_type: ir.LiteralStructType
+) -> None:
+    """Map each byte through transform_fn into a new owned string and return it."""
+    size_i64 = builder.zext(size, i64, name="size_i64")
+    new_data = emit_checked_malloc(builder, malloc_fn, size_i64, name="new_data")
+
+    exit_block = func.append_basic_block("loop_exit")
+
+    def transform_body(body_builder: ir.IRBuilder, i: ir.Value):
+        src_ptr = body_builder.gep(data, [i], name="src_ptr")
+        ch = body_builder.load(src_ptr, name="ch")
+
+        ch_i32 = body_builder.zext(ch, i32, name="ch_i32")
+        transformed_i32 = body_builder.call(transform_fn, [ch_i32], name="transformed_i32")
+        transformed = body_builder.trunc(transformed_i32, i8, name="transformed")
+
+        dst_ptr = body_builder.gep(new_data, [i], name="dst_ptr")
+        body_builder.store(transformed, dst_ptr)
+
+    IRLoopBuilder.build_counting_loop(
+        func, builder,
+        ir.Constant(i32, 0), size,
+        transform_body, i32,
+        exit_block
+    )
+
+    builder = ir.IRBuilder(exit_block)
+    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+                                 name="struct_complete")
+    builder.ret(result)
 
 
 def emit_string_upper(module: ir.Module) -> ir.Function:
@@ -29,8 +72,8 @@ def emit_string_upper(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
     data, size = IRStructBuilder.extract_fat_pointer_fields(builder, func.args[0])
 
-    IRLoopBuilder.build_char_transform_loop(
-        func, builder, module, data, size, toupper, malloc_fn,
+    _emit_char_transform_loop(
+        func, builder, data, size, toupper, malloc_fn,
         i8, i32, i64, string_type
     )
 
@@ -59,8 +102,8 @@ def emit_string_lower(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(entry_block)
     data, size = IRStructBuilder.extract_fat_pointer_fields(builder, func.args[0])
 
-    IRLoopBuilder.build_char_transform_loop(
-        func, builder, module, data, size, tolower, malloc_fn,
+    _emit_char_transform_loop(
+        func, builder, data, size, tolower, malloc_fn,
         i8, i32, i64, string_type
     )
 
@@ -100,7 +143,8 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
     builder.cbranch(is_empty, empty_return, first_char_block)
 
     builder = ir.IRBuilder(empty_return)
-    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
+    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+                                 name="struct_complete")
     builder.ret(result)
 
     builder = ir.IRBuilder(first_char_block)
@@ -133,7 +177,8 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
     )
 
     builder = ir.IRBuilder(loop_end_block)
-    result = IRStructBuilder.build_fat_pointer(builder, string_type, new_data, size, owned=1)
+    result = build_string_struct(builder, string_type, new_data, size, owned=1,
+                                 name="struct_complete")
     builder.ret(result)
 
     return func
