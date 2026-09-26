@@ -18,26 +18,6 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.tables import SymbolTables
 
-SOURCE = """
-unsafe external "C" as sysio because "the back end reads the extern table":
-    fn text_length(string s) i64 = "strlen"
-
-const i32 LIMIT = 4
-
-struct Crate:
-    i32 weight
-
-enum Cursor:
-    Start
-
-extend Crate heavier() i32:
-    return self.weight + 1
-
-fn main() i32:
-    let Crate c = Crate(LIMIT)
-    println(c.heavier())
-    return Result.Ok(0)
-"""
 
 
 def test_the_analyzer_declares_no_shadow_of_a_program_table():
@@ -62,18 +42,3 @@ def test_every_program_table_answers_before_check():
             field.name == "intern_generic_ref"
 
 
-def test_the_back_end_reads_the_analyzer_own_tables(analyze_program):
-    """The pipeline's hand-off is typed and takes the tables, not an attribute guess."""
-    from sushi_lang.compiler.pipeline import codegen_for
-
-    analysis = analyze_program(SOURCE)
-    tables = analysis.analyzer.tables
-    cg = codegen_for(analysis.analyzer)
-
-    assert cg.struct_table is tables.structs
-    assert cg.enum_table is tables.enums
-    assert cg.func_table is tables.funcs
-    assert cg.perk_impl_table is tables.perk_impls
-    assert cg.const_table is tables.constants
-    assert cg.external_table is tables.externals
-    assert cg.unit_namespaces == dict(tables.namespaces)

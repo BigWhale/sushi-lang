@@ -83,10 +83,6 @@ class LLVMCodegen:
         # A named callee is resolved through it, so a library's own body reads the
         # library's signature where a consumer shadows the name (#487).
         self.emitting_unit: Optional[str] = None
-        # And its FILE, for a diagnostic the back end raises against a body. The unit
-        # name alone cannot locate a caret, and the reporter's default file is the unit
-        # the compiler was pointed at (#501).
-        self.emitting_unit_file: Optional[str] = None
         # What each unit may write, bare and behind a dot, handed over by the semantic
         # analyser. The back end resolves a bare callee through the SAME ladder the
         # typecheck pass walked, or two units declaring one name would bind the call to
@@ -442,7 +438,6 @@ class LLVMCodegen:
                 continue
 
             self.emitting_unit = unit.name
-            self.emitting_unit_file = str(unit.file_path)
             # Each body as the emitter named it. A snapshot cannot find these: the
             # declaration round above already put every function in the module.
             emitted = []
@@ -463,7 +458,6 @@ class LLVMCodegen:
             if unit.name in weak_units:
                 weaken_all(emitted)
         self.emitting_unit = None
-        self.emitting_unit_file = None
 
         for ext in self.monomorphized_extensions:
             self.functions.emit_extension_method_def(ext).linkage = "weak_odr"

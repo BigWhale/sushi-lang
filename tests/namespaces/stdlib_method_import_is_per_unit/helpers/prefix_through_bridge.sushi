@@ -1,0 +1,4 @@
+use "helpers/strings_bridge"
+
+public fn opens_with_a(string s) bool:
+    return Result.Ok(s.starts_with("a"))

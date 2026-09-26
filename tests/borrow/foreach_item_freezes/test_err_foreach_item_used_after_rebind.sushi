@@ -1,0 +1,10 @@
+# A bare `foreach` item views a slot of the iterated array. A rebind of the array frees
+# that slot, so a read of the item after the rebind is refused (#919).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let string[] a = from(["one".clone(), "two".clone()])
+    foreach(x in a.iter()):
+        a := from(["three".clone()])
+        println(x)
+    return Result.Ok(0)

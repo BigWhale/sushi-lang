@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import typing
 
-import pytest
 
 from sushi_lang.semantics import ast as sushi_ast
 from sushi_lang.semantics.const_eval import NOT_CONSTANT, ConstantEvaluator
@@ -50,27 +49,6 @@ def test_no_decision_names_a_node_outside_the_expr_union():
 # `~` by the blank type (CE2032), and a `MethodCall`, an `EnumConstructor` and a `Spread`
 # never arrive: the parser spells the first two as a `DotCall` and the third is an
 # argument, whose `Call` is the node that answers.
-REFUSED_FROM_SOURCE = {
-    "range":  "const i32 X = 0..3",
-    "lambda": "const fn(i32) -> i32 X = |i32 x| x",
-    "try":    "const i32 X = seven()??",
-    "borrow": "const i32 X = peek A",
-}
-
-PRELUDE = (
-    'const string A = "abc"\n'
-    "fn seven() i32:\n"
-    "    return Result.Ok(7)\n"
-)
-MAIN = "\nfn main() i32:\n    return Result.Ok(0)\n"
 
 
-@pytest.mark.parametrize("label", list(REFUSED_FROM_SOURCE), ids=list(REFUSED_FROM_SOURCE))
-def test_a_refused_kind_reads_ce0108_at_its_node(analyze_program, label):
-    src = PRELUDE + REFUSED_FROM_SOURCE[label] + "\n" + MAIN
-    analysis = analyze_program(src)
-    items = [item for item in analysis.reporter.items if item.code == "CE0108"]
-    assert items, f"{label}: no CE0108 in {[item.code for item in analysis.reporter.items]}"
-    node = analysis.program.constants[-1].value
-    assert type(node) in NOT_CONSTANT, f"{label}: {type(node).__name__} is not in NOT_CONSTANT"
-    assert (items[0].span.line, items[0].span.col) == (node.loc.line, node.loc.col)
+

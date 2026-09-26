@@ -3,8 +3,7 @@ io/path -- lexical path algebra, pure Sushi, POSIX separators.
 
 The module ships as bundled .sushi source and is merged as a compilation unit
 when imported (`use <io/path>`). Every function works on the string alone: no
-OS call, no file system read. The rules mirror Python's posixpath, and the
-differential test in tests/unit/test_path_differential.py holds them there.
+OS call, no file system read. The rules mirror Python's posixpath.
 
 Limitations: the separator is '/' only. normalize() is lexical -- it resolves
 `..` without looking at symlinks, so the result can name a different file

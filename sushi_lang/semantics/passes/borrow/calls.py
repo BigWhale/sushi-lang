@@ -20,7 +20,7 @@ from .consume import consume, consume_each
 from .diagnostics import emit_use_of_invalidated_borrow, expr_to_string
 from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
 from .reads import OWNER_STEPS, called_on, read_type
-from .writes import changes_its_receiver
+from .state import BorrowState
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -45,39 +45,77 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
     consume_each(checker, expr.args)
 
 
-def reject_borrow_read_by_the_change(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """CE2412: a borrowed argument is read DURING the call that changes the receiver (#888).
+def unchanged_borrowed_roots(checker: 'BorrowChecker', expr: CallLike) -> frozenset[str]:
+    """The roots of a call's borrowed arguments that no change has invalidated yet.
 
-    The change invalidates every binding that reads out of the receiver's owner. A binding
-    that is also a borrowed argument of that call is used while the change runs, so it is
-    the use after the change. A consumed argument has its own refusal (CE2411).
+    Taken at the call's ENTRY, before its receiver and arguments are walked, so that
+    `reject_borrow_read_by_the_change` can tell an invalidation this call made from an
+    older one.
     """
-    if not changes_its_receiver(expr):
-        return
+    roots = (_arg_root(checker, arg) for arg in _borrowed_args(checker, expr))
+    return frozenset(name for name, state in roots
+                     if name is not None and state is not None
+                     and state.invalidated_at is None)
+
+
+def reject_borrow_read_by_the_change(checker: 'BorrowChecker', expr: CallLike,
+                                     unchanged: frozenset[str]) -> None:
+    """CE2412: a borrowed argument is read DURING the call that changes its owner.
+
+    Every argument of a call is live while the callee runs (#888, #920). The call changes
+    an owner through its receiver, a `poke` argument or a `nom` argument, and each of
+    them invalidates every binding that reads out of that owner. A binding that is also
+    a borrowed argument of that call is used while the change runs, whatever the order
+    of the arguments. A consumed argument has its own refusal (CE2411).
+    """
     for arg in _borrowed_args(checker, expr):
-        root = walk_place(arg, Step.MEMBER | Step.INDEX).name
-        state = checker.borrow_state.get(root.id) if root is not None else None
-        # Only the invalidation THIS call made: an older one is the ordinary later use.
-        if state is None or state.invalidated_at is not expr.loc:
+        name, state = _arg_root(checker, arg)
+        # Only the invalidation THIS call made: an older one is the ordinary later use,
+        # and a read after the change in the walk was already reported and cleared.
+        if state is None or name not in unchanged or state.invalidated_at is None:
             continue
-        emit_use_of_invalidated_borrow(checker, root.id, arg.loc, state,
-                                       by_the_change=True)
+        emit_use_of_invalidated_borrow(checker, name, arg.loc, state, by_the_change=True)
 
 
-def _borrowed_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
-    """The arguments a method call reads without taking them, `peek` ones unwrapped."""
-    modes = expr.callee_param_modes
-    if modes is not None:
-        args = [arg for i, arg in enumerate(expr.args)
-                if not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
-    elif (called_on(expr, *CONTAINER_INSERT_METHODS) is not None
-          and checker.types.is_container(read_type(checker, expr.receiver))):
-        args = []
+def _arg_root(checker: 'BorrowChecker', arg: Expr) -> tuple[Optional[str], Optional[BorrowState]]:
+    """The local an argument reads out of, and its borrow state."""
+    root = walk_place(arg, Step.MEMBER | Step.INDEX).name
+    if root is None:
+        return None, None
+    return root.id, checker.borrow_state.get(root.id)
+
+
+def _borrowed_args(checker: 'BorrowChecker', expr: CallLike) -> list[Expr]:
+    """The arguments a call reads without taking them, `peek` ones unwrapped."""
+    if isinstance(expr, Call):
+        args = _borrowed_call_args(checker, expr)
     else:
-        args = list(expr.args)
+        args = _borrowed_method_args(checker, expr)
     return [arg.expr if isinstance(arg, Borrow) else arg for arg in args
             if not (isinstance(arg, Borrow)
                     and borrow_mode(arg.mutability) is BorrowMode.POKE)]
+
+
+def _borrowed_call_args(checker: 'BorrowChecker', expr: Call) -> list[Expr]:
+    """A plain call's arguments that land on a parameter that does not consume."""
+    if expr.callee_unresolved:
+        return []
+    kind, modes, variadic_at = call_modes(checker, expr)
+    return [arg for i, arg in enumerate(expr.args)
+            if (variadic_at is None or i < variadic_at)
+            and not checker.callee_modes.mode_at(modes, i, kind).consumes]
+
+
+def _borrowed_method_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
+    """A method-shaped call's arguments that land on a parameter that does not consume."""
+    modes = expr.callee_param_modes
+    if modes is not None:
+        return [arg for i, arg in enumerate(expr.args)
+                if not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
+    if (called_on(expr, *CONTAINER_INSERT_METHODS) is not None
+            and checker.types.is_container(read_type(checker, expr.receiver))):
+        return []
+    return list(expr.args)
 
 
 def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> None:

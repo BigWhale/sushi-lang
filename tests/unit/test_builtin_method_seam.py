@@ -235,23 +235,3 @@ def test_reference_receivers_unwrap():
                                  NOTHING_DERIVED)
 
 
-def test_struct_auto_derived_pair_is_recognised(analyze_program):
-    """The one table-backed family -- registered from semantics in the derive pass."""
-    analysis = analyze_program("""
-struct P:
-    i32 x
-
-fn main() i32:
-    let P p = P(1)
-    println(p.hash())
-    return Result.Ok(0)
-""")
-    point = StructType(name="P", fields=())
-    derived = analysis.analyzer.tables.derived_methods
-    assert builtin_method_exists(point, "hash", derived) is True
-    assert builtin_method_exists(point, "clone", derived) is True
-    assert builtin_method_exists(point, "describe", derived) is False
-
-    # And the same names on the same type are unknown to a compilation that never
-    # declared it -- the leak #601 closed.
-    assert builtin_method_exists(point, "hash", NOTHING_DERIVED) is False

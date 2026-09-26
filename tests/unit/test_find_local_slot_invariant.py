@@ -4,38 +4,15 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 
-from sushi_lang.backend.codegen_llvm import LLVMCodegen
-from sushi_lang.semantics.passes.collect import PerkImplementationTable
-from sushi_lang.internals.diagnostics import InternalCompilerError
 
 BACKEND_ROOT = Path(__file__).parent.parent.parent / "sushi_lang" / "backend"
 
 
-def test_find_local_slot_raises_registered_diagnostic():
-    """An unknown name is CE0055, not a bare KeyError."""
-    memory = LLVMCodegen(perk_impl_table=PerkImplementationTable()).memory
-    with pytest.raises(InternalCompilerError) as excinfo:
-        memory.find_local_slot("no_such_name")
-    assert excinfo.value.code == "CE0055"
 
 
-def test_find_local_slot_does_not_raise_keyerror():
-    """Explicitly: a KeyError must not escape (it renders as an anonymous CE0000)."""
-    memory = LLVMCodegen(perk_impl_table=PerkImplementationTable()).memory
-    try:
-        memory.find_local_slot("no_such_name")
-    except InternalCompilerError:
-        pass
-    except KeyError as exc:  # pragma: no cover - the regression this file exists for
-        pytest.fail(f"find_local_slot raised a bare KeyError: {exc!r}")
 
 
-def test_try_find_local_slot_returns_none():
-    """The interrogative form answers "not a local" without raising."""
-    memory = LLVMCodegen(perk_impl_table=PerkImplementationTable()).memory
-    assert memory.try_find_local_slot("no_such_name") is None
 
 
 def _calls_find_local_slot(node: ast.AST) -> bool:

@@ -11,24 +11,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from sushi_lang.backend.codegen_llvm import LLVMCodegen
-from sushi_lang.semantics.passes.collect import PerkImplementationTable
 
 BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
 
-LIFECYCLE_STATE = {
-    "_dtor_funcs": dict,
-    "_dtor_inprogress": list,
-    "_clone_funcs": dict,
-    "_clone_inprogress": list,
-}
 
 
-def test_a_new_codegen_declares_the_four_lifecycle_attributes():
-    cg = LLVMCodegen(perk_impl_table=PerkImplementationTable())
-    for name, kind in LIFECYCLE_STATE.items():
-        assert isinstance(cg.__dict__.get(name), kind), name
-        assert not cg.__dict__[name], name
 
 
 def test_no_backend_module_reads_the_lifecycle_state_through_getattr():

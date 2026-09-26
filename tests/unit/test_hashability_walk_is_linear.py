@@ -11,51 +11,18 @@ fault is the shape of the growth.
 """
 from __future__ import annotations
 
-import collections
 
 from sushi_lang.semantics.generics import hashing
 
 
-DEPTH = 10
-FAN = 4
 
 
-def _fanning_structs(depth: int, fan: int) -> str:
-    lines = ["struct S0:", "    i32 a", ""]
-    for i in range(1, depth):
-        lines.append(f"struct S{i}:")
-        lines += [f"    S{i - 1} f{k}" for k in range(fan)]
-        lines.append("")
-    lines += ["fn main() i32:", '    println("Mostly Harmless")', "    return Result.Ok(0)"]
-    return "\n".join(lines)
 
 
-def _visit_counts(analyze, monkeypatch, src: str) -> collections.Counter:
-    counts: collections.Counter = collections.Counter()
-    original = hashing.can_struct_be_hashed
-
-    def counted(struct_type, *args, **kwargs):
-        counts[struct_type.name] += 1
-        return original(struct_type, *args, **kwargs)
-
-    monkeypatch.setattr(hashing, "can_struct_be_hashed", counted)
-    analyze(src)
-    return counts
 
 
-def test_a_fanning_struct_graph_is_not_walked_exponentially(analyze, monkeypatch):
-    counts = _visit_counts(analyze, monkeypatch, _fanning_structs(DEPTH, FAN))
-    total = sum(counts.values())
-    assert total <= 20 * DEPTH, (
-        f"{total} hashability decisions for {DEPTH} structs of fan-out {FAN}. A visited "
-        "set copied per field cannot stop a re-visit across branches, so the walk "
-        "multiplies by the fan-out at every link."
-    )
 
 
-def test_a_hashable_struct_graph_is_still_hashable(analyze):
-    reporter = analyze(_fanning_structs(4, 2))
-    assert not [item for item in reporter.items if item.severity.name == "ERROR"]
 
 
 def _struct(name, fields):

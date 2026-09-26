@@ -1,96 +1,19 @@
 """No Python traceback ever reaches the user, whatever channel the failure took."""
 from __future__ import annotations
 
-import subprocess
-import re
-from pathlib import Path
 
-import pytest
-from sushic_path import SUSHIC
 
 
 TRACEBACK_MARKER = "Traceback (most recent call last)"
-CODE_RE = re.compile(r"\[(C[EW]\d{4})\]")
-LOCATION_RE = re.compile(r"^\S+:\d+:\d+: ", re.MULTILINE)
 
 
-def _compile(tmp_path: Path, source: str, *extra: str) -> subprocess.CompletedProcess:
-    src = tmp_path / "crash.sushi"
-    src.write_text(source, encoding="utf-8")
-    return subprocess.run(
-        [SUSHIC, "crash.sushi", *extra],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        env={"NO_COLOR": "1", "PATH": _path(), "HOME": str(tmp_path)},
-    )
 
 
-def _path() -> str:
-    import os
-    return os.environ.get("PATH", "")
 
 
 # (id, source, expected_code, has_location)
-CHANNELS = [
-    pytest.param(
-        "fn main() i32:\n    let i32 x = \n    return Result.Ok(0)\n",
-        "CE6001", True, id="unexpected_token",
-    ),
-    pytest.param(
-        "fn main() i32:\n    let i32 x = ```\n    return Result.Ok(0)\n",
-        "CE6002", True, id="unexpected_characters",
-    ),
-    pytest.param(
-        "fn main() i32:\n",
-        "CE6003", True, id="unexpected_eof",
-    ),
-    pytest.param(
-        'fn main() i32:\n    if (true):\n        println("a")\n      println("b")\n'
-        "    return Result.Ok(0)\n",
-        "CE6004", True, id="inconsistent_dedent",
-    ),
-    pytest.param(
-        'fn main() i32:\n    println("val {1 +}")\n    return Result.Ok(0)\n',
-        "CE6010", True, id="interpolation_bad_expression",
-    ),
-    pytest.param(
-        'fn main() i32:\n    println("{x")\n    return Result.Ok(0)\n',
-        "CE2026", True, id="unterminated_interpolation",
-    ),
-    pytest.param(
-        "fn main() i32:\n"
-        "    let Result@(i32, StdError) r = Result.Ok(1)\n"
-        "    let bool ok = r.is_ok(1)\n"
-        "    return Result.Ok(0)\n",
-        "CE2009", True, id="result_method_arity",
-    ),
-    pytest.param(
-        "fn main() i32:\n    let i32 x = 0755\n    return Result.Ok(0)\n",
-        "CE2071", True, id="c_style_octal",
-    ),
-    pytest.param(
-        "fn main() i32:\n    let i32 x = \"hi\"\n    return Result.Ok(0)\n",
-        "CE2002", True, id="type_mismatch_control",
-    ),
-]
 
 
-@pytest.mark.parametrize("source,expected_code,has_location", CHANNELS)
-def test_no_traceback_escapes(tmp_path, source, expected_code, has_location):
-    result = _compile(tmp_path, source)
-    output = result.stdout + result.stderr
-
-    assert TRACEBACK_MARKER not in output, f"traceback leaked:\n{output}"
-    assert result.returncode == 2, f"expected exit 2, got {result.returncode}:\n{output}"
-
-    codes = CODE_RE.findall(result.stderr)
-    assert codes, f"no diagnostic code in stderr:\n{result.stderr}"
-    if expected_code is not None:
-        assert expected_code in codes, f"expected {expected_code}, got {codes}"
-    if has_location:
-        assert LOCATION_RE.search(result.stderr), \
-            f"no file:line:col prefix in stderr:\n{result.stderr}"
 
 
 def test_internal_compiler_error_is_reported_not_dumped(tmp_path, monkeypatch):

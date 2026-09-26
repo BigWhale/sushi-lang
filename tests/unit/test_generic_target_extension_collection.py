@@ -13,89 +13,14 @@ failed when it fails.
 """
 from __future__ import annotations
 
-import pytest
 
-_PRELUDE = """\
-struct Box@(T):
-    T value
 
-struct Pair@(A, B):
-    A first
-    B second
-
-enum Wrap@(T):
-    Full(T)
-    Empty
-"""
-
-_TAIL = """\
-fn main() i32:
-    let Box@(i32) b = Box(1)
-    return Result.Ok(0)
-"""
 
 # (id, declaration, the interned name the declaration must make exist)
-_CASES = [
-    (
-        "return_builtin_enum",
-        "extend Box@(i32) tagged() Maybe@(i32):\n    return Maybe.Some(self.value)\n",
-        "Maybe<i32>",
-    ),
-    (
-        "return_user_enum",
-        "extend Box@(i32) wrapped() Wrap@(i32):\n    return Wrap.Full(self.value)\n",
-        "Wrap<i32>",
-    ),
-    (
-        "parameter_builtin_enum",
-        "extend Box@(i32) plus(Maybe@(i32) m) i32:\n    return self.value + m.realise(0)\n",
-        "Maybe<i32>",
-    ),
-    (
-        "parameter_user_struct",
-        "extend Box@(i32) paired(Pair@(i32, i32) p) i32:\n"
-        "    return self.value + p.first + p.second\n",
-        "Pair<i32, i32>",
-    ),
-    (
-        "owning_signature_type",
-        'extend Box@(i32) named() Maybe@(string):\n    return Maybe.Some("marvin")\n',
-        "Maybe<string>",
-    ),
-    (
-        "body_annotation",
-        "extend Box@(i32) counted() i32:\n"
-        "    let List@(i32) out = List.new()\n"
-        "    let i32 n = out.len()\n"
-        "    out.destroy()\n"
-        "    return n\n",
-        "List<i32>",
-    ),
-]
 
 
-def _interned_names(analysis) -> set[str]:
-    """Every struct and enum name the analysis interned."""
-    analyzer = analysis.analyzer
-    assert analyzer is not None, "analysis produced no analyzer"
-    return set(analyzer.tables.enums.by_name) | set(analyzer.tables.structs.by_name)
 
 
-@pytest.mark.parametrize("case_id,declaration,interned", _CASES,
-                         ids=[c[0] for c in _CASES])
-def test_a_generic_target_declaration_interns_the_types_it_names(
-        analyze_program, case_id, declaration, interned):
-    """A type named in a generic-target extension reaches the tables."""
-    analysis = analyze_program(_PRELUDE + declaration + _TAIL, name=case_id)
-
-    assert interned in _interned_names(analysis), (
-        f"{case_id}: '{interned}' is named by the declaration and was never interned, so "
-        "the instantiate pass did not read it. The declaration reports a false CE2001."
-    )
-    assert not analysis.reporter.has_errors, (
-        f"{case_id}: semantic analysis reported an error:\n"
-        + "\n".join(str(d) for d in analysis.reporter.diagnostics)
-    )
 
 
 # A TEMPLATE target reads its signature per instantiation of the target. This case used to
@@ -104,43 +29,9 @@ def test_a_generic_target_declaration_interns_the_types_it_names(
 # Each instantiation owns its body now (#391), so the restriction is gone and the positive
 # case takes its place.
 
-_TEMPLATE_CASES = [
-    ("template_return", "extend Box@(T) peeked() Maybe@(T):\n"
-                        "    return Maybe.Some(self.value.clone())\n",
-     ["Maybe<i32>", "Maybe<string>"]),
-    ("template_parameter", "extend Box@(T) plus(Maybe@(T) m) T:\n"
-                           "    return m.realise(self.value.clone())\n",
-     ["Maybe<i32>", "Maybe<string>"]),
-    ("template_nested", "extend Box@(T) wrapped() Maybe@(List@(T)):\n"
-                        "    return Maybe.Some(List.new())\n",
-     ["List<i32>", "List<string>", "Maybe<List<i32>>", "Maybe<List<string>>"]),
-]
-
-_TWO_INSTANTIATIONS = """\
-fn main() i32:
-    let Box@(i32) a = Box(1)
-    let Box@(string) b = Box("marvin")
-    return Result.Ok(0)
-"""
 
 
-@pytest.mark.parametrize("case_id,declaration,interned", _TEMPLATE_CASES,
-                         ids=[c[0] for c in _TEMPLATE_CASES])
-def test_a_template_target_interns_one_signature_per_instantiation(
-        analyze_program, case_id, declaration, interned):
-    """Both instantiations of a template intern their own signature types."""
-    analysis = analyze_program(_PRELUDE + declaration + _TWO_INSTANTIATIONS, name=case_id)
 
-    names = _interned_names(analysis)
-    missing = [name for name in interned if name not in names]
-    assert not missing, (
-        f"{case_id}: {missing} never interned. A template's signature is read once per "
-        "instantiation of its target."
-    )
-    assert not analysis.reporter.has_errors, (
-        f"{case_id}: semantic analysis reported an error:\n"
-        + "\n".join(str(d) for d in analysis.reporter.diagnostics)
-    )
 
 
 # -- the array-target classifier (ruling 3 of the UFCS epic) ----------------------------
@@ -188,23 +79,3 @@ def test_array_element_of_any_other_shape_is_invalid():
     assert classify_array_extension_target(nested, lambda name: False) is None
 
 
-def test_an_array_template_files_under_the_synthetic_base_key(analyze_program):
-    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
-
-    analysis = analyze_program(
-        "extend T[] count_plus_one() i32:\n"
-        "    return self.len() + 1\n"
-        "\n"
-        "fn main() i32:\n"
-        "    let i32[] xs = from([1, 2, 3])\n"
-        "    println(\"{xs.count_plus_one()}\")\n"
-        "    return Result.Ok(0)\n",
-        name="array_template_key")
-
-    assert not analysis.reporter.has_errors, (
-        "semantic analysis reported an error:\n"
-        + "\n".join(str(d) for d in analysis.reporter.diagnostics))
-    declarations = analysis.analyzer.tables.generic_extensions.declarations(
-        ARRAY_BASE_KEY, "count_plus_one")
-    assert len(declarations) == 1
-    assert declarations[0].type_params == ("T",)

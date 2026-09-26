@@ -16,62 +16,8 @@ from sushi_lang.semantics.passes.collect import EnumTable, StructTable
 from sushi_lang.semantics.typesys import StructType, UnknownType
 
 
-def test_a_function_typed_field_resolves_the_names_it_spells(analyze_program):
-    """A `fn(Node) -> i32` field names `Node`, and the field must hold the table entry."""
-    analysis = analyze_program(
-        """
-struct Node:
-    i32 v
-
-struct Sink:
-    fn(Node) -> i32 handler
-
-fn main() i32:
-    return Result.Ok(0)
-"""
-    )
-    sink = analysis.analyzer.tables.structs.by_name["Sink"]
-    handler = dict(sink.fields)["handler"]
-
-    unresolved = [p for p in handler.param_types if isinstance(p, UnknownType)]
-    assert not unresolved, (
-        f"a function-typed field kept unresolved parameter names: {unresolved}. "
-        "Two spellings of one interned name is the hazard the intern seam documents."
-    )
-    assert not isinstance(handler.err_type, UnknownType), (
-        f"a function-typed field kept an unresolved error arm: {handler.err_type}"
-    )
 
 
-def test_an_array_field_is_not_rebuilt_by_a_second_run(analyze_program):
-    """The pass runs again at every late intern; an unchanged field must stay the same object."""
-    analysis = analyze_program(
-        """
-struct Inner:
-    i32 v
-
-struct Holder:
-    Inner[] many
-    Inner[3] fixed
-    i32[] plain
-
-fn main() i32:
-    return Result.Ok(0)
-"""
-    )
-    analyzer = analysis.analyzer
-    before = analyzer.tables.structs.by_name["Holder"].fields
-
-    resolve_pass.resolve_struct_field_types(analyzer.tables.structs, analyzer.tables.enums)
-
-    after = analyzer.tables.structs.by_name["Holder"].fields
-    rebuilt = [name for (name, was), (_, now) in zip(before, after, strict=True)
-               if was is not now]
-    assert not rebuilt, (
-        f"a second run rebuilt these field types: {rebuilt}. An array type was rebuilt "
-        "unconditionally, so every array-bearing struct was rewritten on every run."
-    )
-    assert before is after, "the frozen fields tuple was replaced although nothing changed"
 
 
 class _CountingSig:

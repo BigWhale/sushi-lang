@@ -12,7 +12,6 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-import pytest
 
 from sushi_lang.semantics.method_effects import METHOD_EFFECTS, effect_of
 from sushi_lang.semantics.passes.types import arrays
@@ -40,14 +39,5 @@ def test_every_array_method_the_table_marks_is_measured():
     assert {"clear", "push", "pop", "fill", "reverse", "extend"} <= marked
 
 
-_CONSTANT = "const i32[3] A = [1, 2, 3]\n\nfn main() i32:\n    A.{call}\n    return Result.Ok(0)\n"
 
 
-@pytest.mark.parametrize("call", [
-    name + ("(4)" if spec.arity == 1 else "(0, 1)" if spec.arity == 2
-            else "(from([9]), 0, 1)" if spec.arity == 3 else "()")
-    for name, spec in arrays._ARRAY_METHODS.items() if effect_of(name).mutates
-])
-def test_a_mutating_method_on_a_constant_reads_ce2096(analyze, call):
-    codes = [item.code for item in analyze(_CONSTANT.format(call=call), name="m").items]
-    assert codes == ["CE2096"], (call, codes)

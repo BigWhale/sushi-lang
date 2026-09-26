@@ -748,9 +748,9 @@ its single-unit case and loses its cross-unit one:
 
 | Test | Asserts today | Under phase 1 |
 |---|---|---|
-| `tests/unit/test_duplicate_declaration_cascades.py` | cross-unit `CE0101` for a private `fn scale` | legal; each unit's call answers itself |
-| `tests/unit/test_constant_visibility.py` | cross-unit `CE0105` for two private constants, `CE3003` for two public ones | `CE0105` goes. The both-public case becomes **nothing at all**, because that fixture's consumer declares the name itself and a unit's own declaration always wins; `CE3012` needs a THIRD unit that declares neither, which the file gained as a second case |
-| `tests/unit/test_collect_attribution.py` | cross-unit `CE0101` for one `libc.strlen` declared in two units | legal; an FFI namespace is bound by the unit that declares it (section 3) |
+| `test_duplicate_declaration_cascades.py` (retired) | cross-unit `CE0101` for a private `fn scale` | legal; each unit's call answers itself |
+| `test_constant_visibility.py` (retired) | cross-unit `CE0105` for two private constants, `CE3003` for two public ones | `CE0105` goes. The both-public case becomes **nothing at all**, because that fixture's consumer declares the name itself and a unit's own declaration always wins; `CE3012` needs a THIRD unit that declares neither, which the file gained as a second case |
+| `test_collect_attribution.py` (retired) | cross-unit `CE0101` for one `libc.strlen` declared in two units | legal; an FFI namespace is bound by the unit that declares it (section 3) |
 
 Of the thirteen files that assert `CE0101`, those two are the cross-unit ones; the other
 eleven are single-unit and do not move. Two files assert `CE3003` and both are cross-unit.
@@ -1026,10 +1026,9 @@ Identity is nominal and program-wide (`docs/design/type-identity.md`; Ruling 6: 
 namespace is a resolution path, not a type identity). A qualifier folds into the bare
 name before the table lookup, so `IoError`, `fs.IoError`, `io.IoError` and a name reached
 through a two-hop chain resolve to the ONE synthesized `EnumType`, and
-`Result<string, IoError>` interns once. `tests/unit/test_public_use_reexport.py` is the
-gate: one program names `Vec` bare through two hops and behind two aliases, `IoError` bare
-and behind two aliases, and every `let` resolves to the same table object; no CE0126.
-`tests/unit/test_lib_binary_reexports.py` is the compiled half's gate (#585).
+`Result<string, IoError>` interns once: a program that names `Vec` bare through two hops and
+behind two aliases, and `IoError` bare and behind two aliases, gets no CE0126. The fixtures
+under `tests/namespaces/reexport/` hold it.
 
 **Mechanics.** The grammar takes `PUBLIC? USE`; `UseStatement.is_public` and
 `public_span` carry it. A provider composes what it re-exports: `Provider.reexports` is the
@@ -1051,8 +1050,7 @@ import in the help); `public use ... as` (CE3016); a `public use` below a declar
 one declaration reached twice; a `public use` of a unit with nothing public (CW3005). The
 stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
 `SeekFrom.Start`; `use <io/fs> as fs` gives `fs.IoError`; `use <net/tcp>` alone matches
-`IoError` from a read. `tests/unit/test_public_use_reexport.py` holds the identity gate
-and rule 3.
+`IoError` from a read. The fixtures under `tests/namespaces/reexport/` hold rule 3.
 
 **What this does not decide.** Whether a `public use` may re-export a single name
 (`public use "geometry".Vec`), and whether a `.slib` consumer may re-export a library

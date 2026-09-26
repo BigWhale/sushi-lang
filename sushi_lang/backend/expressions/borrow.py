@@ -25,10 +25,8 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         if slot is None:
             raise_internal_error("CE0055", name=var_name)
 
-        if hasattr(codegen, 'variable_types') and var_name in codegen.variable_types:
-            semantic_type = codegen.variable_types[var_name]
-            if isinstance(semantic_type, ReferenceType):
-                return codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
+        if isinstance(codegen.memory.find_semantic_type(var_name), ReferenceType):
+            return codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
 
         return slot  # Return the pointer directly (zero-cost)
 

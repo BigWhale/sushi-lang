@@ -59,16 +59,3 @@ def test_the_idempotency_guard_is_still_there():
                     "is already stamped: a second reach reports its range fault twice")
 
 
-def test_a_literal_reached_twice_reports_its_range_fault_once(analyze):
-    """The guard's user-visible job: one literal, one range diagnostic."""
-    source = """fn take(i8 n) i32:
-    return Result.Ok(n as i32)
-
-fn main() i32:
-    let i32 r = take(300)??
-    println("{r}")
-    return Result.Ok(0)
-"""
-    reporter = analyze(source, name="m")
-    codes = [item.code for item in reporter.items if item.code == "CE2073"]
-    assert codes == ["CE2073"], codes

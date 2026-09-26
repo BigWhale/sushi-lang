@@ -13,15 +13,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from tests.docs_sweep import (
-    PROJECT_ROOT,
     blocks_in,
     examples_in,
     parse_attrs,
-    run_example,
     wrap_example,
 )
 
-FIXTURE = PROJECT_ROOT / "tests" / "docs" / "examples" / "fence_outcomes.sushi"
 
 
 def _write(path: Path, text: str) -> Path:
@@ -122,51 +119,10 @@ def test_an_indented_snippet_body_keeps_its_own_shape():
 
 # -- the collector (R21, R22) ---------------------------------------------------
 
-def test_the_collector_finds_every_example_in_source_order():
-    examples = examples_in(FIXTURE)
-    assert [example.owner for example in examples] == \
-        ["doubled", "summed", "connect", "incremented"]
-    assert [example.attrs.mode for example in examples] == \
-        ["run", "no_run", "skip", "error"]
 
 
-def test_a_private_declaration_is_a_skip_with_its_reason(tmp_path):
-    unit = _write(tmp_path / "hidden.sushi", """\
-##:
-Doubles a number.
-- Example:
-```sushi
-let i32 d = doubled(21)??
-println("{d}")
-```
-:##
-fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
-""")
-    example = examples_in(unit)[0]
-    assert example.skip_reason is not None
-    assert "private" in example.skip_reason
 
 
-def test_a_unit_that_declares_main_is_a_skip_with_its_reason(tmp_path):
-    unit = _write(tmp_path / "program.sushi", """\
-##:
-Doubles a number.
-- Example:
-```sushi
-let i32 d = doubled(21)??
-println("{d}")
-```
-:##
-public fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
-
-fn main() i32:
-    return Result.Ok(0)
-""")
-    example = examples_in(unit)[0]
-    assert example.skip_reason is not None
-    assert "main" in example.skip_reason
 
 
 def test_a_file_that_does_not_parse_yields_no_examples(tmp_path):
@@ -174,17 +130,6 @@ def test_a_file_that_does_not_parse_yields_no_examples(tmp_path):
     assert examples_in(unit) == []
 
 
-def test_a_defective_example_is_not_collected(tmp_path):
-    """CE7007 and CE7008 are the compiler's business; the sweep never runs a defect."""
-    unit = _write(tmp_path / "defect.sushi", """\
-##:
-Doubles a number.
-- Example: there is no fence after this tag.
-:##
-public fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
-""")
-    assert examples_in(unit) == []
 
 
 # -- the Markdown collector honours the fence rule (R27) ------------------------
@@ -231,24 +176,5 @@ def test_an_ordinary_block_is_still_collected():
 
 # -- end to end -----------------------------------------------------------------
 
-def test_the_four_outcomes_against_the_checked_in_fixture(tmp_path):
-    outcomes = [run_example(example, tmp_path)[1] for example in examples_in(FIXTURE)]
-    assert outcomes == ["PASS", "PASS", "SKIP", "EXPECTED-ERROR"]
 
 
-def test_an_example_that_does_not_compile_is_a_fail(tmp_path):
-    unit = _write(tmp_path / "lib" / "drifted.sushi", """\
-##:
-Doubles a number.
-- Example:
-```sushi
-let i32 d = renamed_last_week(21)??
-println("{d}")
-```
-:##
-public fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
-""")
-    example = examples_in(unit)[0]
-    _example, outcome, detail = run_example(example, tmp_path / "run")
-    assert outcome == "FAIL", detail

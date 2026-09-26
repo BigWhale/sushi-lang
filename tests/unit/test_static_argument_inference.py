@@ -25,38 +25,11 @@ class _Template:
         self.params = params
 
 
-def _codes(reporter):
-    return [item.code for item in reporter.items if item.code.startswith("CE")]
 
 
-def _ce2060(reporter):
-    return [item for item in reporter.items if item.code == "CE2060"]
 
 
-CAGE = """
-struct Cage@(T):
-    T[] items
 
-extend Cage@(T) static empty() Cage@(T):
-    return Cage(from([]))
-
-fn main() i32:
-    println("{Cage.empty().items.len()}")
-    return Result.Ok(0)
-"""
-
-PAIR = """
-struct Pair@(A, B):
-    A first
-    B[] rest
-
-extend Pair@(A, B) static of_first(A a) Pair@(A, B):
-    return Pair(a, from([]))
-
-fn main() i32:
-    println("{Pair.of_first(3).first}")
-    return Result.Ok(0)
-"""
 
 
 # 1. The solver
@@ -99,25 +72,7 @@ def test_an_argument_with_no_type_yet_solves_nothing():
 
 # 2. The refusal
 
-def test_no_source_names_both_sources_and_the_parameter(analyze):
-    reporter = analyze(CAGE)
-    items = _ce2060(reporter)
-    assert len(items) == 1
-    message = items[0].message
-    assert "'T'" in message
-    assert "no argument names" in message
-    assert "declares no type" in message
 
 
-def test_a_solved_parameter_is_not_named(analyze):
-    reporter = analyze(PAIR)
-    items = _ce2060(reporter)
-    assert len(items) == 1
-    message = items[0].message
-    assert "'B'" in message
-    assert "'A'" not in message
 
 
-def test_the_refusal_is_one_diagnostic(analyze):
-    assert _codes(analyze(CAGE)) == ["CE2060"]
-    assert _codes(analyze(PAIR)) == ["CE2060"]

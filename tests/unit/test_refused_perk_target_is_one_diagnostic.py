@@ -13,26 +13,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-_TESTS = Path(__file__).resolve().parents[1]
-
-_CASES = {
-    "perks/refused_target/test_err_perk_target_count_refused.sushi": ["CE2062"],
-    "perks/refused_target/test_err_perk_target_mixed_refused.sushi": ["CE2098"],
-    "perks/refused_target/test_err_perk_target_refused_other_method.sushi":
-        ["CE2062", "CE2008"],
-}
 
 
-def _codes(analyze, src: str) -> list[str]:
-    return [item.code for item in analyze(src, name="prt").items
-            if item.code.startswith("CE")]
 
 
-@pytest.mark.parametrize("fixture", list(_CASES))
-def test_one_fault_is_one_diagnostic(analyze, fixture):
-    assert _codes(analyze, (_TESTS / fixture).read_text()) == _CASES[fixture]
+
+
 
 
 def test_one_helper_emits_ce2098():

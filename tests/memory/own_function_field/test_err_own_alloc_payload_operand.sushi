@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2518
+# The payload expression of `Own.alloc` is checked, so a bad operand in it is a
+# diagnostic and not an internal error (#923).
+
+fn main() i32:
+    let Own@(i32) o1 = Own.alloc(1 + true)
+    println("{o1.get()}")
+    return Result.Ok(0)

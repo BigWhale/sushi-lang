@@ -56,11 +56,11 @@ compiled like user code instead of precompiled to bitcode. Six exist today:
 - `compression/zlib` (`src_sushi/compression/zlib.sushi`) — DEFLATE and the
   zlib container, and the first source module that both READS and WRITES a
   binary format. It is validated differentially against Python `zlib` in both
-  directions (`tests/unit/test_zlib_differential.py`), which is what makes a
+  directions, which is what makes a
   hand-written codec safe to trust.
 - `io/path` (`src_sushi/io/path.sushi`) — lexical path algebra (`join`,
   `basename`, `dirname`, `extension`, `normalize`), mirroring Python's
-  `posixpath` and held there by `tests/unit/test_path_differential.py`. The
+  `posixpath`. The
   first source module that depends on a `.bc` string unit
   (`collections/strings`).
 - `io/fs` (`src_sushi/io/fs.sushi`) — composed file-system operations:

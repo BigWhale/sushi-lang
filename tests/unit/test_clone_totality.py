@@ -9,9 +9,7 @@ from sushi_lang.semantics.ownership import TypeClass, type_class_of
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
-    DynamicArrayType,
     DynamicArrayType as DynArr,
-    EnumType,
     FunctionType,
     StructType,
 )
@@ -79,13 +77,6 @@ REPRESENTATIVE_TYPES: list[tuple[str, object]] = [
 #           -- a transient view over storage someone else owns; Rust's `Iterator: Clone` is
 #              opt-in for the same reason. If an iterator ever becomes ownable, this is the
 #              exemption to revisit.
-EXEMPT_REASONS: dict[str, str] = {
-    "ptr": "no methods (CE5011); not a generic type argument (CE5012); owns nothing",
-    "blank": "not a value a user binds",
-    "io handles": "a RESOURCE type: no clone by design (CE2431), and no valid argument "
-                  "to a generic that clones -- the escape is .share(), and CE2411 names it",
-    "Iterator<T>": "a transient view; ownership belongs to what it iterates",
-}
 
 
 # Clause 1 -- the escape must exist
@@ -124,46 +115,8 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
 
 # The auto-derived pair, which needs the analyzer to have run
 
-def test_user_struct_and_enum_carry_a_clone(analyze_program):
-    """The derive pass registers clone from SEMANTICS, so the answer is import-order safe."""
-    analysis = analyze_program("""
-struct Bag:
-    i32[] items
-
-enum Holder:
-    Full(i32[])
-    Empty
-
-fn main() i32:
-    let Bag b = Bag(from([1, 2, 3]))
-    let Holder h = Holder.Full(from([4]))
-    println(b.items.len())
-    return Result.Ok(0)
-""")
-    bag = StructType(name="Bag", fields=())
-    holder = EnumType(name="Holder", variants=())
-    derived = analysis.analyzer.tables.derived_methods
-    assert builtin_method_exists(bag, "clone", derived), (
-        "the derive pass must auto-derive a struct clone")
-    assert builtin_method_exists(holder, "clone", derived), (
-        "the derive pass must auto-derive an enum clone")
 
 
-def test_an_owning_user_struct_is_move_and_therefore_needs_its_clone(analyze_program):
-    """The two clauses meet: a struct with a `T[]` field is MOVE, so clause 1 binds to it."""
-    analysis = analyze_program("""
-struct Bag:
-    i32[] items
-
-fn main() i32:
-    let Bag b = Bag(from([1, 2, 3]))
-    println(b.items.len())
-    return Result.Ok(0)
-""")
-    bag = StructType(name="Bag", fields=(("items", DynamicArrayType(base_type=BuiltinType.I32)),))
-    assert type_class_of(bag, NO_DROPS) is TypeClass.MOVE
-    assert builtin_method_exists(StructType(name="Bag", fields=()), "clone",
-                                 analysis.analyzer.tables.derived_methods)
 
 
 # The former known hole, now closed

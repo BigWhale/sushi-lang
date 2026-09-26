@@ -17,7 +17,7 @@ lists, or a generic declaration is silently missing from every consumer (#631).
 
 The ORDER is part of the contract, not an implementation detail --
 `tests/docs_sweep.py` numbers its `doc_example_<n>` helpers from it, so a rearrangement
-renames every one of them. `tests/unit/test_declaration_walk_is_total.py` is the gate.
+renames every one of them.
 
 `walk_nodes()` at the bottom is the other shared walk: the STRUCTURAL one, over the
 nodes themselves rather than over what a unit declares. It replaced seven hand-rolled

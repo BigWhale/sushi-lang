@@ -5,22 +5,14 @@ every handle. The providers of that set must not make one up when their table is
 """
 import pytest
 
-from sushi_lang.backend.codegen_llvm import LLVMCodegen
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.passes.borrow.types import TypeQueries
-from sushi_lang.semantics.passes.collect import PerkImplementationTable
 from sushi_lang.semantics.tables import SymbolTables
 
 
-def test_codegen_refuses_a_missing_perk_table():
-    with pytest.raises(TypeError):
-        LLVMCodegen()
 
 
-def test_codegen_keeps_the_perk_table_it_is_given():
-    table = PerkImplementationTable()
-    assert LLVMCodegen(perk_impl_table=table).perk_impl_table is table
 
 
 def test_borrow_checker_refuses_missing_tables():

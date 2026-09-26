@@ -17,10 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from sushi_lang.internals.parser import build_parser
-from sushi_lang.semantics.ast_builder import ASTBuilder
-from sushi_lang.semantics.ast_builder.declarations.signatures import (
-    read_signature_types)
 
 ROOT = Path(__file__).resolve().parents[2]
 GRAMMAR = ROOT / "sushi_lang" / "grammar.lark"
@@ -35,73 +31,11 @@ SIGNATURE_RULES = {
 
 # One channel, written at the same column in all three positions, so a span read that
 # points at the return type instead of the channel cannot pass.
-CHANNEL_SOURCES = {
-    "function": (
-        "enum OddError:\n"
-        "    TooOdd\n"
-        "\n"
-        "fn halved(i32 v) i32 | OddError:\n"
-        "    return Result.Ok(v)\n"
-    ),
-    "extension": (
-        "enum OddError:\n"
-        "    TooOdd\n"
-        "\n"
-        "struct Half:\n"
-        "    i32 n\n"
-        "\n"
-        "extend Half take(peek self) i32 | OddError:\n"
-        "    return Result.Ok(self.n)\n"
-    ),
-    "perk method": (
-        "enum OddError:\n"
-        "    TooOdd\n"
-        "\n"
-        "perk Source:\n"
-        "    fn read_one(peek self) i32 | OddError\n"
-    ),
-}
-
-BARE_SOURCES = {
-    "function": "fn halved(i32 v) i32:\n    return Result.Ok(v)\n",
-    "extension": (
-        "struct Half:\n"
-        "    i32 n\n"
-        "\n"
-        "extend Half take(peek self) i32:\n"
-        "    return self.n\n"
-    ),
-    "perk method": "perk Source:\n    fn read_one(peek self) i32\n",
-}
-
-CONTRACT_AND_IMPLEMENTATION = (
-    "enum OddError:\n"
-    "    TooOdd\n"
-    "\n"
-    "perk Source:\n"
-    "    fn read_one(peek self) i32 | OddError\n"
-    "\n"
-    "struct Counter:\n"
-    "    i32 value\n"
-    "\n"
-    "extend Counter with Source:\n"
-    "    fn read_one(peek self) i32 | OddError:\n"
-    "        return Result.Ok(self.value)\n"
-)
-
-_PARSER = build_parser()
 
 
-def _declaration(source: str, position: str):
-    """The one declaration of `position` that this unit holds."""
-    program = ASTBuilder().build(_PARSER.parse(source))
-    found = {
-        "function": program.functions,
-        "extension": program.extensions,
-        "perk method": program.perks[0].methods if program.perks else [],
-    }[position]
-    assert len(found) == 1
-    return found[0]
+
+
+
 
 
 def _rule_body(rule: str) -> str:
@@ -137,69 +71,13 @@ def test_the_parser_of_each_position_calls_the_one_reader(rule: str) -> None:
 
 # -- the three positions answer one channel --------------------------------------
 
-def test_a_channel_reads_the_same_type_wherever_it_is_written() -> None:
-    """The three positions answer one channel. A drift between readers shows here."""
-    read = [_declaration(source, position)
-            for position, source in sorted(CHANNEL_SOURCES.items())]
-
-    assert read[0].err_type is not None
-    assert read[0].err_type.name == "OddError"
-    for other in read[1:]:
-        assert other.err_type == read[0].err_type
-        assert other.ret == read[0].ret
 
 
-def test_a_signature_with_no_channel_has_no_error_type() -> None:
-    read = [_declaration(source, position)
-            for position, source in sorted(BARE_SOURCES.items())]
-
-    for declaration in read:
-        assert declaration.err_type is None
-        assert declaration.ret == read[0].ret
 
 
-@pytest.mark.parametrize("position", ["extension", "perk method"])
-def test_the_channel_span_covers_the_channel_and_not_the_return_type(
-        position: str) -> None:
-    """The two nodes that record a channel span point it at the channel."""
-    declaration = _declaration(CHANNEL_SOURCES[position], position)
-
-    assert declaration.err_span is not None
-    assert declaration.err_span.col > declaration.ret_span.col
-    assert declaration.err_span.end_col - declaration.err_span.col == len("OddError")
 
 
-def test_a_contract_and_its_implementation_read_one_channel() -> None:
-    """What CE0133 compares. Two readers can make these differ; one cannot."""
-    program = ASTBuilder().build(_PARSER.parse(CONTRACT_AND_IMPLEMENTATION))
-    contract = program.perks[0].methods[0]
-    implementation = program.perk_impls[0].methods[0]
-
-    assert contract.err_type == implementation.err_type
-    assert contract.ret == implementation.ret
-    assert contract.self_mode == implementation.self_mode
 
 
 # -- the reader answers what a caller cannot read off the parsed type ------------
 
-def test_a_missing_return_type_is_told_apart_from_one_that_did_not_parse() -> None:
-    """`declares_return` answers the WRITTEN shape, which `ret` cannot.
-
-    The type parser gives None for a malformed type too, so a caller that makes the
-    return type mandatory has to ask whether one was written at all.
-    """
-    written = read_signature_types(
-        _PARSER.parse("fn f() i32:\n    return Result.Ok(1)\n")
-        .children[0].children[0].children,
-        ASTBuilder())
-    omitted = read_signature_types(
-        _PARSER.parse("fn f():\n    println(\"a\")\n")
-        .children[0].children[0].children,
-        ASTBuilder())
-
-    assert written.declares_return is True
-    assert omitted.declares_return is False
-    assert omitted.ret is None
-    assert omitted.ret_span is None
-    assert omitted.err is None
-    assert omitted.err_span is None

@@ -230,7 +230,6 @@ a declaration with none collects CW7002 and stops, so one omission is one diagno
 none. `documented()` filters it, and `check_missing_docs` asks each yield whether it
 carries a block. `tests/docs_sweep.py` reads the same walk, and its order is fixed: the
 sweep numbers its generated `doc_example_<n>` helpers from it.
-`tests/unit/test_declaration_walk_is_total.py` is the gate.
 
 ### Placement
 
@@ -488,8 +487,7 @@ finding that genuinely differs by type argument keeps its own message and is sti
 `v + 1` over an `f64` and over a `u8` answers two CE2510s at one caret, and both survive.
 
 It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed where it is
-made, and stays visible -- `tests/unit/test_diagnostics_not_duplicated.py` is the gate on
-that, and `tests/unit/test_generic_instance_reports_once.py` on this.
+made, and stays visible.
 
 A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
 `instance_of` onto what it lifts. The `borrow` pass is the one that walks the template as

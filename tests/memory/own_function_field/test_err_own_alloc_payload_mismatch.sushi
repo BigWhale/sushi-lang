@@ -1,0 +1,7 @@
+# EXPECT_ERROR_CODE: CE2006
+# The payload of `Own.alloc` is checked against the `T` of the declared `Own@(T)` (#923).
+
+fn main() i32:
+    let Own@(i32) o1 = Own.alloc("text")
+    println("{o1.get()}")
+    return Result.Ok(0)

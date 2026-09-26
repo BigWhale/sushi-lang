@@ -180,8 +180,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
             # module is code the user did not write: without this the `docs` pass
             # reports OUR doc-block mistakes in every program that imports the module,
             # and every other diagnostic against it arrives unattributed
-            # (documentation.md section 10, R24). The repo's own gate is
-            # `tests/unit/test_stdlib_doc_blocks.py`.
+            # (documentation.md section 10, R24).
             unit_manager.units[module_path] = Unit(
                 name=module_path, file_path=src_path, ast=module_ast,
                 dependencies=[], public_symbols={}, source=module_src,

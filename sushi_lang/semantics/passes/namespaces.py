@@ -82,6 +82,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
 
     declared = _names_declared_by(program)
     flat: list[Tuple[UseStatement, Provider]] = []
+    aliased: list[Provider] = []
 
     for use_stmt in program.uses or ():
         provider = _provider_for(use_stmt, tables, units, library_registry, unit)
@@ -99,17 +100,31 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
         if _reject_alias_collision(reporter, table, declared, use_stmt, alias):
             continue
         table.bind(alias, provider, use_stmt.alias_span or use_stmt.loc)
+        aliased.append(provider)
         if not tuple(provider.members()):
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
 
-    table.scope = _scope_of(unit, flat, units, library_registry)
+    table.scope = _scope_of(unit, flat, units, library_registry, aliased)
     return table
+
+
+class MethodInterfaceNamespace(UnitNamespace):
+    """A stdlib module that enables methods on a type and brings no name.
+
+    `<collections/strings>` is one, and so is a directory import such as
+    `<collections>`. It declares nothing, so its place in the scope decides no name: it
+    decides only whether this unit may call the methods it enables (#942).
+    """
+
+    def __init__(self, module_path: str, homed: Optional[Dict[str, str]] = None) -> None:
+        super().__init__(module_path, functions={}, constants={}, others=homed)
 
 
 def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
               units: Dict[str, Unit],
-              library_registry: Optional[LibraryRegistry] = None) -> UnitScope:
+              library_registry: Optional[LibraryRegistry] = None,
+              aliased: Iterable[Provider] = ()) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
     An import brings what it names AND what that re-exports (section 8.1): the walk is
@@ -120,6 +135,9 @@ def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
     of its units, so scoping the import to the matched unit would leave a multi-unit
     library's second unit unreachable with no escape. A library unit importing its own
     sibling wrote an ordinary `use`, and gets the sibling and nothing more.
+
+    An ALIASED import puts no name here, but a method interface it reaches is still
+    this unit's import: the methods it enables have no name for the alias to gate.
     """
     scoped_units: list[str] = []
     modules: list[str] = []
@@ -136,6 +154,9 @@ def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
             scoped_units.extend(_library_units(provider.origin, units))
             scoped_units.extend(
                 _binary_library_units(provider.origin, library_registry))
+    for provider in aliased:
+        scoped_units.extend(reached.origin for reached in provider.reaches()
+                            if isinstance(reached, MethodInterfaceNamespace))
     return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False)
@@ -376,7 +397,7 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
 
     # A method interface: the import enables methods on a type and brings no name.
     # CW3004 is what says so, at the `use` rather than at every call after it.
-    return UnitNamespace(path, functions={}, constants={}, others=homed)
+    return MethodInterfaceNamespace(path, homed)
 
 
 def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],

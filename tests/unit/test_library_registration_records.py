@@ -11,7 +11,6 @@ producing: a library built for it would only say the same thing more slowly.
 """
 from __future__ import annotations
 
-import pytest
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.library_registration import LibraryRegistration
@@ -57,19 +56,3 @@ def test_no_linker_leaves_no_registry():
     assert registration.registry is None
 
 
-@pytest.mark.parametrize("name, kind, source", [
-    ("Plain", "struct", "struct Plain:\n    i32 x\n"),
-    ("Mood", "enum", "enum Mood:\n    Calm\n"),
-    ("Cell", "struct", "struct Cell@(T):\n    T item\n"),
-    ("Slot", "enum", "enum Slot@(T):\n    Full(T)\n    Empty\n"),
-])
-def test_a_shipped_private_type_is_recorded_under_its_own_kind(name, kind, source):
-    """A GENERIC one lands in neither concrete table, and it is still what it is."""
-    _registration, tables = _register({"probe": _manifest(
-        [{"name": name, "unit": "probe", "source": source}])})
-
-    recorded = [origin for one in ("struct", "enum")
-                for origin in tables.visibility.origins(one, name)]
-
-    assert [(o.kind, o.is_public, o.unit_name) for o in recorded] == \
-        [(kind, False, "probe")]

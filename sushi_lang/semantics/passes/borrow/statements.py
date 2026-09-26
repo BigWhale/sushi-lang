@@ -31,7 +31,9 @@ from sushi_lang.semantics.typesys import ForeignPtrType, ReferenceType
 from .bindings import (
     bind_let_reference,
     BindingScope,
+    freeze_for_a_view,
     register_pattern_bindings,
+    ScrutineeKind,
     reject_partial_take,
     release_binding_borrow,
 )
@@ -287,9 +289,10 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     """
     check_expr(checker, stmt.iterable)
     clear_borrows(checker)
-    # A value binding matches the backend's `register_cleanup=False`; a reference binding
-    # (#300) additionally freezes the container for the loop. Both end with the scope, so
-    # an outer local the item shadows gets its state back (#337).
+    # A value binding matches the backend's `register_cleanup=False`. A reference binding
+    # (#300) and a value binding of an owning element (#919) freeze the container for the
+    # loop. Both end with the scope, so an outer local the item shadows gets its state
+    # back (#337).
     span = stmt.item_name_span or stmt.loc
     with BindingScope(checker) as scope:
         if stmt.item_borrow is not None:
@@ -297,19 +300,19 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
                            owner=stmt.iterable, declared_at=stmt.item_borrow_span)
         elif stmt.protocol_next is not None:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
-            check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
-            return
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
-        check_loop_body(checker, stmt.body)
+            freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
+                              stmt.iterable, ScrutineeKind.BORROWED)
+        check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
 
 
 def check_loop_body(checker: 'BorrowChecker', body: Block,
                     per_iteration: frozenset[str] = frozenset()) -> None:
     """Borrow-check a loop body to a fixed point so the back edge is honoured.
 
-    `per_iteration` names the bindings the loop creates anew on every pass -- a protocol
-    item -- whose facts at the end of the body do not reach the next iteration.
+    `per_iteration` names the bindings the loop creates anew on every pass -- the item --
+    whose facts at the end of the body do not reach the next iteration.
     """
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed

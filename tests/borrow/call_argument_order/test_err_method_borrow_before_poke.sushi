@@ -1,0 +1,20 @@
+# A method call with a `poke` argument follows the same rule: a borrowed argument that
+# views the poked owner is refused, whatever the order (#920).
+# EXPECT_ERROR_CODE: CE2412
+
+use <collections/strings>
+
+struct Shelf:
+    i32 id
+
+extend Shelf put(string v, poke string[] dst) ~:
+    dst.fill(v)
+
+fn main() i32:
+    let string s = "abcdefghijklmnopqrstuvwxyz0123456789"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    let string first = a[0]
+    let Shelf sh = Shelf(1)
+    sh.put(first, poke a)
+    println(a[1])
+    return Result.Ok(0)
