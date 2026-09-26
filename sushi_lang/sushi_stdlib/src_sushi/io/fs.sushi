@@ -91,21 +91,21 @@ public fn mkdir_all(string path, i32 dir_mode) ~ | FileError:
     let string[] parts = path.split("/")
     let string prefix = ""
     foreach(part in parts.iter()):
-        if (not part.is_empty()):
-            if (prefix.is_empty()):
-                if (rooted):
-                    prefix := "/".concat(part)
-                else:
-                    prefix := part.clone()
+        if (part.is_empty()):
+            continue
+        if (prefix.is_empty()):
+            if (rooted):
+                prefix := "/".concat(part)
             else:
-                prefix := prefix.concat("/").concat(part)
-            if (not exists(prefix)):
-                match mkdir(prefix, dir_mode):
-                    Result.Ok(_) -> ~
-                    Result.Err(e) ->
-                        match e:
-                            FileError.AlreadyExists -> ~
-                            _ -> return Result.Err(e)
+                prefix := part.clone()
+        else:
+            prefix := prefix.concat("/").concat(part)
+        if (exists(prefix)):
+            continue
+        match mkdir(prefix, dir_mode):
+            Result.Ok(_) -> ~
+            Result.Err(FileError.AlreadyExists) -> ~
+            Result.Err(e) -> return Result.Err(e)
     return Result.Ok(~)
 
 ##:
@@ -129,15 +129,11 @@ public fn remove_all(string path) ~ | FileError:
             let string[] names = read_dir(path)??
             foreach(name in names.iter()):
                 let string full = join(path, name).realise("")
-                match remove_all(full):
-                    Result.Ok(_) -> ~
-                    Result.Err(e) -> return Result.Err(e)
-            match rmdir(path):
-                Result.Ok(_) -> return Result.Ok(~)
-                Result.Err(e) -> return Result.Err(e)
-    match remove(path):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(e)
+                remove_all(full)??
+            rmdir(path)??
+            return Result.Ok(~)
+    remove(path)??
+    return Result.Ok(~)
 
 ##:
 Collects the regular files under one directory into the accumulator.
@@ -152,9 +148,7 @@ fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
         let string full = join(dir, name).realise("")
         if (is_dir(full)):
             if (not is_symlink(full)??):
-                match walk_into(full, poke acc):
-                    Result.Ok(_) -> ~
-                    Result.Err(e) -> return Result.Err(e)
+                walk_into(full, poke acc)??
         else:
             acc.push(full.clone())
     return Result.Ok(~)
