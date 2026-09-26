@@ -1,0 +1,12 @@
+# A `poke` foreach item leaves no state that a later plain `let` of the same name reads
+# (#941).
+# EXPECT_STDOUT_EXACT: 11\n12\n5\n
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(poke e in xs.iter()):
+        e := e + 10
+        println(e)
+    let i32 e = 5
+    println(e)
+    return Result.Ok(0)

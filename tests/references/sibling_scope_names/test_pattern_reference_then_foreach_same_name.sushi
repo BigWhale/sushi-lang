@@ -1,0 +1,20 @@
+# A reference pattern binding in one arm leaves no state that a later `foreach` item of
+# the same name reads (#941).
+# EXPECT_STDOUT_EXACT: 7\n1\n2\n
+# EXPECT_NO_LEAKS
+struct Box:
+    i32 n
+
+enum Slot:
+    Full(Box)
+    Empty
+
+fn main() i32:
+    let Slot s = Slot.Full(Box(7))
+    match s:
+        Slot.Full(poke e) -> println(e.n)
+        Slot.Empty -> println("empty")
+    let i32[] xs = from([1, 2])
+    foreach(e in xs.iter()):
+        println(e)
+    return Result.Ok(0)

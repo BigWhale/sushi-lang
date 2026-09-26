@@ -24,9 +24,6 @@ def resolve_name_semantic_type(codegen: 'LLVMCodegen', name: str) -> Optional['T
     semantic_ty = codegen.memory.find_semantic_type(name)
     if semantic_ty is not None:
         return semantic_ty
-    semantic_ty = codegen.variable_types.get(name)
-    if semantic_ty is not None:
-        return semantic_ty
     const_sig = codegen.const_table.lookup(name, codegen.emitting_unit, codegen.scope)
     return const_sig.const_type if const_sig is not None else None
 

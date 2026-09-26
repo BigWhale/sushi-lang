@@ -1,0 +1,12 @@
+# A `let peek` binding in one block leaves no state that a later range item of the same
+# name reads (#941).
+# EXPECT_STDOUT_EXACT: 9\n0\n1\n
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let i32 n = 9
+    if (n > 0):
+        let peek i32 i = n
+        println(i)
+    foreach(i in 0..2):
+        println(i)
+    return Result.Ok(0)

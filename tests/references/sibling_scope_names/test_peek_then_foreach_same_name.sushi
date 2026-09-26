@@ -1,0 +1,12 @@
+# A `let peek` binding in one block leaves no state that a later `foreach` item of the
+# same name reads (#941).
+# EXPECT_STDOUT_EXACT: a\na\nb\n
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let string[] xs = from(["a", "b"])
+    if (xs.len() > 0):
+        let peek string e = xs[0]
+        println(e)
+    foreach(e in xs.iter()):
+        println(e)
+    return Result.Ok(0)

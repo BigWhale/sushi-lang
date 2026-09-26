@@ -1,0 +1,13 @@
+# A `let poke` binding in one block leaves no state that a later `foreach` item of the
+# same name reads (#941).
+# EXPECT_STDOUT_EXACT: 11\n11\n2\n
+# EXPECT_NO_LEAKS
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    if (xs.len() > 0):
+        let poke i32 e = xs[0]
+        e := e + 10
+        println(e)
+    foreach(e in xs.iter()):
+        println(e)
+    return Result.Ok(0)

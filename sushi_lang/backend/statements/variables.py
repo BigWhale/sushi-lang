@@ -106,8 +106,7 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         slot = resolve_name_slot(codegen, var_name)
         if slot is None:
             raise_internal_error("CE0055", name=var_name)
-        # A reference parameter's type is in codegen.variable_types; a local's in
-        # memory.semantic_types; a unit variable's in the constant table.
+        # A local's type is in the scope manager; a unit variable's in the constant table.
         semantic_type = resolve_name_semantic_type(codegen, var_name)
     else:
         raise_internal_error("CE0022", type=f"Unsupported rebind target: {type(stmt.target)}")
