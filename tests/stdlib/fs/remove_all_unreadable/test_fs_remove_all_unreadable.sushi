@@ -1,42 +1,30 @@
-# remove_all on a path under a parent with mode 000 cannot read the path, so it
-# answers Err and the tree stays. A missing path is still Ok. The fixture works in
-# its own directory and restores the mode before it removes that directory.
-# EXPECT_STDOUT_EXACT: "made\nlocked: Err\nstill there: true\nmissing: Ok\ncleaned: true\n"
+# remove_all on a path it cannot check (a name longer than the file system takes, so
+# lstat fails with ENAMETOOLONG) answers Err: only a missing path is success. The
+# condition holds for root too, where a mode-000 parent does not stop a read. A
+# missing path is still Ok. The fixture works in its own directory.
+# EXPECT_STDOUT_EXACT: "made\ntoo long: Err\nmissing: Ok\ncleaned: true\n"
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
 use <io/fs>
+use <collections/strings>
 
-unsafe external "C" as posix because "the test sets and restores a directory mode":
-    fn chmod(string path, i32 mode) i32 = "chmod"
+unsafe external "C" as posix because "the test names its directory by the process id":
     fn getpid() i32 = "getpid"
 
 fn main() i32:
     let i32 pid = posix.getpid()
     let string root = "/tmp/sushi_fs_remove_all_unreadable_{pid}"
-    let string locked = "{root}/locked"
-    let string inner = "{root}/locked/inner"
-    match mkdir_all(inner, 0o755):
+    match mkdir_all(root, 0o755):
         Result.Ok(_) -> println("made")
         Result.Err(_) ->
             println("mkdir_all failed")
             return Result.Ok(1)
-    match open("{inner}/f.txt", FileMode.Write()):
-        Result.Ok(nom f) ->
-            f.write("x")
-            f.close()
-        Result.Err(_) ->
-            println("open failed")
-            return Result.Ok(1)
 
-    posix.chmod(locked, 0o000)
-    match remove_all(inner):
-        Result.Ok(_) -> println("locked: Ok")
-        Result.Err(_) -> println("locked: Err")
-    posix.chmod(locked, 0o755)
-
-    let bool there = exists("{inner}/f.txt")
-    println("still there: {there}")
+    let string name = "a".repeat(300)
+    match remove_all("{root}/{name}"):
+        Result.Ok(_) -> println("too long: Ok")
+        Result.Err(_) -> println("too long: Err")
 
     match remove_all("{root}/missing"):
         Result.Ok(_) -> println("missing: Ok")

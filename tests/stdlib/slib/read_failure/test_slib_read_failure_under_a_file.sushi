@@ -1,24 +1,25 @@
-# A file with mode 000 does not open (EACCES). Each reader answers the I/O error of
-# the open, not a missing file. The fixture gives the file its mode back before it
-# removes its directory.
-# EXPECT_STDOUT_EXACT: "read_metadata: Io(PermissionDenied)\nsizes: Io(PermissionDenied)\nbitcode_size: Io(PermissionDenied)\n"
+# A library path under a regular file does not open (ENOTDIR). Each reader answers the
+# I/O error of the open, not a missing file and not a truncated one. The condition
+# holds for root too, where a mode-000 file still opens. The fixture removes its
+# directory.
+# EXPECT_STDOUT_EXACT: "read_metadata: Io(InvalidInput)\nsizes: Io(InvalidInput)\nbitcode_size: Io(InvalidInput)\n"
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 
 use <io/fs>
 use <toolchain/slib>
 
-unsafe external "C" as libc because "the stdlib has no chmod, and the fixture needs a file it cannot read":
-    fn chmod(string path, i32 mode) i32 = "chmod"
-
-const string ROOT = "/tmp/sushi_slib_read_failure_unreadable"
-const string LOCKED = "/tmp/sushi_slib_read_failure_unreadable/x.slib"
+const string ROOT = "/tmp/sushi_slib_read_failure_under_a_file"
+const string PLAIN = "/tmp/sushi_slib_read_failure_under_a_file/plain"
+const string UNDER = "/tmp/sushi_slib_read_failure_under_a_file/plain/x.slib"
 
 fn show_io(IoError e) string:
     match e:
         IoError.NotFound -> return Result.Ok("NotFound")
         IoError.PermissionDenied -> return Result.Ok("PermissionDenied")
         IoError.IsDirectory -> return Result.Ok("IsDirectory")
+        IoError.InvalidInput -> return Result.Ok("InvalidInput")
+        IoError.Os(_) -> return Result.Ok("Os")
         _ -> return Result.Ok("another IoError")
 
 fn show_err(SlibError e) string:
@@ -26,29 +27,27 @@ fn show_err(SlibError e) string:
         SlibError.Io(io) -> return Result.Ok("Io({show_io(io)??})")
         _ -> return Result.Ok("another SlibError")
 
-fn make_locked() bool:
+fn make_plain() bool:
     if (mkdir_all(ROOT, 0o755).is_err()):
         return Result.Ok(false)
-    match open(LOCKED, FileMode.WriteB()):
+    match open(PLAIN, FileMode.WriteB()):
         Result.Ok(nom f) -> f.close()
         Result.Err(_) -> return Result.Ok(false)
-    return Result.Ok(libc.chmod(LOCKED, 0) == 0)
+    return Result.Ok(true)
 
 fn main() i32:
-    libc.chmod(LOCKED, 0o644)
     remove_all(ROOT)
-    if (not make_locked().realise(false)):
+    if (not make_plain().realise(false)):
         println("setup failed")
         return Result.Ok(1)
-    match read_metadata(LOCKED):
+    match read_metadata(UNDER):
         Result.Ok(_) -> println("read_metadata: Ok")
         Result.Err(e) -> println("read_metadata: {show_err(e).realise('')}")
-    match sizes(LOCKED):
+    match sizes(UNDER):
         Result.Ok(_) -> println("sizes: Ok")
         Result.Err(e) -> println("sizes: {show_err(e).realise('')}")
-    match bitcode_size(LOCKED):
+    match bitcode_size(UNDER):
         Result.Ok(_) -> println("bitcode_size: Ok")
         Result.Err(e) -> println("bitcode_size: {show_err(e).realise('')}")
-    libc.chmod(LOCKED, 0o644)
     remove_all(ROOT)
     return Result.Ok(0)
