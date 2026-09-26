@@ -3,20 +3,20 @@ from __future__ import annotations
 from llvmlite import ir
 
 
-def _generate_f64_intrinsic_wrapper(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
+def _forward_f64(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
     """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic or libc function."""
     f64 = ir.DoubleType()
     sig = ir.FunctionType(f64, [f64] * len(arg_names))
-    intrinsic = module.globals.get(llvm_name)
-    if intrinsic is None:
-        intrinsic = ir.Function(module, sig, name=llvm_name)
+    callee = module.globals.get(llvm_name)
+    if callee is None:
+        callee = ir.Function(module, sig, name=llvm_name)
 
-    func = ir.Function(module, ir.FunctionType(f64, [f64] * len(arg_names)), name=sushi_name)
+    func = ir.Function(module, sig, name=sushi_name)
     for arg, name in zip(func.args, arg_names, strict=True):
         arg.name = name
 
     builder = ir.IRBuilder(func.append_basic_block("entry"))
-    builder.ret(builder.call(intrinsic, func.args))
+    builder.ret(builder.call(callee, func.args))
 
 
 def generate_abs_functions(module: ir.Module) -> None:
@@ -173,42 +173,42 @@ def generate_min_max_functions(module: ir.Module) -> None:
 
 def generate_sqrt(module: ir.Module) -> None:
     """Generate sushi_sqrt(f64 x) -> f64 via the llvm.sqrt.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.sqrt.f64", "sushi_sqrt", ('x',))
+    _forward_f64(module, "llvm.sqrt.f64", "sushi_sqrt", ('x',))
 
 
 def generate_pow(module: ir.Module) -> None:
     """Generate sushi_pow(f64 base, f64 exponent) -> f64 via the llvm.pow.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.pow.f64", "sushi_pow", ('base', 'exponent'))
+    _forward_f64(module, "llvm.pow.f64", "sushi_pow", ('base', 'exponent'))
 
 
 def generate_floor(module: ir.Module) -> None:
     """Generate sushi_floor(f64 x) -> f64 via the llvm.floor.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.floor.f64", "sushi_floor", ('x',))
+    _forward_f64(module, "llvm.floor.f64", "sushi_floor", ('x',))
 
 
 def generate_ceil(module: ir.Module) -> None:
     """Generate sushi_ceil(f64 x) -> f64 via the llvm.ceil.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.ceil.f64", "sushi_ceil", ('x',))
+    _forward_f64(module, "llvm.ceil.f64", "sushi_ceil", ('x',))
 
 
 def generate_round(module: ir.Module) -> None:
     """Generate sushi_round(f64 x) -> f64 via the llvm.round.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.round.f64", "sushi_round", ('x',))
+    _forward_f64(module, "llvm.round.f64", "sushi_round", ('x',))
 
 
 def generate_trunc(module: ir.Module) -> None:
     """Generate sushi_trunc(f64 x) -> f64 via the llvm.trunc.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.trunc.f64", "sushi_trunc", ('x',))
+    _forward_f64(module, "llvm.trunc.f64", "sushi_trunc", ('x',))
 
 
 def generate_sin(module: ir.Module) -> None:
     """Generate sushi_sin(f64 x) -> f64 via the llvm.sin.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.sin.f64", "sushi_sin", ('x',))
+    _forward_f64(module, "llvm.sin.f64", "sushi_sin", ('x',))
 
 
 def generate_cos(module: ir.Module) -> None:
     """Generate sushi_cos(f64 x) -> f64 via the llvm.cos.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.cos.f64", "sushi_cos", ('x',))
+    _forward_f64(module, "llvm.cos.f64", "sushi_cos", ('x',))
 
 
 def generate_tan(module: ir.Module) -> None:
@@ -241,127 +241,65 @@ def generate_tan(module: ir.Module) -> None:
 
 
 def generate_asin(module: ir.Module) -> None:
-    """Generate asin function: asin(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    libc_asin_type = ir.FunctionType(f64, [f64])
-    libc_asin = ir.Function(module, libc_asin_type, name="asin")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_asin")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_asin, [x_param])
-    builder.ret(result)
+    """Generate sushi_asin(f64 x) -> f64 via the libc asin."""
+    _forward_f64(module, "asin", "sushi_asin", ('x',))
 
 
 def generate_acos(module: ir.Module) -> None:
-    """Generate acos function: acos(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    libc_acos_type = ir.FunctionType(f64, [f64])
-    libc_acos = ir.Function(module, libc_acos_type, name="acos")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_acos")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_acos, [x_param])
-    builder.ret(result)
+    """Generate sushi_acos(f64 x) -> f64 via the libc acos."""
+    _forward_f64(module, "acos", "sushi_acos", ('x',))
 
 
 def generate_atan(module: ir.Module) -> None:
-    """Generate atan function: atan(f64) -> f64"""
-    f64 = ir.DoubleType()
-
-    libc_atan_type = ir.FunctionType(f64, [f64])
-    libc_atan = ir.Function(module, libc_atan_type, name="atan")
-
-    func_type = ir.FunctionType(f64, [f64])
-    func = ir.Function(module, func_type, name="sushi_atan")
-
-    x_param = func.args[0]
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_atan, [x_param])
-    builder.ret(result)
+    """Generate sushi_atan(f64 x) -> f64 via the libc atan."""
+    _forward_f64(module, "atan", "sushi_atan", ('x',))
 
 
 def generate_atan2(module: ir.Module) -> None:
-    """Generate atan2 function: atan2(f64 y, f64 x) -> f64"""
-    f64 = ir.DoubleType()
-
-    libc_atan2_type = ir.FunctionType(f64, [f64, f64])
-    libc_atan2 = ir.Function(module, libc_atan2_type, name="atan2")
-
-    func_type = ir.FunctionType(f64, [f64, f64])
-    func = ir.Function(module, func_type, name="sushi_atan2")
-
-    y_param = func.args[0]
-    x_param = func.args[1]
-    y_param.name = "y"
-    x_param.name = "x"
-
-    entry = func.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
-
-    result = builder.call(libc_atan2, [y_param, x_param])
-    builder.ret(result)
+    """Generate sushi_atan2(f64 y, f64 x) -> f64 via the libc atan2."""
+    _forward_f64(module, "atan2", "sushi_atan2", ('y', 'x'))
 
 
 def generate_sinh(module: ir.Module) -> None:
     """Generate sushi_sinh(f64 x) -> f64 via the libc sinh."""
-    _generate_f64_intrinsic_wrapper(module, "sinh", "sushi_sinh", ('x',))
+    _forward_f64(module, "sinh", "sushi_sinh", ('x',))
 
 
 def generate_cosh(module: ir.Module) -> None:
     """Generate sushi_cosh(f64 x) -> f64 via the libc cosh."""
-    _generate_f64_intrinsic_wrapper(module, "cosh", "sushi_cosh", ('x',))
+    _forward_f64(module, "cosh", "sushi_cosh", ('x',))
 
 
 def generate_tanh(module: ir.Module) -> None:
     """Generate sushi_tanh(f64 x) -> f64 via the libc tanh."""
-    _generate_f64_intrinsic_wrapper(module, "tanh", "sushi_tanh", ('x',))
+    _forward_f64(module, "tanh", "sushi_tanh", ('x',))
 
 
 def generate_log(module: ir.Module) -> None:
     """Generate sushi_log(f64 x) -> f64 via the llvm.log.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.log.f64", "sushi_log", ('x',))
+    _forward_f64(module, "llvm.log.f64", "sushi_log", ('x',))
 
 
 def generate_log2(module: ir.Module) -> None:
     """Generate sushi_log2(f64 x) -> f64 via the llvm.log2.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.log2.f64", "sushi_log2", ('x',))
+    _forward_f64(module, "llvm.log2.f64", "sushi_log2", ('x',))
 
 
 def generate_log10(module: ir.Module) -> None:
     """Generate sushi_log10(f64 x) -> f64 via the llvm.log10.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.log10.f64", "sushi_log10", ('x',))
+    _forward_f64(module, "llvm.log10.f64", "sushi_log10", ('x',))
 
 
 def generate_exp(module: ir.Module) -> None:
     """Generate sushi_exp(f64 x) -> f64 via the llvm.exp.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.exp.f64", "sushi_exp", ('x',))
+    _forward_f64(module, "llvm.exp.f64", "sushi_exp", ('x',))
 
 
 def generate_exp2(module: ir.Module) -> None:
     """Generate sushi_exp2(f64 x) -> f64 via the llvm.exp2.f64 intrinsic."""
-    _generate_f64_intrinsic_wrapper(module, "llvm.exp2.f64", "sushi_exp2", ('x',))
+    _forward_f64(module, "llvm.exp2.f64", "sushi_exp2", ('x',))
 
 
 def generate_hypot(module: ir.Module) -> None:
     """Generate sushi_hypot(f64 x, f64 y) -> f64 via the libc hypot."""
-    _generate_f64_intrinsic_wrapper(module, "hypot", "sushi_hypot", ('x', 'y'))
+    _forward_f64(module, "hypot", "sushi_hypot", ('x', 'y'))
