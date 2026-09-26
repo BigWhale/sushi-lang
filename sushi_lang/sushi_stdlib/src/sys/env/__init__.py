@@ -5,7 +5,7 @@ from typing import Dict
 from llvmlite import ir
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.signatures import BareOk, Signature, cstr, params_of
 
 
@@ -18,19 +18,6 @@ ENV_SIGNATURES: Dict[str, Signature] = {
     "setenv": Signature(params_of(cstr(), cstr()), ok=BuiltinType.I32, error="EnvError",
                         bare_ok=BareOk(failure="InvalidValue")),
 }
-
-
-def is_builtin_env_function(name: str) -> bool:
-    """Check if name is a built-in env module function."""
-    return name in ENV_SIGNATURES
-
-
-def get_builtin_env_function_return_type(name: str) -> Type:
-    """The declared return type, from the row."""
-    sig = ENV_SIGNATURES.get(name)
-    if sig is None:
-        raise ValueError(f"Unknown env function: {name}")
-    return sig.return_type()
 
 
 def generate_module_ir() -> ir.Module:

@@ -125,6 +125,28 @@ def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     }
 
 
+def family_tables() -> Dict[str, Dict[Callable, Tuple[str, ...]]]:
+    """Every registry module's FAMILIES: a resolver over argument types, and its names.
+
+    A family has one row per argument type, so it has no one entry in its module's
+    signature table. Only `<math>` has families today (`abs`, `min`, `max`).
+    """
+    from sushi_lang.sushi_stdlib.src.math import (
+        MATH_FAMILIES,
+        get_builtin_math_function_return_type,
+    )
+
+    return {"math": {get_builtin_math_function_return_type: tuple(MATH_FAMILIES)}}
+
+
+def _row_resolver(sig: "Signature") -> Callable:
+    return lambda param_types=(): sig.return_type()
+
+
+def _family_resolver(family: Callable, name: str) -> Callable:
+    return lambda param_types=(): family(name, list(param_types))
+
+
 def stdlib_signature(module_path: str, name: str) -> Optional["Signature"]:
     """The row of one registry stdlib function, or None for a module with no table."""
     return signature_tables().get(module_path, {}).get(name)
@@ -141,11 +163,10 @@ class StdlibRegistry:
         "random": "sushi_lang.sushi_stdlib.src.random",
         "io/files": "sushi_lang.sushi_stdlib.src.io.files_funcs",
         "net/socket": "sushi_lang.sushi_stdlib.src.net.socket_funcs",
-        # io/stdio and collections/strings are NOT registry-driven and cannot
-        # be listed here: they expose a METHOD interface
-        # (is_builtin_stdio_method / is_builtin_string_method), while this
-        # registry reads the free-FUNCTION interface (#247). Their methods
-        # resolve through semantics/passes/types/method_registry.py instead.
+        # collections/strings is NOT registry-driven and cannot be listed here: it
+        # exposes METHODS, while this registry reads the free-function rows of
+        # signature_tables() (#247, #908). Its methods resolve through
+        # semantics/passes/types/method_registry.py instead.
     }
 
     def __init__(self):
@@ -180,25 +201,7 @@ class StdlibRegistry:
 
         module_name = module_path.split('/')[-1]
 
-        checker_name = f"is_builtin_{module_name}_function"
-        checker = getattr(py_module, checker_name, None)
-
-        type_resolver_name = f"get_builtin_{module_name}_function_return_type"
-        type_resolver = getattr(py_module, type_resolver_name, None)
-
-        missing = [name for name, symbol in ((checker_name, checker),
-                                              (type_resolver_name, type_resolver))
-                   if not symbol]
-        if missing:
-            raise RuntimeError(
-                f"stdlib registry: module '{module_path}' ({python_path}) is "
-                f"missing {', '.join(missing)} -- a KNOWN_MODULES entry must "
-                "expose the free-function interface"
-            )
-
-        self._discover_functions_heuristic(
-            stdlib_module, module_name, checker, type_resolver
-        )
+        self._discover_functions(stdlib_module, module_name, python_path)
 
         constant_checker_name = f"is_builtin_{module_name}_constant"
         constant_checker = getattr(py_module, constant_checker_name, None)
@@ -207,59 +210,39 @@ class StdlibRegistry:
 
         self._modules[module_path] = stdlib_module
 
-    def _discover_functions_heuristic(
-        self,
-        module: StdlibModule,
-        module_name: str,
-        checker: Callable[[str], bool],
-        type_resolver: Callable,
-    ) -> None:
-        """Discover functions using heuristic approach."""
-        from sushi_lang.sushi_stdlib.src.io.files_funcs import FILE_UTILITY_FUNCTIONS
-        from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES
-        from sushi_lang.sushi_stdlib.src.net.socket_funcs import SOCKET_FUNCTIONS
+    def _discover_functions(self, module: StdlibModule, module_name: str,
+                            python_path: str) -> None:
+        """Register one function per row of the module's table, and per family (#908).
 
-        tables = signature_tables()
-        common_names = {
-            "time": list(tables["time"]),
-            "env": list(tables["sys/env"]),
-            "process": list(tables["sys/process"]),
-            "math": [*MATH_FAMILIES, *tables["math"]],
-            "random": list(tables["random"]),
-            # `files` and `socket` READ their lists rather than repeating them. The copies
-            # had to be kept in step by hand, and a name in one and not the other is
-            # invisible until a program calls it and gets CE2008 for a function the
-            # compiler can emit.
-            "files": FILE_UTILITY_FUNCTIONS,
-            "socket": SOCKET_FUNCTIONS,
+        Every resolver has one shape: it takes the argument types. A row ignores them and
+        answers its declared type; a family answers the row of its argument types.
+        """
+        rows = signature_tables().get(module.path)
+        if rows is None:
+            raise RuntimeError(
+                f"stdlib registry: module '{module.path}' ({python_path}) has no "
+                "signature table -- a KNOWN_MODULES entry must have one in "
+                "signature_tables()"
+            )
+
+        resolvers: Dict[str, Callable] = {
+            name: _family_resolver(family, name)
+            for family, names in family_tables().get(module.path, {}).items()
+            for name in names
         }
+        resolvers.update({name: _row_resolver(sig) for name, sig in rows.items()})
 
-        candidates = common_names.get(module_name, [])
-
-        for name in candidates:
-            if checker(name):
-                # Different modules have different type_resolver signatures.
-                if module_name in ["time", "env", "process", "random", "files", "socket"]:
-                    def make_type_resolver(fn_name):
-                        return lambda: type_resolver(fn_name)
-                    get_ret_type = make_type_resolver(name)
-                else:
-                    def make_type_resolver_with_params(fn_name):
-                        return lambda params: type_resolver(fn_name, params)
-                    get_ret_type = make_type_resolver_with_params(name)
-
-                param_spec = _get_param_specs().get((module_name, name))
-
-                func = StdlibFunction(
-                    name=name,
-                    module_path=module.path,
-                    is_constant=False,
-                    get_return_type=get_ret_type,
-                    params=param_spec,
-                    is_variadic=(module_name, name) in _VARIADIC_STDLIB
-                )
-                module.functions[name] = func
-                self._function_lookup[(module.path, name)] = func
+        for name, get_ret_type in resolvers.items():
+            func = StdlibFunction(
+                name=name,
+                module_path=module.path,
+                is_constant=False,
+                get_return_type=get_ret_type,
+                params=_get_param_specs().get((module_name, name)),
+                is_variadic=(module_name, name) in _VARIADIC_STDLIB
+            )
+            module.functions[name] = func
+            self._function_lookup[(module.path, name)] = func
 
     def _discover_constants(
         self,
