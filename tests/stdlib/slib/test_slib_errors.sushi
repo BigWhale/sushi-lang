@@ -1,7 +1,7 @@
 # Reader errors are values, not exits. Each case prints the matched SlibError
 # arm: a wrong magic byte, a v2 header, a truncated file, a missing path, and
 # a metadata blob the msgpack decoder rejects.
-# EXPECT_STDOUT_EXACT: "BadMagic\nBadVersion(2)\nTruncated\nOpenFailed(test_slib_missing_gone.slib)\nDecode(Unsupported(193))\n"
+# EXPECT_STDOUT_EXACT: "BadMagic\nBadVersion(2)\nTruncated\nIo(NotFound)\nDecode(Unsupported(193))\n"
 # EXPECT_NO_LEAKS: true
 
 use <io/files>
@@ -34,8 +34,12 @@ fn write_fixture(string path, u8[] bytes) i32:
 
 fn show_err(SlibError e) string:
     match e:
-        SlibError.OpenFailed(p) ->
-            return Result.Ok("OpenFailed({p})")
+        SlibError.Io(io) ->
+            match io:
+                IoError.NotFound ->
+                    return Result.Ok("Io(NotFound)")
+                _ ->
+                    return Result.Ok("Io(another IoError)")
         SlibError.BadMagic() ->
             return Result.Ok("BadMagic")
         SlibError.BadVersion(v) ->

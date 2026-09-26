@@ -1,0 +1,40 @@
+# A directory opens, and its first read fails with EISDIR. Each reader answers the
+# I/O error of that read, not a truncated file.
+# EXPECT_STDOUT_EXACT: "read_metadata: Io(IsDirectory)\nsizes: Io(IsDirectory)\nbitcode_size: Io(IsDirectory)\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/fs>
+use <toolchain/slib>
+
+const string ROOT = "/tmp/sushi_slib_read_failure_directory"
+const string DIR = "/tmp/sushi_slib_read_failure_directory/d.slib"
+
+fn show_io(IoError e) string:
+    match e:
+        IoError.NotFound -> return Result.Ok("NotFound")
+        IoError.PermissionDenied -> return Result.Ok("PermissionDenied")
+        IoError.IsDirectory -> return Result.Ok("IsDirectory")
+        _ -> return Result.Ok("another IoError")
+
+fn show_err(SlibError e) string:
+    match e:
+        SlibError.Io(io) -> return Result.Ok("Io({show_io(io)??})")
+        _ -> return Result.Ok("another SlibError")
+
+fn main() i32:
+    remove_all(ROOT)
+    if (mkdir_all(DIR, 0o755).is_err()):
+        println("mkdir_all failed")
+        return Result.Ok(1)
+    match read_metadata(DIR):
+        Result.Ok(_) -> println("read_metadata: Ok")
+        Result.Err(e) -> println("read_metadata: {show_err(e).realise('')}")
+    match sizes(DIR):
+        Result.Ok(_) -> println("sizes: Ok")
+        Result.Err(e) -> println("sizes: {show_err(e).realise('')}")
+    match bitcode_size(DIR):
+        Result.Ok(_) -> println("bitcode_size: Ok")
+        Result.Err(e) -> println("bitcode_size: {show_err(e).realise('')}")
+    remove_all(ROOT)
+    return Result.Ok(0)

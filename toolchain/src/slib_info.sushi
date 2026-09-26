@@ -839,10 +839,25 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
         println("Bitcode: {o.dim}{bc}{o.reset} bytes")
     return Result.Ok(~)
 
+# io_cause: the words for an I/O error. The Python fallback of `sushic --lib-info` maps
+# errno to the same words, so both halves print the same line.
+fn io_cause(IoError e) string:
+    match e:
+        IoError.NotFound -> return Result.Ok("file not found")
+        IoError.PermissionDenied -> return Result.Ok("permission denied")
+        IoError.IsDirectory -> return Result.Ok("is a directory")
+        IoError.AlreadyExists -> return Result.Ok("already exists")
+        IoError.DiskFull -> return Result.Ok("no space left on device")
+        IoError.TooManyOpen -> return Result.Ok("too many open files")
+        IoError.InvalidInput -> return Result.Ok("invalid path")
+        _ -> return Result.Ok("input/output error")
+
 fn print_read_error(string path, SlibError e) ~:
     match e:
-        SlibError.OpenFailed(p) ->
-            stderr.write("Error: file not found: {p}\n")
+        SlibError.Io(IoError.NotFound) ->
+            stderr.write("Error: file not found: {path}\n")
+        SlibError.Io(io) ->
+            stderr.write("Error: cannot read {path}: {io_cause(io)??}\n")
         SlibError.BadMagic() ->
             stderr.write("Error: {path} is not a .slib library (bad magic)\n")
         SlibError.BadVersion(v) ->
