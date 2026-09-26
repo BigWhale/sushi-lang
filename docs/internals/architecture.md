@@ -146,7 +146,6 @@ sushi/
 │   │   ├── llvm_values.py      # FALSE_I1, ZERO_I32, make_i32_const(), etc
 │   │   ├── bit_widths.py
 │   │   ├── error_codes.py
-│   │   ├── hash_constants.py
 │   │   ├── indices.py
 │   │   └── sizes.py
 │   ├── gep_utils.py           # GetElementPtr utilities
@@ -215,7 +214,6 @@ sushi/
 │   │   ├── dynamic_arrays.py  # Dynamic array management
 │   │   └── heap.py            # Heap allocation (malloc/free)
 │   └── generics/              # Generic type implementations
-│       ├── codegen.py         # Generic code generation
 │       ├── enum_methods_base.py # Base for Result/Maybe
 │       ├── extensions.py      # Generic extension methods
 │       ├── maybe.py           # Maybe@(T) (19KB)

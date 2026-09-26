@@ -37,11 +37,6 @@ class TargetPlatform:
     abi: str       # gnu, musl, msvc, etc. (optional)
 
     @property
-    def is_unix(self) -> bool:
-        """True for darwin, linux, and the BSDs (freebsd, openbsd, netbsd)"""
-        return self.os in {'darwin', 'linux', 'freebsd', 'openbsd', 'netbsd'}
-
-    @property
     def is_darwin(self) -> bool:
         """True for macOS"""
         return self.os == 'darwin'
@@ -50,11 +45,6 @@ class TargetPlatform:
     def is_linux(self) -> bool:
         """True for Linux"""
         return self.os == 'linux'
-
-    @property
-    def is_windows(self) -> bool:
-        """True for Windows"""
-        return self.os == 'windows'
 ```
 
 ### Functions
