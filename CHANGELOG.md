@@ -437,6 +437,14 @@ All notable changes to Sushi Lang will be documented in this file.
   whitelist entry with its reason (#938). The dead-code ratchet is empty.
 
 ### Fixed
+- **A struct that loses its name to an enum no longer cascades at its uses** (#921). A consumer's
+  struct refused with CE0006 also gave CE2001, CE2008, CE6104 and CE2106 at every construction,
+  named argument and field read of it. A contested type name now stops the cascade at every use.
+
+### Changed
+- **The dead Sushi stdlib code is removed** (#954): two unused imports, the `ztake` helper, and the
+  error channel of three zlib functions that cannot fail. The public names with no caller in the
+  repository stay (they are API), and a fixture now calls each one.
 - **Every string-method allocation is checked** (#964). The 23 string-method sites that allocated
   with a bare `malloc` go through the checked seam (RE2021 on failure), and every `Maybe` tag of
   the string methods is written by name.
