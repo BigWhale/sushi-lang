@@ -6,7 +6,7 @@ from sushi_lang.semantics.ast import Expr, Call, Name, Spread
 from sushi_lang.semantics.ast_builder.types.generics import parse_type_list
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree, first_name, ice, expect, mark_nom)
-from sushi_lang.internals.report import span_of
+from sushi_lang.internals.report import Span, span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -83,6 +83,9 @@ def call_from_parts(callee_name: Union[Name, Token], call_tail: Tree, ast_builde
     The callee arrives as the `Name` the atom was already parsed into, SPAN AND ALL. Built
     afresh from the bare id, it had no span, and every diagnostic anchored to a callee --
     CE2008, CE2009, CE3005, the CE206x family -- rendered as text with no caret.
+
+    The call's own span runs from the callee name through the closing parenthesis, so a
+    diagnostic on the call starts under the name and not under `(` (#929).
     """
     if isinstance(callee_name, Name):
         callee = callee_name
@@ -95,4 +98,11 @@ def call_from_parts(callee_name: Union[Name, Token], call_tail: Tree, ast_builde
     type_args, type_args_loc = extract_call_type_args(call_tail, ast_builder)
     return Call(callee=callee, args=args, field_names=field_names,
                 type_args=type_args, type_args_loc=type_args_loc,
-                loc=span_of(call_tail))
+                loc=_from_callee(callee.loc, span_of(call_tail)))
+
+
+def _from_callee(callee: Optional[Span], tail: Optional[Span]) -> Optional[Span]:
+    """The span from the start of `callee` through the end of `tail`."""
+    if callee is None or tail is None:
+        return tail
+    return Span(callee.line, callee.col, tail.end_line, tail.end_col)

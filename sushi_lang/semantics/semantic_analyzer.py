@@ -17,6 +17,7 @@ from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
+from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
 
@@ -349,7 +350,20 @@ class SemanticAnalyzer:
     def _monomorphize(self, compilation_order: list[Unit],
                       instantiations: 'InstantiationCollector',
                       ) -> tuple['Monomorphizer', ExtensionCopies]:
-        """monomorphize: every generic the program names becomes a concrete declaration."""
+        """monomorphize: every generic the program names becomes a concrete declaration.
+
+        The work order is load-bearing, and it is not the order a user reads the faults
+        in: the stage's diagnostics are put in site order once it ends (#927).
+        """
+        first = len(self.reporter.items)
+        copies = self._monomorphize_in_work_order(compilation_order, instantiations)
+        self.reporter.items[first:] = diagnostics_in_site_order(
+            self.reporter.items[first:], instantiations.sites)
+        return copies
+
+    def _monomorphize_in_work_order(self, compilation_order: list[Unit],
+                                    instantiations: 'InstantiationCollector',
+                                    ) -> tuple['Monomorphizer', ExtensionCopies]:
         type_instantiations = instantiations.instantiations
         func_instantiations = instantiations.function_instantiations
 

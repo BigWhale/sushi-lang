@@ -1,0 +1,14 @@
+# The span of a bare call starts at the callee name and ends at the closing
+# parenthesis. The caret of a diagnostic on the call starts under the name, as it does
+# for a method call on the result of the call.
+# TEST_TYPE: error
+# EXPECT_ERROR_CODE: CE2505
+# EXPECT_STDERR_CONTAINS: "test_err_bare_call_span_starts_at_callee.sushi:12:20: error [CE2505]"
+# EXPECT_STDERR_CONTAINS: "  |     let string a = f()\n  `                    -+-\n"
+fn f() i32:
+    return Result.Ok(1)
+
+fn main() i32:
+    let string a = f()
+    println("{a}")
+    return Result.Ok(0)

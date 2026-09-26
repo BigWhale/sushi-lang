@@ -1,0 +1,13 @@
+# The CW2511 of a propagation in `main` starts at the operand of `??`, because the
+# propagation has one span over the whole expression.
+# TEST_TYPE: warning
+# EXPECT_ERROR_CODE: CW2511
+# EXPECT_STDERR_CONTAINS: "test_warn_propagation_in_main_span.sushi:11:17: warning [CW2511]"
+# EXPECT_STDERR_CONTAINS: "  |     let i32 n = f()??\n  `                 --+--\n"
+fn f() i32:
+    return Result.Ok(1)
+
+fn main() i32:
+    let i32 n = f()??
+    println("{n}")
+    return Result.Ok(0)
