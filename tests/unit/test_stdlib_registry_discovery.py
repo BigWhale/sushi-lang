@@ -1,7 +1,7 @@
 """Stdlib module discovery must be loud, and every entry must register (#247).
 
 A module listed in KNOWN_MODULES whose python module does not import, or whose
-three interface symbols are absent, is a compiler configuration error -- not a
+signature table is absent, is a compiler configuration error -- not a
 no-op. The silent-skip path is what let two commented "just uncomment when
 ready" entries sit for months while the real blocker was an interface
 mismatch.
@@ -27,7 +27,7 @@ def test_every_known_module_registers_functions():
 
 
 def test_missing_interface_symbols_raise():
-    """A module that imports fine but lacks the three symbols must be loud.
+    """A module that imports fine but has no signature table must be loud.
 
     sushi_stdlib.src.collections.strings is the real-world case: it exposes a
     METHOD interface (is_builtin_string_method), not the function interface the
