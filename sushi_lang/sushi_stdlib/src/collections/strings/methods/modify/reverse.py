@@ -5,6 +5,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
 from ...common import build_string_struct, clone_string_to_owned
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_reverse(module: ir.Module) -> ir.Function:
@@ -53,9 +54,10 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
     char_count = builder.call(utf8_count, [str_data, str_size], name="char_count")
 
     str_size_i64 = builder.zext(str_size, i64, name="str_size_i64")
-    result_data = builder.call(malloc, [str_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, str_size_i64, name="result_data")
 
     initial_char_index = builder.sub(char_count, ir.Constant(i32, 1), name="initial_char_index")
+    reverse_end = builder.block
 
     builder.branch(loop_cond)
 
@@ -63,8 +65,8 @@ def emit_string_reverse(module: ir.Module) -> ir.Function:
     char_index_phi = builder.phi(i32, name="char_index")
     output_pos_phi = builder.phi(i32, name="output_pos")
 
-    char_index_phi.add_incoming(initial_char_index, reverse_block)
-    output_pos_phi.add_incoming(ir.Constant(i32, 0), reverse_block)
+    char_index_phi.add_incoming(initial_char_index, reverse_end)
+    output_pos_phi.add_incoming(ir.Constant(i32, 0), reverse_end)
 
     continue_loop = builder.icmp_signed(">=", char_index_phi, ir.Constant(i32, 0), name="continue_loop")
     builder.cbranch(continue_loop, loop_body, loop_done)

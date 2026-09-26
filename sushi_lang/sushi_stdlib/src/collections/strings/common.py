@@ -32,7 +32,7 @@ def allocate_and_copy_bytes(
 ) -> ir.Value:
     """Allocate memory and copy bytes from source."""
     byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
-    new_data = builder.call(malloc, [byte_count_i64], name="new_data")
+    new_data = emit_checked_malloc(builder, malloc, byte_count_i64, name="new_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])

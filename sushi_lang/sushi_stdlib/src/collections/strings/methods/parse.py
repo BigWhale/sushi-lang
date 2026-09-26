@@ -10,6 +10,8 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
 )
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
+from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_to_i32(module: ir.Module) -> ir.Function:
@@ -47,7 +49,7 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
-    buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
+    buffer = emit_checked_malloc(builder, malloc, size_plus_one_i64, name="buffer")
 
     idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
@@ -102,23 +104,11 @@ def emit_string_to_i32(module: ir.Module) -> ir.Function:
     builder.position_at_end(success_block)
     result_i32 = builder.trunc(result_i64, i32, name="result_i32")
 
-    undef_some = ir.Constant(maybe_i32_type, ir.Undefined)
-    some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
-
-    data_temp = entry_alloca(builder, maybe_i32_type.elements[1], name="data_temp")
-    data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
-    data_temp_i32 = builder.bitcast(data_temp_i8, i32.as_pointer(), name="data_temp_i32")
-    builder.store(result_i32, data_temp_i32)
-    packed_data = builder.load(data_temp, name="packed_data")
-
-    some_complete = builder.insert_value(some_with_tag, packed_data, 1, name="some_complete")
+    some_complete = emit_some(builder, maybe_i32_type, result_i32)
     builder.branch(return_block)
 
     builder.position_at_end(failure_block)
-    undef_none = ir.Constant(maybe_i32_type, ir.Undefined)
-    none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
-    undef_data = ir.Constant(maybe_i32_type.elements[1], ir.Undefined)
-    none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
+    none_complete = emit_none(builder, maybe_i32_type)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
@@ -167,7 +157,7 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
-    buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
+    buffer = emit_checked_malloc(builder, malloc, size_plus_one_i64, name="buffer")
 
     idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
@@ -210,23 +200,11 @@ def emit_string_to_i64(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(success_block)
 
-    undef_some = ir.Constant(maybe_i64_type, ir.Undefined)
-    some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
-
-    data_temp = entry_alloca(builder, maybe_i64_type.elements[1], name="data_temp")
-    data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
-    data_temp_i64 = builder.bitcast(data_temp_i8, i64.as_pointer(), name="data_temp_i64")
-    builder.store(result_i64, data_temp_i64)
-    packed_data = builder.load(data_temp, name="packed_data")
-
-    some_complete = builder.insert_value(some_with_tag, packed_data, 1, name="some_complete")
+    some_complete = emit_some(builder, maybe_i64_type, result_i64)
     builder.branch(return_block)
 
     builder.position_at_end(failure_block)
-    undef_none = ir.Constant(maybe_i64_type, ir.Undefined)
-    none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
-    undef_data = ir.Constant(maybe_i64_type.elements[1], ir.Undefined)
-    none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
+    none_complete = emit_none(builder, maybe_i64_type)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
@@ -276,7 +254,7 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
 
     size_plus_one = builder.add(str_size, ir.Constant(i32, 1), name="size_plus_one")
     size_plus_one_i64 = builder.zext(size_plus_one, i64, name="size_plus_one_i64")
-    buffer = builder.call(malloc, [size_plus_one_i64], name="buffer")
+    buffer = emit_checked_malloc(builder, malloc, size_plus_one_i64, name="buffer")
 
     idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
@@ -318,23 +296,11 @@ def emit_string_to_f64(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(success_block)
 
-    undef_some = ir.Constant(maybe_f64_type, ir.Undefined)
-    some_with_tag = builder.insert_value(undef_some, ir.Constant(i32, 0), 0, name="some_with_tag")
-
-    data_temp = entry_alloca(builder, maybe_f64_type.elements[1], name="data_temp")
-    data_temp_i8 = builder.bitcast(data_temp, i8_ptr, name="data_temp_i8")
-    data_temp_f64 = builder.bitcast(data_temp_i8, f64.as_pointer(), name="data_temp_f64")
-    builder.store(result_f64, data_temp_f64)
-    packed_data = builder.load(data_temp, name="packed_data")
-
-    some_complete = builder.insert_value(some_with_tag, packed_data, 1, name="some_complete")
+    some_complete = emit_some(builder, maybe_f64_type, result_f64)
     builder.branch(return_block)
 
     builder.position_at_end(failure_block)
-    undef_none = ir.Constant(maybe_f64_type, ir.Undefined)
-    none_with_tag = builder.insert_value(undef_none, ir.Constant(i32, 1), 0, name="none_with_tag")
-    undef_data = ir.Constant(maybe_f64_type.elements[1], ir.Undefined)
-    none_complete = builder.insert_value(none_with_tag, undef_data, 1, name="none_complete")
+    none_complete = emit_none(builder, maybe_f64_type)
     builder.branch(return_block)
 
     builder.position_at_end(return_block)

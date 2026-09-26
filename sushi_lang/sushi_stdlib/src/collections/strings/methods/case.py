@@ -134,7 +134,7 @@ def emit_string_cap(module: ir.Module) -> ir.Function:
     data, size = IRStructBuilder.extract_fat_pointer_fields(builder, func.args[0])
 
     size_i64 = builder.zext(size, i64, name="size_i64")
-    new_data = builder.call(malloc, [size_i64], name="new_data")
+    new_data = emit_checked_malloc(builder, malloc, size_i64, name="new_data")
 
     zero = ir.Constant(i32, 0)
     is_empty = builder.icmp_unsigned("==", size, zero, name="is_empty")
