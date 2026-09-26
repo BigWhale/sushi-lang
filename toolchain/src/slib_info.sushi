@@ -239,9 +239,7 @@ fn print_lines(string indent, string text, string opener, i32 opener_width,
     let string pad = " ".repeat(opener_width)
     let string hang = "{indent}{pad}"
     let string[] lines = text.split("\n")
-    let i32 n = lines.len()
-    let i32 i = 0
-    while (i < n):
+    foreach(i in 0..lines.len()):
         let string raw = lines.get(i)??
         if (raw == ""):
             println("")
@@ -251,7 +249,6 @@ fn print_lines(string indent, string text, string opener, i32 opener_width,
                 println("{indent}{opener}{line}")
             else:
                 println("{hang}{line}")
-        i := i + 1
     return Result.Ok(~)
 
 # print_doc_record: one doc record -- the summary, the body, then the tags -- and whether
@@ -380,15 +377,11 @@ fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
 # backtick inside a program is a program's own.
 fn print_code(string indent, string code, Opts o) ~:
     let string[] lines = code.split("\n")
-    let i32 n = lines.len()
-    let i32 i = 0
-    while (i < n):
-        let string line = lines.get(i)??
+    foreach(line in lines.iter()):
         if (line == ""):
             println("")
         else:
             println("{indent}    {o.dim}{line}{o.reset}")
-        i := i + 1
     return Result.Ok(~)
 
 # print_doc: the doc record of one manifest entry, when it carries one.
