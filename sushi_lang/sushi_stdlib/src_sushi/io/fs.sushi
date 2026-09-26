@@ -111,17 +111,20 @@ public fn mkdir_all(string path, i32 dir_mode) ~ | FileError:
 ##:
 Removes a path and, for a directory, everything under it.
 
-A missing path is success: the goal state already holds. A symlink is
+A missing path is success: the goal state already holds. A path that cannot
+be read for any other reason is an error, and nothing is removed. A symlink is
 removed as the link; its target stays.
 
 - Parameter path: The path to remove.
 - Errors: FileError, when an entry cannot be removed.
 :##
 public fn remove_all(string path) ~ | FileError:
-    let bool link = is_symlink(path).realise(false)
+    let bool link = false
+    match is_symlink(path):
+        Result.Ok(l) -> link := l
+        Result.Err(FileError.NotFound) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(e)
     if (not link):
-        if (not exists(path)):
-            return Result.Ok(~)
         if (is_dir(path)):
             let string[] names = read_dir(path)??
             foreach(name in names.iter()):
