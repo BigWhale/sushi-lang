@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.passes.types.inference import (
     infer_array_literal_type, infer_dynamic_array_from_type, infer_index_access_type)
 from sushi_lang.semantics.visitors import NodeVisitor
-from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType, StructType
+from sushi_lang.semantics.typesys import (
+    Type, ArrayType, BuiltinType, DynamicArrayType, StructType)
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_NUMERIC_TYPES)
 from sushi_lang.semantics.ast import (
@@ -117,8 +118,15 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return BuiltinType.STRING
 
     def visit_arrayliteral(self, node: ArrayLiteral) -> Optional[Type]:
-        """Infer array literal type."""
-        return infer_array_literal_type(self.type_validator, node)
+        """A fixed array literal infers its type from the elements, and stamps it (#889).
+
+        A declared position stamps first, through propagation. In a position with no type,
+        the inferred type is the stamp, as for `from()`.
+        """
+        inferred = infer_array_literal_type(self.type_validator, node)
+        if node.resolved_type is None and isinstance(inferred, ArrayType):
+            node.resolved_type = inferred
+        return inferred
 
     def visit_indexaccess(self, node: IndexAccess) -> Optional[Type]:
         """Infer index access type."""

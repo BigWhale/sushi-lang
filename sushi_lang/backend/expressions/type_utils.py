@@ -65,7 +65,7 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
     """
     from sushi_lang.semantics.ast import (Name, IntLit, FloatLit, BinaryOp, StringLit, BoolLit,
                                           UnaryOp, CastExpr, MemberAccess, DynamicArrayFrom,
-                                          InterpolatedString)
+                                          InterpolatedString, ArrayLiteral)
     from sushi_lang.backend.expressions.calls.utils import stamped_semantic_type
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -104,6 +104,9 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
 
     elif isinstance(expr, DynamicArrayFrom):
         return _dynamic_array_from_type(codegen, expr)
+
+    elif isinstance(expr, ArrayLiteral):
+        return expr.resolved_type
 
     elif isinstance(expr, (StringLit, InterpolatedString)):
         # An interpolation is a string like any other, and answering None for one left

@@ -1,0 +1,7 @@
+# A fixed array literal of integer literals as a method receiver (#889). It was CE0042.
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    println([1, 2].len())
+    return Result.Ok(0)

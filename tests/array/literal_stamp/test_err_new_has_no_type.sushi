@@ -1,0 +1,8 @@
+# An empty `new()` in a position with no type has no element type to take. That is the
+# user error CE2111 at the call, not the internal error CE0042 (#889).
+# EXPECT_ERROR_CODE: CE2111
+# EXPECT_STDERR_CONTAINS: new()
+
+fn main() i32:
+    println(new().len())
+    return Result.Ok(0)

@@ -6,6 +6,7 @@ from llvmlite import ir
 
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import ArrayLiteral
+from sushi_lang.semantics.typesys import ArrayType
 from sushi_lang.backend.types.arrays import runs
 
 if TYPE_CHECKING:
@@ -13,11 +14,18 @@ if TYPE_CHECKING:
 
 
 def emit_array_literal(codegen: 'LLVMCodegen', expr: ArrayLiteral) -> ir.Value:
-    """Emit array literal as LLVM array constant or initialization."""
+    """Emit array literal as LLVM array constant or initialization.
+
+    The element type is the one the typecheck pass stamped (#889). A missing stamp is a
+    gap in the typecheck pass and CE0041, never a guess.
+    """
     if not expr.elements:
         raise NotImplementedError("empty array literals not supported yet")
 
-    emitted = runs.emit_runs(codegen, expr.elements, None)
+    stamped = expr.resolved_type
+    if not isinstance(stamped, ArrayType):
+        raise_internal_error("CE0041", type=f"{type(stamped).__name__} on an array literal")
+    emitted = runs.emit_runs(codegen, expr.elements, stamped.base_type)
     element_type = runs.element_llvm_type(codegen, emitted)
     # A fixed array's length is part of its TYPE, so it is always readable here: the
     # typecheck pass reported CE2017 or CE2019 for anything else and stopped (Ruling 3).
