@@ -1,104 +1,143 @@
-# compression/zlib -- DEFLATE and the zlib wrapper, pure Sushi.
-#
-# The module ships as bundled .sushi source and is merged as a compilation unit
-# when imported (`use <compression/zlib>`). It implements RFC 1951 (DEFLATE) and
-# RFC 1950 (the zlib container), so a Sushi program reads and writes data that
-# any zlib reads and writes.
-#
-# The decoder follows puff.c, Mark Adler's reference inflate: a Huffman code is
-# a count per bit length plus the symbols sorted by length, and decoding walks
-# the code one bit at a time. That shape needs only flat integer arrays.
-#
-# Limitations: gzip (RFC 1952) is not handled, so there is no CRC-32 here. A
-# preset dictionary gives DictNeeded. Buffers above 2 GiB are out of range: a
-# length casts to a negative count and the read reports Truncated.
-#
+##:
+DEFLATE (RFC 1951) and the zlib container (RFC 1950), written in Sushi.
+
+Data that this module writes, any zlib can read, and data that any zlib writes, this
+module can read. The decoder reads all three block types. The encoder writes stored
+blocks and fixed-Huffman blocks, and never a dynamic-Huffman block. The decoder follows
+puff.c, the reference inflate of Mark Adler: a Huffman code is a count for each bit
+length and the symbols sorted by length, and the decode reads one bit at a time.
+
+gzip (RFC 1952) is not handled, so there is no CRC-32. A preset dictionary gives
+`ZError.DictNeeded`. A buffer of 2 GiB or more is out of range: a length casts to a
+negative count, and the read gives `ZError.Truncated`.
+:##
+
 # On the casts: a bitwise operator rejects two different numeric types
 # (CE2510), so the `as u32` and `as i32` on the OPERANDS of a shift, an OR or
 # an AND are what the language requires and not defensive noise. A shift COUNT
 # is exempt -- its type is free -- so a count carries no cast here.
 
-# The length code table of RFC 1951 3.2.5. Symbol 257 + i has base length
-# ZLIB_LEN_BASE[i] and reads ZLIB_LEN_EXTRA[i] more bits.
+##:
+The base length of each length symbol, RFC 1951 section 3.2.5.
+
+Symbol 257 + i has the base length `ZLIB_LEN_BASE[i]`.
+:##
 const i32[29] ZLIB_LEN_BASE = [
     3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51,
     59, 67, 83, 99, 115, 131, 163, 195, 227, 258
 ]
+##: The number of extra bits that length symbol 257 + i reads. :##
 const i32[29] ZLIB_LEN_EXTRA = [
     0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3,
     3, 4, 4, 4, 4, 5, 5, 5, 5, 0
 ]
 
-# The distance code table of the same section.
+##: The base distance of each distance symbol, RFC 1951 section 3.2.5. :##
 const i32[30] ZLIB_DIST_BASE = [
     1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385,
     513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577
 ]
+##: The number of extra bits that each distance symbol reads. :##
 const i32[30] ZLIB_DIST_EXTRA = [
     0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
     8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
 ]
 
-# The inverse of the two tables above, for the encoder. A repeated element
-# writes them, so the encoder reads one slot instead of scanning a base table
-# backwards for every match it emits.
+##:
+The length code, 0 to 28, of a match length of 3 to 258. The index is the length minus 3.
 
-# Length 3 to 258 -> length code 0 to 28, indexed by length - 3.
+This table and the two distance tables that follow are the inverse of the base tables,
+for the encoder. The encoder reads one slot, and does not scan a base table for each
+match.
+:##
 const i32[256] ZLIB_LEN_CODE = [
     0;1, 1;1, 2;1, 3;1, 4;1, 5;1, 6;1, 7;1, 8;2, 9;2, 10;2, 11;2,
     12;4, 13;4, 14;4, 15;4, 16;8, 17;8, 18;8, 19;8, 20;16, 21;16,
     22;16, 23;16, 24;32, 25;32, 26;32, 27;31, 28;1
 ]
 
-# Distance 1 to 256 -> distance code 0 to 15, indexed by dist - 1.
+##: The distance code, 0 to 15, of a distance of 1 to 256. The index is the distance minus 1. :##
 const i32[256] ZLIB_DIST_SMALL = [
     0;1, 1;1, 2;1, 3;1, 4;2, 5;2, 6;4, 7;4,
     8;8, 9;8, 10;16, 11;16, 12;32, 13;32, 14;64, 15;64
 ]
 
-# Distance 257 to 32768 -> distance code 16 to 29, indexed by (dist - 1) >> 7.
-# The first two slots are never read, because that index is 2 or more for every
-# distance of 257 and above. They stay so the shift needs no adjustment.
+##:
+The distance code, 16 to 29, of a distance of 257 to 32768. The index is `(dist - 1) >> 7`.
+
+The encoder does not read the first two slots, because the index is 2 or more for each
+distance of 257 and more. They stay, so the shift needs no adjustment.
+:##
 const i32[256] ZLIB_DIST_BIG = [
     0;1, 14;1, 16;1, 17;1, 18;2, 19;2, 20;4, 21;4,
     22;8, 23;8, 24;16, 25;16, 26;32, 27;32, 28;64, 29;64
 ]
 
-# The order the code-length code lengths arrive in, RFC 1951 3.2.7.
+##: The order of the code-length code lengths in a dynamic block, RFC 1951 section 3.2.7. :##
 const i32[19] ZLIB_CLEN_ORDER = [
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 ]
 
+##:
+Why a compress or a decompress failed.
+
+Each payload holds the detail that a caller can report. `zlib_error_text` gives one
+stable line for each variant.
+:##
 public enum ZError:
+    ##: The input ended. The payload is the byte offset where it ended. :##
     Truncated(i32)
+    ##: The block type is 3, which is reserved. The payload is the block type. :##
     BadBlockType(i32)
+    ##: LEN and NLEN of a stored block are not complements. The payloads are LEN and NLEN. :##
     BadStoredLength(i32, i32)
+    ##: A Huffman code is incomplete or over-subscribed. :##
     BadCode()
+    ##: A distance goes before the start of the output. The payloads are the distance and the bytes that are available. :##
     BadDistance(i32, i32)
+    ##: A length or distance symbol has no meaning. The payload is the symbol. :##
     BadSymbol(i32)
+    ##: The zlib header is not valid. The payload is the header value that failed. :##
     BadHeader(i32)
+    ##: The Adler-32 checksum does not agree. The payloads are the expected and the calculated sums. :##
     BadChecksum(u32, u32)
+    ##: The compression level is not 0 to 9. The payload is the level. :##
     BadLevel(i32)
+    ##: The header sets FDICT. A preset dictionary is not supported. :##
     DictNeeded()
 
-# ZBits: the bit cursor. `pos` is the next unread byte, `acc` holds `cnt` bits
-# already taken from earlier bytes. After any read `cnt` is below 8, so dropping
-# the accumulator is exactly a byte alignment.
+##:
+The bit cursor of the decoder.
+
+After each read, `cnt` is less than 8. Thus to clear the accumulator is exactly to align
+to the next byte.
+:##
 struct ZBits:
+    ##: The index of the next byte to read. :##
     i32 pos
+    ##: The bits that the cursor took from bytes before `pos` and did not use. :##
     u32 acc
+    ##: The number of bits in `acc`. :##
     i32 cnt
 
-# ZHuff: a canonical Huffman code. `count[n]` is how many codes have length n,
-# `symbol` holds the symbols ordered by code length, and `left` is the number of
-# unused codes -- 0 for a complete code, above 0 for an incomplete one.
+##: A canonical Huffman code for the decoder. :##
 struct ZHuff:
+    ##: `count[n]` is the number of codes of length n. :##
     i32[] count
+    ##: The symbols, sorted by code length. :##
     i32[] symbol
+    ##: The number of codes that are not used: 0 for a complete code, more for an incomplete code. :##
     i32 left
 
-# zbits_get: the next `need` bits, low bit first. DEFLATE packs plain values
-# that way. A `need` of 0 reads nothing and gives 0.
+##:
+Reads the next `need` bits, low bit first, which is how DEFLATE packs a plain value.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter need: The number of bits to read, 0 to 24. When it is 0, nothing is read.
+- Returns: The bits, as an unsigned value.
+- Errors: `ZError.Truncated` when the input ends first.
+:##
 fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
     while (s.cnt < need):
         if (s.pos >= src.len()):
@@ -112,9 +151,18 @@ fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
     s.cnt := s.cnt - need
     return Result.Ok(v)
 
-# zhuff_build: the canonical table for a list of code lengths. An
-# over-subscribed code is rejected here; an incomplete one is reported through
-# `left` because the distance code of a one-symbol block is legally incomplete.
+##:
+Builds the canonical code for a list of code lengths.
+
+This function refuses an over-subscribed code. It does not refuse an incomplete code,
+but gives it in `left`, because the distance code of a one-symbol block can be
+incomplete.
+
+- Parameter lengths: The code length of each symbol.
+- Parameter n: The number of symbols.
+- Returns: The code.
+- Errors: `ZError.BadCode` when a length is more than 15 or the code is over-subscribed.
+:##
 fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
     let i32[] count = from([0; 16])
 
@@ -146,8 +194,15 @@ fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
 
     return Result.Ok(ZHuff(count, symbol, left))
 
-# zhuff_decode: one symbol. `code` is the bits read so far, `first` the first
-# code of the current length, `index` the first symbol of that length.
+##:
+Decodes one symbol, one bit at a time.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter h: The code to decode with.
+- Returns: The symbol.
+- Errors: `ZError.Truncated`, or `ZError.BadCode` when no code of 15 bits or fewer matches.
+:##
 fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
     let i32 code = 0
     let i32 first = 0
@@ -162,19 +217,39 @@ fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
         code := code * 2
     return Result.Err(ZError.BadCode())
 
-# zfixed_lit: the fixed literal/length code of RFC 1951 3.2.6.
+##:
+Builds the fixed literal and length code of RFC 1951 section 3.2.6.
+
+- Returns: The code.
+- Errors: This function does not fail for the fixed lengths.
+:##
 fn zfixed_lit() ZHuff | ZError:
     let i32[] lengths = from([8;144, 9;112, 7;24, 8;8])
     return Result.Ok(zhuff_build(peek lengths, 288)??)
 
-# zfixed_dist: the fixed distance code. Thirty codes of five bits, so the code
-# is incomplete by design and the two spare patterns decode to nothing.
+##:
+Builds the fixed distance code: thirty codes of five bits.
+
+The code is incomplete on purpose. The two spare patterns decode to nothing.
+
+- Returns: The code.
+- Errors: This function does not fail for the fixed lengths.
+:##
 fn zfixed_dist() ZHuff | ZError:
     let i32[] lengths = from([5; 30])
     return Result.Ok(zhuff_build(peek lengths, 30)??)
 
-# zinflate_stored: a BTYPE=00 block. The bit buffer is dropped, which aligns to
-# the next byte, then LEN and NLEN follow as plain little-endian 16-bit values.
+##:
+Decodes a stored block (BTYPE 00).
+
+The function clears the bit buffer to align to the next byte. Then LEN and NLEN follow
+as little-endian 16-bit values.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter out: The output. The block adds its bytes to it.
+- Errors: `ZError.Truncated`, or `ZError.BadStoredLength` when LEN and NLEN are not complements.
+:##
 fn zinflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     s.acc := 0
     s.cnt := 0
@@ -191,9 +266,19 @@ fn zinflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     s.pos := s.pos + len
     return Result.Ok(~)
 
-# zinflate_codes: the symbol loop shared by fixed and dynamic blocks. A literal
-# appends one byte; a length symbol reads a distance and copies from the output
-# already produced, which may overlap the bytes this loop is writing.
+##:
+Decodes the symbols of a fixed or a dynamic block, up to the end-of-block symbol.
+
+A literal adds one byte. A length symbol reads a distance and copies bytes from the
+output. The copy can overlap the bytes that it writes.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter out: The output. The block adds its bytes to it.
+- Parameter lencode: The literal and length code.
+- Parameter distcode: The distance code.
+- Errors: `ZError.Truncated`, `ZError.BadCode`, `ZError.BadSymbol` or `ZError.BadDistance`.
+:##
 fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
                   peek ZHuff lencode, peek ZHuff distcode) ~ | ZError:
     let i32 done = 0
@@ -223,23 +308,49 @@ fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
                     k := k + 1
     return Result.Ok(~)
 
-# zinflate_fixed: a BTYPE=01 block, decoded with the two fixed codes.
+##:
+Decodes a fixed-Huffman block (BTYPE 01) with the two fixed codes.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter out: The output. The block adds its bytes to it.
+- Errors: The errors of `zinflate_codes`.
+:##
 fn zinflate_fixed(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     let ZHuff lencode = zfixed_lit()??
     let ZHuff distcode = zfixed_dist()??
     zinflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
     return Result.Ok(~)
 
-# zinflate_clen: the code-length code that the header of a dynamic block
-# carries. Its own lengths arrive in the permuted ZLIB_CLEN_ORDER.
+##:
+Reads the code-length code from the header of a dynamic block.
+
+The lengths of this code come in the order of `ZLIB_CLEN_ORDER`.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter ncode: The number of code-length code lengths in the header.
+- Returns: The code-length code.
+- Errors: `ZError.Truncated` or `ZError.BadCode`.
+:##
 fn zinflate_clen(peek u8[] src, poke ZBits s, i32 ncode) ZHuff | ZError:
     let i32[] clen = from([0; 19])
     foreach(i in 0..ncode):
         clen[ZLIB_CLEN_ORDER[i]] := zbits_get(peek src, poke s, 3)?? as i32
     return Result.Ok(zhuff_build(peek clen, 19)??)
 
-# zinflate_lengths: read nlen + ndist code lengths through the code-length code.
-# Symbol 16 repeats the previous length, 17 and 18 repeat a zero.
+##:
+Reads the literal, length and distance code lengths with the code-length code.
+
+Symbol 16 repeats the length before it. Symbols 17 and 18 repeat a zero.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter clencode: The code-length code.
+- Parameter total: The number of lengths to read.
+- Returns: The lengths.
+- Errors: `ZError.Truncated`, `ZError.BadCode` or `ZError.BadSymbol`.
+:##
 fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                     i32 total) i32[] | ZError:
     let i32[] lengths = new()
@@ -270,8 +381,16 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                 k := k + 1
     return Result.Ok(lengths)
 
-# zinflate_dynamic: a BTYPE=10 block. Only a code with at most one used symbol
-# may be incomplete, which is the rule puff.c applies.
+##:
+Decodes a dynamic-Huffman block (BTYPE 10).
+
+Only a code with one used symbol or fewer can be incomplete. This is the rule of puff.c.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. The read moves it.
+- Parameter out: The output. The block adds its bytes to it.
+- Errors: `ZError.Truncated`, `ZError.BadCode` or `ZError.BadSymbol`.
+:##
 fn zinflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     let i32 nlen = (zbits_get(peek src, poke s, 5)?? as i32) + 257
     let i32 ndist = (zbits_get(peek src, poke s, 5)?? as i32) + 1
@@ -299,19 +418,32 @@ fn zinflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     zinflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
     return Result.Ok(~)
 
-# ZOut: the bit accumulator of the encoder. `cnt` stays below 8 between calls,
-# so a flush of one byte is enough to reach a byte boundary.
+##:
+The bit accumulator of the encoder.
+
+Between calls, `cnt` stays less than 8. Thus a flush of one byte gets to a byte boundary.
+:##
 struct ZOut:
+    ##: The bits that are not written yet. :##
     u32 acc
+    ##: The number of bits in `acc`. :##
     i32 cnt
 
-# ZCode: one Huffman code and how many bits of it are meaningful.
+##: One Huffman code of the encoder. :##
 struct ZCode:
+    ##: The code bits. :##
     u32 bits
+    ##: The number of bits in the code. :##
     i32 len
 
-# zput_bits: append n bits of v, low bit first, the way DEFLATE packs plain
-# values.
+##:
+Writes `n` bits of `v`, low bit first, which is how DEFLATE packs a plain value.
+
+- Parameter out: The output. The function adds the bytes that it completes.
+- Parameter w: The bit accumulator.
+- Parameter v: The value.
+- Parameter n: The number of bits to write.
+:##
 fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~:
     w.acc := w.acc | (v << w.cnt)
     w.cnt := w.cnt + n
@@ -321,15 +453,30 @@ fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~:
         w.cnt := w.cnt - 8
     return Result.Ok(~)
 
-# zput_code: append a Huffman code, high bit first. Codes go in the opposite
-# order from plain values, which is the one asymmetry in the format.
+##:
+Writes a Huffman code, high bit first.
+
+A code goes in the opposite order from a plain value. This is the one asymmetry in the
+format.
+
+- Parameter out: The output. The function adds the bytes that it completes.
+- Parameter w: The bit accumulator.
+- Parameter code: The code bits.
+- Parameter n: The number of bits in the code.
+- Errors: This function does not fail.
+:##
 fn zput_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
     foreach(i in (n - 1)..=0):
         let u32 bit = (code >> i) & 1
         zput_bits(poke out, poke w, bit, 1)
     return Result.Ok(~)
 
-# zflush: pad the last partial byte with zeros.
+##:
+Writes the last partial byte, with zero bits as padding.
+
+- Parameter out: The output. The function adds the bytes that it completes.
+- Parameter w: The bit accumulator.
+:##
 fn zflush(poke u8[] out, poke ZOut w) ~:
     if (w.cnt > 0):
         out.push((w.acc & 255) as u8)
@@ -337,7 +484,13 @@ fn zflush(poke u8[] out, poke ZOut w) ~:
         w.cnt := 0
     return Result.Ok(~)
 
-# zfixed_code: the fixed literal/length code for one symbol, RFC 1951 3.2.6.
+##:
+Gives the fixed literal and length code of one symbol, RFC 1951 section 3.2.6.
+
+- Parameter sym: The symbol, 0 to 287.
+- Returns: The code.
+- Errors: `ZError.BadSymbol` when the symbol is 288 or more.
+:##
 fn zfixed_code(i32 sym) ZCode | ZError:
     if (sym < 144):
         return Result.Ok(ZCode((48 + sym) as u32, 8))
@@ -349,7 +502,13 @@ fn zfixed_code(i32 sym) ZCode | ZError:
         return Result.Ok(ZCode((192 + (sym - 280)) as u32, 8))
     return Result.Err(ZError.BadSymbol(sym))
 
-# zlen_index: the length code for a match of 3 to 258 bytes.
+##:
+Gives the length code of a match of 3 to 258 bytes.
+
+- Parameter length: The match length.
+- Returns: The length code, 0 to 28.
+- Errors: `ZError.BadSymbol` when the length is out of range.
+:##
 fn zlen_index(i32 length) i32 | ZError:
     if (length < 3):
         return Result.Err(ZError.BadSymbol(length))
@@ -357,9 +516,17 @@ fn zlen_index(i32 length) i32 | ZError:
         return Result.Err(ZError.BadSymbol(length))
     return Result.Ok(ZLIB_LEN_CODE[length - 3])
 
-# zdist_index: the distance code for 1 to 32768 bytes. One direct table would
-# need 32768 slots, so the range splits: below 257 the distance indexes itself,
-# above it the top bits do, which is the split zlib's own encoder uses.
+##:
+Gives the distance code of a distance of 1 to 32768 bytes.
+
+One direct table would need 32768 slots, so the range has two parts. Less than 257, the
+distance is the index. At 257 and more, the high bits are the index. The encoder of
+zlib uses the same split.
+
+- Parameter dist: The distance.
+- Returns: The distance code, 0 to 29.
+- Errors: `ZError.BadDistance` when the distance is out of range.
+:##
 fn zdist_index(i32 dist) i32 | ZError:
     if (dist < 1):
         return Result.Err(ZError.BadDistance(dist, 0))
@@ -369,8 +536,18 @@ fn zdist_index(i32 dist) i32 | ZError:
         return Result.Ok(ZLIB_DIST_SMALL[dist - 1])
     return Result.Ok(ZLIB_DIST_BIG[(dist - 1) >> 7])
 
-# zemit_match: a length/distance pair. In a fixed block every distance code is
-# five bits and equals its symbol, so the code needs no table.
+##:
+Writes a length and distance pair.
+
+In a fixed block each distance code has five bits and is equal to its symbol, so the
+code needs no table.
+
+- Parameter out: The output. The function adds the bytes that it completes.
+- Parameter w: The bit accumulator.
+- Parameter length: The match length, 3 to 258.
+- Parameter dist: The distance, 1 to 32768.
+- Errors: `ZError.BadSymbol` or `ZError.BadDistance` when a value is out of range.
+:##
 fn zemit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~ | ZError:
     let i32 li = zlen_index(length)??
     let ZCode lc = zfixed_code(257 + li)??
@@ -385,16 +562,32 @@ fn zemit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~ | ZError:
         zput_bits(poke out, poke w, (dist - ZLIB_DIST_BASE[di]) as u32, dextra)
     return Result.Ok(~)
 
-# zhash3: a 15-bit hash of the three bytes at i. The matcher uses it to bucket
-# positions that may share a prefix.
+##:
+Gives a 15-bit hash of the three bytes at `i`.
+
+The matcher uses it to put the positions that can share a prefix in one bucket.
+
+- Parameter src: The input.
+- Parameter i: The position. The input has three bytes or more from it.
+- Returns: The hash, 0 to 32767.
+- Errors: This function does not fail.
+:##
 fn zhash3(peek u8[] src, i32 i) i32 | ZError:
     let i32 a = (src[i] as i32) << 10
     let i32 b = (src[i + 1] as i32) << 5
     let i32 c = src[i + 2] as i32
     return Result.Ok((a ^ b ^ c) & 32767)
 
-# zmatch_len: how many bytes agree at a and b, capped at 258 and at the end of
-# the input.
+##:
+Counts the bytes that agree at `a` and at `b`.
+
+- Parameter src: The input.
+- Parameter a: The earlier position.
+- Parameter b: The current position.
+- Parameter n: The length of the input.
+- Returns: The count, 258 or less, and not past the end of the input.
+- Errors: This function does not fail.
+:##
 fn zmatch_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
     foreach(l in 0..258):
         if ((b + l) >= n):
@@ -403,8 +596,15 @@ fn zmatch_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
             return Result.Ok(l)
     return Result.Ok(258)
 
-# zdeflate_stored: level 0. One block per 65535 bytes, each byte-aligned and
-# copied through. An empty input still emits one final empty block.
+##:
+Writes the input as stored blocks, which is level 0.
+
+Each block holds 65535 bytes or fewer, and is byte-aligned. An empty input gives one
+empty final block.
+
+- Parameter src: The input.
+- Parameter out: The output. The function adds the blocks to it.
+:##
 fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
     let i32 n = src.len()
     let i32 pos = 0
@@ -428,9 +628,17 @@ fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
         pos := pos + chunk
     return Result.Ok(~)
 
-# zdeflate_fixed: one fixed-Huffman block for the whole input. Matches come
-# from a hash of three bytes into a chain of earlier positions; `level` bounds
-# how far down a chain the search walks.
+##:
+Writes one fixed-Huffman block for the whole input.
+
+A hash of three bytes finds a chain of earlier positions, and the matcher looks for a
+match along the chain.
+
+- Parameter src: The input.
+- Parameter out: The output. The function adds the block to it.
+- Parameter level: The level, 1 to 9. It sets how far the search goes along a chain.
+- Errors: This function does not fail for a valid level.
+:##
 fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
     let ZOut w = ZOut(0, 0)
     zput_bits(poke out, poke w, 1, 1)
@@ -485,8 +693,15 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
     zflush(poke out, poke w)
     return Result.Ok(~)
 
-# adler32: the RFC 1950 checksum. Two running sums modulo 65521, high sum
-# first. An empty input gives 1.
+##:
+Calculates the Adler-32 checksum of RFC 1950.
+
+The checksum is two running sums modulo 65521, with the high sum first. This function
+does not fail, so `.realise(0)` gives the value.
+
+- Parameter data: The bytes to sum.
+- Returns: The checksum. An empty input gives 1.
+:##
 public fn adler32(u8[] data) u32:
     let u32 base = 65521
     let u32 a = 1
@@ -496,9 +711,19 @@ public fn adler32(u8[] data) u32:
         b := (b + a) % base
     return Result.Ok((b << 16) | a)
 
-# deflate_raw: encode a raw DEFLATE stream (RFC 1951), with no container.
-# Level 0 stores; levels 1 to 9 emit one fixed-Huffman block and vary how hard
-# the matcher looks.
+##:
+Compresses into a raw DEFLATE stream (RFC 1951), with no header and no checksum.
+
+Level 0 writes stored blocks. Levels 1 to 9 write one fixed-Huffman block, and a higher
+level makes the match search go farther. When the coded block is larger than stored
+blocks, the function writes stored blocks. Thus the result is never more than the input
+and five bytes for each 65535.
+
+- Parameter src: The bytes to compress.
+- Parameter level: The level, 0 to 9.
+- Returns: The DEFLATE stream.
+- Errors: `ZError.BadLevel` when the level is not 0 to 9.
+:##
 public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
     if (level < 0):
         return Result.Err(ZError.BadLevel(level))
@@ -510,10 +735,7 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
         return Result.Ok(out)
 
     zdeflate_fixed(peek src, poke out, level)??
-    # Incompressible input codes to MORE than it started with, because a fixed
-    # literal costs eight or nine bits. A stored block costs the input plus five
-    # bytes per 65535, so fall back when the coded block loses. Only then is the
-    # stored form built, so the ordinary path pays nothing.
+    # A fixed literal costs eight or nine bits, so incompressible input grows.
     let i32 blocks = 1 + (src.len() / 65535)
     let i32 stored_size = src.len() + (5 * blocks)
     if (out.len() <= stored_size):
@@ -522,8 +744,15 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
     zdeflate_stored(peek src, poke plain)
     return Result.Ok(plain)
 
-# zlib_flg: the second header byte. Bits 6 and 7 are the level hint, and the
-# value is picked so that CMF * 256 + FLG is a multiple of 31.
+##:
+Gives the second byte of the zlib header (FLG).
+
+Bits 6 and 7 are the level hint. The value makes CMF * 256 + FLG a multiple of 31.
+
+- Parameter level: The compression level.
+- Returns: The FLG byte.
+- Errors: This function does not fail.
+:##
 fn zlib_flg(i32 level) i32 | ZError:
     if (level < 2):
         return Result.Ok(1)
@@ -533,8 +762,17 @@ fn zlib_flg(i32 level) i32 | ZError:
         return Result.Ok(156)
     return Result.Ok(218)
 
-# zlib_compress: encode an RFC 1950 stream -- the two-byte header, a raw
-# DEFLATE body, and the big-endian Adler-32 of the input.
+##:
+Compresses into a zlib stream (RFC 1950).
+
+The stream is the two-byte header, a raw DEFLATE body, and the big-endian Adler-32 of
+the input.
+
+- Parameter src: The bytes to compress.
+- Parameter level: The level: 0 for stored blocks only, 1 to 9 to compress.
+- Returns: The zlib stream.
+- Errors: `ZError.BadLevel` when the level is not 0 to 9.
+:##
 public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
     let u8[] out = new()
     # CMF: method 8 with a 32 KiB window
@@ -551,7 +789,15 @@ public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
     out.push((sum & 255) as u8)
     return Result.Ok(out)
 
-# inflate_raw: decode a raw DEFLATE stream (RFC 1951), with no container.
+##:
+Decompresses a raw DEFLATE stream (RFC 1951), with no header and no checksum.
+
+The function reads stored, fixed and dynamic blocks, up to the final block.
+
+- Parameter src: The DEFLATE stream.
+- Returns: The decompressed bytes.
+- Errors: A `ZError` that names the fault.
+:##
 public fn inflate_raw(u8[] src) u8[] | ZError:
     let u8[] out = new()
     let ZBits s = ZBits(0, 0, 0)
@@ -570,8 +816,17 @@ public fn inflate_raw(u8[] src) u8[] | ZError:
                 return Result.Err(ZError.BadBlockType(btype))
     return Result.Ok(out)
 
-# zlib_uncompress: decode an RFC 1950 stream -- a two-byte header, a raw DEFLATE
-# body, and a big-endian Adler-32 of the decoded bytes.
+##:
+Decompresses a zlib stream (RFC 1950).
+
+The function checks the header, decompresses the body, and compares the Adler-32
+trailer with the bytes that it got.
+
+- Parameter src: The zlib stream.
+- Returns: The decompressed bytes.
+- Errors: `ZError.BadHeader`, `ZError.DictNeeded`, `ZError.BadChecksum`, and the errors of
+  `inflate_raw`.
+:##
 public fn zlib_uncompress(u8[] src) u8[] | ZError:
     if (src.len() < 6):
         return Result.Err(ZError.Truncated(src.len()))
@@ -598,8 +853,14 @@ public fn zlib_uncompress(u8[] src) u8[] | ZError:
         return Result.Err(ZError.BadChecksum(want, got))
     return Result.Ok(out)
 
-# zlib_error_text: a stable one-line description. The enum payloads carry the
-# detail for a caller that wants it.
+##:
+Gives one stable line of text for an error.
+
+The text does not include the payloads, so a caller can compare it.
+
+- Parameter e: The error.
+- Returns: The text.
+:##
 public fn zlib_error_text(ZError e) string:
     match e:
         ZError.Truncated(_) ->

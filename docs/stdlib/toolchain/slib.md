@@ -22,7 +22,7 @@ library (see [Library Format](../../library-format.md)). The metadata comes back
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
 reads the length of a payload section, never the payload.
 
-The module imports `<encoding/msgpack>` and `<io/files>` — the first source module that
+The module imports `<encoding/msgpack>` and `<io/fs>` — the first source module that
 imports another source module. It re-exports `<io/error>` (`public use`), so
 `use <toolchain/slib>` alone lets a program name the `IoError` that `SlibError.Io`
 carries.
@@ -131,7 +131,8 @@ ends too early; a read that fails is never reported as one.
 
 `toolchain/src/slib_info.sushi` (in the repository, not in the wheel) renders the same
 report as `sushic --lib-info`. A repo checkout builds it with `./toolchain/build.py`,
-and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`.
+and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`, and
+[the design records](../../design/slib-info.md) of the tool.
 
 ## Limitations
 

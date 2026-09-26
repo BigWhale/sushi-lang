@@ -1,15 +1,15 @@
-# toolchain/slib -- a .slib metadata reader, pure Sushi.
-#
-# The module ships as bundled .sushi source and is merged as a compilation
-# unit when imported (`use <toolchain/slib>`). It reads the fixed 52-byte
-# little-endian header and the msgpack metadata map of a version-4 .slib
-# library. It mirrors the Python reader LibraryFormat.read_metadata_only and
-# never reads a payload blob for its own sake; sizes reads only the two
-# length fields that follow the metadata blob.
-#
-# Limitations: the four spare header fields are read and not validated. The
-# reader targets metadata below 2 GiB; a hostile length casts to a negative
-# count, reads nothing, and reports a decode error on the empty blob.
+##:
+A reader for the metadata of a `.slib` library, written in Sushi.
+
+The module reads the fixed 52-byte little-endian header and the MessagePack metadata
+map of a version-4 `.slib` file. It agrees with the Python reader
+`LibraryFormat.read_metadata_only`. It reads the length of a payload section, and never
+the payload itself.
+
+The four spare header fields are read and not validated. Metadata must be less than
+2 GiB: a larger length casts to a negative count, the read gives no bytes, and the
+decode of the empty blob fails.
+:##
 
 use <io/fs>
 public use <io/error>
@@ -23,33 +23,66 @@ permission and a missing file each keep their own cause. `Truncated` is a file t
 ends too early, and never a read that failed.
 :##
 public enum SlibError:
+    ##: The open or a read failed. The `IoError` names the cause. :##
     Io(IoError)
+    ##: The 16 magic bytes at the start of the file do not match. :##
     BadMagic()
+    ##: The header gives a container version that is not 4. :##
     BadVersion(u32)
+    ##: The file ends inside the header or inside a section. :##
     Truncated()
+    ##: The metadata blob is not valid MessagePack. :##
     Decode(MpError)
 
-# slib_le_uint: read nbytes little-endian bytes at off into a u64. The caller
-# has already length-checked the buffer. The SlibError channel lets ?? compose.
+##:
+Reads an unsigned little-endian integer from a byte buffer.
+
+The caller makes sure that the buffer holds the bytes. The `SlibError` channel lets a
+caller use `??`.
+
+- Parameter h: The buffer to read.
+- Parameter off: The index of the first byte.
+- Parameter nbytes: The number of bytes to read, 8 or fewer.
+- Returns: The integer.
+- Errors: This function does not fail.
+:##
 fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
     let u64 acc = 0
     foreach(i in 0..nbytes):
         acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
     return Result.Ok(acc)
 
-# slib_open and slib_read: open() and read_bytes() with their IoError in the SlibError
-# channel, so ?? composes.
+##:
+Opens a file to read bytes, and puts an `IoError` in the `SlibError` channel.
+
+- Parameter path: The path of the file.
+- Returns: The open file.
+- Errors: `SlibError.Io` when the open fails.
+:##
 fn slib_open(string path) File | SlibError:
     match open(path, FileMode.ReadB()):
         Result.Ok(nom f) -> return Result.Ok(f)
         Result.Err(e) -> return Result.Err(SlibError.Io(e))
 
+##:
+Reads bytes from a file, and puts an `IoError` in the `SlibError` channel.
+
+- Parameter f: The file to read.
+- Parameter count: The number of bytes to read.
+- Returns: The bytes. At the end of the file there are fewer than `count`.
+- Errors: `SlibError.Io` when the read fails.
+:##
 fn slib_read(poke File f, i32 count) u8[] | SlibError:
     match f.read_bytes(count):
         Result.Ok(nom bytes) -> return Result.Ok(bytes)
         Result.Err(e) -> return Result.Err(SlibError.Io(e))
 
-# slib_header_check: validate the magic and the version of a full 52-byte header.
+##:
+Makes sure that a full 52-byte header has the correct magic and version.
+
+- Parameter header: The header bytes.
+- Errors: `SlibError.BadMagic` or `SlibError.BadVersion`.
+:##
 fn slib_header_check(peek u8[] header) ~ | SlibError:
     let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
     foreach(i in 0..16):
@@ -60,7 +93,13 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
         return Result.Err(SlibError.BadVersion(version as u32))
     return Result.Ok(~)
 
-# read_metadata: decode the metadata map of a .slib file into a MsgValue.
+##:
+Reads and decodes the metadata map of a `.slib` file.
+
+- Parameter path: The path of the library.
+- Returns: The metadata map, as a `MsgValue` tree.
+- Errors: A `SlibError` that names the fault.
+:##
 public fn read_metadata(string path) MsgValue | SlibError:
     let File f = slib_open(path)??
     let u8[] header = slib_read(poke f, 52)??
@@ -77,16 +116,28 @@ public fn read_metadata(string path) MsgValue | SlibError:
         Result.Err(e) ->
             return Result.Err(SlibError.Decode(e))
 
-# SlibSizes: the byte length of the two payload sections that follow the
-# metadata blob. A source library records no bitcode, a binary one no source.
+##:
+The byte lengths of the two payload sections after the metadata blob.
+
+A source library has no bitcode, and a binary library has no source.
+:##
 public struct SlibSizes:
+    ##: The length of the source section, in bytes. :##
     u64 source
+    ##: The length of the bitcode section, in bytes. :##
     u64 bitcode
 
-# sizes: the length of both payload sections, in one pass over the file.
-# Container version 4 puts a length-prefixed SOURCE section between the metadata
-# and the bitcode, so reaching the bitcode length means stepping over that
-# section first. No report needs a blob itself, only its length.
+##:
+Reads the length of the two payload sections, in one pass over the file.
+
+A version-4 container has a length-prefixed source section between the metadata and
+the bitcode. Thus the reader steps over the source section to get to the bitcode
+length.
+
+- Parameter path: The path of the library.
+- Returns: The two lengths.
+- Errors: A `SlibError` that names the fault.
+:##
 public fn sizes(string path) SlibSizes | SlibError:
     let File f = slib_open(path)??
     let u8[] header = slib_read(poke f, 52)??
@@ -111,7 +162,13 @@ public fn sizes(string path) SlibSizes | SlibError:
     let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
     return Result.Ok(SlibSizes(slen, bclen))
 
-# bitcode_size: the u64 length of the bitcode section alone.
+##:
+Reads the length of the bitcode section alone.
+
+- Parameter path: The path of the library.
+- Returns: The length of the bitcode section, in bytes.
+- Errors: A `SlibError` that names the fault.
+:##
 public fn bitcode_size(string path) u64 | SlibError:
     let SlibSizes both = sizes(path)??
     return Result.Ok(both.bitcode)

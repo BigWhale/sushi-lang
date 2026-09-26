@@ -1,37 +1,65 @@
-# encoding/msgpack -- a MessagePack decoder, pure Sushi, decode-only.
-#
-# The module ships as bundled .sushi source and is merged as a compilation unit
-# when imported (`use <encoding/msgpack>`). It decodes one whole buffer into a
-# MsgValue tree. There is no encoder and no streaming entry.
-#
-# Limitations: ext, fixext and timestamp tags give MpError.Unsupported. The
-# decoder targets buffers below 2 GiB. A length prefix is checked against what
-# is left in the buffer as it is read, so a length too large to satisfy -- a
-# hostile 2^32-1 included -- is Truncated at the header (#463).
+##:
+A MessagePack decoder, written in Sushi. It decodes and does not encode.
+
+`decode` reads one whole buffer as exactly one value, and gives a `MsgValue` tree. There
+is no streaming entry. The `ext`, `fixext` and timestamp tags give
+`MpError.Unsupported`. The buffer must be less than 2 GiB. The decoder compares each
+length prefix with the bytes that are left when it reads the prefix. Thus a length that
+the input cannot supply, `0xffffffff` included, is `Truncated` at the header.
+:##
 
 use <collections/strings>
 
+##:
+One decoded MessagePack value.
+
+A map is two parallel arrays and not a hash table: a MessagePack key can be of any
+kind, and the wire order stays visible.
+:##
 public enum MsgValue:
+    ##: The `nil` value. :##
     Nil()
+    ##: A `true` or `false` value. :##
     Bool(bool)
+    ##: A signed integer, or an unsigned integer that fits in `i64`. :##
     Int(i64)
+    ##: A `uint64` value that is more than the `i64` maximum. :##
     UInt(u64)
+    ##: A float. A `float32` value widens to `f64`. :##
     Float(f64)
+    ##: A string, validated as UTF-8. :##
     Str(string)
+    ##: A binary payload. :##
     Bin(u8[])
+    ##: An array of values, in wire order. :##
     Arr(MsgValue[])
+    ##: A map: the keys and the values as parallel arrays, in wire order. :##
     Map(MsgValue[], MsgValue[])
 
+##: Why a buffer did not decode. :##
 public enum MpError:
+    ##: The input ended. The payload is the byte offset where it ended. :##
     Truncated(i32)
+    ##: The tag is ext, fixext, timestamp or `0xc1`. The payload is the tag byte. :##
     Unsupported(u8)
+    ##: A string payload is not UTF-8. The payload is the offset after it. :##
     BadUtf8(i32)
+    ##: Bytes stay after the root value. The payload is the offset of the first one. :##
     Trailing(i32)
 
+##: The read position of the decoder in its buffer. :##
 struct MpCursor:
+    ##: The index of the next byte to read. :##
     i32 pos
 
-# mp_take: the next byte, or Truncated.
+##:
+Reads the next byte.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. The read moves it one byte.
+- Returns: The byte.
+- Errors: `MpError.Truncated` at the end of the buffer.
+:##
 fn mp_take(peek u8[] buf, poke MpCursor cur) u8 | MpError:
     if (cur.pos >= buf.len()):
         return Result.Err(MpError.Truncated(cur.pos))
@@ -39,7 +67,15 @@ fn mp_take(peek u8[] buf, poke MpCursor cur) u8 | MpError:
     cur.pos := cur.pos + 1
     return Result.Ok(b)
 
-# mp_be_uint: read nbytes big-endian bytes into a u64 (nbytes in 1, 2, 4, 8).
+##:
+Reads an unsigned big-endian integer.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. The read moves it `nbytes` bytes.
+- Parameter nbytes: The width in bytes: 1, 2, 4 or 8.
+- Returns: The integer.
+- Errors: `MpError.Truncated` when the buffer ends first.
+:##
 fn mp_be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
     let u64 acc = 0
     let i32 i = 0
@@ -49,11 +85,20 @@ fn mp_be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
         i := i + 1
     return Result.Ok(acc)
 
-# mp_len: a length prefix as a count. Every element of an array or a map needs
-# at least one byte, and a str or bin payload needs exactly its count, so a
-# count above what is left in the buffer cannot be satisfied by any of the four
-# families. Rejecting it where it is read is what keeps a length at or above
-# 2^31 from casting to a negative count and decoding as an empty value (#463).
+##:
+Reads a length prefix as a count.
+
+An element of an array or a map needs one byte or more, and a str or bin payload needs
+exactly its count. Thus no count can be more than the bytes that are left. This function
+refuses such a count where it reads it, so a length of 2^31 or more cannot cast to a
+negative count and decode as an empty value.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. The read moves it `nbytes` bytes.
+- Parameter nbytes: The width of the prefix in bytes: 1, 2 or 4.
+- Returns: The count.
+- Errors: `MpError.Truncated` when the count is more than the bytes that are left.
+:##
 fn mp_len(peek u8[] buf, poke MpCursor cur, i32 nbytes) i32 | MpError:
     let u64 raw = mp_be_uint(peek buf, poke cur, nbytes)??
     let u64 left = (buf.len() - cur.pos) as u64
@@ -61,8 +106,16 @@ fn mp_len(peek u8[] buf, poke MpCursor cur, i32 nbytes) i32 | MpError:
         return Result.Err(MpError.Truncated(cur.pos))
     return Result.Ok(raw as i32)
 
-# mp_signed: reinterpret a width-limited unsigned value as two's complement.
-# It cannot fail; it shares the MpError channel so ?? composes in the dispatch.
+##:
+Reads an unsigned value of a given width as a two's complement value.
+
+This function does not fail. It has the `MpError` channel, so the dispatch can use `??`.
+
+- Parameter v: The unsigned value.
+- Parameter nbytes: The width in bytes: 1, 2, 4 or 8.
+- Returns: The signed value.
+- Errors: None.
+:##
 fn mp_signed(u64 v, i32 nbytes) i64 | MpError:
     if (nbytes == 8):
         return Result.Ok(v as i64)
@@ -73,9 +126,18 @@ fn mp_signed(u64 v, i32 nbytes) i64 | MpError:
         return Result.Ok(sv - (half * 2))
     return Result.Ok(sv)
 
-# mp_take_bytes: copy the next count bytes into a fresh owned array, in one step.
-# `.ss()` clamps a range that runs past the end, so the bounds check is explicit: the
-# fixstr path reaches here with no mp_len check. A short buffer is Truncated at its end.
+##:
+Copies the next bytes into a new array.
+
+`.ss()` clamps a range that goes past the end, so this function does the bounds check
+itself. The fixstr path gets here with no `mp_len` check.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. The read moves it `count` bytes.
+- Parameter count: The number of bytes to copy.
+- Returns: The bytes.
+- Errors: `MpError.Truncated` at the end of the buffer when it is too short.
+:##
 fn mp_take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
     if (count > buf.len() - cur.pos):
         return Result.Err(MpError.Truncated(buf.len()))
@@ -83,7 +145,15 @@ fn mp_take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
     cur.pos := cur.pos + count
     return Result.Ok(out)
 
-# mp_take_str: read count payload bytes and validate them as UTF-8.
+##:
+Reads a string payload and validates it as UTF-8.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. The read moves it `count` bytes.
+- Parameter count: The length of the payload in bytes.
+- Returns: A `MsgValue.Str`.
+- Errors: `MpError.Truncated` or `MpError.BadUtf8`.
+:##
 fn mp_take_str(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let u8[] raw = mp_take_bytes(peek buf, poke cur, count)??
     match raw.to_string_checked():
@@ -92,7 +162,15 @@ fn mp_take_str(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
         Result.Err(_) ->
             return Result.Err(MpError.BadUtf8(cur.pos))
 
-# mp_take_arr: decode count child values into an Arr.
+##:
+Decodes the elements of an array.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. It moves past each element.
+- Parameter count: The number of elements.
+- Returns: A `MsgValue.Arr`.
+- Errors: The first error of an element.
+:##
 fn mp_take_arr(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let MsgValue[] items = new()
     let i32 i = 0
@@ -102,7 +180,15 @@ fn mp_take_arr(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
         i := i + 1
     return Result.Ok(MsgValue.Arr(items))
 
-# mp_take_map: decode count key/value pairs into parallel arrays, wire order.
+##:
+Decodes the key and value pairs of a map into parallel arrays, in wire order.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. It moves past each key and each value.
+- Parameter count: The number of pairs.
+- Returns: A `MsgValue.Map`.
+- Errors: The first error of a key or a value.
+:##
 fn mp_take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let MsgValue[] keys = new()
     let MsgValue[] vals = new()
@@ -115,9 +201,17 @@ fn mp_take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
         i := i + 1
     return Result.Ok(MsgValue.Map(keys, vals))
 
-# mp_decode_value: dispatch one tag byte and decode one value. The fix families
-# (fixint, fixmap, fixarray, fixstr, negative fixint) are RANGES, so they stay
-# as guards; every single-byte tag dispatches through the match.
+##:
+Reads one tag byte and decodes one value.
+
+The fix families (fixint, fixmap, fixarray, fixstr, negative fixint) are ranges of tags,
+so each one has an `if` guard. Each single-byte tag has an arm in the `match`.
+
+- Parameter buf: The buffer.
+- Parameter cur: The cursor. It moves past the value.
+- Returns: The value.
+- Errors: An `MpError` that names the fault.
+:##
 fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
     let u8 t = mp_take(peek buf, poke cur)??
     if (t <= 0x7f):
@@ -197,7 +291,21 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
         _ ->
             return Result.Err(MpError.Unsupported(t))
 
-# decode: decode one whole buffer as exactly one value.
+##:
+Decodes one whole buffer as exactly one value.
+
+- Parameter buf: The MessagePack bytes.
+- Returns: The value tree.
+- Errors: `MpError.Trailing` when bytes stay after the root value, and the other
+  `MpError` variants when the value does not decode.
+- Example:
+```sushi
+let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
+match decode(buf):
+    Result.Ok(v) -> println(show(v)??)
+    Result.Err(_) -> println("decode error")
+```
+:##
 public fn decode(u8[] buf) MsgValue | MpError:
     let MpCursor cur = MpCursor(0)
     let MsgValue v = mp_decode_value(peek buf, poke cur)??
@@ -205,7 +313,13 @@ public fn decode(u8[] buf) MsgValue | MpError:
         return Result.Err(MpError.Trailing(cur.pos))
     return Result.Ok(v)
 
-# mp_is_key: whether a map key is the string `key`. A key of another kind never matches.
+##:
+Tells if a map key is the string `key`. A key of a different kind does not match.
+
+- Parameter k: The map key.
+- Parameter key: The string to compare.
+- Returns: True when the key matches.
+:##
 fn mp_is_key(MsgValue k, string key) bool:
     match k:
         MsgValue.Str(s) -> return Result.Ok(s == key)
@@ -233,7 +347,16 @@ public fn map_index(MsgValue m, string key) Maybe@(i32):
         _ ->
             return Result.Ok(Maybe.None())
 
-# map_get: the value under a string key, as a deep copy, so the tree stays intact.
+##:
+The value under a string key, as a deep copy. The tree does not change.
+
+To read a string or a bool, use `map_get_str` or `map_get_bool`. To walk a subtree
+without a copy, use `map_index`.
+
+- Parameter m: The map to read.
+- Parameter key: The string key to find.
+- Returns: A copy of the value, or `Maybe.None` when the key is absent or `m` is not a map.
+:##
 public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
         MsgValue.Map(_, vals) ->
@@ -283,8 +406,15 @@ public fn map_get_bool(MsgValue m, string key) Maybe@(bool):
         _ ->
             return Result.Ok(Maybe.None())
 
-# show: render a value on one line. Deterministic: floats print their raw
-# IEEE-754 bits, strings print unescaped between plain double quotes.
+##:
+Writes a value on one line. The output is the same on each run.
+
+A float shows its raw IEEE-754 bits, so the output does not depend on float formatting.
+A string shows between double quotes, with no escapes.
+
+- Parameter v: The value to show.
+- Returns: The text.
+:##
 public fn show(MsgValue v) string:
     match v:
         MsgValue.Nil() ->
