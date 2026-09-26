@@ -1,15 +1,9 @@
 """The SEQUENTIAL half of the descriptor layer: read, write, readln, seek, isatty.
 
-`positional.py` is the twin, and the difference is the whole point of having both. A
-`pread` takes its offset as an argument and never moves the descriptor's own position,
-which is what makes it safe to share; the calls here move it, which is what makes them
-the ones a `File` handle is written on (HANDLES.md, Phase 5).
-
-Every one of these is what a builtin `file` method used to reach through libc stdio.
-`fopen` and `fgets` buffer, and `File.write()` writing through `write(2)` beside a
-buffered `printf` is what put the console out of order in ruling R12; there is one route
-to a descriptor now, and this is the file half of it.
+The design record is `docs/design/stdlib-syscall-layer.md`.
 """
+from dataclasses import dataclass
+
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_byte_array_type, get_maybe_type, get_result_type,
@@ -225,24 +219,8 @@ def generate_fd_write_str(module: ir.Module) -> None:
 def generate_fd_readln(module: ir.Module) -> None:
     """Emit `Result<Maybe<string>, FileError> sushi_io_files_fd_readln(i32 fd)`.
 
-    One line, the newline STRIPPED, in a `Maybe`. **A blank line and end of file are
-    different answers**: a blank line is `Some("")` and the end is `None`. The old
-    contract answered an empty string for both, so a file with a blank line in it
-    truncated there and a caller could not tell a short file from a failed read.
-
-    **Two paths, chosen by whether the descriptor can seek.** Reading one byte at a time
-    is the only shape that is correct on a descriptor that CANNOT seek: a pipe, a socket
-    or a terminal cannot give back an over-read, so a chunked read there would swallow
-    bytes the next reader owns -- and `stdin` is a pipe. It is also ten times slower,
-    measured at 200 000 lines: 4.49s against 0.47s for the buffered `fgets` this
-    replaces, with 3.3s of that in the kernel across 9.3 million system calls.
-
-    So a SEEKABLE descriptor takes the chunked path instead, and it is written in
-    ABSOLUTE positions throughout -- `pread` at a computed offset, then one `lseek` to
-    just past the newline. Relative seek-back arithmetic would be the same idea and one
-    sign error away from silently reading the wrong bytes.
-
-    Phase 7's `BufReader` is still the general answer, and R13 sends `lines()` there.
+    One line, the newline STRIPPED, in a `Maybe`: a blank line is `Some("")` and the end
+    of file is `None`. The two paths are in `docs/design/stdlib-syscall-layer.md`.
     """
     i8, i8_ptr, i32, i64 = get_basic_types()
     platform_files = get_platform_module('files')
@@ -302,12 +280,14 @@ def generate_fd_readln(module: ir.Module) -> None:
                                         name="can_seek"),
                     chunked_bb, byte_bb)
 
-    _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byte,
-                         buf_slot, len_slot, cap_slot, at_eof_slot, byte_bb, finish_bb,
-                         failure_bb, alloc_fail_bb)
-    _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_fn,
-                         platform_files, buf_slot, len_slot, cap_slot, start_slot,
-                         at_eof_slot, chunked_bb, finish_bb, failure_bb, alloc_fail_bb)
+    frame = _ReadlnFrame(func=func, fd=fd, realloc_fn=realloc_fn, buf_slot=buf_slot,
+                         len_slot=len_slot, cap_slot=cap_slot, start_slot=start_slot,
+                         one_byte=one_byte, at_eof_slot=at_eof_slot,
+                         finish_bb=finish_bb, failure_bb=failure_bb,
+                         alloc_fail_bb=alloc_fail_bb)
+    _emit_readln_by_byte(builder, frame, byte_bb, read_fn)
+    _emit_readln_chunked(builder, frame, chunked_bb, pread_fn, lseek_fn,
+                         platform_files.SEEK_SET)
 
     builder.position_at_end(failure_bb)
     tag = emit_file_error_tag(builder, module)
@@ -386,11 +366,32 @@ def _emit_grow(builder: ir.IRBuilder, func: ir.Function, realloc_fn: ir.Function
     return done_bb
 
 
-def _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byte,
-                         buf_slot, len_slot, cap_slot, at_eof_slot, entry_bb, finish_bb,
-                         failure_bb, alloc_fail_bb) -> None:
+@dataclass(frozen=True)
+class _ReadlnFrame:
+    """The state both `fd_readln` paths share: the slots, the grow step, the exits."""
+    func: ir.Function
+    fd: ir.Argument
+    realloc_fn: ir.Function
+    buf_slot: ir.AllocaInstr
+    len_slot: ir.AllocaInstr
+    cap_slot: ir.AllocaInstr
+    start_slot: ir.AllocaInstr
+    one_byte: ir.AllocaInstr
+    at_eof_slot: ir.AllocaInstr
+    finish_bb: ir.Block
+    failure_bb: ir.Block
+    alloc_fail_bb: ir.Block
+
+
+def _emit_readln_by_byte(builder: ir.IRBuilder, frame: _ReadlnFrame, entry_bb: ir.Block,
+                         read_fn: ir.Function) -> None:
     """One `read(2)` per byte: the only shape a descriptor that cannot seek allows."""
     i8, _i8_ptr, _i32, i64 = get_basic_types()
+    func, fd = frame.func, frame.fd
+    buf_slot, len_slot, cap_slot = frame.buf_slot, frame.len_slot, frame.cap_slot
+    one_byte, at_eof_slot = frame.one_byte, frame.at_eof_slot
+    finish_bb, failure_bb = frame.finish_bb, frame.failure_bb
+    realloc_fn, alloc_fail_bb = frame.realloc_fn, frame.alloc_fail_bb
 
     builder.position_at_end(entry_bb)
     cond_bb = func.append_basic_block(name="byte_cond")
@@ -434,18 +435,16 @@ def _emit_readln_by_byte(builder, func, module, fd, read_fn, realloc_fn, one_byt
     builder.branch(cond_bb)
 
 
-def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_fn,
-                         platform_files, buf_slot, len_slot, cap_slot, start_slot,
-                         at_eof_slot, entry_bb, finish_bb, failure_bb,
-                         alloc_fail_bb) -> None:
-    """`pread` a chunk at a computed offset, then one `lseek` past the newline.
-
-    Every position here is ABSOLUTE: the line's start is read once, each `pread` asks for
-    `start + len`, and the final `lseek` is a SEEK_SET to `start + consumed`. A relative
-    seek-back would be the same idea with a sign error waiting in it, and the failure
-    mode -- reading the wrong bytes, silently -- is the worst kind.
-    """
+def _emit_readln_chunked(builder: ir.IRBuilder, frame: _ReadlnFrame, entry_bb: ir.Block,
+                         pread_fn: ir.Function, lseek_fn: ir.Function,
+                         seek_set: int) -> None:
+    """`pread` a chunk at an ABSOLUTE offset, then one `lseek` past the newline."""
     i8, _i8_ptr, i32, i64 = get_basic_types()
+    func, fd = frame.func, frame.fd
+    buf_slot, len_slot, cap_slot = frame.buf_slot, frame.len_slot, frame.cap_slot
+    start_slot, at_eof_slot = frame.start_slot, frame.at_eof_slot
+    finish_bb, failure_bb = frame.finish_bb, frame.failure_bb
+    realloc_fn, alloc_fail_bb = frame.realloc_fn, frame.alloc_fail_bb
     chunk = ir.Constant(i64, _LINE_CHUNK)
 
     builder.position_at_end(entry_bb)
@@ -478,7 +477,7 @@ def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_
 
     builder.position_at_end(at_eof_bb)
     builder.call(lseek_fn, [fd, builder.add(start, builder.load(len_slot), name="eof_at"),
-                            ir.Constant(i32, platform_files.SEEK_SET)])
+                            ir.Constant(i32, seek_set)])
     builder.store(ir.Constant(i8, 1), at_eof_slot)
     builder.branch(finish_bb)
 
@@ -519,7 +518,7 @@ def _emit_readln_chunked(builder, func, module, fd, pread_fn, lseek_fn, realloc_
                                             builder.add(newline_at, ir.Constant(i64, 1),
                                                         name="consumed"),
                                             name="resume_at"),
-                            ir.Constant(i32, platform_files.SEEK_SET)])
+                            ir.Constant(i32, seek_set)])
     builder.branch(finish_bb)
 
     builder.position_at_end(exhausted_bb)
