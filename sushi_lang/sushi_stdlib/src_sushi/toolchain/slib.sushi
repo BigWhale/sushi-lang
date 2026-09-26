@@ -13,10 +13,18 @@
 
 use <io/files>
 use <io/fs>
+public use <io/error>
 use <encoding/msgpack>
 
+##:
+Why a .slib file could not be read.
+
+`Io` carries the error of the open or of a read, so a directory, a file with no read
+permission and a missing file each keep their own cause. `Truncated` is a file that
+ends too early, and never a read that failed.
+:##
 public enum SlibError:
-    OpenFailed(string)
+    Io(IoError)
     BadMagic()
     BadVersion(u32)
     Truncated()
@@ -31,6 +39,18 @@ fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
         acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
         i := i + 1
     return Result.Ok(acc)
+
+# slib_open and slib_read: open() and read_bytes() with their IoError in the SlibError
+# channel, so ?? composes.
+fn slib_open(string path) File | SlibError:
+    match open(path, FileMode.ReadB()):
+        Result.Ok(nom f) -> return Result.Ok(f)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
+
+fn slib_read(poke File f, i32 count) u8[] | SlibError:
+    match f.read_bytes(count):
+        Result.Ok(nom bytes) -> return Result.Ok(bytes)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
 
 # slib_header_check: validate the magic and the version of a full 52-byte header.
 fn slib_header_check(peek u8[] header) ~ | SlibError:
@@ -47,25 +67,20 @@ fn slib_header_check(peek u8[] header) ~ | SlibError:
 
 # read_metadata: decode the metadata map of a .slib file into a MsgValue.
 public fn read_metadata(string path) MsgValue | SlibError:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) ->
-            let u8[] empty1 = from([])
-            let u8[] header = f.read_bytes(52).realise(empty1)
-            if (header.len() < 52):
-                return Result.Err(SlibError.Truncated())
-            let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
-            let u8[] empty2 = from([])
-            let u8[] blob = f.read_bytes(mlen).realise(empty2)
-            slib_header_check(peek header)??
-            if (blob.len() < mlen):
-                return Result.Err(SlibError.Truncated())
-            match decode(blob):
-                Result.Ok(v) ->
-                    return Result.Ok(v.clone())
-                Result.Err(e) ->
-                    return Result.Err(SlibError.Decode(e))
-        Result.Err(_) ->
-            return Result.Err(SlibError.OpenFailed(path.clone()))
+    let File f = slib_open(path)??
+    let u8[] header = slib_read(poke f, 52)??
+    if (header.len() < 52):
+        return Result.Err(SlibError.Truncated())
+    let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
+    let u8[] blob = slib_read(poke f, mlen)??
+    slib_header_check(peek header)??
+    if (blob.len() < mlen):
+        return Result.Err(SlibError.Truncated())
+    match decode(blob):
+        Result.Ok(v) ->
+            return Result.Ok(v.clone())
+        Result.Err(e) ->
+            return Result.Err(SlibError.Decode(e))
 
 # SlibSizes: the byte length of the two payload sections that follow the
 # metadata blob. A source library records no bitcode, a binary one no source.
@@ -78,36 +93,28 @@ public struct SlibSizes:
 # and the bitcode, so reaching the bitcode length means stepping over that
 # section first. No report needs a blob itself, only its length.
 public fn sizes(string path) SlibSizes | SlibError:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) ->
-            let u8[] empty3 = from([])
-            let u8[] header = f.read_bytes(52).realise(empty3)
-            if (header.len() < 52):
-                return Result.Err(SlibError.Truncated())
-            let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
-            let u8[] empty4 = from([])
-            let u8[] blob = f.read_bytes(mlen).realise(empty4)
-            let u8[] empty5 = from([])
-            let u8[] src_field = f.read_bytes(8).realise(empty5)
-            if (src_field.len() < 8):
-                slib_header_check(peek header)??
-                return Result.Err(SlibError.Truncated())
-            let u64 slen = slib_le_uint(peek src_field, 0, 8)??
-            let u8[] empty6 = from([])
-            let u8[] src_blob = f.read_bytes(slen as i32).realise(empty6)
-            let u8[] empty7 = from([])
-            let u8[] size_field = f.read_bytes(8).realise(empty7)
-            slib_header_check(peek header)??
-            if (blob.len() < mlen):
-                return Result.Err(SlibError.Truncated())
-            if (src_blob.len() < (slen as i32)):
-                return Result.Err(SlibError.Truncated())
-            if (size_field.len() < 8):
-                return Result.Err(SlibError.Truncated())
-            let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
-            return Result.Ok(SlibSizes(slen, bclen))
-        Result.Err(_) ->
-            return Result.Err(SlibError.OpenFailed(path.clone()))
+    let File f = slib_open(path)??
+    let u8[] header = slib_read(poke f, 52)??
+    if (header.len() < 52):
+        return Result.Err(SlibError.Truncated())
+    let i32 mlen = slib_le_uint(peek header, 44, 8)?? as i32
+    let u8[] blob = slib_read(poke f, mlen)??
+    let u8[] src_field = slib_read(poke f, 8)??
+    if (src_field.len() < 8):
+        slib_header_check(peek header)??
+        return Result.Err(SlibError.Truncated())
+    let u64 slen = slib_le_uint(peek src_field, 0, 8)??
+    let u8[] src_blob = slib_read(poke f, slen as i32)??
+    let u8[] size_field = slib_read(poke f, 8)??
+    slib_header_check(peek header)??
+    if (blob.len() < mlen):
+        return Result.Err(SlibError.Truncated())
+    if (src_blob.len() < (slen as i32)):
+        return Result.Err(SlibError.Truncated())
+    if (size_field.len() < 8):
+        return Result.Err(SlibError.Truncated())
+    let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
+    return Result.Ok(SlibSizes(slen, bclen))
 
 # bitcode_size: the u64 length of the bitcode section alone.
 public fn bitcode_size(string path) u64 | SlibError:

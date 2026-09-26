@@ -1,0 +1,9 @@
+# A library path that names a directory cannot be read. The compiler says so in one
+# diagnostic with the cause, and does not crash.
+# EXPECT_ERROR_CODE: CE3515
+# EXPECT_STDERR_CONTAINS: "is a directory"
+
+use <lib/tests/stdlib/slib/read_failure/broken/not_a_file>
+
+fn main() i32:
+    return Result.Ok(0)
