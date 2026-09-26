@@ -350,6 +350,9 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         # elements when nothing stamped it.
         if isinstance(value_expr, DynamicArrayFrom) and isinstance(expected_type, DynamicArrayType):
             value_expr.resolved_type = expected_type
+        # A fixed literal takes the declared `T[N]` of its position the same way (#889).
+        if isinstance(value_expr, ArrayLiteral) and isinstance(expected_type, ArrayType):
+            value_expr.resolved_type = expected_type
         _propagate_array_element_type(validator, value_expr, expected_type.base_type)
         return
 

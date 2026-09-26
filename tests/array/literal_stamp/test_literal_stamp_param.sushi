@@ -1,0 +1,13 @@
+# A fixed array literal with a name as a call argument, where the parameter declares
+# `i32[2]` (#889). It was the internal error CE0000.
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn show(i32[2] p) i32:
+    return Result.Ok(p[0] + p[1])
+
+fn main() i32:
+    let i32 a = 1
+    let i32 s = show([a, 2]).realise(0)
+    println("{s}")
+    return Result.Ok(0)

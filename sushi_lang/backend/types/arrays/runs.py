@@ -90,7 +90,6 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
     from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     from sushi_lang.backend.ranges import emit_range
     from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.types.arrays.utils import alias_element_type
 
     runs = read_runs(codegen, elements)
     if runs is None:
@@ -108,8 +107,6 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
             emitted.append(EmittedRun(count=span.count, span=span))
             continue
 
-        ety = element_type if element_type is not None else alias_element_type(codegen, run.value)
-
         if run.count is None:
             count = codegen.utils.require_i32(codegen.expressions.emit_expr(run.count_expr))
             count = _clamp_count(codegen, count)
@@ -121,16 +118,16 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
             # satisfy and one value, so there is no single position to consume into -- the
             # rule `.fill()` already follows (#479). `emit_borrowed_arg` is the built-in
             # borrow seam, and it gives an owning TEMPORARY an owner (#475).
-            value = emit_borrowed_arg(codegen, run.value, ety)
-            owning = ety is not None and needs_cleanup(codegen, ety)
+            value = emit_borrowed_arg(codegen, run.value, element_type)
+            owning = element_type is not None and needs_cleanup(codegen, element_type)
         else:
             # One value, one slot, one position. This still CONSUMES.
             value = consume(codegen, run.value, codegen.expressions.emit_expr(run.value),
-                            ety, ConsumingUse.ARRAY_ELEMENT)
+                            element_type, ConsumingUse.ARRAY_ELEMENT)
             owning = False
 
         emitted.append(EmittedRun(count=count, value=value,
-                                  element_type=ety if owning else None))
+                                  element_type=element_type if owning else None))
     return emitted
 
 
