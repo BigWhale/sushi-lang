@@ -1,0 +1,19 @@
+# A consumer's enum `Crate` against a BINARY library's public struct `Crate`. A type
+# name is one per program, whatever the two kinds are, so the consumer's declaration
+# is refused where it stands (CE3011) and the library that holds the name is named.
+# The pytest gate tests/unit/test_lib_binary_other_kind_clash.py pins the complete
+# code list.
+# EXPECT_ERROR_CODE: CE3011
+# EXPECT_STDERR_CONTAINS: "binary_api_lib"
+use <lib/binary_api_lib>
+
+enum Crate:
+    Empty
+    Full
+
+fn main() i32:
+    let Crate c = Crate.Full
+    match c:
+        Crate.Empty -> println("e")
+        Crate.Full -> println("f")
+    return Result.Ok(0)
