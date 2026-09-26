@@ -34,10 +34,8 @@ public enum SlibError:
 # has already length-checked the buffer. The SlibError channel lets ?? compose.
 fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
     let u64 acc = 0
-    let i32 i = 0
-    while (i < nbytes):
+    foreach(i in 0..nbytes):
         acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
-        i := i + 1
     return Result.Ok(acc)
 
 # slib_open and slib_read: open() and read_bytes() with their IoError in the SlibError
@@ -55,11 +53,9 @@ fn slib_read(poke File f, i32 count) u8[] | SlibError:
 # slib_header_check: validate the magic and the version of a full 52-byte header.
 fn slib_header_check(peek u8[] header) ~ | SlibError:
     let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    let i32 i = 0
-    while (i < 16):
+    foreach(i in 0..16):
         if (header[i] != magic[i]):
             return Result.Err(SlibError.BadMagic())
-        i := i + 1
     let u64 version = slib_le_uint(peek header, 16, 4)??
     if (version != 4):
         return Result.Err(SlibError.BadVersion(version as u32))
