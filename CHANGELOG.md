@@ -428,6 +428,24 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **A `foreach` item freezes its container** (#919). A bare item of an owning element views the
+  container's storage, and a change of the container in the body while the item lives read freed
+  memory with no diagnostic. It is CE2412 now, as for a `let`-borrow. A plain element stays a copy.
+- **A borrowed call argument conflicts with a `poke` or `nom` of its owner in any order** (#920).
+  `put(first, poke a)` read freed memory where `put(poke a, first)` was refused; a `nom` argument
+  was missed in both orders. One step now checks every call shape after the call's changes.
+- **`Own.alloc` typechecks its argument** (#923). A lambda in the payload (directly or in a struct
+  field) stopped the compiler with CE0021, and a wrong payload type or a bad operand with CE0000.
+  The payload is now checked against the `T` of the declared `Own@(T)` (CE2006, CE2518, ...).
+- **A reference binding leaves no state for a later name** (#941). A `let peek` / `let poke`
+  binding in one block and a `foreach` item or a `peek` argument of the same name in a later block
+  stopped the compiler with CE0000 or CE0017. The backend reads the reference fact from the open
+  scope.
+- **A stdlib-method import is checked per unit** (#942). A unit could call a method of
+  `<collections/strings>` with no import of its own when another unit of the program imported it.
+  The check is now in the typecheck pass and reads the unit's own imports (and its `public use`
+  chain); the program-wide backend check is gone. `<io/fs>` now imports `<collections/strings>`
+  itself.
 - **`tan` gives the C library's value** (#925). It computed `sin(x) / cos(x)` in IR and was 1 to
   3 ulp off libc `tan` on about a fifth of inputs. It forwards to libc now, like the other
   `<math>` functions that libc provides.
