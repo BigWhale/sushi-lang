@@ -98,9 +98,9 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_OFFSET", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_BITS", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_HAS_LEN", _PLATFORM_ABI),
+    ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
+     "a reserved bit of the .slib header format; the library design defines it and "
+     "the writer keeps it zero"),
 )
 
-RATCHET: tuple[tuple[str, str, str], ...] = (
-    ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
-     "a header bit docs/design/libraries.md section 2 defines; nothing sets or reads it"),
-)
+RATCHET: tuple[tuple[str, str, str], ...] = ()
