@@ -2,10 +2,13 @@
 from __future__ import annotations
 from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
+from collections import deque
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.types import TypePack
 from sushi_lang.semantics.typesys import Type
+
+from .order import functions_in_site_order
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Block, Call, ExtendDef, FuncDef
@@ -274,13 +277,14 @@ class FunctionMonomorphizer:
         target_program = program_or_units if is_single_file else None
         units = None if is_single_file else program_or_units
 
-        worklist = set(function_instantiations)
+        sites = self.monomorphizer.sites
+        worklist = deque(functions_in_site_order(function_instantiations, sites))
         processed = set()
 
         self.monomorphizer.pending_instantiations = set()
 
         while worklist:
-            unit_name, func_name, type_args = worklist.pop()
+            unit_name, func_name, type_args = worklist.popleft()
 
             if (unit_name, func_name, type_args) in processed:
                 continue
@@ -355,7 +359,8 @@ class FunctionMonomorphizer:
                 origin=getattr(generic_func, "library_origin", None),
             )
 
-            worklist.update(self.monomorphizer.pending_instantiations)
+            worklist.extend(functions_in_site_order(
+                self.monomorphizer.pending_instantiations, sites))
             self.monomorphizer.pending_instantiations.clear()
 
     def _collect_nested_instantiations(
