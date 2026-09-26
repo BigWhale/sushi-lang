@@ -47,6 +47,10 @@ fn make_opts(bool docs, bool colour) Opts:
                               ESC_RESET.clone()))
     return Result.Ok(Opts(docs, "", "", "", "", "", ""))
 
+# The manifest is read IN PLACE. A function cannot return a borrow, so no reader hands a
+# subtree back: a printer finds a key with `map_index` and passes `vals[at]` down as a
+# borrow, and only a leaf string is copied. An absent key prints as a Nil value does.
+
 # ml_str: the payload of a Str value, empty for any other kind.
 fn ml_str(MsgValue v) string:
     match v:
@@ -55,26 +59,15 @@ fn ml_str(MsgValue v) string:
         _ ->
             return Result.Ok("")
 
-# ml_get: the value under a string key, Nil when the key is absent.
-fn ml_get(MsgValue m, string key) MsgValue:
-    let Maybe@(MsgValue) found = map_get(m, key)??
-    match found:
-        Maybe.Some(v) ->
-            return Result.Ok(v.clone())
-        Maybe.None() ->
-            return Result.Ok(MsgValue.Nil())
-
+# ml_get_str: the Str under a string key, empty when the key is absent or holds another
+# kind.
 fn ml_get_str(MsgValue m, string key) string:
-    let MsgValue v = ml_get(m, key)??
-    return Result.Ok(ml_str(v)??)
+    return Result.Ok(map_get_str(m, key)??.realise(""))
 
+# ml_get_bool: the Bool under a string key, false when the key is absent or holds another
+# kind.
 fn ml_get_bool(MsgValue m, string key) bool:
-    let MsgValue v = ml_get(m, key)??
-    match v:
-        MsgValue.Bool(b) ->
-            return Result.Ok(b)
-        _ ->
-            return Result.Ok(false)
+    return Result.Ok(map_get_bool(m, key)??.realise(false))
 
 # ml_len: the element count of an Arr value, 0 for any other kind.
 fn ml_len(MsgValue v) i32:
@@ -84,15 +77,40 @@ fn ml_len(MsgValue v) i32:
         _ ->
             return Result.Ok(0)
 
-# ml_at: clone element i out of an Arr value, Nil when out of range.
-fn ml_at(MsgValue v, i32 i) MsgValue:
-    match v:
-        MsgValue.Arr(items) ->
-            if (i < items.len()):
-                return Result.Ok(items[i].clone())
-            return Result.Ok(MsgValue.Nil())
+# ml_len_at: the element count of the Arr under a string key, 0 when the key is absent.
+fn ml_len_at(MsgValue m, string key) i32:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(at) -> return Result.Ok(ml_len(vals[at])??)
+                Maybe.None() -> return Result.Ok(0)
         _ ->
-            return Result.Ok(MsgValue.Nil())
+            return Result.Ok(0)
+
+# join_strs: the Str elements of an Arr value, joined with ", ".
+fn join_strs(MsgValue list) string:
+    match list:
+        MsgValue.Arr(items) ->
+            let string out = ""
+            foreach(i in 0..items.len()):
+                let string s = ml_str(items[i])??
+                if (i == 0):
+                    out := "{s}"
+                else:
+                    out := "{out}, {s}"
+            return Result.Ok(out)
+        _ ->
+            return Result.Ok("")
+
+# join_at: the Str elements of the Arr under a string key, joined with ", ".
+fn join_at(MsgValue m, string key) string:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(at) -> return Result.Ok(join_strs(vals[at])??)
+                Maybe.None() -> return Result.Ok("")
+        _ ->
+            return Result.Ok("")
 
 # ml_is_nil: whether a value is the Nil kind. `ml_get_str` gives "" for an absent key
 # and for an empty string alike, so a doc record is tested for Nil before it is read.
@@ -271,23 +289,7 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
             println("")
         print_lines(indent, body, "", 0, o)??
         printed := true
-    let MsgValue named = ml_get(doc, "params")??
-    let MsgValue declared = ml_get(owner, "params")??
-    let i32 n = ml_len(declared)??
-    let i32 i = 0
-    while (i < n):
-        let MsgValue p = ml_at(declared, i)??
-        let string pn = ml_get_str(p, "name")??
-        let string ptext = ml_get_str(named, pn)??
-        if (ptext != ""):
-            if (printed):
-                println("")
-            # The width is the PLAIN opener's, so it cannot drift from what prints.
-            let string pplain = "- Parameter {pn}: "
-            let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
-            print_lines(indent, ptext, popener, pplain.len(), o)??
-            printed := true
-        i := i + 1
+    printed := print_param_tags_at(owner, doc, indent, printed, o)??
     let string returns = ml_get_str(doc, "returns")??
     if (returns != ""):
         if (printed):
@@ -303,24 +305,81 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     # An example is the LAST thing a record says: a parameter is a contract and an
     # example is a demonstration. Its body is CODE, so it is indented rather than hung,
     # and dim rather than rendered -- a backtick inside a program is a program's own.
-    let MsgValue examples = ml_get(doc, "examples")??
-    let i32 ne = ml_len(examples)??
-    let i32 e = 0
-    while (e < ne):
-        let MsgValue ex = ml_at(examples, e)??
-        if (printed):
-            println("")
-        let string caption = ml_get_str(ex, "caption")??
-        if (caption == ""):
-            println("{indent}- {o.blue}Example{o.reset}:")
-        else:
-            # A caption is a tag's text like any other, so it hangs and it renders.
-            print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
-                        "- Example: ".len(), o)??
-        print_code(indent, ml_get_str(ex, "code")??, o)??
-        printed := true
-        e := e + 1
+    printed := print_examples_at(doc, indent, printed, o)??
     return Result.Ok(printed)
+
+# print_param_tags_at: the `- Parameter` tags of a doc record, in the order of the
+# owner's `params` array, and whether anything is printed above the next part.
+fn print_param_tags_at(MsgValue owner, MsgValue doc, string indent, bool printed,
+                       Opts o) bool:
+    match owner:
+        MsgValue.Map(_, vals) ->
+            match map_index(owner, "params")??:
+                Maybe.Some(at) ->
+                    return Result.Ok(print_param_tags(vals[at], doc, indent, printed, o)??)
+                Maybe.None() -> return Result.Ok(printed)
+        _ ->
+            return Result.Ok(printed)
+
+fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed,
+                    Opts o) bool:
+    match declared:
+        MsgValue.Arr(params) ->
+            let bool p = printed
+            foreach(param in params.iter()):
+                let string pn = ml_get_str(param, "name")??
+                let string ptext = param_text(doc, pn)??
+                if (ptext != ""):
+                    if (p):
+                        println("")
+                    # The width is the PLAIN opener's, so it cannot drift from what prints.
+                    let string pplain = "- Parameter {pn}: "
+                    let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
+                    print_lines(indent, ptext, popener, pplain.len(), o)??
+                    p := true
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(printed)
+
+# param_text: the text of one `- Parameter` tag, read by name from the record's `params`
+# map.
+fn param_text(MsgValue doc, string name) string:
+    match doc:
+        MsgValue.Map(_, vals) ->
+            match map_index(doc, "params")??:
+                Maybe.Some(at) -> return Result.Ok(ml_get_str(vals[at], name)??)
+                Maybe.None() -> return Result.Ok("")
+        _ ->
+            return Result.Ok("")
+
+fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool:
+    match doc:
+        MsgValue.Map(_, vals) ->
+            match map_index(doc, "examples")??:
+                Maybe.Some(at) -> return Result.Ok(print_examples(vals[at], indent, printed, o)??)
+                Maybe.None() -> return Result.Ok(printed)
+        _ ->
+            return Result.Ok(printed)
+
+fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
+    match examples:
+        MsgValue.Arr(items) ->
+            let bool p = printed
+            foreach(ex in items.iter()):
+                if (p):
+                    println("")
+                let string caption = ml_get_str(ex, "caption")??
+                if (caption == ""):
+                    println("{indent}- {o.blue}Example{o.reset}:")
+                else:
+                    # A caption is a tag's text like any other, so it hangs and it renders.
+                    print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
+                                "- Example: ".len(), o)??
+                print_code(indent, ml_get_str(ex, "code")??, o)??
+                p := true
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(printed)
 
 # print_code: an example's program, indented four past its tag and dim. Not rendered: a
 # backtick inside a program is a program's own.
@@ -339,8 +398,18 @@ fn print_code(string indent, string code, Opts o) ~:
 
 # print_doc: the doc record of one manifest entry, when it carries one.
 fn print_doc(MsgValue owner, string indent, Opts o) bool:
-    let MsgValue doc = ml_get(owner, "doc")??
-    return Result.Ok(print_doc_record(doc, owner, indent, o)??)
+    return Result.Ok(print_doc_at(owner, "doc", owner, indent, o)??)
+
+# print_doc_at: the doc record under a string key of `m`, for the declaration `owner`.
+fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) bool:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(at) ->
+                    return Result.Ok(print_doc_record(vals[at], owner, indent, o)??)
+                Maybe.None() -> return Result.Ok(false)
+        _ ->
+            return Result.Ok(false)
 
 # open_record: the blank line rule 2 puts BEFORE a record whose predecessor left a block
 # behind, never after one -- an after-rule would double with the blank line every section
@@ -352,30 +421,38 @@ fn open_record(bool pending) bool:
     return Result.Ok(false)
 
 fn render_params(MsgValue f) string:
-    let MsgValue ps = ml_get(f, "params")??
     # A perk method's receiver mode is the record's own field too, and it prints first,
     # where the declaration wrote it: `(poke self, i32 width)`. Absent, it prints nothing.
-    let string out = ml_get_str(f, "self_mode")??
-    if (out != ""):
-        out := "{out} self"
-    let i32 n = ml_len(ps)??
-    let i32 i = 0
-    while (i < n):
-        let MsgValue p = ml_at(ps, i)??
-        let string t = to_surface(ml_get_str(p, "type")??)??
-        let string pn = ml_get_str(p, "name")??
-        # `nom` is the one mode a TYPE cannot spell, so it comes from the record's own
-        # field. `peek` and `poke` are part of the type string already.
-        let string declared = ml_get_str(p, "mode")??
-        let string mode = ""
-        if (declared == "nom"):
-            mode := "nom "
-        if (out == ""):
-            out := "{mode}{t} {pn}"
-        else:
-            out := "{out}, {mode}{t} {pn}"
-        i := i + 1
-    return Result.Ok(out)
+    let string head = ml_get_str(f, "self_mode")??
+    if (head != ""):
+        head := "{head} self"
+    match f:
+        MsgValue.Map(_, vals) ->
+            match map_index(f, "params")??:
+                Maybe.Some(at) -> return Result.Ok(render_param_list(vals[at], nom head)??)
+                Maybe.None() -> return Result.Ok(head)
+        _ ->
+            return Result.Ok(head)
+
+fn render_param_list(MsgValue ps, nom string out) string:
+    match ps:
+        MsgValue.Arr(items) ->
+            foreach(p in items.iter()):
+                let string t = to_surface(ml_get_str(p, "type")??)??
+                let string pn = ml_get_str(p, "name")??
+                # `nom` is the one mode a TYPE cannot spell, so it comes from the record's
+                # own field. `peek` and `poke` are part of the type string already.
+                let string declared = ml_get_str(p, "mode")??
+                let string mode = ""
+                if (declared == "nom"):
+                    mode := "nom "
+                if (out == ""):
+                    out := "{mode}{t} {pn}"
+                else:
+                    out := "{out}, {mode}{t} {pn}"
+            return Result.Ok(out)
+        _ ->
+            return Result.Ok(out)
 
 # render_signature: one function's whole signature, concrete or generic. ONE renderer,
 # so a template prints what a concrete function prints -- a generic used to print
@@ -395,112 +472,91 @@ fn render_signature(MsgValue f, Opts o) string:
     let string serr = to_surface(err)??
     return Result.Ok("fn {name}{generic}({params}) {ret} | {serr}")
 
-fn print_functions(MsgValue meta, Opts o) ~:
-    let MsgValue funcs = ml_get(meta, "public_functions")??
-    let i32 n = ml_len(funcs)??
-    if (not section("Public Functions", n, o)??):
-        return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue f = ml_at(funcs, i)??
-        pending := open_record(pending)??
-        let string sig = render_signature(f, o)??
-        println("  {sig}")
-        pending := print_doc(f, "    ", o)??
-        i := i + 1
-    println("")
+# print_signatures_at: one section of function records, concrete or generic.
+fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(at) -> print_signatures(vals[at], title, o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
     return Result.Ok(~)
 
-fn render_constraints(MsgValue tp) string:
-    let MsgValue cs = ml_get(tp, "constraints")??
-    let string out = ""
-    let i32 n = ml_len(cs)??
-    let i32 i = 0
-    while (i < n):
-        let MsgValue c = ml_at(cs, i)??
-        let string s = ml_str(c)??
-        if (i == 0):
-            out := "{s}"
-        else:
-            out := "{out}, {s}"
-        i := i + 1
-    return Result.Ok(out)
+fn print_signatures(MsgValue funcs, string title, Opts o) ~:
+    if (not section(title, ml_len(funcs)??, o)??):
+        return Result.Ok(~)
+    match funcs:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(f in items.iter()):
+                pending := open_record(pending)??
+                let string sig = render_signature(f, o)??
+                println("  {sig}")
+                pending := print_doc(f, "    ", o)??
+        _ ->
+            return Result.Ok(~)
+    println("")
+    return Result.Ok(~)
 
 fn render_type_params(MsgValue gf) string:
-    let MsgValue tps = ml_get(gf, "type_params")??
-    let i32 n = ml_len(tps)??
-    if (n == 0):
-        return Result.Ok("")
-    let string body = ""
-    let i32 i = 0
-    while (i < n):
-        let MsgValue tp = ml_at(tps, i)??
-        let string tname = ml_get_str(tp, "name")??
-        let string cs = render_constraints(tp)??
-        let string one = ""
-        if (cs == ""):
-            one := "{tname}"
-        else:
-            one := "{tname}: {cs}"
-        if (i == 0):
-            body := "{one}"
-        else:
-            body := "{body}, {one}"
-        i := i + 1
-    return Result.Ok("@({body})")
+    match gf:
+        MsgValue.Map(_, vals) ->
+            match map_index(gf, "type_params")??:
+                Maybe.Some(at) -> return Result.Ok(render_type_param_list(vals[at])??)
+                Maybe.None() -> return Result.Ok("")
+        _ ->
+            return Result.Ok("")
 
-fn print_generic_functions(MsgValue meta, Opts o) ~:
-    let MsgValue templates = ml_get(meta, "templates")??
-    let MsgValue gfs = ml_get(templates, "generic_functions")??
-    let i32 n = ml_len(gfs)??
-    if (not section("Generic Functions", n, o)??):
-        return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue gf = ml_at(gfs, i)??
-        pending := open_record(pending)??
-        let string sig = render_signature(gf, o)??
-        println("  {sig}")
-        pending := print_doc(gf, "    ", o)??
-        i := i + 1
-    println("")
+fn render_type_param_list(MsgValue tps) string:
+    match tps:
+        MsgValue.Arr(items) ->
+            if (items.len() == 0):
+                return Result.Ok("")
+            let string body = ""
+            foreach(i in 0..items.len()):
+                let peek MsgValue tp = items[i]
+                let string tname = ml_get_str(tp, "name")??
+                let string cs = join_at(tp, "constraints")??
+                let string one = ""
+                if (cs == ""):
+                    one := "{tname}"
+                else:
+                    one := "{tname}: {cs}"
+                if (i == 0):
+                    body := "{one}"
+                else:
+                    body := "{body}, {one}"
+            return Result.Ok("@({body})")
+        _ ->
+            return Result.Ok("")
+
+# print_bindings_at: one section of constant or variable records. The two have the
+# same shape and differ by the keyword.
+fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts o) ~:
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(at) -> print_bindings(vals[at], title, keyword, o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
     return Result.Ok(~)
 
-fn print_constants(MsgValue meta, Opts o) ~:
-    let MsgValue consts = ml_get(meta, "public_constants")??
-    let i32 n = ml_len(consts)??
-    if (not section("Public Constants", n, o)??):
+fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~:
+    if (not section(title, ml_len(list)??, o)??):
         return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue c = ml_at(consts, i)??
-        pending := open_record(pending)??
-        let string t = to_surface(ml_get_str(c, "type")??)??
-        let string name = ml_get_str(c, "name")??
-        println("  const {t} {name}")
-        pending := print_doc(c, "    ", o)??
-        i := i + 1
-    println("")
-    return Result.Ok(~)
-
-fn print_variables(MsgValue meta, Opts o) ~:
-    let MsgValue vars = ml_get(meta, "public_variables")??
-    let i32 n = ml_len(vars)??
-    if (not section("Public Variables", n, o)??):
-        return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue v = ml_at(vars, i)??
-        pending := open_record(pending)??
-        let string t = to_surface(ml_get_str(v, "type")??)??
-        let string name = ml_get_str(v, "name")??
-        println("  var {t} {name}")
-        pending := print_doc(v, "    ", o)??
-        i := i + 1
+    match list:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(c in items.iter()):
+                pending := open_record(pending)??
+                let string t = to_surface(ml_get_str(c, "type")??)??
+                let string name = ml_get_str(c, "name")??
+                println("  {keyword} {t} {name}")
+                pending := print_doc(c, "    ", o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
@@ -508,106 +564,147 @@ fn print_variables(MsgValue meta, Opts o) ~:
 fn render_named_type_params(MsgValue rec) string:
     if (not ml_get_bool(rec, "is_generic")??):
         return Result.Ok("")
-    let MsgValue tps = ml_get(rec, "type_params")??
-    let i32 n = ml_len(tps)??
-    if (n == 0):
+    if (ml_len_at(rec, "type_params")?? == 0):
         return Result.Ok("")
-    let string body = ""
-    let i32 i = 0
-    while (i < n):
-        let MsgValue tp = ml_at(tps, i)??
-        let string s = ml_str(tp)??
-        if (i == 0):
-            body := "{s}"
-        else:
-            body := "{body}, {s}"
-        i := i + 1
+    let string body = join_at(rec, "type_params")??
     return Result.Ok("@({body})")
 
 fn print_structs(MsgValue meta, Opts o) ~:
-    let MsgValue structs = ml_get(meta, "structs")??
-    let i32 n = ml_len(structs)??
-    if (not section("Public Structs", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "structs")??:
+                Maybe.Some(at) -> print_struct_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_struct_list(MsgValue structs, Opts o) ~:
+    if (not section("Public Structs", ml_len(structs)??, o)??):
         return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue s = ml_at(structs, i)??
-        pending := open_record(pending)??
-        let string name = ml_get_str(s, "name")??
-        let string generic = render_named_type_params(s)??
-        println("  struct {name}{generic}:")
-        # A FIELD is a record too, and the struct's own block is the record above the
-        # first one -- so one flag covers the struct and its members alike.
-        pending := print_doc(s, "    ", o)??
-        let MsgValue fields = ml_get(s, "fields")??
-        let i32 nf = ml_len(fields)??
-        let i32 j = 0
-        while (j < nf):
-            let MsgValue fld = ml_at(fields, j)??
-            pending := open_record(pending)??
-            let string ft = to_surface(ml_get_str(fld, "type")??)??
-            let string fname = ml_get_str(fld, "name")??
-            println("    {ft} {fname}")
-            pending := print_doc(fld, "      ", o)??
-            j := j + 1
-        i := i + 1
+    match structs:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(s in items.iter()):
+                pending := open_record(pending)??
+                let string name = ml_get_str(s, "name")??
+                let string generic = render_named_type_params(s)??
+                println("  struct {name}{generic}:")
+                # A FIELD is a record too, and the struct's own block is the record above
+                # the first one -- so one flag covers the struct and its members alike.
+                pending := print_doc(s, "    ", o)??
+                pending := print_fields_at(s, pending, o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
+fn print_fields_at(MsgValue s, bool pending, Opts o) bool:
+    match s:
+        MsgValue.Map(_, vals) ->
+            match map_index(s, "fields")??:
+                Maybe.Some(at) -> return Result.Ok(print_fields(vals[at], pending, o)??)
+                Maybe.None() -> return Result.Ok(pending)
+        _ ->
+            return Result.Ok(pending)
+
+fn print_fields(MsgValue fields, bool pending, Opts o) bool:
+    match fields:
+        MsgValue.Arr(items) ->
+            let bool p = pending
+            foreach(fld in items.iter()):
+                p := open_record(p)??
+                let string ft = to_surface(ml_get_str(fld, "type")??)??
+                let string fname = ml_get_str(fld, "name")??
+                println("    {ft} {fname}")
+                p := print_doc(fld, "      ", o)??
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(pending)
+
 fn print_enums(MsgValue meta, Opts o) ~:
-    let MsgValue enums = ml_get(meta, "enums")??
-    let i32 n = ml_len(enums)??
-    if (not section("Public Enums", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "enums")??:
+                Maybe.Some(at) -> print_enum_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_enum_list(MsgValue enums, Opts o) ~:
+    if (not section("Public Enums", ml_len(enums)??, o)??):
         return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue e = ml_at(enums, i)??
-        pending := open_record(pending)??
-        let string name = ml_get_str(e, "name")??
-        let string generic = render_named_type_params(e)??
-        println("  enum {name}{generic}:")
-        pending := print_doc(e, "    ", o)??
-        let MsgValue variants = ml_get(e, "variants")??
-        let i32 nv = ml_len(variants)??
-        let i32 j = 0
-        while (j < nv):
-            let MsgValue v = ml_at(variants, j)??
-            pending := open_record(pending)??
-            let string vname = ml_get_str(v, "name")??
-            if (ml_get_bool(v, "has_data")??):
-                let string dt = to_surface(ml_get_str(v, "data_type")??)??
-                println("    {vname}({dt})")
-            else:
-                println("    {vname}")
-            pending := print_doc(v, "      ", o)??
-            j := j + 1
-        i := i + 1
+    match enums:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(e in items.iter()):
+                pending := open_record(pending)??
+                let string name = ml_get_str(e, "name")??
+                let string generic = render_named_type_params(e)??
+                println("  enum {name}{generic}:")
+                pending := print_doc(e, "    ", o)??
+                pending := print_variants_at(e, pending, o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
+
+fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
+    match e:
+        MsgValue.Map(_, vals) ->
+            match map_index(e, "variants")??:
+                Maybe.Some(at) -> return Result.Ok(print_variants(vals[at], pending, o)??)
+                Maybe.None() -> return Result.Ok(pending)
+        _ ->
+            return Result.Ok(pending)
+
+fn print_variants(MsgValue variants, bool pending, Opts o) bool:
+    match variants:
+        MsgValue.Arr(items) ->
+            let bool p = pending
+            foreach(v in items.iter()):
+                p := open_record(p)??
+                let string vname = ml_get_str(v, "name")??
+                if (ml_get_bool(v, "has_data")??):
+                    let string dt = to_surface(ml_get_str(v, "data_type")??)??
+                    println("    {vname}({dt})")
+                else:
+                    println("    {vname}")
+                p := print_doc(v, "      ", o)??
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(pending)
 
 # print_generic_named: one section of generic structs, or one of generic enums. The two
 # records have the same shape -- a name, its type parameters and its own block -- so they
 # share a printer and differ by the keyword. A generic struct's FIELD blocks are not in
 # the index at all (documentation.md S8, R3), so neither record has members to print.
-fn print_generic_named(MsgValue meta, string key, string title, string keyword,
+fn print_generic_named(MsgValue templates, string key, string title, string keyword,
                        Opts o) ~:
-    let MsgValue templates = ml_get(meta, "templates")??
-    let MsgValue items = ml_get(templates, key)??
-    let i32 n = ml_len(items)??
-    if (not section(title, n, o)??):
+    match templates:
+        MsgValue.Map(_, vals) ->
+            match map_index(templates, key)??:
+                Maybe.Some(at) -> print_generic_named_list(vals[at], title, keyword, o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o) ~:
+    if (not section(title, ml_len(list)??, o)??):
         return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue r = ml_at(items, i)??
-        pending := open_record(pending)??
-        let string name = ml_get_str(r, "name")??
-        let string generic = render_type_params(r)??
-        println("  {keyword} {name}{generic}:")
-        pending := print_doc(r, "    ", o)??
-        i := i + 1
+    match list:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(r in items.iter()):
+                pending := open_record(pending)??
+                let string name = ml_get_str(r, "name")??
+                let string generic = render_type_params(r)??
+                println("  {keyword} {name}{generic}:")
+                pending := print_doc(r, "    ", o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
@@ -615,38 +712,54 @@ fn print_generic_named(MsgValue meta, string key, string title, string keyword,
 # line. ONE printer for the contract and its implementations, so a method prints the
 # same way wherever it stands; each method is a record of its own for rule 2's spacing.
 fn print_methods(MsgValue owner, bool pending, Opts o) bool:
-    let bool p = pending
-    let MsgValue methods = ml_get(owner, "methods")??
-    let i32 nm = ml_len(methods)??
-    let i32 j = 0
-    while (j < nm):
-        let MsgValue m = ml_at(methods, j)??
-        p := open_record(p)??
-        let string sig = render_signature(m, o)??
-        println("    {sig}")
-        p := print_doc(m, "      ", o)??
-        j := j + 1
-    return Result.Ok(p)
+    match owner:
+        MsgValue.Map(_, vals) ->
+            match map_index(owner, "methods")??:
+                Maybe.Some(at) -> return Result.Ok(print_method_list(vals[at], pending, o)??)
+                Maybe.None() -> return Result.Ok(pending)
+        _ ->
+            return Result.Ok(pending)
+
+fn print_method_list(MsgValue methods, bool pending, Opts o) bool:
+    match methods:
+        MsgValue.Arr(items) ->
+            let bool p = pending
+            foreach(m in items.iter()):
+                p := open_record(p)??
+                let string sig = render_signature(m, o)??
+                println("    {sig}")
+                p := print_doc(m, "      ", o)??
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(pending)
 
 # print_perks: the contracts a consumer can be asked to satisfy -- every public perk,
 # plus any perk an exported template names -- each with the method signatures that
 # satisfying it means.
-fn print_perks(MsgValue meta, Opts o) ~:
-    let MsgValue templates = ml_get(meta, "templates")??
-    let MsgValue perks = ml_get(templates, "perks")??
-    let i32 n = ml_len(perks)??
-    if (not section("Perks", n, o)??):
+fn print_perks(MsgValue templates, Opts o) ~:
+    match templates:
+        MsgValue.Map(_, vals) ->
+            match map_index(templates, "perks")??:
+                Maybe.Some(at) -> print_perk_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_perk_list(MsgValue perks, Opts o) ~:
+    if (not section("Perks", ml_len(perks)??, o)??):
         return Result.Ok(~)
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue r = ml_at(perks, i)??
-        pending := open_record(pending)??
-        let string name = ml_get_str(r, "name")??
-        println("  perk {name}:")
-        pending := print_doc(r, "    ", o)??
-        pending := print_methods(r, pending, o)??
-        i := i + 1
+    match perks:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(r in items.iter()):
+                pending := open_record(pending)??
+                let string name = ml_get_str(r, "name")??
+                println("  perk {name}:")
+                pending := print_doc(r, "    ", o)??
+                pending := print_methods(r, pending, o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
@@ -655,129 +768,195 @@ fn print_perks(MsgValue meta, Opts o) ~:
 # written, so the header is rebuilt here and never parsed out of the source slice.
 fn render_impl_target(MsgValue r) string:
     let string target = to_surface(ml_get_str(r, "type")??)??
-    let MsgValue targs = ml_get(r, "type_args")??
-    let i32 n = ml_len(targs)??
-    if (n == 0):
+    if (ml_len_at(r, "type_args")?? == 0):
         return Result.Ok(target)
-    let string body = ""
-    let i32 i = 0
-    while (i < n):
-        let MsgValue a = ml_at(targs, i)??
-        let string s = ml_str(a)??
-        if (i == 0):
-            body := "{s}"
-        else:
-            body := "{body}, {s}"
-        i := i + 1
+    let string body = join_at(r, "type_args")??
     return Result.Ok("{target}@({body})")
 
-# print_impl_records: one list of implementation records, concrete or template.
+# print_impls_at: one list of implementation records, concrete or template.
+fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool:
+    match templates:
+        MsgValue.Map(_, vals) ->
+            match map_index(templates, key)??:
+                Maybe.Some(at) -> return Result.Ok(print_impl_records(vals[at], pending, o)??)
+                Maybe.None() -> return Result.Ok(pending)
+        _ ->
+            return Result.Ok(pending)
+
 fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
-    let bool p = pending
-    let i32 n = ml_len(impls)??
-    let i32 i = 0
-    while (i < n):
-        let MsgValue r = ml_at(impls, i)??
-        p := open_record(p)??
-        let string target = render_impl_target(r)??
-        # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
-        let string contract = ml_get_str(r, "perk")??
-        println("  extend {target} with {contract}:")
-        p := print_doc(r, "    ", o)??
-        p := print_methods(r, p, o)??
-        i := i + 1
-    return Result.Ok(p)
+    match impls:
+        MsgValue.Arr(items) ->
+            let bool p = pending
+            foreach(r in items.iter()):
+                p := open_record(p)??
+                let string target = render_impl_target(r)??
+                # `perk` is a reserved word, so the contract's NAME cannot be bound to it.
+                let string contract = ml_get_str(r, "perk")??
+                println("  extend {target} with {contract}:")
+                p := print_doc(r, "    ", o)??
+                p := print_methods(r, p, o)??
+            return Result.Ok(p)
+        _ ->
+            return Result.Ok(pending)
 
 # print_perk_impls: which types satisfy which contract -- the concrete implementations,
 # then the generic-target templates, in ONE section: a reader asking "who implements
 # Show" wants one list, and `extend Box@(T) with Show` answers for every `Box`.
-fn print_perk_impls(MsgValue meta, Opts o) ~:
-    let MsgValue templates = ml_get(meta, "templates")??
-    let MsgValue impls = ml_get(templates, "perk_impls")??
-    let MsgValue generic = ml_get(templates, "generic_perk_impls")??
-    let i32 concrete_n = ml_len(impls)??
-    let i32 generic_n = ml_len(generic)??
+fn print_perk_impls(MsgValue templates, Opts o) ~:
+    let i32 concrete_n = ml_len_at(templates, "perk_impls")??
+    let i32 generic_n = ml_len_at(templates, "generic_perk_impls")??
     if (not section("Perk Implementations", concrete_n + generic_n, o)??):
         return Result.Ok(~)
     let bool pending = false
-    pending := print_impl_records(impls, pending, o)??
-    pending := print_impl_records(generic, pending, o)??
+    pending := print_impls_at(templates, "perk_impls", pending, o)??
+    pending := print_impls_at(templates, "generic_perk_impls", pending, o)??
     println("")
     return Result.Ok(~)
 
 # print_foreign_extensions: the types this library claims methods on and does
 # not declare -- the consumer's half of CW3003. The key is absent for a library
-# that extends only what it declares, and ml_len answers 0 for Nil.
+# that extends only what it declares, and then the section prints nothing.
 fn print_foreign_extensions(MsgValue meta, Opts o) ~:
-    let MsgValue claims = ml_get(meta, "foreign_extensions")??
-    let i32 n = ml_len(claims)??
-    if (not section("Foreign Extensions", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "foreign_extensions")??:
+                Maybe.Some(at) -> print_foreign_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_foreign_list(MsgValue claims, Opts o) ~:
+    if (not section("Foreign Extensions", ml_len(claims)??, o)??):
         return Result.Ok(~)
-    let i32 i = 0
-    while (i < n):
-        let MsgValue c = ml_at(claims, i)??
-        let string target = to_surface(ml_get_str(c, "type")??)??
-        let string method = ml_get_str(c, "method")??
-        println("  extend {target} {method}")
-        i := i + 1
+    match claims:
+        MsgValue.Arr(items) ->
+            foreach(c in items.iter()):
+                let string target = to_surface(ml_get_str(c, "type")??)??
+                let string method = ml_get_str(c, "method")??
+                println("  extend {target} {method}")
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
 # print_units: the unit index a v4 library carries.
 fn print_units(MsgValue meta, Opts o) ~:
-    let MsgValue units = ml_get(meta, "units")??
-    let i32 n = ml_len(units)??
-    if (not section("Units", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "units")??:
+                Maybe.Some(at) -> print_unit_list(vals[at], meta, o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~:
+    if (not section("Units", ml_len(units)??, o)??):
         return Result.Ok(~)
-    let MsgValue unit_docs = ml_get(meta, "unit_docs")??
-    let bool pending = false
-    let i32 i = 0
-    while (i < n):
-        let MsgValue u = ml_at(units, i)??
-        pending := open_record(pending)??
-        let string name = ml_str(u)??
-        println("  {name}")
-        let MsgValue doc = ml_get(unit_docs, name)??
-        pending := print_doc_record(doc, MsgValue.Nil(), "    ", o)??
-        i := i + 1
+    match units:
+        MsgValue.Arr(items) ->
+            let bool pending = false
+            foreach(u in items.iter()):
+                pending := open_record(pending)??
+                let string name = ml_str(u)??
+                println("  {name}")
+                pending := print_unit_doc(meta, name, o)??
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
+
+# print_unit_doc: the doc record of one unit, read by name from the `unit_docs` map.
+fn print_unit_doc(MsgValue meta, string name, Opts o) bool:
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "unit_docs")??:
+                Maybe.Some(at) ->
+                    return Result.Ok(print_doc_at(vals[at], name, MsgValue.Nil(), "    ", o)??)
+                Maybe.None() -> return Result.Ok(false)
+        _ ->
+            return Result.Ok(false)
 
 # print_reexports: what each unit hands on (#585). One record per `public use`,
 # rendered as the statement that produced it: a unit target is quoted, and a stdlib
 # or library target is angled. The key is absent for a library that re-exports
-# nothing, and ml_len answers 0 for Nil.
+# nothing, and then the section prints nothing.
 fn print_reexports(MsgValue meta, Opts o) ~:
-    let MsgValue records = ml_get(meta, "reexports")??
-    let i32 n = ml_len(records)??
-    if (not section("Re-exports", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "reexports")??:
+                Maybe.Some(at) -> print_reexport_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_reexport_list(MsgValue records, Opts o) ~:
+    if (not section("Re-exports", ml_len(records)??, o)??):
         return Result.Ok(~)
-    let i32 i = 0
-    while (i < n):
-        let MsgValue r = ml_at(records, i)??
-        let string unit = ml_get_str(r, "unit")??
-        let string path = ml_get_str(r, "path")??
-        let string kind = ml_get_str(r, "kind")??
-        let string target = "<{path}>"
-        if (kind == "unit"):
-            target := "\"{path}\""
-        println("  {unit}: public use {target}")
-        i := i + 1
+    match records:
+        MsgValue.Arr(items) ->
+            foreach(r in items.iter()):
+                let string unit = ml_get_str(r, "unit")??
+                let string path = ml_get_str(r, "path")??
+                let string kind = ml_get_str(r, "kind")??
+                let string target = "<{path}>"
+                if (kind == "unit"):
+                    target := "\"{path}\""
+                println("  {unit}: public use {target}")
+        _ ->
+            return Result.Ok(~)
     println("")
     return Result.Ok(~)
 
 fn print_dependencies(MsgValue meta, Opts o) ~:
-    let MsgValue deps = ml_get(meta, "dependencies")??
-    let i32 n = ml_len(deps)??
-    if (not section("Dependencies", n, o)??):
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "dependencies")??:
+                Maybe.Some(at) -> print_dependency_list(vals[at], o)??
+                Maybe.None() -> return Result.Ok(~)
+        _ ->
+            return Result.Ok(~)
+    return Result.Ok(~)
+
+fn print_dependency_list(MsgValue deps, Opts o) ~:
+    if (not section("Dependencies", ml_len(deps)??, o)??):
         return Result.Ok(~)
-    let i32 i = 0
-    while (i < n):
-        let MsgValue d = ml_at(deps, i)??
-        let string s = ml_str(d)??
-        println("  <{s}>")
-        i := i + 1
+    match deps:
+        MsgValue.Arr(items) ->
+            foreach(d in items.iter()):
+                let string s = ml_str(d)??
+                println("  <{s}>")
+        _ ->
+            return Result.Ok(~)
     println("")
+    return Result.Ok(~)
+
+# print_declarations: every declaration section, in the order of the report. `templates`
+# is the `templates` map, or Nil when the library carries none.
+fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
+    print_signatures_at(meta, "public_functions", "Public Functions", o)??
+    print_signatures_at(templates, "generic_functions", "Generic Functions", o)??
+    print_bindings_at(meta, "public_constants", "Public Constants", "const", o)??
+    print_bindings_at(meta, "public_variables", "Public Variables", "var", o)??
+    print_structs(meta, o)??
+    print_generic_named(templates, "generic_structs", "Generic Structs", "struct", o)??
+    print_enums(meta, o)??
+    print_generic_named(templates, "generic_enums", "Generic Enums", "enum", o)??
+    print_perks(templates, o)??
+    print_perk_impls(templates, o)??
+    print_foreign_extensions(meta, o)??
+    return Result.Ok(~)
+
+fn print_declarations_at(MsgValue meta, Opts o) ~:
+    match meta:
+        MsgValue.Map(_, vals) ->
+            match map_index(meta, "templates")??:
+                Maybe.Some(at) -> print_declarations(meta, vals[at], o)??
+                Maybe.None() -> print_declarations(meta, MsgValue.Nil(), o)??
+        _ ->
+            print_declarations(meta, MsgValue.Nil(), o)??
     return Result.Ok(~)
 
 # group_thousands: render a u64 with comma separators, as Python's {n:,}.
@@ -819,17 +998,7 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
     println("")
     print_units(meta, o)??
     print_reexports(meta, o)??
-    print_functions(meta, o)??
-    print_generic_functions(meta, o)??
-    print_constants(meta, o)??
-    print_variables(meta, o)??
-    print_structs(meta, o)??
-    print_generic_named(meta, "generic_structs", "Generic Structs", "struct", o)??
-    print_enums(meta, o)??
-    print_generic_named(meta, "generic_enums", "Generic Enums", "enum", o)??
-    print_perks(meta, o)??
-    print_perk_impls(meta, o)??
-    print_foreign_extensions(meta, o)??
+    print_declarations_at(meta, o)??
     print_dependencies(meta, o)??
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)??
