@@ -20,7 +20,9 @@ from sushi_lang.sushi_stdlib.src.net.errno import (
     emit_errno_err_result,
 )
 from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc,
+)
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types,
     get_dynamic_array_type,
@@ -106,7 +108,7 @@ def generate_resolve(module: ir.Module) -> None:
     builder.position_at_end(gai_ok_bb)
     initial_bytes = builder.mul(ir.Constant(i64, _INITIAL_CAPACITY), string_stride,
                                 name="initial_bytes")
-    buffer = builder.call(malloc_fn, [initial_bytes], name="answers")
+    buffer = emit_checked_malloc(builder, malloc_fn, initial_bytes, name="answers")
     builder.store(builder.bitcast(buffer, string_ty.as_pointer()), data_slot)
     builder.store(zero, len_slot)
     builder.store(ir.Constant(i32, _INITIAL_CAPACITY), cap_slot)
@@ -162,7 +164,7 @@ def generate_resolve(module: ir.Module) -> None:
     builder.position_at_end(store_bb)
     length = builder.call(strlen_fn, [host_buf], name="answer_len")
     length64 = builder.zext(length, i64, name="answer_len64")
-    owned = builder.call(malloc_fn, [length64], name="answer_buf")
+    owned = emit_checked_malloc(builder, malloc_fn, length64, name="answer_buf")
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)

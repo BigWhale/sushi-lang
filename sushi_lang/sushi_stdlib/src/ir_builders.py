@@ -3,6 +3,7 @@
 from typing import Callable, Optional, Tuple, Any
 import llvmlite.ir as ir
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 class IRStructBuilder:
@@ -88,7 +89,7 @@ class IRLoopBuilder:
     ) -> None:
         """Build a character transformation loop and return result."""
         size_i64 = builder.zext(size, i64, name="size_i64")
-        new_data = builder.call(malloc_fn, [size_i64], name="new_data")
+        new_data = emit_checked_malloc(builder, malloc_fn, size_i64, name="new_data")
 
         exit_block = func.append_basic_block("loop_exit")
 
@@ -129,7 +130,7 @@ class IRMemoryBuilder:
     ) -> ir.Value:
         """Allocate memory and copy bytes from source."""
         byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
-        new_data = builder.call(malloc_fn, [byte_count_i64], name="new_data")
+        new_data = emit_checked_malloc(builder, malloc_fn, byte_count_i64, name="new_data")
 
         is_volatile = ir.Constant(ir.IntType(1), 0)
         builder.call(memcpy_fn, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])

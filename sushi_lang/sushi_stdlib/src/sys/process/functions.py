@@ -5,9 +5,10 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_string_type, get_result_type, get_unit_enum_type,
     get_process_output_type, get_process_output_result_type, get_dynamic_array_type,
 )
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 from sushi_lang.internals.errors import InternalCompilerError
-from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr, cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc, fat_pointer_to_cstr,
+)
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc, declare_free, declare_strlen,
     declare_fread, declare_fseek, declare_ftell, declare_fclose,
@@ -64,7 +65,7 @@ def generate_getcwd(module: ir.Module) -> None:
     builder = ir.IRBuilder(entry)
 
     path_max = ir.Constant(i64, 4096)
-    buffer = builder.call(malloc_fn, [path_max])
+    buffer = emit_checked_malloc(builder, malloc_fn, path_max)
 
     result_ptr = builder.call(libc_getcwd, [buffer, path_max])
 
@@ -255,20 +256,11 @@ def generate_run(module: ir.Module) -> None:
         b.store(b.load(ev), data)
         b.ret(b.load(res))
 
-    alloc_fail = func.append_basic_block("alloc_fail")
-
-    def checked_malloc(size: ir.Value) -> ir.Value:
-        raw = b.call(malloc_fn, [size])
-        alloc_ok = func.append_basic_block("alloc_ok")
-        b.cbranch(b.icmp_unsigned('==', raw, null_i8ptr, name="alloc_failed"), alloc_fail, alloc_ok)
-        b.position_at_end(alloc_ok)
-        return raw
-
     def emit_read_all(f) -> ir.Value:
         b.call(fseek_fn, [f, ir.Constant(i64, 0), ir.Constant(i32, 2)])   # SEEK_END
         n64 = b.call(ftell_fn, [f])
         b.call(fseek_fn, [f, ir.Constant(i64, 0), ir.Constant(i32, 0)])   # SEEK_SET (rewind)
-        buf = checked_malloc(b.add(n64, ir.Constant(i64, 1)))
+        buf = emit_checked_malloc(b, malloc_fn, b.add(n64, ir.Constant(i64, 1)))
         b.call(fread_fn, [buf, ir.Constant(i64, 1), n64, f])
         b.store(ir.Constant(i8, 0), b.gep(buf, [n64]))                    # NUL terminate
         return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32), owned=1)
@@ -296,7 +288,7 @@ def generate_run(module: ir.Module) -> None:
     argc = b.add(arg_len, one_i32)                                # cmd + args
     slots = b.add(argc, one_i32)                                  # + NULL terminator
     argv_bytes = b.mul(b.zext(slots, i64), ir.Constant(i64, 8))
-    argv_raw = checked_malloc(argv_bytes)
+    argv_raw = emit_checked_malloc(b, malloc_fn, argv_bytes)
     argv = b.bitcast(argv_raw, char_pp)
     b.store(cmd_cstr, b.gep(argv, [z]))                           # argv[0]
     b.store(z, i_slot)
@@ -378,5 +370,3 @@ def generate_run(module: ir.Module) -> None:
     ok_data = b.bitcast(b.gep(res, [z, one_i32]), out_type.as_pointer())
     b.store(po_val, ok_data)
     b.ret(b.load(res))
-
-    emit_runtime_error(module, ir.IRBuilder(alloc_fail), "RE2021")

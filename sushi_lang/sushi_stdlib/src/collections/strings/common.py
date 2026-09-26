@@ -19,6 +19,7 @@ import llvmlite.ir as ir
 #
 # For backward compatibility during transition, re-export from libc_declarations:
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def allocate_and_copy_bytes(
@@ -88,7 +89,7 @@ def clone_string_to_owned(
     src_data = builder.extract_value(string_val, 0, name="clone_src_data")
     size = builder.extract_value(string_val, 1, name="clone_size")
     size_i64 = builder.zext(size, i64, name="clone_size_i64")
-    new_data = builder.call(malloc, [size_i64], name="clone_data")
+    new_data = emit_checked_malloc(builder, malloc, size_i64, name="clone_data")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_data, builder.zext(size, ir.IntType(64)), is_volatile])
     return build_string_struct(builder, string_type, new_data, size, owned=1)

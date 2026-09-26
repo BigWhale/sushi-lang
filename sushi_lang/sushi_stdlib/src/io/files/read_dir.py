@@ -5,7 +5,9 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_dynamic_array_type, get_string_type,
 )
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc,
+)
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc, declare_memcpy, declare_realloc, declare_strlen,
 )
@@ -70,7 +72,7 @@ def generate_read_dir(module: ir.Module) -> None:
     builder.store(zero_i32, len_slot)
     builder.store(initial_cap, cap_slot)
     initial_bytes = ir.Constant(i64, 8 * STRING_STRIDE)
-    initial_data = builder.call(malloc_func, [initial_bytes], name="initial_data")
+    initial_data = emit_checked_malloc(builder, malloc_func, initial_bytes, name="initial_data")
     builder.store(builder.bitcast(initial_data, string_ptr), data_slot)
 
     loop_bb = func.append_basic_block(name="loop")
@@ -119,7 +121,7 @@ def generate_read_dir(module: ir.Module) -> None:
     builder.position_at_end(keep_bb)
     name_len = builder.call(strlen_func, [name_ptr], name="name_len")
     name_len_i64 = builder.zext(name_len, i64, name="name_len_i64")
-    name_buf = builder.call(malloc_func, [name_len_i64], name="name_buf")
+    name_buf = emit_checked_malloc(builder, malloc_func, name_len_i64, name="name_buf")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy_fn, [name_buf, name_ptr, name_len_i64, is_volatile])
     name_string = cstr_to_fat_pointer_with_len(builder, name_buf, name_len, owned=1)

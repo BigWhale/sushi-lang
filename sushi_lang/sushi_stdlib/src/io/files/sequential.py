@@ -17,7 +17,7 @@ from sushi_lang.sushi_stdlib.src.results import (
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_free, declare_malloc, declare_realloc,
 )
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
+from sushi_lang.sushi_stdlib.src.string_helpers import alloc_fail_block, emit_checked_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 # `fd_readln`'s buffer step, and its `pread` size on the seekable path. It bounds the
@@ -61,20 +61,10 @@ def generate_fd_read(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     max64 = builder.zext(maximum, i64, name="max64")
-    buffer = builder.call(malloc_fn, [max64], name="read_buf")
-    is_null = builder.icmp_unsigned("==", buffer, ir.Constant(i8_ptr, None),
-                                    name="alloc_failed")
-
-    alloc_fail_bb = func.append_basic_block(name="alloc_fail")
-    do_read_bb = func.append_basic_block(name="do_read")
-    builder.cbranch(is_null, alloc_fail_bb, do_read_bb)
-
-    builder.position_at_end(alloc_fail_bb)
-    emit_runtime_error(module, builder, "RE2021")
+    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="read_buf")
 
     # A signal that lands before the first byte moves answers -1 with EINTR, and the
     # only correct response is to ask again (probe P13).
-    builder.position_at_end(do_read_bb)
     got_slot = entry_alloca(builder, i64, name="got_slot")
     attempt_bb = func.append_basic_block(name="read_attempt")
     builder.branch(attempt_bb)
@@ -254,24 +244,16 @@ def generate_fd_readln(module: ir.Module) -> None:
 
     builder.store(ir.Constant(i64, _LINE_CHUNK), cap_slot)
     builder.store(ir.Constant(i64, 0), len_slot)
-    initial = builder.call(malloc_fn, [ir.Constant(i64, _LINE_CHUNK)], name="line_buf")
+    initial = emit_checked_malloc(builder, malloc_fn, ir.Constant(i64, _LINE_CHUNK),
+                                  name="line_buf")
     builder.store(initial, buf_slot)
-
-    alloc_ok_bb = func.append_basic_block(name="alloc_ok")
-    alloc_fail_bb = func.append_basic_block(name="alloc_fail")
-    builder.cbranch(builder.icmp_unsigned("==", initial, ir.Constant(i8_ptr, None),
-                                          name="alloc_failed"),
-                    alloc_fail_bb, alloc_ok_bb)
-
-    builder.position_at_end(alloc_fail_bb)
-    emit_runtime_error(module, builder, "RE2021")
+    alloc_fail_bb = alloc_fail_block(func)
 
     finish_bb = func.append_basic_block(name="line_finish")
     failure_bb = func.append_basic_block(name="line_failed")
 
     # Can this descriptor seek? A pipe, a socket and a terminal answer -1 with ESPIPE,
     # and each must not be over-read.
-    builder.position_at_end(alloc_ok_bb)
     here = builder.call(lseek_fn, [fd, ir.Constant(i64, 0),
                                    ir.Constant(i32, platform_files.SEEK_CUR)],
                         name="here")
