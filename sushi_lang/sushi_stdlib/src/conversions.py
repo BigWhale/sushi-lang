@@ -55,9 +55,7 @@ def emit_integer_to_string(
             converted_value = builder.sext(int_value, i32)
         else:
             converted_value = builder.zext(int_value, i32)
-    elif bit_width == 32:
-        converted_value = int_value
-    else:  # 64-bit
+    else:
         converted_value = int_value
 
     builder.call(sprintf_fn, [buffer, fmt_str, converted_value])
