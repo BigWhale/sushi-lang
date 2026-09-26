@@ -10,6 +10,7 @@ unit-variant error enum -- FileError, NetError, ProcessError -- and the
 generator picks the table that turns an errno into that tag.
 """
 from llvmlite import ir
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_memcpy
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -23,7 +24,7 @@ def emit_ok_result(builder: ir.IRBuilder, result_type: ir.LiteralStructType,
     """Build Result.Ok(value): the value's size_bytes land at the payload start."""
     i8, i8_ptr, i32, i64 = get_basic_types()
     data_array_type = result_type.elements[1]
-    memcpy_fn = builder.module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+    memcpy_fn = declare_memcpy(builder.module)
 
     value_alloca = entry_alloca(builder, value.type, name="ok_value")
     builder.store(value, value_alloca)

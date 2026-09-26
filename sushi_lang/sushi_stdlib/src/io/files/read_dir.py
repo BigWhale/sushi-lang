@@ -7,7 +7,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
-    declare_malloc, declare_realloc, declare_strlen,
+    declare_malloc, declare_memcpy, declare_realloc, declare_strlen,
 )
 from sushi_lang.sushi_stdlib.src.io.files.errno import emit_errno_err_result
 from sushi_lang.sushi_stdlib.src.results import emit_ok_result
@@ -34,7 +34,7 @@ def generate_read_dir(module: ir.Module) -> None:
     malloc_func = declare_malloc(module)
     realloc_func = declare_realloc(module)
     strlen_func = declare_strlen(module)
-    memcpy_fn = module.declare_intrinsic('llvm.memcpy', [i8_ptr, i8_ptr, i64])
+    memcpy_fn = declare_memcpy(module)
 
     string_type = get_string_type()
     string_ptr = string_type.as_pointer()
