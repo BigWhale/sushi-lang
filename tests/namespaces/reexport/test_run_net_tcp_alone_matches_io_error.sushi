@@ -7,6 +7,7 @@
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "refused\nread: empty\n"
 use <net/tcp>
+use <collections/strings>
 
 fn drain(poke TcpStream s) string | IoError:
     return Result.Ok(s.read(64)??)
