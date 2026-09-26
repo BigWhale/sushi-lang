@@ -428,6 +428,12 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`tan` gives the C library's value** (#925). It computed `sin(x) / cos(x)` in IR and was 1 to
+  3 ulp off libc `tan` on about a fifth of inputs. It forwards to libc now, like the other
+  `<math>` functions that libc provides.
+- **`run()` checks its allocations** (#896). The argv array and the two output buffers of `run()`
+  used `malloc` with no NULL check; a failed allocation is RE2021 now, the `<io/files>` contract.
+  The generator also reads the `T[]` descriptor fields and the `Result` tags through their homes.
 - **Every `<math>` call has the type of its signature row** (#926). A bare `sin(1.0)` had no
   inferred type, so `let i32 a = sin(1.0)` compiled with no diagnostic and printed `0`. Sixteen
   functions (`sin`, `cos`, `tan`, `exp`, `log`, `hypot`, ...) were outside a hand-kept list of
@@ -1290,6 +1296,12 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **Every stdlib extern goes through `declare_extern`** (#911). The last nine files with
+  hand-written declarations moved onto the accessor, the gate's ratchet is gone, and the gate
+  also refuses a declaration written beside a definition. The IR is byte-identical.
+- **The dead code in the semantic analysis is deleted** (#917): the four test-only template
+  deserializers and `_reconcile_type_params` (by ruling), two scope helpers, two registry
+  helpers, three AST fields with no reader, and `NOT_A_VALUE`. The program IR is identical.
 - **One accessor for a stdlib extern declaration** (#910). `declare_extern` in
   `libc_declarations.py` replaces the hand-written guard-and-declare shape in the libc module and
   the POSIX platform modules; a gate refuses a new hand declaration and ratchets the rest down.
