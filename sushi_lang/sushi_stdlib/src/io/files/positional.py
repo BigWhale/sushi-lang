@@ -22,7 +22,7 @@ from sushi_lang.sushi_stdlib.src.io.files.errno import (
     emit_errno_err_result, emit_file_error_tag)
 from sushi_lang.sushi_stdlib.src.results import emit_ok_result, emit_err_result
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_free, declare_malloc
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 
@@ -124,18 +124,7 @@ def generate_fd_pread(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     max64 = builder.zext(maximum, i64, name="max64")
-    buffer = builder.call(malloc_fn, [max64], name="pread_buf")
-    is_null = builder.icmp_unsigned("==", buffer, ir.Constant(i8_ptr, None),
-                                    name="alloc_failed")
-
-    alloc_fail_bb = func.append_basic_block(name="alloc_fail")
-    do_read_bb = func.append_basic_block(name="do_read")
-    builder.cbranch(is_null, alloc_fail_bb, do_read_bb)
-
-    builder.position_at_end(alloc_fail_bb)
-    emit_runtime_error(module, builder, "RE2021")
-
-    builder.position_at_end(do_read_bb)
+    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="pread_buf")
     got = builder.call(pread_fn, [fd, buffer, max64, offset], name="got")
     ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="pread_ok")
 

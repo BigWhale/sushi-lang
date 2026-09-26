@@ -1,0 +1,70 @@
+# The typed map readers read one leaf and copy only that leaf. map_index gives the
+# position of the first string key that matches, map_get_str a Str payload and
+# map_get_bool a Bool payload. A key that is absent, a value of a different kind, a
+# key that is not a string and an argument that is not a map all give Maybe.None.
+# EXPECT_STDOUT_EXACT: "index s=0\nindex b=1\nindex n=2\nindex k=none\nindex zz=none\nstr s=hi\nstr n=none\nstr zz=none\nbool b=true\nbool s=none\nbool zz=none\nscalar index=none\nscalar str=none\nscalar bool=none\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn show_index(MsgValue m, string key) ~:
+    match map_index(m, key)??:
+        Maybe.Some(i) -> println("index {key}={i}")
+        Maybe.None() -> println("index {key}=none")
+    return Result.Ok(~)
+
+fn show_str(MsgValue m, string key) ~:
+    match map_get_str(m, key)??:
+        Maybe.Some(s) -> println("str {key}={s}")
+        Maybe.None() -> println("str {key}=none")
+    return Result.Ok(~)
+
+fn show_bool(MsgValue m, string key) ~:
+    match map_get_bool(m, key)??:
+        Maybe.Some(b) -> println("bool {key}={b}")
+        Maybe.None() -> println("bool {key}=none")
+    return Result.Ok(~)
+
+fn check_map(MsgValue m) ~:
+    show_index(m, "s")??
+    show_index(m, "b")??
+    show_index(m, "n")??
+    show_index(m, "k")??
+    show_index(m, "zz")??
+    show_str(m, "s")??
+    show_str(m, "n")??
+    show_str(m, "zz")??
+    show_bool(m, "b")??
+    show_bool(m, "s")??
+    show_bool(m, "zz")??
+    return Result.Ok(~)
+
+fn check_scalar(MsgValue v) ~:
+    match map_index(v, "s")??:
+        Maybe.Some(_) -> println("scalar index=some")
+        Maybe.None() -> println("scalar index=none")
+    match map_get_str(v, "s")??:
+        Maybe.Some(_) -> println("scalar str=some")
+        Maybe.None() -> println("scalar str=none")
+    match map_get_bool(v, "s")??:
+        Maybe.Some(_) -> println("scalar bool=some")
+        Maybe.None() -> println("scalar bool=none")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    # {"s": "hi", "b": true, "n": 5, 1: "k", "s": "dup"}
+    let u8[] buf = from([0x85, 0xa1, 0x73, 0xa2, 0x68, 0x69, 0xa1, 0x62, 0xc3,
+                         0xa1, 0x6e, 0x05, 0x01, 0xa1, 0x6b,
+                         0xa1, 0x73, 0xa3, 0x64, 0x75, 0x70])
+    match decode(buf):
+        Result.Ok(m) -> check_map(m)??
+        Result.Err(_) -> println("decode failed")
+    let u8[] one = from([0x05])
+    match decode(one):
+        Result.Ok(v) -> check_scalar(v)??
+        Result.Err(_) -> println("decode failed")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 r = run_test().realise(99)
+    return Result.Ok(r)

@@ -876,8 +876,7 @@ per-symbol record, so the manifest gains one top-level key:
 
 A map beside the existing `units` array, not a change to it. `units` is an ordered list and
 the order is load-bearing for the consumer's injection; readers index it as an array, and
-`slib_info.sushi`'s `ml_len` and `ml_at` helpers work on an `Arr` and return nothing for a
-`Map`.
+`slib_info.sushi`'s `ml_len` helper works on an `Arr` and returns nothing for a `Map`.
 
 A **library**-level description is not this feature's business. `nori.toml`
 `[package] description` already carries one, and it is the only prose Omakase renders.
@@ -903,7 +902,7 @@ known keys, and it needs work:
   the order: whatever order a map happened to have would not be the signature's.
 
   An earlier draft of this bullet also said a `Map` cannot be walked at all. That is true
-  of the `ml_*` helpers -- `ml_len` and `ml_at` are `Arr`-only -- and not of the language.
+  of the `ml_*` helpers -- `ml_len` is `Arr`-only -- and not of the language.
   `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `map_get` in the
   stdlib does exactly that. Phase 3 reads `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte

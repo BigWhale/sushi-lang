@@ -37,6 +37,7 @@ is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE400
 ```sushi
 use <io/fs>
 use <io/buf>
+use <collections/strings>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
@@ -75,7 +76,9 @@ BYTES, so a multi-byte character can be split across two calls.
 
 ### `read_all() -> string | IoError`
 
-Everything left, held in memory at once. A large input wants `read_line()` in a loop.
+Everything left, held in memory at once. A large input wants `read_line()` in a loop. The
+method forwards to the generic [`read_all`](contracts.md#read_all) of `<io/contracts>`, so
+`r.read_all()` and `read_all(poke r)` give the same answer.
 
 ### `fill() -> bool | IoError`
 

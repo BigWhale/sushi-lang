@@ -85,8 +85,8 @@ fn mp_take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
 fn mp_take_str(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let u8[] raw = mp_take_bytes(peek buf, poke cur, count)??
     match raw.to_string_checked():
-        Result.Ok(s) ->
-            return Result.Ok(MsgValue.Str(s.clone()))
+        Result.Ok(nom s) ->
+            return Result.Ok(MsgValue.Str(s))
         Result.Err(_) ->
             return Result.Err(MpError.BadUtf8(cur.pos))
 
@@ -203,20 +203,81 @@ public fn decode(u8[] buf) MsgValue | MpError:
         return Result.Err(MpError.Trailing(cur.pos))
     return Result.Ok(v)
 
-# map_get: scan a Map in wire order for a string key; clone the value out.
+# mp_is_key: whether a map key is the string `key`. A key of another kind never matches.
+fn mp_is_key(MsgValue k, string key) bool:
+    match k:
+        MsgValue.Str(s) -> return Result.Ok(s == key)
+        _ -> return Result.Ok(false)
+
+##:
+The position of a string key in a map.
+
+The scan goes in wire order, and the first key that matches wins. Use the position to
+borrow the value in place (`vals[i]` inside a `MsgValue.Map(keys, vals)` arm) instead of
+a copy of it.
+
+- Parameter m: The map to scan.
+- Parameter key: The string key to find.
+- Returns: The position of the key, or `Maybe.None` when the key is absent or `m` is not
+  a map.
+:##
+public fn map_index(MsgValue m, string key) Maybe@(i32):
+    match m:
+        MsgValue.Map(keys, _) ->
+            foreach(i in 0..keys.len()):
+                if (mp_is_key(keys[i], key)??):
+                    return Result.Ok(Maybe.Some(i))
+            return Result.Ok(Maybe.None())
+        _ ->
+            return Result.Ok(Maybe.None())
+
+# map_get: the value under a string key, as a deep copy, so the tree stays intact.
 public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
-        MsgValue.Map(keys, vals) ->
-            let i32 i = 0
-            while (i < keys.len()):
-                match keys[i]:
-                    MsgValue.Str(s) ->
-                        if (s == key):
-                            return Result.Ok(Maybe.Some(vals[i].clone()))
-                        i := i + 1
-                    _ ->
-                        i := i + 1
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(i) -> return Result.Ok(Maybe.Some(vals[i].clone()))
+                Maybe.None() -> return Result.Ok(Maybe.None())
+        _ ->
             return Result.Ok(Maybe.None())
+
+##:
+The string under a string key. Only the string is copied, never the map.
+
+- Parameter m: The map to read.
+- Parameter key: The string key to find.
+- Returns: The `Str` payload, or `Maybe.None` when the key is absent, its value is not a
+  `Str`, or `m` is not a map.
+:##
+public fn map_get_str(MsgValue m, string key) Maybe@(string):
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(i) ->
+                    match vals[i]:
+                        MsgValue.Str(s) -> return Result.Ok(Maybe.Some(s.clone()))
+                        _ -> return Result.Ok(Maybe.None())
+                Maybe.None() -> return Result.Ok(Maybe.None())
+        _ ->
+            return Result.Ok(Maybe.None())
+
+##:
+The bool under a string key.
+
+- Parameter m: The map to read.
+- Parameter key: The string key to find.
+- Returns: The `Bool` payload, or `Maybe.None` when the key is absent, its value is not a
+  `Bool`, or `m` is not a map.
+:##
+public fn map_get_bool(MsgValue m, string key) Maybe@(bool):
+    match m:
+        MsgValue.Map(_, vals) ->
+            match map_index(m, key)??:
+                Maybe.Some(i) ->
+                    match vals[i]:
+                        MsgValue.Bool(b) -> return Result.Ok(Maybe.Some(b))
+                        _ -> return Result.Ok(Maybe.None())
+                Maybe.None() -> return Result.Ok(Maybe.None())
         _ ->
             return Result.Ok(Maybe.None())
 

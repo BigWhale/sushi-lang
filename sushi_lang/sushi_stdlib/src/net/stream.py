@@ -9,14 +9,15 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_memcpy,
     declare_strlen,
 )
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
 from sushi_lang.sushi_stdlib.src.net.errno import (
     NET_ERROR_RESOLVE_FAILED,
     emit_errno_err_result,
     emit_net_error_tag,
 )
 from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc,
+)
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types,
     get_byte_array_type,
@@ -214,18 +215,7 @@ def generate_recv(module: ir.Module) -> None:
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
     max64 = builder.zext(maximum, i64, name="max64")
-    buffer = builder.call(malloc_fn, [max64], name="recv_buf")
-    is_null = builder.icmp_unsigned("==", buffer, ir.Constant(i8_ptr, None),
-                                    name="alloc_failed")
-
-    alloc_fail_bb = func.append_basic_block(name="alloc_fail")
-    do_recv_bb = func.append_basic_block(name="do_recv")
-    builder.cbranch(is_null, alloc_fail_bb, do_recv_bb)
-
-    builder.position_at_end(alloc_fail_bb)
-    emit_runtime_error(module, builder, "RE2021")
-
-    builder.position_at_end(do_recv_bb)
+    buffer = emit_checked_malloc(builder, malloc_fn, max64, name="recv_buf")
     got = builder.call(recv_fn, [fd, buffer, max64, ir.Constant(i32, 0)], name="got")
     ok = builder.icmp_signed(">=", got, ir.Constant(i64, 0), name="recv_ok")
 
@@ -346,7 +336,7 @@ def generate_peer_ip(module: ir.Module) -> None:
     builder.position_at_end(rendered_bb)
     length = builder.call(strlen_fn, [host_buf], name="ip_len")
     length64 = builder.zext(length, i64, name="ip_len64")
-    owned = builder.call(malloc_fn, [length64], name="ip_buf")
+    owned = emit_checked_malloc(builder, malloc_fn, length64, name="ip_buf")
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)

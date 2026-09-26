@@ -5,9 +5,10 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types, get_string_type, get_result_type, get_unit_enum_type,
     get_process_output_type, get_process_output_result_type, get_dynamic_array_type,
 )
-from sushi_lang.sushi_stdlib.src.error_emission import emit_runtime_error
-from sushi_lang.internals.errors import InternalCompilerError
-from sushi_lang.sushi_stdlib.src.string_helpers import fat_pointer_to_cstr, cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.results import result_tag
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc, fat_pointer_to_cstr,
+)
 from sushi_lang.sushi_stdlib.src.libc_declarations import (
     declare_malloc, declare_free, declare_strlen,
     declare_fread, declare_fseek, declare_ftell, declare_fclose,
@@ -20,19 +21,6 @@ from sushi_lang.backend.gep_utils import gep_dynamic_array_data, gep_dynamic_arr
 _PE_SPAWN_FAILED = 0
 _PE_EXIT_FAILURE = 1
 _PE_SIGNAL_RECEIVED = 2
-
-
-def _result_tag(variant: str) -> int:
-    """The tag of a Result variant, read from the interned Result enum."""
-    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-    from sushi_lang.semantics.passes.collect.enums import EnumTable
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    result = ensure_result_type_in_table(EnumTable(), BuiltinType.I32, BuiltinType.I32)
-    tag = result.get_variant_index(variant) if result is not None else None
-    if tag is None:
-        raise InternalCompilerError("CE0035", variant=variant, enum="Result")
-    return tag
 
 
 def get_process_error_type() -> ir.LiteralStructType:
@@ -64,7 +52,7 @@ def generate_getcwd(module: ir.Module) -> None:
     builder = ir.IRBuilder(entry)
 
     path_max = ir.Constant(i64, 4096)
-    buffer = builder.call(malloc_fn, [path_max])
+    buffer = emit_checked_malloc(builder, malloc_fn, path_max)
 
     result_ptr = builder.call(libc_getcwd, [buffer, path_max])
 
@@ -83,7 +71,7 @@ def generate_getcwd(module: ir.Module) -> None:
 
     result_ok = entry_alloca(builder, result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
+    builder.store(ir.Constant(i32, result_tag("Ok")), tag_ptr)
 
     data_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 1)])
     data_ptr_cast = builder.bitcast(data_ptr, string_type.as_pointer())
@@ -97,7 +85,7 @@ def generate_getcwd(module: ir.Module) -> None:
 
     result_err = entry_alloca(builder, result_type)
     tag_ptr_err = builder.gep(result_err, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, 1), tag_ptr_err)  # tag = 1 (Err)
+    builder.store(ir.Constant(i32, result_tag("Err")), tag_ptr_err)
 
     result_val_err = builder.load(result_err)
     builder.ret(result_val_err)
@@ -125,7 +113,7 @@ def generate_chdir(module: ir.Module) -> None:
 
     result_ok = entry_alloca(builder, result_type)
     tag_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 0)])
-    builder.store(ir.Constant(i32, 0), tag_ptr)  # tag = 0 (Ok)
+    builder.store(ir.Constant(i32, result_tag("Ok")), tag_ptr)
 
     data_ptr = builder.gep(result_ok, [ir.Constant(i32, 0), ir.Constant(i32, 1)])
     data_ptr_cast = builder.bitcast(data_ptr, i32.as_pointer())
@@ -225,8 +213,8 @@ def generate_run(module: ir.Module) -> None:
     z = ir.Constant(i32, 0)
     one_i32 = ir.Constant(i32, 1)
     null_i8ptr = ir.Constant(i8_ptr, None)
-    ok_tag = ir.Constant(i32, _result_tag("Ok"))
-    err_tag = ir.Constant(i32, _result_tag("Err"))
+    ok_tag = ir.Constant(i32, result_tag("Ok"))
+    err_tag = ir.Constant(i32, result_tag("Err"))
 
     entry = func.append_basic_block("entry")
     tmpfile_fail = func.append_basic_block("tmpfile_fail")
@@ -255,20 +243,11 @@ def generate_run(module: ir.Module) -> None:
         b.store(b.load(ev), data)
         b.ret(b.load(res))
 
-    alloc_fail = func.append_basic_block("alloc_fail")
-
-    def checked_malloc(size: ir.Value) -> ir.Value:
-        raw = b.call(malloc_fn, [size])
-        alloc_ok = func.append_basic_block("alloc_ok")
-        b.cbranch(b.icmp_unsigned('==', raw, null_i8ptr, name="alloc_failed"), alloc_fail, alloc_ok)
-        b.position_at_end(alloc_ok)
-        return raw
-
     def emit_read_all(f) -> ir.Value:
         b.call(fseek_fn, [f, ir.Constant(i64, 0), ir.Constant(i32, 2)])   # SEEK_END
         n64 = b.call(ftell_fn, [f])
         b.call(fseek_fn, [f, ir.Constant(i64, 0), ir.Constant(i32, 0)])   # SEEK_SET (rewind)
-        buf = checked_malloc(b.add(n64, ir.Constant(i64, 1)))
+        buf = emit_checked_malloc(b, malloc_fn, b.add(n64, ir.Constant(i64, 1)))
         b.call(fread_fn, [buf, ir.Constant(i64, 1), n64, f])
         b.store(ir.Constant(i8, 0), b.gep(buf, [n64]))                    # NUL terminate
         return cstr_to_fat_pointer_with_len(b, buf, b.trunc(n64, i32), owned=1)
@@ -296,7 +275,7 @@ def generate_run(module: ir.Module) -> None:
     argc = b.add(arg_len, one_i32)                                # cmd + args
     slots = b.add(argc, one_i32)                                  # + NULL terminator
     argv_bytes = b.mul(b.zext(slots, i64), ir.Constant(i64, 8))
-    argv_raw = checked_malloc(argv_bytes)
+    argv_raw = emit_checked_malloc(b, malloc_fn, argv_bytes)
     argv = b.bitcast(argv_raw, char_pp)
     b.store(cmd_cstr, b.gep(argv, [z]))                           # argv[0]
     b.store(z, i_slot)
@@ -378,5 +357,3 @@ def generate_run(module: ir.Module) -> None:
     ok_data = b.bitcast(b.gep(res, [z, one_i32]), out_type.as_pointer())
     b.store(po_val, ok_data)
     b.ret(b.load(res))
-
-    emit_runtime_error(module, ir.IRBuilder(alloc_fail), "RE2021")

@@ -4,7 +4,9 @@ import typing
 from llvmlite import ir
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_string_type, get_maybe_type
-from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len
+from sushi_lang.sushi_stdlib.src.string_helpers import (
+    cstr_to_fat_pointer_with_len, emit_checked_malloc,
+)
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern, declare_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -60,7 +62,7 @@ def generate_getenv(module: ir.Module) -> None:
     result_len_i64 = builder.call(libc_strlen, [result_ptr], name="result_len_i64")
     result_len = builder.trunc(result_len_i64, i32, name="result_len")
 
-    string_buffer = builder.call(malloc_fn, [result_len_i64], name="string_buffer")
+    string_buffer = emit_checked_malloc(builder, malloc_fn, result_len_i64, name="string_buffer")
 
     from sushi_lang.sushi_stdlib.src.libc_declarations import declare_memcpy
     memcpy_fn = declare_memcpy(module)

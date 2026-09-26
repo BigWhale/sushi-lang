@@ -77,8 +77,8 @@ public fn read_metadata(string path) MsgValue | SlibError:
     if (blob.len() < mlen):
         return Result.Err(SlibError.Truncated())
     match decode(blob):
-        Result.Ok(v) ->
-            return Result.Ok(v.clone())
+        Result.Ok(nom v) ->
+            return Result.Ok(v)
         Result.Err(e) ->
             return Result.Err(SlibError.Decode(e))
 
