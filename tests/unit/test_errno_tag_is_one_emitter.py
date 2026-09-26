@@ -14,12 +14,12 @@ import llvmlite.ir as ir
 
 from sushi_lang.backend.platform_detect import get_current_platform
 from sushi_lang.backend.runtime.constants import (
-    ERRNO_DEFAULT_FILE_ERROR,
     ERRNO_DEFAULT_NET_ERROR,
-    errno_to_file_error_table,
+    ERRNO_ENOTDIR,
     errno_to_net_error_table,
 )
 from sushi_lang.sushi_stdlib.src import errno_tags
+from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 from sushi_lang.sushi_stdlib.src.io.files import errno as file_errno
 from sushi_lang.sushi_stdlib.src.net import errno as net_errno
 
@@ -69,7 +69,7 @@ def test_each_family_is_a_caller_of_the_emitter() -> None:
     linux = get_current_platform().is_linux
     pairs = (
         (file_errno.emit_file_error_tag,
-         errno_to_file_error_table(linux), ERRNO_DEFAULT_FILE_ERROR),
+         file_errno.errno_to_file_error_table(), file_errno.ERRNO_DEFAULT_FILE_ERROR),
         (net_errno.emit_net_error_tag,
          errno_to_net_error_table(linux), ERRNO_DEFAULT_NET_ERROR),
     )
@@ -77,3 +77,12 @@ def test_each_family_is_a_caller_of_the_emitter() -> None:
         direct = _emit(lambda b, m, t=table, d=default: errno_tags.emit_errno_tag(b, m, t, d))
         assert _emit(family) == direct
         assert "select" in direct
+
+
+def test_the_file_table_reads_the_platform_errno_values(monkeypatch) -> None:
+    files = get_platform_module("files")
+    monkeypatch.setattr(files, "ENAMETOOLONG", 900)
+    monkeypatch.setattr(files, "ELOOP", 901)
+    table = file_errno.errno_to_file_error_table()
+    invalid_path = table[ERRNO_ENOTDIR]
+    assert table[900] == table[901] == invalid_path
