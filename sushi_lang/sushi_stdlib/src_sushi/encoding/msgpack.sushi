@@ -9,6 +9,8 @@
 # is left in the buffer as it is read, so a length too large to satisfy -- a
 # hostile 2^32-1 included -- is Truncated at the header (#463).
 
+use <collections/strings>
+
 public enum MsgValue:
     Nil()
     Bool(bool)
@@ -300,38 +302,24 @@ public fn show(MsgValue v) string:
         MsgValue.Str(s) ->
             return Result.Ok("\"{s}\"")
         MsgValue.Bin(bytes) ->
-            let string bin_body = ""
-            let i32 i = 0
-            while (i < bytes.len()):
-                let u8 b = bytes[i]
-                if (i == 0):
-                    bin_body := "{b}"
-                else:
-                    bin_body := "{bin_body},{b}"
-                i := i + 1
+            let string[] bin_parts = new()
+            foreach(b in bytes.iter()):
+                bin_parts.push("{b}")
+            let string bin_body = ",".join(bin_parts)
             return Result.Ok("bin({bin_body})")
         MsgValue.Arr(items) ->
-            let string arr_body = ""
-            let i32 j = 0
-            while (j < items.len()):
-                let string shown = show(items[j])??
-                if (j == 0):
-                    arr_body := shown
-                else:
-                    arr_body := "{arr_body},{shown}"
-                j := j + 1
+            let string[] arr_parts = new()
+            foreach(item in items.iter()):
+                arr_parts.push(show(item)??)
+            let string arr_body = ",".join(arr_parts)
             return Result.Ok("[{arr_body}]")
         MsgValue.Map(keys, vals) ->
             let string open_brace = '{'
             let string close_brace = '}'
-            let string map_body = ""
-            let i32 k = 0
-            while (k < keys.len()):
+            let string[] map_parts = new()
+            foreach(k in 0..keys.len()):
                 let string ks = show(keys[k])??
                 let string vs = show(vals[k])??
-                if (k == 0):
-                    map_body := "{ks}:{vs}"
-                else:
-                    map_body := "{map_body},{ks}:{vs}"
-                k := k + 1
+                map_parts.push("{ks}:{vs}")
+            let string map_body = ",".join(map_parts)
             return Result.Ok("{open_brace}{map_body}{close_brace}")

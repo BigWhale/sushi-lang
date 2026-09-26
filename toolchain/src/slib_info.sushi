@@ -90,14 +90,10 @@ fn ml_len_at(MsgValue m, string key) i32:
 fn join_strs(MsgValue list) string:
     match list:
         MsgValue.Arr(items) ->
-            let string out = ""
-            foreach(i in 0..items.len()):
-                let string s = ml_str(items[i])??
-                if (i == 0):
-                    out := "{s}"
-                else:
-                    out := "{out}, {s}"
-            return Result.Ok(out)
+            let string[] parts = new()
+            foreach(item in items.iter()):
+                parts.push(ml_str(item)??)
+            return Result.Ok(", ".join(parts))
         _ ->
             return Result.Ok("")
 
@@ -436,6 +432,9 @@ fn render_params(MsgValue f) string:
 fn render_param_list(MsgValue ps, nom string out) string:
     match ps:
         MsgValue.Arr(items) ->
+            let string[] parts = new()
+            if (out != ""):
+                parts.push(out)
             foreach(p in items.iter()):
                 let string t = to_surface(ml_get_str(p, "type")??)??
                 let string pn = ml_get_str(p, "name")??
@@ -445,11 +444,8 @@ fn render_param_list(MsgValue ps, nom string out) string:
                 let string mode = ""
                 if (declared == "nom"):
                     mode := "nom "
-                if (out == ""):
-                    out := "{mode}{t} {pn}"
-                else:
-                    out := "{out}, {mode}{t} {pn}"
-            return Result.Ok(out)
+                parts.push("{mode}{t} {pn}")
+            return Result.Ok(", ".join(parts))
         _ ->
             return Result.Ok(out)
 
@@ -512,9 +508,8 @@ fn render_type_param_list(MsgValue tps) string:
         MsgValue.Arr(items) ->
             if (items.len() == 0):
                 return Result.Ok("")
-            let string body = ""
-            foreach(i in 0..items.len()):
-                let peek MsgValue tp = items[i]
+            let string[] parts = new()
+            foreach(tp in items.iter()):
                 let string tname = ml_get_str(tp, "name")??
                 let string cs = join_at(tp, "constraints")??
                 let string one = ""
@@ -522,10 +517,8 @@ fn render_type_param_list(MsgValue tps) string:
                     one := "{tname}"
                 else:
                     one := "{tname}: {cs}"
-                if (i == 0):
-                    body := "{one}"
-                else:
-                    body := "{body}, {one}"
+                parts.push(one)
+            let string body = ", ".join(parts)
             return Result.Ok("@({body})")
         _ ->
             return Result.Ok("")
