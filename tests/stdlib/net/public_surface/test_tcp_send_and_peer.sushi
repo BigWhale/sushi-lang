@@ -1,0 +1,71 @@
+# The three TcpStream methods no other fixture calls: send(), peer_ip() and
+# peer_port(). Loopback only. The client's peer is the listener's address and
+# port; the served stream's peer port is the client's own local port.
+# send() of two bytes on loopback answers the whole count.
+# EXPECT_STDOUT_EXACT: "sent 2\nserver got 42\npeer ip 127.0.0.1\nclient peer port matches\nserved peer port matches\nclosed\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+use <collections/strings>
+
+fn main() i32:
+    let TcpListener listener = listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
+    if (listener.fd < 0):
+        println("listen failed")
+        return Result.Ok(1)
+    if (not listener.set_timeout(5000).is_ok()):
+        println("listener set_timeout failed")
+        return Result.Ok(1)
+
+    let i32 port = listener.local_port().realise(-1)
+    let TcpStream client = connect("127.0.0.1", port).realise(TcpStream(-1))
+    if (client.fd < 0):
+        println("connect failed")
+        return Result.Ok(1)
+    if (not client.set_timeouts(5000, 5000).is_ok()):
+        println("client set_timeouts failed")
+        return Result.Ok(1)
+
+    let TcpStream served = listener.accept().realise(TcpStream(-1))
+    if (served.fd < 0):
+        println("accept failed")
+        return Result.Ok(1)
+    if (not served.set_timeouts(5000, 5000).is_ok()):
+        println("served set_timeouts failed")
+        return Result.Ok(1)
+
+    let u8[] answer = "42".to_bytes()
+    match client.send(answer):
+        Result.Ok(n) -> println("sent {n}")
+        Result.Err(_) -> println("send failed")
+    match served.recv_exact(2):
+        Result.Ok(heard) -> println("server got {heard.to_string()}")
+        Result.Err(_) -> println("server recv_exact failed")
+
+    match client.peer_ip():
+        Result.Ok(ip) -> println("peer ip {ip}")
+        Result.Err(_) -> println("peer_ip failed")
+
+    let i32 client_peer = client.peer_port().realise(-1)
+    if (client_peer == port):
+        println("client peer port matches")
+    else:
+        println("client peer port {client_peer}, listener port {port}")
+
+    let i32 served_peer = served.peer_port().realise(-1)
+    let i32 client_local = client.local_port().realise(-2)
+    if (served_peer == client_local):
+        println("served peer port matches")
+    else:
+        println("served peer port {served_peer}, client local port {client_local}")
+
+    if (not client.close().is_ok()):
+        println("client close failed")
+    if (not served.close().is_ok()):
+        println("served close failed")
+    match listener.close():
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close failed")
+
+    return Result.Ok(0)
