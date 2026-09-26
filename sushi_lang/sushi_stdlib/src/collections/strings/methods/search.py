@@ -6,7 +6,7 @@ from typing import Callable, Optional
 import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
-from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
 def emit_string_starts_with(module: ir.Module) -> ir.Function:
@@ -301,29 +301,11 @@ def _emit_search(
 
 
 def _ret_maybe_some(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType, value: ir.Value) -> None:
-    _i8, i8_ptr, i32, _i64, _string_type = get_string_types()
-    data_array_ty = maybe_type.elements[1]
-    undef_maybe = ir.Constant(maybe_type, ir.Undefined)
-    maybe_with_tag = builder.insert_value(undef_maybe, ir.Constant(i32, 0), 0, name="maybe_some_tag")
-
-    temp_alloca = entry_alloca(builder, data_array_ty, name="data_temp")
-    builder.store(ir.Constant(data_array_ty, None), temp_alloca)
-    data_ptr_i8 = builder.bitcast(temp_alloca, i8_ptr, name="data_ptr_i8")
-    data_ptr_i32 = builder.bitcast(data_ptr_i8, ir.PointerType(i32), name="data_ptr_i32")
-    builder.store(value, data_ptr_i32)
-    packed_data = builder.load(temp_alloca, name="packed_data")
-    maybe_complete = builder.insert_value(maybe_with_tag, packed_data, 1, name="maybe_some_data")
-    builder.ret(maybe_complete)
+    builder.ret(emit_some(builder, maybe_type, value))
 
 
 def _ret_maybe_none(builder: ir.IRBuilder, maybe_type: ir.LiteralStructType) -> None:
-    i32 = ir.IntType(32)
-    data_array_ty = maybe_type.elements[1]
-    undef_maybe_none = ir.Constant(maybe_type, ir.Undefined)
-    maybe_none_with_tag = builder.insert_value(undef_maybe_none, ir.Constant(i32, 1), 0, name="maybe_none_tag")
-    zero_data = ir.Constant(data_array_ty, None)
-    maybe_none_complete = builder.insert_value(maybe_none_with_tag, zero_data, 1, name="maybe_none_data")
-    builder.ret(maybe_none_complete)
+    builder.ret(emit_none(builder, maybe_type))
 
 
 def emit_string_contains(module: ir.Module) -> ir.Function:

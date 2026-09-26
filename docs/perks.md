@@ -228,8 +228,11 @@ derives a `hash()` for it, or when the type implements the perk itself.
   `HashMap@(K, V)`, a `ptr`, or a function value. A constraint on it is **CE4006**,
   exactly as for any other perk.
 - **Overridable:** `extend T with Hashable: fn hash() u64:` REPLACES the derived hash
-  (see [method resolution](design/method-resolution.md)). It also satisfies the
-  constraint for a type the derive pass refuses.
+  everywhere (see [method resolution](design/method-resolution.md)). It also satisfies
+  the constraint for a type the derive pass refuses. It gives a hash only: it does not
+  make the type comparable, so a type with no equality test (for example, a struct with
+  a function-typed field) is still not a `HashMap` key (**CE2055**, see
+  [Key Requirements](stdlib/collections/hashmap.md#key-requirements)).
 
 A perk of your own follows the ordinary rule: only an explicit implementation
 satisfies it. `perk Hashy: fn hash() u64` is not satisfied by `i32`, because the

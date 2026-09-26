@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from ..common import declare_malloc, declare_memcpy, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_to_bytes(module: ir.Module) -> ir.Function:
@@ -32,7 +33,7 @@ def emit_string_to_bytes(module: ir.Module) -> ir.Function:
     size = builder.extract_value(func.args[0], 1, name="size")
 
     size_i64 = builder.zext(size, i64, name="size_i64")
-    byte_data = builder.call(malloc, [size_i64], name="byte_data")
+    byte_data = emit_checked_malloc(builder, malloc, size_i64, name="byte_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [byte_data, data, builder.zext(size, ir.IntType(64)), is_volatile])
@@ -97,7 +98,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     builder.position_at_end(empty_delim_block)
     one_elem = ir.Constant(i32, 1)
     string_size = ir.Constant(i64, 16)  # sizeof({i8*, i32}) = 16 bytes (8 + 4 + padding)
-    array_data_empty = builder.call(malloc, [string_size], name="array_data_empty")
+    array_data_empty = emit_checked_malloc(builder, malloc, string_size, name="array_data_empty")
     array_data_empty_typed = builder.bitcast(array_data_empty, string_ptr, name="array_data_empty_typed")
     builder.store(func.args[0], array_data_empty_typed)
 
@@ -105,6 +106,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     struct_empty_len = builder.insert_value(undef_empty, one_elem, 0, name="struct_empty_len")
     struct_empty_cap = builder.insert_value(struct_empty_len, one_elem, 1, name="struct_empty_cap")
     result_empty = builder.insert_value(struct_empty_cap, array_data_empty_typed, 2, name="result_empty")
+    empty_delim_end = builder.block
     builder.branch(return_block)
 
     builder.position_at_end(normal_split_block)
@@ -178,7 +180,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
 
     num_strings_i64 = builder.zext(num_strings, i64, name="num_strings_i64")
     array_bytes = builder.mul(num_strings_i64, string_size, name="array_bytes")
-    array_data_raw = builder.call(malloc, [array_bytes], name="array_data_raw")
+    array_data_raw = emit_checked_malloc(builder, malloc, array_bytes, name="array_data_raw")
     array_data = builder.bitcast(array_data_raw, string_ptr, name="array_data")
 
     builder.store(ir.Constant(i32, 0), pos_ptr)
@@ -237,7 +239,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     substr_size = builder.sub(pos2, start, name="substr_size")
 
     substr_size_i64 = builder.zext(substr_size, i64, name="substr_size_i64")
-    substr_data_raw = builder.call(malloc, [substr_size_i64], name="substr_data_raw")
+    substr_data_raw = emit_checked_malloc(builder, malloc, substr_size_i64, name="substr_data_raw")
 
     start_ptr_gep = builder.gep(str_data, [start], name="start_ptr_gep")
     is_volatile = ir.Constant(ir.IntType(1), 0)
@@ -266,7 +268,7 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     final_substr_size = builder.sub(str_size, final_start, name="final_substr_size")
 
     final_substr_size_i64 = builder.zext(final_substr_size, i64, name="final_substr_size_i64")
-    final_substr_data_raw = builder.call(malloc, [final_substr_size_i64], name="final_substr_data_raw")
+    final_substr_data_raw = emit_checked_malloc(builder, malloc, final_substr_size_i64, name="final_substr_data_raw")
 
     final_start_ptr = builder.gep(str_data, [final_start], name="final_start_ptr")
     builder.call(memcpy, [final_substr_data_raw, final_start_ptr, builder.zext(final_substr_size, ir.IntType(64)), is_volatile])
@@ -281,12 +283,13 @@ def emit_string_split(module: ir.Module) -> ir.Function:
     result_with_len = builder.insert_value(undef_result, num_strings, 0, name="result_with_len")
     result_with_cap = builder.insert_value(result_with_len, num_strings, 1, name="result_with_cap")
     result_normal = builder.insert_value(result_with_cap, array_data, 2, name="result_normal")
+    split_done_end = builder.block
     builder.branch(return_block)
 
     builder.position_at_end(return_block)
     result_phi = builder.phi(dyn_array_type, name="result")
-    result_phi.add_incoming(result_empty, empty_delim_block)
-    result_phi.add_incoming(result_normal, split_done_block)
+    result_phi.add_incoming(result_empty, empty_delim_end)
+    result_phi.add_incoming(result_normal, split_done_end)
     builder.ret(result_phi)
 
     return func
@@ -350,10 +353,11 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     single_data = builder.extract_value(single_elem, 0, name="single_data")
     single_size = builder.extract_value(single_elem, 1, name="single_size")
     single_size_i64 = builder.zext(single_size, i64, name="single_size_i64")
-    single_copy = builder.call(malloc, [single_size_i64], name="single_copy")
+    single_copy = emit_checked_malloc(builder, malloc, single_size_i64, name="single_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [single_copy, single_data, builder.zext(single_size, ir.IntType(64)), is_volatile])
     single_result = build_string_struct(builder, string_type, single_copy, single_size, owned=1)
+    single_elem_end = builder.block
     builder.branch(return_block)
 
     builder.position_at_end(size_loop_block)
@@ -392,7 +396,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(alloc_block)
     final_size_i64 = builder.zext(final_size, i64, name="final_size_i64")
-    result_data = builder.call(malloc, [final_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, final_size_i64, name="result_data")
 
     builder.store(ir.Constant(i32, 0), idx_ptr)
     offset_ptr = entry_alloca(builder, i32, name="offset_ptr")
@@ -439,7 +443,7 @@ def emit_string_join(module: ir.Module) -> ir.Function:
     builder.position_at_end(return_block)
     result_phi = builder.phi(string_type, name="result")
     result_phi.add_incoming(empty_string, empty_array_block)
-    result_phi.add_incoming(single_result, single_elem_block)
+    result_phi.add_incoming(single_result, single_elem_end)
     result_phi.add_incoming(join_result, copy_done_block)
     builder.ret(result_phi)
 

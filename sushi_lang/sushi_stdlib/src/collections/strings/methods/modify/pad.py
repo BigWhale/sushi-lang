@@ -6,6 +6,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declar
 from ...intrinsics import declare_utf8_count_intrinsic
 from ...common import build_string_struct
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_repeat(module: ir.Module) -> ir.Function:
@@ -53,13 +54,14 @@ def emit_string_repeat(module: ir.Module) -> ir.Function:
     total_size = builder.mul(str_size, func.args[1], name="total_size")
 
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
-    result_data = builder.call(malloc, [total_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, total_size_i64, name="result_data")
+    allocate_end = builder.block
 
     builder.branch(loop_cond)
 
     builder = ir.IRBuilder(loop_cond)
     i_phi = builder.phi(i32, name="i")
-    i_phi.add_incoming(ir.Constant(i32, 0), allocate_block)
+    i_phi.add_incoming(ir.Constant(i32, 0), allocate_end)
 
     continue_loop = builder.icmp_unsigned("<", i_phi, func.args[1], name="continue_loop")
     builder.cbranch(continue_loop, loop_body, loop_done)
@@ -129,10 +131,11 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(no_padding_block)
     str_size_i64 = builder.zext(str_size, i64, name="str_size_i64")
-    no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
+    no_pad_copy = emit_checked_malloc(builder, malloc, str_size_i64, name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
     no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
+    no_padding_end = builder.block
     builder.branch(return_block)
 
     builder.position_at_end(do_padding_block)
@@ -140,7 +143,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
     pad_bytes = builder.mul(needed_chars, pad_size, name="pad_bytes")
     total_size = builder.add(pad_bytes, str_size, name="total_size")
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
-    result_data = builder.call(malloc, [total_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, total_size_i64, name="result_data")
 
     idx_ptr = entry_alloca(builder, i32, name="idx_ptr")
     builder.store(ir.Constant(i32, 0), idx_ptr)
@@ -174,7 +177,7 @@ def emit_string_pad_left(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(return_block)
     result_phi = builder.phi(string_type, name="result")
-    result_phi.add_incoming(no_pad_result, no_padding_block)
+    result_phi.add_incoming(no_pad_result, no_padding_end)
     result_phi.add_incoming(padded_result, padding_done_block)
     builder.ret(result_phi)
 
@@ -221,10 +224,11 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(no_padding_block)
     str_size_i64 = builder.zext(str_size, i64, name="str_size_i64")
-    no_pad_copy = builder.call(malloc, [str_size_i64], name="no_pad_copy")
+    no_pad_copy = emit_checked_malloc(builder, malloc, str_size_i64, name="no_pad_copy")
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [no_pad_copy, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
     no_pad_result = build_string_struct(builder, string_type, no_pad_copy, str_size, owned=1)
+    no_padding_end = builder.block
     builder.branch(return_block)
 
     builder.position_at_end(do_padding_block)
@@ -232,7 +236,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
     pad_bytes = builder.mul(needed_chars, pad_size, name="pad_bytes")
     total_size = builder.add(str_size, pad_bytes, name="total_size")
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
-    result_data = builder.call(malloc, [total_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, total_size_i64, name="result_data")
 
     builder.call(memcpy, [result_data, str_data, builder.zext(str_size, ir.IntType(64)), is_volatile])
 
@@ -266,7 +270,7 @@ def emit_string_pad_right(module: ir.Module) -> ir.Function:
 
     builder.position_at_end(return_block)
     result_phi = builder.phi(string_type, name="result")
-    result_phi.add_incoming(no_pad_result, no_padding_block)
+    result_phi.add_incoming(no_pad_result, no_padding_end)
     result_phi.add_incoming(padded_result, padding_done_block)
     builder.ret(result_phi)
 

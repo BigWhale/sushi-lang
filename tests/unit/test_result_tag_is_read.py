@@ -5,8 +5,7 @@
 value: an `insert_value(_, ir.Constant(_, <int>), 0)`, and a `store(ir.Constant(_, <int>),
 p)` where `p` is a `gep(_, [<0>, <0>])` in the same function.
 
-`MAYBE_LITERALS` counts the `Maybe` tags that the string methods still write as numbers.
-It is a ratchet: a count may only go down.
+`MAYBE_LITERALS` is an empty ratchet: no generator writes a `Maybe` tag as a number.
 """
 from __future__ import annotations
 
@@ -15,10 +14,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "sushi_lang" / "sushi_stdlib" / "src"
 
-MAYBE_LITERALS: dict[str, int] = {
-    "collections/strings/methods/parse.py": 6,
-    "collections/strings/methods/search.py": 2,
-}
+MAYBE_LITERALS: dict[str, int] = {}
 
 
 def _is_int_constant(node: ast.AST) -> bool:

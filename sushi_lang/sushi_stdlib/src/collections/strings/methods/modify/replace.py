@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...common import build_string_struct, clone_string_to_owned
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_replace(module: ir.Module) -> ir.Function:
@@ -122,14 +123,15 @@ def emit_string_replace(module: ir.Module) -> ir.Function:
     result_size = builder.add(size_without_old, new_total, name="result_size")
 
     result_size_i64 = builder.zext(result_size, i64, name="result_size_i64")
-    result_data = builder.call(malloc, [result_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, result_size_i64, name="result_data")
+    alloc_result_end = builder.block
     builder.branch(copy_loop_cond)
 
     builder = ir.IRBuilder(copy_loop_cond)
     copy_src_pos_phi = builder.phi(i32, name="copy_src_pos")
     copy_dst_pos_phi = builder.phi(i32, name="copy_dst_pos")
-    copy_src_pos_phi.add_incoming(ir.Constant(i32, 0), alloc_result)
-    copy_dst_pos_phi.add_incoming(ir.Constant(i32, 0), alloc_result)
+    copy_src_pos_phi.add_incoming(ir.Constant(i32, 0), alloc_result_end)
+    copy_dst_pos_phi.add_incoming(ir.Constant(i32, 0), alloc_result_end)
     copy_src_ok = builder.icmp_unsigned("<", copy_src_pos_phi, str_size, name="copy_src_ok")
     builder.cbranch(copy_src_ok, copy_loop_body, copy_done)
 

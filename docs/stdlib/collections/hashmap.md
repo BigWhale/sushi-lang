@@ -150,12 +150,14 @@ string is quoted. Anything else prints as `<value>`.
 
 ## Key Requirements
 
-Keys must implement `.hash() -> u64` method. Supported types:
+A key needs two things: a hash (`.hash() -> u64`) and an equality test. The map uses
+the hash to find a slot, and the equality test to tell two keys in one slot apart.
+Supported types:
 
 - **Primitives**: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`, `bool`
 - **string**
-- **Structs** (with hashable fields)
-- **Enums** (with hashable variant data)
+- **Structs** (each field has a hash and an equality test)
+- **Enums** (each payload has a hash and an equality test)
 
 - **`List@(T)` and `Own@(T)`** have a hash of what they hold, but no equality test, so
   neither is a key today
@@ -163,6 +165,54 @@ Keys must implement `.hash() -> u64` method. Supported types:
 **Not supported:** Nested arrays (cannot be hashed), and a `HashMap@(K, V)` itself. A map
 has no hash of its own: its buckets carry a state for each slot and the slot order is not
 the entry order, so a hash over them would answer two values for one set of entries.
+
+### A `Hashable` override gives a hash, not equality
+
+Hashing and equality are two contracts. `extend T with Hashable` REPLACES the hash of
+`T` everywhere, and it makes a type hashable that the compiler cannot hash (for example,
+a struct with a function-typed field). It does NOT give `T` an equality test. The map
+compares two keys field by field, and a function value, a `ptr`, a `List@(T)` and an
+`Own@(T)` have no equality. Thus a type that holds one of them is not a key, with or
+without an override (**CE2055**):
+
+<!-- docs-sweep: error CE2055 -->
+```sushi
+use <collections/hashmap>
+
+struct Handler:
+    fn(i32) -> i32 run
+    i32 id
+
+extend Handler with Hashable:
+    fn hash() u64:
+        return self.id as u64
+
+fn main() i32:
+    let HashMap@(Handler, i32) m = HashMap.new()    # CE2055: no equality test
+    m.free()
+    return Result.Ok(0)
+```
+
+To find such a value by a key, use a field that has equality as the key (here the
+`i32 id`), and keep the full value in the map as the value:
+
+```sushi
+use <collections/hashmap>
+
+struct Handler:
+    fn(i32) -> i32 run
+    i32 id
+
+fn main() i32:
+    let HashMap@(i32, Handler) m = HashMap.new()
+    let Handler h = Handler(|i32 x| x + 1, 7)
+    m.insert(h.id, h)
+    match m.get(7):
+        Maybe.Some(found) -> println("{found.run(41).realise(0)}")
+        Maybe.None -> println("none")
+    m.free()
+    return Result.Ok(0)
+```
 
 ## Hash Function
 

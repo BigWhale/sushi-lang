@@ -9,6 +9,8 @@
 # is left in the buffer as it is read, so a length too large to satisfy -- a
 # hostile 2^32-1 included -- is Truncated at the header (#463).
 
+use <collections/strings>
+
 public enum MsgValue:
     Nil()
     Bool(bool)
@@ -29,7 +31,7 @@ public enum MpError:
 struct MpCursor:
     i32 pos
 
-# mp_take: the next byte, or Truncated. The one place bounds are checked.
+# mp_take: the next byte, or Truncated.
 fn mp_take(peek u8[] buf, poke MpCursor cur) u8 | MpError:
     if (cur.pos >= buf.len()):
         return Result.Err(MpError.Truncated(cur.pos))
@@ -71,14 +73,14 @@ fn mp_signed(u64 v, i32 nbytes) i64 | MpError:
         return Result.Ok(sv - (half * 2))
     return Result.Ok(sv)
 
-# mp_take_bytes: copy the next count bytes into a fresh owned array.
+# mp_take_bytes: copy the next count bytes into a fresh owned array, in one step.
+# `.ss()` clamps a range that runs past the end, so the bounds check is explicit: the
+# fixstr path reaches here with no mp_len check. A short buffer is Truncated at its end.
 fn mp_take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
-    let u8[] out = new()
-    let i32 i = 0
-    while (i < count):
-        let u8 b = mp_take(peek buf, poke cur)??
-        out.push(b)
-        i := i + 1
+    if (count > buf.len() - cur.pos):
+        return Result.Err(MpError.Truncated(buf.len()))
+    let u8[] out = buf.ss(cur.pos, count)
+    cur.pos := cur.pos + count
     return Result.Ok(out)
 
 # mp_take_str: read count payload bytes and validate them as UTF-8.
@@ -159,7 +161,7 @@ fn mp_decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
             return Result.Ok(MsgValue.Int(mp_be_uint(peek buf, poke cur, 4)?? as i64))
         0xcf ->
             let u64 big = mp_be_uint(peek buf, poke cur, 8)??
-            let u64 i64_max = 0x7fffffffffffffff
+            let u64 i64_max = 0x7fff_ffff_ffff_ffff
             if (big > i64_max):
                 return Result.Ok(MsgValue.UInt(big))
             return Result.Ok(MsgValue.Int(big as i64))
@@ -300,38 +302,24 @@ public fn show(MsgValue v) string:
         MsgValue.Str(s) ->
             return Result.Ok("\"{s}\"")
         MsgValue.Bin(bytes) ->
-            let string bin_body = ""
-            let i32 i = 0
-            while (i < bytes.len()):
-                let u8 b = bytes[i]
-                if (i == 0):
-                    bin_body := "{b}"
-                else:
-                    bin_body := "{bin_body},{b}"
-                i := i + 1
+            let string[] bin_parts = new()
+            foreach(b in bytes.iter()):
+                bin_parts.push("{b}")
+            let string bin_body = ",".join(bin_parts)
             return Result.Ok("bin({bin_body})")
         MsgValue.Arr(items) ->
-            let string arr_body = ""
-            let i32 j = 0
-            while (j < items.len()):
-                let string shown = show(items[j])??
-                if (j == 0):
-                    arr_body := shown
-                else:
-                    arr_body := "{arr_body},{shown}"
-                j := j + 1
+            let string[] arr_parts = new()
+            foreach(item in items.iter()):
+                arr_parts.push(show(item)??)
+            let string arr_body = ",".join(arr_parts)
             return Result.Ok("[{arr_body}]")
         MsgValue.Map(keys, vals) ->
             let string open_brace = '{'
             let string close_brace = '}'
-            let string map_body = ""
-            let i32 k = 0
-            while (k < keys.len()):
+            let string[] map_parts = new()
+            foreach(k in 0..keys.len()):
                 let string ks = show(keys[k])??
                 let string vs = show(vals[k])??
-                if (k == 0):
-                    map_body := "{ks}:{vs}"
-                else:
-                    map_body := "{map_body},{ks}:{vs}"
-                k := k + 1
+                map_parts.push("{ks}:{vs}")
+            let string map_body = ",".join(map_parts)
             return Result.Ok("{open_brace}{map_body}{close_brace}")

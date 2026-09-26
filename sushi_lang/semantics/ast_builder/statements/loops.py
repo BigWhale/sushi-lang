@@ -33,13 +33,17 @@ def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
     type, which is the one thing the parser cannot know.
     """
     hidden = f"__fe_item{next(_try_binder_ids)}"
+    marker = span_of(try_token)
+    whole = marker
+    if item_name_span is not None and marker is not None:
+        whole = Span(item_name_span.line, item_name_span.col, marker.end_line, marker.end_col)
     unwrap = Let(
         name=item_name,
         ty=None,
-        value=TryExpr(expr=Name(id=hidden, loc=item_name_span), loc=span_of(try_token)),
+        value=TryExpr(expr=Name(id=hidden, loc=item_name_span), loc=whole),
         name_span=item_name_span,
         type_span=item_name_span,
-        loc=span_of(try_token),
+        loc=whole,
     )
     body.statements.insert(0, unwrap)
     return hidden, unwrap
