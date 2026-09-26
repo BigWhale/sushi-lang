@@ -13,6 +13,7 @@ unvisited and a loop cannot form.
 :##
 
 public use <io/contracts>
+use <collections/strings>
 use <io/files>
 use <io/path>
 

@@ -1,0 +1,15 @@
+# A unit may reach <collections/strings> through a `public use` of one of its
+# own imports, or behind an alias. Both helpers call a method of the module,
+# and both calls compile (#942). The two warnings say that the `public` and the
+# `as` bring no name, and the imports still do their work.
+# EXPECT_ERROR_CODE: CW3005
+# EXPECT_STDERR_CONTAINS: "CW3004"
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+use "helpers/prefix_through_bridge"
+use "helpers/prefix_aliased"
+
+fn main() i32:
+    let string s = "a,b"
+    println(opens_with_a(s).realise(false))
+    println(leads_with_a(s).realise(false))
+    return Result.Ok(0)

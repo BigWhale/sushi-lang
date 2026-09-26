@@ -1,0 +1,12 @@
+# A stdlib module reaches only the unit that wrote the `use` line. This unit
+# imports <collections/strings>, and the helper calls a method of it without
+# an import of its own, so the call in the helper is refused (#942).
+# EXPECT_ERROR_CODE: CE3015
+# EXPECT_STDERR_CONTAINS: "prefix_bare.sushi:2"
+# EXPECT_STDERR_CONTAINS: "string.starts_with()"
+use "helpers/prefix_bare"
+use <collections/strings>
+
+fn main() i32:
+    println(starts_with_a("a,b").realise(false))
+    return Result.Ok(0)

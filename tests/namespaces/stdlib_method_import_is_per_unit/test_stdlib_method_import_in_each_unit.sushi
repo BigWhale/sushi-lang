@@ -1,0 +1,11 @@
+# Each unit imports <collections/strings> for itself, so the call in the helper
+# and the call here both compile (#942).
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+use "helpers/prefix_own"
+use <collections/strings>
+
+fn main() i32:
+    let string s = "a,b"
+    println(begins_with_a(s).realise(false))
+    println(s.ends_with("b"))
+    return Result.Ok(0)

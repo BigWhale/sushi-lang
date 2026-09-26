@@ -1,0 +1,4 @@
+public use <collections/strings>
+
+public fn bridge_marker() i32:
+    return Result.Ok(1)

@@ -658,6 +658,23 @@ def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -
         _reject_unreachable_receiver(validator, call, mode)
 
 
+def _reject_missing_method_module(validator: 'TypeValidator', call: MethodCall,
+                                  name: str, module: str) -> None:
+    """A built-in method whose body lives in a stdlib module needs THIS unit's import.
+
+    The question is per unit (#942): the unit that holds the call imports the module,
+    or a directory above it, directly, behind an alias, or through a `public use` of
+    its own imports. An import in another unit of the program does not count.
+    """
+    scope = validator.scope
+    parts = module.split("/")
+    if any(scope.holds_unit("/".join(parts[:depth]))
+           for depth in range(1, len(parts) + 1)):
+        return
+    er.emit_with(validator.reporter, er.ERR.CE3015, call.loc, name=name, module=module) \
+        .help(f"add `use <{module}>` above the first declaration of this unit")
+
+
 # The validation half of each built-in family, in the table's order. The claim is the
 # registry's and is written once; what stands here is the CHECK that follows it.
 
@@ -677,7 +694,10 @@ def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
 def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
     from sushi_lang.sushi_stdlib.src.collections.strings import (
-        validate_builtin_string_method_with_validator)
+        METHOD_SPECS, validate_builtin_string_method_with_validator)
+    if call.method in METHOD_SPECS:
+        _reject_missing_method_module(validator, call, f"string.{call.method}()",
+                                      "collections/strings")
     validate_builtin_string_method_with_validator(
         call, receiver_type, validator.reporter, validator)
 
