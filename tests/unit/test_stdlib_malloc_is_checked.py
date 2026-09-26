@@ -16,34 +16,7 @@ import re
 
 from sushi_lang.sushi_stdlib.build import STDLIB_BITCODE_UNITS
 
-# The string methods of collections/strings/methods/ still call malloc directly, and
-# allocate_and_copy_bytes stays unchecked while string_char_at names its calling block
-# in a phi.
-UNCHECKED: frozenset[str] = frozenset({
-    "string_cap",
-    "string_char_at",
-    "string_concat",
-    "string_join",
-    "string_pad_left",
-    "string_pad_right",
-    "string_repeat",
-    "string_replace",
-    "string_reverse",
-    "string_s",
-    "string_sleft",
-    "string_split",
-    "string_sright",
-    "string_ss",
-    "string_strip_prefix",
-    "string_strip_suffix",
-    "string_tleft",
-    "string_to_bytes",
-    "string_to_f64",
-    "string_to_i32",
-    "string_to_i64",
-    "string_tright",
-    "string_trim",
-})
+UNCHECKED: frozenset[str] = frozenset()
 
 _DEFINE = re.compile(r'^define .*?@"?([A-Za-z0-9_.$]+)"?\(')
 _MALLOC = re.compile(r'^\s*(%"[^"]+"|%[A-Za-z0-9_.$]+) = call i8\* @"?malloc"?\(')
@@ -97,3 +70,12 @@ def test_every_stdlib_malloc_is_checked_before_use():
     found = _unchecked_functions()
     assert found <= UNCHECKED, sorted(found - UNCHECKED)
     assert UNCHECKED <= found, f"checked now, remove from UNCHECKED: {sorted(UNCHECKED - found)}"
+
+
+def test_the_strings_unit_verifies():
+    """A checked malloc splits its block, so a phi after it must name the new block."""
+    from llvmlite import binding as llvm
+
+    from sushi_lang.sushi_stdlib.src.collections.strings import generate_module_ir
+
+    llvm.parse_assembly(str(generate_module_ir())).verify()

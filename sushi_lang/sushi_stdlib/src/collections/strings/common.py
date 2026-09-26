@@ -32,7 +32,7 @@ def allocate_and_copy_bytes(
 ) -> ir.Value:
     """Allocate memory and copy bytes from source."""
     byte_count_i64 = builder.zext(byte_count, i64, name="byte_count_i64")
-    new_data = builder.call(malloc, [byte_count_i64], name="new_data")
+    new_data = emit_checked_malloc(builder, malloc, byte_count_i64, name="new_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_ptr, builder.zext(byte_count, ir.IntType(64)), is_volatile])
@@ -65,13 +65,14 @@ def build_string_struct(
     data_ptr: ir.Value,
     size: ir.Value,
     owned: int,
+    name: str = "result",
 ) -> ir.Value:
     """Build a string fat pointer struct { i8*, i32, i8 owned }."""
     owned_flag = ir.Constant(ir.IntType(8), 1 if owned else 0)
     undef_struct = ir.Constant(string_type, ir.Undefined)
     struct_with_data = builder.insert_value(undef_struct, data_ptr, 0, name="struct_with_data")
     struct_with_size = builder.insert_value(struct_with_data, size, 1, name="struct_with_size")
-    struct_complete = builder.insert_value(struct_with_size, owned_flag, 2, name="result")
+    struct_complete = builder.insert_value(struct_with_size, owned_flag, 2, name=name)
     return struct_complete
 
 
@@ -93,12 +94,3 @@ def clone_string_to_owned(
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, src_data, builder.zext(size, ir.IntType(64)), is_volatile])
     return build_string_struct(builder, string_type, new_data, size, owned=1)
-
-
-# ==============================================================================
-# Character Transformation Helpers
-# ==============================================================================
-# NOTE: This functionality has been moved to stdlib.src.ir_builders.IRLoopBuilder
-# The emit_char_transform_loop function is now deprecated. Use:
-#   IRLoopBuilder.build_char_transform_loop(...)
-# instead.

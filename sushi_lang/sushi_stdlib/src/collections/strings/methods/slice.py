@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic, declare_utf8_byte_offset_intrinsic
 from ..common import declare_malloc, declare_memcpy, allocate_substring, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_ss(module: ir.Module) -> ir.Function:
@@ -267,17 +268,19 @@ def emit_string_char_at(module: ir.Module) -> ir.Function:
     char_length = builder.sub(end_byte_final, start_byte, name="char_length")
 
     result_valid = allocate_substring(builder, malloc, memcpy, string_type, data, start_byte, char_length, i32, i64)
+    valid_end = builder.block
     builder.branch(merge_block)
 
     builder.position_at_end(invalid_index_block)
-    empty_data = builder.call(malloc, [ir.Constant(i64, 1)], name="empty_data")
+    empty_data = emit_checked_malloc(builder, malloc, ir.Constant(i64, 1), name="empty_data")
     result_invalid = build_string_struct(builder, string_type, empty_data, zero, owned=1)
+    invalid_end = builder.block
     builder.branch(merge_block)
 
     builder.position_at_end(merge_block)
     result = builder.phi(string_type, name="result")
-    result.add_incoming(result_valid, valid_index_block)
-    result.add_incoming(result_invalid, invalid_index_block)
+    result.add_incoming(result_valid, valid_end)
+    result.add_incoming(result_invalid, invalid_end)
     builder.ret(result)
 
     return func

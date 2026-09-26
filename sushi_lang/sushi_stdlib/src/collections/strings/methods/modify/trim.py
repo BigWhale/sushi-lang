@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
 from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from ...common import build_string_struct, clone_string_to_owned
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
@@ -68,7 +69,7 @@ def emit_string_strip_prefix(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(match_block)
     new_size = builder.sub(str_size, prefix_size, name="new_size")
     new_size_i64 = builder.zext(new_size, i64, name="new_size_i64")
-    result_data = builder.call(malloc, [new_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, new_size_i64, name="result_data")
 
     new_data_ptr = builder.gep(str_data, [prefix_size], name="new_data_ptr")
     is_volatile = ir.Constant(ir.IntType(1), 0)
@@ -149,7 +150,7 @@ def emit_string_strip_suffix(module: ir.Module) -> ir.Function:
     builder = ir.IRBuilder(match_block)
     new_size = builder.sub(str_size, suffix_size, name="new_size")
     new_size_i64 = builder.zext(new_size, i64, name="new_size_i64")
-    result_data = builder.call(malloc, [new_size_i64], name="result_data")
+    result_data = emit_checked_malloc(builder, malloc, new_size_i64, name="result_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [result_data, str_data, builder.zext(new_size, ir.IntType(64)), is_volatile])

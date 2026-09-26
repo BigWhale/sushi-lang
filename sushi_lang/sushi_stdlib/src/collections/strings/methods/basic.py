@@ -4,6 +4,7 @@ import llvmlite.ir as ir
 from ..intrinsics import declare_utf8_count_intrinsic
 from ..common import declare_malloc, declare_memcpy, build_string_struct
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types
+from sushi_lang.sushi_stdlib.src.string_helpers import emit_checked_malloc
 
 
 def emit_string_size(module: ir.Module) -> ir.Function:
@@ -89,7 +90,7 @@ def emit_string_concat(module: ir.Module) -> ir.Function:
     total_size = builder.add(size1, size2, name="total_size")
 
     total_size_i64 = builder.zext(total_size, i64, name="total_size_i64")
-    new_data = builder.call(malloc, [total_size_i64], name="new_data")
+    new_data = emit_checked_malloc(builder, malloc, total_size_i64, name="new_data")
 
     is_volatile = ir.Constant(ir.IntType(1), 0)
     builder.call(memcpy, [new_data, data1, builder.zext(size1, ir.IntType(64)), is_volatile])
