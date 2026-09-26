@@ -1,0 +1,16 @@
+# The escape: `.clone()` gives `fill` an independent value, so the call is legal (#919).
+# EXPECT_STDOUT_EXACT: "ABC\nABC\nABC\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "abc"
+    let string[] a = from([s.upper(), s.lower(), s.upper()])
+    foreach(x in a.iter()):
+        a.fill(x.clone())
+        break
+    println(a[0])
+    println(a[1])
+    println(a[2])
+    return Result.Ok(0)

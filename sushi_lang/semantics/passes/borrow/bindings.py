@@ -252,7 +252,7 @@ def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: P
                 pass                      # an explicit discard binds nothing
             case str():
                 scope.bind_value(binding, payload_type, span)
-                _freeze_for_a_view(checker, scope, binding, payload_type, span,
+                freeze_for_a_view(checker, scope, binding, payload_type, span,
                                    scrutinee, kind)
             case NomBinding():
                 # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
@@ -275,14 +275,15 @@ def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: P
                                       scrutinee)
 
 
-def _freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
+def freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
                        ty: Optional[Type], span: Optional[Span],
                        scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
-    """A bare binding of an owning payload views the owner's storage (#888).
+    """A bare binding of an owning payload or element views the owner's storage.
 
-    The copy is shallow, so the owner is frozen for the arm exactly as for a `let`-borrow:
-    a change to the owner while the binding is still used is CE2412. A plain payload is a
-    copy, and a scrutinee the match owns has no other owner to change.
+    The copy is shallow, so the owner is frozen for the arm or the loop exactly as for a
+    `let`-borrow: a change to the owner while the binding is still used is CE2412 (#888,
+    #919). A plain value is a copy, and a scrutinee the match owns has no other owner to
+    change.
     """
     if kind is not ScrutineeKind.BORROWED or scrutinee is None:
         return
