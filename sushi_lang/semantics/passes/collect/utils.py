@@ -28,6 +28,32 @@ class TakenName:
     what: str = "first defined here"
 
 
+def type_name_rules(kind: str, *, structs: 'TypeNameTable',
+                    generic_structs: 'TypeNameTable', enums: 'TypeNameTable',
+                    generic_enums: 'TypeNameTable') -> tuple[TakenName, ...]:
+    """Every table a new struct or enum name may already be taken in (#901).
+
+    A struct and an enum share one type name. Both collectors read this one list, so a
+    declaration of either kind meets the other kind's tables in every collection order.
+    """
+    from sushi_lang.internals.errors import ERR
+
+    same, other = (("struct", "enum") if kind == "struct" else ("enum", "struct"))
+    duplicate = ERR.CE0004 if kind == "struct" else ERR.CE2046
+    own, own_generic = ((structs, generic_structs) if kind == "struct"
+                        else (enums, generic_enums))
+    theirs, theirs_generic = ((enums, generic_enums) if kind == "struct"
+                              else (structs, generic_structs))
+    article = "an" if other == "enum" else "a"
+    return (
+        TakenName(own, duplicate),
+        TakenName(own_generic, duplicate, f"first defined here, as a generic {same}"),
+        TakenName(theirs, ERR.CE0006, f"already defined as {article} {other} here"),
+        TakenName(theirs_generic, ERR.CE0006,
+                  f"already defined as a generic {other} here"),
+    )
+
+
 def extract_type_param_names(type_params_raw: Optional[List]) -> Optional[List[str]]:
     """Extract type parameter names from AST type_params."""
     if type_params_raw is None:
@@ -87,8 +113,11 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     return builder.note("defined by the compiler")
 
 
+_OTHER_TYPE_KIND = {"struct": "enum", "enum": "struct"}
+
+
 def reject_duplicate_type_name(
-    reporter, name: str, name_span: Optional[Span],
+    reporter, kind: str, name: str, name_span: Optional[Span],
     rules: Sequence[TakenName],
     library_clash: Optional[Callable[[str, Optional[Span]], bool]] = None,
 ) -> bool:
@@ -111,7 +140,8 @@ def reject_duplicate_type_name(
     for rule in rules:
         if name in rule.table.by_name:
             note_first_declaration(
-                er.emit_with(reporter, rule.code, name_span, name=name),
+                er.emit_with(reporter, rule.code, name_span, name=name, kind=kind,
+                             other=_OTHER_TYPE_KIND[kind]),
                 rule.table.spans, name, what=rule.what, files=rule.table.files,
             ).emit()
             return True

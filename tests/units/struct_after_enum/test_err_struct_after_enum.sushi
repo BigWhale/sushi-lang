@@ -1,0 +1,12 @@
+# A unit declares a struct whose name a unit collected before it took for an enum.
+# A type name is one per program, so the struct is refused at its declaration (CE0006),
+# with a note at the enum. The pytest gate tests/unit/test_struct_after_enum_is_refused.py
+# pins the complete code list.
+# EXPECT_ERROR_CODE: CE0006
+use "helpers/acc_enum"
+
+struct Acc:
+    i32 m
+
+fn main() i32:
+    return Result.Ok(one().realise(0))
