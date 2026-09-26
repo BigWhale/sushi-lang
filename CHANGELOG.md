@@ -428,6 +428,19 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`tanh`, `sinh`, `cosh` and `hypot` give the C library's value** (#905). `tanh(1000.0)` was
+  `nan`, `hypot(1e200, 1e200)` was `inf` and `sinh(1e-20)` was `0`: the generators computed the
+  textbook formulas in IR, and the intermediate values overflowed or cancelled. The four
+  functions forward to libc now, as `asin`, `acos` and `atan` already did.
+- **A holder of a type with a `Hashable` override is hashable** (#891). A struct field, an enum
+  payload, an array, a `List` or a `Maybe` element of a type whose own fields cannot be hashed,
+  but which implements `Hashable`, made `.hash()` on the holder CE2008. The override is terminal
+  in the derive pass now, as it already was in the backend. A map KEY of such a type still needs
+  equality, and a function-typed field has none (CE2055).
+- **A platform module has one name** (#904). The stdlib platform loader imported each platform
+  module a second time as a top-level `sushi_stdlib` package and added `sushi_lang/` to
+  `sys.path` twice. It imports the full name now and changes no `sys.path`; the dead `windows`
+  branch is gone.
 - **A borrow passed to a call that changes its owner is CE2412** (#888). `a.fill(first)`, where
   `first` is a `let` binding or a `match` payload binding of a slot of `a`, read freed memory: the
   call destroys each slot while it reads its argument. A borrowed argument is now a use DURING the
@@ -1261,6 +1274,10 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **The dead code in the stdlib generators is deleted** (#915). 13 unused libc declarations, the
+  array-type matchers, the whole `type_converters` module, the unused type getters and IR
+  builders, three string intrinsic declarations and `build.create_module`: 444 lines. The
+  generated IR and the built bitcode are byte-identical.
 - **One semantic reader of the `Drop` set** (#791, row 1). `semantics/drop_set.py:drop_type_names`
   serves the typecheck and the borrow pass; the gate holds one reader per layer.
 - **One seam computes a `T[]` descriptor field address** (#878). The `LLVMTypeSystem` trio is
