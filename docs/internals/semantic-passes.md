@@ -244,6 +244,14 @@ Library units are skipped, both ways. A consumer must not be told about the libr
 author's doc typos, and must not be warned once per undocumented symbol in every library
 it imports.
 
+The test runner's stdlib doc-block gate (#953) sets the hidden environment variable
+`SUSHI_STDLIB_DOC_GATE=1`. It has no CLI flag, in the style of `SUSHI_SPELLING_GATE`. When
+it is set, the pass also checks each BUNDLED stdlib unit, the units whose name is in
+`SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`), and `--warn-missing-docs` adds the
+completeness lint on them. A unit of a source library stays skipped. The runner compiles
+one program that imports every bundled module, because a stdlib module is never built
+alone. When the variable is not set, the pass skips every library unit.
+
 ## The `externs` pass: FFI signature validation
 
 **File:** `semantics/passes/types/externals.py`

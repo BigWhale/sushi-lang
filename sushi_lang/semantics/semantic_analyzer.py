@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
@@ -18,6 +19,7 @@ from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
+from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
 
@@ -35,6 +37,18 @@ def enum_base_names(*tables) -> set[str]:
         names.update(name.split('<', 1)[0] for name in mapping)
     return names
 
+
+
+# The test runner's stdlib doc-block gate (#953). Hidden, like SUSHI_SPELLING_GATE: set, the
+# `docs` pass also checks the BUNDLED stdlib units; a source library stays skipped.
+STDLIB_DOC_GATE_ENV = "SUSHI_STDLIB_DOC_GATE"
+
+
+def _doc_gate_checks(unit: Unit) -> bool:
+    """Does the stdlib doc-block gate ask the `docs` pass to check this provenance unit?"""
+    if os.environ.get(STDLIB_DOC_GATE_ENV, "").lower() in ("", "0", "off"):
+        return False
+    return not unit.from_library and unit.name in SOURCE_STDLIB_MODULES
 
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
@@ -243,7 +257,9 @@ class SemanticAnalyzer:
         # library author's doc typos.
         from sushi_lang.semantics.passes.docs import check_docs, check_missing_docs
         for unit in compilation_order:
-            if unit.ast is None or unit.provenance is not None:
+            if unit.ast is None:
+                continue
+            if unit.provenance is not None and not _doc_gate_checks(unit):
                 continue
             unit_reporter = self._unit_reporter(unit)
             check_docs(unit_reporter, unit.ast)
