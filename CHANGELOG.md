@@ -1296,6 +1296,14 @@ All notable changes to Sushi Lang will be documented in this file.
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
 ### Changed
+- **The dead code in the backend, the packager and the internals is deleted** (#916): two
+  modules, about forty functions, methods and constants, three attributes that were written and
+  never read, one unused parameter, and the second-round orphans the deletion left. The program
+  IR and the stdlib bitcode are identical.
+- **A gate refuses new dead code** (#918). `tests/unit/test_no_dead_code.py` runs `vulture` over
+  `sushi_lang/` with one whitelist of the names that live by a reflective path (each with its
+  reason; the five platform ABI constants by name) and a ratchet that may only get shorter.
+  `vulture` is in the `dev` extras; a missing `vulture` fails the gate, it never skips.
 - **Every stdlib extern goes through `declare_extern`** (#911). The last nine files with
   hand-written declarations moved onto the accessor, the gate's ratchet is gone, and the gate
   also refuses a declaration written beside a definition. The IR is byte-identical.
