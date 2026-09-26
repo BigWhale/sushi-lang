@@ -10,12 +10,12 @@ if TYPE_CHECKING:
 
 
 def is_reference_parameter(codegen: 'LLVMCodegen', var_name: str) -> bool:
-    """Check if a variable is a reference parameter."""
-    if var_name not in codegen.variable_types:
-        return False
+    """Is the local `var_name` a reference (its slot holds a pointer), in the scope that is open now?
 
-    var_type = codegen.variable_types[var_name]
-    return isinstance(var_type, ReferenceType)
+    The scope manager answers, because it records the type with the slot and drops both when
+    the scope pops. A flat per-name table kept a `let peek e` alive for a later sibling `e`.
+    """
+    return isinstance(codegen.memory.find_semantic_type(var_name), ReferenceType)
 
 
 def load_with_reference_handling(

@@ -1,0 +1,22 @@
+# A `let peek` binding in one block leaves no state that a later `foreach` item of the
+# same name reads, when the `foreach` walks a type with `next()` (#941).
+# EXPECT_STDOUT_EXACT: 4\n3\n2\n1\n
+# EXPECT_NO_LEAKS
+struct Countdown:
+    i32 left
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    let i32 now = self.left
+    self.left := self.left - 1
+    return Maybe.Some(now)
+
+fn main() i32:
+    let i32 n = 4
+    if (n > 0):
+        let peek i32 k = n
+        println(k)
+    foreach(k in Countdown(3)):
+        println(k)
+    return Result.Ok(0)
