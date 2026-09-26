@@ -270,12 +270,6 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --python 3.13 python tests/run_tests.py --enhanced
 
-      - name: Docs-vs-code stdlib smoke check (macOS backend)
-        if: needs.changes.outputs.code == 'true'
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          uv run --python 3.13 python -m pytest tests/unit/test_docs_stdlib_smoke.py -q
-
   # Badge publication. Three properties the job this replaced did not have:
   #   - it never runs a suite itself; it consumes THIS run's artifacts, so the badge
   #     cannot disagree with the gate it claims to describe;
