@@ -428,6 +428,24 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **`UdpSocket` closes its descriptor on drop** (#940). It had no `Drop`, so a socket that went out
+  of scope kept its descriptor. It implements `Drop` now, as `TcpStream` does; it moves, and a use
+  after `nom` is CE2405.
+- **`remove_all` reports a failed check** (#944). `is_symlink(path).realise(false)` turned an
+  unreadable path into "not a link", and the call answered `Ok` with nothing removed. The error is
+  returned now; only a missing path is success.
+- **The `.slib` reader names the real read error** (#947). Every failed read was reported as a
+  truncated file and every failed `open()` as "file not found". `SlibError.Io(IoError)` replaces
+  `OpenFailed(string)`, and `<toolchain/slib>` re-exports `<io/error>`. `--lib-info` prints the
+  cause ("is a directory", "permission denied").
+- **`--lib-info` and `use <lib/...>` give CE3515 for a library they cannot read** (#943). The
+  Python fallback printed a traceback, and a `use <lib/...>` that named a directory was CE0000.
+
+### Changed
+- **`<io/fs>` uses `??` for four pass-through `match` blocks, and `mkdir_all` is flat** (#945).
+- **pytest runs no Sushi compiler.** Every pytest test that parsed, analyzed, generated code or
+  spawned `sushic` is removed; the fixture corpus is the one compiler test harness. The test
+  runner's own tests stay.
 - **A `foreach` item freezes its container** (#919). A bare item of an owning element views the
   container's storage, and a change of the container in the body while the item lives read freed
   memory with no diagnostic. It is CE2412 now, as for a `let`-borrow. A plain element stays a copy.

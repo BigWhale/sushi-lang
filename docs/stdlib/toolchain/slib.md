@@ -23,16 +23,18 @@ library (see [Library Format](../../library-format.md)). The metadata comes back
 reads the length of a payload section, never the payload.
 
 The module imports `<encoding/msgpack>` and `<io/files>` — the first source module that
-imports another source module.
+imports another source module. It re-exports `<io/error>` (`public use`), so
+`use <toolchain/slib>` alone lets a program name the `IoError` that `SlibError.Io`
+carries.
 
 ## Types
 
 ```
 public enum SlibError:
-    OpenFailed(string)  # the path that did not open
+    Io(IoError)         # the open or a read failed; the IoError names the cause
     BadMagic()          # the 16 magic bytes do not match
     BadVersion(u32)     # header version is not 4
-    Truncated()         # the file ends inside the header or the blob
+    Truncated()         # the file ends inside the header or a section
     Decode(MpError)     # the metadata blob does not decode
 
 public struct SlibSizes:
@@ -103,8 +105,10 @@ fn classify(string path) string:
             return Result.Ok("ok")
         Result.Err(e) ->
             match e:
-                SlibError.OpenFailed(p) ->
-                    return Result.Ok("cannot open {p}")
+                SlibError.Io(IoError.NotFound) ->
+                    return Result.Ok("no such file: {path}")
+                SlibError.Io(_) ->
+                    return Result.Ok("cannot read {path}")
                 SlibError.BadMagic() ->
                     return Result.Ok("not a .slib library")
                 SlibError.BadVersion(v) ->
@@ -115,9 +119,13 @@ fn classify(string path) string:
                     return Result.Ok("metadata does not decode")
 
 fn main() i32:
-    println(classify("missing.slib").realise("error"))    # cannot open missing.slib
+    println(classify("missing.slib").realise("error"))    # no such file: missing.slib
     return Result.Ok(0)
 ```
+
+A directory opens, and its first read fails, so it is `Io(IoError.IsDirectory)`. A file
+with no read permission is `Io(IoError.PermissionDenied)`. `Truncated` is only a file that
+ends too early; a read that fails is never reported as one.
 
 ## The slib-info tool
 

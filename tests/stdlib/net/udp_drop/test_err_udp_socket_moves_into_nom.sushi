@@ -1,0 +1,14 @@
+# A UdpSocket MOVES. Handing one to a `nom` parameter transfers it, and reading
+# the old binding afterwards is CE2405.
+# EXPECT_ERROR_CODE: CE2405
+use <net/udp>
+
+fn adopt(nom UdpSocket socket) ~:
+    println("adopted")
+    return Result.Ok(~)
+
+fn main() i32:
+    let UdpSocket s = bind("127.0.0.1", 0).realise(UdpSocket(-1))
+    adopt(nom s)
+    println("{s.fd}")
+    return Result.Ok(0)

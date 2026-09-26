@@ -17,7 +17,7 @@ fn check_missing() bool:
             return Result.Ok(false)
         Result.Err(e) ->
             match e:
-                SlibError.OpenFailed(_) ->
+                SlibError.Io(IoError.NotFound) ->
                     return Result.Ok(true)
                 _ ->
                     return Result.Ok(false)

@@ -94,6 +94,15 @@ _add(ErrorMessage("CE3513", Severity.ERROR,
     "library file too large '{path}': {size} bytes exceeds maximum {max_size} bytes",
     Category.LIBRARY, "Library file exceeds reasonable size limit."))
 
+_add(ErrorMessage("CE3515", Severity.ERROR,
+    "cannot read library file '{path}': {reason}",
+    Category.LIBRARY,
+    "The operating system refused to open or to read the file: a directory, a file with no "
+    "read permission, or an I/O failure. The reason names the cause in the words the "
+    "slib-info tool uses for the same errno, so both halves of --lib-info say the same thing. "
+    "It used to be a Python traceback from the --lib-info fallback and CE0000 from a "
+    "`use <lib/...>` that named a directory (#943)."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,
