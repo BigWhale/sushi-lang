@@ -1,15 +1,15 @@
 """Sushi Standard Library Build Script"""
 
 import argparse
+import importlib
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 import llvmlite.ir as ir
 import llvmlite.binding as llvm
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from sushi_lang.sushi_stdlib.src.collections import strings
-from sushi_lang.backend.types import primitives
 from sushi_lang.backend.platform_detect import get_current_platform
 
 
@@ -39,110 +39,34 @@ def compile_module_to_bc(module: ir.Module, output_path: Path, quiet: bool = Fal
     return [fn.name for fn in mod.functions if not fn.is_declaration]
 
 
-def build_collections_strings(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build collections/strings unit (platform-agnostic)."""
-    if not quiet:
-        print("Building collections/strings...")
+@dataclass(frozen=True)
+class StdlibBitcodeUnit:
+    """One stdlib bitcode unit: its `use` path and the module that generates its IR.
 
-    module = strings.generate_module_ir()
+    The linker resolves `use <unit>` to `<unit>.bc`, so the output path and the progress
+    label are both read from the unit path and cannot drift from it.
+    """
 
-    output = platform_dir / "collections" / "strings.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
+    unit: str
+    generator: str
 
-
-def build_core_primitives(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build core/primitives unit (platform-agnostic)."""
-    if not quiet:
-        print("Building core/primitives...")
-
-    module = primitives.generate_module_ir()
-
-    output = platform_dir / "core" / "primitives.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
+    @property
+    def output(self) -> str:
+        return f"{self.unit}.bc"
 
 
-def build_io_files(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build io/files unit (platform-agnostic)."""
-    if not quiet:
-        print("Building io/files...")
-
-    from sushi_lang.sushi_stdlib.src.io import files
-    module = files.generate_module_ir()
-
-    output = platform_dir / "io" / "files.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_time(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build time unit (includes platform-specific nanosleep declarations)."""
-    if not quiet:
-        print("Building time...")
-
-    from sushi_lang.sushi_stdlib.src import time
-    module = time.generate_module_ir()
-
-    output = platform_dir / "time.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_math(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build math unit (platform-agnostic)."""
-    if not quiet:
-        print("Building math...")
-
-    from sushi_lang.sushi_stdlib.src import math
-    module = math.generate_module_ir()
-
-    output = platform_dir / "math.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_sys_env(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build sys/env unit (includes platform-specific getenv/setenv declarations)."""
-    if not quiet:
-        print("Building sys/env...")
-
-    from sushi_lang.sushi_stdlib.src.sys import env
-    module = env.generate_module_ir()
-
-    output = platform_dir / "sys" / "env.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_net(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build the net/socket unit (platform-specific socket constants)."""
-    if not quiet:
-        print("Building net/socket...")
-
-    from sushi_lang.sushi_stdlib.src import net
-    module = net.generate_module_ir()
-
-    output = platform_dir / "net" / "socket.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_random(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build random unit (includes platform-specific random declarations)."""
-    if not quiet:
-        print("Building random...")
-
-    from sushi_lang.sushi_stdlib.src import random
-    module = random.generate_module_ir()
-
-    output = platform_dir / "random.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
-
-
-def build_sys_process(platform_dir: Path, quiet: bool = False) -> list[str]:
-    """Build sys/process unit (includes platform-specific process control declarations)."""
-    if not quiet:
-        print("Building sys/process...")
-
-    from sushi_lang.sushi_stdlib.src.sys import process
-    module = process.generate_module_ir()
-
-    output = platform_dir / "sys" / "process.bc"
-    return compile_module_to_bc(module, output, quiet=quiet)
+# The BUILD ORDER. A generator module is imported when its row is built.
+STDLIB_BITCODE_UNITS: tuple[StdlibBitcodeUnit, ...] = (
+    StdlibBitcodeUnit("collections/strings", "sushi_lang.sushi_stdlib.src.collections.strings"),
+    StdlibBitcodeUnit("core/primitives", "sushi_lang.backend.types.primitives"),
+    StdlibBitcodeUnit("io/files", "sushi_lang.sushi_stdlib.src.io.files"),
+    StdlibBitcodeUnit("time", "sushi_lang.sushi_stdlib.src.time"),
+    StdlibBitcodeUnit("math", "sushi_lang.sushi_stdlib.src.math"),
+    StdlibBitcodeUnit("sys/env", "sushi_lang.sushi_stdlib.src.sys.env"),
+    StdlibBitcodeUnit("sys/process", "sushi_lang.sushi_stdlib.src.sys.process"),
+    StdlibBitcodeUnit("random", "sushi_lang.sushi_stdlib.src.random"),
+    StdlibBitcodeUnit("net/socket", "sushi_lang.sushi_stdlib.src.net"),
+)
 
 
 def build_all(platform_name: str, quiet: bool = False) -> None:
@@ -158,16 +82,11 @@ def build_all(platform_name: str, quiet: bool = False) -> None:
         print()
 
     defined: set[str] = set()
-    defined.update(build_collections_strings(platform_dir, quiet=quiet))
-    defined.update(build_core_primitives(platform_dir, quiet=quiet))
-    defined.update(build_io_files(platform_dir, quiet=quiet))
-    defined.update(build_time(platform_dir, quiet=quiet))
-    defined.update(build_math(platform_dir, quiet=quiet))
-    defined.update(build_sys_env(platform_dir, quiet=quiet))
-    defined.update(build_sys_process(platform_dir, quiet=quiet))
-    defined.update(build_random(platform_dir, quiet=quiet))
-    defined.update(build_net(platform_dir, quiet=quiet))
-
+    for row in STDLIB_BITCODE_UNITS:
+        if not quiet:
+            print(f"Building {row.unit}...")
+        module = importlib.import_module(row.generator).generate_module_ir()
+        defined.update(compile_module_to_bc(module, platform_dir / row.output, quiet=quiet))
 
     # Note: core/results and core/maybe use inline emission only
     # They are not built as stdlib units because monomorphizing for
