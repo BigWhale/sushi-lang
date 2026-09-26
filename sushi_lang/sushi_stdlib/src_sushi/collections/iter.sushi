@@ -1,24 +1,36 @@
-# collections/iter -- opt-in higher-order combinators over List@(T).
-#
-# The first Sushi-source stdlib module: it ships as bundled .sushi source and is
-# merged as a compilation unit when imported (`use <collections/iter>`). The
-# combinators are ordinary generic free functions -- they monomorphize through
-# the normal generic pipeline, so there is no bitcode and nothing is emitted
-# unless a program actually instantiates one.
-#
-# Element types are copy/primitive for now (filter re-pushes each element, map
-# reads each one); owned-element combinators are deferred. Pass a typed-param
-# lambda (`|i32 x| ...`) or a plain function reference -- a bare-param lambda
-# (`|x| ...`) cannot be inferred against a generic parameter.
+##:
+Higher-order combinators over `List@(T)` and `T[]`, opt in with `use <collections/iter>`.
 
-# map: apply `f` to every element, collecting the results into a new List@(U).
+The module ships as Sushi source. Each combinator is a generic function or a generic
+extension method, so the compiler emits code only for an instance that a program uses.
+The free functions take a list with a plain element type. The extension methods declare
+the `| StdError` channel, so a call gives a `Result` and chains with `??`:
+`xs.map(f)??.filter(p)??.fold(0, g)??`.
+
+A bare-parameter lambda (`|x| ...`) cannot be inferred against a generic parameter
+(CE2063 on a method). Give a typed-parameter lambda (`|i32 x| ...`) or a named function.
+:##
+
+##:
+Applies `f` to every element, and collects the results into a new list.
+
+- Parameter xs: The list to read.
+- Parameter f: The transform to apply.
+- Returns: A new list of the transformed elements, in order.
+:##
 public fn map@(T, U)(List@(T) xs, fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in xs.iter()):
         out.push(f(x)??)
     return Result.Ok(out)
 
-# filter: keep the elements for which `pred` returns true.
+##:
+Keeps the elements for which `pred` answers true.
+
+- Parameter xs: The list to read.
+- Parameter pred: The predicate.
+- Returns: A new list of the kept elements, in order.
+:##
 public fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
     let List@(T) out = List.new()
     foreach(x in xs.iter()):
@@ -26,27 +38,31 @@ public fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
             out.push(x)
     return Result.Ok(out)
 
-# fold: reduce the list left-to-right, threading `acc` through `f`.
+##:
+Reduces the list from left to right, and gives the accumulator to `f` at each step.
+
+- Parameter xs: The list to read.
+- Parameter init: The start value of the accumulator.
+- Parameter f: The step.
+- Returns: The last value of the accumulator.
+:##
 public fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
     let U acc = init
     foreach(x in xs.iter()):
         acc := f(acc, x)??
     return Result.Ok(acc)
 
-# compose: build a new function that applies `g` then `f` (f after g). The returned
-# lambda captures `f` and `g` and calls them -- the capture-and-call case.
+##:
+Makes a function that applies `g`, then `f`, to its argument.
+
+The function that this returns captures `f` and `g`, and calls them in that order.
+
+- Parameter g: The first function to apply.
+- Parameter f: The second function to apply.
+- Returns: The composed function.
+:##
 public fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
     return Result.Ok(|x| f(g(x)??)??)
-
-# -- the method form (the UFCS epic) ------------------------------------------------
-#
-# The extension twins of the free functions above. Each declares the '| StdError'
-# channel, so a call yields Result and chains with '??':
-# xs.map(f)??.filter(p)??.fold(0, g)??. The T[] twins collect into a List@(U) -- a
-# dynamic array has no empty generic constructor to fill. Element ownership: map and
-# fold stay copy/primitive-element like the free functions; filter is fully general,
-# because it clones each kept element. A bare-param lambda cannot be inferred
-# (CE2063): pass a typed-param lambda ('|i32 x| ...') or a named function.
 
 ##:
 Applies `f` to every element of the list, collecting the results into a new list.
