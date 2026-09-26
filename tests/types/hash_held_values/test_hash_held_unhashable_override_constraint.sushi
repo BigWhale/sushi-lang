@@ -1,0 +1,23 @@
+# The Hashable constraint reads the same rule as the derive pass: a holder of an
+# overridden type satisfies it when the rest of the holder is hashable.
+# EXPECT_STDOUT_EXACT: "same true\n"
+
+struct F:
+    fn(i32) -> i32 f
+    i32 n
+
+extend F with Hashable:
+    fn hash() u64:
+        return self.n as u64
+
+struct H:
+    F inner
+
+fn digest@(T: Hashable)(T x) u64:
+    return Result.Ok(x.hash())
+
+fn main() i32:
+    let u64 a = digest(H(F(|i32 x| x + 1, 5))).realise(0)
+    let u64 b = digest(H(F(|i32 x| x - 1, 5))).realise(1)
+    println("same {a == b}")
+    return Result.Ok(0)

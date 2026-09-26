@@ -120,3 +120,24 @@ def test_a_container_element_that_cannot_hash_refuses_the_container():
     can_hash, reason = hashing.hashability_of(a_list)
     assert not can_hash
     assert reason
+
+
+def test_a_container_of_an_overridden_element_registers_its_held_array():
+    """`List@(F[])` hashes each `F[]`, and no field or payload names that array.
+
+    The backend registers a missing array hash on demand and has no override predicate,
+    so an array of an overridden F read CE0052 there. The container registers it (#891).
+    """
+    from sushi_lang.semantics.derived_methods import DerivedMethodTable
+    from sushi_lang.semantics.typesys import DynamicArrayType, FunctionType
+    fn_type = FunctionType(param_types=(BuiltinType.I32,),
+                           ok_type=BuiltinType.I32, err_type=BuiltinType.I32)
+    f = StructType(name="F", fields=(("f", fn_type), ("n", BuiltinType.I32)))
+    cells = DynamicArrayType(base_type=f)
+    a_list = StructType(name="List<F[]>", fields=(), generic_base="List",
+                        generic_args=(cells,))
+    derived = DerivedMethodTable()
+    derived.hash_override = lambda ty: ty == f
+    assert hashing.register_hash_if_hashable(a_list, derived)
+    assert derived.get_method(a_list, "hash") is not None
+    assert derived.get_method(cells, "hash") is not None

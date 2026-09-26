@@ -110,3 +110,21 @@ def test_the_magic_list_is_gone():
     """The derive pass's predicate is the one answer; no table of twelve names beside it."""
     assert not hasattr(PerkCollector, "register_synthetic_impls")
     assert not hasattr(PerkImplementationTable, "register_synthetic")
+
+
+def test_a_holder_of_an_overridden_type_satisfies_the_constraint(analyze):
+    """The constraint reads the derive pass's walk, and the walk reads the override (#891)."""
+    decls = (
+        "struct F:\n    fn(i32) -> i32 f\n    i32 n\n\n"
+        "extend F with Hashable:\n    fn hash() u64:\n        return self.n as u64\n\n"
+        "struct H:\n    F inner\n"
+    )
+    reporter = analyze(_program(decls, "H(F(|i32 a| a + 1, 5))"))
+    assert _codes(reporter) == [], "\n".join(str(item) for item in reporter.items)
+
+
+def test_the_tables_hand_the_derived_table_the_override():
+    """Every registration reads `hash_override` from the one derived table."""
+    from sushi_lang.semantics.tables import SymbolTables
+    tables = SymbolTables()
+    assert tables.derived_methods.hash_override is not None

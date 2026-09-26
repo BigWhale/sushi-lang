@@ -65,6 +65,11 @@ class SymbolTables:
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
 
+    def __post_init__(self) -> None:
+        from sushi_lang.semantics.generics.hashing import hash_override_of
+        self.enums.derived.hash_override = hash_override_of(
+            self.perk_impls, self.generic_perk_impls)
+
     @property
     def derived_methods(self) -> DerivedMethodTable:
         """The hash() and clone() the `derive` pass wrote for THIS program (#601).
