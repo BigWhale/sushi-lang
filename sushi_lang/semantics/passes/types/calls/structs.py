@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 
 from sushi_lang.internals import errors as er
-from ..visibility import name_is_contested
+from ..visibility import type_name_is_contested
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.ast import Call, Expr
@@ -24,6 +24,15 @@ def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
 
     struct_name = call.callee.id
 
+    # A type name this unit lost (#863, #921): the table holds the winner, a struct or
+    # an enum, and the declaration's CE0004 / CE0006 / CE3011 is the one fault. The
+    # arguments are still checked.
+    if type_name_is_contested(validator, struct_name):
+        call.field_names = None
+        for arg in call.args:
+            validator.validate_expression(arg)
+        return
+
     if struct_name not in validator.struct_table.by_name:
         er.emit(validator.reporter, er.ERR.CE2001, call.callee.loc, name=struct_name)
         for arg in call.args:
@@ -31,14 +40,6 @@ def validate_struct_constructor(validator: 'TypeValidator', call: Call) -> None:
         return
 
     struct_type = validator.struct_table.by_name[struct_name]
-
-    # A struct name this unit lost (#863): the fields are the winner's, and the
-    # declaration's CE0004 / CE0006 is the one fault. The arguments are still checked.
-    if name_is_contested(validator, "struct", struct_name):
-        call.field_names = None
-        for arg in call.args:
-            validator.validate_expression(arg)
-        return
 
     expected_fields = list(struct_type.fields)
 
