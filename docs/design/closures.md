@@ -243,7 +243,7 @@ for the captured variable's provenance and type class, not a closures-specific r
    **The env parameter is `poke`, and the mode is load-bearing (2026-08-15).** A move-captured
    `List@(T)` / `Own@(T)` / dynamic array is MUTABLE inside the body by design (§3, T1.5), and
    after the rewrite every such write goes through this parameter: `xs.push(x)` is
-   `__closure_env.xs.push(x)`. The environment is the closure's OWN storage — the closure value
+   `#closure_env.xs.push(x)`. The environment is the closure's OWN storage — the closure value
    owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
    to a caller's value.
 
@@ -266,7 +266,7 @@ for the captured variable's provenance and type class, not a closures-specific r
    `ReferenceType` machinery as a user borrow, so every new reference rule has to be checked
    against it by hand. If a second rule needs an accommodation for it, that is the signal to give
    it its own kind (a `synthesized` flag on `Param`, or a distinct param kind) so a rule can ask
-   "is this a user borrow?" instead of matching the name `__closure_env`. One accommodation is a
+   "is this a user borrow?" instead of matching the name `#closure_env`. One accommodation is a
    coincidence; two is a missing concept.
 3. At the lambda site, heap-allocate the env, populate captured fields (copy or move), and build
    `{@__lambda_N, env_ptr, @__closure_env_N_drop}`.
