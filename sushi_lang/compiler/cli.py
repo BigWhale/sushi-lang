@@ -117,7 +117,7 @@ def _render_type_params(records: list | None) -> str:
     rendered = []
     for tp in records:
         constraints = tp.get('constraints') or []
-        rendered.append(f"{tp['name']}: {', '.join(constraints)}"
+        rendered.append(f"{tp['name']}: {' + '.join(constraints)}"
                         if constraints else tp['name'])
     return f"@({', '.join(rendered)})"
 
@@ -524,7 +524,8 @@ def print_library_info(library_path: Path, show_docs: bool = False,
             for variant in enum['variants']:
                 records.open()
                 if variant.get('has_data'):
-                    print(f"    {variant['name']}({_surface(variant['data_type'])})")
+                    payload = ", ".join(_surface(t) for t in variant['data_types'])
+                    print(f"    {variant['name']}({payload})")
                 else:
                     print(f"    {variant['name']}")
                 records.close(_print_doc(variant, "      ", opts))

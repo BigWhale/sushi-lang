@@ -129,7 +129,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "struct": {"name", "fields", "is_generic", "type_params", "doc"},
     "field": {"name", "type", "doc"},
     "enum": {"name", "variants", "is_generic", "type_params", "doc"},
-    "variant": {"name", "has_data", "data_type", "doc"},
+    "variant": {"name", "has_data", "data_types", "doc"},
     "generic_type": {"name", "type_params", "doc"},
     "perk": {"name", "methods", "doc"},
     "perk_impl": {"type", "type_args", "perk", "methods", "doc"},

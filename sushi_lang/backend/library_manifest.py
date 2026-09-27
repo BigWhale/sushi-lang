@@ -437,13 +437,11 @@ class LibraryManifestGenerator:
     def _enum_members(self, enum_def) -> dict:
         variants = []
         for variant in enum_def.variants:
-            has_data = len(variant.associated_types) > 0
-            variants.append(with_doc({
-                "name": variant.name,
-                "has_data": has_data,
-                "data_type": (self._type_to_string(variant.associated_types[0])
-                              if has_data else None),
-            }, variant))
+            record = {"name": variant.name, "has_data": bool(variant.associated_types)}
+            if variant.associated_types:
+                record["data_types"] = [self._type_to_string(t)
+                                        for t in variant.associated_types]
+            variants.append(with_doc(record, variant))
         return {"variants": variants}
 
     def _extract_unit_docs(self, units: list['Unit']) -> dict[str, dict]:
