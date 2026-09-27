@@ -1,0 +1,7 @@
+# The quiet twin of test_warn_keep_object_incremental: a program of one unit takes the
+# monolithic build, which keeps its object file, so --keep-object is honoured and the
+# compiler gives no warning.
+# COMPILER_FLAGS: --keep-object
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,7 +1,8 @@
 """Source file loading and unit resolution."""
 from __future__ import annotations
 
-import sys
+from pathlib import Path
+from typing import Optional
 
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.parser import parse_to_ast
@@ -35,6 +36,28 @@ def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
             seen_units[key] = use_stmt.loc
 
 
+def _unreadable_reason(exc: Exception) -> str:
+    if isinstance(exc, UnicodeDecodeError):
+        line = exc.object[:exc.start].count(b"\n") + 1
+        return f"byte 0x{exc.object[exc.start]:02x} on line {line} is not valid UTF-8"
+    if isinstance(exc, OSError) and exc.strerror:
+        return exc.strerror
+    return str(exc)
+
+
+def read_source(path: Path, reporter: Reporter) -> Optional[str]:
+    """The text of a source file, or None after CE3017. One reader for the main source
+    and every unit it imports."""
+    from sushi_lang.internals import errors as er
+
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        er.emit(reporter, er.ERR.CE3017, None, filename=str(path),
+                path=path, reason=_unreadable_reason(exc))
+        return None
+
+
 def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
                           loaded: set[str], reporter: Reporter) -> bool:
     """Recursively load a unit and all its dependencies."""
@@ -50,10 +73,8 @@ def load_unit_recursively(unit_manager: UnitManager, unit_name: str,
             er.emit(unit_manager.reporter, er.ERR.CE3002, None, name=unit_name, path=unit_path)
         return False
 
-    try:
-        unit_src = unit_path.read_text(encoding="utf-8")
-    except Exception as e:
-        print(f"error: cannot read {unit_path}: {e}", file=sys.stderr)
+    unit_src = read_source(unit_path, reporter)
+    if unit_src is None:
         return False
 
     unit_reporter = Reporter(source=unit_src, filename=str(unit_path))

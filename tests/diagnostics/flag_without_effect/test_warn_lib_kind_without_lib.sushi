@@ -1,0 +1,7 @@
+# --lib-kind chooses how a library ships, and this build is a program, so the flag is ignored and the compiler says so.
+# COMPILER_FLAGS: --lib-kind binary
+# EXPECT_ERROR_CODES_EXACT: CW0003
+# EXPECT_STDERR_CONTAINS: "'--lib-kind' has no effect without --lib"
+
+fn main() i32:
+    return Result.Ok(0)

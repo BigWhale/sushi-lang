@@ -1,7 +1,6 @@
 """Multi-file compilation orchestration."""
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING, Optional
 import time
 from pathlib import Path
@@ -474,6 +473,19 @@ def codegen_for(analyzer: SemanticAnalyzer,
     return cg
 
 
+def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
+    from sushi_lang.internals import errors as er
+
+    ll_path = out_path.with_suffix(".ll")
+    try:
+        ll_path.write_text(str(cg.module), encoding="utf-8")
+    except OSError as exc:
+        er.emit(reporter, er.ERR.CW0002, None, path=ll_path,
+                reason=exc.strerror or str(exc))
+        return
+    print(f"wrote LLVM IR: {ll_path}")
+
+
 def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                         is_library, stdlib_units, library_imports, library_linker) -> int:
     """Original single-module compilation path."""
@@ -543,12 +555,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
             return 2
 
         if args.write_ll:
-            try:
-                ll_path = out_path.with_suffix(".ll")
-                ll_path.write_text(str(cg.module), encoding="utf-8")
-                print(f"wrote LLVM IR: {ll_path}")
-            except Exception as e:
-                print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
+            _write_ll(cg, out_path, reporter)
 
         print(f"Success! Wrote library: {out_path}")
     else:
@@ -559,12 +566,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
                                   monomorphized_extensions=monomorphized_extensions)
 
         if args.write_ll:
-            try:
-                ll_path = out_path.with_suffix(".ll")
-                ll_path.write_text(str(cg.module), encoding="utf-8")
-                print(f"wrote LLVM IR: {ll_path}")
-            except Exception as e:
-                print(f"(warn) failed to write LLVM IR: {e}", file=sys.stderr)
+            _write_ll(cg, out_path, reporter)
 
         print(f"Success! Wrote native binary: {out_path}")
 
@@ -683,8 +685,13 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
         link_desc += f" + {lib_count} libs"
     print(f"Linking: {link_desc} in {link_time:.2f}s")
 
-    if args.write_ll:
-        print("(note: --write-ll not supported in incremental mode)")
+    from sushi_lang.compiler.cli import COMMAND_LINE
+    from sushi_lang.internals import errors as er
+    for flag, given in (("--write-ll", args.write_ll), ("--keep-object", args.keep_object)):
+        if given:
+            er.emit(reporter, er.ERR.CW0003, None, filename=COMMAND_LINE, flag=flag,
+                    reason="on the incremental build of a program of more than one unit; "
+                           "add --no-incremental")
 
     print(f"Success! Wrote native binary: {out_path}")
 
