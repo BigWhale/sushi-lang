@@ -324,9 +324,75 @@ def propagate_declared_type_to_value(validator: 'TypeValidator', value_expr: Exp
     return resolved
 
 
+def _note_declared_position(validator: 'TypeValidator', node: Expr,
+                            expected_type: 'Type') -> None:
+    """Record that a concrete declared type reaches a generic enum constructor (#1005).
+
+    A type that fits stamps the node below. A type that does not fit (`let i32 x =
+    Result.Ok(1)`) stamps nothing, and then the position's own mismatch check is the one
+    diagnostic, not CE2112: the constructor asks `holds_declared_type`.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.type_predicates import is_abstract_type
+
+    if isinstance(node, EnumConstructor):
+        enum_name: Optional[str] = node.enum_name
+    elif isinstance(node, (DotCall, MemberAccess)):
+        enum_name = _enum_receiver_name(validator, node.receiver)
+    else:
+        return
+    if enum_name not in validator.generic_enum_table.by_name:
+        return
+    if expected_type is None or isinstance(expected_type, GenericTypeRef) or is_abstract_type(
+            expected_type, validator.struct_table.by_name, validator.enum_table.by_name):
+        return
+    _declared_positions(validator).add(id(node))
+
+
+def _note_refused_declared_type(validator: 'TypeValidator', node: Expr) -> None:
+    """A refused declared type reaches a constructor, and every constructor in its payload.
+
+    The type gives no instance, but it is a declared type, so no constructor it reaches
+    reports CE2112 (#991). The walk follows the payload of a generic enum constructor
+    only: that is where a declared type would go.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if isinstance(node, EnumConstructor):
+        enum_name: Optional[str] = node.enum_name
+    elif isinstance(node, (DotCall, MemberAccess)):
+        enum_name = _enum_receiver_name(validator, node.receiver)
+    else:
+        return
+    if enum_name not in validator.generic_enum_table.by_name:
+        return
+    _declared_positions(validator).add(id(node))
+    for arg in getattr(node, "args", None) or ():
+        _note_refused_declared_type(validator, arg)
+
+
+def _declared_positions(validator: 'TypeValidator') -> set:
+    positions = getattr(validator, "_declared_positions", None)
+    if positions is None:
+        positions = set()
+        validator._declared_positions = positions  # type: ignore[attr-defined]
+    return positions
+
+
+def holds_declared_type(validator: 'TypeValidator', node: Expr) -> bool:
+    """Whether a concrete declared type was propagated to this constructor node."""
+    return id(node) in _declared_positions(validator)
+
+
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""
+    from .utils import names_no_type
+    if names_no_type(validator, expected_type):
+        _note_refused_declared_type(validator, value_expr)
+        return
+    _note_declared_position(validator, value_expr, expected_type)
     if isinstance(expected_type, BuiltinType) and (
             expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):
         _propagate_numeric_type(validator, value_expr, expected_type)

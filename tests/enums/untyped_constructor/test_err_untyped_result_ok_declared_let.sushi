@@ -1,0 +1,8 @@
+# A declared type reaches the constructor, so CE2112 does not apply (#1005): the `let`
+# reports the one mismatch, CE2505.
+# EXPECT_ERROR_CODES_EXACT: CE2505
+
+fn main() i32:
+    let i32 x = Result.Ok(42)
+    println(x)
+    return Result.Ok(0)

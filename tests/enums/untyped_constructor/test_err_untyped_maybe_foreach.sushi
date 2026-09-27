@@ -1,0 +1,8 @@
+# An untyped `Maybe.Some(1)` as a foreach iterable is `Maybe@(i32)`, which is not
+# walkable: CE2033, as for a `Maybe@(i32)` local (#1005). It was an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE2033
+
+fn main() i32:
+    foreach(x in Maybe.Some(1)):
+        println(x)
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# A generic enum constructor with no declared type takes its type from its payload
+# (#1005). `Maybe.Some(1)` as a match scrutinee is `Maybe@(i32)`. It reached the backend
+# with no stamp and stopped with an internal error.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n"
+
+fn main() i32:
+    match Maybe.Some(1):
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

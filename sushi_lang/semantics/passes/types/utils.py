@@ -21,14 +21,40 @@ if TYPE_CHECKING:
 _KEPT_TYPE_KINDS = frozenset({"struct", "enum"})
 
 
-def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
+def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> bool:
     """Validate a WRITTEN type: every name in it, then every HashMap key it holds.
 
     The key rules are asked once per written type, over the whole of it, so a
     `HashMap@(K, V)` nested in a `Maybe@(...)` is read exactly once (#773).
+
+    Answers whether the type is REFUSED: it holds a name that is not a type (#991).
     """
     _check_type_names(validator, type_obj, span)
     reject_unusable_hashmap_keys(validator, type_obj, span)
+    return names_no_type(validator, type_obj)
+
+
+def names_no_type(validator: 'TypeValidator', type_obj: Optional[Type]) -> bool:
+    """Whether a type holds a name that no table holds: a type CE2001 refuses (#991).
+
+    One fault, one diagnostic: no check compares a value against such a type, and no
+    constructor takes an instance from it. The answer reads the type and the tables
+    alone, so the order in which the declarations are checked does not change it.
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.type_walk import walk_named_types
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    for held in walk_named_types(type_obj, through_declarations=False):
+        if isinstance(held, UnknownType):
+            if held.name not in structs and held.name not in enums:
+                return True
+        elif isinstance(held, GenericTypeRef):
+            if (held.base_name not in validator.generic_enum_table.by_name
+                    and held.base_name not in validator.generic_struct_table.by_name):
+                return True
+    return False
 
 
 def reject_unusable_hashmap_keys(validator: 'TypeValidator', type_obj: Optional[Type],

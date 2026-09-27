@@ -1,0 +1,10 @@
+# `Result.Ok(1)` given to an `i32` parameter: the argument check reports the one mismatch,
+# CE2006, and CE2112 does not apply (#1005). It was an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+
+fn f(i32 x) i32:
+    return Result.Ok(x)
+
+fn main() i32:
+    println(f(Result.Ok(1)).realise(0))
+    return Result.Ok(0)

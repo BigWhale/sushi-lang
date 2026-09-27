@@ -181,6 +181,12 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
     if actual == expected:
         return True
 
+    # A refused type is one fault (#991): CE2001 was its diagnostic, and a compare against
+    # it answers yes so that no position reports the same fault again.
+    from .utils import names_no_type
+    if names_no_type(validator, actual) or names_no_type(validator, expected):
+        return True
+
     # Function-value compatibility: invariant on arity, every parameter, ok type, and
     # err type (no variance in v1). Recurse so members still carrying UnknownType resolve.
     if isinstance(actual, FunctionType) and isinstance(expected, FunctionType):

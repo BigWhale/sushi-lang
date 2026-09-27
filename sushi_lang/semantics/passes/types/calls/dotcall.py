@@ -21,6 +21,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.typesys import BuiltinType, Type
 from .enums import validate_enum_constructor
+from ..propagation import holds_declared_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import DotCall
@@ -166,7 +167,8 @@ def validate_variant_spelling(validator: 'TypeValidator', node, variant_name: st
         loc=node.loc,
     )
     constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)
-    validate_enum_constructor(validator, constructor)
+    validate_enum_constructor(validator, constructor,
+                              declared=holds_declared_type(validator, node))
     if constructor.resolved_enum_type is not None:
         node.resolved_enum_type = constructor.resolved_enum_type
     return True
@@ -195,9 +197,19 @@ def _enum_receiver(validator: 'TypeValidator', node: 'DotCall', *,
     if enum_type is not None:
         node.inferred_return_type = enum_type
         return DotCallTarget(DotCallKind.ENUM, type=enum_type)
-    # A GENERIC enum constructor (`Result.Ok()`): the instantiation comes from the
-    # position that binds it, so this rung answers the node with no type of its own.
-    return DotCallTarget(DotCallKind.ENUM)
+    # A GENERIC enum constructor: the position's stamp, or else the instance its payload
+    # gives (#1005). Neither is None, and validation reports why.
+    instance = getattr(node, 'resolved_enum_type', None)
+    if instance is None:
+        from sushi_lang.semantics.passes.types.calls.enums import (
+            declared_position_shape, untyped_constructor_instance)
+        instance = untyped_constructor_instance(validator, name, node.method, node.args)
+        if instance is None:
+            return DotCallTarget(DotCallKind.ENUM, type=declared_position_shape(
+                validator, node, name, node.method, node.args))
+        node.resolved_enum_type = instance
+    node.inferred_return_type = instance
+    return DotCallTarget(DotCallKind.ENUM, type=instance)
 
 
 def _fn_field_type(validator: 'TypeValidator', node: 'DotCall') -> Optional[Type]:

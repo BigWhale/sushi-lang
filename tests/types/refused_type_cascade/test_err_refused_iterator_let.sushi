@@ -1,0 +1,8 @@
+# A refused written type is one fault: CE2001 and no CE2002 against it.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let Iterator@(i32) it = a.iter()
+    println(it)
+    return Result.Ok(0)

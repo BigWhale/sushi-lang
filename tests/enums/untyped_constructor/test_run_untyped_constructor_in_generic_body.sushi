@@ -1,0 +1,14 @@
+# An untyped constructor inside a generic body takes the instance of each copy (#1005):
+# `Maybe.Some(x)` is `Maybe@(i32)` in one copy and `Maybe@(string)` in the other.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+fn has@(T)(T x) bool:
+    return Result.Ok(Maybe.Some(x.clone()).is_some())
+
+fn main() i32:
+    println(has(4).realise(false))
+    println(has("four").realise(false))
+    return Result.Ok(0)

@@ -1,0 +1,7 @@
+# A constructor under a refused declared type takes no instance from it and is not CE2112.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+
+fn main() i32:
+    let Result@(Maybe@(Nope), StdError) bad = Result.Ok(Maybe.None())
+    println(bad.is_ok())
+    return Result.Ok(0)
