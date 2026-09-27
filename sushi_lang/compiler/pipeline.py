@@ -235,6 +235,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
                                        cache)
             else:
                 binary_imports.add(lib_path)
+                metadata["library_path"] = str(slib_path)
                 resolver.loaded_libraries[metadata["library_name"]] = metadata
 
             print(f"  - {' / '.join(lib_path.split('/'))}")
