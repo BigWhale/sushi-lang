@@ -26,7 +26,10 @@ def _get_versions() -> dict[str, str]:
         "llvm": llvm_lib_ver,
     }
 
-def print_banner() -> None:
+SUSHI_TITLE = "🍣 Sushi (すし) Lang Compiler"
+
+
+def print_banner(title: str = SUSHI_TITLE) -> None:
     _ensure_utf8_stdout()
     v = _get_versions()
     today = datetime.date.today().isoformat()
@@ -40,6 +43,6 @@ def print_banner() -> None:
 
     dev_marker = " (dev)" if is_dev else ""
     print(
-        f"{BOLD} 🍣 Sushi (すし) Lang Compiler{RESET} • {v['app']}{dev_marker}\n"
+        f"{BOLD} {title}{RESET} • {v['app']}{dev_marker}\n"
         f"{DIM}Python {v['python']} • llvmlite {v['llvmlite']} • LLVM {v['llvm']} • {today}{RESET}\n"
     )
