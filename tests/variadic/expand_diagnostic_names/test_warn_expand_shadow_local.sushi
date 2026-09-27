@@ -1,0 +1,28 @@
+# A `let` in an `expand` body declares the name of a local of the enclosing
+# function. The copies of the body stand in the function's block after the
+# unroll, but the written `let` is in the inner block of the `expand`, so it is a
+# shadow: CW1002 names the written local 'u' (#1022). It is told one time for the
+# written `let`, keyed on its record; a probe with the reporter's repeat drop
+# turned off measured one CW1002.
+# EXPECT_ERROR_CODES_EXACT: CW1002
+# EXPECT_STDERR_CONTAINS: :19:9: warning [CW1002]: declared variable 'u' already exists in an outer scope.
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    let i32 u = 0
+    expand(a in args):
+        let i32 u = 1
+        println("{u} {a.display()}")
+    println(u)
+    return Result.Ok(~)
+
+fn main() i32:
+    match f(1, 2):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

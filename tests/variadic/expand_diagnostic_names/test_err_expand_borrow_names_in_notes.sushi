@@ -1,0 +1,38 @@
+# Two borrow faults on the locals of an `expand` body name the written locals in
+# the message, in every note and in the help (#1022). CE2412 names 'xs' and
+# 'first'; CE2411 names the place 'xs[0]'. Each fault is told one time for the
+# written statement; a probe with the reporter's repeat drop turned off measured
+# one CE2412 and one CE2411.
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2412
+# EXPECT_STDERR_CONTAINS: :29:9: error [CE2412]: cannot mutate 'xs' while 'first' borrows from it.
+# EXPECT_STDERR_CONTAINS: note: 'first' borrows from 'xs' here
+# EXPECT_STDERR_CONTAINS: note: 'first' is used here, after the change
+# EXPECT_STDERR_CONTAINS: help: call `.push()` after the last use of 'first', or bind an independent value with `.clone()`
+# EXPECT_STDERR_CONTAINS: :31:19: error [CE2411]: cannot consume 'xs[0]': another owner keeps this value.
+# EXPECT_STDERR_CONTAINS: note: 'xs' owns this value and still frees it
+# EXPECT_STDERR_CONTAINS: help: clone it to take an independent value: `xs[0].clone()`
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let string[] xs = from([a.display()])
+        let string first = xs[0]
+        xs.push("z")
+        println(first)
+        eat(nom xs[0])??
+    return Result.Ok(~)
+
+fn main() i32:
+    match f(1, 2):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
