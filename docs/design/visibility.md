@@ -580,9 +580,9 @@ Only four Sushi sources cross a unit boundary with a type, and all four are mark
 | `compression/zlib.sushi` | `ZError` | 4 structs, 8 lookup tables |
 | `collections/iter.sushi` | — | declares no types |
 
-`.slib` production carries the gate. `_extract_structs`
-(`backend/library_manifest.py:286`), `_extract_enums` (`:322`) and
-`_extract_public_constants` (`:262`) all read the marker now, matching
+`.slib` production carries the gate. `_extract_public_types` (structs and enums) and
+`_extract_public_bindings` (constants and variables), in `backend/library_manifest.py`,
+both read the marker now, matching
 `_extract_public_functions`; the constant extractor also stopped iterating every unit,
 which had been putting a bundled stdlib module's constants in the manifest. The
 `not_exported` list (`:215`) grew a `struct`, an `enum` and a `constant` kind, so a

@@ -8,6 +8,7 @@ from pathlib import Path
 from sushi_lang.compiler.loader import (
     load_unit_recursively,
 )
+from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.compiler.cache import CacheManager
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter
@@ -77,11 +78,6 @@ def _check_library_compiler_version(metadata: dict, lib_path: str,
         raise LibraryError("CE3503",
                            lib=metadata.get("library_name") or lib_path,
                            requires=requires, current=current)
-
-
-# The templates schema this compiler writes and reads. ONE constant for the producer
-# (`backend/library_manifest.py`) and the consumer gate below.
-TEMPLATES_SCHEMA_VERSION = 7
 
 
 def _check_library_templates_version(metadata: dict, lib_path: str) -> None:

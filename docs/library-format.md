@@ -361,7 +361,7 @@ is the authority, and the index is a cache of it.
                                        #   contract and on both kinds of
                                        #   implementation. The one constant is
                                        #   `TEMPLATES_SCHEMA_VERSION` in
-                                       #   `compiler/pipeline.py`
+                                       #   `backend/library_format.py`
 
         # Generic functions (incl. variadic packs), as re-parsable source
         # slices; monomorphized at the consumer's call sites. Public ones plus
