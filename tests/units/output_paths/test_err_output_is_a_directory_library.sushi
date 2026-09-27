@@ -1,0 +1,8 @@
+# A library build whose -o path is a directory (`d.slib`, beside this fixture) is CE3020.
+# OUTPUT_PATH: d.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CE3020
+# EXPECT_STDERR_CONTAINS: "Is a directory"
+
+public fn answer() i32:
+    return Result.Ok(42)

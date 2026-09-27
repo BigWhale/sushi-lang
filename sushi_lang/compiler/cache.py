@@ -64,9 +64,12 @@ class CacheManager:
 
     def ensure_dirs(self) -> None:
         """Create the cache directory structure if it doesn't exist."""
+        from sushi_lang.backend.driver import writing_output
+
         for path in (self.units_path, self.stdlib_path, self.libs_path,
                      self.libsrc_path):
-            path.mkdir(parents=True, exist_ok=True)
+            with writing_output(path):
+                path.mkdir(parents=True, exist_ok=True)
 
     def wipe(self) -> None:
         """Remove the entire cache directory."""
@@ -111,13 +114,16 @@ class CacheManager:
 
     def _store(self, obj_path: Path, obj_bytes: bytes) -> Path:
         """Publish an object atomically."""
-        obj_path.parent.mkdir(parents=True, exist_ok=True)
+        from sushi_lang.backend.driver import writing_output
+
         tmp_path = obj_path.with_name(
             f"{obj_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
         )
         try:
-            tmp_path.write_bytes(obj_bytes)
-            os.replace(tmp_path, obj_path)
+            with writing_output(obj_path):
+                obj_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path.write_bytes(obj_bytes)
+                os.replace(tmp_path, obj_path)
         finally:
             tmp_path.unlink(missing_ok=True)
         return obj_path
