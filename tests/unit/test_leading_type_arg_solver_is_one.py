@@ -30,7 +30,7 @@ MODULES = (
 
 SITES = (
     ("generics/instantiate/expressions.py", "_infer_type_args_from_call"),
-    ("generics/instantiate/expressions.py", "scan_generic_fn_reference"),
+    ("generics/instantiate/expressions.py", "_record_fn_reference"),
     ("generics/monomorphize/functions.py", "_call_type_args"),
     ("passes/types/calls/generics.py", "resolve_generic_fn_reference"),
     ("passes/types/calls/generics.py", "_infer_type_args_from_call_site"),

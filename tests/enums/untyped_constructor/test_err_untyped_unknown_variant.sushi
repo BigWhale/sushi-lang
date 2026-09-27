@@ -1,0 +1,9 @@
+# An untyped constructor that names a variant the generic enum does not declare is CE2045
+# (#1005). It was accepted with no diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2045
+
+fn main() i32:
+    match Maybe.Nope(1):
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

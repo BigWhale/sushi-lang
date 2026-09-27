@@ -1,0 +1,9 @@
+# `Result.Err(e)` gives the error type and nothing gives the Ok type (#1005).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "'T'"
+
+fn main() i32:
+    match Result.Err(StdError.Error):
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println(0)
+    return Result.Ok(0)

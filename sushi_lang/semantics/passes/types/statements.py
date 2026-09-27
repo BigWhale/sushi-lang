@@ -29,7 +29,7 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         er.emit(validator.reporter, er.ERR.CE2007, stmt.name_span, name=stmt.name)
         return  # Cannot continue without type info
 
-    validate_type_name(validator, stmt.ty, stmt.type_span)
+    refused = validate_type_name(validator, stmt.ty, stmt.type_span)
 
     # Blank type cannot be used for variables
     if stmt.ty == BuiltinType.BLANK:
@@ -61,6 +61,8 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         # argument in the very call that produced it. Then the Result question BEFORE
         # the general one, because CE2505 names the fix and CE2002 does not (#535).
         validator.validate_expression(stmt.value)
+        if refused:
+            return
         if not reject_unhandled_result(validator, stmt, resolved_type):
             reject_incompatible_assignment(validator, stmt.ty, stmt.value,
                                            stmt.type_span, stmt.value.loc)

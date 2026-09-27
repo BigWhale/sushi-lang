@@ -10,7 +10,12 @@ from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit,
 from sushi_lang.semantics.ownership import Ownership, Provenance, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
-from .diagnostics import emit_consume_of_borrow, emit_consume_of_read
+from .diagnostics import (
+    emit_consume_of_borrow,
+    emit_consume_of_read,
+    no_clone_reason,
+    refuses_clone,
+)
 from .reads import (
     constant_sig, read_type, reads_through_owner, root_owner, unwrap_try)
 from .state import BorrowState
@@ -217,15 +222,21 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
             if state.first_borrow_span is not None:
                 diag.note_at("borrowed here, in the same statement",
                              state.first_borrow_span)
-            diag.help(f"the new owner frees this value while the borrow still points "
-                      f"at it; borrow it twice, or clone what the owning position "
-                      f"needs: `{name}.clone()`").emit()
+            if refuses_clone(checker, state.var_type):
+                diag.help(f"the new owner frees this value while the borrow still "
+                          f"points at it; borrow it twice: {no_clone_reason(name)}")
+            else:
+                diag.help(f"the new owner frees this value while the borrow still "
+                          f"points at it; borrow it twice, or clone what the owning "
+                          f"position needs: `{name}.clone()`")
+            diag.emit()
             return
         # Handing the owner away leaves every binding reading out of it pointing at
         # storage the new owner frees (#242).
         check_owner_not_borrowed(checker, name, use_span, "move")
         state.is_moved = True
         state.moved_at_span = state.moved_at_span or use_span
+        state.move_reported_by = None
         # A move deeper than the owner's declaration cannot dominate the scope exit,
         # so the backend guards this owner's frees with a runtime drop flag (#414).
         if checker.branch_depth > state.declared_branch_depth:
@@ -281,6 +292,7 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     if decision is Ownership.MOVE:
         src_state.is_moved = True
         src_state.moved_at_span = src_state.moved_at_span or expr.loc
+        src_state.move_reported_by = None
         # Same rule as consume(): a conditional move needs a runtime drop flag (#414).
         if checker.branch_depth > src_state.declared_branch_depth:
             checker.conditional_moves.add(src_state.name)

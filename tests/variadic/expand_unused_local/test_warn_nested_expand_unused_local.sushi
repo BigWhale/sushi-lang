@@ -1,0 +1,26 @@
+# An unused `let` in an inner `expand` that is in an `if` block of an outer
+# `expand`. The copies of the inner `let` are in a different block for each outer
+# copy, and they are all one written declaration: CW1001 is reported ONE time,
+# with the written name `v` (#1019). The outer `u` is read, so it is not reported.
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :19:17: warning [CW1001]: unused variable 'v'.
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let i32 u = 1
+        if (u == 1):
+            expand(b in args):
+                let i32 v = 2
+                println(b.display())
+        println(a.display())
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)

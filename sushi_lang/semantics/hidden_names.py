@@ -22,6 +22,10 @@ def pack_element_name(pack_param: str, index: int) -> str:
     return hidden_name(f"pack_{pack_param}_", index)
 
 
-def expand_copy_local_name(local: str, copy_index: int) -> str:
-    """The local `local` of the unrolled `expand` copy `copy_index` (#1015)."""
-    return hidden_name(f"{local}_x", copy_index)
+def expand_copy_local_name(local: str, copy_number: int) -> str:
+    """The local `local` of the unrolled `expand` copy `copy_number` (#1015).
+
+    `copy_number` is unique over the instance: nested and sibling copies draw from
+    one counter (#1018).
+    """
+    return hidden_name(f"{local}_x", copy_number)

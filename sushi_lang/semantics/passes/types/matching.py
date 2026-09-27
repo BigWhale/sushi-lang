@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
     BuiltinType, EnumType, ReferenceType, StructType, Type,
@@ -133,7 +134,13 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
 
     if scrutinee_type is None:
-        return None  # Error already emitted during expression validation
+        # A scrutinee with no type is refused by the check that found the fault. With no
+        # error at all, the arms would go unchecked and the backend would guess (#1005).
+        # The reporter drops a repeat in an instance body, so the test is "any error".
+        if not validator.reporter.has_errors:
+            raise_internal_error(
+                "CE0015", message="match scrutinee has no type and no diagnostic says why")
+        return None
 
     # An unresolved generic scrutinee (e.g. an indexed element of a Maybe<i32>[]
     # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.

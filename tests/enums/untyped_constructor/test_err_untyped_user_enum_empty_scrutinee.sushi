@@ -1,0 +1,12 @@
+# A payload-free variant of a user generic enum gives no type argument (#1005).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn main() i32:
+    match Slot.Empty():
+        Slot.Full(v) -> println(v)
+        Slot.Empty -> println(0)
+    return Result.Ok(0)

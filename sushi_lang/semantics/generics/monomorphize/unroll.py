@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import itertools
-from typing import Dict, List
+from typing import Dict, Iterator, List, Optional, Tuple, cast
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
@@ -13,6 +13,30 @@ from sushi_lang.semantics.hidden_names import expand_copy_local_name
 
 
 _COPY_IDS = itertools.count(1)
+
+
+@dataclasses.dataclass(eq=False)
+class WrittenLet:
+    """One `let` as it is written in an `expand` body.
+
+    Every copy of that `let`, at every depth of nesting, points to one record, so a
+    diagnostic about the declaration is told once and with the written name (#1019).
+    The record is compared by identity.
+    """
+    name: str
+
+
+# A copy `Let` -> its written declaration. The key is the copy's `id`; the value holds
+# the copy, so the key is never used again for a different object.
+_WRITTEN: Dict[int, Tuple[Let, WrittenLet]] = {}
+
+
+def written_let(stmt: Let) -> Optional[WrittenLet]:
+    """The written declaration of a `let` that the unroll copied, or None."""
+    entry = _WRITTEN.get(id(stmt))
+    if entry is None or entry[0] is not stmt:
+        return None
+    return entry[1]
 
 
 def _is_frozen_dataclass(obj) -> bool:
@@ -47,26 +71,37 @@ def _pattern_binding_names(pattern) -> set:
 def unroll_expands(
     body: Block, pack_param_fanout: Dict[str, List[str]]
 ) -> Block:
-    """Rewrite every ``Expand`` in ``body`` into its unrolled ordinary statements."""
-    body.statements = _unroll_stmt_list(body.statements, pack_param_fanout)
+    """Rewrite every ``Expand`` in ``body`` into its unrolled ordinary statements.
+
+    Every copy of every ``expand`` in the instance, at every depth of nesting and
+    in every sibling ``expand``, draws its own number from ONE counter, so a local
+    of a copy has a name that is unique over the instance (#1018).
+    """
+    body.statements = _unroll_stmt_list(
+        body.statements, pack_param_fanout, itertools.count()
+    )
     return body
 
 
 def _unroll_stmt_list(
-    statements: List[Stmt], pack_param_fanout: Dict[str, List[str]]
+    statements: List[Stmt], pack_param_fanout: Dict[str, List[str]],
+    copy_numbers: Iterator[int],
 ) -> List[Stmt]:
     """Unroll a flat statement list, splicing expanded copies in place."""
     result: List[Stmt] = []
     for stmt in statements:
         if isinstance(stmt, Expand):
-            result.extend(_unroll_expand(stmt, pack_param_fanout))
+            result.extend(_unroll_expand(stmt, pack_param_fanout, copy_numbers))
         else:
-            result.append(_unroll_in_nested_blocks(stmt, pack_param_fanout))
+            result.append(
+                _unroll_in_nested_blocks(stmt, pack_param_fanout, copy_numbers)
+            )
     return result
 
 
 def _unroll_expand(
-    node: Expand, pack_param_fanout: Dict[str, List[str]]
+    node: Expand, pack_param_fanout: Dict[str, List[str]],
+    copy_numbers: Iterator[int],
 ) -> List[Stmt]:
     """Expand a single ``Expand`` node into its N unrolled body copies."""
     # The iterable must be a Name referencing a pack value-parameter. Anything
@@ -90,8 +125,14 @@ def _unroll_expand(
     fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []
-    for i, elem_name in enumerate(fanout):
-        body_copy = copy.deepcopy(node.body)
+    written = [(let, written_let(let) or WrittenLet(let.name))
+               for let in _lets_in(node.body, _seen=set())]
+    for elem_name in fanout:
+        memo: Dict[int, object] = {}
+        body_copy = copy.deepcopy(node.body, memo)
+        for let, origin in written:
+            let_copy = cast(Let, memo[id(let)])
+            _WRITTEN[id(let_copy)] = (let_copy, origin)
         renamed = _rename_block_statements(
             body_copy.statements, node.var, elem_name, _seen=set()
         )
@@ -100,8 +141,8 @@ def _unroll_expand(
         # the shared callee scope. Done AFTER the loop-var rename so a `let`
         # named like the loop var (which the loop-var rename already shadow-stops
         # at) still gets its own fresh local name here.
-        renamed = _rename_copy_locals(renamed, i)
-        renamed = _unroll_stmt_list(renamed, pack_param_fanout)
+        renamed = _rename_copy_locals(renamed, next(copy_numbers))
+        renamed = _unroll_stmt_list(renamed, pack_param_fanout, copy_numbers)
         copy_id = next(_COPY_IDS)
         for stmt in renamed:
             stmt.expand_copies = (copy_id, *stmt.expand_copies)
@@ -109,12 +150,25 @@ def _unroll_expand(
     return out
 
 
-def _rename_copy_locals(statements: List[Stmt], copy_index: int) -> List[Stmt]:
+def _lets_in(obj, _seen) -> List[Let]:
+    """Every `Let` in ``obj``, at every depth, in written order."""
+    if isinstance(obj, (list, tuple)):
+        return [let for item in obj for let in _lets_in(item, _seen)]
+    if not dataclasses.is_dataclass(obj) or _is_frozen_dataclass(obj) or id(obj) in _seen:
+        return []
+    _seen.add(id(obj))
+    found = [obj] if isinstance(obj, Let) else []
+    for f in dataclasses.fields(obj):
+        found.extend(_lets_in(getattr(obj, f.name), _seen))
+    return found
+
+
+def _rename_copy_locals(statements: List[Stmt], copy_number: int) -> List[Stmt]:
     """Alpha-rename top-level ``let`` locals in one unrolled copy to fresh names."""
     for idx, stmt in enumerate(statements):
         if isinstance(stmt, Let):
             old = stmt.name
-            new = expand_copy_local_name(old, copy_index)
+            new = expand_copy_local_name(old, copy_number)
             stmt.name = new
             # Rewrite references in the statements that follow (the local's
             # scope is from its declaration to the end of the block), honoring
@@ -127,37 +181,42 @@ def _rename_copy_locals(statements: List[Stmt], copy_index: int) -> List[Stmt]:
 
 
 def _unroll_in_nested_blocks(
-    stmt: Stmt, pack_param_fanout: Dict[str, List[str]]
+    stmt: Stmt, pack_param_fanout: Dict[str, List[str]],
+    copy_numbers: Iterator[int],
 ) -> Stmt:
     """Recurse into a non-Expand statement's nested blocks and unroll there."""
-    _walk_unroll(stmt, pack_param_fanout, _seen=set())
+    _walk_unroll(stmt, pack_param_fanout, copy_numbers, _seen=set())
     return stmt
 
 
-def _walk_unroll(obj, pack_param_fanout, _seen) -> None:
+def _walk_unroll(obj, pack_param_fanout, copy_numbers, _seen) -> None:
     """Find Blocks reachable from ``obj`` and unroll their statement lists."""
     obj_id = id(obj)
     if obj_id in _seen:
         return
     if isinstance(obj, Block):
-        obj.statements = _unroll_stmt_list(obj.statements, pack_param_fanout)
+        obj.statements = _unroll_stmt_list(
+            obj.statements, pack_param_fanout, copy_numbers
+        )
         return
     if not dataclasses.is_dataclass(obj):
         return
     _seen.add(obj_id)
     for f in dataclasses.fields(obj):
         value = getattr(obj, f.name)
-        _walk_unroll_value(value, pack_param_fanout, _seen)
+        _walk_unroll_value(value, pack_param_fanout, copy_numbers, _seen)
 
 
-def _walk_unroll_value(value, pack_param_fanout, _seen) -> None:
+def _walk_unroll_value(value, pack_param_fanout, copy_numbers, _seen) -> None:
     if isinstance(value, Block):
-        value.statements = _unroll_stmt_list(value.statements, pack_param_fanout)
+        value.statements = _unroll_stmt_list(
+            value.statements, pack_param_fanout, copy_numbers
+        )
     elif isinstance(value, (list, tuple)):
         for item in value:
-            _walk_unroll_value(item, pack_param_fanout, _seen)
+            _walk_unroll_value(item, pack_param_fanout, copy_numbers, _seen)
     elif dataclasses.is_dataclass(value):
-        _walk_unroll(value, pack_param_fanout, _seen)
+        _walk_unroll(value, pack_param_fanout, copy_numbers, _seen)
 
 
 def _rename_walk(obj, var: str, new_name: str, _seen) -> None:

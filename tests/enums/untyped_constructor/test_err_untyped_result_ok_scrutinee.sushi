@@ -1,0 +1,10 @@
+# `Result.Ok(1)` gives the Ok type and nothing gives the error type (#1005). There is no
+# default error type: this is a user error, not `Result@(i32, StdError)`.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "'E'"
+
+fn main() i32:
+    match Result.Ok(1):
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println(0)
+    return Result.Ok(0)

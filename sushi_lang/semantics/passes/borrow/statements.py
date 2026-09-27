@@ -1,7 +1,7 @@
 """Statement walking: scopes, branch joins, and the bindings each statement opens."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import (
     Block,
@@ -36,6 +36,7 @@ from .bindings import (
     ScrutineeKind,
     reject_partial_take,
     release_binding_borrow,
+    walks_a_temporary,
 )
 from .borrows import clear_borrows
 from .diagnostics import emit_change_under_iterator
@@ -47,7 +48,15 @@ from .consume import (
     source_provenance,
 )
 from .expressions import check_expr
-from .flow import FlowFacts, reinitialize, restore_flow, snapshot_flow, terminates
+from .flow import (
+    FlowFacts,
+    LoopFlow,
+    LoopFrame,
+    reinitialize,
+    restore_flow,
+    snapshot_flow,
+    terminates,
+)
 from .reads import root_owner
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -96,8 +105,12 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             _check_foreach(checker, stmt)
         case Match():
             _check_match(checker, stmt)
-        case Break() | Continue():
-            pass  # No borrow checking needed
+        case Break():
+            if checker._loop_frames:
+                checker._loop_frames[-1].breaks.append(snapshot_flow(checker))
+        case Continue():
+            if checker._loop_frames:
+                checker._loop_frames[-1].continues.append(snapshot_flow(checker))
 
 
 def _branch(checker: 'BorrowChecker'):
@@ -221,13 +234,13 @@ def _check_if(checker: 'BorrowChecker', stmt: If) -> None:
         clear_borrows(checker)
         with _branch(checker):
             check_block(checker, arm_block)
-        if not terminates(arm_block):
+        if not terminates(arm_block, leaves_round=True):
             paths.append(snapshot_flow(checker))
     if stmt.else_block:
         restore_flow(checker, entry)
         with _branch(checker):
             check_block(checker, stmt.else_block)
-        if not terminates(stmt.else_block):
+        if not terminates(stmt.else_block, leaves_round=True):
             paths.append(snapshot_flow(checker))
     else:
         paths.append(entry)
@@ -275,7 +288,7 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
             else:
                 check_expr(checker, arm.body)
                 clear_borrows(checker)
-        if not terminates(arm.body):
+        if not terminates(arm.body, leaves_round=True):
             paths.append(snapshot_flow(checker))
     # A `match` is exhaustive (the typecheck pass enforces it), so unlike an `if` with no else there
     # is no fall-through path to add: some arm always runs.
@@ -308,30 +321,91 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
-            freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
-                              stmt.iterable, ScrutineeKind.BORROWED)
+            if not walks_a_temporary(checker, stmt.iterable):
+                freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
+                                  stmt.iterable, ScrutineeKind.BORROWED)
         if iterator is not None:
             checker.borrow_state[stmt.item_name].covered_by = iterator.name
-        check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
-        if iterator is not None and iterator.invalidated_at is not None:
-            emit_change_under_iterator(checker, iterator, stmt.iterable, stmt.loc)
+        flow = check_loop_body(checker, stmt.body,
+                               per_iteration=frozenset({stmt.item_name}),
+                               view=iterator.name if iterator is not None else None)
+        # Only a change that reaches the next round meets the iterator again (#993).
+        change = (flow.back_edge.invalidation_of(iterator.name)
+                  if iterator is not None else None)
+        if change is not None:
+            emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
 
 
 def check_loop_body(checker: 'BorrowChecker', body: Block,
-                    per_iteration: frozenset[str] = frozenset()) -> None:
+                    per_iteration: frozenset[str] = frozenset(),
+                    view: Optional[str] = None) -> LoopFlow:
     """Borrow-check a loop body to a fixed point so the back edge is honoured.
 
     `per_iteration` names the bindings the loop creates anew on every pass -- the item --
-    whose facts at the end of the body do not reach the next iteration.
+    whose facts at the end of the body do not reach the next iteration. A `break` path
+    does not reach the back edge; its facts join the loop's exit (#993).
+
+    `view` is the binding that walks a container for the whole loop (a foreach
+    iterator). When a move of that container reaches the back edge, the iterator reports
+    it (CE2412), so the second round does not report that move again at a use (#995).
     """
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed
     checker.err.suppressed = True
-    with _branch(checker):
-        check_block(checker, body)
+    first_back, _first_breaks = _check_round(checker, body, per_iteration)
     checker.err.suppressed = prev_suppressed
-    fixed_point = entry | snapshot_flow(checker).without(per_iteration)
+    fixed_point = entry if first_back is None else entry | first_back
     restore_flow(checker, fixed_point)
-    with _branch(checker):
-        check_block(checker, body)
-    restore_flow(checker, fixed_point)
+    reported = _move_reported_by_view(checker, view, entry, first_back)
+    if reported is not None:
+        reported.move_reported_by = view
+    try:
+        back, breaks = _check_round(checker, body, per_iteration)
+    finally:
+        if reported is not None:
+            reported.move_reported_by = None
+    flow = LoopFlow(entry=entry, fixed_point=fixed_point,
+                    back_edge=fixed_point if back is None else fixed_point | back,
+                    exit=fixed_point if breaks is None else fixed_point | breaks)
+    restore_flow(checker, flow.exit)
+    return flow
+
+
+def _move_reported_by_view(checker: 'BorrowChecker', view: Optional[str],
+                           entry: FlowFacts, first_back: FlowFacts | None
+                           ) -> Optional[BorrowState]:
+    """The owner whose move came round the back edge and invalidated `view`, or None."""
+    if view is None or first_back is None:
+        return None
+    change = first_back.invalidation_of(view)
+    if change is None:
+        return None
+    _span, (owner, _what) = change
+    if owner not in first_back.moved or owner in entry.moved:
+        return None
+    return checker.borrow_state.get(owner)
+
+
+def _check_round(checker: 'BorrowChecker', body: Block, per_iteration: frozenset[str]
+                 ) -> tuple[FlowFacts | None, FlowFacts | None]:
+    """Check one round of a loop body: the paths to the back edge, the `break` paths.
+
+    Each is None when no path of that kind exists. `FlowFacts.join` of no path is not an
+    identity, so a caller joins a None as nothing.
+    """
+    frame = LoopFrame()
+    checker._loop_frames.append(frame)
+    try:
+        with _branch(checker):
+            check_block(checker, body)
+    finally:
+        checker._loop_frames.pop()
+    back = list(frame.continues)
+    if not terminates(body, leaves_round=True):
+        back.append(snapshot_flow(checker))
+    return _join_round(back, per_iteration), _join_round(frame.breaks, per_iteration)
+
+
+def _join_round(paths: list[FlowFacts], per_iteration: frozenset[str]
+                ) -> FlowFacts | None:
+    return FlowFacts.join(paths).without(per_iteration) if paths else None

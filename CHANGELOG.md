@@ -409,6 +409,40 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A generic enum constructor with no declared type takes its type from the payload** (#1005).
+  `match Maybe.Some(1):`, `Maybe.Some(1).is_some()`, `Maybe.Some(5)??`, a `foreach` over one, an
+  interpolation hole and a generic argument reached the backend with no instance and stopped
+  with an internal error (CE0113, CE0055, CE0124, CE0015, CE2060). The payload now gives the
+  instance (`Maybe.Some(1)` is `Maybe@(i32)`). An arm that nothing gives -- the error type of
+  `Result.Ok(1)`, the type of `Maybe.None()` -- is the new **CE2112**, whose help asks for a
+  declared type; there is no `StdError` default. Where a declared type reaches the constructor
+  and does not fit, the position's own mismatch is the one diagnostic (`f(Maybe.None())` against
+  an `i32` parameter was CE0055 and is CE2006).
+- **A refused written type gives one diagnostic** (#991). After CE2001, the `let`, rebind,
+  argument and return checks compared values against the unknown type and added a second error
+  (`cannot assign Iterator@(i32) to Iterator@(i32)`). A refused type now compares equal to
+  everything, through the one compatibility seam, and gives no instance to a constructor.
+- **A generic function behind an alias is a function value where its type is solved** (#1017):
+  `let fn(i32) -> i32 f = l.gen` was CE2093, and the bare form worked.
+- **A `let` in an `expand` body is unique over the instance** (#1018). A nested `expand` over the
+  same pack, and two sibling `expand`s, that declared one local name gave CE0000 (duplicate
+  local). An unused `let` in an `expand` body gives ONE CW1001 with the written name (#1019); it
+  gave one per copy, each with the compiler's copy name.
+- **A `foreach` over a temporary copy does not freeze the original** (#1014): `foreach(x in
+  a.clone().iter())` with `a.push(5)` in the body was CE2412, for the iterator and for an item
+  that views an owning element. A place and a get-out receiver still freeze.
+- **The borrow flow models `break` and `continue`** (#993). A change or a move followed by
+  `break` in a loop over the container's iterator was CE2412, and a move then `break` gave a
+  false CE2405; the same shape with `return` compiled. The break paths now join the state after
+  the loop, so a move before a `break` is still seen there.
+- **A `nom` move of the container under its iterator is one diagnostic** (#995): it was CE2405
+  and CE2412 at one place.
+- **A borrow help never offers `.clone()` for a type that owns a resource** (#994). The CE2412
+  help under a `foreach` offered `l.clone().iter()` for a `List@(File)` (CE2431), and named the
+  root, not the receiver (`h.clone()` for `h.items.iter()`); the two `let`-borrow CE2412 helps
+  and the CE2401 help offered `.clone()` on a resource too. One clone test decides every help.
+
+### Fixed
 - **A string temporary in a comparison is freed, and so is a condition's temporary on each
   evaluation** (#1004). An owning string operand of `==`, `!=`, `<`, `<=`, `>` or `>=` got no
   owner and leaked, in every position. An owning temporary in a `while` condition had one owner

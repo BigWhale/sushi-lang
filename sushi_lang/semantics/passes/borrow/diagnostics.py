@@ -19,7 +19,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .reads import root_owner
+from .reads import read_type, root_owner
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -78,7 +78,12 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     RECEIVER has no marker anywhere on the page -- a receiver's mode is
     declaration-only -- so CE2435 has to carry what the syntax cannot, and it names the
     method.
+
+    A move that a foreach iterator reports (CE2412) is not reported again at its use on
+    the next round (#995).
     """
+    if state.move_reported_by is not None:
+        return
     method = state.consumed_by_method
     if method is not None:
         diag = checker.err.emit_with(er.ERR.CE2435, use_span,
@@ -110,8 +115,14 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         diag.note_at(f"'{name}' is read here, by the call that changes '{owner}'"
                      if by_the_change else f"'{name}' is used here, after the change",
                      use_span)
-    if by_the_change:
+    no_clone = refuses_clone(checker, state.var_type)
+    if by_the_change and no_clone:
+        diag.help(f"{no_clone_reason(name)}, so no call can read it while it "
+                  f"changes '{owner}'")
+    elif by_the_change:
         diag.help(f"pass an independent value: `{name}.clone()`")
+    elif no_clone:
+        diag.help(f"{what} after the last use of '{name}': {no_clone_reason(name)}")
     else:
         diag.help(f"{what} after the last use of '{name}', "
                   f"or bind an independent value with `.clone()`")
@@ -122,18 +133,43 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
-def emit_change_under_iterator(checker: 'BorrowChecker', iterator: BorrowState,
+def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                iterable: Expr, header: Optional[Span]) -> None:
-    """Report CE2412 at a change of the container a `foreach` still walks (#956)."""
-    owner, what = iterator.invalidated_by
+    """Report CE2412 at a change of the container a `foreach` still walks (#956).
+
+    `change` is the span of the change and its cause, as `FlowFacts.invalidation_of`
+    answers them.
+    """
+    span, (owner, what) = change
     text = expr_to_string(iterable)
-    diag = checker.err.emit_with(er.ERR.CE2412, iterator.invalidated_at,
+    diag = checker.err.emit_with(er.ERR.CE2412, span,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    diag.help(f"{what} after the loop, or walk an independent value: "
-              f"`{owner}.clone().{iterable.method}()`")
+    receiver = expr_to_string(iterable.receiver)
+    if refuses_clone(checker, read_type(checker, iterable.receiver)):
+        diag.help(f"{what} after the loop: {no_clone_reason(receiver)}")
+    else:
+        diag.help(f"{what} after the loop, or walk an independent value: "
+                  f"`{receiver}.clone().{iterable.method}()`")
     diag.emit()
+
+
+def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
+    """Is `.clone()` refused on `ty` (CE2431)? The one type test of every clone escape.
+
+    A type that declares a resource, or holds one, has no clone (ruling R3), so a help
+    must not offer one there.
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
+    drops = checker.types.drops
+    return bool(drops) and holds_declared_resource(ty, drops,
+                                                   resolve=checker.types.resolve_named)
+
+
+def no_clone_reason(text: str) -> str:
+    """The clause a help gives in place of a clone escape that CE2431 refuses."""
+    return f"'{text}' owns a resource and cannot be cloned"
 
 
 def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
@@ -144,9 +180,7 @@ def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
     totality gate exists to prevent (HANDLES.md ruling R3). For a resource the second
     owner is `.share()`, and the message says why a descriptor cannot be deep-copied.
     """
-    from sushi_lang.semantics.typesys import holds_declared_resource
-    drops = checker.types.drops
-    if drops and holds_declared_resource(ty, drops, resolve=checker.types.resolve_named):
+    if refuses_clone(checker, ty):
         return (f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`; "
                 f"take a second owner with `{text}.share()`, or restructure so only one "
                 f"owner is needed")

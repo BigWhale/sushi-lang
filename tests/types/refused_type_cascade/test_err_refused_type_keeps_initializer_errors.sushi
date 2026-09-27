@@ -1,0 +1,7 @@
+# The initializer of a let with a refused type still reports its own faults.
+# EXPECT_ERROR_CODES_EXACT: CE2001, CE1001
+
+fn main() i32:
+    let Nope x = missing_name
+    println(x)
+    return Result.Ok(0)

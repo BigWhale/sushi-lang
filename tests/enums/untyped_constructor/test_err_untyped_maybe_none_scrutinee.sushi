@@ -1,0 +1,9 @@
+# `Maybe.None()` gives no payload, so nothing gives `T` (#1005). It is a user error that
+# asks for a declared type. It reached the backend as an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE2112
+
+fn main() i32:
+    match Maybe.None():
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

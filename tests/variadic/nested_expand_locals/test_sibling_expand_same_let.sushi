@@ -1,0 +1,23 @@
+# Two `expand` statements in one body, each with a `let t`. The copies of the
+# first and of the second `expand` declare their locals in one scope, so each
+# copy name is unique over the whole instance (#1018).
+# EXPECT_STDOUT_EXACT: "first 1\nfirst 2\nsecond 1\nsecond 2\n"
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let string t = a.display()
+        println("first {t}")
+    expand(b in args):
+        let string t = b.display()
+        println("second {t}")
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)

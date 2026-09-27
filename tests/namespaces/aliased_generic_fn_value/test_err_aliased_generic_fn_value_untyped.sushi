@@ -1,0 +1,8 @@
+# A generic function behind an alias in a position with no expected function
+# type is not a function value (#1017).
+# EXPECT_ERROR_CODES_EXACT: CE2093
+use "helpers/libg" as l
+
+fn main() i32:
+    println(l.gen)
+    return Result.Ok(0)

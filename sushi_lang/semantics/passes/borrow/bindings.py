@@ -17,7 +17,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import expr_to_string
-from .reads import constant_sig, root_owner
+from .reads import constant_sig, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState
 
@@ -33,6 +33,16 @@ def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> 
         owner_state.binding_borrows = [
             entry for entry in owner_state.binding_borrows if entry[0] != binding
         ]
+
+
+def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
+    """Does a `foreach` walk an owned temporary that only the loop keeps (#1014)?
+
+    The iterator and the item then view the temporary, so neither freezes the local
+    that the temporary was copied from.
+    """
+    return (isinstance(iterable, (MethodCall, DotCall))
+            and not names_kept_storage(checker, iterable.receiver))
 
 
 class BindingScope:
@@ -120,10 +130,14 @@ class BindingScope:
         The iterator reads the container's storage on every round, whatever the item
         does, so it is a `let`-borrow of the container with a name no source can spell.
         A range and a `next()` protocol value own their state; the caller does not ask.
+        An iterator over an owned temporary (`a.clone().iter()`) walks storage that the
+        loop alone keeps, so it freezes nothing (#1014).
         """
         if not isinstance(iterable, (MethodCall, DotCall)) or iterable.args:
             return None
         if iterable.method not in CONTAINER_ITERATORS:
+            return None
+        if walks_a_temporary(self.checker, iterable):
             return None
         state = BorrowState(name=f"<iterator {id(iterable)}>",
                             bound_at_span=iterable.loc,

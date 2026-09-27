@@ -1,10 +1,10 @@
 """Path-sensitive facts and the branch / loop joins that carry them."""
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.semantics.ast import Block, If, Match, Return
+from sushi_lang.semantics.ast import Block, Break, Continue, If, Match, Return
 
 from .state import BorrowState
 
@@ -59,6 +59,13 @@ class FlowFacts:
             invalidation=tuple(e for e in self.invalidation if e[0] not in names),
         )
 
+    def invalidation_of(self, name: str) -> Optional[tuple]:
+        """The span and the cause of the change that invalidated `name`, or None."""
+        for entry_name, span, by in self.invalidation:
+            if entry_name == name:
+                return span, by
+        return None
+
     @staticmethod
     def join(paths: list["FlowFacts"]) -> "FlowFacts":
         """Join every surviving path of a branch."""
@@ -80,30 +87,68 @@ def reinitialize(state: BorrowState) -> None:
     """
     state.is_moved = False
     state.moved_at_span = None
+    state.move_reported_by = None
     state.is_destroyed = False
     state.invalidated_at = None
     state.invalidated_by = ()
 
 
-def terminates(node) -> bool:
-    """Does every path through this statement (or block) leave the function?"""
+def terminates(node, *, leaves_round: bool = False) -> bool:
+    """Does every path through this statement (or block) leave the function?
+
+    With `leaves_round`, a `break` and a `continue` end a path too: they leave the round
+    of the loop, and the loop frame keeps their facts (#993). This is the question of a
+    join inside a loop body. A nested loop is not descended: a `break` in it ends that
+    loop's round, not this path.
+    """
     match node:
         case Return():
             return True
+        case Break() | Continue():
+            return leaves_round
         case Block():
             # Any terminating statement terminates the block. Later statements are
             # unreachable; they are still checked, which over-checks and never
             # under-checks.
-            return any(terminates(stmt) for stmt in node.statements)
+            return any(terminates(stmt, leaves_round=leaves_round)
+                       for stmt in node.statements)
         case If():
             return bool(node.else_block) and (
-                all(terminates(arm) for _cond, arm in node.arms)
-                and terminates(node.else_block))
+                all(terminates(arm, leaves_round=leaves_round) for _cond, arm in node.arms)
+                and terminates(node.else_block, leaves_round=leaves_round))
         case Match():
             arms = getattr(node, "arms", ())
-            return bool(arms) and all(terminates(arm.body) for arm in arms)
+            return bool(arms) and all(terminates(arm.body, leaves_round=leaves_round)
+                                      for arm in arms)
         case _:
             return False
+
+
+@dataclass
+class LoopFrame:
+    """The paths that leave one round of a loop body early (#993).
+
+    A `continue` path goes to the back edge; a `break` path goes to the code after the
+    loop and never to the next round.
+    """
+    breaks: list[FlowFacts] = field(default_factory=list)
+    continues: list[FlowFacts] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class LoopFlow:
+    """The facts at the four points of a loop that the borrow pass reads (#993).
+
+    `fixed_point` is where the second, reporting round starts (`entry` joined with the
+    back edge of the first round), so a fact in it and not in `entry` came round the back
+    edge. `back_edge` joins every path that reaches the next round, of both rounds: a
+    view that lives for the whole loop reads its invalidation here. `exit` is what the
+    code after the loop sees: the loop head's facts joined with every `break` path.
+    """
+    entry: FlowFacts
+    fixed_point: FlowFacts
+    back_edge: FlowFacts
+    exit: FlowFacts
 
 
 def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
