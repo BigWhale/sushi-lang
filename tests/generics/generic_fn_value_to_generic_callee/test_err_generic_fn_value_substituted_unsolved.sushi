@@ -1,0 +1,13 @@
+# A generic function value that the substituted parameter type does not solve
+# stays CE2093, and the callee itself is solved from its other argument (#1029).
+# EXPECT_ERROR_CODES_EXACT: CE2093
+fn gen@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn apply2@(T)(fn(T, T) -> i32 f, T x) i32:
+    return Result.Ok(f(x, x).realise(0))
+
+fn main() i32:
+    println(apply2(gen, 3).realise(0))
+    return Result.Ok(0)

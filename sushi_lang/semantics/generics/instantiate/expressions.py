@@ -442,11 +442,18 @@ class ExpressionScanner:
         return infer_call_arg_type(self.type_validator, arg_expr)
 
     def _infer_type_args_from_call(self, call, generic_func) -> tuple["Type", ...] | None:
-        """Infer type arguments for generic function call."""
+        """Infer type arguments for generic function call.
+
+        A generic function value is not typed here: the callee types it, once the other
+        arguments solve the callee (#1029).
+        """
         from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
 
-        arg_types: list["Type"] = []
+        arg_types: list["Type | None"] = []
         for arg_expr in getattr(call, "args", []) or []:
+            if self._names_generic_fn_value(arg_expr):
+                arg_types.append(None)
+                continue
             arg_type = self._infer_arg_type(arg_expr)
             if arg_type is None:
                 return None
@@ -502,12 +509,23 @@ class ExpressionScanner:
         return (isinstance(value, MemberAccess) and isinstance(value.receiver, Name)
                 and value.receiver.id not in locals_)
 
+    def _names_generic_fn_value(self, value) -> bool:
+        """The value is a generic function, bare or behind an alias, and no local or
+        concrete function takes the name."""
+        from sushi_lang.semantics.ast import MemberAccess
+        if not self.may_name_generic_fn(value):
+            return False
+        if isinstance(value, MemberAccess):
+            binding = self._namespaced_binding(value.receiver, value.member)
+            return binding is not None and binding.kind == "generic function"
+        return not self._declares_concrete(value.id)
+
     def _call_param_types(self, call) -> tuple:
         """The declared types of a direct call's argument positions, or () when unknown.
 
         A concrete function gives its parameter types, a struct construction its field
-        types. A generic callee gives nothing: its parameter types name its own type
-        parameters, which the arguments solve.
+        types. A generic callee gives its parameter types with the solved type arguments
+        put in (#1029), or nothing when the arguments do not solve it.
         """
         from sushi_lang.semantics.ast import Name
         callee = call.callee
@@ -515,11 +533,26 @@ class ExpressionScanner:
             return ()
         name = callee.id
         if name in (self.generic_funcs or {}) and not self._declares_concrete(name):
-            return ()
+            return self._substituted_param_types(call)
         sig = self._visible_function(name)
         if sig is not None:
             return tuple(p.ty for p in sig.params)
         return self._field_types(name, call.field_names)
+
+    def _substituted_param_types(self, call, generic_func=None) -> tuple:
+        """A generic callee's fixed parameter types under its solved type arguments."""
+        from sushi_lang.semantics.generics.types import (
+            substitute_type_params, type_param_substitution)
+        resolved = self.resolve_generic_call(call, generic_func)
+        if resolved is None:
+            return ()
+        generic_func, type_args = resolved
+        substitution = type_param_substitution(generic_func, type_args)
+        if substitution is None:
+            return ()
+        return tuple(None if p.ty is None or p.is_pack
+                     else substitute_type_params(p.ty, substitution)
+                     for p in generic_func.params)
 
     def _dot_call_param_types(self, call) -> tuple:
         """The declared types of `X.Y(args)`'s argument positions, or () when unknown.
@@ -527,9 +560,10 @@ class ExpressionScanner:
         `alias.f(...)` gives the concrete function's parameter types, `alias.S(...)` the
         struct's field types, `Enum.Variant(...)` the variant's payload types,
         `Type.static(...)` the static's parameter types (the type bare or behind an
-        alias), and a method call on a value its method's parameter types.
+        alias), and a method call on a value its method's parameter types. `alias.g(...)`
+        of a generic `g` gives its substituted parameter types (#1029).
         """
-        from sushi_lang.semantics.ast import MemberAccess, Name
+        from sushi_lang.semantics.ast import Call, MemberAccess, Name
         receiver = call.receiver
         type_name = None
         if isinstance(receiver, MemberAccess):
@@ -542,6 +576,11 @@ class ExpressionScanner:
             if binding is not None:
                 if binding.kind == "function" and binding.record is not None:
                     return tuple(p.ty for p in binding.record.params)
+                if binding.kind == "generic function":
+                    return self._substituted_param_types(
+                        Call(callee=Name(id=call.method, loc=call.loc), args=call.args,
+                             type_args=call.type_args, loc=call.loc),
+                        binding.record)
                 if binding.kind == "struct":
                     return self._field_types(binding.name, None)
                 return ()
