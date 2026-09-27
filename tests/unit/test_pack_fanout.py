@@ -2,6 +2,7 @@
 
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
+from sushi_lang.semantics.hidden_names import pack_element_name
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
 I32 = BuiltinType.I32
@@ -50,7 +51,7 @@ def test_fanout_arity3():
 
     names = [p.name for p in fn.params]
     types = [p.ty for p in fn.params]
-    assert names == ["prefix", "args_0", "args_1", "args_2"]
+    assert names == ["prefix", pack_element_name("args", 0), pack_element_name("args", 1), pack_element_name("args", 2)]
     assert types == [STR, I32, STR, BOOL]
     # Expanded params are ordinary (non-variadic) concrete params.
     assert all(p.is_variadic is False for p in fn.params)
@@ -73,7 +74,7 @@ def test_fanout_arity1():
 
     fn = mono.function_monomorphizer.monomorphize_function(generic, (BOOL,))
 
-    assert [p.name for p in fn.params] == ["prefix", "args_0"]
+    assert [p.name for p in fn.params] == ["prefix", pack_element_name("args", 0)]
     assert [p.ty for p in fn.params] == [STR, BOOL]
 
 
@@ -96,7 +97,7 @@ def test_fanout_preserves_spans():
     mono = _make_mono()
     fn = mono.function_monomorphizer.monomorphize_function(generic, (I32, STR))
 
-    assert [p.name for p in fn.params] == ["args_0", "args_1"]
+    assert [p.name for p in fn.params] == [pack_element_name("args", 0), pack_element_name("args", 1)]
     for p in fn.params:
         assert p.name_span is nspan
         assert p.type_span is tspan
@@ -144,7 +145,7 @@ def test_expand_pack_param_pack_via_typeparameter_ref():
     # Pack-typed param expressed as a bare TypeParameter reference.
     param = Param(loc=None, name="args", ty=TypeParameter("Ts"))
     out = sub.expand_pack_param(param, {"Ts": TypePack((I32, STR))})
-    assert [p.name for p in out] == ["args_0", "args_1"]
+    assert [p.name for p in out] == [pack_element_name("args", 0), pack_element_name("args", 1)]
     assert [p.ty for p in out] == [I32, STR]
 
 

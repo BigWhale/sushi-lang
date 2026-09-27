@@ -3,6 +3,7 @@
 
 from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
+from sushi_lang.semantics.hidden_names import expand_copy_local_name, pack_element_name
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 from sushi_lang.semantics.ast import (
     Block, Param, Expand, Name, DotCall, PrintLn, Let, If, BoolLit,
@@ -188,8 +189,8 @@ def test_shadowing_let_suppresses_rename_in_tail():
     # (shadowed), so the println does NOT become args_0. The top-level local
     # `a` is then alpha-renamed to its copy-unique name, and the println follows.
     let_stmt, print_stmt = body.statements
-    assert isinstance(let_stmt, Let) and let_stmt.name == "a__x0"
-    assert print_stmt.value.id == "a__x0"
+    assert isinstance(let_stmt, Let) and let_stmt.name == expand_copy_local_name("a", 0)
+    assert print_stmt.value.id == expand_copy_local_name("a", 0)
     # crucially, it is NOT the fan-out param.
     assert print_stmt.value.id != "args_0"
 
@@ -231,16 +232,16 @@ def test_unroll_renames_toplevel_locals_per_copy():
     # the shared callee scope).
     let_names = [let.name for let in lets]
     assert len(set(let_names)) == 2, let_names
-    assert let_names == ["s__x0", "s__x1"]
+    assert let_names == [expand_copy_local_name("s", 0), expand_copy_local_name("s", 1)]
 
     # References are consistent within each copy: copy i's println uses copy i's
     # renamed local, and the let value uses the matching fan-out receiver.
     let0, print0, let1, print1 = body.statements
-    assert let0.name == "s__x0"
-    assert print0.value.id == "s__x0"
+    assert let0.name == expand_copy_local_name("s", 0)
+    assert print0.value.id == expand_copy_local_name("s", 0)
     assert let0.value.receiver.id == "args_0"
-    assert let1.name == "s__x1"
-    assert print1.value.id == "s__x1"
+    assert let1.name == expand_copy_local_name("s", 1)
+    assert print1.value.id == expand_copy_local_name("s", 1)
     assert let1.value.receiver.id == "args_1"
     # The original local name 's' no longer appears anywhere.
     assert "s" not in _names_in(body)
@@ -288,15 +289,15 @@ def test_monomorphize_unrolls_expand_end_to_end():
     # arity 2: pack (i32, string)
     fn = mono.function_monomorphizer.monomorphize_function(generic, (I32, STR))
 
-    # Signature fanned out to args_0 (i32), args_1 (string).
-    assert [p.name for p in fn.params] == ["args_0", "args_1"]
+    # Signature fanned out to pack elements 0 (i32) and 1 (string).
+    assert [p.name for p in fn.params] == [pack_element_name("args", 0), pack_element_name("args", 1)]
     assert [p.ty for p in fn.params] == [I32, STR]
 
     # Body has two unrolled prints, no Expand, receivers renamed in order.
     assert _expands_in(fn.body) == []
     prints = [s for s in fn.body.statements if isinstance(s, PrintLn)]
     assert len(prints) == 2
-    assert [p.value.receiver.id for p in prints] == ["args_0", "args_1"]
+    assert [p.value.receiver.id for p in prints] == [pack_element_name("args", 0), pack_element_name("args", 1)]
 
 
 def test_monomorphize_arity_zero_removes_expand_end_to_end():
