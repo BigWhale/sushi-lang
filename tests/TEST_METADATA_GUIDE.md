@@ -352,10 +352,62 @@ fixture file itself, because the one set of directives describes both steps.
 - The runner starts `sushic` from the copy of the fixture's directory, with the bare
   file name as the source path, the way a user does. The `sushic` wrapper passes that
   directory to the compiler in `SUSHI_CWD`.
-- The runner passes no `--cache-dir`: the compiler picks its own cache, as it does for a
-  user, and that cache is in the copy.
+- The runner passes no `--cache-dir`, unless the fixture has `FIXTURE_CACHE_DIR`: the
+  compiler picks its own cache, as it does for a user, and that cache is in the copy.
 - The binary also runs in the copy, unless `TEST_CWD` names another directory.
 - `-o` stays the runner's, and it is an absolute path outside the copy.
+
+#### FIXTURE_CACHE_DIR
+
+```sushi
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_CACHE_DIR: relcache
+```
+
+- The runner passes `--cache-dir relcache` exactly as written. It is a RELATIVE path, and
+  the compiler resolves it against the directory the compiler starts in: the copy.
+- It needs `RUN_IN_FIXTURE_DIR`. In any other fixture the compiler starts in the
+  checkout, and a relative cache would go into the runner's own tree.
+- An absolute path, or a path with a `..` part, fails the fixture.
+
+#### EXPECT_PATH_EXISTS / EXPECT_PATH_ABSENT
+
+```sushi
+# EXPECT_PATH_EXISTS: relcache/libsrc/geolib
+# EXPECT_PATH_ABSENT: __sushi_cache__
+```
+
+- Paths relative to the fixture's copy. A comma/space separated list; the directive may
+  be repeated. Either directive gives the fixture a copy of its own.
+- The runner reads them ONCE, after the fixture's LAST compiler invocation (the
+  `THEN_CLEAN_CACHE` one when the fixture has it) and before the binary runs.
+- The compilation must first pass its other compilation checks.
+- An absolute path, or a path with a `..` part, fails the fixture.
+
+#### THEN_CLEAN_CACHE
+
+```sushi
+# RUN_IN_FIXTURE_DIR
+# EXPECT_PATH_EXISTS_BEFORE_CLEAN: __sushi_cache__/units
+# THEN_CLEAN_CACHE: bare
+# EXPECT_PATH_ABSENT: __sushi_cache__
+```
+
+- After the compilation passes its checks, the runner starts `sushic` one more time, in the
+  same directory, with the same environment and the same `--cache-dir` (the
+  `FIXTURE_CACHE_DIR` one, or none):
+  - `bare`: `sushic --clean-cache`. It must exit 0.
+  - `source`: `sushic --clean-cache <source> -o <binary> <COMPILER_FLAGS>`, which cleans
+    and then builds again. It must exit as the compilation must. Its binary is the one the
+    runtime directives describe, and its code-generation report is the one
+    `EXPECT_REBUILT` / `EXPECT_CACHED` read. So these two need no `v2/` here. For `bare`,
+    they read the report of the compilation.
+- `EXPECT_PATH_EXISTS_BEFORE_CLEAN` -- paths of the copy that must exist after the
+  compilation and BEFORE the clean. It proves that the clean removed something that was
+  there. It needs `THEN_CLEAN_CACHE`.
+- The runner fails the fixture if the checkout's own `__sushi_cache__/` was there before
+  the clean and is gone after it.
+- It needs `RUN_IN_FIXTURE_DIR`. A value other than `bare` or `source` fails the fixture.
 
 #### BUILD_LIB
 
@@ -368,6 +420,23 @@ fixture file itself, because the one set of directives describes both steps.
   it first on `SUSHI_LIB_PATH`. The fixture imports it as `use <lib/geolib>`.
 - In a rebuild fixture the library is built again after `v2/` is copied in.
 - A library that does not build fails the fixture.
+- The build has a cache of its own, outside the copy. The version is `0.0.0`, unless a
+  `nori.toml` beside the library source states one.
+
+#### BUILD_LIB_AT
+
+```sushi
+# BUILD_LIB_AT: vendor/boxes.sushi -> .sushi_bento/boxes/lib/boxes.slib
+```
+
+- Before each compilation, the runner builds the named file of the copy as a SOURCE
+  `.slib` at the target path. Both paths are relative to the copy. The runner adds
+  NOTHING to `SUSHI_LIB_PATH`, so the compiler must find the library itself: next to the
+  program, or in the project's `.sushi_bento/` (with a `nori.toml` in the fixture).
+- Use it with `RUN_IN_FIXTURE_DIR`, so that the compiler starts in the copy.
+- The directive may be repeated. The build, the version and the rebuild are as for
+  `BUILD_LIB`. A value with no `->`, an absolute path, or a path with a `..` part fails
+  the fixture.
 
 #### STDLIB_MODULE
 
