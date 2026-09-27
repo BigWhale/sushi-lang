@@ -1,0 +1,26 @@
+# A generic call whose argument is a chain of generic calls that ends with
+# `.realise(...)` compiles, and the program prints the held value.
+# EXPECT_STDOUT_EXACT: "towel\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T v
+
+extend Box@(string) with Show:
+    fn show() string:
+        return self.v.clone()
+
+fn wrap@(T)(nom T x) Box@(T):
+    return Result.Ok(Box(x))
+
+fn show_it@(S: Show)(S s) string:
+    return Result.Ok(s.show())
+
+fn ident@(T)(nom T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    println(ident(nom show_it(wrap(nom "towel").realise(Box("none"))).realise("?")).realise(""))
+    return Result.Ok(0)
