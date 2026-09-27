@@ -1,0 +1,6 @@
+public struct Vec:
+    i32 y
+    i32 x
+
+public fn make() Vec:
+    return Result.Ok(Vec(x: 3, y: 4))

@@ -1,0 +1,12 @@
+# The second compilation sees the same bytes again, in a file written anew. Every unit
+# comes from the cache.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3 4\n"
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_CACHED: geo, test_cache_unchanged_rebuild
+use "geo"
+
+fn main() i32:
+    match make():
+        Result.Ok(v) -> println("{v.x} {v.y}")
+        Result.Err(_) -> return Result.Ok(1)
+    return Result.Ok(0)

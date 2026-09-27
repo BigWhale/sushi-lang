@@ -1,0 +1,10 @@
+# A dependency changes the value of a public constant. The consumer folds the value into
+# its own object, so the cache must rebuild it.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "10\n"
+# EXPECT_STDOUT_EXACT: "20\n"
+# EXPECT_REBUILT: limits, test_cache_constant_value
+use "limits"
+
+fn main() i32:
+    println("{LIMIT}")
+    return Result.Ok(0)

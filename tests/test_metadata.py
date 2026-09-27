@@ -59,6 +59,20 @@ class TestMetadata:
     # flag has no other way to be exercised by a .sushi fixture.
     compiler_flags: Optional[List[str]] = None
 
+    # A rebuild fixture (#988): a fixture whose directory holds a `v2/` directory. The
+    # units the SECOND compilation reports `[rebuilt]` and `[cached]`, and the stdout of
+    # the FIRST binary. None when the fixture does not say.
+    expect_rebuilt: Optional[List[str]] = None
+    expect_cached: Optional[List[str]] = None
+    expect_stdout_exact_before_rebuild: Optional[str] = None
+
+    # Start `sushic` from (a copy of) the fixture's directory, with a relative source path.
+    run_in_fixture_dir: bool = False
+    # Source `.slib` files the runner builds in the fixture's copy before each compilation.
+    build_libs: Optional[List[str]] = None
+    # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
+    stdlib_modules: Optional[Dict[str, str]] = None
+
     # Test categorization
     test_type: str = "default"  # "default", "runtime", "compilation"
 
@@ -74,6 +88,15 @@ class TestMetadata:
             self.test_env = {}
         if self.compiler_flags is None:
             self.compiler_flags = []
+        if self.build_libs is None:
+            self.build_libs = []
+        if self.stdlib_modules is None:
+            self.stdlib_modules = {}
+
+    @property
+    def declares_a_rebuild(self) -> bool:
+        return (self.expect_rebuilt is not None or self.expect_cached is not None
+                or self.expect_stdout_exact_before_rebuild is not None)
 
         # If any runtime expectations are set, this test requires runtime validation
         if (self.expect_runtime_exit is not None or
@@ -91,6 +114,41 @@ RUNNER_OWNED_FLAGS = frozenset({
 })
 
 
+# The directory beside a rebuild fixture whose files replace their namesakes before the
+# second compilation. It is data, never a fixture of its own.
+REBUILD_DIR = "v2"
+
+
+def is_rebuild_fixture(test_file: Path) -> bool:
+    return (Path(test_file).parent / REBUILD_DIR).is_dir()
+
+
+def _unquote(value: str) -> str:
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1]
+    return value
+
+
+def _text(value: str) -> str:
+    """A quoted-string value, with `\\n` and `\\t` read as escapes."""
+    return _unquote(value).replace('\\n', '\n').replace('\\t', '\t')
+
+
+def _split(value: str) -> List[str]:
+    """A comma/space separated list."""
+    return [token for token in re.split(r'[,\s]+', value) if token]
+
+
+def _flag_value(rest: str) -> Optional[bool]:
+    """A bare `NAME` is true; `NAME: true|yes|1` is true; `NAME: <other>` is false."""
+    rest = rest.lstrip()
+    if rest == '':
+        return True
+    if rest.startswith(':'):
+        return rest[1:].strip().lower() in ('true', 'yes', '1')
+    return None
+
+
 def header_block(lines: List[str]) -> List[str]:
     """The leading comment block: every line before the first line of CODE."""
     header = []
@@ -102,149 +160,134 @@ def header_block(lines: List[str]) -> List[str]:
     return header
 
 
+def _int_into(field_name: str, directive: str):
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        try:
+            setattr(metadata, field_name, int(value))
+        except ValueError:
+            _warn(f"Invalid {directive} value in {test_file}: {value}")
+    return handle
+
+
+def _extend(field_name: str, read):
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        read_value = read(value)
+        current = getattr(metadata, field_name)
+        if isinstance(read_value, list):
+            setattr(metadata, field_name, (current or []) + read_value)
+        else:
+            current.append(read_value)
+    return handle
+
+
+def _set(field_name: str, read):
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        setattr(metadata, field_name, read(value))
+    return handle
+
+
+def _exact_codes(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    codes = _split(_unquote(value))
+    if not codes:
+        _warn(f"Empty EXPECT_ERROR_CODES_EXACT in {test_file}")
+    metadata.expect_error_codes_exact = (metadata.expect_error_codes_exact or []) + codes
+
+
+def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    for token in _split(value):
+        if token in RUNNER_OWNED_FLAGS:
+            _warn(f"{token} is the runner's to spell in {test_file}; COMPILER_FLAGS ignored it")
+            continue
+        metadata.compiler_flags.append(token)
+
+
+def _test_type(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    value = value.lower()
+    if value in ('default', 'runtime', 'compilation', 'error', 'warning'):
+        metadata.test_type = value
+    else:
+        _warn(f"Invalid TEST_TYPE value in {test_file}: {value}")
+
+
+def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    # One KEY=VALUE per directive; the directive may be repeated to set several
+    # variables. Lets a test pin HOME/USER/etc. instead of baking the developer's host
+    # environment into an expected-stdout snapshot.
+    if '=' in value:
+        key, val = value.split('=', 1)
+        metadata.test_env[key.strip()] = val.strip()
+    else:
+        _warn(f"Invalid TEST_ENV value in {test_file}: {value}")
+
+
+def _stdlib_module(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    name, sep, path = value.partition('=')
+    if sep and name.strip() and path.strip():
+        metadata.stdlib_modules[name.strip()] = path.strip()
+    else:
+        _warn(f"Invalid STDLIB_MODULE value in {test_file}: {value}")
+
+
+# Every directive that takes a value (`NAME: value`), and its handler. ONE table, so a
+# directive the parser knows is a row here and nowhere else.
+VALUED_DIRECTIVES = {
+    'EXPECT_RUNTIME_EXIT': _int_into('expect_runtime_exit', 'EXPECT_RUNTIME_EXIT'),
+    'EXPECT_STDOUT_CONTAINS': _extend('expect_stdout_contains', _text),
+    'EXPECT_STDOUT_EXACT': _set('expect_stdout_exact', _text),
+    'EXPECT_STDERR_CONTAINS': _extend('expect_stderr_contains', _text),
+    'EXPECT_STDERR_EMPTY': _set('expect_stderr_empty',
+                                lambda v: v.lower() in ('true', 'yes', '1')),
+    # A comma/space separated list, and the directive may repeat for multi-error compiles.
+    'EXPECT_ERROR_CODE': _extend('expect_error_code', lambda v: _split(_unquote(v))),
+    'EXPECT_ERROR_CODES_EXACT': _exact_codes,
+    'COMPILER_FLAGS': _compiler_flags,
+    'TIMEOUT_SECONDS': _int_into('timeout_seconds', 'TIMEOUT_SECONDS'),
+    'TEST_TYPE': _test_type,
+    # Stored as-is; the runner splits it on whitespace.
+    'CMD_ARGS': _set('cmd_args', str),
+    'STDIN_INPUT': _set('stdin_input', _text),
+    'TEST_ENV': _test_env,
+    # Working directory to run the binary in, so getcwd()-style output is
+    # host-independent (e.g. TEST_CWD: / yields a deterministic "/").
+    'TEST_CWD': _set('test_cwd', str),
+    'EXPECT_REBUILT': _extend('expect_rebuilt', lambda v: _split(_unquote(v))),
+    'EXPECT_CACHED': _extend('expect_cached', lambda v: _split(_unquote(v))),
+    'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
+    'BUILD_LIB': _extend('build_libs', lambda v: _split(_unquote(v))),
+    'STDLIB_MODULE': _stdlib_module,
+}
+
+# Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.
+FLAG_DIRECTIVES = {
+    'EXPECT_NO_LEAKS': 'expect_no_leaks',
+    'EXPECT_NO_OPEN_FDS': 'expect_no_open_fds',
+    'RUN_IN_FIXTURE_DIR': 'run_in_fixture_dir',
+}
+
+_DIRECTIVE_NAME = re.compile(r"[A-Z_]+")
+
+
 def parse_test_metadata(test_file: Path) -> TestMetadata:
     """Parse test metadata from a Sushi source file."""
     metadata = TestMetadata()
 
     try:
-        content = test_file.read_text(encoding='utf-8')
-        lines = content.split('\n')
-        header_lines = header_block(lines)
-
-        for line in header_lines:
+        lines = test_file.read_text(encoding='utf-8').split('\n')
+        for line in header_block(lines):
             line = line.strip()
             if not line.startswith('#'):
                 continue
-
-            # Remove comment prefix and parse directive
             directive = line[1:].strip()
-
-            if directive.startswith('EXPECT_RUNTIME_EXIT:'):
-                value = directive.split(':', 1)[1].strip()
-                try:
-                    metadata.expect_runtime_exit = int(value)
-                except ValueError:
-                    _warn(f"Invalid EXPECT_RUNTIME_EXIT value in {test_file}: {value}")
-
-            elif directive.startswith('EXPECT_STDOUT_CONTAINS:'):
-                value = directive.split(':', 1)[1].strip()
-                # Remove quotes if present
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                # Handle escape sequences
-                value = value.replace('\\n', '\n').replace('\\t', '\t')
-                metadata.expect_stdout_contains.append(value)
-
-            elif directive.startswith('EXPECT_STDOUT_EXACT:'):
-                value = directive.split(':', 1)[1].strip()
-                # Remove quotes if present
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                # Handle escape sequences
-                value = value.replace('\\n', '\n').replace('\\t', '\t')
-                metadata.expect_stdout_exact = value
-
-            elif directive.startswith('EXPECT_STDERR_CONTAINS:'):
-                value = directive.split(':', 1)[1].strip()
-                # Remove quotes if present
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                value = value.replace('\\n', '\n').replace('\\t', '\t')
-                metadata.expect_stderr_contains.append(value)
-
-            elif directive.startswith('EXPECT_STDERR_EMPTY:'):
-                value = directive.split(':', 1)[1].strip().lower()
-                metadata.expect_stderr_empty = value in ('true', 'yes', '1')
-
-            elif directive.startswith('EXPECT_NO_OPEN_FDS'):
-                rest = directive[len('EXPECT_NO_OPEN_FDS'):].lstrip()
-                if rest.startswith(':'):
-                    value = rest[1:].strip().lower()
-                    metadata.expect_no_open_fds = value in ('true', 'yes', '1')
-                elif rest == '':
-                    metadata.expect_no_open_fds = True
-
-            elif directive.startswith('EXPECT_NO_LEAKS'):
-                rest = directive[len('EXPECT_NO_LEAKS'):].lstrip()
-                if rest.startswith(':'):
-                    value = rest[1:].strip().lower()
-                    metadata.expect_no_leaks = value in ('true', 'yes', '1')
-                elif rest == '':
-                    # Bare `# EXPECT_NO_LEAKS` (no colon) means true.
-                    metadata.expect_no_leaks = True
-
-            elif directive.startswith('EXPECT_ERROR_CODE:'):
-                value = directive.split(':', 1)[1].strip()
-                # Strip optional quotes; accept a comma/space separated list and
-                # allow the directive to be repeated for multi-error compiles.
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                for token in re.split(r'[,\s]+', value):
-                    if token:
-                        metadata.expect_error_code.append(token)
-
-            elif directive.startswith('EXPECT_ERROR_CODES_EXACT:'):
-                value = directive.split(':', 1)[1].strip().strip('"')
-                codes = [token for token in re.split(r'[,\s]+', value) if token]
-                if not codes:
-                    _warn(f"Empty EXPECT_ERROR_CODES_EXACT in {test_file}")
-                metadata.expect_error_codes_exact = (
-                    (metadata.expect_error_codes_exact or []) + codes)
-
-            elif directive.startswith('COMPILER_FLAGS:'):
-                value = directive.split(':', 1)[1].strip()
-                for token in re.split(r'[,\s]+', value):
-                    if not token:
-                        continue
-                    if token in RUNNER_OWNED_FLAGS:
-                        _warn(f"{token} is the runner's to spell in "
-                              f"{test_file}; COMPILER_FLAGS ignored it")
-                        continue
-                    metadata.compiler_flags.append(token)
-
-            elif directive.startswith('TIMEOUT_SECONDS:'):
-                value = directive.split(':', 1)[1].strip()
-                try:
-                    metadata.timeout_seconds = int(value)
-                except ValueError:
-                    _warn(f"Invalid TIMEOUT_SECONDS value in {test_file}: {value}")
-
-            elif directive.startswith('TEST_TYPE:'):
-                value = directive.split(':', 1)[1].strip().lower()
-                if value in ('default', 'runtime', 'compilation', 'error', 'warning'):
-                    metadata.test_type = value
-                else:
-                    _warn(f"Invalid TEST_TYPE value in {test_file}: {value}")
-
-            elif directive.startswith('CMD_ARGS:'):
-                value = directive.split(':', 1)[1].strip()
-                # Store the command-line arguments as-is (will be split by shell)
-                metadata.cmd_args = value
-
-            elif directive.startswith('STDIN_INPUT:'):
-                value = directive.split(':', 1)[1].strip()
-                # Remove quotes if present
-                if value.startswith('"') and value.endswith('"'):
-                    value = value[1:-1]
-                # Handle escape sequences
-                value = value.replace('\\n', '\n').replace('\\t', '\t')
-                metadata.stdin_input = value
-
-            elif directive.startswith('TEST_ENV:'):
-                value = directive.split(':', 1)[1].strip()
-                # One KEY=VALUE per directive; the directive may be repeated to set
-                # several variables. Lets a test pin HOME/USER/etc. instead of baking
-                # the developer's host environment into an expected-stdout snapshot.
-                if '=' in value:
-                    key, val = value.split('=', 1)
-                    metadata.test_env[key.strip()] = val.strip()
-                else:
-                    _warn(f"Invalid TEST_ENV value in {test_file}: {value}")
-
-            elif directive.startswith('TEST_CWD:'):
-                # Working directory to run the binary in, so getcwd()-style output is
-                # host-independent (e.g. TEST_CWD: / yields a deterministic "/").
-                metadata.test_cwd = directive.split(':', 1)[1].strip()
+            match = _DIRECTIVE_NAME.match(directive)
+            if match is None:
+                continue
+            name, rest = match.group(), directive[match.end():]
+            if name in FLAG_DIRECTIVES:
+                flag = _flag_value(rest)
+                if flag is not None:
+                    setattr(metadata, FLAG_DIRECTIVES[name], flag)
+            elif name in VALUED_DIRECTIVES and rest.startswith(':'):
+                VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
 
     except Exception as e:
         _warn(f"Failed to parse metadata from {test_file}: {e}")
@@ -322,8 +365,9 @@ def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
 
 
 # Directories the corpus glob steps over: `helpers` holds modules that are not
-# standalone programs, `bin` holds what a run compiled.
-EXCLUDED_FIXTURE_DIRS = {"helpers", "bin"}
+# standalone programs, `bin` holds what a run compiled, `v2` holds a rebuild fixture's
+# second version.
+EXCLUDED_FIXTURE_DIRS = {"helpers", "bin", REBUILD_DIR}
 
 
 def collect_fixtures(tests_dir: Path) -> List[Path]:

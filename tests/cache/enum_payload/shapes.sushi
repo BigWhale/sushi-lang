@@ -1,0 +1,6 @@
+public enum Shape:
+    Circle(i32)
+    Square(i32)
+
+public fn make() Shape:
+    return Result.Ok(Shape.Square(7))
