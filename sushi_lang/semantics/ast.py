@@ -802,6 +802,7 @@ class MemberAccess(Node):
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
     resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
+    expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
 
 @dataclass(slots=True)
 class EnumConstructor(Node):

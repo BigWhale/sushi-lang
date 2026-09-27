@@ -305,9 +305,8 @@ class FunctionCollector:
                     self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
-                from sushi_lang.semantics.ast import Name
-                if isinstance(stmt.value, Name) and stmt.ty is not None:
-                    self.expression_scanner.scan_generic_fn_reference(stmt.value.id, stmt.ty)
+                if stmt.ty is not None:
+                    self.expression_scanner.scan_generic_fn_reference(stmt.value, stmt.ty)
 
         elif isinstance(stmt, Foreach):
             if stmt.item_type is not None:

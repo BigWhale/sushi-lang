@@ -157,8 +157,7 @@ def infer_namespaced_member(validator: 'TypeValidator',
         if binding.kind == "function":
             return _infer_namespaced_function_value(validator, node, binding)
         if binding.kind == "generic function":
-            _reject_generic_function_value(validator, node)
-            return None
+            return _infer_namespaced_generic_value(validator, node, binding)
     if binding is None or binding.kind != "constant":
         _reject_unknown_member(validator, node.receiver, node.member,
                                getattr(node, "loc", None))
@@ -194,8 +193,37 @@ def _infer_namespaced_function_value(validator: 'TypeValidator', node: 'MemberAc
     return function_type_of_sig(binding.record)
 
 
+def _infer_namespaced_generic_value(validator: 'TypeValidator', node: 'MemberAccess',
+                                    binding: 'Binding') -> Optional[Type]:
+    """`<alias>.<generic>` as a function value, solved from the expected fn type (#1017).
+
+    The bare name's solver, over the declaration the alias's provider resolved. The
+    stamp names the monomorphized instance as a FUNCTION, so the back end emits it as
+    it emits any other function value behind an alias.
+    """
+    from .generics import resolve_generic_fn_reference
+    resolved = resolve_generic_fn_reference(validator, binding.name,
+                                            getattr(node, "expected_type", None),
+                                            generic_func=binding.record)
+    if resolved is None:
+        _reject_generic_function_value(validator, node)
+        return None
+    mangled_name, fn_type = resolved
+    if getattr(node, "namespace_ref", None) is None:
+        from sushi_lang.semantics.passes.types.visibility import reject_private_name
+        from sushi_lang.semantics.visibility import VALUE_VERB
+        loc = getattr(node, "loc", None)
+        if not _first_report(validator, loc):
+            return None
+        if reject_private_name(validator, "function", binding.record, loc,
+                               verb=VALUE_VERB):
+            return None
+        _stamp(node, binding, name=mangled_name, kind="function")
+    return fn_type
+
+
 def _reject_generic_function_value(validator: 'TypeValidator', node: 'MemberAccess') -> None:
-    """CE2093: a generic function behind an alias is not a function value (#1013)."""
+    """CE2093: no expected fn type solves the generic behind the alias (#1013, #1017)."""
     loc = getattr(node, "loc", None)
     if _first_report(validator, loc):
         er.emit(validator.reporter, er.ERR.CE2093, loc,

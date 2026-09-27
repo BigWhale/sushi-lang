@@ -1,0 +1,9 @@
+# A generic function behind an alias is a function value where a typed binding
+# solves its type arguments, as the flat name is (#1017).
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/libg" as l
+
+fn main() i32:
+    let fn(i32) -> i32 f = l.gen
+    println(f(1).realise(0))
+    return Result.Ok(0)
