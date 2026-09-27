@@ -29,8 +29,9 @@ implementation when one does not. The contract:
 - `sushic --lib-info FILE` runs `toolchain/bin/slib-info FILE` and returns its
   exit code. The tool owns the full report; the Python fallback
   (`print_library_info` in `sushi_lang/compiler/lib_info.py`) prints the same body.
-  The parity of the two is not gated today: pytest runs no compiler, and no
-  fixture compares the tool with the fallback yet.
+  Two runner steps compare the halves: the library-reader gate checks that both
+  report the same code for a damaged file, and the library-report gate checks the
+  variant-payload and constraint lines. The rest of the body is not compared.
 - **A switch is spelled the same at both ends.** `sushic --lib-info FILE --docs`
   passes `--docs` through to the tool as itself, and `--color=always|never` the
   same way (`auto` is the default and says nothing, so it is not passed). The
