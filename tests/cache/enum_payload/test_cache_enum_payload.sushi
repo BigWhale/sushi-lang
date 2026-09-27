@@ -1,0 +1,16 @@
+# A dependency widens an enum payload from i32 to i64. The consumer reads the payload in
+# its own object, so the cache must rebuild it: a stale object reads 32 bits of the new
+# value and prints 7.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "7\n"
+# EXPECT_STDOUT_EXACT: "4294967303\n"
+# EXPECT_REBUILT: shapes, test_cache_enum_payload
+use "shapes"
+
+fn main() i32:
+    match make():
+        Result.Ok(shape) ->
+            match shape:
+                Shape.Circle(r) -> println("circle {r}")
+                Shape.Square(side) -> println("{side}")
+        Result.Err(_) -> return Result.Ok(1)
+    return Result.Ok(0)

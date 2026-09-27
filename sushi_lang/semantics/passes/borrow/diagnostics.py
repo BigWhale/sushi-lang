@@ -122,6 +122,20 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
+def emit_change_under_iterator(checker: 'BorrowChecker', iterator: BorrowState,
+                               iterable: Expr, header: Optional[Span]) -> None:
+    """Report CE2412 at a change of the container a `foreach` still walks (#956)."""
+    owner, what = iterator.invalidated_by
+    text = expr_to_string(iterable)
+    diag = checker.err.emit_with(er.ERR.CE2412, iterator.invalidated_at,
+                                 owner=owner, name=text)
+    if header is not None:
+        diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
+    diag.help(f"{what} after the loop, or walk an independent value: "
+              f"`{owner}.clone().{iterable.method}()`")
+    diag.emit()
+
+
 def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 

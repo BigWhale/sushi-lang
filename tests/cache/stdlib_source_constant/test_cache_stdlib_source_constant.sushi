@@ -1,0 +1,12 @@
+# A Sushi-source stdlib module changes the value of a public constant. The runner
+# registers the module from this directory, the way the bundled modules under src_sushi
+# are registered, and the cache must rebuild the consumer.
+# STDLIB_MODULE: fixture/limits=limits.sushi
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "10\n"
+# EXPECT_STDOUT_EXACT: "20\n"
+# EXPECT_REBUILT: fixture/limits, test_cache_stdlib_source_constant
+use <fixture/limits>
+
+fn main() i32:
+    println("{LIMIT}")
+    return Result.Ok(0)

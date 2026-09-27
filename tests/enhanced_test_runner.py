@@ -21,12 +21,12 @@ from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
                           TestMetadata, fixture_binary_name,
-                          select_fixtures)
+                          select_fixtures, is_rebuild_fixture, REBUILD_DIR)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
-                       DocGateResult, stdlib_doc_gate)
+                       DocGateResult, stdlib_doc_gate, stdlib_override_command)
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -36,6 +36,13 @@ RUNTIME_QUARANTINE: set[str] = set()
 
 
 _NUMERIC = re.compile(r"-?\d+")
+# The code of one compiler diagnostic, `error [CE1001]` or `warning [CW1001]`.
+_DIAGNOSTIC_CODE = re.compile(r"\b(?:error|warning) \[(C[EW]\d{4})\]")
+
+
+def diagnostic_codes(stderr: str) -> set:
+    """Every distinct diagnostic code the compiler printed."""
+    return set(_DIAGNOSTIC_CODE.findall(stderr or ""))
 
 # Why a leak assertion was not evaluated. A skip is never a pass, so the reason has to
 # survive as far as the summary; these constants are what _check_leaks records and what
@@ -280,6 +287,26 @@ def stdout_contains(stdout: str, expected: str) -> bool:
     return re.search(lookbehind + re.escape(token) + r"(?![\d.])", stdout) is not None
 
 
+# One line of a multi-unit compilation's code-generation report: `  geo   [cached]`.
+_UNIT_REPORT = re.compile(r"^\s+(\S+)\s+\[(cached|rebuilt)\]\s*$", re.MULTILINE)
+
+
+def unit_report(stdout: str) -> Dict[str, str]:
+    """Each unit a compilation reported, and whether it was `cached` or `rebuilt`."""
+    return dict(_UNIT_REPORT.findall(stdout or ""))
+
+
+@dataclass
+class Workspace:
+    """The copy of a directory fixture that the runner compiles and runs in (#988)."""
+    home: Path
+    root: Path
+    source: Path
+    cache: Optional[Path]
+    rebuild: Optional[Path]
+    libs: Path
+
+
 @dataclass
 class TestResult:
     """Result of running a single test."""
@@ -306,9 +333,12 @@ class TestRunner:
     def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False,
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
-                 compile_only: bool = False):
+                 compile_only: bool = False, project_root: Optional[Path] = None):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
+        # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
+        # every real run; a runner test that selects from a temporary directory names it.
+        self.project_root = project_root or tests_dir.parent
         self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
@@ -327,6 +357,8 @@ class TestRunner:
         self.leaks_checked: List[str] = []
         self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
+        # The copy each directory fixture compiles and runs in, by test name, while it runs.
+        self._workspaces: Dict[str, Workspace] = {}
         # The stdlib doc-block gate's verdict (#953), set by main before the run.
         self.doc_gate: Optional[DocGateResult] = None
         # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
@@ -497,6 +529,21 @@ class TestRunner:
                 total_success=True,
             )
 
+        workspace, refusal = self._prepare_workspace(test_file, metadata)
+        if refusal is not None:
+            return TestResult(name=test_name, category=category, compilation_success=False,
+                              compilation_message=refusal, skipped_runtime=True)
+        if workspace is not None:
+            self._workspaces[test_name] = workspace
+        try:
+            return self._compile_and_run(test_file, test_name, category, metadata)
+        finally:
+            if workspace is not None:
+                self._workspaces.pop(test_name, None)
+                shutil.rmtree(workspace.home, ignore_errors=True)
+
+    def _compile_and_run(self, test_file: Path, test_name: str, category: str,
+                         metadata: TestMetadata) -> TestResult:
         compilation_success, compilation_message = self._run_compilation_test(test_file, category, metadata)
 
         result = TestResult(
@@ -523,6 +570,149 @@ class TestRunner:
 
         return result
 
+    # --- directory fixtures (#988) -------------------------------------------
+
+    def _prepare_workspace(self, test_file: Path, metadata: TestMetadata
+                           ) -> Tuple[Optional["Workspace"], Optional[str]]:
+        """A copy of a directory fixture to compile in, or the reason the fixture is refused.
+
+        A fixture needs one when it is a rebuild fixture, when it runs in its own directory,
+        or when it builds a library or registers a stdlib module there. The copy keeps the
+        tree clean: the runner writes `v2/`, the libraries and the cache only in the copy.
+        """
+        rebuild = is_rebuild_fixture(test_file)
+        if metadata.declares_a_rebuild and not rebuild:
+            return None, (f"✗ Compilation: the fixture declares a rebuild and its directory "
+                          f"holds no {REBUILD_DIR}/")
+        if rebuild and (test_file.parent / REBUILD_DIR / test_file.name).exists():
+            return None, (f"✗ Compilation: {REBUILD_DIR}/ may not replace the fixture "
+                          f"itself; its directives describe both steps")
+        if not (rebuild or metadata.run_in_fixture_dir or metadata.build_libs
+                or metadata.stdlib_modules):
+            return None, None
+
+        home = Path(self.temp_dir) / "work" / fixture_binary_name(test_file, self.tests_dir)
+        root = home / "fixture"
+        shutil.copytree(test_file.parent, root,
+                        ignore=shutil.ignore_patterns(REBUILD_DIR, "__sushi_cache__"))
+        # In its own directory the compiler picks its own cache, as it does for a user.
+        cache = None if metadata.run_in_fixture_dir else home / "cache"
+        return Workspace(home=home, root=root, source=root / test_file.name, cache=cache,
+                         rebuild=test_file.parent / REBUILD_DIR if rebuild else None,
+                         libs=home / "libs"), None
+
+    def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
+        """Build each BUILD_LIB source library in the copy; the failure, or None."""
+        workspace.libs.mkdir(parents=True, exist_ok=True)
+        for source in metadata.build_libs:
+            done = subprocess.run(
+                [str(self.project_root / "sushic"), "--lib", "--lib-version", "0.0.0",
+                 str(workspace.root / source), "-o",
+                 str(workspace.libs / f"{Path(source).stem}.slib")],
+                capture_output=True, text=True, cwd=self.project_root,
+                env={**os.environ, "NO_COLOR": "1"}, timeout=60)
+            if done.returncode != 0:
+                return (f"✗ Compilation: BUILD_LIB {source} failed with exit "
+                        f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
+        return None
+
+    def _invoke_compiler(self, test_file: Path, metadata: TestMetadata,
+                         binary_path: Path) -> subprocess.CompletedProcess:
+        """Start `sushic` for one compilation of a fixture, the way the fixture asks.
+
+        Force NO_COLOR so diagnostic codes/messages land in stderr without ANSI escapes,
+        keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
+        """
+        workspace = self._workspaces.get(test_file.name)
+        env = {**os.environ, "NO_COLOR": "1"}
+        cwd = self.project_root
+        source = str(test_file)
+        flags = ["-o", str(binary_path), *metadata.compiler_flags]
+        if workspace is not None:
+            source = str(workspace.source)
+            if metadata.run_in_fixture_dir:
+                cwd, source = workspace.root, workspace.source.name
+            if workspace.cache is not None:
+                flags += ["--cache-dir", str(workspace.cache)]
+            if metadata.build_libs:
+                env["SUSHI_LIB_PATH"] = os.pathsep.join(
+                    [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
+        if metadata.stdlib_modules and workspace is not None:
+            # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
+            # the wrapper does: start in the checkout, and name the caller's directory.
+            command, extra = stdlib_override_command(
+                self.project_root,
+                {name: workspace.root / path for name, path in metadata.stdlib_modules.items()},
+                [source, *flags])
+            env.update(extra)
+            env["SUSHI_CWD"] = str(cwd)
+            cwd = self.project_root
+        else:
+            command = [str(self.project_root / "sushic"), source, *flags]
+        return subprocess.run(command, capture_output=True, text=True, cwd=cwd, env=env,
+                              timeout=30)
+
+    def _first_build(self, test_file: Path, metadata: TestMetadata,
+                     binary_path: Path) -> Optional[str]:
+        """The first compilation of a rebuild fixture, then `v2/` over the copy.
+
+        It must build, into a cache nobody filled, and its binary must print what
+        EXPECT_STDOUT_EXACT_BEFORE_REBUILD says. Returns the failure, or None.
+        """
+        workspace = self._workspaces[test_file.name]
+        first = binary_path.with_name(binary_path.name + "__before_rebuild")
+        done = self._invoke_compiler(test_file, metadata, first)
+        if done.returncode not in (0, 1) or spelling_gate_tripped(done.stderr):
+            return (f"✗ Compilation: the build before the rebuild failed with exit "
+                    f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
+        warm = [name for name, status in unit_report(done.stdout).items()
+                if status != "rebuilt"]
+        if warm:
+            return (f"✗ Compilation: the build before the rebuild found a warm cache: "
+                    f"{', '.join(warm)}")
+        if metadata.expect_stdout_exact_before_rebuild is not None:
+            ran = subprocess.run([str(first)], capture_output=True, text=True,
+                                 timeout=metadata.timeout_seconds,
+                                 cwd=self._runtime_cwd(test_file.name, metadata))
+            if (ran.returncode != 0
+                    or ran.stdout != metadata.expect_stdout_exact_before_rebuild):
+                return ("✗ Runtime: the binary before the rebuild\n"
+                        f"Expected: exit 0, {metadata.expect_stdout_exact_before_rebuild!r}\n"
+                        f"Actual: exit {ran.returncode}, {ran.stdout!r}")
+        first.unlink(missing_ok=True)
+        assert workspace.rebuild is not None
+        shutil.copytree(workspace.rebuild, workspace.root, dirs_exist_ok=True)
+        return None
+
+    @staticmethod
+    def _check_unit_report(stdout: str, metadata: TestMetadata) -> Tuple[bool, str]:
+        """EXPECT_REBUILT and EXPECT_CACHED against the units the compilation reported."""
+        reported = unit_report(stdout)
+        expected = {**{n: "cached" for n in metadata.expect_cached or []},
+                    **{n: "rebuilt" for n in metadata.expect_rebuilt or []}}
+        problems = []
+        for name, status in sorted(expected.items()):
+            got = reported.get(name)
+            if got != status:
+                problems.append(f"{name}: expected [{status}], "
+                                f"got {'[' + got + ']' if got else 'no report'}")
+        for name in sorted(set(reported) - set(expected)):
+            problems.append(f"{name}: reported [{reported[name]}] and named in neither "
+                            f"EXPECT_REBUILT nor EXPECT_CACHED")
+        if problems:
+            return False, ("✗ Compilation: the rebuild report differs\n  "
+                           + "\n  ".join(problems))
+        return True, "✓ Compilation: the rebuild report matched"
+
+    def _runtime_cwd(self, test_name: str, metadata: TestMetadata) -> Optional[str]:
+        """TEST_CWD, else the fixture's copy for RUN_IN_FIXTURE_DIR, else the runner's."""
+        if metadata.test_cwd:
+            return metadata.test_cwd
+        workspace = self._workspaces.get(test_name)
+        if workspace is not None and metadata.run_in_fixture_dir:
+            return str(workspace.root)
+        return None
+
     def _run_compilation_test(self, test_file: Path, category: str, metadata: TestMetadata) -> Tuple[bool, str]:
         """Run compilation phase for a test."""
         # Determine expected exit code based on category
@@ -533,6 +723,7 @@ class TestRunner:
             'runtime': 0,    # Should succeed without warnings
         }
         expected_exit_code = expected_exit_codes.get(category, 0)
+        workspace = self._workspaces.get(test_file.name)
 
         try:
             # The output binary, named from the fixture's PATH. The stem plus the
@@ -540,21 +731,18 @@ class TestRunner:
             # constant and a shared stem was a shared binary (#604).
             binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
-            # Run the compiler (from project root). Force NO_COLOR so diagnostic
-            # codes/messages land in stderr without ANSI escapes, keeping
-            # substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
-            # robust.
-            project_root = self.tests_dir.parent
-            cmd = ["./sushic", str(test_file), "-o", str(binary_path),
-                   *metadata.compiler_flags]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=project_root,
-                env={**os.environ, "NO_COLOR": "1"},
-                timeout=30  # 30 second timeout for compilation
-            )
+            if workspace is not None and metadata.build_libs:
+                failure = self._build_libraries(metadata, workspace)
+                if failure is not None:
+                    return False, failure
+            if workspace is not None and workspace.rebuild is not None:
+                failure = self._first_build(test_file, metadata, binary_path)
+                if failure is None and metadata.build_libs:
+                    failure = self._build_libraries(metadata, workspace)
+                if failure is not None:
+                    return False, failure
+
+            result = self._invoke_compiler(test_file, metadata, binary_path)
 
             success = result.returncode == expected_exit_code
             if success and spelling_gate_tripped(result.stderr):
@@ -580,6 +768,10 @@ class TestRunner:
                     success = False
                     message = diag_msg
 
+            if success and (metadata.expect_rebuilt is not None
+                            or metadata.expect_cached is not None):
+                success, message = self._check_unit_report(result.stdout, metadata)
+
             return success, message
 
         except subprocess.TimeoutExpired:
@@ -603,6 +795,16 @@ class TestRunner:
                 + ", ".join(missing)
                 + f"\nSTDERR: {stderr.strip()}"
             )
+        if metadata.expect_error_codes_exact is not None:
+            expected = set(metadata.expect_error_codes_exact)
+            printed = diagnostic_codes(stderr)
+            if printed != expected:
+                return False, (
+                    "✗ Compilation: the diagnostic codes are not the exact set"
+                    f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
+                    f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
+                    f"\nSTDERR: {stderr.strip()}"
+                )
         return True, "✓ Compilation: diagnostics matched"
 
     def _run_runtime_test(self, test_name: str, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
@@ -638,7 +840,7 @@ class TestRunner:
                 text=True,
                 timeout=metadata.timeout_seconds,
                 env=run_env,
-                cwd=metadata.test_cwd or None,
+                cwd=self._runtime_cwd(test_name, metadata),
             )
 
             # Validate runtime behavior
@@ -674,7 +876,7 @@ class TestRunner:
     def _check_leaks(self, test_name: str, binary_path: Path,
                      metadata: TestMetadata) -> Tuple[Optional[bool], str]:
         """Re-run a binary under the malloc-interposer and assert it leaks nothing."""
-        shim = leakcheck_lib_path(self.tests_dir.parent)
+        shim = leakcheck_lib_path(self.project_root)
         if shim is None:
             return self._skip_leak_check(test_name, SKIP_UNSUPPORTED_PLATFORM)
         if not shim.exists():
@@ -702,7 +904,7 @@ class TestRunner:
             stderr=subprocess.PIPE,
             text=True,
             env=run_env,
-            cwd=metadata.test_cwd or None,
+            cwd=self._runtime_cwd(test_name, metadata),
             start_new_session=True,
         )
         try:

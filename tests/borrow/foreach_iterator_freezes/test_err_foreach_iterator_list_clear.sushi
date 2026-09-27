@@ -1,0 +1,12 @@
+# A `clear` frees the storage the loop's iterator reads, so it is refused in the body of
+# a `foreach` over the list (#956).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    l.push(2)
+    foreach(x in l.iter()):
+        println(x)
+        l.clear()
+    return Result.Ok(0)

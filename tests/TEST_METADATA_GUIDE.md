@@ -197,6 +197,25 @@ compilation failed but *which* diagnostic fired.
   forces `NO_COLOR` so the token is never split by color escapes.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
+- It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
+  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the set.
+
+#### EXPECT_ERROR_CODES_EXACT
+
+Asserts the WHOLE set of diagnostic codes the compiler printed, warnings included, for a
+`test_err_*` / `test_warn_*` test. A code that is missing fails the test, and so does a
+code that is printed and not listed.
+
+```sushi
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_ERROR_CODES_EXACT: CW1001, CE1001, CE2002
+```
+
+- A comma/space separated list; the directive may be repeated, and the lists add up
+- It compares SETS: a code printed twice is listed once
+- A code is read from the head of each diagnostic (`error [CE1001]`,
+  `warning [CW1001]`); a code inside a message or a note does not count
+- The failure names each missing code and each code that was not expected
 
 ### Advanced Metadata Directives
 
@@ -283,6 +302,87 @@ lives behind a compiler flag.
   quiet twin is what proves the flag is a gate; without it a lint that became always-on
   would pass both ways
 
+### Directory Fixtures: the Rebuild and the Working Directory
+
+A fixture that needs more than one file, a second compilation or its own working
+directory lives in a directory of its own, for example `tests/cache/<name>/`. The
+fixture is the one `test_*.sushi` file there; the other `.sushi` files are the units it
+imports. The runner never compiles in the tree: it copies the fixture's directory to a
+temporary directory and compiles, runs and rebuilds the copy. `--cache-dir` stays the
+runner's flag, and the runner gives each such fixture a cache of its own.
+
+#### The rebuild form (`v2/`)
+
+When the fixture's directory holds a `v2/` directory, the fixture is a rebuild fixture:
+
+1. The runner compiles the copy. The compilation must succeed (exit 0 or 1), and every
+   unit must report `[rebuilt]`, because the cache is new.
+2. It copies each file of `v2/` over its namesake in the copy.
+3. It compiles again, with the same cache. This second compilation, and its binary, are
+   what the ordinary directives (`EXPECT_STDOUT_EXACT`, `EXPECT_ERROR_CODE`, the exit code
+   of the file name, ...) describe.
+
+`v2/` is data, never a fixture: the collector steps over it, and it may not hold the
+fixture file itself, because the one set of directives describes both steps.
+
+```sushi
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3 4\n"
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_REBUILT: geo, test_cache_struct_shape
+# EXPECT_CACHED: other
+```
+
+- `EXPECT_STDOUT_EXACT_BEFORE_REBUILD` -- the exact stdout of the FIRST binary, which
+  must also exit 0. It proves that the change `v2/` makes is visible.
+- `EXPECT_REBUILT` / `EXPECT_CACHED` -- the units the SECOND compilation reports as
+  `[rebuilt]` and `[cached]` in its code-generation report. A unit name is the one the
+  compiler prints: the file stem for a unit of the program (`geo`), the module name for a
+  stdlib module (`fixture/limits`), and `lib/<lib>/<unit>` for a unit of a source
+  library. A comma/space separated list; the directive may be repeated. When either is
+  present, every unit the compiler reports must be named in one of the two, so an
+  unexpected rebuild fails the fixture too.
+- A rebuild directive in a fixture whose directory holds no `v2/` fails the fixture.
+
+#### RUN_IN_FIXTURE_DIR
+
+```sushi
+# RUN_IN_FIXTURE_DIR
+```
+
+- The runner starts `sushic` from the copy of the fixture's directory, with the bare
+  file name as the source path, the way a user does. The `sushic` wrapper passes that
+  directory to the compiler in `SUSHI_CWD`.
+- The runner passes no `--cache-dir`: the compiler picks its own cache, as it does for a
+  user, and that cache is in the copy.
+- The binary also runs in the copy, unless `TEST_CWD` names another directory.
+- `-o` stays the runner's, and it is an absolute path outside the copy.
+
+#### BUILD_LIB
+
+```sushi
+# BUILD_LIB: geolib.sushi
+```
+
+- Before each compilation, the runner builds the named file of the fixture's directory
+  as a SOURCE `.slib` (`--lib --lib-version 0.0.0`), and puts the directory that holds
+  it first on `SUSHI_LIB_PATH`. The fixture imports it as `use <lib/geolib>`.
+- In a rebuild fixture the library is built again after `v2/` is copied in.
+- A library that does not build fails the fixture.
+
+#### STDLIB_MODULE
+
+```sushi
+# STDLIB_MODULE: fixture/limits=limits.sushi
+```
+
+- Registers the named file of the fixture's directory as a Sushi-source stdlib module,
+  in the one compiler process, the way the bundled modules under `src_sushi/` are
+  registered. The fixture imports it as `use <fixture/limits>`. This is how a fixture
+  tests what a change to a bundled module does, without a change to the stdlib.
+- The compiler then runs without the `sushic` wrapper, so the runner does what the
+  wrapper does: it starts the compiler in the checkout and names the fixture's directory
+  in `SUSHI_CWD`.
+
 ## Test File Naming Conventions
 
 Test files must follow naming conventions to indicate expected compilation behavior:
@@ -295,7 +395,7 @@ Test files must follow naming conventions to indicate expected compilation behav
 A test file name must also be UNIQUE across the whole of `tests/`, whatever directory it
 sits in. The runners report each test by its file name and key their quarantine sets on
 it, so a name that picks out two files drops one of them from the count and makes a
-failure unattributable. `tests/unit/test_fixture_identity_is_its_path.py` refuses a
+failure unattributable. `tests/unit/runner/test_fixture_identity_is_its_path.py` refuses a
 duplicate. Give the name enough of its subject to stand alone:
 `test_run_socket_close_then_scope_exit.sushi`, not `test_run_close_then_scope_exit.sushi`
 next to another of that name.

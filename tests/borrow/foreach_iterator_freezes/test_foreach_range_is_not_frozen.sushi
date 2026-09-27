@@ -1,0 +1,11 @@
+# A range owns its state, so a body that grows a list while it walks a range stays legal
+# (#956).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    foreach(i in 0..3):
+        l.push(i)
+    println("{l.len()}")
+    return Result.Ok(0)

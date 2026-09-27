@@ -1,0 +1,14 @@
+# A source library reorders the fields of a public struct, and the runner builds the
+# library again before the second compilation. The consumer's source does not move, so
+# the cache must rebuild it from the new library.
+# BUILD_LIB: geolib.sushi
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3 4\n"
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_REBUILT: lib/geolib/geolib, test_cache_slib_struct
+use <lib/geolib>
+
+fn main() i32:
+    match make():
+        Result.Ok(v) -> println("{v.x} {v.y}")
+        Result.Err(_) -> return Result.Ok(1)
+    return Result.Ok(0)

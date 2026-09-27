@@ -184,9 +184,9 @@ DOC_GATE_MODULES_ENV = "SUSHI_DOC_GATE_MODULES"
 _DIAGNOSTIC_HEAD = re.compile(
     r"^(?P<path>[^:\s][^:]*?)(?::\d+:\d+)?: (?:warning|error) \[(?P<code>C[EW]\d{4})\]")
 _DOC_CODE = re.compile(r"^C[EW]70\d\d$")
-# A synthetic module of the runner tests is not in the registry, so the compiler must be
-# told about it. This bootstrap adds it to the registry of ONE compiler process and runs
-# that compiler; only the SUSHI_DOC_GATE_MODULES override uses it.
+# A synthetic module is not in the registry, so the compiler must be told about it. This
+# bootstrap adds it to the registry of ONE compiler process and runs that compiler; the
+# SUSHI_DOC_GATE_MODULES override and a fixture's STDLIB_MODULE directive use it.
 _OVERRIDE_BOOTSTRAP = """\
 import json, sys
 from pathlib import Path
@@ -232,6 +232,17 @@ class DocGateResult:
             lines.append(f"  {name}: {len(findings)} finding(s)")
             lines.extend(f"    {f}" for f in findings)
         return lines
+
+
+def stdlib_override_command(project_root: Path, modules: Dict[str, Path],
+                            compiler_args: List[str]) -> Tuple[List[str], Dict[str, str]]:
+    """A compiler command that first registers `modules` as Sushi-source stdlib modules,
+    and the environment it needs on top of the caller's."""
+    command = [sys.executable, "-c", _OVERRIDE_BOOTSTRAP,
+               json.dumps({n: str(p) for n, p in modules.items()}), *compiler_args]
+    env = {"PYTHONPATH": os.pathsep.join(
+        [str(project_root), *filter(None, [os.environ.get("PYTHONPATH")])])}
+    return command, env
 
 
 def doc_gate_modules() -> Tuple[Dict[str, Path], bool]:
@@ -327,11 +338,9 @@ def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
         env = {**os.environ, STDLIB_DOC_GATE_ENV: "1"}
         cwd = project_root
         if is_override:
-            command = [sys.executable, "-c", _OVERRIDE_BOOTSTRAP,
-                       json.dumps({n: str(p) for n, p in chosen.items()}), *flags]
+            command, extra = stdlib_override_command(project_root, chosen, flags)
             cwd = Path(os.path.commonpath([p.parent for p in chosen.values()]))
-            env["PYTHONPATH"] = os.pathsep.join(
-                [str(project_root), *filter(None, [env.get("PYTHONPATH")])])
+            env.update(extra)
         else:
             command = [str(project_root / "sushic"), *flags]
         try:
