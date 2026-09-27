@@ -1,0 +1,24 @@
+# A generic function value is solved by the payload type of a generic enum that
+# the declared type names, in a `let` and in a `return` (#1021).
+# EXPECT_STDOUT_EXACT: "7\n8\n"
+fn g1@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn g2@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(8 + (h & 0) as i32)
+
+fn pick() Maybe@(fn(i32) -> i32):
+    return Result.Ok(Maybe.Some(g2))
+
+fn main() i32:
+    let Maybe@(fn(i32) -> i32) m = Maybe.Some(g1)
+    match m:
+        Maybe.Some(f) -> println(f(1).realise(0))
+        Maybe.None -> println("none")
+    match pick():
+        Result.Ok(Maybe.Some(f)) -> println(f(1).realise(0))
+        Result.Ok(Maybe.None) -> println("none")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

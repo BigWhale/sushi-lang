@@ -1,0 +1,28 @@
+# A generic function value is solved by the declared type of a position that
+# an alias names: a function, a struct field and an enum payload of another
+# unit, and the generic behind the alias too (#1021).
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n7\n"
+use "helpers/libpos" as l
+
+fn g1@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(1 + (h & 0) as i32)
+
+fn g2@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(2 + (h & 0) as i32)
+
+fn g3@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(3 + (h & 0) as i32)
+
+fn main() i32:
+    println(l.apply(g1).realise(0))
+    let l.Holder h = l.Holder(g2)
+    println(h.f(1).realise(0))
+    let l.Op o = l.Op.Apply(g3)
+    match o:
+        l.Op.Apply(g) -> println(g(1).realise(0))
+    let l.Holder k = l.Holder(l.gen)
+    println(k.f(1).realise(0))
+    return Result.Ok(0)

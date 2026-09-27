@@ -1,0 +1,26 @@
+# A generic function value is solved by the parameter type of a method and of
+# a static method (#1021).
+# EXPECT_STDOUT_EXACT: "7\n8\n"
+fn g1@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn g2@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(8 + (h & 0) as i32)
+
+struct Box:
+    i32 v
+
+extend Box run(fn(i32) -> i32 f) i32:
+    return f(self.v).realise(0)
+
+extend Box static make(fn(i32) -> i32 f) Box:
+    return Box(f(1).realise(0))
+
+fn main() i32:
+    let Box b = Box(1)
+    println(b.run(g1))
+    let Box c = Box.make(g2)
+    println(c.v)
+    return Result.Ok(0)

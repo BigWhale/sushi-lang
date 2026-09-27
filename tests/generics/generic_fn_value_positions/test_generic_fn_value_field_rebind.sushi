@@ -1,0 +1,21 @@
+# A generic function value is solved by the field type in a named struct
+# construction and in a rebind of a field (#1021).
+# EXPECT_STDOUT_EXACT: "7\n8\n"
+fn g1@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn g2@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(8 + (h & 0) as i32)
+
+struct Holder:
+    i32 n
+    fn(i32) -> i32 f
+
+fn main() i32:
+    let Holder h = Holder(f: g1, n: 1)
+    println(h.f(1).realise(0))
+    h.f := g2
+    println(h.f(1).realise(0))
+    return Result.Ok(0)

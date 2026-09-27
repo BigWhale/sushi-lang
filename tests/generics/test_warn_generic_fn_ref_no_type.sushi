@@ -1,0 +1,15 @@
+# A generic-fn reference in an argument position is a function value: Ruling 6 made
+# the argument form legal, because the parameter type solves the type arguments
+# (#1021). The one diagnostic left is the `??` in main.
+# EXPECT_ERROR_CODES_EXACT: CW2511
+# EXPECT_STDOUT_EXACT: "1\n"
+fn identity@(T)(T x) T:
+    return Result.Ok(x)
+
+fn take(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(1)??)
+
+fn main() i32:
+    let i32 r = take(identity)??
+    println(r)
+    return Result.Ok(0)
