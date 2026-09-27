@@ -2,6 +2,7 @@
 import argparse
 import sys
 
+from sushi_lang.internals.styling import Palette, should_colour
 from sushi_lang.packager.api_client import api_request, ApiError
 from sushi_lang.packager.credentials import load_token
 from sushi_lang.packager.repository import resolve_repository
@@ -29,11 +30,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(str(e))
         return 1
 
-    use_ansi = sys.stdout.isatty()
-    if use_ansi:
-        BOLD, DIM, RESET = "\x1b[1m", "\x1b[2m", "\x1b[0m"
-    else:
-        BOLD, DIM, RESET = "", "", ""
+    p = Palette(should_colour(sys.stdout))
+    BOLD, DIM, RESET = p.bold, p.dim, p.reset
 
     username = user.get("username", "unknown")
     email = user.get("email", "")

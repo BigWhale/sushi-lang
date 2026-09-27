@@ -2,27 +2,10 @@
 import argparse
 import sys
 
+from sushi_lang.internals.styling import COLOUR_CHOICES, set_colour_override
 
-def _print_banner() -> None:
-    from sushi_lang.internals.version import _ensure_utf8_stdout, _get_versions
-    from sushi_lang import __dev__ as is_dev
-    import datetime
 
-    _ensure_utf8_stdout()
-    v = _get_versions()
-    today = datetime.date.today().isoformat()
-
-    use_ansi = sys.stdout.isatty()
-    if use_ansi:
-        BOLD, DIM, RESET = "\x1b[1m", "\x1b[2m", "\x1b[0m"
-    else:
-        BOLD, DIM, RESET = "", "", ""
-
-    dev_marker = " (dev)" if is_dev else ""
-    print(
-        f"{BOLD} \U0001f96c Nori (\u6d77\u82d4) Package Manager{RESET} \u2022 {v['app']}{dev_marker}\n"
-        f"{DIM}Python {v['python']} \u2022 llvmlite {v['llvmlite']} \u2022 LLVM {v['llvm']} \u2022 {today}{RESET}\n"
-    )
+NORI_TITLE = "\U0001f96c Nori (\u6d77\u82d4) Package Manager"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +15,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--version", action="store_true", help="Show version and exit",
+    )
+    parser.add_argument(
+        "--color", choices=list(COLOUR_CHOICES), default="auto",
+        help="When to use ANSI colour. 'auto' reads NO_COLOR, CLICOLOR_FORCE, TERM and "
+             "whether the stream is a terminal.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -141,7 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> int:
-    _print_banner()
+    from sushi_lang.internals.version import print_banner
+
+    set_colour_override(args.color)
+    print_banner(NORI_TITLE)
 
     if args.version:
         return 0
