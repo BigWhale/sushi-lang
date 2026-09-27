@@ -15,8 +15,8 @@ to exactly one owner and closes itself when that owner leaves scope. Handing a
 socket to a `nom` parameter is what transfers it.
 
 close() stays, for the caller who has to SEE that the close failed -- a
-destructor cannot answer a Result. It writes -1 into the binding, so the drop
-that follows is a no-op and the descriptor is released exactly once.
+destructor cannot answer a Result. It consumes the handle, so the descriptor
+is released exactly once and a use after the close is refused (CE2435).
 
 Limitations: blocking sockets only. A datagram longer than the maximum asked
 for is truncated and the rest is lost, which is how the protocol works. Every
@@ -49,24 +49,6 @@ extend UdpSocket with Drop:
     :##
     fn drop(poke self) ~:
         close_socket(poke self.fd)
-
-##:
-Releases a descriptor exactly once, and writes -1 over it.
-
-Private to this module, and the ONE place the guard and the sock_close() call
-are spelled, so close() and the destructor share it.
-
-- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
-- Returns: Nothing.
-- Errors: NetError, when the descriptor could not be closed.
-:##
-fn close_socket(poke i32 fd) ~ | NetError:
-    if (fd < 0):
-        return Result.Ok(~)
-    let i32 held = fd
-    fd := -1
-    sock_close(held)??
-    return Result.Ok(~)
 
 ##:
 Binds a datagram socket to an address and port.
@@ -139,14 +121,15 @@ extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
     return Result.Ok(~)
 
 ##:
-Closes a socket and writes -1 into the binding.
+Closes a socket, and CONSUMES the handle.
 
-The binding is marked so that closing it again is a success, and the drop at
-scope exit is then a no-op.
+The call takes the handle, so a use after a close is refused while compiling (CE2435)
+rather than answering EBADF at run time, and there is nothing left for the scope exit to
+close. The same terms as TcpStream.
 
-- Returns: Nothing. The binding reads -1 afterwards.
+- Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend UdpSocket close(poke self) ~ | NetError:
+extend UdpSocket close(nom self) ~ | NetError:
     close_socket(poke self.fd)??
     return Result.Ok(~)
