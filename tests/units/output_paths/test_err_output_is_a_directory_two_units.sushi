@@ -1,0 +1,10 @@
+# A two-unit program takes the incremental path; an -o path that is a directory is CE3020 there too.
+# OUTPUT_PATH: adir
+# EXPECT_ERROR_CODES_EXACT: CE3020
+# EXPECT_STDERR_CONTAINS: "Is a directory"
+
+use "output_paths_dep"
+
+fn main() i32:
+    println("{ANSWER}")
+    return Result.Ok(0)

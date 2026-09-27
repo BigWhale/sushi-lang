@@ -1,0 +1,8 @@
+# A library build whose -o path has no .slib extension is CE3500, also when the path is a directory.
+# OUTPUT_PATH: adir
+# COMPILER_FLAGS: --lib --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CE3500
+# EXPECT_STDERR_CONTAINS: "must have .slib extension"
+
+public fn answer() i32:
+    return Result.Ok(42)

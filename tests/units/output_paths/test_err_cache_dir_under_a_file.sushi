@@ -1,0 +1,11 @@
+# A --cache-dir under a regular file (`afile`, beside this fixture) is CE3020 on the incremental path.
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_CACHE_DIR: afile/cache
+# EXPECT_ERROR_CODES_EXACT: CE3020
+# EXPECT_STDERR_CONTAINS: "Not a directory"
+
+use "output_paths_dep"
+
+fn main() i32:
+    println("{ANSWER}")
+    return Result.Ok(0)

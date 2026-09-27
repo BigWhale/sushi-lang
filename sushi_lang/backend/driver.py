@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Iterator, List, Optional
 
 from llvmlite import ir, binding as llvm
 
@@ -12,6 +13,19 @@ from sushi_lang.semantics.units import Unit
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.ast import ExtendDef
+
+
+@contextmanager
+def writing_output(path: Path) -> Iterator[None]:
+    """An `OSError` while the compiler writes a file that the command line asked for
+    (the `-o` output, the object beside it, the cache) is CE3020, never CE0000."""
+    try:
+        yield
+    except OSError as exc:
+        from sushi_lang.compiler.cli import COMMAND_LINE
+        from sushi_lang.internals.diagnostics import SushiError
+        raise SushiError("CE3020", filename=COMMAND_LINE, path=exc.filename or path,
+                         reason=exc.strerror or str(exc)) from exc
 
 
 def _run_linker(cmd: List[str], cc: str) -> None:
@@ -252,7 +266,9 @@ class LLVMDriver:
             tm = optimizer.ensure_target(llmod)
 
         obj_path = out.with_suffix(".o")
-        obj_path.write_bytes(tm.emit_object(llmod))
+        obj_bytes = tm.emit_object(llmod)
+        with writing_output(obj_path):
+            obj_path.write_bytes(obj_bytes)
 
         try:
             _run_linker(_link_command(cc, [obj_path], out, debug), cc)
