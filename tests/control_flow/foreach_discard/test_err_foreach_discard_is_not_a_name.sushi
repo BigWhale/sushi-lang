@@ -1,0 +1,7 @@
+# A `_` binder binds nothing, so the body cannot read it: `_` is not a name.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+
+fn main() i32:
+    foreach(_ in 0..3):
+        println(_)
+    return Result.Ok(0)

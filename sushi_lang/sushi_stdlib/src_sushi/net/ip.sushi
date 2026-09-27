@@ -327,10 +327,8 @@ fn parse_v6_groups(string text) u16[] | NetError:
 
     let u16[] groups = from([])
     groups.extend(left)
-    let i32 filled = total
-    while (filled < 8):
+    foreach(_ in total..8):
         groups.push(0)
-        filled := filled + 1
     groups.extend(right)
     return Result.Ok(groups)
 

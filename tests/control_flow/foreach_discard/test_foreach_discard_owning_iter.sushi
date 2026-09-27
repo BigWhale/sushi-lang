@@ -1,0 +1,20 @@
+# A `_` binder over an iterator of an owning element: each item is destroyed as the
+# named item would be, and nothing leaks. A `_` binder in a nested loop does not
+# collide with the `_` of the enclosing loop.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n9\n"
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string[] xs = from(["a", "bb", "ccc"])
+    let i32 n = 0
+    foreach(_ in xs.iter()):
+        n := n + 1
+    println(n)
+    let i32 m = 0
+    foreach(_ in xs.iter()):
+        foreach(_ in xs.iter()):
+            m := m + 1
+    println(m)
+    return Result.Ok(0)

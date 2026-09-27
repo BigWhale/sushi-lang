@@ -735,6 +735,21 @@ declares, a generic instantiation (`Maybe@(i32)`), a qualified name (`geo.Vec`),
 reference form (`poke Point p`), which is the long spelling of `poke p`. A type that
 the iterator's element does not match is **CE2034**.
 
+**`_` discards the item.** A loop that only repeats its body writes `_` as the binder, as
+a `match` pattern does. `_` binds nothing and the body cannot name it, so it is never
+CW1001 (unused variable). A NAMED binder that the body never reads is still CW1001.
+
+```sushi
+fn main() i32:
+    foreach(_ in 0..3):                  # three lines, no binding
+        println("Mostly Harmless")
+    return Result.Ok(0)
+```
+
+The discard takes every binder form: a written type (`foreach(i32 _ in ...)`), a borrow
+mode (`foreach(poke _ in ...)`), and the `??` marker, where `foreach(_?? in it)` leaves
+the function on the first failure and discards the value of each success.
+
 **Two things are walkable.** An ITERATOR -- what `.iter()` answers on an array or a
 `List@(T)`, what `.keys()` / `.values()` / `.entries()` answer on a `HashMap`, and what a
 range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop calls it until

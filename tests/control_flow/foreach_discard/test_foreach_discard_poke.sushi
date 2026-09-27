@@ -1,0 +1,13 @@
+# A `_` binder takes a borrow mode too: `foreach(poke _ in ...)` walks the storage and
+# binds no name.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_STDERR_EMPTY: true
+
+fn main() i32:
+    let i32[] xs = from([4, 5])
+    let i32 n = 0
+    foreach(poke _ in xs.iter()):
+        n := n + 1
+    println(n)
+    return Result.Ok(0)

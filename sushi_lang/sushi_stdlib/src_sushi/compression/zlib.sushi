@@ -302,10 +302,8 @@ fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
                 let i32 dist = ZLIB_DIST_BASE[dsym] + dx
                 if (dist > out.len()):
                     return Result.Err(ZError.BadDistance(dist, out.len()))
-                let i32 k = 0
-                while (k < length):
+                foreach(_ in 0..length):
                     out.push(out[out.len() - dist])
-                    k := k + 1
     return Result.Ok(~)
 
 ##:
@@ -375,10 +373,8 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                     return Result.Err(ZError.BadSymbol(sym))
             if ((lengths.len() + rep) > total):
                 return Result.Err(ZError.BadCode())
-            let i32 k = 0
-            while (k < rep):
+            foreach(_ in 0..rep):
                 lengths.push(val)
-                k := k + 1
     return Result.Ok(lengths)
 
 ##:
