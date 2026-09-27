@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 from sushi_lang.compiler.loader import (
-    get_effective_cwd,
     load_unit_recursively,
 )
+from sushi_lang.compiler.cache import CacheManager
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
@@ -190,7 +190,7 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
 
 
 def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args,
-                             cache_root: Path) -> tuple[LibraryResolver | None, set[str]] | None:
+                             cache: CacheManager) -> tuple[LibraryResolver | None, set[str]] | None:
     """Resolve every `use <lib/...>`, injecting source libraries as ordinary units.
 
     A source library is not linked, registered or monomorphized through the library
@@ -232,7 +232,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
 
             if metadata.get("kind") == "source":
                 _inject_library_source(unit_manager, slib_path, metadata, lib_path,
-                                       cache_root)
+                                       cache)
             else:
                 binary_imports.add(lib_path)
                 resolver.loaded_libraries[metadata["library_name"]] = metadata
@@ -249,7 +249,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
 
 
 def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata: dict,
-                           lib_path: str, cache_root: Path) -> None:
+                           lib_path: str, cache: CacheManager) -> None:
     """Write a source library's units to disk and add them to the unit table.
 
     The units are materialized rather than kept in memory because two things read a
@@ -261,7 +261,6 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     a consumer unit of the same name, and every intra-library dependency is rewritten
     to match.
     """
-    from sushi_lang.compiler.cache import CacheManager
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.backend.library_format import LibraryFormat
 
@@ -271,7 +270,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     provenance = (f"'{lib_name}' {version} is a source library, "
                   f"compiled here because of `use <{lib_path}>`")
 
-    out_dir = CacheManager(cache_root).library_source_dir(lib_name)
+    out_dir = cache.library_source_dir(lib_name)
     out_dir.mkdir(parents=True, exist_ok=True)
     own = set(sources)
 
@@ -320,8 +319,8 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     # Libraries resolve BEFORE the symbol table and before the stdlib injector: a
     # source library's units have to be in the table when it is built, and a bundled
     # module the LIBRARY uses still needs injecting.
-    resolved = _resolve_library_imports(unit_manager, reporter, args,
-                                        src_path.resolve().parent)
+    cache = CacheManager.for_run(args, src_path.parent)
+    resolved = _resolve_library_imports(unit_manager, reporter, args, cache)
     if resolved is None:
         return 2
     library_linker, library_imports = resolved
@@ -431,7 +430,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
     if use_incremental:
         return _compile_incremental(
             compilation_order, multi_file_analyzer, src_path, reporter, args,
-            stdlib_units, library_imports, library_linker, unit_manager,
+            stdlib_units, library_imports, library_linker, unit_manager, cache,
         )
     return _compile_monolithic(
         compilation_order, multi_file_analyzer, src_path, reporter, args,
@@ -481,17 +480,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     cg = codegen_for(analyzer, library_linker)
     driver = LLVMDriver(cg)
 
-    effective_cwd = get_effective_cwd()
     if args.out:
-        out_path = Path(args.out)
-        if not out_path.is_absolute():
-            out_path = effective_cwd / out_path
+        out_path = Path(args.out).resolve()
     else:
-        source_name = src_path.stem
-        if is_library:
-            out_path = effective_cwd / (source_name + ".slib")
-        else:
-            out_path = effective_cwd / source_name
+        suffix = ".slib" if is_library else ""
+        out_path = Path.cwd() / (src_path.stem + suffix)
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
@@ -581,25 +574,15 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
 
 def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
                          stdlib_units, library_imports, library_linker,
-                         unit_manager) -> int:
+                         unit_manager, cache: CacheManager) -> int:
     """Incremental compilation path: per-unit .o caching."""
-    from sushi_lang.compiler.cache import CacheManager
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
         compute_stdlib_fingerprint,
         compute_lib_fingerprint,
     )
 
-    effective_cwd = get_effective_cwd()
-    if args.out:
-        out_path = Path(args.out)
-        if not out_path.is_absolute():
-            out_path = effective_cwd / out_path
-    else:
-        out_path = effective_cwd / src_path.stem
-
-    cache_dir = Path(args.cache_dir) if getattr(args, 'cache_dir', None) else None
-    cache = CacheManager(src_path.parent, opt_level=args.opt, cache_dir=cache_dir)
+    out_path = Path(args.out).resolve() if args.out else Path.cwd() / src_path.stem
 
     cache.prepare()
 

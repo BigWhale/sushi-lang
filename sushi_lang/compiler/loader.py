@@ -1,23 +1,13 @@
 """Source file loading and unit resolution."""
 from __future__ import annotations
 
-import os
 import sys
-from pathlib import Path
 
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.parser import parse_to_ast
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.units import UnitManager
-
-
-def get_effective_cwd() -> Path:
-    """Get the effective current working directory for file resolution."""
-    sushi_cwd = os.environ.get('SUSHI_CWD')
-    if sushi_cwd:
-        return Path(sushi_cwd)
-    return Path.cwd()
 
 
 def check_duplicate_uses(ast: Program, reporter: Reporter) -> None:
