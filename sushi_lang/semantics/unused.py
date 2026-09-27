@@ -2,21 +2,22 @@
 import whose unit names nothing it brings (CW3006).
 
 A private name is visible only in its own unit, so both questions are asked per unit, over
-the WRITTEN declarations. The names a declaration mentions are every string its subtree
-holds, doc blocks and string literals left out. That over-approximates on purpose: a
-local that happens to spell a private function's name keeps the function alive, so the
-lint can miss a dead declaration and never reports a live one.
+the WRITTEN declarations. The names a declaration mentions are every string its nodes hold
+and every name the types in it spell, string literals left out. That over-approximates on
+purpose: a local that happens to spell a private function's name keeps the function
+alive, so the lint can miss a dead declaration and never reports a live one.
 """
 from __future__ import annotations
 
-import dataclasses
-import enum
-from typing import Any, Dict, Iterable, List, Set, Tuple, cast
+from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.semantics.ast import DocBlock, FuncDef, Program, StringLit, UseStatement
-from sushi_lang.semantics.ast_walk import declarations
+from sushi_lang.internals.report import Reporter
+from sushi_lang.semantics.ast import FuncDef, Node, Param, Program, StringLit, UseStatement
+from sushi_lang.semantics.ast_walk import (
+    DESCENDED_FIELD_KINDS, declarations, field_kind, node_fields, signature_constraints,
+    signature_types, walk_nodes)
+from sushi_lang.semantics.type_walk import spelled_names
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
 
@@ -33,7 +34,7 @@ def check_unused(reporter: Reporter, unit: Unit, tables: SymbolTables,
     program = cast(Program, unit.ast)
     written = [(kind, decl) for kind, decl in declarations(program)
                if kind in _ROOT_KINDS or (kind in _CHECKED_KINDS and _is_written(decl))]
-    mentions = {id(decl): names_in(decl) for _, decl in written}
+    mentions = _mentions(program, written)
     _report_dead(reporter, written, mentions)
     used = set().union(*mentions.values())
     for use_stmt in program.uses or ():
@@ -76,34 +77,52 @@ def _is_root(kind: str, decl: object) -> bool:
     return isinstance(decl, FuncDef) and decl.name == "main"
 
 
-def names_in(root: object) -> Set[str]:
-    """Every name a subtree mentions: each string it holds, doc blocks and literals left out."""
-    names: Set[str] = set()
-    seen: Set[int] = set()
-    stack: List[object] = [root]
-    while stack:
-        obj = stack.pop()
-        if isinstance(obj, str):
-            names.add(str(obj))
-            continue
-        if obj is None or isinstance(obj, (int, float, enum.Enum, Span, DocBlock,
-                                           StringLit)):
-            continue
-        if id(obj) in seen:
-            continue
-        seen.add(id(obj))
-        stack.extend(_children(obj))
-    return names
+def _mentions(program: Program, written: List[Tuple[str, Any]]) -> Dict[int, Set[str]]:
+    """The names each written declaration mentions, keyed by the declaration.
+
+    Three seams, and nothing else: the node walk for what a node holds (a name, a type, a
+    parameter), and the two signature walks for the records a declaration keeps outside
+    any node (a field, a variant, a perk method, a constraint).
+    """
+    mentions: Dict[int, Set[str]] = {id(decl): set() for _, decl in written}
+    for _, decl in written:
+        walk_nodes(decl, _reader(mentions[id(decl)]))
+    for site in signature_types(program):
+        if id(site.decl) in mentions:
+            mentions[id(site.decl)].update(spelled_names(site.ty))
+    for constraint in signature_constraints(program):
+        if id(constraint.decl) in mentions:
+            names = mentions[id(constraint.decl)]
+            names.add(constraint.perk_name)
+            if constraint.namespace is not None:
+                names.add(constraint.namespace)
+    return mentions
 
 
-def _children(obj: object) -> Iterable[object]:
-    if isinstance(obj, (list, tuple, set, frozenset)):
-        return obj
-    if isinstance(obj, dict):
-        return [*obj.keys(), *obj.values()]
-    if dataclasses.is_dataclass(obj):
-        return [getattr(obj, f.name, None) for f in dataclasses.fields(obj)]
-    return list(getattr(obj, "__dict__", {}).values())
+def _reader(names: Set[str]) -> Callable[[Node], bool]:
+    """A node-walk visitor that reads the names each node's fields hold."""
+    def visit(node: Node) -> bool:
+        if isinstance(node, StringLit):
+            return False
+        for _field, value in node_fields(node):
+            _read_value(value, names)
+        return True
+    return visit
+
+
+def _read_value(value: object, names: Set[str]) -> None:
+    kind = field_kind(value)
+    if kind == "node":
+        return
+    if kind in DESCENDED_FIELD_KINDS:
+        for item in cast(Iterable[object], value):
+            _read_value(item, names)
+    elif isinstance(value, str):
+        names.add(value)
+    elif isinstance(value, Param):
+        names.update(spelled_names(value.ty))
+    else:
+        names.update(spelled_names(value))
 
 
 def _brings(use_stmt: UseStatement, unit: Unit, tables: SymbolTables,

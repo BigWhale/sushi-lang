@@ -14,7 +14,7 @@ kind the walk misses nor miss a kind the walk enters (#718).
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, Iterator, Optional, Set
+from typing import Callable, Iterator, Optional, Set, cast
 
 from sushi_lang.semantics.typesys import Type, UnknownType
 
@@ -67,6 +67,39 @@ DECLARATION_KINDS = frozenset(
 # A kind that SPELLS a declaration without being one. A `resolve` given to the walk maps
 # these, and only these, to the declaration they name.
 RESOLVABLE_KINDS = frozenset({"UnknownType", "GenericTypeRef"})
+
+
+# Every kind that can spell a name or hold a type that does. A terminal kind spells none,
+# so a reader holding an arbitrary value asks this set and not the whole type union.
+_SPELLING_KINDS = frozenset(COMPOSITE_KINDS) | DECLARATION_KINDS | {"UnknownType"}
+
+
+# The attributes that carry a NAME a kind spells: a declaration's name, a bare or generic
+# name, the alias it was written behind, and the constant a fixed array's size named. A
+# kind that is not here spells no name of its own.
+SPELLED_NAME_SLOTS: dict[str, tuple[str, ...]] = {
+    "UnknownType": ("name", "namespace"),
+    "GenericTypeRef": ("base_name", "namespace"),
+    "ArrayType": ("size_name",),
+    "StructType": ("name", "generic_base"),
+    "EnumType": ("name", "generic_base"),
+    "GenericStructType": ("name",),
+    "GenericEnumType": ("name",),
+}
+
+
+def spelled_names(value: object) -> Iterator[str]:
+    """Every name a type spells, the types it holds included; nothing for a non-type.
+
+    A named declaration is not entered: what it holds is spelled at its own declaration.
+    """
+    if type(value).__name__ not in _SPELLING_KINDS:
+        return
+    for inner in walk_named_types(cast(Type, value), through_declarations=False):
+        for slot in SPELLED_NAME_SLOTS.get(type(inner).__name__, ()):
+            name = getattr(inner, slot, None)
+            if isinstance(name, str):
+                yield name
 
 
 def _nominal_name(ty: Type) -> Optional[str]:
