@@ -151,7 +151,7 @@ class StructCollector:
         if reject_duplicate_type_name(self.r, "struct", name, name_span, type_name_rules(
             "struct", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
-        ), library_clash=self._reject_library_clash):
+        ), library_clash=self._reject_library_clash, visibility=self.visibility):
             return
 
         fields_list: List[Tuple[str, Type]] = []
