@@ -46,7 +46,6 @@ class FunctionHelpers:
     def __init__(self, codegen: 'LLVMCodegen') -> None:
         """Initialize helpers with reference to main codegen instance."""
         self.codegen = codegen
-        self._variable_types_stack: list[dict] = []
 
     def params_of(self, fn: FuncDef) -> List[Tuple[str, Ty]]:
         """Extract parameter information from function definition."""
@@ -106,13 +105,6 @@ class FunctionHelpers:
         body = getattr(fn_def, "body", None) if fn_def is not None else None
         self.codegen.current_conditional_moves = frozenset(
             getattr(body, "conditional_move_names", ()) or ())
-
-        # `variable_types` is per-FUNCTION state. Per-module, an entry one function wrote
-        # stayed readable by every later one -- wrong DATA for a value type, wrong CODE for
-        # a `ReferenceType`, since `is_reference_parameter` keys on it. Save and restore
-        # rather than clear: an out-of-line destructor body emitted mid-function nests.
-        self._variable_types_stack.append(self.codegen.variable_types)
-        self.codegen.variable_types = {}
 
         # Two blocks, and the entry one holds the branch and the stack slots alone. The
         # slots go there through `memory.entry_alloca`, which finds the block from the
@@ -199,9 +191,6 @@ class FunctionHelpers:
         self.codegen.func = None
         self.codegen.builder = None
         self.codegen.memory.reset_scope_stack()
-        self.codegen.variable_types = (
-            self._variable_types_stack.pop() if self._variable_types_stack else {}
-        )
 
 
 def declare_stdlib_function(

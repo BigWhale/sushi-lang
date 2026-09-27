@@ -156,8 +156,6 @@ class LLVMCodegen:
         # defined - the bodies link in from the library bitcode.
         self.library_perk_impls: list['ExtendWithDef'] = []
 
-        self.variable_types: Dict[str, 'Type'] = {}
-
         self.stdlib_units: set[str] = set()
 
         # Function return type tracking (Sushi language types, not LLVM types)
