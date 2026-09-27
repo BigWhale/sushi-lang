@@ -1,0 +1,12 @@
+# A consumer's struct `Opt` against a BINARY library's public generic enum `Opt@(T)`
+# is CE0006, and its note names the library that holds the name: the `.slib` has no
+# source span, and the compiler did not define the name.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+# EXPECT_STDERR_CONTAINS: "binary_api_lib.slib"
+use <lib/binary_api_lib>
+
+struct Opt:
+    i32 v
+
+fn main() i32:
+    return Result.Ok(0)
