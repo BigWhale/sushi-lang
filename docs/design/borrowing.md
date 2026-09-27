@@ -242,8 +242,8 @@ invalidated at the change, and the error is reported at the next read of the bor
   a method body like anywhere else.
 - **The ownership seam** needs no reference arm: the rejection happens in the borrow pass, before
   codegen. An unstamped consuming use in the backend is CE0129, which is fatal on purpose.
-- **The backend** keys every deref on `variable_types`, which is saved and restored per
-  function (#332).
+- **The backend** keys every deref on the semantic type the scope manager holds for the name
+  (`codegen.memory.find_semantic_type`), one entry per scope.
 
 ## 7. What keeps this total
 

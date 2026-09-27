@@ -293,9 +293,8 @@ def _infer_struct(codegen: 'LLVMCodegen', expr: Expr, strict: bool) -> Optional[
         return stamped
 
     if isinstance(expr, Name):
-        # Scope-aware, because `codegen.variable_types` is FLAT: a shadowing match binding
-        # overwrote the outer entry for the rest of the function, so the outer struct was
-        # read through the inner type's field indices -- silent wrong data, not a crash.
+        # Scope-aware: a shadowing match binding must not answer for the outer struct,
+        # or the outer one is read through the inner type's field indices.
         var_name = expr.id
         var_type = resolve_name_semantic_type(codegen, var_name)
         if var_type is None:

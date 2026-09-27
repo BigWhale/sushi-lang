@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 import llvmlite.binding as llvm
 
+from sushi_lang.internals.diagnostics import InternalCompilerError
+
 if TYPE_CHECKING:
     from sushi_lang.backend.symbol_table import SymbolInfo
 
@@ -67,15 +69,13 @@ class ModuleMerger:
         full_ir = '\n'.join(ir_parts)
 
         try:
-            merged_module = llvm.parse_assembly(full_ir)
-            return merged_module
-        except Exception as e:
-            debug_path = '/tmp/sushi_merge_failed.ll'
-            with open(debug_path, 'w') as f:
-                f.write(full_ir)
-            raise RuntimeError(
-                f"Failed to parse merged IR. Debug IR written to {debug_path}\n"
-                f"Error: {e}"
+            return llvm.parse_assembly(full_ir)
+        except RuntimeError as e:
+            # The pieces come from modules that each parsed, so a merge that does not
+            # parse is the linker's fault. No dump: this layer has no build directory,
+            # and a fixed path outside it is not writable on every platform.
+            raise InternalCompilerError(
+                "CE0000", detail=f"the merged IR of the two-phase link does not parse: {e}"
             ) from e
 
     def _extract_type_definitions(

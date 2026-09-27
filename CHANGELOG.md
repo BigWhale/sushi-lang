@@ -435,6 +435,32 @@ All notable changes to Sushi Lang will be documented in this file.
   are `foreach(_ in ...)` now.
 
 ### Fixed
+- **`--lib-info` and the consumer check a library's shape once** (#977, #978, #967). A damaged
+  `.slib` gave a Python traceback and exit 1 from `--lib-info`, blank fields from the `slib-info`
+  tool, or CE0000 `KeyError` in a consumer; a syntax error in a library's template was reported
+  at the consumer's `use` line. `library_format.py` now holds one manifest schema (`MANIFEST_SCHEMA`,
+  `check_manifest`) that both `--lib-info` halves and the consumer read, and `<toolchain/slib>` has
+  the same rows (`check_manifest`, `read_library`, `SlibFault`). A missing or mistyped field, a
+  template that does not parse or holds more than one declaration, is CE3512 naming the library
+  and the field. The reader checks the magic first, then the 1 GiB limit before any read, then
+  every declared length against the bytes left. A missing file is CE3515, a name that does not end
+  in `.slib` is the new CE3516, and `--lib-info` runs inside the CE0000 guard. `module_merger` no
+  longer writes a dump to `/tmp`.
+- **A unit's own function beats an imported generic of the same name** (#963). The typecheck pass
+  chose the unit's own function for a bare call, but the instantiate pass still recorded the
+  imported generic and judged its perk constraint (CE4006). Both passes now ask one predicate.
+
+### Changed
+- **The backend drops the flat `variable_types` table** (#958). Nothing read it; every deref reads
+  the scope manager's semantic type. The loop frame loses the exit action the table needed. The IR
+  of 269 fixtures is byte-identical.
+
+### Testing
+- **The runner gates the library readers.** A runner step builds a hybrid and a binary library,
+  damages copies of them (truncated, bad magic, oversize length, a manifest missing a field), and
+  runs `--lib-info` in both halves and a consumer over each copy; every case must report its code.
+
+### Fixed
 - **A source that is not UTF-8 is CE3017, not the internal error CE0000** (#979). The main source
   and every imported unit go through one reader, and the diagnostic names the file and the byte
   (`byte 0xff on line 2 is not valid UTF-8`) or the system reason (`Is a directory`). A run with no

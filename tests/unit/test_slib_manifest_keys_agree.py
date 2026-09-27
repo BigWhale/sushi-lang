@@ -75,6 +75,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "seed_perks"): {"record": "perk"},
     (REGISTRATION, R + "_template_records"): {"manifest": "manifest"},
     (REGISTRATION, R + "_build_registry"): {"manifest": "manifest"},
+    (REGISTRATION, R + "_library_file"): {"manifest": "manifest"},
     (REGISTRATION, R + "_register_constants"): {
         "manifest": "manifest", "templates": "templates"},
     (REGISTRATION, R + "_register_one_constant"): {"record": "constant"},
@@ -313,3 +314,31 @@ def test_the_sushi_reader_table_names_keys_the_reader_spells():
     missing = sorted({key for keys in SUSHI_READER.values() for key in keys
                       if f'"{key}"' not in text})
     assert not missing, missing
+
+
+# `check_manifest` reads the manifest through `MANIFEST_SCHEMA`: each row names a record
+# kind and a key. Two schema kinds are writer kinds under another name.
+SCHEMA_KIND_WRITER = {"helper": "function", "closure_constant": "constant"}
+
+
+def test_every_schema_key_is_written():
+    from sushi_lang.backend.library_format import MANIFEST_SCHEMA
+    written = written_by_kind()
+    unwritten = sorted((kind, key) for kind, key, _type, _required in MANIFEST_SCHEMA
+                       if key not in written[SCHEMA_KIND_WRITER.get(kind, kind)])
+    assert not unwritten, unwritten
+
+
+def test_the_sushi_schema_is_the_python_schema():
+    """`<toolchain/slib>` checks a manifest against the same rows, in the same order."""
+    import re
+
+    from sushi_lang.backend.library_format import MANIFEST_SCHEMA
+    text = (REPO / "sushi_lang/sushi_stdlib/src_sushi/toolchain/slib.sushi").read_text(
+        encoding="utf-8")
+    block = re.search(r"const string\[(\d+)\] SLIB_MANIFEST_SCHEMA = \[\n(.*?)\n\]",
+                      text, re.S)
+    assert block is not None, "SLIB_MANIFEST_SCHEMA is gone from toolchain/slib.sushi"
+    rows = re.findall(r"^    '([^']*)',?$", block.group(2), re.M)
+    assert rows == [" ".join(row) for row in MANIFEST_SCHEMA]
+    assert int(block.group(1)) == len(MANIFEST_SCHEMA)

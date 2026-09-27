@@ -342,6 +342,8 @@ class ExpressionScanner:
         if not isinstance(call, Call) or not isinstance(call.callee, Name):
             return None
         if generic_func is None:
+            if self._declares_concrete(call.callee.id):
+                return None
             generic_func = (self.generic_funcs or {}).get(call.callee.id)
         if generic_func is None:
             return None
@@ -365,6 +367,18 @@ class ExpressionScanner:
         if type_args is None:
             return None
         return generic_func, type_args
+
+    def _declares_concrete(self, name: str) -> bool:
+        """The unit declares a concrete function of this name, which wins its bare call.
+
+        Section 8's ladder, as the typecheck pass reads it: the unit's own declaration
+        answers before a generic an import brought (#963).
+        """
+        funcs = getattr(self.type_validator, "func_table", None)
+        unit = getattr(getattr(self.namespaces, "scope", None), "unit", None)
+        if funcs is None or unit is None:
+            return False
+        return funcs.declared(name, unit) is not None
 
     def generic_call_type(self, expr):
         """What a generic call yields, as this pass can know it (#549).

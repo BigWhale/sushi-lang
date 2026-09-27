@@ -1,0 +1,15 @@
+# `<io/fs>` re-exports `<io/contracts>`, which declares the generic
+# `read_all@(R: Reader)`. The unit's own `read_all` takes the bare call and
+# shadows the export (CW3002), and the `Reader` constraint is never judged
+# against a string (#963).
+# EXPECT_ERROR_CODE: CW3002
+# EXPECT_STDOUT_EXACT: "3\n"
+use <io/fs>
+use <collections/strings>
+
+fn read_all(string path) i32:
+    return Result.Ok(path.len())
+
+fn main() i32:
+    println(read_all("abc").realise(0))
+    return Result.Ok(0)
