@@ -55,22 +55,36 @@ def load_manifest(directory: Path | None = None) -> NoriManifest:
     manifest_path = directory / MANIFEST_NAME
     if not manifest_path.exists():
         raise ManifestError(f"No {MANIFEST_NAME} found in {directory}")
-    with open(manifest_path, "rb") as f:
-        data = tomllib.load(f)
-    return _parse_manifest(data)
+    return load_manifest_from_string(manifest_path.read_bytes(), str(manifest_path))
 
 
-def load_manifest_from_string(text: str) -> NoriManifest:
-    """Load manifest from a TOML string (for reading from archives)."""
-    data = tomllib.loads(text)
-    return _parse_manifest(data)
+def load_manifest_from_string(text: str | bytes, origin: str = MANIFEST_NAME) -> NoriManifest:
+    """Load a manifest from TOML text; every error names `origin`."""
+    try:
+        if isinstance(text, bytes):
+            text = text.decode("utf-8")
+        return _parse_manifest(tomllib.loads(text))
+    except tomllib.TOMLDecodeError as e:
+        lineno, colno = getattr(e, "lineno", None), getattr(e, "colno", None)
+        if lineno is None:
+            raise ManifestError(f"{origin}: {e}") from e
+        raise ManifestError(f"{origin}:{lineno}:{colno}: {getattr(e, "msg", e)} (line {lineno}, column {colno})") from e
+    except (UnicodeDecodeError, ManifestError) as e:
+        raise ManifestError(f"{origin}: {e}") from e
+
+
+def _table(data: dict, key: str) -> dict:
+    value = data.get(key, {})
+    if not isinstance(value, dict):
+        raise ManifestError(f"[{key}] must be a table, not {type(value).__name__}")
+    return value
 
 
 def _parse_manifest(data: dict) -> NoriManifest:
-    pkg = data.get("package", {})
-    files = data.get("files", {})
-    install = data.get("install", {})
-    deps = data.get("dependencies", {})
+    pkg = _table(data, "package")
+    files = _table(data, "files")
+    install = _table(data, "install")
+    deps = _table(data, "dependencies")
     if not pkg.get("name"):
         raise ManifestError("Missing required field: [package] name")
     if not pkg.get("version"):

@@ -428,6 +428,39 @@ All notable changes to Sushi Lang will be documented in this file.
   signature, which the record could not carry before.
 
 ### Fixed
+- **The compiler works in the user's directory** (#976, #974, #971). The `sushic` wrapper changes
+  into the checkout, and the compiler read the checkout where it meant the user's directory: a
+  `.slib` next to the program or in `.sushi_bento/` was not found (CE3502), a relative
+  `SUSHI_LIB_PATH` entry resolved against the checkout, and a bare `--clean-cache` REMOVED THE
+  CHECKOUT'S OWN CACHE. The compiler now changes into `SUSHI_CWD` once, at the top of `main()`, and
+  the second mechanism (`get_effective_cwd`) is gone. A relative `--cache-dir` lands in the user's
+  directory (#974), and one `CacheManager` per run holds a source library's units too, under
+  `--cache-dir` and not next to the program (#971).
+- **The CE0006 note for a type a binary library ships names the library** (#972). It said "defined
+  by the compiler". The loaded manifest now carries the `.slib` path, and the note reads
+  `declared by the library <path>`.
+- **`nori` follows the colour rules of `sushic`** (#986): `NO_COLOR`, `CLICOLOR_FORCE` and the new
+  `--color {auto,always,never}` go through the one styling seam, and the banner names Nori.
+- **`nori` errors name their file** (#987). A bad `nori.toml` or a bad archive names the file (and
+  the line and column where TOML gives them) and exits 1; an internal error exits 2 with a bug
+  note, and `--traceback` appends the Python traceback. `extract` takes the archive's top
+  directory from the manifest, not from the first member.
+
+### Changed
+- **The report renderer draws every snippet through one helper** (#983); `format()` is a loop of
+  three steps and the two broad `except` clauses are narrow. The rendered text is unchanged in all
+  four modes (1428 captures compared).
+- **The manifest generator reads each unit's source once** (#984), and the export closure resolves
+  its four kinds through one loop. Every helper library's `.slib` is byte-identical in all three
+  kinds.
+
+### Testing
+- **The runner states paths in the user's directory**: `BUILD_LIB_AT: <src> -> <target>`,
+  `FIXTURE_CACHE_DIR: <rel>`, `EXPECT_PATH_EXISTS` / `EXPECT_PATH_ABSENT`,
+  `EXPECT_PATH_EXISTS_BEFORE_CLEAN` and `THEN_CLEAN_CACHE: bare|source`. A bare clean that removes
+  the checkout's own cache fails the fixture.
+
+### Fixed
 - **A `foreach` over a container iterator freezes the container's storage** (#956). A body that
   pushed onto the list it walked (`foreach(x in l.iter()): l.push(x)`) compiled, and the loop read
   freed memory after the push reallocated. While the loop walks `c.iter()`, `.keys()`, `.values()`

@@ -1,8 +1,10 @@
 from __future__ import annotations
 import os
 import re
+import sys
 import textwrap
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional, Any
 
 from lark import Token
@@ -330,13 +332,9 @@ class Reporter:
         if filename.startswith("<") and filename.endswith(">"):
             return filename
         try:
-            from pathlib import Path
-            abs_path = Path(filename).resolve()
-            cwd = Path.cwd()
-            rel_path = abs_path.relative_to(cwd)
+            rel_path = Path(filename).resolve().relative_to(Path.cwd())
             return f"./{rel_path}"
-        except (ValueError, Exception):
-            from pathlib import Path
+        except (ValueError, OSError):
             return Path(filename).name
 
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
@@ -344,256 +342,138 @@ class Reporter:
         if filename == self.filename:
             return src_lines
         try:
-            from pathlib import Path
             return Path(filename).read_text(encoding="utf-8").splitlines()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             return None
 
     def _render_snippet(self, span: Span, source_lines: Optional[List[str]],
                         color: str, use_color: bool, use_unicode: bool,
-                        out: List[str], prefix: str = "  ") -> None:
-        """Render a source code snippet with underline marker."""
-        if source_lines is not None:
-            line_idx = span.line - 1
-            line_text = source_lines[line_idx] if 0 <= line_idx < len(source_lines) else ""
-        else:
-            line_text = ""
+                        out: List[str], prefix: str = "  ") -> int:
+        """Render a source line and its marker; answer the column the close guide ends at."""
+        line_text = ""
+        if source_lines is not None and 0 <= span.line - 1 < len(source_lines):
+            line_text = source_lines[span.line - 1]
 
         start = max(1, span.col)
         if span.end_line > span.line:
-            end = max(start, len(line_text) + 1)   # only this line is drawn
+            # The span runs past this line and only this line is drawn, so it is
+            # underlined to its end. The width taken from the span's LAST line measured
+            # it against text the caret is not drawn under.
+            end = max(start, len(line_text) + 1)
         else:
             end = max(start, span.end_col)
-        span_len = max(1, end - start)             # `end_col` is exclusive
 
+        marker = _marker(start, end, use_unicode)
         if use_unicode:
-            if span_len <= 1:
-                marker = " " * (start - 1) + "\u252c"
-            else:
-                left = span_len // 2
-                right = span_len - left - 1
-                marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
-            if use_color:
-                def gray(s: str) -> str:
-                    return f"{C.GRAY}{s}{C.RESET}"
-                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{line_text}")
-                out.append(f"{gray(prefix + chr(0x2502))}{' ' * 1}{color}{marker}{C.RESET}")
-            else:
-                out.append(f"{prefix}\u2502  {line_text}")
-                out.append(f"{prefix}\u2502  {marker}")
+            bar = _paint(C.GRAY, prefix + "│", use_color)
+            gap = " " if use_color else "  "
+            out.append(f"{bar}{gap}{line_text}")
+            out.append(f"{bar}{gap}{_paint(color, marker, use_color)}")
         else:
-            if span_len <= 1:
-                ascii_marker = " " * (start - 1) + "^"
-            else:
-                left = span_len // 2
-                right = span_len - left - 1
-                ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
             out.append(f"{prefix}| {line_text}")
-            out.append(f"{prefix}` {ascii_marker}")
+            out.append(f"{prefix}` {marker}")
+        return _guide(start, end)
 
     def format(self, use_color: bool = True, use_unicode: bool = True) -> str:
         """Render all diagnostics."""
         out: List[str] = []
         src_lines = self.source.splitlines() if self.source else None
-
         for d in self.items:
-            filename = d.filename or self.filename
-            filename = self._resolve_filename(filename)
+            self._render_diagnostic(d, src_lines, use_color, use_unicode, out)
+        return "\n".join(out)
 
-            loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
+    def _render_diagnostic(self, d: Diagnostic, src_lines: Optional[List[str]],
+                           use_color: bool, use_unicode: bool, out: List[str]) -> None:
+        filename = self._resolve_filename(d.filename or self.filename)
+        loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
+        message = d.message if d.message.endswith('.') else f"{d.message}."
+        kind_style = C.BOLD + (C.RED if d.kind == "error" else C.YELLOW)
+        head = (f"{_paint(C.CYAN, loc, use_color)}: {_paint(kind_style, d.kind, use_color)} "
+                f"[{_paint(C.DIM, d.code, use_color)}]: {message}")
 
-            message = d.message if d.message.endswith('.') else f"{d.message}."
-
-            if use_color:
-                kind = f"{C.BOLD}{C.RED}error{C.RESET}" if d.kind == "error" else f"{C.BOLD}{C.YELLOW}warning{C.RESET}"
-                head = f"{C.CYAN}{loc}{C.RESET}: {kind} [{C.DIM}{d.code}{C.RESET}]: {message}"
-            else:
-                head = f"{loc}: {d.kind} [{d.code}]: {message}"
-
-            if d.span and d.show_source:
-                diagnostic_src_lines = (
-                    d.source.splitlines() if d.source is not None
-                    else self._get_source_lines(d.filename or self.filename, src_lines)
-                )
-
-                if diagnostic_src_lines is not None:
-                    line_idx = d.span.line - 1
-                    line_text = diagnostic_src_lines[line_idx] if 0 <= line_idx < len(diagnostic_src_lines) else ""
-                else:
-                    line_text = ""
-
-                start = max(1, d.span.col)
-                if d.span.end_line > d.span.line:
-                    # The span runs past this line and only this line is drawn, so it
-                    # is underlined to its end. Taking the width from the span's LAST
-                    # line measures it against text the caret is not drawn under: a
-                    # `const_def` ends at column 1 of the line after the declaration,
-                    # which rendered as a one-character caret under the first keyword.
-                    end = max(start, len(line_text) + 1)
-                else:
-                    end = max(start, d.span.end_col)
-
-                if use_unicode:
-                    if use_color:
-                        def gray(s: str) -> str:
-                            return f"{C.GRAY}{s}{C.RESET}"
-                        error_color = C.RED if d.kind == "error" else C.YELLOW
-
-                    top_curve = "  ╭──┤ "
-                    if use_color:
-                        out.append(f"{gray(top_curve)}{head}")
-                    else:
-                        out.append(f"{top_curve}{head}")
-
-                    line_prefix = "  │  "
-                    if use_color:
-                        out.append(f"{gray('  │')}{' ' * 1}{line_text}")
-                    else:
-                        out.append(f"{line_prefix}{line_text}")
-
-                    # `end_col` is EXCLUSIVE, as Lark reports it and as every span
-                    # the compiler builds by hand spells it (`col + len(text)`), so
-                    # the width is the difference. Adding one drew a marker one
-                    # character wider than its own token, every time.
-                    span_len = max(1, end - start)
-                    if span_len <= 1:
-                        marker = " " * (start - 1) + "\u252c"
-                    else:
-                        left = span_len // 2
-                        right = span_len - left - 1
-                        marker = " " * (start - 1) + "\u2500" * left + "\u252c" + "\u2500" * right
-
-                    if use_color:
-                        out.append(f"{gray('  \u2502')}{' ' * 1}{error_color}{marker}{C.RESET}")
-                    else:
-                        out.append(f"{line_prefix}{marker}")
-
-                    # The box stays open for ANY sub-diagnostic: a note carries its
-                    # own snippet, and a help is now rendered inside the box too.
-                    has_subs = bool(d.sub)
-
-                    guide_len = start + (span_len // 2 if span_len > 1 else 0)
-
-                    if not has_subs:
-                        if use_color:
-                            out.append(f"{gray('  \u2570')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
-                        else:
-                            out.append(f"  \u2570{'\u2500' * guide_len}\u256f")
-                    else:
-                        if use_color:
-                            out.append(f"{gray('  \u251c')}{C.GRAY}{'\u2500' * guide_len}{C.RESET}{error_color}\u256f{C.RESET}")
-                        else:
-                            out.append(f"  \u251c{'\u2500' * guide_len}\u256f")
-
-                else:
-                    out.append(head)
-                    line_prefix  = "  | "
-                    caret_prefix = "  ` "
-                    span_len = max(1, end - start)
-                    if span_len <= 1:
-                        ascii_marker = " " * (start - 1) + "^"
-                    else:
-                        left = span_len // 2
-                        right = span_len - left - 1
-                        ascii_marker = " " * (start - 1) + "-" * left + "+" + "-" * right
-                    out.append(f"{line_prefix}{line_text}")
-                    out.append(f"{caret_prefix}{ascii_marker}")
-            elif d.span and use_unicode:
-                # Location only: the header names the line and column, and there is
-                # no caret because there is nothing on the line to separate.
-                if use_color:
-                    out.append(f"{C.GRAY}  \u256d\u2500\u2500\u2524{C.RESET} {head}")
-                else:
-                    out.append(f"  \u256d\u2500\u2500\u2524 {head}")
-                if not d.sub:
-                    out.append(f"{C.GRAY}  \u2570\u2500\u2500\u2500{C.RESET}"
-                               if use_color else "  \u2570\u2500\u2500\u2500")
+        if d.span and d.show_source:
+            lines = (d.source.splitlines() if d.source is not None
+                     else self._get_source_lines(d.filename or self.filename, src_lines))
+            if use_unicode:
+                tip = C.RED if d.kind == "error" else C.YELLOW
+                out.append(f"{_paint(C.GRAY, '  ╭──┤ ', use_color)}{head}")
+                guide = self._render_snippet(d.span, lines, tip, use_color, use_unicode, out)
+                # The box stays open for ANY sub-diagnostic: a note carries its own
+                # snippet, and a help is rendered inside the box too.
+                corner = "├" if d.sub else "╰"
+                out.append(_paint(C.GRAY, f"  {corner}", use_color)
+                           + _paint(C.GRAY, "─" * guide, use_color)
+                           + _paint(tip, "╯", use_color))
             else:
                 out.append(head)
+                self._render_snippet(d.span, lines, "", use_color, use_unicode, out)
+        elif d.span and use_unicode:
+            # Location only: the header names the line and column, and there is no
+            # caret because there is nothing on the line to separate.
+            out.append(f"{_paint(C.GRAY, '  ╭──┤', use_color)} {head}")
+            if not d.sub:
+                out.append(_box_end(use_color))
+        else:
+            out.append(head)
 
-            # Render sub-diagnostics (notes, help)
-            span_subs = [s for s in d.sub if s.span]
-            no_span_subs = [s for s in d.sub if not s.span]
-            # A help never carries a location, so it can only be rendered after every
-            # note. Inside the box when there is a box; the old trailing `= help:`
-            # form otherwise.
-            in_box = bool(use_unicode and d.span)
+        # A help never carries a location, so it can only be rendered after every note.
+        # Inside the box when there is a box; the trailing `= help:` form otherwise.
+        in_box = bool(use_unicode and d.span)
+        prose = [s for s in d.sub if not s.span]
+        self._render_span_subs(d, src_lines, use_color, use_unicode, in_box and bool(prose), out)
+        self._render_prose_subs(prose, use_color, in_box, out)
 
-            for i, sub in enumerate(span_subs):
-                sub_span = sub.span
-                assert sub_span is not None  # span_subs is filtered on s.span above
-                sub_filename = sub.filename or d.filename or self.filename
-                sub_filename = self._resolve_filename(sub_filename)
-                sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
-                sub_src_lines = (
-                    d.source.splitlines() if d.source is not None and sub.filename is None
-                    else self._get_source_lines(
-                        sub.filename or d.filename or self.filename, src_lines)
-                )
-                is_last = (i == len(span_subs) - 1) and not (in_box and no_span_subs)
+    def _render_span_subs(self, d: Diagnostic, src_lines: Optional[List[str]],
+                          use_color: bool, use_unicode: bool, box_continues: bool,
+                          out: List[str]) -> None:
+        located = [(s, s.span) for s in d.sub if s.span is not None]
+        for i, (sub, sub_span) in enumerate(located):
+            sub_filename = self._resolve_filename(sub.filename or d.filename or self.filename)
+            sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
+            sub_lines = (
+                d.source.splitlines() if d.source is not None and sub.filename is None
+                else self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+            )
+            kind = _paint(_sub_style(sub.kind), sub.kind, use_color)
 
-                if use_unicode:
-                    sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
-                    if use_color:
-                        out.append(f"{C.GRAY}  \u2502{C.RESET}")
-                        sub_label = f"{C.CYAN}{sub_loc}{C.RESET}: {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}"
-                        out.append(f"{C.GRAY}  \u251c\u2500\u2500\u2524{C.RESET} {sub_label}")
-                    else:
-                        out.append("  \u2502")
-                        out.append(f"  \u251c\u2500\u2500\u2524 {sub_loc}: {sub.kind}: {sub.message}")
-                    note_color = C.BLUE if use_color else ""
-                    self._render_snippet(sub_span, sub_src_lines, note_color, use_color, use_unicode, out)
+            if not use_unicode:
+                out.append(f"  = {kind}: {sub.message}")
+                out.append(f"    {_paint(C.CYAN, sub_loc, use_color)}")
+                self._render_snippet(sub_span, sub_lines, "", use_color, use_unicode, out, prefix="    ")
+                continue
 
-                    if is_last:
-                        sub_start = max(1, sub_span.col)
-                        sub_end = max(sub_start, sub_span.end_col)
-                        sub_span_len = max(1, sub_end - sub_start)
-                        sub_guide = sub_start + (sub_span_len // 2 if sub_span_len > 1 else 0)
-                        if use_color:
-                            out.append(f"{C.GRAY}  \u2570{'\u2500' * sub_guide}\u256f{C.RESET}")
-                        else:
-                            out.append(f"  \u2570{'\u2500' * sub_guide}\u256f")
-                else:
-                    sub_kind_color = C.BLUE if (use_color and sub.kind == "note") else (C.BOLD if use_color else "")
-                    if use_color:
-                        out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
-                        out.append(f"    {C.CYAN}{sub_loc}{C.RESET}")
-                    else:
-                        out.append(f"  = {sub.kind}: {sub.message}")
-                        out.append(f"    {sub_loc}")
-                    self._render_snippet(sub_span, sub_src_lines, "", use_color, use_unicode, out, prefix="    ")
+            out.append(_box_bar(use_color))
+            label = f"{_paint(C.CYAN, sub_loc, use_color)}: {kind}: {sub.message}"
+            out.append(f"{_paint(C.GRAY, '  ├──┤', use_color)} {label}")
+            self._render_snippet(sub_span, sub_lines, C.BLUE, use_color, use_unicode, out)
+            if i == len(located) - 1 and not box_continues:
+                # The close guide reads the span's own end column, never the drawn line.
+                start = max(1, sub_span.col)
+                guide = _guide(start, max(start, sub_span.end_col))
+                out.append(_paint(C.GRAY, f"  ╰{'─' * guide}╯", use_color))
 
-            for index, sub in enumerate(no_span_subs):
-                sub_kind_color = C.BLUE if sub.kind == "note" else C.BOLD
-                if not in_box:
-                    if use_color:
-                        out.append(f"  = {sub_kind_color}{sub.kind}{C.RESET}: {sub.message}")
-                    else:
-                        out.append(f"  = {sub.kind}: {sub.message}")
-                    continue
-
-                # The label stays: a span-less NOTE is a fact and a HELP is advice,
-                # and inside the box nothing else tells the two apart.
-                if index == 0:
-                    out.append(f"{C.GRAY}  \u2502{C.RESET}" if use_color else "  \u2502")
-                label = f"{sub.kind}: "
-                lines = textwrap.wrap(sub.message, width=76 - len(label)) or [""]
-                for offset, line in enumerate(lines):
-                    shown = f"{sub_kind_color}{label}{C.RESET}" if use_color else label
-                    lead = shown if offset == 0 else " " * len(label)
-                    bar = f"{C.GRAY}  \u2502{C.RESET}" if use_color else "  \u2502"
-                    out.append(f"{bar}  {lead}{line}")
-
-            if in_box and no_span_subs:
-                out.append(f"{C.GRAY}  \u2570\u2500\u2500\u2500{C.RESET}"
-                           if use_color else "  \u2570\u2500\u2500\u2500")
-
-        return "\n".join(out)
+    @staticmethod
+    def _render_prose_subs(prose: List[SubDiagnostic], use_color: bool, in_box: bool,
+                           out: List[str]) -> None:
+        for index, sub in enumerate(prose):
+            style = _sub_style(sub.kind)
+            if not in_box:
+                out.append(f"  = {_paint(style, sub.kind, use_color)}: {sub.message}")
+                continue
+            # The label stays: a span-less NOTE is a fact and a HELP is advice, and
+            # inside the box nothing else tells the two apart.
+            if index == 0:
+                out.append(_box_bar(use_color))
+            label = f"{sub.kind}: "
+            lines = textwrap.wrap(sub.message, width=76 - len(label)) or [""]
+            for offset, line in enumerate(lines):
+                lead = _paint(style, label, use_color) if offset == 0 else " " * len(label)
+                out.append(f"{_box_bar(use_color)}  {lead}{line}")
+        if in_box and prose:
+            out.append(_box_end(use_color))
 
     def print(self, stream=None, use_color: Optional[bool] = None, use_unicode: Optional[bool] = None) -> None:
         """Print diagnostics to `stream` (default: sys.stderr)."""
-        import os
-        import sys
         stream = stream or sys.stderr
 
         if use_color is None:
@@ -608,3 +488,36 @@ class Reporter:
         text = self.format(use_color=use_color, use_unicode=use_unicode)
         if text:
             print(text, file=stream)
+
+
+def _paint(style: str, text: str, use_color: bool) -> str:
+    """`text` in `style` when colour is on, and bare otherwise."""
+    return f"{style}{text}{C.RESET}" if use_color else text
+
+
+def _box_bar(use_color: bool) -> str:
+    return _paint(C.GRAY, "  │", use_color)
+
+
+def _box_end(use_color: bool) -> str:
+    return _paint(C.GRAY, "  ╰───", use_color)
+
+
+def _sub_style(kind: str) -> str:
+    return C.BLUE if kind == "note" else C.BOLD
+
+
+def _marker(start: int, end: int, use_unicode: bool) -> str:
+    """The underline from column `start` to the EXCLUSIVE `end`, its tick in the middle."""
+    dash, tick, single = ("─", "┬", "┬") if use_unicode else ("-", "+", "^")
+    width = max(1, end - start)
+    if width <= 1:
+        return " " * (start - 1) + single
+    left = width // 2
+    return " " * (start - 1) + dash * left + tick + dash * (width - left - 1)
+
+
+def _guide(start: int, end: int) -> int:
+    """The column a box's close guide runs to: under the marker's tick."""
+    width = max(1, end - start)
+    return start + (width // 2 if width > 1 else 0)

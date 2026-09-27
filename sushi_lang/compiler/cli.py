@@ -49,11 +49,6 @@ def library_info_command(library_path: Path, show_docs: bool = False,
     `--docs` and `--color` are spelled the same at both ends, so a switch travels as
     itself rather than being translated into a name only one side knows.
     """
-    from sushi_lang.compiler.loader import get_effective_cwd
-
-    if not library_path.is_absolute():
-        library_path = get_effective_cwd() / library_path
-
     tool = _find_toolchain_tool("slib-info")
     if tool is not None:
         import subprocess
@@ -704,7 +699,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def _run(session: Session) -> int:
     """Everything the compiler does. Raises; never reports."""
-    from sushi_lang.compiler.loader import get_effective_cwd, check_duplicate_uses
+    from sushi_lang.compiler.loader import check_duplicate_uses
     from sushi_lang.compiler.pipeline import compile_multi_file
     from sushi_lang.internals import errors as er
     from sushi_lang.internals.parser import parse_to_ast
@@ -713,9 +708,8 @@ def _run(session: Session) -> int:
 
     if args.clean_cache:
         from sushi_lang.compiler.cache import CacheManager
-        effective_cwd = Path(args.source).resolve().parent if args.source else Path.cwd()
-        cache_dir = Path(args.cache_dir) if args.cache_dir else None
-        cm = CacheManager(effective_cwd, cache_dir=cache_dir)
+        root = Path(args.source).resolve().parent if args.source else Path.cwd()
+        cm = CacheManager.for_run(args, root)
         if cm.cache_path.exists():
             cm.wipe()
             print(f"Removed cache: {cm.cache_path}")
@@ -747,10 +741,7 @@ def _run(session: Session) -> int:
         print("error: source file required (unless using --build-stdlib)", file=sys.stderr)
         return 2
 
-    src_path = Path(args.source)
-    if not src_path.is_absolute():
-        src_path = get_effective_cwd() / src_path
-    src_path = src_path.resolve()
+    src_path = Path(args.source).resolve()
     session.src_path = src_path
 
     try:
@@ -815,8 +806,19 @@ def _flush(session: Session) -> None:
         traceback.print_exception(session.crash)
 
 
+def _enter_user_directory() -> None:
+    """Start in the directory the user ran `sushic` from, which the wrapper names in
+    SUSHI_CWD, so every relative path and default directory is the user's."""
+    import os
+
+    user_cwd = os.environ.get("SUSHI_CWD")
+    if user_cwd:
+        os.chdir(user_cwd)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main compiler entry point."""
+    _enter_user_directory()
     # The banner is a coloured line, so it comes AFTER the flag that decides its colour.
     # A usage error now prints argparse's message alone, with no banner above it.
     args = _parse_args(argv)

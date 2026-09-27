@@ -1,0 +1,10 @@
+# A `.slib` in the user's directory, next to the program, is found with nothing on
+# SUSHI_LIB_PATH: the compiler searches the directory it was started in (#976).
+# RUN_IN_FIXTURE_DIR
+# BUILD_LIB_AT: boxes.sushi -> boxes.slib
+# EXPECT_STDOUT_EXACT: "42\n"
+use <lib/boxes>
+
+fn main() i32:
+    println(answer().realise(0))
+    return Result.Ok(0)

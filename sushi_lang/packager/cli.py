@@ -1,28 +1,28 @@
 """Nori CLI - command line interface for the Sushi package manager."""
 import argparse
 import sys
+import traceback
+from typing import Callable
+
+from sushi_lang.internals.styling import COLOUR_CHOICES, set_colour_override
+from sushi_lang.internals.version import print_banner
+from sushi_lang.packager.api_client import ApiError
+from sushi_lang.packager.archive import ArchiveError
+from sushi_lang.packager.commands.build import cmd_build
+from sushi_lang.packager.commands.info import cmd_info
+from sushi_lang.packager.commands.init import cmd_init
+from sushi_lang.packager.commands.install import cmd_install
+from sushi_lang.packager.commands.list_cmd import cmd_list
+from sushi_lang.packager.commands.login import cmd_login
+from sushi_lang.packager.commands.publish import cmd_publish
+from sushi_lang.packager.commands.remove import cmd_remove
+from sushi_lang.packager.commands.search import cmd_search
+from sushi_lang.packager.commands.status import cmd_status
+from sushi_lang.packager.installer import InstallError
+from sushi_lang.packager.manifest import ManifestError
 
 
-def _print_banner() -> None:
-    from sushi_lang.internals.version import _ensure_utf8_stdout, _get_versions
-    from sushi_lang import __dev__ as is_dev
-    import datetime
-
-    _ensure_utf8_stdout()
-    v = _get_versions()
-    today = datetime.date.today().isoformat()
-
-    use_ansi = sys.stdout.isatty()
-    if use_ansi:
-        BOLD, DIM, RESET = "\x1b[1m", "\x1b[2m", "\x1b[0m"
-    else:
-        BOLD, DIM, RESET = "", "", ""
-
-    dev_marker = " (dev)" if is_dev else ""
-    print(
-        f"{BOLD} \U0001f96c Nori (\u6d77\u82d4) Package Manager{RESET} \u2022 {v['app']}{dev_marker}\n"
-        f"{DIM}Python {v['python']} \u2022 llvmlite {v['llvmlite']} \u2022 LLVM {v['llvm']} \u2022 {today}{RESET}\n"
-    )
+NORI_TITLE = "\U0001f96c Nori (\u6d77\u82d4) Package Manager"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +32,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--version", action="store_true", help="Show version and exit",
+    )
+    parser.add_argument(
+        "--traceback", action="store_true",
+        help="Append the Python traceback to an error (for debugging)",
+    )
+    parser.add_argument(
+        "--color", choices=list(COLOUR_CHOICES), default="auto",
+        help="When to use ANSI colour. 'auto' reads NO_COLOR, CLICOLOR_FORCE, TERM and "
+             "whether the stream is a terminal.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -140,57 +149,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
+    "init": cmd_init,
+    "build": cmd_build,
+    "install": cmd_install,
+    "search": cmd_search,
+    "list": cmd_list,
+    "info": cmd_info,
+    "remove": cmd_remove,
+    "publish": cmd_publish,
+    "login": cmd_login,
+    "status": cmd_status,
+}
+
+USER_ERRORS = (ManifestError, ArchiveError, InstallError, ApiError, ConnectionError)
+
+
 def run(args: argparse.Namespace) -> int:
-    _print_banner()
+    set_colour_override(args.color)
+    print_banner(NORI_TITLE)
 
     if args.version:
         return 0
 
-    if args.command is None or args.command == "help":
+    handler = COMMANDS.get(args.command)
+    if handler is None:
         build_parser().print_help()
         return 0
-
-    if args.command == "init":
-        from sushi_lang.packager.commands.init import cmd_init
-        return cmd_init(args)
-
-    if args.command == "build":
-        from sushi_lang.packager.commands.build import cmd_build
-        return cmd_build(args)
-
-    if args.command == "install":
-        from sushi_lang.packager.commands.install import cmd_install
-        return cmd_install(args)
-
-    if args.command == "search":
-        from sushi_lang.packager.commands.search import cmd_search
-        return cmd_search(args)
-
-    if args.command == "list":
-        from sushi_lang.packager.commands.list_cmd import cmd_list
-        return cmd_list(args)
-
-    if args.command == "info":
-        from sushi_lang.packager.commands.info import cmd_info
-        return cmd_info(args)
-
-    if args.command == "remove":
-        from sushi_lang.packager.commands.remove import cmd_remove
-        return cmd_remove(args)
-
-    if args.command == "publish":
-        from sushi_lang.packager.commands.publish import cmd_publish
-        return cmd_publish(args)
-
-    if args.command == "login":
-        from sushi_lang.packager.commands.login import cmd_login
-        return cmd_login(args)
-
-    if args.command == "status":
-        from sushi_lang.packager.commands.status import cmd_status
-        return cmd_status(args)
-
-    return 0
+    return handler(args)
 
 
 def cli_main() -> int:
@@ -201,6 +187,21 @@ def cli_main() -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.")
         return 130
-    except Exception as e:
+    except USER_ERRORS as e:
         print(f"Error: {e}", file=sys.stderr)
+        _print_traceback(args, e)
         return 1
+    except Exception as e:
+        detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        print(f"Internal error: {detail}", file=sys.stderr)
+        print("note: this is a bug in nori, not in your package", file=sys.stderr)
+        if not args.traceback:
+            print("help: re-run with --traceback for the full Python traceback, "
+                  "then please report it", file=sys.stderr)
+        _print_traceback(args, e)
+        return 2
+
+
+def _print_traceback(args: argparse.Namespace, exc: BaseException) -> None:
+    if args.traceback:
+        traceback.print_exception(exc)

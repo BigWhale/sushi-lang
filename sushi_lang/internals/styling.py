@@ -19,6 +19,7 @@ class C:
     DIM = "\x1b[2m"
     ITALIC = "\x1b[3m"
     RED = "\x1b[31m"
+    GREEN = "\x1b[32m"
     YELLOW = "\x1b[33m"
     BLUE = "\x1b[34m"
     CYAN = "\x1b[36m"
@@ -79,7 +80,7 @@ class Palette:
     report and the plain report comes back.
     """
 
-    __slots__ = ("bold", "dim", "italic", "blue", "cyan", "reset")
+    __slots__ = ("bold", "dim", "italic", "blue", "cyan", "green", "yellow", "reset")
 
     def __init__(self, on: bool):
         self.bold = C.BOLD if on else ""
@@ -87,4 +88,6 @@ class Palette:
         self.italic = C.ITALIC if on else ""
         self.blue = C.BLUE if on else ""
         self.cyan = C.CYAN if on else ""
+        self.green = C.GREEN if on else ""
+        self.yellow = C.YELLOW if on else ""
         self.reset = C.RESET if on else ""

@@ -4,7 +4,7 @@ import hashlib
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 
 
@@ -72,6 +72,19 @@ class TestMetadata:
     build_libs: Optional[List[str]] = None
     # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
     stdlib_modules: Optional[Dict[str, str]] = None
+    # Source `.slib` files built at a path inside the copy: (source, target), both relative.
+    build_libs_at: Optional[List[Tuple[str, str]]] = None
+    # A relative `--cache-dir`, spelled as given, for a fixture that runs in its own directory.
+    fixture_cache_dir: Optional[str] = None
+    # Paths of the copy read after the fixture's last compiler invocation.
+    expect_paths_exist: Optional[List[str]] = None
+    expect_paths_absent: Optional[List[str]] = None
+    # Paths of the copy that must exist after the compilation and BEFORE THEN_CLEAN_CACHE.
+    expect_paths_exist_before_clean: Optional[List[str]] = None
+    # A last invocation, `sushic --clean-cache`: "bare", or "source" (with the source and -o).
+    then_clean_cache: Optional[str] = None
+    # A directive value the parser could not read; the runner fails a fixture that has one.
+    directive_errors: Optional[List[str]] = None
 
     # Test categorization
     test_type: str = "default"  # "default", "runtime", "compilation"
@@ -92,6 +105,24 @@ class TestMetadata:
             self.build_libs = []
         if self.stdlib_modules is None:
             self.stdlib_modules = {}
+        if self.build_libs_at is None:
+            self.build_libs_at = []
+        if self.expect_paths_exist is None:
+            self.expect_paths_exist = []
+        if self.expect_paths_absent is None:
+            self.expect_paths_absent = []
+        if self.expect_paths_exist_before_clean is None:
+            self.expect_paths_exist_before_clean = []
+        if self.directive_errors is None:
+            self.directive_errors = []
+
+    @property
+    def reads_the_copy(self) -> bool:
+        """A directive that names a path in the fixture's copy, so the fixture needs one."""
+        return bool(self.build_libs_at or self.fixture_cache_dir is not None
+                    or self.expect_paths_exist or self.expect_paths_absent
+                    or self.expect_paths_exist_before_clean
+                    or self.then_clean_cache is not None or self.directive_errors)
 
     @property
     def declares_a_rebuild(self) -> bool:
@@ -228,6 +259,27 @@ def _stdlib_module(metadata: TestMetadata, value: str, test_file: Path) -> None:
         _warn(f"Invalid STDLIB_MODULE value in {test_file}: {value}")
 
 
+def _build_lib_at(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    source, sep, target = _unquote(value).partition('->')
+    if sep and source.strip() and target.strip():
+        metadata.build_libs_at.append((source.strip(), target.strip()))
+    else:
+        metadata.directive_errors.append(
+            f"BUILD_LIB_AT takes `<source> -> <target>`, not {value!r}")
+
+
+CLEAN_CACHE_FORMS = ("bare", "source")
+
+
+def _then_clean_cache(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    form = _unquote(value).strip().lower()
+    if form in CLEAN_CACHE_FORMS:
+        metadata.then_clean_cache = form
+    else:
+        metadata.directive_errors.append(
+            f"THEN_CLEAN_CACHE takes {' or '.join(CLEAN_CACHE_FORMS)}, not {value!r}")
+
+
 # Every directive that takes a value (`NAME: value`), and its handler. ONE table, so a
 # directive the parser knows is a row here and nowhere else.
 VALUED_DIRECTIVES = {
@@ -255,6 +307,13 @@ VALUED_DIRECTIVES = {
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
     'BUILD_LIB': _extend('build_libs', lambda v: _split(_unquote(v))),
     'STDLIB_MODULE': _stdlib_module,
+    'BUILD_LIB_AT': _build_lib_at,
+    'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),
+    'EXPECT_PATH_EXISTS': _extend('expect_paths_exist', lambda v: _split(_unquote(v))),
+    'EXPECT_PATH_ABSENT': _extend('expect_paths_absent', lambda v: _split(_unquote(v))),
+    'EXPECT_PATH_EXISTS_BEFORE_CLEAN': _extend('expect_paths_exist_before_clean',
+                                               lambda v: _split(_unquote(v))),
+    'THEN_CLEAN_CACHE': _then_clean_cache,
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.

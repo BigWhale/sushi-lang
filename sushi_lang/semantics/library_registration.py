@@ -701,7 +701,7 @@ class LibraryRegistration:
         """
         table = getattr(self.tables, key)
         kind = "struct" if key == "generic_structs" else "enum"
-        for lib_name, _manifest, record in self._template_records(key):
+        for lib_name, manifest, record in self._template_records(key):
             type_name = record["name"]
             if type_name in table.by_name:
                 continue
@@ -721,8 +721,11 @@ class LibraryRegistration:
             declarations = snippet.program.structs if kind == "struct" \
                 else snippet.program.enums
             node = next((d for d in declarations or [] if d.name == type_name), None)
+            shipped_in = manifest.get("library_path")
             if getattr(node, "is_public", False):
-                self.tables.visibility.record(DeclOrigin(kind=kind, name=type_name))
+                self.tables.visibility.record(DeclOrigin(
+                    kind=kind, name=type_name, filename=shipped_in))
             else:
                 self.tables.visibility.record(DeclOrigin(
-                    kind=kind, name=type_name, unit_name=lib_name, is_public=False))
+                    kind=kind, name=type_name, unit_name=lib_name, filename=shipped_in,
+                    is_public=False))

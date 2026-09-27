@@ -581,44 +581,102 @@ class TestRunner:
         tree clean: the runner writes `v2/`, the libraries and the cache only in the copy.
         """
         rebuild = is_rebuild_fixture(test_file)
-        if metadata.declares_a_rebuild and not rebuild:
+        # A clean build (THEN_CLEAN_CACHE: source) is the second compilation whose unit
+        # report EXPECT_REBUILT / EXPECT_CACHED read; nothing else stands in for `v2/`.
+        second_build = (metadata.then_clean_cache == "source"
+                        and metadata.expect_stdout_exact_before_rebuild is None)
+        if metadata.declares_a_rebuild and not rebuild and not second_build:
             return None, (f"✗ Compilation: the fixture declares a rebuild and its directory "
                           f"holds no {REBUILD_DIR}/")
         if rebuild and (test_file.parent / REBUILD_DIR / test_file.name).exists():
             return None, (f"✗ Compilation: {REBUILD_DIR}/ may not replace the fixture "
                           f"itself; its directives describe both steps")
+        if metadata.directive_errors:
+            return None, "✗ Compilation: " + "; ".join(metadata.directive_errors)
+        refusal = self._refuse_copy_paths(metadata)
+        if refusal is not None:
+            return None, refusal
         if not (rebuild or metadata.run_in_fixture_dir or metadata.build_libs
-                or metadata.stdlib_modules):
+                or metadata.stdlib_modules or metadata.reads_the_copy):
             return None, None
 
         home = Path(self.temp_dir) / "work" / fixture_binary_name(test_file, self.tests_dir)
         root = home / "fixture"
         shutil.copytree(test_file.parent, root,
                         ignore=shutil.ignore_patterns(REBUILD_DIR, "__sushi_cache__"))
-        # In its own directory the compiler picks its own cache, as it does for a user.
-        cache = None if metadata.run_in_fixture_dir else home / "cache"
+        # In its own directory the compiler picks its own cache, as it does for a user,
+        # unless the fixture spells one relative to that directory.
+        cache: Optional[Path] = home / "cache"
+        if metadata.run_in_fixture_dir:
+            cache = (Path(metadata.fixture_cache_dir)
+                     if metadata.fixture_cache_dir is not None else None)
         return Workspace(home=home, root=root, source=root / test_file.name, cache=cache,
                          rebuild=test_file.parent / REBUILD_DIR if rebuild else None,
                          libs=home / "libs"), None
 
+    @staticmethod
+    def _refuse_copy_paths(metadata: TestMetadata) -> Optional[str]:
+        """The refusal for a directive that names a path outside the copy, or None.
+
+        FIXTURE_CACHE_DIR and THEN_CLEAN_CACHE spell a path relative to the directory the
+        compiler starts in, so they need RUN_IN_FIXTURE_DIR: elsewhere that directory is
+        the checkout, and the fixture would write or clean the runner's own tree.
+        """
+        needs_dir = [name for name, used in (
+            ("FIXTURE_CACHE_DIR", metadata.fixture_cache_dir is not None),
+            ("THEN_CLEAN_CACHE", metadata.then_clean_cache is not None)) if used]
+        if needs_dir and not metadata.run_in_fixture_dir:
+            return f"✗ Compilation: {', '.join(needs_dir)} needs RUN_IN_FIXTURE_DIR"
+        if metadata.expect_paths_exist_before_clean and metadata.then_clean_cache is None:
+            return "✗ Compilation: EXPECT_PATH_EXISTS_BEFORE_CLEAN needs THEN_CLEAN_CACHE"
+        named = [path for pair in metadata.build_libs_at for path in pair]
+        named += metadata.expect_paths_exist + metadata.expect_paths_absent
+        named += metadata.expect_paths_exist_before_clean
+        if metadata.fixture_cache_dir is not None:
+            named.append(metadata.fixture_cache_dir)
+        outside = [path for path in named
+                   if not path or Path(path).is_absolute() or ".." in Path(path).parts]
+        if outside:
+            return ("✗ Compilation: a directive path must be relative and inside the "
+                    f"fixture's copy: {', '.join(repr(p) for p in outside)}")
+        return None
+
     def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
-        """Build each BUILD_LIB source library in the copy; the failure, or None."""
+        """Build each BUILD_LIB and BUILD_LIB_AT source library; the failure, or None.
+
+        A BUILD_LIB library goes to the directory the runner puts on SUSHI_LIB_PATH; a
+        BUILD_LIB_AT library goes where the fixture says, inside the copy. Each build has
+        a cache outside the copy, so a library build leaves nothing in it but the `.slib`.
+        The version is 0.0.0, unless a `nori.toml` beside the source states one: the
+        compiler refuses a second version (CE3505).
+        """
         workspace.libs.mkdir(parents=True, exist_ok=True)
-        for source in metadata.build_libs:
+        builds = [("BUILD_LIB", source, workspace.libs / f"{Path(source).stem}.slib")
+                  for source in metadata.build_libs]
+        builds += [("BUILD_LIB_AT", source, workspace.root / target)
+                   for source, target in metadata.build_libs_at]
+        for directive, source, target in builds:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            stated = ((workspace.root / source).parent / "nori.toml").is_file()
+            version = [] if stated else ["--lib-version", "0.0.0"]
             done = subprocess.run(
-                [str(self.project_root / "sushic"), "--lib", "--lib-version", "0.0.0",
-                 str(workspace.root / source), "-o",
-                 str(workspace.libs / f"{Path(source).stem}.slib")],
-                capture_output=True, text=True, cwd=self.project_root,
+                [str(self.project_root / "sushic"), "--lib", *version,
+                 str(workspace.root / source), "-o", str(target),
+                 "--cache-dir", str(workspace.home / "libcache")],
+                capture_output=True, text=True, cwd=workspace.home,
                 env={**os.environ, "NO_COLOR": "1"}, timeout=60)
             if done.returncode != 0:
-                return (f"✗ Compilation: BUILD_LIB {source} failed with exit "
+                return (f"✗ Compilation: {directive} {source} failed with exit "
                         f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
         return None
 
     def _invoke_compiler(self, test_file: Path, metadata: TestMetadata,
-                         binary_path: Path) -> subprocess.CompletedProcess:
+                         binary_path: Path, clean: Optional[str] = None
+                         ) -> subprocess.CompletedProcess:
         """Start `sushic` for one compilation of a fixture, the way the fixture asks.
+
+        `clean` is a THEN_CLEAN_CACHE form: "bare" starts `sushic --clean-cache` with the
+        cache flag alone, "source" starts `sushic --clean-cache <source> -o ...`.
 
         Force NO_COLOR so diagnostic codes/messages land in stderr without ANSI escapes,
         keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
@@ -627,28 +685,33 @@ class TestRunner:
         env = {**os.environ, "NO_COLOR": "1"}
         cwd = self.project_root
         source = str(test_file)
-        flags = ["-o", str(binary_path), *metadata.compiler_flags]
+        cache_flags: List[str] = []
         if workspace is not None:
             source = str(workspace.source)
             if metadata.run_in_fixture_dir:
                 cwd, source = workspace.root, workspace.source.name
             if workspace.cache is not None:
-                flags += ["--cache-dir", str(workspace.cache)]
+                cache_flags = ["--cache-dir", str(workspace.cache)]
             if metadata.build_libs:
                 env["SUSHI_LIB_PATH"] = os.pathsep.join(
                     [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
+        if clean == "bare":
+            args = ["--clean-cache", *cache_flags]
+        else:
+            args = [*(["--clean-cache"] if clean else []), source, "-o", str(binary_path),
+                    *metadata.compiler_flags, *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
             # the wrapper does: start in the checkout, and name the caller's directory.
             command, extra = stdlib_override_command(
                 self.project_root,
                 {name: workspace.root / path for name, path in metadata.stdlib_modules.items()},
-                [source, *flags])
+                args)
             env.update(extra)
             env["SUSHI_CWD"] = str(cwd)
             cwd = self.project_root
         else:
-            command = [str(self.project_root / "sushic"), source, *flags]
+            command = [str(self.project_root / "sushic"), *args]
         return subprocess.run(command, capture_output=True, text=True, cwd=cwd, env=env,
                               timeout=30)
 
@@ -731,13 +794,14 @@ class TestRunner:
             # constant and a shared stem was a shared binary (#604).
             binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
 
-            if workspace is not None and metadata.build_libs:
+            builds_libs = bool(metadata.build_libs or metadata.build_libs_at)
+            if workspace is not None and builds_libs:
                 failure = self._build_libraries(metadata, workspace)
                 if failure is not None:
                     return False, failure
             if workspace is not None and workspace.rebuild is not None:
                 failure = self._first_build(test_file, metadata, binary_path)
-                if failure is None and metadata.build_libs:
+                if failure is None and builds_libs:
                     failure = self._build_libraries(metadata, workspace)
                 if failure is not None:
                     return False, failure
@@ -768,9 +832,17 @@ class TestRunner:
                     success = False
                     message = diag_msg
 
+            report = result.stdout
+            if success and metadata.then_clean_cache is not None:
+                success, message, report = self._clean_cache(
+                    test_file, metadata, binary_path, expected_exit_code, message, report)
+
             if success and (metadata.expect_rebuilt is not None
                             or metadata.expect_cached is not None):
-                success, message = self._check_unit_report(result.stdout, metadata)
+                success, message = self._check_unit_report(report, metadata)
+
+            if success and workspace is not None:
+                success, message = self._check_copy_paths(workspace, metadata, message)
 
             return success, message
 
@@ -778,6 +850,51 @@ class TestRunner:
             return False, "✗ Compilation: Timeout (30s)"
         except Exception as e:
             return False, f"✗ Compilation: Exception: {e}"
+
+    def _clean_cache(self, test_file: Path, metadata: TestMetadata, binary_path: Path,
+                     expected_exit_code: int, message: str,
+                     report: str) -> Tuple[bool, str, str]:
+        """THEN_CLEAN_CACHE: the fixture's last compiler invocation.
+
+        Returns the verdict, its message, and the stdout whose unit report
+        EXPECT_REBUILT / EXPECT_CACHED read: the clean build's for "source", the
+        compilation's (`report`) for "bare", which builds nothing. A clean never removes the checkout's own
+        cache: the runner fails the fixture when that cache was there before and is gone.
+        """
+        form = metadata.then_clean_cache
+        workspace = self._workspaces[test_file.name]
+        missing = [path for path in metadata.expect_paths_exist_before_clean
+                   if not (workspace.root / path).exists()]
+        if missing:
+            return False, ("✗ Compilation: before THEN_CLEAN_CACHE the fixture's copy "
+                           f"lacks {', '.join(missing)}"), report
+        checkout_cache = self.project_root / "__sushi_cache__"
+        existed = checkout_cache.is_dir()
+        done = self._invoke_compiler(test_file, metadata, binary_path, clean=form)
+        if existed and not checkout_cache.is_dir():
+            return False, (f"✗ Compilation: THEN_CLEAN_CACHE: {form} removed the "
+                           f"checkout's own cache {checkout_cache}"), done.stdout
+        expected = 0 if form == "bare" else expected_exit_code
+        if done.returncode != expected or spelling_gate_tripped(done.stderr):
+            return False, (f"✗ Compilation: THEN_CLEAN_CACHE: {form} expected exit "
+                           f"{expected}, got {done.returncode}\nSTDERR: {done.stderr.strip()}"
+                           f"\nSTDOUT: {done.stdout.strip()}"), done.stdout
+        return True, message, done.stdout if form == "source" else report
+
+    @staticmethod
+    def _check_copy_paths(workspace: "Workspace", metadata: TestMetadata,
+                          message: str) -> Tuple[bool, str]:
+        """EXPECT_PATH_EXISTS and EXPECT_PATH_ABSENT, against the copy, after the last invocation."""
+        problems = [f"{path}: expected to exist, missing"
+                    for path in metadata.expect_paths_exist
+                    if not (workspace.root / path).exists()]
+        problems += [f"{path}: expected absent, present"
+                     for path in metadata.expect_paths_absent
+                     if (workspace.root / path).exists()]
+        if problems:
+            return False, ("✗ Compilation: the fixture's copy differs\n  "
+                           + "\n  ".join(problems))
+        return True, message
 
     def _check_compilation_diagnostics(self, stderr: str, metadata: TestMetadata) -> Tuple[bool, str]:
         """Assert expected diagnostics appear in the compiler's stderr."""

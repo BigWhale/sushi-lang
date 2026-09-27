@@ -6,6 +6,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
+from sushi_lang.internals.styling import Palette, should_colour
 from sushi_lang.packager.repository import resolve_repository
 
 
@@ -15,16 +16,9 @@ def _format_downloads(count: int) -> str:
     return str(count)
 
 
-def _print_results(packages: list, use_ansi: bool) -> None:
-    if use_ansi:
-        BOLD = "\x1b[1m"
-        DIM = "\x1b[2m"
-        CYAN = "\x1b[1;36m"
-        GREEN = "\x1b[32m"
-        YELLOW = "\x1b[33m"
-        RESET = "\x1b[0m"
-    else:
-        BOLD = DIM = CYAN = GREEN = YELLOW = RESET = ""
+def _print_results(packages: list) -> None:
+    use_ansi = should_colour(sys.stdout)
+    p = Palette(use_ansi)
 
     # Compute dynamic column widths
     name_w = max(len(p.get("name", "")) for p in packages)
@@ -39,7 +33,7 @@ def _print_results(packages: list, use_ansi: bool) -> None:
         f"  {'Name':<{name_w}}  {'Version':<{ver_w}}  "
         f"{'License':<{lic_w}}  {'Downloads':>{dl_w}}  Description"
     )
-    print(f"{BOLD}{header}{RESET}")
+    print(f"{p.bold}{header}{p.reset}")
 
     # Separator
     if use_ansi:
@@ -47,7 +41,7 @@ def _print_results(packages: list, use_ansi: bool) -> None:
             f"  {'\u2500' * name_w}  {'\u2500' * ver_w}  "
             f"{'\u2500' * lic_w}  {'\u2500' * dl_w}  {'\u2500' * 11}"
         )
-        print(f"{DIM}{sep}{RESET}")
+        print(f"{p.dim}{sep}{p.reset}")
 
     # Rows
     for pkg in packages:
@@ -58,10 +52,10 @@ def _print_results(packages: list, use_ansi: bool) -> None:
         description = pkg.get("description", "")
 
         row = (
-            f"  {CYAN}{name:<{name_w}}{RESET}  "
-            f"{GREEN}{version:<{ver_w}}{RESET}  "
-            f"{DIM}{license_:<{lic_w}}{RESET}  "
-            f"{YELLOW}{downloads:>{dl_w}}{RESET}  "
+            f"  {p.bold}{p.cyan}{name:<{name_w}}{p.reset}  "
+            f"{p.green}{version:<{ver_w}}{p.reset}  "
+            f"{p.dim}{license_:<{lic_w}}{p.reset}  "
+            f"{p.yellow}{downloads:>{dl_w}}{p.reset}  "
             f"{description}"
         )
         print(row)
@@ -105,7 +99,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         print(f'No packages found for "{query}".')
         return 0
 
-    _print_results(packages, sys.stdout.isatty())
+    _print_results(packages)
 
     pagination = data.get("pagination", {})
     total = pagination.get("total", len(packages))
