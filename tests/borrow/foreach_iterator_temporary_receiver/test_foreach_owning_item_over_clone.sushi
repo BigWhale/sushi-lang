@@ -1,0 +1,12 @@
+# An item of `a.clone().iter()` views an element of the clone, not of `a`. The clone
+# belongs to the loop, so an in-place write of `a` in the body is legal (#1014).
+# EXPECT_STDOUT_EXACT: "x\ny\nq\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string[] a = from(["x", "y"])
+    foreach(s in a.clone().iter()):
+        a[0] := "q"
+        println(s)
+    println(a[0])
+    return Result.Ok(0)

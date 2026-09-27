@@ -36,6 +36,7 @@ from .bindings import (
     ScrutineeKind,
     reject_partial_take,
     release_binding_borrow,
+    walks_a_temporary,
 )
 from .borrows import clear_borrows
 from .diagnostics import emit_change_under_iterator
@@ -308,8 +309,9 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
-            freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
-                              stmt.iterable, ScrutineeKind.BORROWED)
+            if not walks_a_temporary(checker, stmt.iterable):
+                freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
+                                  stmt.iterable, ScrutineeKind.BORROWED)
         if iterator is not None:
             checker.borrow_state[stmt.item_name].covered_by = iterator.name
         check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
