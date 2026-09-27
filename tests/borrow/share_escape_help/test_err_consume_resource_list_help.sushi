@@ -1,0 +1,21 @@
+# A borrowed `List@(File)` is consumed. A list has no `share()`, so the CE2411 help does
+# not offer one; it offers the escapes that compile (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: help: a descriptor cannot be deep-copied, so there is no `l.clone()`, and its type has no `share()` that gives a second owner; hand the value over with a `nom` parameter, or restructure so only one owner is needed
+
+use <io/fs>
+
+fn eat(nom List@(File) l) ~:
+    println(l.len())
+    return Result.Ok(~)
+
+fn go(List@(File) l) ~:
+    eat(nom l)??
+    return Result.Ok(~)
+
+fn main() i32:
+    let List@(File) l = List.new()
+    match go(l):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

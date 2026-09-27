@@ -1,0 +1,24 @@
+# A borrowed struct with a `File` field is consumed. The struct has no `share()`, so the
+# CE2411 help does not offer one (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: help: a descriptor cannot be deep-copied, so there is no `h.clone()`, and its type has no `share()`
+
+use <io/fs>
+
+struct Holder:
+    File f
+
+fn eat(nom Holder h) ~:
+    println(h.f.is_open())
+    return Result.Ok(~)
+
+fn go(Holder h) ~:
+    eat(nom h)??
+    return Result.Ok(~)
+
+fn main() i32:
+    let Holder h = Holder(stdout.share().realise(stdout))
+    match go(h):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
