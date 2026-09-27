@@ -1,6 +1,7 @@
 """Coverage ratchet: success-category .sushi tests that print but lack stdout assertions."""
 
 import re
+import sys
 from pathlib import Path
 
 
@@ -17,6 +18,11 @@ from pathlib import Path
 BASELINE = 0
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
+
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 EXCLUDED_DIRS = {"helpers", "bin"}
 
 # Quarantine registry (R0.2)
@@ -56,7 +62,7 @@ _VALID_QUARANTINE_REASONS = {"broken-output", "needs-triage", "no-stdout"}
 def _compute_gap() -> list[str]:
     """Return list of files in the gap (print but no stdout assertion)."""
     gap_files = []
-    for f in sorted(TESTS_ROOT.rglob("test_*.sushi")):
+    for f in corpus_files(TESTS_ROOT, "test_*.sushi"):
         rel = str(f.relative_to(TESTS_ROOT))
         # Skip non-test dirs
         if any(d in EXCLUDED_DIRS for d in f.relative_to(TESTS_ROOT).parts):
@@ -67,7 +73,7 @@ def _compute_gap() -> list[str]:
         # Skip quarantined tests (tracked separately; see QUARANTINE + guard test)
         if rel in QUARANTINE:
             continue
-        content = f.read_text(encoding="utf-8")
+        content = corpus_text(f)
         has_print = bool(re.search(r"\bprint\b|\bprintln\b", content))
         has_assert = (
             "EXPECT_STDOUT_CONTAINS" in content

@@ -1,0 +1,9 @@
+# An imported unit that is not UTF-8 reads the same CE3017 as the main source, and the
+# diagnostic names the unit's file.
+# EXPECT_ERROR_CODES_EXACT: CE3017
+# EXPECT_STDERR_CONTAINS: "latin_unit.sushi': byte 0xff on line 2 is not valid UTF-8"
+
+use "latin_unit"
+
+fn main() i32:
+    return Result.Ok(0)
