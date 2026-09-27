@@ -162,6 +162,7 @@ class TypeSubstitutor:
     ) -> List['Param']:
         """Fan a single value-parameter out into its concrete instantiation(s)."""
         from sushi_lang.semantics.ast import Param
+        from sushi_lang.semantics.hidden_names import pack_element_name
 
         # Detect a pack-typed parameter: a bare type-param reference bound to a
         # TypePack. The expansion happens HERE, before substitute_type is ever
@@ -170,7 +171,7 @@ class TypeSubstitutor:
         if pack is not None:
             return [
                 Param(
-                    name=f"{param.name}_{i}",
+                    name=pack_element_name(param.name, i),
                     ty=element_type,
                     name_span=param.name_span,
                     type_span=param.type_span,

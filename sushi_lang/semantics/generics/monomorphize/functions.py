@@ -2,12 +2,10 @@
 from __future__ import annotations
 from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
-import dataclasses
 from collections import deque
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.types import TypePack
-from sushi_lang.semantics.hidden_names import pack_element_name
 from sushi_lang.semantics.typesys import Type
 
 from .order import functions_in_site_order
@@ -207,8 +205,6 @@ class FunctionMonomorphizer:
         for param in generic.params:
             expanded = substitutor.expand_pack_param(param, substitution)
             if substitutor._pack_binding_for(param, substitution) is not None:
-                expanded = [dataclasses.replace(p, name=pack_element_name(param.name, i))
-                            for i, p in enumerate(expanded)]
                 pack_param_fanout[param.name] = [p.name for p in expanded]
             concrete_params.extend(expanded)
 

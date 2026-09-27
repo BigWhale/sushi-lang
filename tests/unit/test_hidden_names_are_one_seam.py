@@ -32,9 +32,6 @@ MONOMORPHIZE = SEMANTICS / "generics" / "monomorphize"
 # Identifier-shaped f-strings in the monomorphizer that do not name a local.
 ALLOWED_FSTRINGS = {
     ("__init__.py", "f'generic_{kind}s'"): "an attribute of the generic tables, not a local",
-    ("transformer.py", "f'{param.name}_{i}'"):
-        "#1015: functions.py renames each element with pack_element_name; this name is "
-        "never read, and a change to call the helper here is handed back",
 }
 
 _IDENTIFIER_PART = re.compile(r"[A-Za-z0-9_]*")
