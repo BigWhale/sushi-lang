@@ -139,7 +139,7 @@ def apply_location_offset(node: object, base_span: 'Span') -> None:
     The nodes come from a second parse of the hole's text alone, so every span they
     carry counts from the hole and not from the file.
     """
-    from sushi_lang.semantics.ast import Node
+    from sushi_lang.semantics.ast import IndexAccess, MemberAccess, Node
     from sushi_lang.internals.report import Span
     from sushi_lang.semantics.ast_walk import walk_nodes
 
@@ -149,17 +149,25 @@ def apply_location_offset(node: object, base_span: 'Span') -> None:
     # own, because it is a tree for every other reader; this one keeps its own.
     moved: set[int] = set()
 
+    def moved_span(span: Optional[Span]) -> Optional[Span]:
+        if span is None:
+            return None
+        return Span(
+            line=span.line + line_offset,
+            col=span.col + col_offset,
+            end_line=span.end_line + line_offset,
+            end_col=span.end_col + col_offset
+        )
+
     def move_the_span_of(current: Node) -> bool:
         if id(current) in moved:
             return False
         moved.add(id(current))
-        if current.loc is not None:
-            current.loc = Span(
-                line=current.loc.line + line_offset,
-                col=current.loc.col + col_offset,
-                end_line=current.loc.end_line + line_offset,
-                end_col=current.loc.end_col + col_offset
-            )
+        current.loc = moved_span(current.loc)
+        if isinstance(current, MemberAccess):
+            current.member_span = moved_span(current.member_span)
+        elif isinstance(current, IndexAccess):
+            current.index_span = moved_span(current.index_span)
         return True
 
     walk_nodes(node, move_the_span_of)
