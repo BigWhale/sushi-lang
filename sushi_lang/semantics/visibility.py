@@ -76,6 +76,9 @@ _VERB = {
     "variable": "read",
 }
 _DEFAULT_VERB = "use"
+# The verb of a function taken as a VALUE, not called (#1013). The position knows it and
+# the kind does not, so the caller passes it.
+VALUE_VERB = "take the value of"
 
 
 @dataclass(frozen=True)
@@ -252,8 +255,12 @@ def reject_private_cross_unit_use(
     current_unit: Optional[str],
     table: Optional[VisibilityTable] = None,
     in_library_body: bool = False,
+    verb: Optional[str] = None,
 ) -> bool:
     """Refuse a use of another unit's private declaration. True when it was refused.
+
+    `verb` overrides the kind's own verb for a position the kind cannot know: a function
+    taken as a value is not called (`VALUE_VERB`).
 
     `in_library_body` is the one caller-side escape: a library body transplanted into the
     consumer's compile may call the library's own privates, and the code the user wrote may
@@ -272,7 +279,7 @@ def reject_private_cross_unit_use(
 
     diagnostic = er.emit_with(
         reporter, er.ERR.CE3005, loc,
-        verb=origin.verb, kind=origin.kind, name=origin.name,
+        verb=verb or origin.verb, kind=origin.kind, name=origin.name,
         current_unit=current_unit, owner=origin.unit_name,
     )
     # BOTH, not either: the collect pass walks every unit through one reporter, so a span

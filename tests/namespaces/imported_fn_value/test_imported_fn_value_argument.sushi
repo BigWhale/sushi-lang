@@ -1,0 +1,11 @@
+# A public function of another unit, brought by a flat import, is a function
+# value in an argument position (#1013).
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/lib3"
+
+fn apply(fn(string) -> i32 f) i32:
+    return Result.Ok(f("abcd").realise(0))
+
+fn main() i32:
+    println(apply(plain).realise(0))
+    return Result.Ok(0)

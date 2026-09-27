@@ -82,6 +82,12 @@ a bare reference to one is never recognized as a function value — it fails as 
 identifier (**CE1001**), not CE2093. A *generic* function reference is recognized-but-deferred
 territory; see §8 for the T2.3 exception now allowed, and Part II §4 for what still stays CE2093.
 
+A plain `fn` of another unit is referenceable wherever the unit may name it (#1013): through a
+flat `use`, a `public use` re-export, or behind an alias (`l.plain`). The scope pass and the
+typecheck pass read one unit-scoped lookup for this rung, the unit's own concrete `fn` wins over
+an imported one (#1003), and the fences of the call apply to the value: CE3005 for a private
+`fn`, CE3012 for a name two imports bring. A generic behind an alias is CE2093 in every position.
+
 ## 2. Lambda syntax
 
 Two body forms, both alternatives in the `atom` grammar production:

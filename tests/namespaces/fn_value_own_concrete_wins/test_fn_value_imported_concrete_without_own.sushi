@@ -1,0 +1,10 @@
+# The control for the own-concrete rule: with no declaration of its own, a
+# unit takes the function value `pick` from the concrete function an import
+# brings (#1003, #1013).
+# EXPECT_STDOUT_EXACT: "40\n"
+use "helpers/pick_plain"
+
+fn main() i32:
+    let fn(string) -> i32 f = pick
+    println(f("abc").realise(0))
+    return Result.Ok(0)

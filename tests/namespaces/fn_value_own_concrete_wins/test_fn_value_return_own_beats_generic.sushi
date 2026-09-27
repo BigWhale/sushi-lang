@@ -1,0 +1,16 @@
+# The function value `pick` in a `return` names the unit's own concrete
+# function, and not the imported generic of the same name (#1003).
+# EXPECT_STDOUT_EXACT: "2\n"
+use "helpers/pick_any"
+use <collections/strings>
+
+fn pick(string s) i32:
+    return Result.Ok(s.len())
+
+fn chooser() fn(string) -> i32:
+    return Result.Ok(pick)
+
+fn main() i32:
+    let fn(string) -> i32 f = chooser().realise(pick)
+    println(f("ab").realise(0))
+    return Result.Ok(0)

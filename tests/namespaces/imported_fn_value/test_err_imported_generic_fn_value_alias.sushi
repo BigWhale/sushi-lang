@@ -1,0 +1,11 @@
+# An imported generic function behind the alias of its import is not a
+# function value, as for a generic of the unit itself (#1013).
+# EXPECT_ERROR_CODES_EXACT: CE2093
+use "helpers/lib3" as l
+
+fn take(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(1)??)
+
+fn main() i32:
+    println(take(l.gen).realise(0))
+    return Result.Ok(0)
