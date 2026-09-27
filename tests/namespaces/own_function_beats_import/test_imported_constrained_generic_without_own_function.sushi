@@ -1,0 +1,15 @@
+# The unit declares no `pick`, so the bare call names the imported generic, and
+# a type that implements the constraint satisfies it (#963).
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/pick_constrained"
+
+struct Seven:
+    i32 n
+
+extend Seven with Pk:
+    fn p() i32:
+        return self.n
+
+fn main() i32:
+    println(pick(Seven(7)).realise(0))
+    return Result.Ok(0)
