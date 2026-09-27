@@ -427,6 +427,32 @@ All notable changes to Sushi Lang will be documented in this file.
   `slib-info` tool change together, and `--docs` prints a perk method's block under its
   signature, which the record could not carry before.
 
+### Fixed
+- **A `foreach` over a container iterator freezes the container's storage** (#956). A body that
+  pushed onto the list it walked (`foreach(x in l.iter()): l.push(x)`) compiled, and the loop read
+  freed memory after the push reallocated. While the loop walks `c.iter()`, `.keys()`, `.values()`
+  or `.entries()`, a change that can move or free the storage -- `push`, `insert`, `extend`,
+  `pop`, `remove`, `clear`, `truncate`, `reserve`, a rebind, a `poke` or `nom` of the container --
+  is now **CE2412**, with the loop header in a note. An in-place write (`fill`, `reverse`, an
+  indexed assignment) stays legal, as it was ruled for a plain item; the item freeze still refuses
+  it where the item views an owning element. The fact is `moves_storage` in
+  `semantics/method_effects.py`.
+
+### Testing
+- **The runner tests have one home, `tests/unit/runner/`, and a gate keeps the compiler out of every
+  other pytest test** (#959 steps 1-4). A pytest test outside that directory that parses Sushi, runs
+  the semantic analyzer, generates code or starts `sushic` fails, and a control proves the gate
+  fires. Every `EXPECT_*` directive has a red and a green runner test, and the new
+  `EXPECT_ERROR_CODES_EXACT: CE1001, CE2002` compares the exact set of codes a compilation reports.
+- **The runner tests the incremental cache again** (#988). A fixture directory with a `v2/`
+  subdirectory is compiled, then overwritten with `v2/` and compiled again with the same cache;
+  `EXPECT_REBUILT` / `EXPECT_CACHED` name the units the second build reports, and
+  `EXPECT_STDOUT_EXACT_BEFORE_REBUILD` the first binary's output. `RUN_IN_FIXTURE_DIR` starts
+  `sushic` in the fixture's own directory, `BUILD_LIB` builds a source library first, and
+  `STDLIB_MODULE` registers a Sushi-source stdlib module. Nine fixtures under `tests/cache/` pin a
+  dependency's struct shape, an enum payload, a `public use` chain, a constant, a source-library
+  edge and a stdlib-source edge.
+
 ### Changed
 - **`foreach` replaces the counter loops of the Sushi stdlib and of `slib-info`** (#949, #950),
   where the bound cannot fall below the start. A loop whose body does not read its counter stays a
