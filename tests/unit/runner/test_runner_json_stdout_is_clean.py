@@ -47,13 +47,12 @@ def test_a_directive_warning_goes_to_stderr(tmp_path, capsys, header):
         + captured.out)
 
 
-def test_an_unreadable_file_warns_on_stderr(tmp_path, capsys):
-    """The catch-all around the whole parse is the sixth writer, and the same rule."""
+def test_an_unreadable_directive_block_fails_and_keeps_stdout_clean(tmp_path, capsys):
+    """A directive block the runner cannot decode is a directive error, never stdout."""
     path = tmp_path / "test_probe.sushi"
-    path.write_bytes(b"# TEST_TYPE: runtime\n\xff\xfe not utf-8\n")
+    path.write_bytes(b"# TEST_TYPE: runtime\n# \xff\xfe not utf-8\n")
 
-    parse_test_metadata(path)
+    metadata = parse_test_metadata(path)
 
-    captured = capsys.readouterr()
-    assert "Warning" in captured.err
-    assert captured.out == ""
+    assert any("not valid UTF-8" in e for e in metadata.directive_errors)
+    assert capsys.readouterr().out == ""
