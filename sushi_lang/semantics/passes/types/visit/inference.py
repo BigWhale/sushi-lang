@@ -533,7 +533,15 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if node.enum_name in self.type_validator.enum_table.by_name:
             return self.type_validator.enum_table.by_name[node.enum_name]
 
-        return None
+        from sushi_lang.semantics.passes.types.calls.enums import (
+            declared_position_shape, untyped_constructor_instance)
+        instance = untyped_constructor_instance(
+            self.type_validator, node.enum_name, node.variant_name, node.args)
+        if instance is None:
+            return declared_position_shape(self.type_validator, node, node.enum_name,
+                                           node.variant_name, node.args)
+        node.resolved_enum_type = instance
+        return instance
 
     def visit_tryexpr(self, node: TryExpr) -> Optional[Type]:
         """Try expression (?? operator) - unwrap result-like enum to Ok type."""

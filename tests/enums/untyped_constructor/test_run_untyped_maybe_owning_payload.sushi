@@ -1,0 +1,16 @@
+# An untyped constructor with an owning payload and a nested one (#1005). The scrutinee is
+# a temporary the match owns, and it is destroyed after the match.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2\n"
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    match Maybe.Some(s.clone()):
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("none")
+    match Maybe.Some(Maybe.Some(2)):
+        Maybe.Some(inner) -> println(inner.realise(0))
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

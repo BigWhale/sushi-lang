@@ -1,0 +1,8 @@
+# The bare spelling `Maybe.None` follows the same rule as `Maybe.None()` (#1005).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+
+fn main() i32:
+    match Maybe.None:
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

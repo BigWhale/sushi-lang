@@ -1,0 +1,6 @@
+# An untyped `Result.Ok(4)` as a method receiver: nothing gives the error type (#1005).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+
+fn main() i32:
+    println(Result.Ok(4).realise(0))
+    return Result.Ok(0)

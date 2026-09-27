@@ -1,0 +1,9 @@
+# `Maybe.Some(Maybe.None())`: the inner constructor is the one fault, and the outer one
+# does not report it a second time (#1005).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+
+fn main() i32:
+    match Maybe.Some(Maybe.None()):
+        Maybe.Some(_) -> println(1)
+        Maybe.None() -> println(0)
+    return Result.Ok(0)

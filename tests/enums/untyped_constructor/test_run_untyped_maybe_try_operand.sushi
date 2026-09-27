@@ -1,0 +1,12 @@
+# An untyped generic enum constructor as the operand of `??` (#1005).
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n"
+
+fn five() i32:
+    let i32 a = Maybe.Some(5)??
+    return Result.Ok(a)
+
+fn main() i32:
+    println(five().realise(0))
+    return Result.Ok(0)
