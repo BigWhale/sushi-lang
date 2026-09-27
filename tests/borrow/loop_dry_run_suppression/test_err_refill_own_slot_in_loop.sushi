@@ -1,10 +1,10 @@
 # A refill from a slot of the array it refills, with an owning element, is CE2430.
-# Inside a loop body it is reported ONCE at 13:19: the dry-run round of the loop emits
+# Inside a loop body it is reported ONCE at 13:17: the dry-run round of the loop emits
 # nothing. The runner cannot count lines; the count rule is held by the gate that every
 # borrow diagnostic goes through the pass's one reporter
 # (tests/unit/test_borrow_emits_through_one_reporter.py).
 # EXPECT_ERROR_CODES_EXACT: CE2430
-# EXPECT_STDERR_CONTAINS: test_err_refill_own_slot_in_loop.sushi:13:19: error [CE2430]
+# EXPECT_STDERR_CONTAINS: test_err_refill_own_slot_in_loop.sushi:13:17: error [CE2430]
 
 fn main() i32:
     let string[] xs = from(["a".clone(), "b".clone()])
