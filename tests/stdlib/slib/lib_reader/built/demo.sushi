@@ -1,9 +1,2 @@
-##: A library for read_library to read. :##
-
-##:
-Gives the answer.
-
-- Returns: The answer.
-:##
 public fn answer() i32:
     return Result.Ok(42)
