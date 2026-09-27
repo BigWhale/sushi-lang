@@ -12,6 +12,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
+from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from sushi_lang.semantics.name_ladder import BareName, classify
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
@@ -33,6 +34,8 @@ class VariableInfo:
     name: str
     declared_at: Optional[Span]
     used: bool = False
+    # The `let` as written in an `expand` body, when this is one of its copies (#1019).
+    written: Optional[WrittenLet] = None
 
 
 class ScopeAnalyzer:
@@ -59,6 +62,9 @@ class ScopeAnalyzer:
         self.kept_constants: AbstractSet[str] = kept_constants or frozenset()
         self.visibility = visibility
         self.scopes: List[Dict[str, VariableInfo]] = []
+        # The copies of each written `expand`-body `let` in this body, collected until
+        # the body ends: CW1001 is about the written declaration, so it is told once.
+        self._copies: Dict[WrittenLet, List[VariableInfo]] = {}
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
@@ -105,13 +111,23 @@ class ScopeAnalyzer:
 
         current_scope = self.scopes.pop()
         for var_info in current_scope.values():
-            if not var_info.used:
-                if var_info.declared_at is None:
-                    continue
-
+            if var_info.written is not None:
+                self._copies.setdefault(var_info.written, []).append(var_info)
+            elif not var_info.used and var_info.declared_at is not None:
                 self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
+        if not self.scopes:
+            self._report_unused_copies()
 
-    def _declare_variable(self, name: str, span: Optional[Span]) -> None:
+    def _report_unused_copies(self) -> None:
+        """One CW1001 per written `expand`-body `let` that no copy reads (#1019)."""
+        for written, copies in self._copies.items():
+            if any(info.used for info in copies) or copies[0].declared_at is None:
+                continue
+            self.err.emit(er.ERR.CW1001, copies[0].declared_at, name=written.name)
+        self._copies = {}
+
+    def _declare_variable(self, name: str, span: Optional[Span],
+                          written: Optional[WrittenLet] = None) -> None:
         """Declare a variable in the current scope."""
         if not self.scopes:
             return
@@ -126,7 +142,7 @@ class ScopeAnalyzer:
                 break
 
         current_scope = self.scopes[-1]
-        current_scope[name] = VariableInfo(name=name, declared_at=span)
+        current_scope[name] = VariableInfo(name=name, declared_at=span, written=written)
 
     def _is_bound_local(self, name: str) -> bool:
         """True if `name` is currently a variable in any active scope."""
@@ -446,7 +462,8 @@ class ScopeAnalyzer:
 
     def _check_let(self, stmt: Let) -> None:
         """Check a let statement. A synthesized `Let` with no written name is never CW1001."""
-        self._declare_variable(stmt.name, stmt.loc if stmt.name_span is not None else None)
+        self._declare_variable(stmt.name, stmt.loc if stmt.name_span is not None else None,
+                               written_let(stmt))
         self._check_expression(stmt.value)
 
     def _check_rebind(self, stmt: Rebind) -> None:
