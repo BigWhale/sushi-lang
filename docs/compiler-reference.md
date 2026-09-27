@@ -220,7 +220,9 @@ Success! Wrote native binary: main
 **Notes:**
 - Single-file programs skip incremental compilation entirely
 - `--dump-ll` forces the monolithic (non-incremental) path
-- `--write-ll` is not supported in incremental mode
+- `--write-ll` and `--keep-object` have no effect in incremental mode: the compiler
+  gives the warning CW0003 and the build goes on. Add `--no-incremental` to get the
+  `.ll` file or the object file
 - The cache directory (`__sushi_cache__/`) is already in `.gitignore`
 
 ## Optimization Levels
@@ -479,6 +481,20 @@ Sushi uses structured error codes for diagnosing issues.
 - **CE3xxx**: Unit management errors
 - **CWxxxx**: Warnings
 - **RExxxx**: Runtime errors
+
+### Driver Diagnostics
+
+The driver reads the command line and the source files before the analysis starts.
+It gives these diagnostics:
+
+| Code | Text | Cause |
+|------|------|-------|
+| CE3017 | `cannot read '<path>': <reason>` | The main source or an imported unit cannot be read: the path is a directory, the file cannot be opened, or the text is not valid UTF-8 (the reason names the first bad byte and its line) |
+| CE3018 | `no source file to compile` | The command line names no `.sushi` file, and the run is not `--build-stdlib` or `--clean-cache` alone |
+| CW0002 | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
+| CW0003 | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, or `--write-ll` / `--keep-object` on the incremental build |
+
+A warning makes the compiler exit 1; an error makes it exit 2.
 
 ### Common Errors
 

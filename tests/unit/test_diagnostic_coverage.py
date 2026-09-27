@@ -1,5 +1,6 @@
 """Coverage ratchet: error/warning .sushi tests that do not assert a diagnostic code."""
 
+import sys
 from pathlib import Path
 
 
@@ -10,6 +11,11 @@ from pathlib import Path
 BASELINE = 0
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
+
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 EXCLUDED_DIRS = {"helpers", "bin"}
 # The parser only inspects the first 20 lines; match that window here.
 HEADER_LINES = 20
@@ -18,12 +24,12 @@ HEADER_LINES = 20
 def _compute_gap() -> list[str]:
     """Return error/warning test files lacking an EXPECT_ERROR_CODE directive."""
     gap_files = []
-    for f in sorted(TESTS_ROOT.rglob("test_*.sushi")):
+    for f in corpus_files(TESTS_ROOT, "test_*.sushi"):
         if any(d in EXCLUDED_DIRS for d in f.relative_to(TESTS_ROOT).parts):
             continue
         if not (f.name.startswith("test_err_") or f.name.startswith("test_warn_")):
             continue
-        header = "\n".join(f.read_text(encoding="utf-8").split("\n")[:HEADER_LINES])
+        header = "\n".join(corpus_text(f).split("\n")[:HEADER_LINES])
         if "EXPECT_ERROR_CODE" not in header:
             gap_files.append(str(f.relative_to(TESTS_ROOT)))
     return gap_files

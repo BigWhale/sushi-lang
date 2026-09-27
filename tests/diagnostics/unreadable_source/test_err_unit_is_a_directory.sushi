@@ -1,0 +1,9 @@
+# A unit path that is a directory reads CE3017 with the operating system's reason. The
+# directory holds a `.keep` file so that git keeps it.
+# EXPECT_ERROR_CODES_EXACT: CE3017
+# EXPECT_STDERR_CONTAINS: "directory_unit.sushi': Is a directory"
+
+use "directory_unit"
+
+fn main() i32:
+    return Result.Ok(0)

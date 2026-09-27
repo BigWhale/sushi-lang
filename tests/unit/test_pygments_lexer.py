@@ -24,7 +24,9 @@ LEXER_PKG = PROJECT_ROOT / "docs" / "sushi-pygments"
 GRAMMAR = PROJECT_ROOT / "sushi_lang" / "grammar.lark"
 
 sys.path.insert(0, str(LEXER_PKG))
+sys.path.insert(0, str(PROJECT_ROOT / "tests"))
 import sushi_pygments  # noqa: E402
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 
 lexer = sushi_pygments.SushiLexer()
 
@@ -123,7 +125,7 @@ def _corpus_files() -> list[Path]:
         if directory.exists():
             # A `test_err_` fixture may hold characters the language does not have;
             # that is what it asserts. Every other file is valid Sushi.
-            files += [f for f in directory.rglob("*.sushi")
+            files += [f for f in corpus_files(directory)
                       if not f.name.startswith("test_err_")]
     return sorted(files)
 
@@ -135,6 +137,6 @@ def test_the_corpus_has_no_character_the_lexer_cannot_place():
 
     offenders: dict[str, str] = {}
     for path in corpus:
-        for char in _unstyled(path.read_text(encoding="utf-8")):
+        for char in _unstyled(corpus_text(path)):
             offenders.setdefault(char, str(path.relative_to(PROJECT_ROOT)))
     assert not offenders, f"characters with no lexer rule: {offenders}"

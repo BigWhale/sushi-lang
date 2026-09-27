@@ -191,6 +191,30 @@ def header_block(lines: List[str]) -> List[str]:
     return header
 
 
+class DirectiveBlockError(ValueError):
+    """The leading comment block of a fixture holds a byte that is not UTF-8."""
+
+
+def directive_block(test_file: Path) -> List[str]:
+    """The leading comment block of a file, read as BYTES and decoded alone.
+
+    A later line may hold any byte (a fixture about a source that is not UTF-8 holds
+    one), so only the block the runner reads must be UTF-8.
+    """
+    lines = []
+    for number, raw in enumerate(Path(test_file).read_bytes().split(b'\n'), start=1):
+        stripped = raw.strip()
+        if stripped and not stripped.startswith(b'#'):
+            break
+        try:
+            lines.append(raw.decode('utf-8'))
+        except UnicodeDecodeError as e:
+            raise DirectiveBlockError(
+                f"byte 0x{raw[e.start]:02x} on line {number} of the directive block is not "
+                f"valid UTF-8") from None
+    return lines
+
+
 def _int_into(field_name: str, directive: str):
     def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
         try:
@@ -331,8 +355,7 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     metadata = TestMetadata()
 
     try:
-        lines = test_file.read_text(encoding='utf-8').split('\n')
-        for line in header_block(lines):
+        for line in directive_block(test_file):
             line = line.strip()
             if not line.startswith('#'):
                 continue
@@ -349,7 +372,8 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
 
     except Exception as e:
-        _warn(f"Failed to parse metadata from {test_file}: {e}")
+        # A fixture whose directives cannot be read FAILS; it never passes unchecked.
+        metadata.directive_errors.append(f"the directives cannot be read: {e}")
 
     _apply_category_defaults(test_file, metadata)
 
@@ -436,10 +460,63 @@ def collect_fixtures(tests_dir: Path) -> List[Path]:
     that globbed on its own could pass over a fixture a runner runs.
     """
     tests_dir = Path(tests_dir)
-    return sorted(
-        f for f in tests_dir.rglob("test_*.sushi")
-        if not (EXCLUDED_FIXTURE_DIRS & set(f.relative_to(tests_dir).parts))
-    )
+    return [f for f in corpus_files(tests_dir, "test_*.sushi")
+            if not (EXCLUDED_FIXTURE_DIRS & set(f.relative_to(tests_dir).parts))]
+
+
+def corpus_files(root: Path, pattern: str = "*.sushi") -> List[Path]:
+    """Every FILE under `root` whose name matches `pattern`, sorted.
+
+    ONE reader of the `.sushi` corpus, for the collector and for every gate that scans
+    the corpus. A directory whose name ends in `.sushi` (a fixture's unit that is a
+    directory) is not a source and is never yielded.
+    """
+    return sorted(f for f in Path(root).rglob(pattern) if f.is_file())
+
+
+# The code of a source the compiler cannot read. A fixture that declares it may keep
+# files beside it that are not UTF-8.
+UNREADABLE_SOURCE_CODE = "CE3017"
+
+
+class CorpusReadError(ValueError):
+    """A corpus file is not UTF-8 and no fixture beside it declares that it may be."""
+
+
+def declares_unreadable_sources(directory: Path) -> bool:
+    """A `test_err_` fixture in `directory` declares UNREADABLE_SOURCE_CODE in its directives."""
+    for fixture in Path(directory).glob("test_err_*.sushi"):
+        if not fixture.is_file():
+            continue
+        metadata = parse_test_metadata(fixture)
+        codes = metadata.expect_error_code + (metadata.expect_error_codes_exact or [])
+        if UNREADABLE_SOURCE_CODE in codes:
+            return True
+    return False
+
+
+def corpus_text(path: Path) -> str:
+    """The text of a corpus file, for a gate that scans the corpus.
+
+    A UTF-8 file answers its whole text. A file that is not UTF-8 is a DECLARED
+    NEGATIVE when a `test_err_` fixture in its own directory declares
+    UNREADABLE_SOURCE_CODE; it answers its leading comment block alone, the one part
+    of it that is text, and that block must be UTF-8. Any other file that is not UTF-8
+    raises CorpusReadError: the rule is structural, and no file name is listed.
+    """
+    data = Path(path).read_bytes()
+    try:
+        return data.decode('utf-8')
+    except UnicodeDecodeError as e:
+        if not declares_unreadable_sources(Path(path).parent):
+            raise CorpusReadError(
+                f"{path}: byte 0x{data[e.start]:02x} at offset {e.start} is not valid "
+                f"UTF-8, and no test_err_ fixture beside it declares "
+                f"{UNREADABLE_SOURCE_CODE}") from None
+    try:
+        return "\n".join(directive_block(path))
+    except DirectiveBlockError as e:
+        raise CorpusReadError(f"{path}: {e}") from None
 
 
 def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,

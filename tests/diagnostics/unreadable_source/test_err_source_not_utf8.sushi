@@ -1,0 +1,9 @@
+# A main source that is not UTF-8 is the user's input fault and not a compiler crash: CE3017
+# names the first byte that is not UTF-8 and its line. The byte 0xff sits in the code below
+# the directive block, so the runner still reads the directives.
+# EXPECT_ERROR_CODES_EXACT: CE3017
+# EXPECT_STDERR_CONTAINS: "not valid UTF-8"
+
+fn main() i32:
+    let string s = "ÿ"
+    return Result.Ok(0)
