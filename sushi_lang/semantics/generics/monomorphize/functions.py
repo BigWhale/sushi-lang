@@ -2,10 +2,12 @@
 from __future__ import annotations
 from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
+import dataclasses
 from collections import deque
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.types import TypePack
+from sushi_lang.semantics.hidden_names import pack_element_name
 from sushi_lang.semantics.typesys import Type
 
 from .order import functions_in_site_order
@@ -199,11 +201,16 @@ class FunctionMonomorphizer:
         # Substitute in parameter types. A pack-typed value-parameter fans out
         # into N concrete params (one per pack element, possibly zero); a normal
         # param yields exactly one concrete param identical to the legacy result.
+        substitutor = self.monomorphizer.substitutor
         concrete_params = []
+        pack_param_fanout: Dict[str, list] = {}
         for param in generic.params:
-            concrete_params.extend(
-                self.monomorphizer.substitutor.expand_pack_param(param, substitution)
-            )
+            expanded = substitutor.expand_pack_param(param, substitution)
+            if substitutor._pack_binding_for(param, substitution) is not None:
+                expanded = [dataclasses.replace(p, name=pack_element_name(param.name, i))
+                            for i, p in enumerate(expanded)]
+                pack_param_fanout[param.name] = [p.name for p in expanded]
+            concrete_params.extend(expanded)
 
         concrete_ret = self.monomorphizer.substitutor.substitute_type(
             generic.ret, substitution
@@ -227,15 +234,7 @@ class FunctionMonomorphizer:
         concrete_body = self.monomorphizer.substitutor.substitute_body(generic.body, substitution)
 
         # Unroll `expand(...)` into ordinary statements, so no later pass ever sees an
-        # Expand: each element's copy is straight-line and references args_i directly.
-        substitutor = self.monomorphizer.substitutor
-        pack_param_fanout: Dict[str, list] = {}
-        for param in generic.params:
-            pack = substitutor._pack_binding_for(param, substitution)
-            if pack is not None:
-                pack_param_fanout[param.name] = [
-                    f"{param.name}_{i}" for i in range(len(pack.types))
-                ]
+        # Expand: each element's copy is straight-line and names its element parameter.
         if pack_param_fanout:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
             concrete_body = unroll_expands(concrete_body, pack_param_fanout)
