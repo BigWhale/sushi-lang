@@ -10,7 +10,7 @@ from sushi_lang.internals.errors import message_for
 from sushi_lang.internals.report import Reporter
 
 # The diagnostic location of a failure that is nori's and names no source position.
-NORI_LOCATION = "<nori>"
+NORI_LOCATION = None
 
 RELOGIN_HELP = "run 'nori login' to authenticate again"
 

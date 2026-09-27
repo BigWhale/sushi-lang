@@ -402,6 +402,7 @@ def test_a_command_failure_is_a_coded_diagnostic_on_stderr(case, sushi_home, tmp
     assert _nori(monkeypatch, *argv) == 1
     captured = capsys.readouterr()
     assert f"error [{code}]" in captured.err, captured.err
+    assert any(line.startswith(f"error [{code}]") for line in captured.err.splitlines()), captured.err
     assert len(CODED.findall(captured.err)) == 1, captured.err
     assert "bug" not in captured.err
     assert not CODED.search(captured.out)

@@ -233,7 +233,7 @@ class DiagnosticBuilder:
 
 
 class Reporter:
-    def __init__(self, source: Optional[str] = None, filename: str = "<input>",
+    def __init__(self, source: Optional[str] = None, filename: Optional[str] = "<input>",
                  provenance: Optional[str] = None,
                  keeps_warnings: Optional[bool] = None) -> None:
         self.source = source
@@ -399,16 +399,20 @@ class Reporter:
 
     def _render_diagnostic(self, d: Diagnostic, src_lines: Optional[List[str]],
                            use_color: bool, use_unicode: bool, out: List[str]) -> None:
-        filename = self._resolve_filename(d.filename or self.filename)
-        loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
+        name = d.filename or self.filename
+        loc = ""
+        if name:
+            filename = self._resolve_filename(name)
+            loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
         message = d.message if d.message.endswith('.') else f"{d.message}."
         kind_style = C.BOLD + (C.RED if d.kind == "error" else C.YELLOW)
-        head = (f"{_paint(C.CYAN, loc, use_color)}: {_paint(kind_style, d.kind, use_color)} "
+        where = f"{_paint(C.CYAN, loc, use_color)}: " if loc else ""
+        head = (f"{where}{_paint(kind_style, d.kind, use_color)} "
                 f"[{_paint(C.DIM, d.code, use_color)}]: {message}")
 
         if d.span and d.show_source:
             lines = (d.source.splitlines() if d.source is not None
-                     else self._get_source_lines(d.filename or self.filename, src_lines))
+                     else self._get_source_lines(d.filename or self.filename or "", src_lines))
             if use_unicode:
                 tip = C.RED if d.kind == "error" else C.YELLOW
                 out.append(f"{_paint(C.GRAY, '  ╭──┤ ', use_color)}{head}")
@@ -443,11 +447,11 @@ class Reporter:
                           out: List[str]) -> None:
         located = [(s, s.span) for s in d.sub if s.span is not None]
         for i, (sub, sub_span) in enumerate(located):
-            sub_filename = self._resolve_filename(sub.filename or d.filename or self.filename)
+            sub_filename = self._resolve_filename(sub.filename or d.filename or self.filename or "")
             sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
             sub_lines = (
                 d.source.splitlines() if d.source is not None and sub.filename is None
-                else self._get_source_lines(sub.filename or d.filename or self.filename, src_lines)
+                else self._get_source_lines(sub.filename or d.filename or self.filename or "", src_lines)
             )
             kind = _paint(_sub_style(sub.kind), sub.kind, use_color)
 
