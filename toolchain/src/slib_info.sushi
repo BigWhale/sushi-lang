@@ -1422,6 +1422,8 @@ fn print_fault(string path, SlibFault e) ~:
                     print_diagnostic("CE3506", "corrupted library file '{path}': source section truncated {counts}")??
                 SlibSection.Bitcode() ->
                     print_diagnostic("CE3511", "corrupted library file '{path}': bitcode section truncated {counts}")??
+        SlibFault.TooLarge(size) ->
+            print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum 1073741824 bytes")??
         SlibFault.Decode(_) ->
             print_diagnostic("CE3512", "invalid library metadata in '{path}': the metadata does not decode as MessagePack")??
         SlibFault.Invalid(reason) ->

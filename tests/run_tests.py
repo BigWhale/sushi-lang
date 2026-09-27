@@ -457,6 +457,29 @@ def _write_bytes(path: Path, data: bytes) -> Path:
     return path
 
 
+def _half(source: Path) -> bytes:
+    raw = source.read_bytes()
+    return raw[:len(raw) // 2]
+
+
+def _meta_len(source: Path, length: int) -> bytes:
+    """A copy whose header declares a metadata section of `length` bytes."""
+    import struct
+
+    raw = source.read_bytes()
+    return raw[:44] + struct.pack("<Q", length) + raw[52:]
+
+
+def _oversize(source: Path, target: Path) -> Path:
+    """A whole library followed by a hole, one byte past the 1 GiB limit (sparse)."""
+    from sushi_lang.backend.library_format import LibraryFormat
+
+    target.write_bytes(source.read_bytes())
+    with open(target, "r+b") as f:
+        f.truncate(LibraryFormat.MAX_FILE_SIZE + 1)
+    return target
+
+
 def _write_edit(source: Path, case_dir: Path, edit) -> Path:
     return _write_bytes(case_dir / source.name, _edited_slib(source.read_bytes(), edit))
 
@@ -481,6 +504,14 @@ LIB_INFO_CASES = (
     ("no such file", "CE3515", lambda libs, d: d / "gate_lib.slib"),
     ("not a .slib name", "CE3516", lambda libs, d: _write_bytes(
         d / "gate_lib.txt", (libs / "gate_lib.slib").read_bytes())),
+    ("cut to half", "CE3511", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _half(libs / "gate_lib.slib"))),
+    ("a short file with a bad magic", "CE3508", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", b"hello!")),
+    ("a metadata length past the end", "CE3510", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _meta_len(libs / "gate_lib.slib", 1 << 40))),
+    ("a file past MAX_FILE_SIZE", "CE3513", lambda libs, d: _oversize(
+        libs / "gate_lib.slib", d / "gate_lib.slib")),
 )
 
 def _append(text: str, *keys):

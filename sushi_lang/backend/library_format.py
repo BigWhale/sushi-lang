@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import errno
+import io
+import os
 import struct
 from contextlib import contextmanager
 from pathlib import Path
-from typing import BinaryIO, Dict, Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, BinaryIO, Dict, Iterator, Optional, Tuple
 
 import msgpack
+
+if TYPE_CHECKING:
+    from sushi_lang.backend.library_errors import LibraryError
 
 
 # Header KIND values. A source library carries no bitcode, a binary one carries no
@@ -49,30 +54,68 @@ def _open_for_read(library_path: Path) -> Iterator[BinaryIO]:
         raise LibraryError("CE3515", path=str(library_path), reason=reason) from e
 
 
-def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
-    """Read exact number of bytes with truncation detection."""
+def _file_size(f: BinaryIO) -> Optional[int]:
+    """The size of the file under `f`, or None for a stream that is not a file."""
+    try:
+        return os.fstat(f.fileno()).st_size
+    except (AttributeError, OSError, io.UnsupportedOperation):
+        return None
+
+
+def _truncated(section: str, path: str, expected: int, actual: int) -> LibraryError:
+    """The truncation error of one section."""
     from sushi_lang.backend.library_errors import LibraryError
 
+    # Three literal codes, not a variable one: the registry-completeness gate
+    # (test_error_registry.py) only sees string-literal codes, and a code it cannot see
+    # is a code it cannot prove is registered.
+    if section == "metadata":
+        return LibraryError("CE3510", path=path, expected=expected, actual=actual)
+    if section == "source":
+        return LibraryError("CE3506", path=path, expected=expected, actual=actual)
+    return LibraryError("CE3511", path=path, expected=expected, actual=actual)
+
+
+def _check_fits(f: BinaryIO, size: int, path: str, section: str) -> None:
+    """Refuse a declared length that is longer than what is left of the file.
+
+    The check comes BEFORE the read, so a length field that declares more bytes than
+    the file holds is a truncation, and never an attempt to read that many bytes.
+    """
+    total = _file_size(f)
+    if total is not None and size > total - f.tell():
+        raise _truncated(section, path, size, max(total - f.tell(), 0))
+
+
+def _read_bytes(f: BinaryIO, size: int, path: str, section: str) -> bytes:
+    """Read exact number of bytes with truncation detection."""
+    _check_fits(f, size, path, section)
     data = f.read(size)
     if len(data) != size:
-        # Three literal raises, not a variable code: the registry-completeness gate
-        # (test_error_registry.py) only sees string-literal codes, and a code it
-        # cannot see is a code it cannot prove is registered.
-        if section == "metadata":
-            raise LibraryError("CE3510", path=path, expected=size, actual=len(data))
-        if section == "source":
-            raise LibraryError("CE3506", path=path, expected=size, actual=len(data))
-        raise LibraryError("CE3511", path=path, expected=size, actual=len(data))
+        raise _truncated(section, path, size, len(data))
     return data
 
 
 def _read_header_and_metadata(f: BinaryIO, path: str) -> dict:
-    """Read and validate header, return deserialized metadata."""
+    """Read and validate header, return deserialized metadata.
+
+    The magic comes first in the file, so it is checked first: a file whose first bytes
+    are not the magic is CE3508 whatever its length. Then the size limit, before any
+    section is read, then the header length.
+    """
     from sushi_lang.backend.library_errors import LibraryError
 
-    magic = _read_bytes(f, 16, path, "metadata")
-    if magic != LibraryFormat.MAGIC:
+    magic = f.read(16)
+    if magic != LibraryFormat.MAGIC[:len(magic)]:
         raise LibraryError("CE3508", path=path)
+    total = _file_size(f)
+    if total is not None and total > LibraryFormat.MAX_FILE_SIZE:
+        raise LibraryError("CE3513", path=path,
+                           size=total, max_size=LibraryFormat.MAX_FILE_SIZE)
+    if total is not None and total < LibraryFormat.FIXED_HEADER_SIZE:
+        raise _truncated("metadata", path, LibraryFormat.FIXED_HEADER_SIZE, total)
+    if len(magic) != 16:
+        raise _truncated("metadata", path, 16, len(magic))
 
     header_rest = _read_bytes(f, 28, path, "metadata")
     version = struct.unpack("<I", header_rest[0:4])[0]
@@ -94,26 +137,27 @@ def _read_source_section(f: BinaryIO, path: str) -> Dict[str, str]:
     """Read the source section that sits between the metadata and the bitcode."""
     from sushi_lang.backend.library_errors import LibraryError
 
-    blob = _skip_source_section(f, path)
-    if not blob:
+    src_len = struct.unpack("<Q", _read_bytes(f, 8, path, "source"))[0]
+    if src_len == 0:
         return {}
+    blob = _read_bytes(f, src_len, path, "source")
     try:
         return msgpack.unpackb(blob, raw=False)
     except Exception as e:
         raise LibraryError("CE3512", path=path, reason=str(e)) from e
 
 
-def _skip_source_section(f: BinaryIO, path: str) -> bytes:
-    """Consume the source section, returning its raw bytes without unpacking them.
+def _skip_source_section(f: BinaryIO, path: str) -> int:
+    """Step over the source section and give its length, without reading it.
 
-    `read()` wants the bitcode and must still step over the source to reach it. A whole
-    library's source can be large, so the bytes are checked for truncation (CE3506) and
-    handed back unparsed -- only `read_source_only` pays to unpack them.
+    `read()` wants the bitcode and `--lib-info` wants the lengths, and both must step
+    over the source to reach the bitcode field. The length is checked against the file
+    (CE3506) and the section is skipped with a seek: only `read_source_only` reads it.
     """
     src_len = struct.unpack("<Q", _read_bytes(f, 8, path, "source"))[0]
-    if src_len == 0:
-        return b""
-    return _read_bytes(f, src_len, path, "source")
+    _check_fits(f, src_len, path, "source")
+    f.seek(src_len, os.SEEK_CUR)
+    return src_len
 
 
 # The templates schema this compiler writes and reads, beside the container's own
@@ -358,8 +402,6 @@ class LibraryFormat:
     @staticmethod
     def read(library_path: Path) -> Tuple[dict, bytes]:
         """Read .slib file and return (metadata, bitcode)."""
-        from sushi_lang.backend.library_errors import LibraryError
-
         path = str(library_path)
 
         with _open_for_read(library_path) as f:
@@ -368,11 +410,6 @@ class LibraryFormat:
 
             bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
             bitcode = _read_bytes(f, bc_len, path, "bitcode")
-
-            total_size = f.tell()
-            if total_size > LibraryFormat.MAX_FILE_SIZE:
-                raise LibraryError("CE3513", path=path,
-                                   size=total_size, max_size=LibraryFormat.MAX_FILE_SIZE)
 
         return metadata, bitcode
 
@@ -396,8 +433,9 @@ class LibraryFormat:
         path = str(library_path)
         with _open_for_read(library_path) as f:
             metadata = _read_header_and_metadata(f, path)
-            source_len = len(_skip_source_section(f, path))
+            source_len = _skip_source_section(f, path)
             bc_len = struct.unpack("<Q", _read_bytes(f, 8, path, "bitcode"))[0]
+            _check_fits(f, bc_len, path, "bitcode")
             return metadata, source_len, bc_len
 
     @staticmethod
