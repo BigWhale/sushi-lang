@@ -24,10 +24,6 @@ _add(ErrorMessage("CE3002", Severity.ERROR,
 # `sine` could not be used together at all. `CE3012` below is the answer -- at the USE,
 # naming every candidate, and lifted by writing `as`.
 
-_add(ErrorMessage("CE3004", Severity.ERROR,
-    "invalid unit path '{path}': {reason}",
-    Category.UNIT, "Unit path contains invalid characters or structure."))
-
 _add(ErrorMessage("CE3005", Severity.ERROR,
     "cannot {verb} private {kind} '{name}' from unit '{current_unit}' ({kind} is defined in '{owner}')",
     Category.UNIT, "A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one gate answers for a function, a constant, a struct and an enum rather than four. A generic is no exception (#467): a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. Before that the only place that noticed was the backend, which had no template to emit. A binary library answers here too (#469): the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit."))
@@ -85,3 +81,7 @@ _add(ErrorMessage("CE3017", Severity.ERROR,
 _add(ErrorMessage("CE3018", Severity.ERROR,
     "no source file to compile",
     Category.UNIT, "`sushic` needs a `.sushi` file to compile, unless the run only rebuilds the standard library (`--build-stdlib`) or only removes the cache (`--clean-cache`). Name the source file: `sushic app.sushi`."))
+
+_add(ErrorMessage("CE3019", Severity.ERROR,
+    "cannot write '{path}': '{directory}' is not a directory",
+    Category.UNIT, "The output path named with `-o` is in a directory that does not exist, or its parent is not a directory. The binary, the object file, the `.ll` file and the `.slib` are all written beside that path, so the build is refused after the analysis and before any code is generated. The compiler does not create the directory: a mistyped path would otherwise create a directory nobody asked for. This is an input condition and not a compiler bug, which is why it is not CE0000; it used to reach the top-level guard as an internal error, or the linker as CE3008 on an incremental build. Create the directory, or fix the path."))

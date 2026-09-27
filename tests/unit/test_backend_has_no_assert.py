@@ -1,16 +1,17 @@
-"""A backend invariant is a registered internal error, never an `assert` (#880).
+"""A backend or driver invariant is a registered internal error, never an `assert` (#880, #981).
 
 `python -O` removes an `assert` statement. A broken invariant then fails later, at a less
 clear place, where a structured CE0xxx diagnostic must stop the build. So an invariant
-under `sushi_lang/backend/` is `raise_internal_error(<code>)`, and an `assert` is for
-tests only.
+under `sushi_lang/backend/` or `sushi_lang/compiler/` is `raise_internal_error(<code>)`,
+and an `assert` is for tests only.
 """
 from __future__ import annotations
 
 import ast
 from pathlib import Path
 
-BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
+PACKAGE = Path(__file__).resolve().parents[2] / "sushi_lang"
+SCANNED = (PACKAGE / "backend", PACKAGE / "compiler")
 
 
 def _asserts(path: Path) -> list[int]:
@@ -23,7 +24,8 @@ def test_the_scan_sees_an_assert():
     assert any(isinstance(node, ast.Assert) for node in ast.walk(tree))
 
 
-def test_backend_has_no_assert():
-    hits = [f"{path.relative_to(BACKEND)}:{line}"
-            for path in sorted(BACKEND.rglob("*.py")) for line in _asserts(path)]
+def test_backend_and_compiler_have_no_assert():
+    hits = [f"{path.relative_to(PACKAGE)}:{line}"
+            for root in SCANNED for path in sorted(root.rglob("*.py"))
+            for line in _asserts(path)]
     assert hits == []

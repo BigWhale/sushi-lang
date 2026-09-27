@@ -435,6 +435,27 @@ All notable changes to Sushi Lang will be documented in this file.
   are `foreach(_ in ...)` now.
 
 ### Fixed
+- **An `-o` path whose directory does not exist is CE3019** (#1006). It was the internal error
+  CE0000 (`FileNotFoundError`, `NotADirectoryError`) for a program, a `.ll` and a `.slib`, and a
+  misleading CE3008 "linking failed" for a two-unit build. One check in the one home for the output
+  path names the directory, before code generation.
+
+### Changed
+- **The pipeline takes a `BuildOptions`** (#981), a frozen record built once from the command line,
+  not the argparse namespace. `compile_multi_file` runs named steps; the output path, the `.ll`
+  write and the stdlib build each have one home; a `.slib` source section comes from the manifest
+  generator's source map, so each unit is read once; the two bare asserts in the pipeline are gone
+  and the no-assert gate covers `sushi_lang/compiler`. The IR of 227 fixtures and the bytes of every
+  helper library are unchanged.
+- **Dead code is removed, and five never-emitted codes retire** (#989): CE0074, CE1004, CE2042,
+  CE2043 and CE3004. `LibraryMetadata.version` (read from a key no writer wrote) goes. A ruff `ARG`
+  ratchet counts the unused parameters and may only go down (177 today).
+
+### Testing
+- **`OUTPUT_PATH: <relative path>`** lets a fixture name its `-o` path inside its own copy, which
+  also lets a fixture build a library (`COMPILER_FLAGS: --lib ...`); four CE3019 fixtures use it.
+
+### Fixed
 - **A library keeps every payload type of a variant** (#966). The manifest kept the first payload
   type only, so `--lib-info` printed `Blue(string)` for `Blue(string, i32)`, and a consumer of a
   binary or hybrid library that bound both payloads was refused with CE2044. The variant record

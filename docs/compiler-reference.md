@@ -491,6 +491,7 @@ It gives these diagnostics:
 |------|------|-------|
 | CE3017 | `cannot read '<path>': <reason>` | The main source or an imported unit cannot be read: the path is a directory, the file cannot be opened, or the text is not valid UTF-8 (the reason names the first bad byte and its line) |
 | CE3018 | `no source file to compile` | The command line names no `.sushi` file, and the run is not `--build-stdlib` or `--clean-cache` alone |
+| CE3019 | `cannot write '<path>': '<directory>' is not a directory` | The `-o` path is in a directory that does not exist. The compiler does not create it |
 | CW0002 | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
 | CW0003 | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, or `--write-ll` / `--keep-object` on the incremental build |
 

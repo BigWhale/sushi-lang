@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
                           TestMetadata, fixture_binary_name,
-                          select_fixtures, is_rebuild_fixture, REBUILD_DIR)
+                          select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
@@ -596,6 +596,10 @@ class TestRunner:
         refusal = self._refuse_copy_paths(metadata)
         if refusal is not None:
             return None, refusal
+        if (metadata.output_path is not None and LIB_FLAG in metadata.compiler_flags
+                and should_run_runtime_test(test_file, metadata)):
+            return None, (f"✗ Compilation: OUTPUT_PATH with {LIB_FLAG}: a library has no "
+                          f"binary to run, so the fixture is a test_err_ or a test_warn_ one")
         if not (rebuild or metadata.run_in_fixture_dir or metadata.build_libs
                 or metadata.stdlib_modules or metadata.reads_the_copy):
             return None, None
@@ -670,6 +674,18 @@ class TestRunner:
                         f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
         return None
 
+    def _binary_path(self, test_file: Path, metadata: TestMetadata) -> Path:
+        """Where the compilation writes: OUTPUT_PATH in the fixture's copy, else the run's directory.
+
+        The name in the run's directory comes from the fixture's PATH. The stem plus the
+        process id was not unique: a run is threads in ONE process, so the id is constant
+        and a shared stem was a shared binary (#604).
+        """
+        workspace = self._workspaces.get(test_file.name)
+        if metadata.output_path is not None and workspace is not None:
+            return workspace.root / metadata.output_path
+        return Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
+
     def _invoke_compiler(self, test_file: Path, metadata: TestMetadata,
                          binary_path: Path, clean: Optional[str] = None
                          ) -> subprocess.CompletedProcess:
@@ -686,10 +702,13 @@ class TestRunner:
         cwd = self.project_root
         source = str(test_file)
         cache_flags: List[str] = []
+        output = str(binary_path)
         if workspace is not None:
             source = str(workspace.source)
             if metadata.run_in_fixture_dir:
                 cwd, source = workspace.root, workspace.source.name
+                if metadata.output_path is not None:
+                    output = os.path.relpath(binary_path, workspace.root)
             if workspace.cache is not None:
                 cache_flags = ["--cache-dir", str(workspace.cache)]
             if metadata.build_libs:
@@ -698,7 +717,7 @@ class TestRunner:
         if clean == "bare":
             args = ["--clean-cache", *cache_flags]
         else:
-            args = [*(["--clean-cache"] if clean else []), source, "-o", str(binary_path),
+            args = [*(["--clean-cache"] if clean else []), source, "-o", output,
                     *metadata.compiler_flags, *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
@@ -789,10 +808,7 @@ class TestRunner:
         workspace = self._workspaces.get(test_file.name)
 
         try:
-            # The output binary, named from the fixture's PATH. The stem plus the
-            # process id was not unique: a run is threads in ONE process, so the id is
-            # constant and a shared stem was a shared binary (#604).
-            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
+            binary_path = self._binary_path(test_file, metadata)
 
             builds_libs = bool(metadata.build_libs or metadata.build_libs_at)
             if workspace is not None and builds_libs:
@@ -927,8 +943,7 @@ class TestRunner:
     def _run_runtime_test(self, test_name: str, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
         """Run runtime phase for a test."""
         try:
-            # Find the compiled binary
-            binary_path = Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
+            binary_path = self._binary_path(test_file, metadata)
 
             if not binary_path.exists():
                 return False, "✗ Runtime: Binary not found after compilation"

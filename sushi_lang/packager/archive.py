@@ -28,15 +28,15 @@ class PackageArchive:
 
             # Add libraries
             for lib in manifest.libraries:
-                _add_file(tar, base_dir, lib, f"{prefix}/lib", prefix)
+                _add_file(tar, base_dir, lib, f"{prefix}/lib")
 
             # Add executables (preserve permissions)
             for exe in manifest.executables:
-                _add_file(tar, base_dir, exe, f"{prefix}/bin", prefix, executable=True)
+                _add_file(tar, base_dir, exe, f"{prefix}/bin", executable=True)
 
             # Add data files/directories
             for data_entry in manifest.data:
-                _add_data(tar, base_dir, data_entry, f"{prefix}/data", prefix)
+                _add_data(tar, base_dir, data_entry, f"{prefix}/data")
 
         return archive_path
 
@@ -87,7 +87,6 @@ def _add_file(
     base_dir: Path,
     file_path: str,
     arc_subdir: str,
-    prefix: str,
     executable: bool = False,
 ) -> None:
     """Add a single file to the archive."""
@@ -109,7 +108,6 @@ def _add_data(
     base_dir: Path,
     data_entry: str,
     arc_subdir: str,
-    prefix: str,
 ) -> None:
     """Add a data file or directory to the archive."""
     full_path = base_dir / data_entry

@@ -35,7 +35,7 @@ REFERENCE_PATTERNS = [
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 367
+REGISTRY_SIZE = 363
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -154,20 +154,9 @@ def test_expect_error_code_directives_are_registered():
     assert not unknown, f"EXPECT_ERROR_CODE names an unregistered code: {unknown}"
 
 
-# Registered but referenced from nowhere in sushi_lang/. What remains is the "Group 3"
-# set: codes reserved for genuinely-missing checks not yet implemented (plus CE0074, an
-# unreachable internal guard). PR4 deleted the 17 speculative catch-alls that nothing
-# would ever emit. This is an EXACT-MATCH ratchet: a new code may not join the list, and
-# one that leaves must be removed from it.
-# Tier 6.0 shrank it: CE0119 is now emitted (malformed expand, three shapes) and
-# CE4008/CE4009 were deleted outright (CE4010 rejects generic perks at declaration,
-# making implementation-arity codes unreachable by construction).
-# TODO: implement each remaining check (CE1004 loop-shadow, CE2042/CE2043
-# match exhaustiveness/pattern-type, CE3004 unit-path) and drop it from here;
-# delete CE0074 if it stays unreachable.
-UNREFERENCED = {
-    "CE0074", "CE1004", "CE2042", "CE2043", "CE3004",
-}
+# Registered but referenced from nowhere in sushi_lang/. EXACT-MATCH and EMPTY since
+# #989 retired the last five: a code nothing emits is not registered.
+UNREFERENCED: set[str] = set()
 
 
 def test_unreferenced_codes_match_the_allowlist():

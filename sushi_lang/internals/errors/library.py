@@ -9,13 +9,6 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
-#
-# --- Runtime Error Codes (RExxxx) ---
-#
-# Runtime errors occur during program execution (not during compilation).
-# These are emitted as runtime checks in the generated LLVM code.
-# Convention: RE prefix indicates Runtime Error
-#
 # Library System Errors (CE35xx)
 _add(ErrorMessage("CE3500", Severity.ERROR,
     "library output path must have .slib extension: '{path}'",
