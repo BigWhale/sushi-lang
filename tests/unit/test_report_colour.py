@@ -19,6 +19,7 @@ and not the line above it.
 from __future__ import annotations
 
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+from sushi_lang.internals.report import Reporter, Span  # noqa: E402
 from sushi_lang.internals.styling import should_colour  # noqa: E402
 
 
@@ -104,20 +106,26 @@ def test_auto_falls_through_to_the_variables(monkeypatch):
 
 # ------------------------------------------------------------------ the report
 
+_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+_SOURCE = "fn main() i32:\n    let i32 x = \"text\"\n    return Result.Ok(0)\n"
 
 
+def _report() -> Reporter:
+    """An error with a located note, the shape that draws a snippet twice and a guide."""
+    r = Reporter(_SOURCE, filename="<input>")
+    r.error_with("CE2002", "type mismatch: cannot assign string to i32",
+                 Span(2, 17, 2, 23)).note_at("declared here", Span(2, 9, 2, 12))
+    return r
 
 
-
-
-
-
-
-
-
-
-
-
+@pytest.mark.parametrize("use_unicode", [True, False], ids=["unicode", "ascii"])
+def test_painting_changes_no_text_of_a_diagnostic(use_unicode):
+    """Remove the escapes from a painted report, and the plain report comes back (#997)."""
+    painted = _report().format(use_color=True, use_unicode=use_unicode)
+    plain = _report().format(use_color=False, use_unicode=use_unicode)
+    assert painted != plain
+    assert _ESCAPE.sub("", painted) == plain
 
 
 # ------------------------------------------------------------------- the banner
