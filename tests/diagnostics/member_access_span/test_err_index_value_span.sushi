@@ -1,0 +1,10 @@
+# A diagnostic about the VALUE of an index access marks the whole expression, from
+# the receiver's first column through the closing bracket (#1030).
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: test_err_index_value_span.sushi:7:18: error [CE2002]
+fn main() i32:
+    let string[] xs = from(["a"])
+    let bool b = xs[0]
+    if (b):
+        return Result.Ok(1)
+    return Result.Ok(0)

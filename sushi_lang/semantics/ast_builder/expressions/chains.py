@@ -114,10 +114,12 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 )
 
             elif call_node.data == "member_access":
-                result_expr = members.member_access_from_parts(result_expr, call_node)
+                result_expr = members.member_access_from_parts(
+                    result_expr, call_node, _span_through(t, call_node))
 
             elif call_node.data == "index":
-                result_expr = members.index_access_from_parts(result_expr, call_node, ast_builder)
+                result_expr = members.index_access_from_parts(
+                    result_expr, call_node, ast_builder, _span_through(t, call_node))
 
             elif call_node.data == "try_op":
                 result_expr = TryExpr(expr=result_expr, loc=_span_through(t, call_node))

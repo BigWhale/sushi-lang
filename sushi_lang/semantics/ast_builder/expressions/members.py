@@ -4,25 +4,28 @@ from typing import TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.ast import Expr, MemberAccess, IndexAccess
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import read_method_name, ice, expect
-from sushi_lang.internals.report import span_of
+from sushi_lang.internals.report import Span, span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
-def member_access_from_parts(receiver: Expr, member_access_node: Tree) -> MemberAccess:
-    """Parse member_access: \".\" method_name"""
+def member_access_from_parts(receiver: Expr, member_access_node: Tree,
+                             loc: Span | None) -> MemberAccess:
+    """Parse member_access: \".\" method_name. `loc` spans the chain through the member."""
     member_access_node = expect(member_access_node, "member_access")
 
     return MemberAccess(
         receiver=receiver,
         member=str(read_method_name(member_access_node)),
-        loc=span_of(member_access_node)
+        loc=loc,
+        member_span=span_of(member_access_node),
     )
 
 
-def index_access_from_parts(array_expr: Expr, index_node: Tree, ast_builder: 'ASTBuilder') -> IndexAccess:
-    """Parse index: \"[\" expr \"]\" """
+def index_access_from_parts(array_expr: Expr, index_node: Tree, ast_builder: 'ASTBuilder',
+                            loc: Span | None) -> IndexAccess:
+    """Parse index: \"[\" expr \"]\". `loc` spans the chain through the closing bracket."""
     index_node = expect(index_node, "index")
 
     index_expr_node = None
@@ -37,5 +40,6 @@ def index_access_from_parts(array_expr: Expr, index_node: Tree, ast_builder: 'AS
     return IndexAccess(
         array=array_expr,
         index=ast_builder._expr(index_expr_node),
-        loc=span_of(index_node)
+        loc=loc,
+        index_span=span_of(index_node),
     )

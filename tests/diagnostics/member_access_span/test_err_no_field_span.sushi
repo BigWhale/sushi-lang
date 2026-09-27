@@ -1,0 +1,11 @@
+# A diagnostic about the MEMBER itself marks the member, not the receiver (#1030).
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: test_err_no_field_span.sushi:9:21: error [CE2106]
+struct P:
+    i32 x
+
+fn main() i32:
+    let P p = P(1)
+    let string s = p.y
+    println(s)
+    return Result.Ok(0)
