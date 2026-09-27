@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 
 from sushi_lang.compiler.loader import (
-    get_effective_cwd,
     load_unit_recursively,
 )
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
@@ -481,17 +480,11 @@ def _compile_monolithic(compilation_order, analyzer, src_path, reporter, args,
     cg = codegen_for(analyzer, library_linker)
     driver = LLVMDriver(cg)
 
-    effective_cwd = get_effective_cwd()
     if args.out:
-        out_path = Path(args.out)
-        if not out_path.is_absolute():
-            out_path = effective_cwd / out_path
+        out_path = Path(args.out).resolve()
     else:
-        source_name = src_path.stem
-        if is_library:
-            out_path = effective_cwd / (source_name + ".slib")
-        else:
-            out_path = effective_cwd / source_name
+        suffix = ".slib" if is_library else ""
+        out_path = Path.cwd() / (src_path.stem + suffix)
 
     monomorphized_extensions = getattr(analyzer, 'monomorphized_extensions', [])
 
@@ -590,13 +583,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
         compute_lib_fingerprint,
     )
 
-    effective_cwd = get_effective_cwd()
-    if args.out:
-        out_path = Path(args.out)
-        if not out_path.is_absolute():
-            out_path = effective_cwd / out_path
-    else:
-        out_path = effective_cwd / src_path.stem
+    out_path = Path(args.out).resolve() if args.out else Path.cwd() / src_path.stem
 
     cache_dir = Path(args.cache_dir) if getattr(args, 'cache_dir', None) else None
     cache = CacheManager(src_path.parent, opt_level=args.opt, cache_dir=cache_dir)
