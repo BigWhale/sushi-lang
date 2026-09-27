@@ -699,7 +699,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def _run(session: Session) -> int:
     """Everything the compiler does. Raises; never reports."""
-    from sushi_lang.compiler.loader import check_duplicate_uses
+    from sushi_lang.compiler.loader import check_duplicate_uses, read_source
     from sushi_lang.compiler.pipeline import compile_multi_file
     from sushi_lang.internals import errors as er
     from sushi_lang.internals.parser import parse_to_ast
@@ -738,16 +738,14 @@ def _run(session: Session) -> int:
             return 0
 
     if not args.source:
-        print("error: source file required (unless using --build-stdlib)", file=sys.stderr)
+        er.emit(session.reporter, er.ERR.CE3018, None, filename="sushic")
         return 2
 
     src_path = Path(args.source).resolve()
     session.src_path = src_path
 
-    try:
-        src = src_path.read_text(encoding="utf-8")
-    except OSError as e:
-        print(f"error: cannot read {src_path}: {e}", file=sys.stderr)
+    src = read_source(src_path, session.reporter)
+    if src is None:
         return 2
 
     session.reporter.source = src
