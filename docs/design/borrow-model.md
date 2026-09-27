@@ -317,14 +317,26 @@ freed by nobody. A per-slot take needs a drop flag per payload and is a later ch
 
 `peek` and `poke` are unchanged by the ruling except in one place: a binding into a
 TEMPORARY was CE2404, because a temporary had no address. It has one now -- the match parks
-what it owns in a slot for the whole statement, which `nom` needed in any case. A read
-through a live owner still has none, and is still CE2404.
+what it owns in a slot for the whole statement, which `nom` needed in any case.
+
+**A place, ruled 2026-09-27 (#788).** Under a match that only borrows its scrutinee, a
+`peek` / `poke` binding takes the places a `let peek` / `let poke` takes: a name, or a
+member or index chain off one (`match b.s:`, `match xs[1]:`, `match c.b.s:`). The address
+exists -- the reference `let` reads it -- so "no stable address" was false for a place.
+The rules are the reference `let`'s, at the binding: the owner is the ROOT of the place
+(`walk_place`), frozen for the arm (CE2412); one `poke` binding of an owner at a time
+(CE2403) and no `peek` beside a `poke` (CE2407), where the bindings of ONE pattern are
+exempt because they point into disjoint payload slots; a `poke` through a `peek` root is
+CE2408. CE2404 stays for a borrowed scrutinee that is not a place: a get-out behind a
+`??` (`match l.get(0)??:`), for example.
 
 A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
 into read-only memory, so the pointer has nothing to point at and a write through the
 binding lands there. That is CE2400, the same answer a `poke self` call on a constant
 reads, and `semantics/constant_borrow.py` is where every position asks it (#685). A `peek`
-and a bare binding READ the payload, and reading a constant is legal.
+and a bare binding READ the payload, and reading a constant is legal -- through a place
+rooted in a constant too (`match B.s:`, `match TS[0]:`): the root decides whether a `poke`
+is allowed, never whether the place has an address.
 
 ## 10c. The third boundary: a field take
 

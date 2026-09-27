@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -27,6 +27,15 @@ if TYPE_CHECKING:
 _NOT_A_POKE_CONTAINER: frozenset[BareName] = frozenset({
     BareName.CONSTANT, BareName.STDLIB_CONSTANT, BareName.FUNCTION,
 })
+
+
+def _declared_as(scope: Dict[str, 'VariableInfo'], name: str) -> Optional['VariableInfo']:
+    """The variable of ``scope`` whose written name is ``name``, or None."""
+    found = scope.get(name)
+    if found is not None:
+        return found
+    return next((info for info in scope.values()
+                 if info.written is not None and info.written.name == name), None)
 
 
 @dataclass
@@ -65,6 +74,8 @@ class ScopeAnalyzer:
         # The copies of each written `expand`-body `let` in this body, collected until
         # the body ends: CW1001 is about the written declaration, so it is told once.
         self._copies: Dict[WrittenLet, List[VariableInfo]] = {}
+        # The written `expand`-body `let`s that CW1002 has named in this body (#1022).
+        self._shadows_told: Set[WrittenLet] = set()
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
@@ -125,21 +136,31 @@ class ScopeAnalyzer:
                 continue
             self.err.emit(er.ERR.CW1001, copies[0].declared_at, name=written.name)
         self._copies = {}
+        self._shadows_told = set()
 
     def _declare_variable(self, name: str, span: Optional[Span],
                           written: Optional[WrittenLet] = None) -> None:
-        """Declare a variable in the current scope."""
+        """Declare a variable in the current scope.
+
+        The shadow check compares WRITTEN names, and names a written `expand`-body `let`
+        once for all its copies (#1022).
+        """
         if not self.scopes:
             return
 
+        shown = written.name if written is not None else name
         for outer_scope in self.scopes[:-1]:
-            if name in outer_scope:
-                outer_var = outer_scope[name]
-                diag = self.err.emit_with(er.ERR.CW1002, span, name=name)
+            outer_var = _declared_as(outer_scope, shown)
+            if outer_var is None:
+                continue
+            if written not in self._shadows_told:
+                diag = self.err.emit_with(er.ERR.CW1002, span, name=shown)
                 if outer_var.declared_at is not None:
                     diag.note_at("first declared here", outer_var.declared_at)
                 diag.emit()
-                break
+                if written is not None:
+                    self._shadows_told.add(written)
+            break
 
         current_scope = self.scopes[-1]
         current_scope[name] = VariableInfo(name=name, declared_at=span, written=written)
@@ -437,9 +458,30 @@ class ScopeAnalyzer:
             self._pop_scope()
 
     def _check_block(self, block: Block) -> None:
-        """Check a block of statements."""
+        """Check a block of statements.
+
+        The copies of an `expand` body stand in this block after the unroll, and each
+        copy is the written body's inner scope: it gets a scope of its own (#1022).
+        """
+        copies: Tuple[int, ...] = ()
         for stmt in block.statements:
+            copies = self._enter_copies(copies, stmt.expand_copies)
             self._check_statement(stmt)
+        self._enter_copies(copies, ())
+
+    def _enter_copies(self, open_copies: Tuple[int, ...],
+                      copies: Tuple[int, ...]) -> Tuple[int, ...]:
+        """Close the copy scopes ``copies`` leaves and open the ones it enters."""
+        common = 0
+        for opened, entered in zip(open_copies, copies, strict=False):
+            if opened != entered:
+                break
+            common += 1
+        for _ in open_copies[common:]:
+            self._pop_scope()
+        for _ in copies[common:]:
+            self._push_scope()
+        return copies
 
     def _check_statement(self, stmt: Stmt) -> None:
         """Check a statement. The table below says which arm, and it is keyed on the TYPE.

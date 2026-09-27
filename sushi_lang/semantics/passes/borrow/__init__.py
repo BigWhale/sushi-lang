@@ -9,7 +9,6 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
 from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.semantics.error_reporter import PassErrorReporter
 
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
@@ -19,6 +18,7 @@ from .reads import unit_variables
 from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
+from .written_names import WrittenNameReporter
 from .methods import MUTATING_METHODS
 from .writes import READONLY_RECEIVERS
 
@@ -71,7 +71,7 @@ class BorrowChecker:
         # answers False for an UnknownType, so without this an owning struct would alias.
         self.tables = tables
         self.types = TypeQueries(tables)
-        self.err = PassErrorReporter(reporter)
+        self.err = WrittenNameReporter(reporter, lambda: self.borrow_state)
         # fn name -> the poke param indices it destroys (#168). Computed once over EVERY
         # unit by compute_destroy_effects(), so a cross-unit callee is not a blind spot.
         # Empty means "no call destroys anything", i.e. the old intra-procedural behaviour.
@@ -146,6 +146,7 @@ class BorrowChecker:
                         self_mode: Optional[str] = None) -> None:
         """Set up the state for one callable body and check it. THE entry point."""
         self.borrow_state = {}
+        self.err.enter_body()
         self.active_borrows = set()
         self._scope_binding_borrows = []
         self._loop_frames = []

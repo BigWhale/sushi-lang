@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet
 
 
 @dataclass
@@ -61,6 +62,8 @@ class BorrowState:
     # A tuple per entry, not a set: `Span` is an unfrozen dataclass and so unhashable.
     binding_borrows: list = field(default_factory=list)
     first_borrow_span: Optional[Span] = None
+    # The `let` as written in an `expand` body, when this is one of its copies (#1022).
+    written: Optional[WrittenLet] = None
 
     @property
     def is_borrowed(self) -> bool:

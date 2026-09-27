@@ -1,0 +1,25 @@
+# Locals of an `expand` body that are NOT shadows give no CW1002 (#1022): the
+# copies of one `let` in the copies of one body, two sibling `expand` bodies that
+# declare one name, and a function local that is declared after the `expand`.
+# EXPECT_STDOUT_EXACT: 1 1\n1 2\n2 1\n2 2\n3\n
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let i32 u = 1
+        println("{u} {a.display()}")
+    expand(b in args):
+        let i32 u = 2
+        println("{u} {b.display()}")
+    let i32 u = 3
+    println(u)
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)

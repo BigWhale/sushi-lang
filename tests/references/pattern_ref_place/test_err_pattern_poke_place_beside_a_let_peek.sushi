@@ -1,0 +1,20 @@
+# A `poke` pattern binding beside a live `let peek` of the same owner is CE2407 (#788).
+# EXPECT_ERROR_CODES_EXACT: CE2407
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+fn main() i32:
+    let Box b = Box(Shade.Dim(1))
+    let peek Box w = b
+    match b.s:
+        Shade.Dim(poke r) -> r := 9
+        Shade.Lit(_) -> println("lit")
+    match w.s:
+        Shade.Dim(v) -> println("{v}")
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(0)

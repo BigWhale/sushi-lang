@@ -1,0 +1,21 @@
+# A `poke` binding in an inner match into the owner an outer `poke` binding still points
+# into is CE2403 (#788); the bindings of one pattern are the only ones that share.
+# EXPECT_ERROR_CODES_EXACT: CE2403
+
+enum Two:
+    Pair(i32, i32)
+    None2
+
+struct Holder:
+    Two t
+
+fn main() i32:
+    let Holder h = Holder(Two.Pair(1, 2))
+    match h.t:
+        Two.Pair(poke a, _) ->
+            match h.t:
+                Two.Pair(poke c, _) -> c := 3
+                Two.None2 -> println("none")
+            a := 10
+        Two.None2 -> println("none")
+    return Result.Ok(0)

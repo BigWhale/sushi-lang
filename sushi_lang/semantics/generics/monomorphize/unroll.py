@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
 )
 from sushi_lang.semantics.hidden_names import expand_copy_local_name
+from sushi_lang.internals.report import Span
 
 
 _COPY_IDS = itertools.count(1)
@@ -35,6 +36,20 @@ def written_let(stmt: Let) -> Optional[WrittenLet]:
     """The written declaration of a `let` that the unroll copied, or None."""
     entry = _WRITTEN.get(id(stmt))
     if entry is None or entry[0] is not stmt:
+        return None
+    return entry[1]
+
+
+# A copy `Span` -> the span of the written `expand` body it was copied from, with the
+# same keying rule as `_WRITTEN`. Every copy of one written node shares one written
+# span, so a diagnostic about one written statement is told once (#1022).
+_WRITTEN_SPANS: Dict[int, Tuple[Span, Span]] = {}
+
+
+def written_span(span: Optional[Span]) -> Optional[Span]:
+    """The written span of a span that the unroll copied, or None."""
+    entry = _WRITTEN_SPANS.get(id(span))
+    if entry is None or entry[0] is not span:
         return None
     return entry[1]
 
@@ -125,14 +140,19 @@ def _unroll_expand(
     fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []
-    written = [(let, written_let(let) or WrittenLet(let.name))
-               for let in _lets_in(node.body, _seen=set())]
+    lets, spans = _written_nodes(node.body)
+    written = [(let, written_let(let) or WrittenLet(let.name)) for let in lets]
+    span_origins = [(span, written_span(span) or span) for span in spans]
     for elem_name in fanout:
         memo: Dict[int, object] = {}
         body_copy = copy.deepcopy(node.body, memo)
         for let, origin in written:
             let_copy = cast(Let, memo[id(let)])
             _WRITTEN[id(let_copy)] = (let_copy, origin)
+        for span, span_origin in span_origins:
+            span_copy = memo.get(id(span))
+            if isinstance(span_copy, Span):
+                _WRITTEN_SPANS[id(span_copy)] = (span_copy, span_origin)
         renamed = _rename_block_statements(
             body_copy.statements, node.var, elem_name, _seen=set()
         )
@@ -150,17 +170,29 @@ def _unroll_expand(
     return out
 
 
-def _lets_in(obj, _seen) -> List[Let]:
-    """Every `Let` in ``obj``, at every depth, in written order."""
+def _written_nodes(body: Block) -> Tuple[List[Let], List[Span]]:
+    """Every `Let` and every `Span` in ``body``, at every depth."""
+    lets: List[Let] = []
+    spans: List[Span] = []
+    _collect_written(body, set(), lets, spans)
+    return lets, spans
+
+
+def _collect_written(obj, _seen, lets: List[Let], spans: List[Span]) -> None:
     if isinstance(obj, (list, tuple)):
-        return [let for item in obj for let in _lets_in(item, _seen)]
+        for item in obj:
+            _collect_written(item, _seen, lets, spans)
+        return
     if not dataclasses.is_dataclass(obj) or _is_frozen_dataclass(obj) or id(obj) in _seen:
-        return []
+        return
     _seen.add(id(obj))
-    found = [obj] if isinstance(obj, Let) else []
+    if isinstance(obj, Span):
+        spans.append(obj)
+        return
+    if isinstance(obj, Let):
+        lets.append(obj)
     for f in dataclasses.fields(obj):
-        found.extend(_lets_in(getattr(obj, f.name), _seen))
-    return found
+        _collect_written(getattr(obj, f.name), _seen, lets, spans)
 
 
 def _rename_copy_locals(statements: List[Stmt], copy_number: int) -> List[Stmt]:

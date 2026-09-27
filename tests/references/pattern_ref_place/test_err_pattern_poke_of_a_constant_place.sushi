@@ -1,0 +1,18 @@
+# A place rooted in a constant decides only whether a `poke` is allowed: a constant is
+# read-only storage, so a `poke` binding into its field is CE2400 and nothing else (#788).
+# EXPECT_ERROR_CODES_EXACT: CE2400
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+const Box B = Box(Shade.Dim(3))
+
+fn main() i32:
+    match B.s:
+        Shade.Dim(poke r) -> r := 9
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(0)

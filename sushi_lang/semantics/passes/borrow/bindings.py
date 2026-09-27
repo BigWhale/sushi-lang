@@ -9,15 +9,13 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
     DotCall, Expr, MethodCall, Name, NomBinding, Pattern, RefBinding,
 )
-from sushi_lang.semantics.constant_borrow import (
-    READ_ONLY_MODE, has_an_address, may_be_written,
-)
+from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import expr_to_string
-from .reads import constant_sig, names_kept_storage, root_owner
+from .reads import names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState
 
@@ -74,6 +72,10 @@ class BindingScope:
         for owner, binding in self._frozen:
             release_binding_borrow(self.checker.borrow_state.get(owner), binding)
         return None
+
+    def frozen_bindings(self) -> frozenset:
+        """The names of the bindings this scope has frozen an owner for."""
+        return frozenset(binding for _owner, binding in self._frozen)
 
     def register(self, state: BorrowState) -> None:
         """Install a binding, saving whatever entry it shadows."""
@@ -208,22 +210,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
                                  receiver=place):
             return
 
-    for bound_name, bound_span in list(owner_state.binding_borrows):
-        bound = checker.borrow_state.get(bound_name)
-        if bound is None or not isinstance(bound.var_type, ReferenceType):
-            continue
-        # The same table as `acquire_borrow`: poke beside poke is CE2403, a mix is CE2407,
-        # and two `peek` bindings share.
-        if bound.var_type.is_poke():
-            code = er.ERR.CE2403 if is_poke else er.ERR.CE2407
-        elif is_poke:
-            code = er.ERR.CE2407
-        else:
-            continue
-        diag = checker.err.emit_with(code, stmt.loc, name=owner)
-        if bound_span is not None:
-            diag.note_at(f"'{bound_name}' binds it here", bound_span)
-        diag.emit()
+    if reject_a_second_writer(checker, owner, owner_state, is_poke, stmt.loc):
         return
 
     if is_poke:
@@ -234,6 +221,34 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     state.borrows_from = owner
     owner_state.binding_borrows.append((stmt.name, stmt.loc))
     checker._scope_binding_borrows[-1].append((owner, stmt.name))
+
+
+def reject_a_second_writer(checker: 'BorrowChecker', owner: str, owner_state: BorrowState,
+                           is_poke: bool, span: Optional[Span],
+                           siblings: frozenset = frozenset()) -> bool:
+    """Report a reference binding beside a live one that excludes it; True when reported.
+
+    The same table as `acquire_borrow`: `poke` beside `poke` is CE2403, a mix is CE2407,
+    and two `peek` bindings share. `siblings` are the bindings of the same pattern, which
+    point into disjoint payload slots.
+    """
+    for bound_name, bound_span in list(owner_state.binding_borrows):
+        bound = checker.borrow_state.get(bound_name)
+        if bound_name in siblings or bound is None \
+                or not isinstance(bound.var_type, ReferenceType):
+            continue
+        if bound.var_type.is_poke():
+            code = er.ERR.CE2403 if is_poke else er.ERR.CE2407
+        elif is_poke:
+            code = er.ERR.CE2407
+        else:
+            continue
+        diag = checker.err.emit_with(code, span, name=owner)
+        if bound_span is not None:
+            diag.note_at(f"'{bound_name}' binds it here", bound_span)
+        diag.emit()
+        return True
+    return False
 
 
 def _pokes_through_a_peek(state: BorrowState, owner_state: BorrowState) -> bool:
@@ -418,29 +433,30 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
 def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
                       ty: Optional[Type], marker: str, span: Optional[Span],
                       scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
-    """Bind a reference into a matched payload, rejecting a scrutinee with no storage."""
+    """Bind a reference into a matched payload, rejecting a scrutinee with no storage.
+
+    Under a borrowed match the scrutinee must be a PLACE, the places a `let peek` /
+    `let poke` takes (#788): the pointer aims into its storage, and the owner, the
+    root of the place, is frozen for the arm. A temporary the match owns is parked in
+    a slot for the whole statement (ruling R11), and an `Own(...)` pointee lives in
+    its heap cell, so neither needs a place.
+    """
     if kind is ScrutineeKind.BORROWED and scrutinee is not None \
-            and not isinstance(scrutinee, Name):
-        # The pointer aims INTO the scrutinee's storage, so the scrutinee must HAVE
-        # storage. A read through an owner has none of its own here, and the write would
-        # go nowhere. A TEMPORARY the match owns is different since ruling R11: the match
-        # parks it in a slot for the whole statement, and that slot is the storage. An
-        # `Own(...)` pointee lives in its heap cell, not in the scrutinee.
+            and not _is_a_place(scrutinee):
         scope.bind_ref(name, ty, marker, span, owner=None, declared_at=span)
-        if not _refused_as_a_constant(checker, scrutinee, marker):
-            checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
+        checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
         return
-    owner = scrutinee if isinstance(scrutinee, Name) else None
+    owner = scrutinee if kind is ScrutineeKind.BORROWED or isinstance(scrutinee, Name) \
+        else None
+    root = root_owner(owner)
+    owner_state = checker.borrow_state.get(root) if root else None
+    if owner_state is not None and reject_a_second_writer(
+            checker, root, owner_state, marker != READ_ONLY_MODE, span,
+            siblings=scope.frozen_bindings()):
+        owner = None
     scope.bind_ref(name, ty, marker, span, owner=owner, declared_at=span)
 
 
-def _refused_as_a_constant(checker: 'BorrowChecker', scrutinee: Expr, marker: str) -> bool:
-    """Does CE2400 already refuse this binding: a write into a place rooted in a constant?
-
-    The typecheck pass asks the same root the same question, so one fault reads one code.
-    """
-    root = walk_place(scrutinee, Step.MEMBER | Step.INDEX).name
-    if root is None or root.id in checker.borrow_state:
-        return False
-    sig = constant_sig(checker, root.id)
-    return has_an_address(sig) and marker != READ_ONLY_MODE and not may_be_written(sig)
+def _is_a_place(expr: Expr) -> bool:
+    """Is `expr` a name, or a member or index chain off one?"""
+    return walk_place(expr, Step.MEMBER | Step.INDEX).name is not None

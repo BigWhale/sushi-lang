@@ -1,6 +1,8 @@
 # A `let t` in the outer `expand` body and a `let t` in the inner one. The inner
 # `t` shadows the outer `t` only inside its own copy; after the inner `expand`
 # the outer `t` of the same outer copy is read again (#1018).
+# The inner `let t` shadows the outer one: one CW1002 (#1022).
+# EXPECT_ERROR_CODES_EXACT: CW1002
 # EXPECT_STDOUT_EXACT: "outer 1\ninner 1\ninner 2\nafter 1\nouter 2\ninner 1\ninner 2\nafter 2\n"
 perk Display:
     fn display() string

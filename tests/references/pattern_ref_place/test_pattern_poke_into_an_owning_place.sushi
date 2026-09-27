@@ -1,0 +1,35 @@
+# A `poke` binding into an owning payload behind a field grows the payload in place, and
+# two `poke` bindings of one pattern point into disjoint slots, so both are legal (#788).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n10 20\n"
+
+enum Slot:
+    Full(i32[])
+    Empty
+
+enum Two:
+    Pair(i32, i32)
+    None2
+
+struct Holder:
+    Slot inner
+    Two t
+
+fn main() i32:
+    let Holder h = Holder(Slot.Full(from([1, 2, 3])), Two.Pair(1, 2))
+    match h.inner:
+        Slot.Full(poke p) ->
+            p.push(9)
+        Slot.Empty -> println("empty")
+    match h.inner:
+        Slot.Full(p) -> println("{p.len()}")
+        Slot.Empty -> println("empty")
+    match h.t:
+        Two.Pair(poke a, poke b) ->
+            a := 10
+            b := 20
+        Two.None2 -> println("none")
+    match h.t:
+        Two.Pair(a, b) -> println("{a} {b}")
+        Two.None2 -> println("none")
+    return Result.Ok(0)

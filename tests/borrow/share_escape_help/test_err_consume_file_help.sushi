@@ -1,0 +1,19 @@
+# A borrowed `File` is consumed. A `File` has `share()`, so the CE2411 help offers it (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: take a second owner with `f.share()`
+
+use <io/fs>
+
+fn eat(nom File f) ~:
+    println(f.is_open())
+    return Result.Ok(~)
+
+fn go(File f) ~:
+    eat(nom f)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match go(stdout):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

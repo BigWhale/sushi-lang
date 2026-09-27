@@ -166,6 +166,20 @@ def constant_sig(checker: 'BorrowChecker', name: str):
     return checker.tables.constants.lookup(name, checker.unit_name, checker.scope)
 
 
+def namespaced_storage(checker: 'BorrowChecker', expr: Optional[Expr]):
+    """The record `alias.name` reaches in the constant table, a `const` or a `var` (#1016).
+
+    The typecheck pass stamps what the qualified name resolved to, so the record is read
+    from the declaring unit's own table and the name is not resolved again. A stdlib
+    constant has no record there, and it is a plain immediate.
+    """
+    ref = getattr(expr, "namespace_ref", None)
+    if (not isinstance(expr, MemberAccess) or ref is None
+            or ref.kind != "constant" or ref.producer != "unit"):
+        return None
+    return checker.tables.constants.declared(ref.name, ref.origin)
+
+
 def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
     """The declared type of a CONSTANT or a unit variable, for a bare name that is no local.
 

@@ -1,0 +1,19 @@
+# One `poke` binding of an owner at a time (#788): a `poke` pattern binding into `b.s`
+# while a `let poke` of `b` lives is CE2403, as a second `let poke` is.
+# EXPECT_ERROR_CODES_EXACT: CE2403
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+fn main() i32:
+    let Box b = Box(Shade.Dim(1))
+    let poke Box w = b
+    match b.s:
+        Shade.Dim(poke r) -> r := 9
+        Shade.Lit(_) -> println("lit")
+    w.s := Shade.Lit(3)
+    return Result.Ok(0)
