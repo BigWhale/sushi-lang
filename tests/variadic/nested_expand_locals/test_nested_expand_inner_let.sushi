@@ -1,0 +1,21 @@
+# A `let` in an `expand` nested in another `expand` over the same pack. Every
+# unrolled copy is its own hygiene scope, so the four inner copies each declare
+# their own `t` (#1018).
+# EXPECT_STDOUT_EXACT: "int\nint\nint\nint\n"
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        expand(b in args):
+            let string t = b.display()
+            println(t)
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)
