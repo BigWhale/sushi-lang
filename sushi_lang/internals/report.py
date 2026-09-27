@@ -463,11 +463,8 @@ class Reporter:
             out.append(_box_bar(use_color))
             label = f"{_paint(C.CYAN, sub_loc, use_color)}: {kind}: {sub.message}"
             out.append(f"{_paint(C.GRAY, '  ├──┤', use_color)} {label}")
-            self._render_snippet(sub_span, sub_lines, C.BLUE, use_color, use_unicode, out)
+            guide = self._render_snippet(sub_span, sub_lines, C.BLUE, use_color, use_unicode, out)
             if i == len(located) - 1 and not box_continues:
-                # The close guide reads the span's own end column, never the drawn line.
-                start = max(1, sub_span.col)
-                guide = _guide(start, max(start, sub_span.end_col))
                 out.append(_paint(C.GRAY, f"  ╰{'─' * guide}╯", use_color))
 
     @staticmethod
