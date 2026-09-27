@@ -1,7 +1,7 @@
 """Loop statement emission for the Sushi language compiler."""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Iterator
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
@@ -36,25 +36,9 @@ def emit_continue(codegen: 'LLVMCodegen') -> None:
     codegen.utils.after_terminator_unreachable()
 
 
-class LoopFrame:
-    """The loop body's exit actions, run on every exit path before the frame closes."""
-
-    def __init__(self) -> None:
-        """Start with no exit action."""
-        self._on_exit: list[Callable[[], None]] = []
-
-    def on_exit(self, action: Callable[[], None]) -> None:
-        """Run `action` when the body ends, also when its emission raises."""
-        self._on_exit.append(action)
-
-    def _run_exit_actions(self) -> None:
-        for action in self._on_exit:
-            action()
-
-
 @contextmanager
 def loop_frame(codegen: 'LLVMCodegen', continue_bb: 'ir.Block', break_bb: 'ir.Block',
-               back_edge: 'ir.Block') -> Iterator[LoopFrame]:
+               back_edge: 'ir.Block') -> Iterator[None]:
     """Open the frame of one loop body at the current block, and close it on exit.
 
     The loop-stack entry is the contract with `emit_break` and `emit_continue`: an early
@@ -64,11 +48,7 @@ def loop_frame(codegen: 'LLVMCodegen', continue_bb: 'ir.Block', break_bb: 'ir.Bl
     """
     codegen.loop_stack.append((continue_bb, break_bb, codegen.memory.depth + 1))
     codegen.memory.push_scope()
-    frame = LoopFrame()
-    try:
-        yield frame
-    finally:
-        frame._run_exit_actions()
+    yield
     codegen.memory.pop_scope()
     codegen.loop_stack.pop()
     if codegen.builder.block.terminator is None:
@@ -173,7 +153,6 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         register_cleanup=False)
     if iterator_type is not None:
         codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
-    codegen.variable_types[iter_name] = iterator_type
 
     codegen.builder.branch(cond_bb)
     codegen.builder.position_at_end(cond_bb)
@@ -189,7 +168,6 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     codegen.builder.position_at_end(end_bb)
     codegen.memory.pop_scope()
-    codegen.variable_types.pop(iter_name, None)
 
 
 def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Value') -> None:
@@ -249,7 +227,7 @@ def _emit_array_foreach_body(
     codegen.builder.cbranch(has_next, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)
-    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb) as frame:
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
         data_ptr_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
         data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
@@ -259,8 +237,8 @@ def _emit_array_foreach_body(
             # Reference binding (#300): store the element POINTER, not a copy, so the slot
             # has a `peek`/`poke` parameter's shape. The `ReferenceType` flips every
             # consumer at once -- `is_reference_parameter` keys on nothing else.
-            _bind_reference_until_exit(codegen, frame, node.item_name, node.item_borrow,
-                                       node.item_type, element_ptr)
+            bind_element_reference(codegen, node.item_name, node.item_borrow,
+                                   node.item_type, element_ptr)
         else:
             element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
@@ -349,7 +327,7 @@ def _emit_hashmap_foreach(
 
     codegen.builder.position_at_end(body_bb)
     with loop_frame(codegen, continue_bb=increment_bb, break_bb=end_bb,
-                    back_edge=increment_bb) as frame:
+                    back_edge=increment_bb):
         # The item binding is a read-only BORROW of the map's entry, exactly as the array
         # path is: the shallow-loaded key/value aliases the buffers the map's own
         # destructor frees, so `register_cleanup=False` below keeps the map the sole
@@ -370,7 +348,6 @@ def _emit_hashmap_foreach(
 
             codegen.memory.create_local(node.item_name, user_entry_llvm, entry_val, element_type,
                                         register_cleanup=False)
-            codegen.variable_types[node.item_name] = element_type
         else:
             element_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, entry_field_index, "element_ptr")
 
@@ -380,8 +357,8 @@ def _emit_hashmap_foreach(
                 # (`.entries()` bindings have NO address -- the user Entry is
                 # insert_value'd above -- and the typecheck pass rejects the marker there
                 # with CE2423.)
-                _bind_reference_until_exit(codegen, frame, node.item_name, node.item_borrow,
-                                           element_type, element_ptr)
+                bind_element_reference(codegen, node.item_name, node.item_borrow,
+                                       element_type, element_ptr)
             else:
                 element_value = codegen.builder.load(element_ptr, name=node.item_name)
 
@@ -494,35 +471,14 @@ def _emit_range_loop_path(
     codegen.builder.branch(cond_bb)
 
 
-_MISSING = object()
-
-
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
-                            element_type, element_ptr):
+                            element_type, element_ptr) -> None:
     """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1)."""
     from sushi_lang.semantics.param_modes import borrow_mode as read_borrow_mode
     from sushi_lang.semantics.typesys import ReferenceType
     ref_type = ReferenceType(element_type, read_borrow_mode(borrow_mode))
     codegen.memory.create_local(name, element_ptr.type, element_ptr, ref_type,
                                 register_cleanup=False)
-    previous = codegen.variable_types.get(name, _MISSING)
-    codegen.variable_types[name] = ref_type
-    return previous
-
-
-def _bind_reference_until_exit(codegen: 'LLVMCodegen', frame: LoopFrame, name: str,
-                               borrow_mode: str, element_type, element_ptr) -> None:
-    """Bind a foreach item as a reference, and end the binding when the loop body ends."""
-    previous = bind_element_reference(codegen, name, borrow_mode, element_type, element_ptr)
-    frame.on_exit(lambda: unbind_element_reference(codegen, name, previous))
-
-
-def unbind_element_reference(codegen: 'LLVMCodegen', name: str, previous) -> None:
-    """End a reference binding's `variable_types` entry at loop exit (#300)."""
-    if previous is _MISSING:
-        codegen.variable_types.pop(name, None)
-    else:
-        codegen.variable_types[name] = previous
 
 
 def _emit_block(codegen: 'LLVMCodegen', block) -> None:

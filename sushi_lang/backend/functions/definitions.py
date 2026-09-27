@@ -33,10 +33,6 @@ class FunctionDefinitions:
         helpers = self.codegen.functions.helpers
         helpers.begin_function(llvm_fn, fn)
 
-        for param in fn.params:
-            if param.ty is not None:
-                self.codegen.variable_types[param.name] = param.ty
-
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
@@ -61,10 +57,9 @@ class FunctionDefinitions:
         from sushi_lang.backend.generics.result_builder import extension_result_of
         self.codegen.current_extension_result = extension_result_of(self.codegen, ext)
 
-        # Track 'self' and parameter types in variable_types for struct member access
-        # resolution. A moded receiver (#327) registers its full ReferenceType -- the
-        # single fact `is_reference_parameter` keys on, so every deref/write consumer
-        # treats `self` as the pointer it now is.
+        # A moded receiver (#327) registers its full ReferenceType -- the single fact
+        # `is_reference_parameter` keys on, so every deref/write consumer treats `self`
+        # as the pointer it now is.
         from sushi_lang.semantics.param_modes import receiver_mode
         self_receiver_mode = receiver_mode(getattr(ext, "self_mode", None))
         # A static has no receiver to register (#542). CE0134 already refused a body
@@ -73,12 +68,6 @@ class FunctionDefinitions:
         if self_semantic is not None and self_receiver_mode.by_pointer:
             from sushi_lang.semantics.typesys import ReferenceType
             self_semantic = ReferenceType(ext.target_type, self_receiver_mode.borrow_mode)
-        if self_semantic is not None:
-            self.codegen.variable_types["self"] = self_semantic
-        for param in ext.params:
-            if param.ty is not None:
-                self.codegen.variable_types[param.name] = param.ty
-
         # Register semantic types for 'self' and params in the memory manager so
         # receiver dispatch (e.g. `self.iter()` on a List<T> receiver) can recognise
         # them. Extension bodies begin_function with fn_def=None, so begin_function

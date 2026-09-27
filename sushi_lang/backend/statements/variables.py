@@ -24,8 +24,6 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
     if stmt.ty is None:
         raise_internal_error("CE0015", message=f"let statement missing type information for '{stmt.name}'")
 
-    codegen.variable_types[stmt.name] = stmt.ty
-
     from sushi_lang.semantics.typesys import ReferenceType
     if isinstance(stmt.ty, ReferenceType):
         # `let poke T x = <place>` (#409): the slot holds a POINTER into storage the owner

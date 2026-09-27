@@ -287,11 +287,6 @@ def _emit_match_arms(
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
 
-        # Bracket `variable_types` per ARM: it is a FLAT per-function dict, so an arm's
-        # binding shadowed a same-named outer local for the rest of the function -- wrong
-        # type for a value binding, and a double deref for a reference one (#300).
-        saved_variable_types = dict(codegen.variable_types)
-
         if isinstance(arm.pattern, Pattern):
             # Only an enum match has Pattern arms, and emit_match refuses one with no type.
             if scrutinee_type is None:
@@ -312,14 +307,10 @@ def _emit_match_arms(
                                       scrutinee_expr=stmt.scrutinee,
                                       scrutinee_slot=scrutinee.slot)
 
-        try:
-            if isinstance(arm.body, Block):
-                _emit_block(codegen, arm.body)
-            else:
-                codegen.expressions.emit_expr(arm.body)
-        finally:
-            codegen.variable_types.clear()
-            codegen.variable_types.update(saved_variable_types)
+        if isinstance(arm.body, Block):
+            _emit_block(codegen, arm.body)
+        else:
+            codegen.expressions.emit_expr(arm.body)
 
         codegen.memory.pop_scope()
 
@@ -405,13 +396,11 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
                                                field_value, binding_type,
                                                register_cleanup=False)
             codegen.memory.register_owning_value(binding_item.name, binding_type, slot)
-            codegen.variable_types[binding_item.name] = binding_type
         elif isinstance(binding_item, str):
             # The binding BORROWS the enum's payload, so it is NOT registered for its own
             # RAII free -- the enum frees it, and registering both double-frees (#139).
             if binding_item != "_":
                 codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type, register_cleanup=False)
-                codegen.variable_types[binding_item] = binding_type
         elif isinstance(binding_item, PatternNode):
             _extract_nested_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
         elif isinstance(binding_item, OwnPattern):
@@ -494,7 +483,6 @@ def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_
                 ref_type = ReferenceType(element_type, borrow_mode(own_pattern.inner_borrow))
                 codegen.memory.create_local(inner_pattern, pointee_ptr.type, pointee_ptr,
                                             ref_type, register_cleanup=False)
-                codegen.variable_types[inner_pattern] = ref_type
             else:
                 codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
                                             element_type, register_cleanup=False)
