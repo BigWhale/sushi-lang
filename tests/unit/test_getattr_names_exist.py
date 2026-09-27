@@ -30,6 +30,9 @@ FOREIGN_ATTRIBUTES = {
     "expected": "a Lark parse exception",
     "char": "a Lark parse exception",
     "meta": "a Lark tree node",
+    "lineno": "a tomllib.TOMLDecodeError (Python 3.14; absent on 3.13)",
+    "colno": "a tomllib.TOMLDecodeError (Python 3.14; absent on 3.13)",
+    "msg": "a tomllib.TOMLDecodeError (Python 3.14; absent on 3.13)",
 }
 
 

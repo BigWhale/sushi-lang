@@ -1,3 +1,2 @@
-##: One. :##
 public fn one() i32:
     return Result.Ok(1)
