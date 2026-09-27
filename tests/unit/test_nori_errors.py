@@ -31,7 +31,7 @@ def _force_a_fault(monkeypatch) -> None:
 
 def test_a_bad_manifest_names_the_file_and_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "nori.toml").write_text("garbage = [\n")
+    (tmp_path / "nori.toml").write_text("garbage = \nname = \"towel\"\n")
 
     assert _nori(monkeypatch, "build") == 1
     err = capsys.readouterr().err
