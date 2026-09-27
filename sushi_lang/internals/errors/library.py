@@ -103,6 +103,14 @@ _add(ErrorMessage("CE3515", Severity.ERROR,
     "It used to be a Python traceback from the --lib-info fallback and CE0000 from a "
     "`use <lib/...>` that named a directory (#943)."))
 
+_add(ErrorMessage("CE3516", Severity.ERROR,
+    "'{path}' is not a library file: the name of a .slib file ends in .slib",
+    Category.LIBRARY,
+    "`--lib-info` reads a library, and a library file is named `<name>.slib`. Both halves "
+    "of the command refuse another name before they open the file, with this code, so a "
+    "file that happens to hold a library under another name is refused as well. It used "
+    "to be an uncoded line on stderr from each half, worded differently (#977)."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,

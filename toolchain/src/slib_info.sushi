@@ -1386,25 +1386,46 @@ fn io_cause(IoError e) string:
         _ -> return Result.Ok("input/output error")
 
 ##:
-Prints the error line for a library that the tool cannot read.
+Prints one diagnostic line to stderr, in the form of the compiler's diagnostics.
+
+The library is named on the command line, so the line starts with `<command line>`,
+as the Python fallback's line does.
+
+- Parameter code: The error code.
+- Parameter message: The message, with no full stop at the end.
+:##
+fn print_diagnostic(string code, string message) ~:
+    stderr.write("<command line>: error [{code}]: {message}.\n")
+    return Result.Ok(~)
+
+##:
+Prints the diagnostic for a library that the tool cannot read. The Python fallback
+gives the same code for the same fault.
 
 - Parameter path: The path of the library.
-- Parameter e: The error.
+- Parameter e: The fault.
 :##
-fn print_read_error(string path, SlibError e) ~:
+fn print_fault(string path, SlibFault e) ~:
     match e:
-        SlibError.Io(IoError.NotFound) ->
-            stderr.write("Error: file not found: {path}\n")
-        SlibError.Io(io) ->
-            stderr.write("Error: cannot read {path}: {io_cause(io)??}\n")
-        SlibError.BadMagic() ->
-            stderr.write("Error: {path} is not a .slib library (bad magic)\n")
-        SlibError.BadVersion(v) ->
-            stderr.write("Error: {path} has library format version {v}; the supported version is 4\n")
-        SlibError.Truncated() ->
-            stderr.write("Error: {path} is truncated\n")
-        SlibError.Decode(_) ->
-            stderr.write("Error: {path} carries metadata that does not decode\n")
+        SlibFault.Io(io) ->
+            print_diagnostic("CE3515", "cannot read library file '{path}': {io_cause(io)??}")??
+        SlibFault.BadMagic() ->
+            print_diagnostic("CE3508", "invalid library file '{path}': not a valid .slib file (bad magic)")??
+        SlibFault.BadVersion(v) ->
+            print_diagnostic("CE3509", "unsupported library format version '{v}' in '{path}' (compiler supports version 4)")??
+        SlibFault.Truncated(section, expected, actual) ->
+            let string counts = "(expected {expected} bytes, got {actual})"
+            match section:
+                SlibSection.Metadata() ->
+                    print_diagnostic("CE3510", "corrupted library file '{path}': metadata section truncated {counts}")??
+                SlibSection.Source() ->
+                    print_diagnostic("CE3506", "corrupted library file '{path}': source section truncated {counts}")??
+                SlibSection.Bitcode() ->
+                    print_diagnostic("CE3511", "corrupted library file '{path}': bitcode section truncated {counts}")??
+        SlibFault.Decode(_) ->
+            print_diagnostic("CE3512", "invalid library metadata in '{path}': the metadata does not decode as MessagePack")??
+        SlibFault.Invalid(reason) ->
+            print_diagnostic("CE3512", "invalid library metadata in '{path}': {reason}")??
     return Result.Ok(~)
 
 ##: The summary line of the command, for `--help` and for each usage error. :##
@@ -1443,17 +1464,12 @@ Reads a library and prints its report.
 - Returns: The exit code: 0 for a report, 2 for a read error.
 :##
 fn report(string path, Opts o) i32:
-    match read_metadata(path):
-        Result.Ok(meta) ->
-            match sizes(path):
-                Result.Ok(lengths) ->
-                    print_report(meta, lengths, o)??
-                    return Result.Ok(0)
-                Result.Err(e2) ->
-                    print_read_error(path, e2)??
-                    return Result.Ok(2)
+    match read_library(path):
+        Result.Ok(library) ->
+            print_report(library.metadata, library.sizes, o)??
+            return Result.Ok(0)
         Result.Err(e) ->
-            print_read_error(path, e)??
+            print_fault(path, e)??
             return Result.Ok(2)
 
 ##:
@@ -1544,7 +1560,7 @@ fn run_tool(peek string[] args) i32:
         stderr.write("{USAGE}\n")
         return Result.Ok(2)
     if (not path.ends_with(".slib")):
-        stderr.write("Error: expected .slib file, got: {path}\n")
+        print_diagnostic("CE3516", "'{path}' is not a library file: the name of a .slib file ends in .slib")??
         return Result.Ok(2)
     let Opts o = make_opts(show_docs, want_colour(colour)??)??
     return Result.Ok(report(path, o)??)
@@ -1554,6 +1570,6 @@ fn main(string[] args) i32:
         match run_tool(peek args):
             Result.Ok(r) -> return Result.Ok(r)
             Result.Err(_) ->
-                stderr.write("Error: internal: the tool stopped on an unexpected StdError\n")
+                stderr.write("<command line>: error [CE0000]: internal compiler error: the slib-info tool stopped on an unexpected StdError.\n")
                 return Result.Ok(2)
     return Result.Ok(2)

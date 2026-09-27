@@ -125,6 +125,191 @@ def _skip_source_section(f: BinaryIO, path: str) -> bytes:
 TEMPLATES_SCHEMA_VERSION = 7
 
 
+# The shape of a manifest: one row per field a reader relies on, as (record kind, key,
+# type, required). A type is `str`, `nstr` (a string or nil), `bool`, `map`, `list`,
+# `strs` (a list of strings), `@kind` (a map of that kind), `[]kind` (a list of maps of
+# that kind) or `{}kind` (a map whose every value is a map of that kind). `required` is `yes`, `no`, or the name of a
+# bool field of the same record that makes the field required when it is true. The Sushi
+# reader (`toolchain/slib.sushi`, `SLIB_MANIFEST_SCHEMA`) carries the same rows, and
+# `tests/unit/test_slib_manifest_keys_agree.py` holds the two together.
+MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
+    ("manifest", "library_name", "str", "yes"),
+    ("manifest", "library_version", "str", "yes"),
+    ("manifest", "platform", "str", "yes"),
+    ("manifest", "compiler_version", "str", "yes"),
+    ("manifest", "compiled_at", "str", "yes"),
+    ("manifest", "sushi_lib_version", "str", "yes"),
+    ("manifest", "kind", "str", "no"),
+    ("manifest", "requires_compiler", "str", "no"),
+    ("manifest", "units", "strs", "no"),
+    ("manifest", "unit_docs", "{}doc", "no"),
+    ("manifest", "reexports", "[]reexport", "no"),
+    ("manifest", "public_functions", "[]function", "no"),
+    ("manifest", "public_constants", "[]constant", "no"),
+    ("manifest", "public_variables", "[]constant", "no"),
+    ("manifest", "structs", "[]struct", "no"),
+    ("manifest", "enums", "[]enum", "no"),
+    ("manifest", "templates", "@templates", "no"),
+    ("manifest", "not_exported", "[]not_exported", "no"),
+    ("manifest", "foreign_extensions", "[]foreign_extension", "no"),
+    ("manifest", "dependencies", "strs", "no"),
+    ("templates", "generic_functions", "[]function", "no"),
+    ("templates", "generic_structs", "[]generic_type", "no"),
+    ("templates", "generic_enums", "[]generic_type", "no"),
+    ("templates", "perks", "[]perk", "no"),
+    ("templates", "perk_impls", "[]perk_impl", "no"),
+    ("templates", "generic_perk_impls", "[]perk_impl", "no"),
+    ("templates", "private_functions", "[]helper", "no"),
+    ("templates", "constants", "[]closure_constant", "no"),
+    ("templates", "private_types", "[]private_type", "no"),
+    ("function", "name", "str", "yes"),
+    ("function", "return_type", "str", "yes"),
+    ("function", "params", "[]param", "no"),
+    ("function", "type_params", "[]type_param", "no"),
+    ("function", "error_type", "str", "no"),
+    ("function", "source", "str", "no"),
+    ("function", "unit", "str", "no"),
+    ("function", "doc", "@doc", "no"),
+    ("helper", "name", "str", "yes"),
+    ("helper", "params", "[]param", "no"),
+    ("helper", "return_type", "str", "no"),
+    ("helper", "error_type", "str", "no"),
+    ("helper", "unit", "str", "no"),
+    ("helper", "link_symbol", "str", "no"),
+    ("param", "name", "str", "yes"),
+    ("param", "type", "str", "yes"),
+    ("param", "mode", "str", "no"),
+    ("type_param", "name", "str", "yes"),
+    ("type_param", "constraints", "strs", "no"),
+    ("type_param", "is_pack", "bool", "no"),
+    ("constant", "name", "str", "yes"),
+    ("constant", "type", "str", "yes"),
+    ("constant", "source", "str", "no"),
+    ("constant", "link_symbol", "str", "no"),
+    ("constant", "doc", "@doc", "no"),
+    ("closure_constant", "name", "str", "no"),
+    ("closure_constant", "source", "str", "no"),
+    ("closure_constant", "link_symbol", "str", "no"),
+    ("private_type", "name", "str", "no"),
+    ("private_type", "source", "str", "no"),
+    ("struct", "name", "str", "yes"),
+    ("struct", "fields", "[]field", "yes"),
+    ("struct", "is_generic", "bool", "no"),
+    ("struct", "type_params", "strs", "no"),
+    ("struct", "doc", "@doc", "no"),
+    ("field", "name", "str", "yes"),
+    ("field", "type", "str", "yes"),
+    ("field", "doc", "@doc", "no"),
+    ("enum", "name", "str", "yes"),
+    ("enum", "variants", "[]variant", "yes"),
+    ("enum", "is_generic", "bool", "no"),
+    ("enum", "type_params", "strs", "no"),
+    ("enum", "doc", "@doc", "no"),
+    ("variant", "name", "str", "yes"),
+    ("variant", "has_data", "bool", "no"),
+    ("variant", "data_type", "nstr", "has_data"),
+    ("variant", "doc", "@doc", "no"),
+    ("generic_type", "name", "str", "yes"),
+    ("generic_type", "source", "str", "no"),
+    ("generic_type", "type_params", "[]type_param", "no"),
+    ("generic_type", "doc", "@doc", "no"),
+    ("perk", "name", "str", "yes"),
+    ("perk", "source", "str", "no"),
+    ("perk", "methods", "[]method", "no"),
+    ("perk", "doc", "@doc", "no"),
+    ("perk_impl", "type", "str", "yes"),
+    ("perk_impl", "perk", "str", "yes"),
+    ("perk_impl", "type_args", "strs", "no"),
+    ("perk_impl", "source", "str", "no"),
+    ("perk_impl", "methods", "[]method", "no"),
+    ("perk_impl", "doc", "@doc", "no"),
+    ("method", "name", "str", "yes"),
+    ("method", "return_type", "str", "yes"),
+    ("method", "params", "[]param", "no"),
+    ("method", "self_mode", "str", "no"),
+    ("method", "error_type", "str", "no"),
+    ("method", "doc", "@doc", "no"),
+    ("doc", "summary", "str", "no"),
+    ("doc", "body", "str", "no"),
+    ("doc", "params", "map", "no"),
+    ("doc", "examples", "[]example", "no"),
+    ("doc", "returns", "str", "no"),
+    ("doc", "errors", "str", "no"),
+    ("example", "code", "str", "yes"),
+    ("example", "caption", "str", "no"),
+    ("reexport", "unit", "str", "yes"),
+    ("reexport", "path", "str", "yes"),
+    ("reexport", "kind", "str", "no"),
+    ("not_exported", "name", "str", "yes"),
+    ("not_exported", "kind", "str", "no"),
+    ("foreign_extension", "type", "str", "yes"),
+    ("foreign_extension", "method", "str", "yes"),
+)
+
+_SCALAR_TYPES = {"str": (str, "a string"), "bool": (bool, "a bool"),
+                 "map": (dict, "a map"), "list": (list, "a list")}
+
+
+def check_manifest(metadata: object, path: str) -> None:
+    """Refuse a manifest that does not have the shape `MANIFEST_SCHEMA` states (CE3512).
+
+    The container readers hand back whatever map the file holds. Every reader of a
+    manifest -- `--lib-info` and a consumer's `use <lib/...>` -- asks this first, so a
+    field a reader subscripts is there and has its type.
+    """
+    from sushi_lang.backend.library_errors import LibraryError
+
+    fault = (_record_fault(metadata, "manifest", "") if isinstance(metadata, dict)
+             else "the metadata is not a map")
+    if fault is not None:
+        raise LibraryError("CE3512", path=path, reason=fault)
+
+
+def _record_fault(record: dict, kind: str, where: str) -> Optional[str]:
+    """The first field of `record` that breaks a row of `kind`, as a reason, or None."""
+    for row_kind, key, spec, required in MANIFEST_SCHEMA:
+        if row_kind != kind:
+            continue
+        name = f"{where}.{key}" if where else key
+        if key not in record:
+            if required == "yes" or (required != "no" and record.get(required) is True):
+                return f"missing required field '{name}'"
+            continue
+        fault = _value_fault(record[key], spec, name)
+        if fault is not None:
+            return fault
+    return None
+
+
+def _value_fault(value: object, spec: str, name: str) -> Optional[str]:
+    """Why `value` is not of the type `spec` names, as a reason, or None."""
+    if spec == "nstr":
+        return _value_fault(value, "str", name) if value is not None else None
+    if spec in _SCALAR_TYPES:
+        py_type, words = _SCALAR_TYPES[spec]
+        return None if isinstance(value, py_type) else f"field '{name}' is not {words}"
+    if spec == "strs" or spec.startswith("[]"):
+        if not isinstance(value, list):
+            return f"field '{name}' is not a list"
+        for index, item in enumerate(value):
+            fault = _value_fault(item, "str" if spec == "strs" else "@" + spec[2:],
+                                 f"{name}[{index}]")
+            if fault is not None:
+                return fault
+        return None
+    if not isinstance(value, dict):
+        return f"field '{name}' is not a map"
+    if spec.startswith("@"):
+        return _record_fault(value, spec[1:], name)
+    for key, item in value.items():
+        if not isinstance(key, str):
+            return f"field '{name}' has a key that is not a string"
+        fault = _value_fault(item, "@" + spec[2:], f"{name}.{key}")
+        if fault is not None:
+            return fault
+    return None
+
+
 class LibraryFormat:
     """Binary format reader/writer for .slib files."""
 

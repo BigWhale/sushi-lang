@@ -6,6 +6,10 @@ map of a version-4 `.slib` file. It agrees with the Python reader
 `LibraryFormat.read_metadata_only`. It reads the length of a payload section, and never
 the payload itself.
 
+`read_library` is the reader of `slib-info`. It also makes sure that the metadata map
+has the shape of a manifest (`check_manifest`), and its `SlibFault` names each fault as
+precisely as the Python reader of `--lib-info` does.
+
 The four spare header fields are read and not validated. Metadata must be less than
 2 GiB: a larger length casts to a negative count, the read gives no bytes, and the
 decode of the empty blob fails.
@@ -14,6 +18,7 @@ decode of the empty blob fails.
 use <io/fs>
 public use <io/error>
 use <encoding/msgpack>
+use <collections/strings>
 
 ##:
 Why a .slib file could not be read.
@@ -172,3 +177,414 @@ Reads the length of the bitcode section alone.
 public fn bitcode_size(string path) u64 | SlibError:
     let SlibSizes both = sizes(path)??
     return Result.Ok(both.bitcode)
+
+##:
+The shape of a manifest, one row per field that a reader uses.
+
+A row is four words: the record kind, the key, the type, and whether the field is
+required. The Python reader has the same rows in `MANIFEST_SCHEMA`
+(`sushi_lang/backend/library_format.py`), and the two tables must agree.
+:##
+const string[111] SLIB_MANIFEST_SCHEMA = [
+    'manifest library_name str yes',
+    'manifest library_version str yes',
+    'manifest platform str yes',
+    'manifest compiler_version str yes',
+    'manifest compiled_at str yes',
+    'manifest sushi_lib_version str yes',
+    'manifest kind str no',
+    'manifest requires_compiler str no',
+    'manifest units strs no',
+    'manifest unit_docs {}doc no',
+    'manifest reexports []reexport no',
+    'manifest public_functions []function no',
+    'manifest public_constants []constant no',
+    'manifest public_variables []constant no',
+    'manifest structs []struct no',
+    'manifest enums []enum no',
+    'manifest templates @templates no',
+    'manifest not_exported []not_exported no',
+    'manifest foreign_extensions []foreign_extension no',
+    'manifest dependencies strs no',
+    'templates generic_functions []function no',
+    'templates generic_structs []generic_type no',
+    'templates generic_enums []generic_type no',
+    'templates perks []perk no',
+    'templates perk_impls []perk_impl no',
+    'templates generic_perk_impls []perk_impl no',
+    'templates private_functions []helper no',
+    'templates constants []closure_constant no',
+    'templates private_types []private_type no',
+    'function name str yes',
+    'function return_type str yes',
+    'function params []param no',
+    'function type_params []type_param no',
+    'function error_type str no',
+    'function source str no',
+    'function unit str no',
+    'function doc @doc no',
+    'helper name str yes',
+    'helper params []param no',
+    'helper return_type str no',
+    'helper error_type str no',
+    'helper unit str no',
+    'helper link_symbol str no',
+    'param name str yes',
+    'param type str yes',
+    'param mode str no',
+    'type_param name str yes',
+    'type_param constraints strs no',
+    'type_param is_pack bool no',
+    'constant name str yes',
+    'constant type str yes',
+    'constant source str no',
+    'constant link_symbol str no',
+    'constant doc @doc no',
+    'closure_constant name str no',
+    'closure_constant source str no',
+    'closure_constant link_symbol str no',
+    'private_type name str no',
+    'private_type source str no',
+    'struct name str yes',
+    'struct fields []field yes',
+    'struct is_generic bool no',
+    'struct type_params strs no',
+    'struct doc @doc no',
+    'field name str yes',
+    'field type str yes',
+    'field doc @doc no',
+    'enum name str yes',
+    'enum variants []variant yes',
+    'enum is_generic bool no',
+    'enum type_params strs no',
+    'enum doc @doc no',
+    'variant name str yes',
+    'variant has_data bool no',
+    'variant data_type nstr has_data',
+    'variant doc @doc no',
+    'generic_type name str yes',
+    'generic_type source str no',
+    'generic_type type_params []type_param no',
+    'generic_type doc @doc no',
+    'perk name str yes',
+    'perk source str no',
+    'perk methods []method no',
+    'perk doc @doc no',
+    'perk_impl type str yes',
+    'perk_impl perk str yes',
+    'perk_impl type_args strs no',
+    'perk_impl source str no',
+    'perk_impl methods []method no',
+    'perk_impl doc @doc no',
+    'method name str yes',
+    'method return_type str yes',
+    'method params []param no',
+    'method self_mode str no',
+    'method error_type str no',
+    'method doc @doc no',
+    'doc summary str no',
+    'doc body str no',
+    'doc params map no',
+    'doc examples []example no',
+    'doc returns str no',
+    'doc errors str no',
+    'example code str yes',
+    'example caption str no',
+    'reexport unit str yes',
+    'reexport path str yes',
+    'reexport kind str no',
+    'not_exported name str yes',
+    'not_exported kind str no',
+    'foreign_extension type str yes',
+    'foreign_extension method str yes'
+]
+
+##:
+Why `read_library` could not read a library.
+
+It gives the cause in more detail than `SlibError`: a truncation names the section
+and the byte counts, and a manifest with the wrong shape names the field.
+:##
+public enum SlibFault:
+    ##: The open or a read failed. The `IoError` names the cause. :##
+    Io(IoError)
+    ##: The 16 magic bytes at the start of the file do not match. :##
+    BadMagic()
+    ##: The header gives a container version that is not 4. :##
+    BadVersion(u32)
+    ##: A section ends too early: the section, the bytes it needs, and the bytes that the file has. :##
+    Truncated(SlibSection, u64, u64)
+    ##: The metadata blob is not valid MessagePack. :##
+    Decode(MpError)
+    ##: The metadata map does not have the shape of a manifest. The string gives the reason. :##
+    Invalid(string)
+
+##: A section of a `.slib` file. :##
+public enum SlibSection:
+    ##: The header and the metadata blob. :##
+    Metadata()
+    ##: The source section and its length field. :##
+    Source()
+    ##: The bitcode section and its length field. :##
+    Bitcode()
+
+##: A library that `read_library` read: its manifest and the lengths of its payload sections. :##
+public struct SlibLibrary:
+    ##: The metadata map. It has the shape of a manifest. :##
+    MsgValue metadata
+    ##: The lengths of the two payload sections. :##
+    SlibSizes sizes
+
+##:
+Gives the word at a position in a row of words that one space divides.
+
+- Parameter row: The row.
+- Parameter n: The position of the word, from 0.
+- Returns: The word, or `""` when the row has fewer words.
+- Errors: This function does not fail.
+:##
+fn schema_word(string row, i32 n) string | SlibFault:
+    let string rest = row.clone()
+    let i32 i = 0
+    while (i < n):
+        match rest.find(" "):
+            Maybe.Some(at) ->
+                rest := rest.s(at + 1, rest.len())
+            Maybe.None() ->
+                return Result.Ok("")
+        i := i + 1
+    match rest.find(" "):
+        Maybe.Some(at) ->
+            return Result.Ok(rest.s(0, at))
+        Maybe.None() ->
+            return Result.Ok(rest)
+
+##:
+Gives the schema word for the kind of a value.
+
+- Parameter v: The value.
+- Returns: `str`, `bool`, `map`, `list`, `nil`, or `other`.
+- Errors: This function does not fail.
+:##
+fn value_kind(MsgValue v) string | SlibFault:
+    match v:
+        MsgValue.Str(_) -> return Result.Ok("str")
+        MsgValue.Bool(_) -> return Result.Ok("bool")
+        MsgValue.Map(_, _) -> return Result.Ok("map")
+        MsgValue.Arr(_) -> return Result.Ok("list")
+        MsgValue.Nil() -> return Result.Ok("nil")
+        _ -> return Result.Ok("other")
+
+##:
+Gives the words for a scalar schema type, as a reason says them.
+
+- Parameter spec: The schema type: `str`, `bool`, `map` or `list`.
+- Returns: The words.
+- Errors: This function does not fail.
+:##
+fn type_words(string spec) string | SlibFault:
+    if (spec == "str"):
+        return Result.Ok("a string")
+    if (spec == "bool"):
+        return Result.Ok("a bool")
+    if (spec == "map"):
+        return Result.Ok("a map")
+    return Result.Ok("a list")
+
+##:
+Finds the first field of a record that does not agree with the rows of its kind.
+
+- Parameter rec: The record. It is a map.
+- Parameter kind: The record kind of the rows to use.
+- Parameter where: The path of the record, or `""` for the top of the manifest.
+- Returns: The reason, or `Maybe.None` when the record agrees.
+- Errors: This function does not fail.
+:##
+fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibFault:
+    foreach(r in 0..SLIB_MANIFEST_SCHEMA.len()):
+        let string row_kind = schema_word(SLIB_MANIFEST_SCHEMA[r], 0)??
+        if (row_kind == kind):
+            let string key = schema_word(SLIB_MANIFEST_SCHEMA[r], 1)??
+            let string spec = schema_word(SLIB_MANIFEST_SCHEMA[r], 2)??
+            let string req = schema_word(SLIB_MANIFEST_SCHEMA[r], 3)??
+            let string name = key.clone()
+            if (where != ""):
+                name := "{where}.{key}"
+            match map_index(rec, key).realise(Maybe.None()):
+                Maybe.Some(at) ->
+                    match rec:
+                        MsgValue.Map(_, vals) ->
+                            let Maybe@(string) fault = value_fault(vals[at], spec, name)??
+                            if (fault.is_some()):
+                                return Result.Ok(fault)
+                        _ ->
+                            return Result.Ok(Maybe.Some("field '{name}' is not a map"))
+                Maybe.None() ->
+                    if (req == "yes"):
+                        return Result.Ok(Maybe.Some("missing required field '{name}'"))
+                    if (req != "no" and map_get_bool(rec, req).realise(Maybe.None()).realise(false)):
+                        return Result.Ok(Maybe.Some("missing required field '{name}'"))
+    return Result.Ok(Maybe.None())
+
+##:
+Finds why a value does not have a schema type.
+
+- Parameter v: The value.
+- Parameter spec: The schema type.
+- Parameter name: The path of the value.
+- Returns: The reason, or `Maybe.None` when the value has the type.
+- Errors: This function does not fail.
+:##
+fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibFault:
+    let string kind = value_kind(v)??
+    if (spec == "nstr"):
+        if (kind == "nil" or kind == "str"):
+            return Result.Ok(Maybe.None())
+        return Result.Ok(Maybe.Some("field '{name}' is not a string"))
+    if (spec == "str" or spec == "bool" or spec == "map" or spec == "list"):
+        if (kind == spec):
+            return Result.Ok(Maybe.None())
+        return Result.Ok(Maybe.Some("field '{name}' is not {type_words(spec)??}"))
+    if (spec == "strs" or spec.starts_with("[]")):
+        let string item_spec = "str"
+        if (spec != "strs"):
+            item_spec := "@{spec.s(2, spec.len())}"
+        match v:
+            MsgValue.Arr(items) ->
+                foreach(i in 0..items.len()):
+                    let Maybe@(string) fault = value_fault(items[i], item_spec, "{name}[{i}]")??
+                    if (fault.is_some()):
+                        return Result.Ok(fault)
+                return Result.Ok(Maybe.None())
+            _ ->
+                return Result.Ok(Maybe.Some("field '{name}' is not a list"))
+    if (kind != "map"):
+        return Result.Ok(Maybe.Some("field '{name}' is not a map"))
+    if (spec.starts_with("@")):
+        return Result.Ok(record_fault(v, spec.s(1, spec.len()), name)??)
+    let string value_spec = "@{spec.s(2, spec.len())}"
+    match v:
+        MsgValue.Map(keys, vals) ->
+            foreach(i in 0..keys.len()):
+                match keys[i]:
+                    MsgValue.Str(k) ->
+                        let Maybe@(string) fault = value_fault(vals[i], value_spec, "{name}.{k}")??
+                        if (fault.is_some()):
+                            return Result.Ok(fault)
+                    _ ->
+                        return Result.Ok(Maybe.Some("field '{name}' has a key that is not a string"))
+        _ ->
+            return Result.Ok(Maybe.Some("field '{name}' is not a map"))
+    return Result.Ok(Maybe.None())
+
+##:
+Makes sure that a metadata map has the shape of a manifest.
+
+The Python reader makes the same check with the same rows, and gives the same reason.
+
+- Parameter meta: The metadata map.
+- Errors: `SlibFault.Invalid` with the reason for the first field that is wrong.
+:##
+public fn check_manifest(MsgValue meta) ~ | SlibFault:
+    let string kind = value_kind(meta)??
+    if (kind != "map"):
+        return Result.Err(SlibFault.Invalid("the metadata is not a map"))
+    match record_fault(meta, "manifest", "")??:
+        Maybe.Some(reason) ->
+            return Result.Err(SlibFault.Invalid(reason.clone()))
+        Maybe.None() ->
+            return Result.Ok(~)
+
+##:
+Opens a file to read bytes, and puts an `IoError` in the `SlibFault` channel.
+
+- Parameter path: The path of the file.
+- Returns: The open file.
+- Errors: `SlibFault.Io` when the open fails.
+:##
+fn fault_open(string path) File | SlibFault:
+    match open(path, FileMode.ReadB()):
+        Result.Ok(nom f) -> return Result.Ok(f)
+        Result.Err(e) -> return Result.Err(SlibFault.Io(e))
+
+##:
+Reads the bytes of one part of a section.
+
+- Parameter f: The file to read.
+- Parameter count: The number of bytes that the section needs.
+- Parameter section: The section that the bytes are in.
+- Returns: The bytes.
+- Errors: `SlibFault.Io` when the read fails, `SlibFault.Truncated` when the file ends
+  before `count` bytes.
+:##
+fn read_part(poke File f, u64 count, SlibSection section) u8[] | SlibFault:
+    match f.read_bytes(count as i32):
+        Result.Ok(nom bytes) ->
+            if ((bytes.len() as u64) < count):
+                return Result.Err(SlibFault.Truncated(section, count, bytes.len() as u64))
+            return Result.Ok(bytes)
+        Result.Err(e) ->
+            return Result.Err(SlibFault.Io(e))
+
+##:
+Reads the bytes of one part of a section, and drops them.
+
+- Parameter f: The file to read.
+- Parameter count: The number of bytes that the section needs.
+- Parameter section: The section that the bytes are in.
+- Errors: As for `read_part`.
+:##
+fn skip_part(poke File f, u64 count, SlibSection section) ~ | SlibFault:
+    let u8[] bytes = read_part(poke f, count, section)??
+    if (bytes.len() < 0):
+        return Result.Err(SlibFault.Truncated(section, count, 0))
+    return Result.Ok(~)
+
+##:
+Tells if the bytes agree with the start of the magic.
+
+- Parameter bytes: The first bytes of the file. There can be fewer than 16.
+- Returns: True when each byte agrees with the magic at the same position.
+- Errors: This function does not fail.
+:##
+fn magic_matches(peek u8[] bytes) bool | SlibFault:
+    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    foreach(i in 0..bytes.len()):
+        if (i < 16 and bytes[i] != magic[i]):
+            return Result.Ok(false)
+    return Result.Ok(true)
+
+##:
+Reads a whole library: its manifest, and the lengths of its payload sections.
+
+The reader makes the same checks as the Python reader of `--lib-info`, in the same
+order, so both halves of the command report the same fault for a damaged file. The
+manifest must have the shape of `SLIB_MANIFEST_SCHEMA`.
+
+- Parameter path: The path of the library.
+- Returns: The manifest and the section lengths.
+- Errors: A `SlibFault` that names the fault.
+:##
+public fn read_library(string path) SlibLibrary | SlibFault:
+    let File f = fault_open(path)??
+    let u8[] magic = read_part(poke f, 16, SlibSection.Metadata())??
+    if (not magic_matches(peek magic)??):
+        return Result.Err(SlibFault.BadMagic())
+    let u8[] rest = read_part(poke f, 28, SlibSection.Metadata())??
+    let u64 version = slib_le_uint(peek rest, 0, 4).realise(0)
+    if (version != 4):
+        return Result.Err(SlibFault.BadVersion(version as u32))
+    let u8[] meta_field = read_part(poke f, 8, SlibSection.Metadata())??
+    let u64 mlen = slib_le_uint(peek meta_field, 0, 8).realise(0)
+    let u8[] blob = read_part(poke f, mlen, SlibSection.Metadata())??
+    match decode(blob):
+        Result.Ok(nom meta) ->
+            let u8[] src_field = read_part(poke f, 8, SlibSection.Source())??
+            let u64 slen = slib_le_uint(peek src_field, 0, 8).realise(0)
+            skip_part(poke f, slen, SlibSection.Source())??
+            let u8[] bc_field = read_part(poke f, 8, SlibSection.Bitcode())??
+            let u64 bclen = slib_le_uint(peek bc_field, 0, 8).realise(0)
+            check_manifest(meta)??
+            return Result.Ok(SlibLibrary(meta, SlibSizes(slen, bclen)))
+        Result.Err(e) ->
+            return Result.Err(SlibFault.Decode(e))

@@ -406,24 +406,15 @@ def _print_methods(owner: dict, records: '_Records', opts: '_Report') -> None:
 
 def print_library_info(library_path: Path, show_docs: bool = False,
                        color: str = "auto") -> int:
-    """Print formatted metadata from a .slib library file."""
+    """Print formatted metadata from a .slib library file. A fault raises its code."""
     opts = _Report(show_docs, should_colour(sys.stdout, color))
-    from sushi_lang.backend.library_format import LibraryFormat
+    from sushi_lang.backend.library_format import LibraryFormat, check_manifest
     from sushi_lang.backend.library_errors import LibraryError
 
-    if not library_path.exists():
-        print(f"Error: file not found: {library_path}", file=sys.stderr)
-        return 2
-
-    if not library_path.suffix == '.slib':
-        print(f"Error: expected .slib file, got: {library_path}", file=sys.stderr)
-        return 2
-
-    try:
-        metadata, source_size, bitcode_size = LibraryFormat.read_section_sizes(library_path)
-    except LibraryError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 2
+    if library_path.suffix != '.slib':
+        raise LibraryError("CE3516", path=str(library_path))
+    metadata, source_size, bitcode_size = LibraryFormat.read_section_sizes(library_path)
+    check_manifest(metadata, str(library_path))
 
     # A field the kind makes meaningless is not printed: a source library runs
     # everywhere, so it has no platform, and it carries no bitcode to measure.
@@ -857,14 +848,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         return 0
 
-    if args.lib_info:
-        return library_info_command(Path(args.lib_info), args.docs, args.color)
-
     session = Session(args=args)
-    _validate_args(args, session.reporter)
+    if args.lib_info:
+        # The library is named on the command line, and every diagnostic names its path.
+        session.reporter.filename = COMMAND_LINE
+    else:
+        _validate_args(args, session.reporter)
 
     try:
-        rc = _run(session)
+        if args.lib_info:
+            rc = library_info_command(Path(args.lib_info), args.docs, args.color)
+        else:
+            rc = _run(session)
     except KeyboardInterrupt:
         return 130
     except SushiError as exc:
@@ -874,6 +869,9 @@ def main(argv: list[str] | None = None) -> int:
         session.crash = exc
         rc = _report(session, _as_ice(exc))
 
+    if args.lib_info and session.crash is None:
+        # The report is the whole output: no diagnostic, and no blank line after it.
+        return rc
     _flush(session)
     return rc
 
