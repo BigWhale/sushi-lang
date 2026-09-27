@@ -1,0 +1,28 @@
+# A lint on a binder of an `expand` body is told once per WRITTEN binder, decided by
+# the identity of the written node: the `foreach` item `k` shadows the outer `k`
+# (CW1002), a `match` binding `k` shadows it too (CW1002), and the lambda parameter
+# `unused` is never read (CW1001). The reporter also drops an identical repeat inside
+# an instance; a probe with that drop turned off measured one diagnostic per binder.
+# EXPECT_ERROR_CODES_EXACT: CW1001, CW1002
+# EXPECT_STDERR_CONTAINS: :15:17: warning [CW1002]: declared variable 'k' already exists in an outer scope.
+# EXPECT_STDERR_CONTAINS: :18:13: warning [CW1002]: declared variable 'k' already exists in an outer scope.
+# EXPECT_STDERR_CONTAINS: :20:37: warning [CW1001]: unused variable 'unused'.
+
+fn f@(...Ts)(...Ts args) ~:
+    let i32 k = 1
+    let i32[] xs = from([k, 2])
+    expand(a in args):
+        foreach(k in xs.iter()):
+            println(k)
+        match Maybe.Some(3):
+            Maybe.Some(k) -> println(k)
+            Maybe.None -> println("none")
+        let fn(i32) -> i32 g = |i32 unused| 3
+        println(g(1)??)
+    return Result.Ok(~)
+
+fn main() i32:
+    match f("x", "y"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

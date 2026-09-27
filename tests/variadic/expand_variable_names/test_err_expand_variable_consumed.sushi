@@ -1,0 +1,23 @@
+# A diagnostic about an `expand` loop variable names the variable as it is written,
+# and its help offers a spelling the user can write. It is reported once per written
+# fault, decided by the identity of the written node: the reporter also drops an
+# identical repeat inside an instance, so the count is proved with that drop turned
+# off, and here the fixture holds the written name.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'a'
+# EXPECT_STDERR_CONTAINS: `a.clone()`
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn f@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        eat(nom a)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match f("x", "y"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

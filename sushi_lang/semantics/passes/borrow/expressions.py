@@ -122,6 +122,7 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
 
 def _check_name(checker: 'BorrowChecker', expr: Name) -> None:
     """A bare name: report a use after a move, after a destroy, or after an invalidation."""
+    checker.err.meet(expr)
     state = checker.borrow_state.get(expr.id)
     if state is None:
         return
