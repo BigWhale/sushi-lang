@@ -1,0 +1,13 @@
+# A change of the container on a path that ends in `break` never reaches the loop's next
+# round, so the iterator does not read the changed storage (#993).
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    foreach(x in a.iter()):
+        if (x == 1):
+            a.push(5)
+            break
+    println(a.len())
+    return Result.Ok(0)

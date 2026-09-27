@@ -1,0 +1,14 @@
+# A change on the `break` path does not hide a change on the path that reaches the next
+# round; the second one is CE2412 (#993).
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: 12:9: error [CE2412]
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    foreach(x in a.iter()):
+        if (x == 1):
+            a.push(5)
+            break
+        a.push(6)
+    println(a.len())
+    return Result.Ok(0)

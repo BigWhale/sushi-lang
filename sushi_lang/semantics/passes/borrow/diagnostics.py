@@ -122,12 +122,16 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
         state.invalidated_at = None
 
 
-def emit_change_under_iterator(checker: 'BorrowChecker', iterator: BorrowState,
+def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                iterable: Expr, header: Optional[Span]) -> None:
-    """Report CE2412 at a change of the container a `foreach` still walks (#956)."""
-    owner, what = iterator.invalidated_by
+    """Report CE2412 at a change of the container a `foreach` still walks (#956).
+
+    `change` is the span of the change and its cause, as `FlowFacts.invalidation_of`
+    answers them.
+    """
+    span, (owner, what) = change
     text = expr_to_string(iterable)
-    diag = checker.err.emit_with(er.ERR.CE2412, iterator.invalidated_at,
+    diag = checker.err.emit_with(er.ERR.CE2412, span,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
