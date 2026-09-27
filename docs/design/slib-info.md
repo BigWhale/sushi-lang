@@ -3,7 +3,7 @@
 The `slib-info` tool prints the metadata report of a `.slib` library. Its source is
 `toolchain/src/slib_info.sushi`, and `./toolchain/build.py` builds it into `toolchain/bin/`.
 `sushic --lib-info` runs the built tool, and uses the Python fallback (`print_library_info`
-in `sushi_lang/compiler/cli.py`) when there is no tool. The delegation contract is in
+in `sushi_lang/compiler/lib_info.py`) when there is no tool. The delegation contract is in
 `toolchain/README.md`. The report and its rules (R38 to R49) are in
 `docs/design/documentation.md`.
 

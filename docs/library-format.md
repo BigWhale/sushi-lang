@@ -281,7 +281,10 @@ is the authority, and the index is a cache of it.
                 {
                     "name": str,
                     "has_data": bool,
-                    "data_type": str,  # If has_data
+                    "data_types": [str],  # If has_data: every payload type, in
+                                          #   written order (#966). A manifest that
+                                          #   states `has_data` and no `data_types`
+                                          #   is refused (CE3512) and must be rebuilt
                     "doc": DOC         # If documented
                 }
             ],

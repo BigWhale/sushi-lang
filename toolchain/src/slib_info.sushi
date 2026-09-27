@@ -2,7 +2,7 @@
 The `slib-info` tool: it prints the metadata report of a `.slib` library.
 
 On the success path, the report is the same as the report of the Python fallback
-(`print_library_info` in `sushi_lang/compiler/cli.py`), line for line. The exit code is 0
+(`print_library_info` in `sushi_lang/compiler/lib_info.py`), line for line. The exit code is 0
 for a report or for `--help`, and 2 for a usage error or a read error. The design records
 are in `docs/design/slib-info.md`.
 :##
@@ -124,33 +124,35 @@ fn ml_len_at(MsgValue m, string key) i32:
             return Result.Ok(0)
 
 ##:
-Joins the `Str` elements of an `Arr` value with `", "`.
+Joins the `Str` elements of an `Arr` value with a separator.
 
 - Parameter list: The `Arr` value.
+- Parameter sep: The text between two elements.
 - Returns: The joined text, or `""` for a value that is not an `Arr`.
 :##
-fn join_strs(MsgValue list) string:
+fn join_strs(MsgValue list, string sep) string:
     match list:
         MsgValue.Arr(items) ->
             let string[] parts = new()
             foreach(item in items.iter()):
                 parts.push(ml_str(item)??)
-            return Result.Ok(", ".join(parts))
+            return Result.Ok(sep.join(parts))
         _ ->
             return Result.Ok("")
 
 ##:
-Joins the `Str` elements of the `Arr` value under a string key with `", "`.
+Joins the `Str` elements of the `Arr` value under a string key with a separator.
 
 - Parameter m: The map to read.
 - Parameter key: The key to find.
+- Parameter sep: The text between two elements.
 - Returns: The joined text, or `""` when the key is absent.
 :##
-fn join_at(MsgValue m, string key) string:
+fn join_at(MsgValue m, string key, string sep) string:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key)??:
-                Maybe.Some(at) -> return Result.Ok(join_strs(vals[at])??)
+                Maybe.Some(at) -> return Result.Ok(join_strs(vals[at], sep)??)
                 Maybe.None() -> return Result.Ok("")
         _ ->
             return Result.Ok("")
@@ -680,7 +682,7 @@ fn render_type_param_list(MsgValue tps) string:
             let string[] parts = new()
             foreach(tp in items.iter()):
                 let string tname = ml_get_str(tp, "name")??
-                let string cs = join_at(tp, "constraints")??
+                let string cs = join_at(tp, "constraints", " + ")??
                 let string one = ""
                 if (cs == ""):
                     one := "{tname}"
@@ -747,7 +749,7 @@ fn render_named_type_params(MsgValue rec) string:
         return Result.Ok("")
     if (ml_len_at(rec, "type_params")?? == 0):
         return Result.Ok("")
-    let string body = join_at(rec, "type_params")??
+    let string body = join_at(rec, "type_params", ", ")??
     return Result.Ok("@({body})")
 
 ##:
@@ -887,6 +889,29 @@ fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
             return Result.Ok(pending)
 
 ##:
+Writes the payload types of a variant record, each in the `@(...)` spelling.
+
+- Parameter v: The variant record.
+- Returns: The types joined with `", "`, or `""` when the record has none.
+:##
+fn render_data_types(MsgValue v) string:
+    match v:
+        MsgValue.Map(_, vals) ->
+            match map_index(v, "data_types")??:
+                Maybe.Some(at) ->
+                    match vals[at]:
+                        MsgValue.Arr(types) ->
+                            let string[] parts = new()
+                            foreach(t in types.iter()):
+                                parts.push(to_surface(ml_str(t)??)??)
+                            return Result.Ok(", ".join(parts))
+                        _ ->
+                            return Result.Ok("")
+                Maybe.None() -> return Result.Ok("")
+        _ ->
+            return Result.Ok("")
+
+##:
 Prints each variant record, with its doc record.
 
 - Parameter variants: The array of variant records.
@@ -902,7 +927,7 @@ fn print_variants(MsgValue variants, bool pending, Opts o) bool:
                 p := open_record(p)??
                 let string vname = ml_get_str(v, "name")??
                 if (ml_get_bool(v, "has_data")??):
-                    let string dt = to_surface(ml_get_str(v, "data_type")??)??
+                    let string dt = render_data_types(v)??
                     println("    {vname}({dt})")
                 else:
                     println("    {vname}")
@@ -1043,7 +1068,7 @@ fn render_impl_target(MsgValue r) string:
     let string target = to_surface(ml_get_str(r, "type")??)??
     if (ml_len_at(r, "type_args")?? == 0):
         return Result.Ok(target)
-    let string body = join_at(r, "type_args")??
+    let string body = join_at(r, "type_args", ", ")??
     return Result.Ok("{target}@({body})")
 
 ##:

@@ -143,14 +143,9 @@ class LibraryRegistry:
             enum_name = enum_info["name"]
             variants = []
             for v in enum_info.get("variants", []):
-                assoc_types: tuple = ()
-                if v.get("has_data") and v.get("data_type"):
-                    data_type = parse_type_string(
-                        v["data_type"],
-                        self._struct_table,
-                        self._enum_table
-                    )
-                    assoc_types = (data_type,)
+                assoc_types = tuple(
+                    parse_type_string(t, self._struct_table, self._enum_table)
+                    for t in (v.get("data_types") or []) if v.get("has_data"))
 
                 variants.append(EnumVariantInfo(name=v["name"], associated_types=assoc_types))
 

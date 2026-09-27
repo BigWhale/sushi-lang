@@ -251,7 +251,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("enum", "doc", "@doc", "no"),
     ("variant", "name", "str", "yes"),
     ("variant", "has_data", "bool", "no"),
-    ("variant", "data_type", "nstr", "has_data"),
+    ("variant", "data_types", "strs", "has_data"),
     ("variant", "doc", "@doc", "no"),
     ("generic_type", "name", "str", "yes"),
     ("generic_type", "source", "str", "no"),

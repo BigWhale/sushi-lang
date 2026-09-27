@@ -1122,7 +1122,7 @@ The two implementations need these helpers, under these names:
 `slib-info` has **two** implementations, and they must produce byte-identical success
 reports:
 
-- Python, `print_library_info` in `sushi_lang/compiler/cli.py`
+- Python, `print_library_info` in `sushi_lang/compiler/lib_info.py`
 - Sushi, `toolchain/src/slib_info.sushi`
 
 `toolchain/README.md` states the contract: error messages may differ between the tool and

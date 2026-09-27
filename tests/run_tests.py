@@ -552,6 +552,7 @@ class ReaderGateResult:
     failures: List[str] = field(default_factory=list)
     skip_reason: Optional[str] = None
     duration: float = 0.0
+    title: str = "Library-reader gate"
 
     @property
     def ran(self) -> bool:
@@ -568,8 +569,8 @@ class ReaderGateResult:
     def report(self) -> List[str]:
         """The lines the text report prints."""
         if not self.ran:
-            return [f"Library-reader gate SKIPPED: {self.skip_reason}."]
-        lines = [f"Library-reader gate: {self.checks} check(s), "
+            return [f"{self.title} SKIPPED: {self.skip_reason}."]
+        lines = [f"{self.title}: {self.checks} check(s), "
                  f"{len(self.failures)} failed ({self.duration:.2f}s)"]
         lines.extend(f"  {f}" for f in self.failures)
         return lines
@@ -594,6 +595,44 @@ def _gate_verdict(done: subprocess.CompletedProcess, code: Optional[str]) -> Opt
     return None
 
 
+def _gate_skip(result: ReaderGateResult, filter_pattern: Optional[str],
+               leaks_only: bool) -> Optional[ReaderGateResult]:
+    """The result that says why a library-reader step does not run, or None."""
+    if leaks_only:
+        result.skip_reason = "--leaks-only selects no library-reader check"
+    elif filter_pattern and filter_pattern not in LIB_READER_GATE_PATH:
+        result.skip_reason = f"--filter {filter_pattern!r} selects no library-reader check"
+    return result if result.skip_reason is not None else None
+
+
+def _gate_run(command: List[str], cwd: Path,
+              env: Dict[str, str]) -> subprocess.CompletedProcess:
+    """One command of a library-reader step, with the toolchain choice left to `env`."""
+    base_env = {k: v for k, v in os.environ.items()
+                if k not in ("SUSHI_TOOLCHAIN", "SUSHI_TOOLCHAIN_BIN")}
+    try:
+        return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
+                              timeout=120, env={**base_env, **env})
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(command, -1, "", "timed out after 120s")
+
+
+def _gate_tool(project_root: Path, tmp: Path, result: ReaderGateResult) -> str:
+    """The directory of the `slib-info` a step runs: `LIB_READER_TOOL_ENV`, or one built here."""
+    tool_bin = os.environ.get(LIB_READER_TOOL_ENV)
+    if tool_bin:
+        return tool_bin
+    (tmp / "bin").mkdir()
+    built = _gate_run([str(project_root / "sushic"),
+                       str(project_root / "toolchain" / "src" / "slib_info.sushi"),
+                       "-o", str(tmp / "bin" / "slib-info"), "--cache-dir", str(tmp / "cache")],
+                      project_root, {})
+    if built.returncode != 0:
+        result.failures.append(f"the slib-info tool does not build: "
+                               f"{built.stderr.strip()[:200]}")
+    return str(tmp / "bin")
+
+
 def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
                     leaks_only: bool = False) -> ReaderGateResult:
     """Run `--lib-info` in both halves, and a consumer, over damaged `.slib` files.
@@ -603,24 +642,14 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
     Sushi half is the `slib-info` tool built here from `toolchain/src/`; the Python half
     is the same command with SUSHI_TOOLCHAIN=off.
     """
-    if leaks_only:
-        return ReaderGateResult(skip_reason="--leaks-only selects no library-reader check")
-    if filter_pattern and filter_pattern not in LIB_READER_GATE_PATH:
-        return ReaderGateResult(
-            skip_reason=f"--filter {filter_pattern!r} selects no library-reader check")
+    skipped = _gate_skip(ReaderGateResult(), filter_pattern, leaks_only)
+    if skipped is not None:
+        return skipped
 
     start = time.time()
     result = ReaderGateResult()
     sushic = str(project_root / "sushic")
-    base_env = {k: v for k, v in os.environ.items()
-                if k not in ("SUSHI_TOOLCHAIN", "SUSHI_TOOLCHAIN_BIN")}
-
-    def run(command: List[str], cwd: Path, env: Dict[str, str]) -> subprocess.CompletedProcess:
-        try:
-            return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
-                                  timeout=120, env={**base_env, **env})
-        except subprocess.TimeoutExpired:
-            return subprocess.CompletedProcess(command, -1, "", "timed out after 120s")
+    run = _gate_run
 
     with tempfile.TemporaryDirectory(prefix="sushi_lib_reader_gate_") as tmp_name:
         tmp = Path(tmp_name)
@@ -628,16 +657,7 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
         libs = tmp / "libs"
         libs.mkdir()
         (tmp / "gate_lib.sushi").write_text(_GATE_LIBRARY, encoding="utf-8")
-        tool_bin = os.environ.get(LIB_READER_TOOL_ENV)
-        if not tool_bin:
-            tool_bin = str(tmp / "bin")
-            (tmp / "bin").mkdir()
-            built = run([sushic, str(project_root / "toolchain" / "src" / "slib_info.sushi"),
-                         "-o", str(tmp / "bin" / "slib-info"), "--cache-dir", cache],
-                        project_root, {})
-            if built.returncode != 0:
-                result.failures.append(f"the slib-info tool does not build: "
-                                       f"{built.stderr.strip()[:200]}")
+        tool_bin = _gate_tool(project_root, tmp, result)
         for kind, name in (("hybrid", "gate_lib"), ("binary", "gate_bin")):
             built = run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
                          str(tmp / "gate_lib.sushi"), "-o", str(libs / f"{name}.slib"),
@@ -676,6 +696,120 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
             fault = _gate_verdict(done, code)
             if fault:
                 result.failures.append(f"a consumer, {case}: {fault}")
+    result.duration = time.time() - start
+    return result
+
+
+_REPORT_LIBRARY = """\
+##: A colour. :##
+public enum Colour:
+    ##: No payload. :##
+    Red
+    ##: Two payloads. :##
+    Blue(string, i32)
+
+##: A thing with a name. :##
+public perk Named:
+    ##:
+    The name.
+
+    - Returns: The name.
+    :##
+    fn name() string
+
+##:
+Takes a value with two constraints.
+
+- Parameter x: The value.
+- Returns: Zero.
+:##
+public fn both@(T: Hashable + Named)(T x) i32:
+    return Result.Ok(0)
+
+##:
+A blue colour.
+
+- Parameter n: The number it carries.
+- Returns: The colour.
+:##
+public fn paint(i32 n) Colour:
+    return Result.Ok(Colour.Blue("blue", n))
+"""
+
+_REPORT_CONSUMER = """\
+use <lib/{name}>
+
+fn main() i32:
+    match paint(42).realise(Colour.Red):
+        Colour.Blue(s, n) -> println("{{s}} {{n}}")
+        Colour.Red -> println("red")
+    match Colour.Blue("made", 7):
+        Colour.Blue(s, n) -> println("{{s}} {{n}}")
+        Colour.Red -> println("red")
+    return Result.Ok(0)
+"""
+
+# Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966).
+REPORT_LINES = (
+    "  fn both@(T: Hashable + Named)(T x) i32",
+    "    Blue(string, i32)",
+)
+REPORT_KINDS = ("source", "hybrid", "binary")
+REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n"
+
+
+def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
+                         leaks_only: bool = False) -> ReaderGateResult:
+    """Read the `--lib-info` report of one library in both halves, and use the library.
+
+    A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY` in each kind,
+    asks both halves for its report and looks for each of `REPORT_LINES`, then compiles
+    and runs a consumer of each kind that binds both payloads of a variant.
+    """
+    result = ReaderGateResult(title="Library-report gate")
+    if _gate_skip(result, filter_pattern, leaks_only) is not None:
+        return result
+
+    start = time.time()
+    sushic = str(project_root / "sushic")
+    with tempfile.TemporaryDirectory(prefix="sushi_lib_report_gate_") as tmp_name:
+        tmp = Path(tmp_name)
+        cache = str(tmp / "cache")
+        tool_bin = _gate_tool(project_root, tmp, result)
+        (tmp / "report_lib.sushi").write_text(_REPORT_LIBRARY, encoding="utf-8")
+        for kind in REPORT_KINDS:
+            kind_dir = tmp / kind
+            kind_dir.mkdir()
+            lib = kind_dir / "report_lib.slib"
+            built = _gate_run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
+                               str(tmp / "report_lib.sushi"), "-o", str(lib),
+                               "--cache-dir", cache], tmp, {})
+            if built.returncode != 0:
+                result.failures.append(f"the {kind} report library does not build: "
+                                       f"{built.stderr.strip()[:200]}")
+                continue
+            for half, env in (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
+                              ("python", {"SUSHI_TOOLCHAIN": "off"})):
+                done = _gate_run([sushic, "--lib-info", str(lib)], kind_dir, env)
+                lines = done.stdout.splitlines()
+                for expected in REPORT_LINES:
+                    result.checks += 1
+                    if done.returncode != 0 or expected not in lines:
+                        result.failures.append(
+                            f"--lib-info ({half}), {kind}: no line {expected!r} "
+                            f"(exit {done.returncode})")
+            program = kind_dir / "main.sushi"
+            program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
+            done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"),
+                              "--cache-dir", cache], kind_dir, {"SUSHI_LIB_PATH": str(kind_dir)})
+            result.checks += 1
+            if done.returncode != 0:
+                result.failures.append(f"a consumer, {kind}: exit {done.returncode}: "
+                                       f"{done.stderr.strip()[:200]}")
+                continue
+            ran = _gate_run([str(kind_dir / "main")], kind_dir, {})
+            if ran.stdout != REPORT_CONSUMER_STDOUT:
+                result.failures.append(f"a consumer, {kind}: printed {ran.stdout!r}")
     result.duration = time.time() - start
     return result
 
@@ -856,9 +990,12 @@ def main():
     # goes to stderr under --json, so stdout stays one JSON document.
     gate = lib_reader_gate(Path(__file__).resolve().parent.parent,
                            filter_pattern=args.filter, leaks_only=args.leaks_only)
-    for line in gate.report():
+    report_gate = lib_info_report_gate(Path(__file__).resolve().parent.parent,
+                                       filter_pattern=args.filter,
+                                       leaks_only=args.leaks_only)
+    for line in gate.report() + report_gate.report():
         print(line, file=sys.stderr if args.json else sys.stdout)
-    return rc or (0 if gate.passed else 1)
+    return rc or (0 if gate.passed and report_gate.passed else 1)
 
 
 if __name__ == "__main__":
