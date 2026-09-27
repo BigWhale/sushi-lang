@@ -416,7 +416,7 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
             return codegen.builder.load(slot, name=f"{receiver.id}_ref_ptr")
         return slot
 
-    # A captured collection read as `__closure_env.<name>` (any struct-field List/Own).
+    # A captured collection read as `#closure_env.<name>` (any struct-field List/Own).
     # try_get_struct_alloca recurses through the env reference param and GEPs to the
     # field, yielding a pointer to the List/Own so mutating methods work in the body.
     if isinstance(receiver, MemberAccess):

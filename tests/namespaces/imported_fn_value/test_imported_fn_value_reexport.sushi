@@ -1,0 +1,12 @@
+# A function that a `public use` re-exports is a function value, flat and
+# behind the alias of the re-exporting unit (#1013).
+# EXPECT_STDOUT_EXACT: "5\n5\n"
+use "helpers/relay3"
+use "helpers/relay3" as r
+
+fn main() i32:
+    let fn(string) -> i32 f = plain
+    println(f("abc").realise(0))
+    let fn(string) -> i32 g = r.plain
+    println(g("abc").realise(0))
+    return Result.Ok(0)

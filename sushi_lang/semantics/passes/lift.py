@@ -7,9 +7,10 @@ from sushi_lang.semantics.ast import (
     Node, FuncDef, Lambda, Block, Return, Name, MemberAccess, Param, DotCall,
 )
 from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
+from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.semantics.typesys import StructType, ReferenceType, BorrowMode
 
-ENV_PARAM_NAME = "__closure_env"
+ENV_PARAM_NAME = hidden_name("closure_env")
 
 
 @runtime_checkable

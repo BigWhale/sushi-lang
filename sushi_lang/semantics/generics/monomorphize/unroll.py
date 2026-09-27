@@ -9,6 +9,7 @@ from typing import Dict, List
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
 )
+from sushi_lang.semantics.hidden_names import expand_copy_local_name
 
 
 _COPY_IDS = itertools.count(1)
@@ -113,7 +114,7 @@ def _rename_copy_locals(statements: List[Stmt], copy_index: int) -> List[Stmt]:
     for idx, stmt in enumerate(statements):
         if isinstance(stmt, Let):
             old = stmt.name
-            new = f"{old}__x{copy_index}"
+            new = expand_copy_local_name(old, copy_index)
             stmt.name = new
             # Rewrite references in the statements that follow (the local's
             # scope is from its declaration to the end of the block), honoring

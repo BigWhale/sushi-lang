@@ -1,0 +1,13 @@
+# A local of a lambda body that spells the name the compiler used for the environment
+# parameter of the lifted lambda does not hide the captured values.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "13\n"
+# EXPECT_STDERR_EMPTY: true
+
+fn main() i32:
+    let i32 k = 5
+    let fn(i32) -> i32 f = |i32 x|:
+        let i32 __closure_env = 7
+        return Result.Ok(x + k + __closure_env)
+    println(f(1).realise(0))
+    return Result.Ok(0)

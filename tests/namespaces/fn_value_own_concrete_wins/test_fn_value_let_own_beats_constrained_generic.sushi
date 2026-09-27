@@ -1,0 +1,14 @@
+# The unit declares its own concrete `pick`, and an import brings a generic
+# `pick` with a perk constraint. The function value `pick` names the unit's own
+# function, so the constraint of the generic is never judged (#1003).
+# EXPECT_STDOUT_EXACT: "3\n"
+use "helpers/pick_pk"
+use <collections/strings>
+
+fn pick(string s) i32:
+    return Result.Ok(s.len())
+
+fn main() i32:
+    let fn(string) -> i32 f = pick
+    println(f("abc").realise(0))
+    return Result.Ok(0)

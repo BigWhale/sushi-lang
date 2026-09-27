@@ -120,8 +120,8 @@ It is **not a second feature**. The AST builder renames the loop's own binding t
 name and prepends one statement to the body:
 
 ```
-foreach(line?? in it):        →     foreach(__fe_itemN in it):
-    BODY                                  let <T> line = __fe_itemN??
+foreach(line?? in it):        →     foreach(#fe_itemN in it):
+    BODY                                  let <T> line = #fe_itemN??
                                           BODY
 ```
 
@@ -212,8 +212,8 @@ binds the unwrapped value to a second hidden name with no span, and the scope ex
 it. No new AST shape was necessary.
 
 ```
-foreach(_?? in it):           →     foreach(__fe_itemN in it):
-    BODY                                  let <T> __fe_discardM = __fe_itemN??
+foreach(_?? in it):           →     foreach(#fe_itemN in it):
+    BODY                                  let <T> #fe_discardM = #fe_itemN??
                                           BODY
 ```
 

@@ -1,0 +1,23 @@
+# A user local that spells the name the compiler used for the first element of a
+# variadic pack keeps its own value, and the pack element keeps its own type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "int\nint\nmine\n"
+# EXPECT_STDERR_EMPTY: true
+
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn show_all@(...Ts: Display)(...Ts args) ~:
+    let string args_0 = "mine"
+    expand(a in args):
+        println(a.display())
+    println(args_0)
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all(1, 2)
+    return Result.Ok(0)

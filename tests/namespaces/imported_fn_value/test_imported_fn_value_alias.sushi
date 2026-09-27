@@ -1,0 +1,13 @@
+# A public function of another unit, behind the alias of its import, is a
+# function value (#1013).
+# EXPECT_STDOUT_EXACT: "5\n5\n"
+use "helpers/lib3" as l
+
+fn apply(fn(string) -> i32 f) i32:
+    return Result.Ok(f("abcd").realise(0))
+
+fn main() i32:
+    let fn(string) -> i32 f = l.plain
+    println(f("abc").realise(0))
+    println(apply(l.plain).realise(0))
+    return Result.Ok(0)

@@ -408,6 +408,28 @@ All notable changes to Sushi Lang will be documented in this file.
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
 
+### Fixed
+- **A string temporary in a comparison is freed, and so is a condition's temporary on each
+  evaluation** (#1004). An owning string operand of `==`, `!=`, `<`, `<=`, `>` or `>=` got no
+  owner and leaked, in every position. An owning temporary in a `while` condition had one owner
+  in the enclosing scope, so every evaluation but the last leaked. Each `if` test and `while`
+  condition now has a scope of its own, closed before the branch. This also closes a read of an
+  uninitialised stack slot: a temporary made in an `elif` test was freed at the join from the
+  paths that never made it.
+- **A hidden local can no longer collide with a user name** (#1001, #1015). The compiler named
+  its hidden locals with legal identifiers (`__fe_item0`, `__fe_discard0`, `__fe_iter0`,
+  `__closure_env`, a pack element `args_0`, an unrolled `expand` local `t__x0`). A user variable
+  of that name read the loop item (a silent wrong value), gave CE0000, or gave a false
+  diagnostic. Every such name is now made by one helper, `hidden_name`, with a `#` the grammar
+  refuses, and a gate refuses a new synthesized name outside it.
+- **A bare function value names the unit's own function** (#1003). With an imported generic of
+  the same name, `let fn(string) -> i32 f = pick` took the import: the wrong function ran, or
+  the program was refused (CE4006, CE2093). The call and the value positions read one helper.
+- **A function of another unit is a function value** (#1013), bare (`plain`, CE1001 before) and
+  behind an alias (`l.plain`, CE2008 before), from a source unit, a `public use` re-export and a
+  library alike. A private one is CE3005 ("cannot take the value of private function"), an
+  ambiguous bare name CE3012, and a generic one CE2093.
+
 ### Tooling
 - **`--warn-unused` reports dead code** (#959). Two warnings, off by default: CW1004, a private
   top-level declaration nothing in its unit reaches (the roots are every `public` declaration,

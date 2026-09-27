@@ -5,6 +5,7 @@ from itertools import count
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
@@ -544,7 +545,7 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
         return None
 
     if stmt.protocol_iter_name is None:
-        stmt.protocol_iter_name = f"__fe_iter{next(_protocol_iter_ids)}"
+        stmt.protocol_iter_name = hidden_name("fe_iter", next(_protocol_iter_ids))
     iter_name = stmt.protocol_iter_name
 
     call = MethodCall(receiver=Name(id=iter_name, loc=stmt.iterable.loc),

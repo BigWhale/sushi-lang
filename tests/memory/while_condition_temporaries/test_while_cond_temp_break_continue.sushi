@@ -1,0 +1,17 @@
+# A while condition temporary is freed on each evaluation when the body leaves through break and continue.
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let string a = "manifest x"
+    let i32 i = 0
+    while (a.s(0, 8) == "manifest"):
+        i := i + 1
+        if (i < 3):
+            continue
+        if (i == 4):
+            break
+    println(i)
+    return Result.Ok(0)

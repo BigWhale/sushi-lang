@@ -86,12 +86,18 @@ def emit_name(codegen: 'LLVMCodegen', expr: Name, to_i1: bool) -> ir.Value:
 
 
 def emit_namespaced_value(codegen: 'LLVMCodegen', ref, to_i1: bool) -> ir.Value:
-    """Read `<namespace>.<name>` as a value. Under this epic that is a constant.
+    """Read `<namespace>.<name>` as a value: a constant, or a function value (#1013).
 
     The unit or module the typecheck pass resolved answers, never the emitting one:
     two units may each declare `SCRATCH`, and the alias says which was meant.
     """
     origin, name = ref.origin, ref.name
+    if ref.kind == "function":
+        llvm_fn = codegen.funcs.lookup(name, origin)
+        if llvm_fn is None:
+            raise_internal_error("CE0055", name=f"{origin}.{name}")
+        from sushi_lang.backend.runtime import closures
+        return closures.materialize_function_ref(codegen, llvm_fn)
     if ref.producer == "stdlib":
         from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
         module = get_stdlib_registry().get_module(origin)

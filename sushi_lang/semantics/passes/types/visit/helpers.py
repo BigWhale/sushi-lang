@@ -13,9 +13,13 @@ from sushi_lang.semantics.ast import (
 
 def function_value_type_of(type_validator, name: str) -> Optional[Type]:
     """Build the FunctionType for a bare reference to a plain top-level function."""
+    return function_type_of_sig(type_validator.func_sig(name))
+
+
+def function_type_of_sig(sig) -> Optional[Type]:
+    """The FunctionType of a function value of this signature, bare or behind an alias."""
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    sig = type_validator.func_sig(name)
     if sig is None:
         return None
     for p in sig.params:

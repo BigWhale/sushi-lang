@@ -86,6 +86,7 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
     if (codegen.types.is_string_type(lhs.type) and
         codegen.types.is_string_type(rhs.type)):
+        _own_string_operands(codegen, expr, lhs, rhs)
         if op in ("==", "!="):
             i1v = codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
         else:
@@ -110,6 +111,15 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
     else:
         i1v = codegen.builder.icmp_signed(op, lhs, rhs)
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
+
+def _own_string_operands(codegen: 'LLVMCodegen', expr: BinaryOp,
+                         lhs: ir.Value, rhs: ir.Value) -> None:
+    """Give each string operand that is a temporary an owner: the comparison only reads it."""
+    from sushi_lang.semantics.typesys import BuiltinType
+    from .memory import own_temporary
+    own_temporary(codegen, expr.left, lhs, BuiltinType.STRING)
+    own_temporary(codegen, expr.right, rhs, BuiltinType.STRING)
 
 
 def _require_one_width(op: str, left: ir.Value, right: ir.Value) -> None:

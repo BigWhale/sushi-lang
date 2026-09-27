@@ -1,0 +1,28 @@
+# A function value behind an alias in the positions that take ownership: a
+# `return`, an enum payload, a `nom` argument and a rebind. Each one is a new
+# value, as the bare function value is (#1013).
+# EXPECT_STDOUT_EXACT: "5\n5\n5\n5\n"
+# EXPECT_NO_LEAKS
+use "helpers/lib3" as l
+use <collections/strings>
+
+fn take(nom fn(string) -> i32 f) i32:
+    return Result.Ok(f("a").realise(0))
+
+fn chooser() fn(string) -> i32:
+    return Result.Ok(l.plain)
+
+fn one(string s) i32:
+    return Result.Ok(1 + s.len() * 0)
+
+fn main() i32:
+    let fn(string) -> i32 f = chooser().realise(l.plain)
+    println(f("ab").realise(0))
+    let Maybe@(fn(string) -> i32) m = Maybe.Some(l.plain)
+    let fn(string) -> i32 g = m.realise(one)
+    println(g("ab").realise(0))
+    println(take(nom l.plain).realise(0))
+    let fn(string) -> i32 h = one
+    h := l.plain
+    println(h("ab").realise(0))
+    return Result.Ok(0)

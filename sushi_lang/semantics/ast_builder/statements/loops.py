@@ -3,6 +3,7 @@ from __future__ import annotations
 from itertools import count
 from typing import TYPE_CHECKING, Optional, Sequence, Union
 from lark import Tree, Token
+from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.semantics.ast import Block, Expr, Foreach, Expand, Let, Name, TryExpr
 from sushi_lang.semantics.typesys import ReferenceType, Type
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import ice, is_type_node
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 # One counter for the whole process. A `??` binder and a `_` binder each need a name for
 # a binding that the user cannot have written, and a nested loop must not shadow its
-# parent's -- `__` is not a legal identifier start in Sushi, so nothing can collide.
+# parent's. `hidden_name` makes a name that the grammar refuses, so nothing can collide.
 _hidden_ids = count()
 
 _Child = Union[Tree, Token]
@@ -21,7 +22,7 @@ _Child = Union[Tree, Token]
 
 def _discard_name() -> str:
     """A hidden name for a `_` binder. It has no span, so the scope pass never reports it."""
-    return f"__fe_discard{next(_hidden_ids)}"
+    return hidden_name("fe_discard", next(_hidden_ids))
 
 
 def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
@@ -41,7 +42,7 @@ def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
     A `_` binder (`foreach(_?? in it)`) keeps the propagation and discards the value:
     the `Let` binds a hidden name with no span.
     """
-    hidden = f"__fe_item{next(_hidden_ids)}"
+    hidden = hidden_name("fe_item", next(_hidden_ids))
     marker = span_of(try_token)
     whole = marker
     if item_name_span is not None and marker is not None:

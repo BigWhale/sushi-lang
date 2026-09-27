@@ -1,0 +1,10 @@
+# A private function of another unit behind the alias of its import is not a
+# function value here, as it is not a callee here (#1013).
+# EXPECT_ERROR_CODES_EXACT: CE3005
+# EXPECT_STDERR_CONTAINS: cannot take the value of private function 'hidden' from unit
+use "helpers/lib3" as l
+
+fn main() i32:
+    let fn(string) -> i32 f = l.hidden
+    println(f("abc").realise(0))
+    return Result.Ok(0)

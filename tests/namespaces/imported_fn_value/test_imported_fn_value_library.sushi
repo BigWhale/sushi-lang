@@ -1,0 +1,13 @@
+# A public function of a source library is a function value, flat and behind
+# an alias (#1013).
+# BUILD_LIB: triplelib.sushi
+# EXPECT_STDOUT_EXACT: "12\n15\n"
+use <lib/triplelib>
+use <lib/triplelib> as t
+
+fn main() i32:
+    let fn(i32) -> i32 f = triple
+    println(f(4).realise(0))
+    let fn(i32) -> i32 g = t.triple
+    println(g(5).realise(0))
+    return Result.Ok(0)

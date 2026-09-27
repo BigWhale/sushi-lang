@@ -19,6 +19,7 @@ from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.type_predicates import is_string_convertible
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
+from sushi_lang.semantics.visibility import VALUE_VERB
 from sushi_lang.semantics.passes.types.utils import reject_named_args
 from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
@@ -305,6 +306,9 @@ class ExpressionValidator(RecursiveVisitor):
         # manifest holds the name and the kind, and that is the whole origin (#487).
         if reject_private_kept(tv, node.id, node.loc, kinds={"constant", "variable"}):
             return
+        from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
+        if own_concrete_function(tv.func_table, node.id, tv.current_unit_name) is not None:
+            return
         if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.
@@ -315,6 +319,13 @@ class ExpressionValidator(RecursiveVisitor):
                 return
             er.emit(tv.reporter, er.ERR.CE2093, node.loc,
                     name=node.id, reason="generic function references are deferred (v1)")
+            return
+        # A function value of another unit's function obeys the fences its call obeys:
+        # CE3005 for a private one, CE3012 for a name two imports bring (#1013).
+        func_sig = tv.func_sig(node.id)
+        if func_sig is not None and not reject_private_name(
+                tv, "function", func_sig, node.loc, verb=VALUE_VERB):
+            reject_ambiguous_name(tv, "function", node.id, node.loc)
 
     def visit_intlit(self, node: IntLit) -> None:
         """Range-check a bare integer literal (CE2070)."""

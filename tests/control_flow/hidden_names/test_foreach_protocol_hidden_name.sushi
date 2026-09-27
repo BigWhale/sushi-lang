@@ -1,0 +1,20 @@
+# A user variable that spells the name the compiler used for the iterator slot of a
+# `next()` protocol `foreach` keeps its own value and its own type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "101\n102\n"
+# EXPECT_STDERR_EMPTY: true
+
+struct Count:
+    i32 n
+
+extend Count next(poke self) Maybe@(i32):
+    if (self.n >= 2):
+        return Maybe.None()
+    self.n := self.n + 1
+    return Maybe.Some(self.n)
+
+fn main() i32:
+    let i32 __fe_iter0 = 100
+    foreach(v in Count(0)):
+        println(v + __fe_iter0)
+    return Result.Ok(0)

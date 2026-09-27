@@ -1,0 +1,18 @@
+# The function value `pick` in a rebind names the unit's own concrete function,
+# and not the imported generic of the same name (#1003).
+# EXPECT_STDOUT_EXACT: "1\n5\n"
+use "helpers/pick_any"
+use <collections/strings>
+
+fn pick(string s) i32:
+    return Result.Ok(s.len())
+
+fn one(string s) i32:
+    return Result.Ok(s.len() - s.len() + 1)
+
+fn main() i32:
+    let fn(string) -> i32 f = one
+    println(f("abcde").realise(0))
+    f := pick
+    println(f("abcde").realise(0))
+    return Result.Ok(0)
