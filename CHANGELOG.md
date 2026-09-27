@@ -409,6 +409,40 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A store through a `poke` reference after its owner changed is CE2412** (#1026). `r := v`
+  through a `let poke` or a `poke` pattern binding, after the owner was rebound or its payload
+  replaced, compiled and wrote into freed storage. The field, index and method writes were
+  already refused; the plain store now reads the same predicate.
+- **A `foreach(poke x in ...)` item beside a live reference of its owner is refused** (#1027):
+  CE2403 beside a `poke`, CE2407 for a `peek`/`poke` mix, the rule of the pattern binding. An item
+  over an owned temporary is not checked.
+- **CE2430 in a loop is printed once** (#1032). Every borrow diagnostic goes through the pass's
+  reporter now, so the dry run of a loop body tells nothing.
+- **The CE2414 and CE2426 helps read the type** (#1033): a resource type is no longer offered
+  `.clone()` (CE2431), and the CE2414 tail is right for it.
+- **An `expand` loop variable is named as written** (#1031): a borrow diagnostic printed the pack
+  element's hidden name once per copy, and a foreach item, a pattern binding or a lambda
+  parameter in an `expand` body warned once per copy.
+- **A generic function value to a generic callee is solved in two steps** (#1029). `apply(gen, 3)`
+  was CE2060 + CE2093; the callee's type arguments come from the other arguments first, then the
+  value is solved against the substituted parameter, and the program prints `7`. A value the
+  substituted type does not solve stays CE2093; a callee solved only by the value stays CE2060.
+- **A member access and an index access locate the whole expression** (#1030). `c.GREETING` was
+  underlined from the dot and `xs[0]` from the bracket; a diagnostic about the read now marks
+  `c.GREETING` and `xs[0]`. CE2106 and CE2045 still mark the member alone. Many diagnostics move
+  their column; no text changes.
+- **A diagnostic renders the same text painted and plain** (#997): Unicode mode wrote two spaces
+  after the bar when colour was off. **The last note's close guide ends under its tick** (#998).
+- **nori checks the TOML type of each `nori.toml` field** (#1025). An integer name crashed nori and
+  a string in a list field was read per character; both are the new **NE1011**. A listing that
+  skips a manifest prints its code.
+
+### Changed
+- **Type arguments resolve through the one type walk** (#791): `resolve_type_args` calls
+  `map_named_types`, and the backend reads the `Drop` set through `drops_of` only. The error arm
+  of a function-type argument is now resolved to its enum; no interned name changes.
+
+### Fixed
 - **A `peek`/`poke` pattern binding takes a place** (#788). `match b.s: Shade.Dim(poke r)` over a
   field or an element of a local or a constant was CE2404 "no stable address", and `let poke`
   took the same place. A reference pattern binding now takes the places `let peek` / `let poke`
