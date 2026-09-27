@@ -1,0 +1,12 @@
+# `sushic --clean-cache <source>` in the user's directory finds and removes the cache
+# the first build wrote there, so the build that follows rebuilds every unit (#976).
+# RUN_IN_FIXTURE_DIR
+# EXPECT_STDOUT_EXACT: "1\n"
+# THEN_CLEAN_CACHE: source
+# EXPECT_REBUILT: unit, test_cache_clean_cache_source
+# EXPECT_PATH_EXISTS: __sushi_cache__/units
+use "unit"
+
+fn main() i32:
+    println(one().realise(0))
+    return Result.Ok(0)
