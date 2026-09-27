@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sushi_lang.compiler.options import BuildOptions
 
 
-def _check_library_platform(metadata: dict, lib_path: str) -> None:
+def _check_library_platform(metadata: dict) -> None:
     """Reject a `.slib` carrying bitcode built for a different platform (CE3504).
 
     A source library states a platform too -- the machine that produced it -- but
@@ -222,7 +222,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
             slib_path = resolver.resolve_library(lib_path)
             metadata = LibraryFormat.read_metadata_only(slib_path)
             check_manifest(metadata, str(slib_path))
-            _check_library_platform(metadata, lib_path)
+            _check_library_platform(metadata)
             _check_library_compiler_version(metadata, lib_path,
                                             ignore=ignore_compiler_version)
             _check_library_templates_version(metadata, lib_path)

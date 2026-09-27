@@ -33,7 +33,6 @@ class CacheManager:
 
     def __init__(self, project_root: Path, opt_level: str = "mem2reg",
                  cache_dir: Optional[Path] = None) -> None:
-        self.project_root = project_root
         self.opt_level = opt_level
         self.cache_path = cache_dir or (project_root / CACHE_DIR_NAME)
         self.units_path = self.cache_path / UNITS_DIR

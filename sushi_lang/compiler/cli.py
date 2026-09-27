@@ -68,7 +68,6 @@ class Session:
     """Everything the top-level guard needs to render whatever went wrong."""
     args: argparse.Namespace
     reporter: Reporter = field(default_factory=Reporter)
-    src_path: Optional[Path] = None
     crash: Optional[BaseException] = None
 
 
@@ -244,7 +243,6 @@ def _run(session: Session) -> int:
         return 2
 
     src_path = Path(args.source).resolve()
-    session.src_path = src_path
 
     src = read_source(src_path, session.reporter)
     if src is None:

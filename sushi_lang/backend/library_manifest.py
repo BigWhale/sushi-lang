@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterator
 from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
 )
+from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 from sushi_lang.semantics.ast import Node, VarDef
 
@@ -262,11 +263,6 @@ class LibraryManifestGenerator:
 
         LibraryFormat.write(output_path, manifest, bitcode, source=source)
 
-    def _contains_foreign_ptr(self, ty) -> bool:
-        """Recursively check whether a type exposes a foreign `ptr` (ForeignPtrType)."""
-        from sushi_lang.semantics.type_predicates import contains_foreign_ptr
-        return contains_foreign_ptr(ty)
-
     def _extract_public_functions(self, units: list['Unit']) -> list[dict]:
         """Extract public function signatures from units."""
         import sushi_lang.internals.errors as er
@@ -303,8 +299,8 @@ class LibraryManifestGenerator:
                 # CE5002: reject foreign `ptr` in a public library signature. The
                 # typecheck pass's public-fn ptr fence (CE5008) tests the same condition
                 # and exits earlier, so this is the backstop for a direct producer call.
-                exposes_ptr = self._contains_foreign_ptr(func.ret) or any(
-                    self._contains_foreign_ptr(p.ty) for p in func.params
+                exposes_ptr = contains_foreign_ptr(func.ret) or any(
+                    contains_foreign_ptr(p.ty) for p in func.params
                 )
                 if exposes_ptr:
                     er.emit(self.analyzer.reporter, er.ERR.CE5002,
@@ -397,7 +393,7 @@ class LibraryManifestGenerator:
                 record = {
                     "name": decl.name,
                     "unit": unit.name,
-                    "type": self._type_to_string(decl.ty),
+                    "type": type_string(decl.ty),
                     "source": slice_decl_source(decl, self._source(unit)),
                 }
                 if variables:
@@ -429,7 +425,7 @@ class LibraryManifestGenerator:
 
     def _struct_members(self, struct_def) -> dict:
         return {"fields": [
-            with_doc({"name": f.name, "type": self._type_to_string(f.ty)}, f)
+            with_doc({"name": f.name, "type": type_string(f.ty)}, f)
             for f in struct_def.fields
         ]}
 
@@ -438,7 +434,7 @@ class LibraryManifestGenerator:
         for variant in enum_def.variants:
             record = {"name": variant.name, "has_data": bool(variant.associated_types)}
             if variant.associated_types:
-                record["data_types"] = [self._type_to_string(t)
+                record["data_types"] = [type_string(t)
                                         for t in variant.associated_types]
             variants.append(with_doc(record, variant))
         return {"variants": variants}
@@ -849,8 +845,8 @@ class LibraryManifestGenerator:
     def _impl_exposes_ptr(self, impl) -> bool:
         """Whether a perk implementation's methods expose a foreign `ptr`."""
         return any(
-            self._contains_foreign_ptr(m.ret)
-            or any(self._contains_foreign_ptr(p.ty) for p in m.params)
+            contains_foreign_ptr(m.ret)
+            or any(contains_foreign_ptr(p.ty) for p in m.params)
             for m in impl.methods
         )
 
@@ -858,8 +854,8 @@ class LibraryManifestGenerator:
         """A private concrete function the closure cannot ship: a native variadic has no
         template to monomorphize, and a foreign `ptr` may not cross the boundary."""
         return any(getattr(p, "is_variadic", False) for p in fn.params) or (
-            self._contains_foreign_ptr(fn.ret)
-            or any(self._contains_foreign_ptr(p.ty) for p in fn.params)
+            contains_foreign_ptr(fn.ret)
+            or any(contains_foreign_ptr(p.ty) for p in fn.params)
         )
 
     def _extract_reexports(self, units: list['Unit']) -> list[dict]:
@@ -920,7 +916,3 @@ class LibraryManifestGenerator:
                     deps.add(use_stmt.path)
 
         return sorted(deps)
-
-    def _type_to_string(self, ty) -> str:
-        """Convert Type object to string representation."""
-        return type_string(ty)

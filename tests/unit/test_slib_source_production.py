@@ -47,7 +47,7 @@ from sushi_lang.backend.library_errors import LibraryError
 def _load(metadata, kind):
     from sushi_lang.compiler.pipeline import _check_library_platform
 
-    _check_library_platform({**metadata, "kind": kind}, "lib/x")
+    _check_library_platform({**metadata, "kind": kind})
 
 
 FOREIGN = {"library_name": "x", "platform": "definitely-not-this-one"}

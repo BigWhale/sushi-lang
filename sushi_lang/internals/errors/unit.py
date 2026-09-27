@@ -24,10 +24,6 @@ _add(ErrorMessage("CE3002", Severity.ERROR,
 # `sine` could not be used together at all. `CE3012` below is the answer -- at the USE,
 # naming every candidate, and lifted by writing `as`.
 
-_add(ErrorMessage("CE3004", Severity.ERROR,
-    "invalid unit path '{path}': {reason}",
-    Category.UNIT, "Unit path contains invalid characters or structure."))
-
 _add(ErrorMessage("CE3005", Severity.ERROR,
     "cannot {verb} private {kind} '{name}' from unit '{current_unit}' ({kind} is defined in '{owner}')",
     Category.UNIT, "A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one gate answers for a function, a constant, a struct and an enum rather than four. A generic is no exception (#467): a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. Before that the only place that noticed was the backend, which had no template to emit. A binary library answers here too (#469): the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit."))

@@ -22,7 +22,3 @@ _add(ErrorMessage("CE1002", Severity.ERROR,
 _add(ErrorMessage("CE1003", Severity.ERROR,
     "not allowed here (must be inside a loop).",
     Category.SCOPE, "Emitted when 'break' or 'continue' appear outside any loop."))
-
-_add(ErrorMessage("CE1004", Severity.ERROR,
-    "variable {name} shadows the loop condition.",
-    Category.SCOPE, "Emitted when declaring let name inside a loop body when name is read in the loop condition."))
