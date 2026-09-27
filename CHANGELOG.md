@@ -435,6 +435,24 @@ All notable changes to Sushi Lang will be documented in this file.
   are `foreach(_ in ...)` now.
 
 ### Fixed
+- **A library keeps every payload type of a variant** (#966). The manifest kept the first payload
+  type only, so `--lib-info` printed `Blue(string)` for `Blue(string, i32)`, and a consumer of a
+  binary or hybrid library that bound both payloads was refused with CE2044. The variant record
+  now carries `data_types`, a list; a library built before this change is refused by the manifest
+  check (CE3512, "missing required field ... data_types") and must be rebuilt. Two constraints on
+  one type parameter print joined with ` + `, as they are written, in both report halves.
+
+### Changed
+- **The `--lib-info` renderer lives in `sushi_lang/compiler/lib_info.py`** (#982), driven by one
+  table of 14 sections; `cli.py` goes from 880 to 370 lines. The output is byte-identical in both
+  halves over every helper library, three kinds, four switch sets. The complexity ratchet (C901)
+  comes down from 41 to 32.
+
+### Testing
+- **The runner gates the report lines** that #966 fixed: a runner step builds one library in each
+  kind and checks both `--lib-info` halves and a consumer that binds both payloads.
+
+### Fixed
 - **`--lib-info` and the consumer check a library's shape once** (#977, #978, #967). A damaged
   `.slib` gave a Python traceback and exit 1 from `--lib-info`, blank fields from the `slib-info`
   tool, or CE0000 `KeyError` in a consumer; a syntax error in a library's template was reported
