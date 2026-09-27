@@ -1,0 +1,12 @@
+# The body-only edit, compiled the way a user does: from the program's own directory,
+# with a relative path and the compiler's own cache beside the program.
+# RUN_IN_FIXTURE_DIR
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "42\n"
+# EXPECT_STDOUT_EXACT: "43\n"
+# EXPECT_REBUILT: answers
+# EXPECT_CACHED: test_cache_fixture_dir_rebuild
+use "answers"
+
+fn main() i32:
+    println("{answer().realise(0)}")
+    return Result.Ok(0)

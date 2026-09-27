@@ -1,0 +1,13 @@
+# The consumer imports `mid`, which re-exports `leaf` with a `public use`. `leaf`
+# reorders the fields of its public struct, two units away from the consumer's own
+# import, so the cache must follow the re-export and rebuild the consumer.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "3 4\n"
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_REBUILT: leaf, mid, test_cache_public_use_chain
+use "mid"
+
+fn main() i32:
+    match make():
+        Result.Ok(v) -> println("{v.x} {v.y}")
+        Result.Err(_) -> return Result.Ok(1)
+    return Result.Ok(0)
