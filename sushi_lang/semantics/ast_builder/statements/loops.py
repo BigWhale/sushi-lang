@@ -11,16 +11,22 @@ from sushi_lang.internals.report import span_of, Span
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
-# One counter for the whole process. A `??` binder needs a name for the loop's own
-# binding that the user cannot have written, and a nested loop must not shadow its
+# One counter for the whole process. A `??` binder and a `_` binder each need a name for
+# a binding that the user cannot have written, and a nested loop must not shadow its
 # parent's -- `__` is not a legal identifier start in Sushi, so nothing can collide.
-_try_binder_ids = count()
+_hidden_ids = count()
 
 _Child = Union[Tree, Token]
 
 
+def _discard_name() -> str:
+    """A hidden name for a `_` binder. It has no span, so the scope pass never reports it."""
+    return f"__fe_discard{next(_hidden_ids)}"
+
+
 def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
-                        try_token: Token, body: Block) -> tuple[str, Let]:
+                        try_token: Token, body: Block,
+                        discard: bool = False) -> tuple[str, Let]:
     """Turn `foreach(x?? in it)` into a hidden binding plus `let <T> x = <hidden>??`.
 
     The `??` is a MARKER, not an operator, and this is the whole of its implementation:
@@ -31,8 +37,11 @@ def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
 
     The `Let` leaves here with no type. The typecheck pass fills it in from the item
     type, which is the one thing the parser cannot know.
+
+    A `_` binder (`foreach(_?? in it)`) keeps the propagation and discards the value:
+    the `Let` binds a hidden name with no span.
     """
-    hidden = f"__fe_item{next(_try_binder_ids)}"
+    hidden = f"__fe_item{next(_hidden_ids)}"
     marker = span_of(try_token)
     whole = marker
     if item_name_span is not None and marker is not None:
@@ -41,7 +50,7 @@ def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
         name=item_name,
         ty=None,
         value=TryExpr(expr=Name(id=hidden, loc=item_name_span), loc=whole),
-        name_span=item_name_span,
+        name_span=None if discard else item_name_span,
         type_span=item_name_span,
         loc=whole,
     )
@@ -79,8 +88,16 @@ def _token_at(node: Tree, children: Sequence[_Child], index: int,
     return found
 
 
+def _binder_at(node: Tree, children: Sequence[_Child], index: int) -> Token:
+    """Read the item binder of a `foreach`: a NAME, or the `_` that discards the item."""
+    found = children[index] if -len(children) <= index < len(children) else None
+    if isinstance(found, Token) and found.type == "UNDERSCORE":
+        return found
+    return _token_at(node, children, index, "NAME", "for the item name")
+
+
 def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_stmt: FOREACH "(" [type] NAME [DOUBLE_QUESTION] "in" expr ")" ":" block"""
+    """Parse foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr ")" ":" block"""
     children = node.children
     _token_at(node, children, 0, "FOREACH", "first")
 
@@ -95,8 +112,9 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         try_token = head[-1]
         head = head[:-1]
 
-    name_tok = _token_at(node, head, -1, "NAME", "for the item name")
-    item_name = name_tok.value
+    name_tok = _binder_at(node, head, -1)
+    discard = name_tok.type == "UNDERSCORE"
+    item_name = _discard_name() if discard else name_tok.value
     item_name_span = span_of(name_tok)
 
     item_type: Optional[Type] = None
@@ -116,7 +134,9 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     if try_token is not None:
         item_try_span = span_of(try_token)
         item_name, item_try_let = _desugar_try_binder(
-            item_name, item_name_span, try_token, body)
+            item_name, item_name_span, try_token, body, discard)
+    elif discard:
+        item_name_span = None
 
     # A reference-typed item (`foreach(poke i32 r in ...)`) is the long spelling of
     # the marker form (`foreach(poke r in ...)`) -- normalize it, so every downstream
@@ -144,19 +164,20 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_ref: FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block"""
+    """Parse foreach_ref: FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block"""
     children = node.children
     _token_at(node, children, 0, "FOREACH", "first")
     mode_tok = _token_at(node, children, 1, "BORROW_MODE", "for the binding mode")
-    name_tok = _token_at(node, children, 2, "NAME", "for the item name")
+    name_tok = _binder_at(node, children, 2)
+    discard = name_tok.type == "UNDERSCORE"
     iterable, body = _loop_tail(node, ast_builder)
 
     return Foreach(
-        item_name=name_tok.value,
+        item_name=_discard_name() if discard else name_tok.value,
         item_type=None,
         iterable=iterable,
         body=body,
-        item_name_span=span_of(name_tok),
+        item_name_span=None if discard else span_of(name_tok),
         item_type_span=None,
         item_borrow=mode_tok.value,
         item_borrow_span=span_of(mode_tok),

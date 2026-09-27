@@ -444,8 +444,8 @@ class ScopeAnalyzer:
                                 node=type(stmt).__name__)
 
     def _check_let(self, stmt: Let) -> None:
-        """Check a let statement."""
-        self._declare_variable(stmt.name, stmt.loc)
+        """Check a let statement. A synthesized `Let` with no written name is never CW1001."""
+        self._declare_variable(stmt.name, stmt.loc if stmt.name_span is not None else None)
         self._check_expression(stmt.value)
 
     def _check_rebind(self, stmt: Rebind) -> None:

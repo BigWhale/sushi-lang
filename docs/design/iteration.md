@@ -196,6 +196,27 @@ So a reference binding over one is **CE2423**, whatever the iterable's spelling 
 asks the protocol and not the method name, because a user `iter()` answering a protocol
 iterator would otherwise pass the name test and bind a pointer into a temporary.
 
+### 8. `_` discards the item
+
+A loop that only repeats its body (fill `n` slots, skip `n` bytes) has no use for its
+item. A named binder that the body never reads is CW1001, and that is correct: it hides
+nothing that a reader must know. So `_` is the binder that binds nothing, the spelling a
+`match` pattern already has (#968). It is never CW1001, and the body cannot name it,
+because `_` is not a name in an expression.
+
+The AST builder gives the loop a hidden name with no span, and the scope pass never
+reports a binding with no written name. So every later pass sees an ordinary `foreach`.
+The discard takes every binder form: a written type, `peek`/`poke`, and the `??` marker.
+`foreach(_?? in it)` keeps the propagation and discards the value: the desugar of ruling 3
+binds the unwrapped value to a second hidden name with no span, and the scope exit destroys
+it. No new AST shape was necessary.
+
+```
+foreach(_?? in it):           →     foreach(__fe_itemN in it):
+    BODY                                  let <T> __fe_discardM = __fe_itemN??
+                                          BODY
+```
+
 ## What this replaced
 
 `File.lines()` was a compiler builtin, and the only reading method the compiler still
@@ -217,7 +238,7 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 
 | piece | file |
 |---|---|
-| the `??` binder's desugar | `semantics/ast_builder/statements/loops.py` |
+| the `??` binder's desugar, and the `_` binder | `semantics/ast_builder/statements/loops.py` |
 | the protocol's resolution, and the call it builds | `resolve_protocol_iterator`, `semantics/passes/types/statements.py` |
 | the method ladder it resolves through | `resolve_method`, `semantics/passes/types/calls/methods.py` |
 | the loop arm | `_emit_protocol_foreach`, `backend/statements/loops.py` |
