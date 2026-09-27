@@ -16,11 +16,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Protocol
 
 import sushi_lang.internals.errors as er
+from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.library_registry import LibraryRegistry
 from sushi_lang.semantics.library_templates import (
-    apply_template_bindings, deserialize_perk_impl)
+    TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
+    parse_one_declaration)
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
@@ -133,7 +135,8 @@ class LibraryRegistration:
             if not source:
                 continue
             snippet = self._collect_snippet(
-                source, f"<perk:{lib_name}:{perk_name}>", lib_name)
+                source, f"<perk:{lib_name}:{perk_name}>", lib_name, lib_name,
+                f"perk '{perk_name}'")
             perk_def = snippet.declared("perks", perk_name)
             if perk_def is None:
                 continue
@@ -217,6 +220,11 @@ class LibraryRegistration:
             return
         yield from self.linker.loaded_libraries.items()
 
+    def _library_file(self, lib_name: str) -> str:
+        """The path of the `.slib` a loaded library came from, or its name."""
+        manifest = self.linker.loaded_libraries.get(lib_name, {}) if self.linker else {}
+        return str(manifest.get("library_path") or lib_name)
+
     def library_names(self) -> set[str]:
         """The name of every loaded library, as its visibility records carry it."""
         return {lib_name for lib_name, _manifest in self._manifests()}
@@ -255,16 +263,23 @@ class LibraryRegistration:
 
     # -- one collector for every snippet -------------------------------------------
 
-    def _collect_snippet(self, source: str, label: str, unit: str) -> _Snippet:
+    def _collect_snippet(self, source: str, label: str, unit: str,
+                         lib_name: str, what: str) -> _Snippet:
         """Re-parse one record's source and collect it under `unit`, on the throwaway.
 
         The one collector for every snippet (#675). Its reporter is a throwaway, so a
         library snippet's diagnostics never reach the consumer's; `label` names the
         snippet there. The unit FILE stays unset, as it was for every fresh collector.
-        """
-        from sushi_lang.internals.parser import parse_to_ast
 
-        program, _tree = parse_to_ast(source)
+        A source that does not parse, or that is not one declaration, is a fault of the
+        library `lib_name` and stops the build with CE3512, which names the library file
+        and the record (`what`). It is never reported at the consumer's `use` line.
+        """
+        try:
+            program = parse_one_declaration(source, what)
+        except TemplateSourceError as e:
+            raise SushiError("CE3512", path=self._library_file(lib_name),
+                             reason=str(e)) from e
         reporter = self._snippet_reporter
         reporter.source = source
         reporter.filename = label
@@ -457,7 +472,8 @@ class LibraryRegistration:
             return
 
         snippet = self._collect_snippet(
-            source, f"<const:{lib_name}:{const_name}>", lib_name)
+            source, f"<const:{lib_name}:{const_name}>", lib_name, lib_name,
+            f"constant '{const_name}'")
         sig = snippet.declared("constants", const_name)
         const_defs = snippet.program.constants or []
         if sig is None or len(const_defs) != 1:
@@ -499,7 +515,8 @@ class LibraryRegistration:
                 self._reject_private_type_clash(lib_name, name, build_units)
                 continue
 
-            snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name)
+            snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name,
+                                            lib_name, f"private type '{name}'")
             kind = None
             for table_name, declared_kind, concrete in _PRIVATE_TYPE_TABLES:
                 entry = snippet.declared(table_name, name)
@@ -577,8 +594,6 @@ class LibraryRegistration:
         same target and perk -- the consumer's own, collected first -- wins, as a
         consumer's concrete implementation does.
         """
-        from sushi_lang.internals.parser import parse_to_ast
-
         perks, perk_impls = self.tables.perks, self.tables.perk_impls
         table = self.tables.generic_perk_impls
         is_declared_type = DeclaredTypeNamer(
@@ -599,8 +614,9 @@ class LibraryRegistration:
 
             label = f"<template:{lib_name}:{base} with {perk_name}>"
             try:
-                program, _tree = parse_to_ast(source)
-            except Exception:
+                program = parse_one_declaration(
+                    source, f"perk implementation '{base} with {perk_name}'")
+            except TemplateSourceError:
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
                 continue
 
@@ -646,7 +662,8 @@ class LibraryRegistration:
             # The collector runs under the RECORD's unit, so the template and its
             # instances carry the unit that declared it at the producer (#494).
             label = f"<template:{lib_name}:{func_name}>"
-            snippet = self._collect_snippet(source, label, template_unit)
+            snippet = self._collect_snippet(source, label, template_unit, lib_name,
+                                            f"generic function '{func_name}'")
             gfd = snippet.declared("generic_funcs", func_name)
             if gfd is None:
                 continue
@@ -711,7 +728,8 @@ class LibraryRegistration:
                 continue
 
             snippet = self._collect_snippet(
-                source, f"<template:{lib_name}:{type_name}>", lib_name)
+                source, f"<template:{lib_name}:{type_name}>", lib_name, lib_name,
+                f"generic {kind} '{type_name}'")
             generic_type = snippet.declared(key, type_name)
             if generic_type is None:
                 continue

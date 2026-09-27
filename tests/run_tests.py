@@ -366,6 +366,320 @@ def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
     return result
 
 
+LIB_READER_GATE_PATH = "stdlib/slib/lib_reader/"
+# A directory that holds a `slib-info` to run in place of the one the gate builds. Only
+# the runner tests set it, to show that the gate fails a tool that prints no code.
+LIB_READER_TOOL_ENV = "SUSHI_LIB_READER_GATE_TOOL_BIN"
+
+_GATE_LIBRARY = """\
+##: The library the library-reader gate damages. :##
+
+##:
+Adds two numbers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+:##
+public fn add(i32 a, i32 b) i32:
+    return Result.Ok(a + b)
+
+##:
+Gives its argument back.
+
+- Parameter value: The value.
+- Returns: The value.
+:##
+public fn same@(T)(nom T value) T:
+    return Result.Ok(value)
+
+##: A box that holds one value. :##
+public struct Box@(T):
+    ##: The value. :##
+    T item
+
+##: The answer. :##
+public const i32 ANSWER = 42
+"""
+
+_GATE_CONSUMER = """\
+use <lib/{name}>
+
+fn main() i32:
+    let i32 n = add(40, 2).realise(0)
+    println(same(nom n).realise(0))
+    return Result.Ok(0)
+"""
+
+
+def _slib_manifest(raw: bytes) -> Tuple[dict, int]:
+    """The metadata map of a `.slib` image, and the offset where its metadata ends."""
+    import msgpack
+    import struct
+
+    meta_len = struct.unpack("<Q", raw[44:52])[0]
+    return msgpack.unpackb(raw[52:52 + meta_len], raw=False), 52 + meta_len
+
+
+def _edited_slib(raw: bytes, edit) -> bytes:
+    """A copy of a `.slib` image whose metadata map `edit` changed in place."""
+    import msgpack
+    import struct
+
+    meta, end = _slib_manifest(raw)
+    edit(meta)
+    blob = msgpack.packb(meta, use_bin_type=True)
+    return raw[:44] + struct.pack("<Q", len(blob)) + blob + raw[end:]
+
+
+def _drop(*keys):
+    """An edit that deletes the key at the end of a path of keys and list indices."""
+    def edit(meta):
+        node = meta
+        for key in keys[:-1]:
+            node = node[key]
+        del node[keys[-1]]
+    return edit
+
+
+def _put(value, *keys):
+    """An edit that sets the key at the end of a path of keys and list indices."""
+    def edit(meta):
+        node = meta
+        for key in keys[:-1]:
+            node = node[key]
+        node[keys[-1]] = value
+    return edit
+
+
+def _write_bytes(path: Path, data: bytes) -> Path:
+    path.write_bytes(data)
+    return path
+
+
+def _half(source: Path) -> bytes:
+    raw = source.read_bytes()
+    return raw[:len(raw) // 2]
+
+
+def _meta_len(source: Path, length: int) -> bytes:
+    """A copy whose header declares a metadata section of `length` bytes."""
+    import struct
+
+    raw = source.read_bytes()
+    return raw[:44] + struct.pack("<Q", length) + raw[52:]
+
+
+def _oversize(source: Path, target: Path) -> Path:
+    """A whole library followed by a hole, one byte past the 1 GiB limit (sparse)."""
+    from sushi_lang.backend.library_format import LibraryFormat
+
+    target.write_bytes(source.read_bytes())
+    with open(target, "r+b") as f:
+        f.truncate(LibraryFormat.MAX_FILE_SIZE + 1)
+    return target
+
+
+def _write_edit(source: Path, case_dir: Path, edit) -> Path:
+    return _write_bytes(case_dir / source.name, _edited_slib(source.read_bytes(), edit))
+
+
+# (case, expected code or None for a clean run, how the input is made). A maker takes
+# the directory of the built libraries and the case's own directory, and gives the path
+# the command reads. `--lib-info` runs each case in both halves.
+LIB_INFO_CASES = (
+    ("a whole library", None, lambda libs, d: libs / "gate_lib.slib"),
+    ("no library_name", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _drop("library_name"))),
+    ("no platform", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _drop("platform"))),
+    ("templates is a string", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _put("x", "templates"))),
+    ("a function record with no name", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _drop("public_functions", 0, "name"))),
+    ("a parameter type that is a number", "CE3512", lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _put(7, "public_functions", 0, "params", 0, "type"))),
+    ("a bad magic", "CE3508", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", b"NOTASLIB" * 8)),
+    ("no such file", "CE3515", lambda libs, d: d / "gate_lib.slib"),
+    ("not a .slib name", "CE3516", lambda libs, d: _write_bytes(
+        d / "gate_lib.txt", (libs / "gate_lib.slib").read_bytes())),
+    ("cut to half", "CE3511", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _half(libs / "gate_lib.slib"))),
+    ("a short file with a bad magic", "CE3508", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", b"hello!")),
+    ("a metadata length past the end", "CE3510", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _meta_len(libs / "gate_lib.slib", 1 << 40))),
+    ("a file past MAX_FILE_SIZE", "CE3513", lambda libs, d: _oversize(
+        libs / "gate_lib.slib", d / "gate_lib.slib")),
+)
+
+def _append(text: str, *keys):
+    """An edit that appends `text` to the string at the end of a path of keys."""
+    def edit(meta):
+        node = meta
+        for key in keys[:-1]:
+            node = node[key]
+        node[keys[-1]] += text
+    return edit
+
+
+_SECOND_DECLARATION = "\npublic fn extra() i32:\n    return Result.Ok(0)\n"
+
+# (case, expected code or None, the edit of the binary library's manifest). A consumer
+# that imports the edited library is compiled for each case.
+CONSUMER_CASES = (
+    ("a whole library", None, None),
+    ("a generic function record with no name", "CE3512",
+     _drop("templates", "generic_functions", 0, "name")),
+    ("no library_name", "CE3512", _drop("library_name")),
+    ("templates is a string", "CE3512", _put("x", "templates")),
+    ("a generic function source that does not parse", "CE3512",
+     _put("fn broken@(T)(T a T:\n", "templates", "generic_functions", 0, "source")),
+    ("a generic function source with two declarations", "CE3512",
+     _append(_SECOND_DECLARATION, "templates", "generic_functions", 0, "source")),
+    ("a generic struct source that does not parse", "CE3512",
+     _put("public struct Box@(T:\n", "templates", "generic_structs", 0, "source")),
+    ("a constant source with two declarations", "CE3512",
+     _append("\npublic const i32 OTHER = 1\n", "public_constants", 0, "source")),
+)
+
+
+@dataclass
+class ReaderGateResult:
+    """What the library-reader gate found, or why it did not run."""
+    checks: int = 0
+    failures: List[str] = field(default_factory=list)
+    skip_reason: Optional[str] = None
+    duration: float = 0.0
+
+    @property
+    def ran(self) -> bool:
+        return self.skip_reason is None
+
+    @property
+    def passed(self) -> bool:
+        return not self.failures
+
+    def as_json(self) -> dict:
+        return {"ran": self.ran, "skip_reason": self.skip_reason, "checks": self.checks,
+                "failures": self.failures, "duration_seconds": round(self.duration, 2)}
+
+    def report(self) -> List[str]:
+        """The lines the text report prints."""
+        if not self.ran:
+            return [f"Library-reader gate SKIPPED: {self.skip_reason}."]
+        lines = [f"Library-reader gate: {self.checks} check(s), "
+                 f"{len(self.failures)} failed ({self.duration:.2f}s)"]
+        lines.extend(f"  {f}" for f in self.failures)
+        return lines
+
+
+def _gate_verdict(done: subprocess.CompletedProcess, code: Optional[str]) -> Optional[str]:
+    """Why one run is wrong, or None. A clean run exits 0; a fault exits 2 with its code."""
+    output = done.stdout + done.stderr
+    if "Traceback" in output:
+        return "printed a Python traceback"
+    if code is None:
+        return None if done.returncode == 0 else f"exit {done.returncode}, expected 0"
+    if done.returncode != 2:
+        return f"exit {done.returncode}, expected 2 with {code}"
+    if f"error [{code}]" not in done.stderr:
+        heads = [line.strip() for line in done.stderr.splitlines() if " [C" in line]
+        got = heads[0] if heads else done.stderr.strip()[:160]
+        return f"no {code} on stderr (got: {got})"
+    for stray in ("CE0000", "CE6001"):
+        if stray != code and f"[{stray}]" in output:
+            return f"also printed {stray}"
+    return None
+
+
+def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
+                    leaks_only: bool = False) -> ReaderGateResult:
+    """Run `--lib-info` in both halves, and a consumer, over damaged `.slib` files.
+
+    A fixture cannot use `--lib-info`, and a damaged binary library cannot be a helper,
+    so the gate builds the libraries, damages copies of them, and reads each copy. The
+    Sushi half is the `slib-info` tool built here from `toolchain/src/`; the Python half
+    is the same command with SUSHI_TOOLCHAIN=off.
+    """
+    if leaks_only:
+        return ReaderGateResult(skip_reason="--leaks-only selects no library-reader check")
+    if filter_pattern and filter_pattern not in LIB_READER_GATE_PATH:
+        return ReaderGateResult(
+            skip_reason=f"--filter {filter_pattern!r} selects no library-reader check")
+
+    start = time.time()
+    result = ReaderGateResult()
+    sushic = str(project_root / "sushic")
+    base_env = {k: v for k, v in os.environ.items()
+                if k not in ("SUSHI_TOOLCHAIN", "SUSHI_TOOLCHAIN_BIN")}
+
+    def run(command: List[str], cwd: Path, env: Dict[str, str]) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
+                                  timeout=120, env={**base_env, **env})
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(command, -1, "", "timed out after 120s")
+
+    with tempfile.TemporaryDirectory(prefix="sushi_lib_reader_gate_") as tmp_name:
+        tmp = Path(tmp_name)
+        cache = str(tmp / "cache")
+        libs = tmp / "libs"
+        libs.mkdir()
+        (tmp / "gate_lib.sushi").write_text(_GATE_LIBRARY, encoding="utf-8")
+        tool_bin = os.environ.get(LIB_READER_TOOL_ENV)
+        if not tool_bin:
+            tool_bin = str(tmp / "bin")
+            (tmp / "bin").mkdir()
+            built = run([sushic, str(project_root / "toolchain" / "src" / "slib_info.sushi"),
+                         "-o", str(tmp / "bin" / "slib-info"), "--cache-dir", cache],
+                        project_root, {})
+            if built.returncode != 0:
+                result.failures.append(f"the slib-info tool does not build: "
+                                       f"{built.stderr.strip()[:200]}")
+        for kind, name in (("hybrid", "gate_lib"), ("binary", "gate_bin")):
+            built = run([sushic, "--lib", "--lib-version", "1.0.0", "--lib-kind", kind,
+                         str(tmp / "gate_lib.sushi"), "-o", str(libs / f"{name}.slib"),
+                         "--cache-dir", cache], tmp, {})
+            if built.returncode != 0:
+                result.failures.append(f"the {kind} gate library does not build: "
+                                       f"{built.stderr.strip()[:200]}")
+        if result.failures:
+            result.duration = time.time() - start
+            return result
+
+        halves = (("tool", {"SUSHI_TOOLCHAIN_BIN": tool_bin}),
+                  ("python", {"SUSHI_TOOLCHAIN": "off"}))
+        for index, (case, code, make) in enumerate(LIB_INFO_CASES):
+            case_dir = tmp / f"info_{index}"
+            case_dir.mkdir()
+            path = make(libs, case_dir)
+            for half, env in halves:
+                done = run([sushic, "--lib-info", str(path)], case_dir, env)
+                result.checks += 1
+                fault = _gate_verdict(done, code)
+                if fault:
+                    result.failures.append(f"--lib-info ({half}), {case}: {fault}")
+
+        for index, (case, code, edit) in enumerate(CONSUMER_CASES):
+            case_dir = tmp / f"use_{index}"
+            case_dir.mkdir()
+            raw = (libs / "gate_bin.slib").read_bytes()
+            (case_dir / "gate_bin.slib").write_bytes(
+                raw if edit is None else _edited_slib(raw, edit))
+            program = case_dir / "main.sushi"
+            program.write_text(_GATE_CONSUMER.format(name="gate_bin"), encoding="utf-8")
+            done = run([sushic, str(program), "-o", str(case_dir / "main"),
+                        "--cache-dir", cache], case_dir, {"SUSHI_LIB_PATH": str(case_dir)})
+            result.checks += 1
+            fault = _gate_verdict(done, code)
+            if fault:
+                result.failures.append(f"a consumer, {case}: {fault}")
+    result.duration = time.time() - start
+    return result
+
+
 def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:
     """Delete every tests/**/__sushi_cache__ before a run."""
     for cache in (project_root / "tests").rglob("__sushi_cache__"):
@@ -536,7 +850,15 @@ def main():
         sys.argv.append("--allow-leak-skips")
     if args.compile_only:
         sys.argv.append("--compile-only")
-    return enhanced_test_runner.main()
+    rc = enhanced_test_runner.main()
+
+    # After the run, which builds the stdlib the gate's libraries import. The report
+    # goes to stderr under --json, so stdout stays one JSON document.
+    gate = lib_reader_gate(Path(__file__).resolve().parent.parent,
+                           filter_pattern=args.filter, leaks_only=args.leaks_only)
+    for line in gate.report():
+        print(line, file=sys.stderr if args.json else sys.stdout)
+    return rc or (0 if gate.passed else 1)
 
 
 if __name__ == "__main__":
