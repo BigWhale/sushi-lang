@@ -1,0 +1,28 @@
+# The close helper has one home, <net/error>, and both socket modules reach it. A program
+# that imports <net/tcp> and <net/udp> closes a handle of each kind, and the helper is
+# public: a slot that already reads -1 is a success and stays -1.
+# TEST_TYPE: runtime
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "listener closed\nsocket closed\nslot -1\n"
+use <net/tcp>
+use <net/udp>
+use <net/error>
+
+fn shut_both() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 1)??
+    listener.close()??
+    println("listener closed")
+    let UdpSocket s = bind("127.0.0.1", 0)??
+    s.close()??
+    println("socket closed")
+    return Result.Ok(~)
+
+fn main() i32:
+    if (not shut_both().is_ok()):
+        println("close failed")
+    let i32 slot = -1
+    match close_socket(poke slot):
+        Result.Ok(_) -> println("slot {slot}")
+        Result.Err(_) -> println("close_socket failed")
+    return Result.Ok(0)
