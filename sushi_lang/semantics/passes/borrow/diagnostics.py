@@ -78,7 +78,12 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     RECEIVER has no marker anywhere on the page -- a receiver's mode is
     declaration-only -- so CE2435 has to carry what the syntax cannot, and it names the
     method.
+
+    A move that a foreach iterator reports (CE2412) is not reported again at its use on
+    the next round (#995).
     """
+    if state.move_reported_by is not None:
+        return
     method = state.consumed_by_method
     if method is not None:
         diag = checker.err.emit_with(er.ERR.CE2435, use_span,

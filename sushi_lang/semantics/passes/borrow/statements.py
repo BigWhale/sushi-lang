@@ -1,7 +1,7 @@
 """Statement walking: scopes, branch joins, and the bindings each statement opens."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import (
     Block,
@@ -327,7 +327,8 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         if iterator is not None:
             checker.borrow_state[stmt.item_name].covered_by = iterator.name
         flow = check_loop_body(checker, stmt.body,
-                               per_iteration=frozenset({stmt.item_name}))
+                               per_iteration=frozenset({stmt.item_name}),
+                               view=iterator.name if iterator is not None else None)
         # Only a change that reaches the next round meets the iterator again (#993).
         change = (flow.back_edge.invalidation_of(iterator.name)
                   if iterator is not None else None)
@@ -336,12 +337,17 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
 
 
 def check_loop_body(checker: 'BorrowChecker', body: Block,
-                    per_iteration: frozenset[str] = frozenset()) -> LoopFlow:
+                    per_iteration: frozenset[str] = frozenset(),
+                    view: Optional[str] = None) -> LoopFlow:
     """Borrow-check a loop body to a fixed point so the back edge is honoured.
 
     `per_iteration` names the bindings the loop creates anew on every pass -- the item --
     whose facts at the end of the body do not reach the next iteration. A `break` path
     does not reach the back edge; its facts join the loop's exit (#993).
+
+    `view` is the binding that walks a container for the whole loop (a foreach
+    iterator). When a move of that container reaches the back edge, the iterator reports
+    it (CE2412), so the second round does not report that move again at a use (#995).
     """
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed
@@ -350,12 +356,34 @@ def check_loop_body(checker: 'BorrowChecker', body: Block,
     checker.err.suppressed = prev_suppressed
     fixed_point = entry if first_back is None else entry | first_back
     restore_flow(checker, fixed_point)
-    back, breaks = _check_round(checker, body, per_iteration)
+    reported = _move_reported_by_view(checker, view, entry, first_back)
+    if reported is not None:
+        reported.move_reported_by = view
+    try:
+        back, breaks = _check_round(checker, body, per_iteration)
+    finally:
+        if reported is not None:
+            reported.move_reported_by = None
     flow = LoopFlow(entry=entry, fixed_point=fixed_point,
                     back_edge=fixed_point if back is None else fixed_point | back,
                     exit=fixed_point if breaks is None else fixed_point | breaks)
     restore_flow(checker, flow.exit)
     return flow
+
+
+def _move_reported_by_view(checker: 'BorrowChecker', view: Optional[str],
+                           entry: FlowFacts, first_back: FlowFacts | None
+                           ) -> Optional[BorrowState]:
+    """The owner whose move came round the back edge and invalidated `view`, or None."""
+    if view is None or first_back is None:
+        return None
+    change = first_back.invalidation_of(view)
+    if change is None:
+        return None
+    _span, (owner, _what) = change
+    if owner not in first_back.moved or owner in entry.moved:
+        return None
+    return checker.borrow_state.get(owner)
 
 
 def _check_round(checker: 'BorrowChecker', body: Block, per_iteration: frozenset[str]
