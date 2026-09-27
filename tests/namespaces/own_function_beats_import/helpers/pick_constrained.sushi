@@ -1,0 +1,5 @@
+public perk Pk:
+    fn p() i32
+
+public fn pick@(T: Pk)(T x) i32:
+    return Result.Ok(x.p())
