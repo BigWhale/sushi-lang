@@ -91,10 +91,11 @@ ignore = ["E501"]
 # Lower the number when a section's batch splits its own worst function. Wave C took
 # `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2, S3 Wave 2
 # took `validate_builtin_array_method` from 39 to 5, and S3 Wave 3 took
-# `validate_method_call` from 60 to 11; the next steps down are 37 (`print_library_info`
-# and `parse_test_metadata`), 35 (`_compute_export_closure`) and 32 (`report.format` and
-# `_collect_from_expr`).
-max-complexity = 41
+# `validate_method_call` from 60 to 11, and S10 took `print_library_info`,
+# `parse_test_metadata`, `_compute_export_closure` and `report.format` below the line; the
+# next steps down are 32 (`_collect_from_expr`, `_check_type_names`) and 30
+# (`scan_expression`).
+max-complexity = 32
 
 [tool.mypy]
 # Tier 5.2 ratchet. The CLEAN packages (internals, compiler, packager, sushi_stdlib)

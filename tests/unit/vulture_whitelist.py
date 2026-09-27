@@ -33,7 +33,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/sushi_stdlib/src/_platform/*/files.py", "ST_*_OFFSET",
      "io/files/stat.py reads each offset by name with getattr"),
     ("sushi_lang/internals/styling.py", "italic",
-     "compiler/cli.py reads a style by name from _MARKS with getattr"),
+     "compiler/lib_info.py reads a style by name from _MARKS with getattr"),
     ("sushi_lang/semantics/method_effects.py", "consumes_args",
      "methods_where() reads a MethodEffect flag by name with getattr"),
     ("sushi_lang/semantics/method_effects.py", "bulk_writes",
