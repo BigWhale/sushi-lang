@@ -1,12 +1,10 @@
 """nori search - search for packages in the repository."""
 import argparse
-import json
 import sys
-import urllib.request
-import urllib.error
 import urllib.parse
 
 from sushi_lang.internals.styling import Palette, should_colour
+from sushi_lang.packager.api_client import api_request
 from sushi_lang.packager.repository import resolve_repository
 
 
@@ -17,8 +15,7 @@ def _format_downloads(count: int) -> str:
 
 
 def _print_results(packages: list) -> None:
-    use_ansi = should_colour(sys.stdout)
-    p = Palette(use_ansi)
+    p = Palette(should_colour(sys.stdout))
 
     # Compute dynamic column widths
     name_w = max(len(p.get("name", "")) for p in packages)
@@ -35,13 +32,11 @@ def _print_results(packages: list) -> None:
     )
     print(f"{p.bold}{header}{p.reset}")
 
-    # Separator
-    if use_ansi:
-        sep = (
-            f"  {'\u2500' * name_w}  {'\u2500' * ver_w}  "
-            f"{'\u2500' * lic_w}  {'\u2500' * dl_w}  {'\u2500' * 11}"
-        )
-        print(f"{p.dim}{sep}{p.reset}")
+    sep = (
+        f"  {'\u2500' * name_w}  {'\u2500' * ver_w}  "
+        f"{'\u2500' * lic_w}  {'\u2500' * dl_w}  {'\u2500' * 11}"
+    )
+    print(f"{p.dim}{sep}{p.reset}")
 
     # Rows
     for pkg in packages:
@@ -77,22 +72,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     if args.per_page != 20:
         params["per_page"] = args.per_page
 
-    url = f"https://{repository}/api/v1/packages?{urllib.parse.urlencode(params)}"
-
-    try:
-        req = urllib.request.Request(url, headers={
-            "Accept": "application/json",
-            "User-Agent": "nori/1.0",
-        })
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        print(f"Repository error: HTTP {e.code}")
-        return 1
-    except (urllib.error.URLError, OSError) as e:
-        reason = getattr(e, "reason", e)
-        print(f"Could not connect to {repository}: {reason}")
-        return 1
+    data = api_request(repository, f"/packages?{urllib.parse.urlencode(params)}")
 
     packages = data.get("packages", [])
     if not packages:

@@ -23,6 +23,7 @@ class Category(str, Enum):
     SYNTAX    = "syntax"
     DOCS      = "docs"
     RUNTIME   = "runtime"
+    PACKAGER  = "packager"
     INTERNAL  = "internal"
 
 

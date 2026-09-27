@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from sushi_lang.packager.constants import MANIFEST_NAME
+from sushi_lang.packager.errors import NoriError, toml_error
 
 # Package name: lowercase alphanumeric + hyphens, 1-64 chars
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9\-]{0,63}$")
@@ -15,7 +16,7 @@ NAME_PATTERN = re.compile(r"^[a-z][a-z0-9\-]{0,63}$")
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-class ManifestError(Exception):
+class ManifestError(NoriError):
     pass
 
 
@@ -34,14 +35,9 @@ class NoriManifest:
 
     def validate(self) -> None:
         if not NAME_PATTERN.match(self.name):
-            raise ManifestError(
-                f"Invalid package name '{self.name}'. "
-                "Must be 1-64 chars, lowercase alphanumeric and hyphens, starting with a letter."
-            )
+            raise ManifestError("NE1005", name=self.name)
         if not VERSION_PATTERN.match(self.version):
-            raise ManifestError(
-                f"Invalid version '{self.version}'. Must be in major.minor.patch format (e.g. 1.0.0)."
-            )
+            raise ManifestError("NE1006", version=self.version)
 
     @property
     def archive_name(self) -> str:
@@ -54,7 +50,7 @@ def load_manifest(directory: Path | None = None) -> NoriManifest:
         directory = Path.cwd()
     manifest_path = directory / MANIFEST_NAME
     if not manifest_path.exists():
-        raise ManifestError(f"No {MANIFEST_NAME} found in {directory}")
+        raise ManifestError("NE1001", manifest=MANIFEST_NAME, directory=directory)
     return load_manifest_from_string(manifest_path.read_bytes(), str(manifest_path))
 
 
@@ -65,18 +61,17 @@ def load_manifest_from_string(text: str | bytes, origin: str = MANIFEST_NAME) ->
             text = text.decode("utf-8")
         return _parse_manifest(tomllib.loads(text))
     except tomllib.TOMLDecodeError as e:
-        lineno, colno = getattr(e, "lineno", None), getattr(e, "colno", None)
-        if lineno is None:
-            raise ManifestError(f"{origin}: {e}") from e
-        raise ManifestError(f"{origin}:{lineno}:{colno}: {getattr(e, "msg", e)} (line {lineno}, column {colno})") from e
-    except (UnicodeDecodeError, ManifestError) as e:
-        raise ManifestError(f"{origin}: {e}") from e
+        raise toml_error(origin, e).recast(ManifestError) from e
+    except UnicodeDecodeError as e:
+        raise ManifestError("NE1010", path=origin) from e
+    except ManifestError as e:
+        raise e.recast(ManifestError, path=origin) from e
 
 
 def _table(data: dict, key: str) -> dict:
     value = data.get(key, {})
     if not isinstance(value, dict):
-        raise ManifestError(f"[{key}] must be a table, not {type(value).__name__}")
+        raise ManifestError("NE1003", table=key, kind=type(value).__name__)
     return value
 
 
@@ -86,19 +81,16 @@ def _parse_manifest(data: dict) -> NoriManifest:
     install = _table(data, "install")
     deps = _table(data, "dependencies")
     if not pkg.get("name"):
-        raise ManifestError("Missing required field: [package] name")
+        raise ManifestError("NE1004", field="name")
     if not pkg.get("version"):
-        raise ManifestError("Missing required field: [package] version")
+        raise ManifestError("NE1004", field="version")
 
     # Validate dependency versions
     for dep_name, dep_version in deps.items():
         if not isinstance(dep_version, str):
-            raise ManifestError(f"Dependency '{dep_name}' version must be a string")
+            raise ManifestError("NE1007", name=dep_name)
         if not VERSION_PATTERN.match(dep_version):
-            raise ManifestError(
-                f"Invalid version '{dep_version}' for dependency '{dep_name}'. "
-                "Must be in major.minor.patch format (e.g. 1.0.0)."
-            )
+            raise ManifestError("NE1008", version=dep_version, name=dep_name)
 
     manifest = NoriManifest(
         name=pkg["name"],

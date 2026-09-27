@@ -6,12 +6,16 @@ import os
 import urllib.request
 import urllib.error
 
+from sushi_lang.packager.errors import NoriError
 
-class ApiError(Exception):
+
+class ApiError(NoriError):
+    """The repository answered with an HTTP error: NE5002 unless a command names it better."""
+
     def __init__(self, status: int, message: str):
         self.status = status
         self.message = message
-        super().__init__(f"HTTP {status}: {message}")
+        super().__init__("NE5002", status=status, detail=message)
 
 
 def api_request(
@@ -39,10 +43,10 @@ def api_request(
             body = json.loads(e.read().decode()).get("detail", "")
         except (ValueError, AttributeError, OSError):
             pass  # malformed/unreadable error body: fall back to the HTTP code
-        raise ApiError(e.code, body or f"HTTP {e.code}") from e
+        raise ApiError(e.code, body or str(e.reason)) from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)
-        raise ConnectionError(f"Could not connect to {repository}: {reason}") from e
+        raise NoriError("NE5001", repository=repository, reason=reason) from e
 
 
 def api_upload_multipart(
@@ -83,7 +87,7 @@ def api_upload_multipart(
             detail = json.loads(e.read().decode()).get("detail", "")
         except (ValueError, AttributeError, OSError):
             pass  # malformed/unreadable error body: fall back to the HTTP code
-        raise ApiError(e.code, detail or f"HTTP {e.code}") from e
+        raise ApiError(e.code, detail or str(e.reason)) from e
     except (urllib.error.URLError, OSError) as e:
         reason = getattr(e, "reason", e)
-        raise ConnectionError(f"Could not connect to {repository}: {reason}") from e
+        raise NoriError("NE5001", repository=repository, reason=reason) from e

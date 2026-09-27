@@ -25,6 +25,7 @@ from sushi_lang.internals.errors import (  # noqa: F401
     func,
     internal,
     library,
+    nori,
     perk,
     result,
     runtime,

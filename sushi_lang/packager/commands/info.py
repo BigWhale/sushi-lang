@@ -1,7 +1,7 @@
 """nori info - show details about an installed package."""
 import argparse
 
-from sushi_lang.packager.installer import PackageInstaller
+from sushi_lang.packager.installer import InstallError, PackageInstaller
 from sushi_lang.packager.paths import package_dir
 
 
@@ -10,14 +10,12 @@ def cmd_info(args: argparse.Namespace) -> int:
     installer = PackageInstaller()
 
     if not installer.is_installed(name):
-        print(f"Package '{name}' is not installed.")
-        return 1
+        raise InstallError("NE3003", name=name)
 
     packages = installer.get_installed_packages()
     manifest = next((p for p in packages if p.name == name), None)
     if manifest is None:
-        print(f"Package '{name}' has a corrupted manifest.")
-        return 1
+        raise InstallError("NE3010", name=name)
 
     pkg_path = package_dir(name)
 
