@@ -8,6 +8,7 @@ from sushi_lang.semantics.ast import (
     Break,
     Continue,
     DotCall,
+    Expr,
     ExprStmt,
     Foreach,
     If,
@@ -33,6 +34,7 @@ from .bindings import (
     BindingScope,
     freeze_for_a_view,
     register_pattern_bindings,
+    reject_a_second_reference,
     ScrutineeKind,
     reject_partial_take,
     release_binding_borrow,
@@ -323,8 +325,14 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         iterator = (scope.bind_iterator(stmt.iterable)
                     if stmt.protocol_next is None else None)
         if stmt.item_borrow is not None:
+            owner: Optional[Expr] = stmt.iterable
+            # An item over an owned temporary has no named owner to conflict with.
+            if not walks_a_temporary(checker, stmt.iterable) and reject_a_second_reference(
+                    checker, stmt.iterable, stmt.item_borrow,
+                    stmt.item_borrow_span or span):
+                owner = None
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
-                           owner=stmt.iterable, declared_at=stmt.item_borrow_span)
+                           owner=owner, declared_at=stmt.item_borrow_span)
         elif stmt.protocol_next is not None:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:

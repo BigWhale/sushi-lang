@@ -1,0 +1,11 @@
+# Two `peek` references to one owner share: a `foreach(peek r in a.iter())` item beside
+# a live `let peek` binding compiles.
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n3\n"
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let peek i32[] w = a
+    foreach(peek r in a.iter()):
+        println(r)
+    println(w.len())
+    return Result.Ok(0)
