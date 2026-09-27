@@ -683,8 +683,8 @@ numbers its generated `doc_example_<n>` helpers from it.
 
 **R35 — the flag is a keyword argument, not an options object.** `SemanticAnalyzer.__init__`
 gains `warn_missing_docs: bool = False`, beside `unit_manager`, `library_linker` and
-`library_registry`, which are keywords already. `compile_multi_file` unpacks it from `args`
-the way `--ignore-compiler-version` is unpacked. A `CompilerOptions` object is the right
+`library_registry`, which are keywords already. `compile_multi_file` reads it from its
+`BuildOptions` the way `--ignore-compiler-version` is read. A `CompilerOptions` object is the right
 answer to the SECOND warning flag and the wrong answer to the first.
 
 **R36 — the test runner gains a `COMPILER_FLAGS:` directive.** A `.sushi` fixture could not
@@ -1048,7 +1048,7 @@ cheap to take — one feature at a time. What changes here is only what the numb
 measurement above is what tells that work what it is worth, and it is not an argument for
 carrying less text.
 
-**R9 — `unit_docs` uses `own_units()`.** The same filter as `collect_unit_source`, so the
+**R9 — `unit_docs` uses `own_units()`.** The same filter as `LibraryManifestGenerator.source_map`, so the
 index, the unit array and the source section can never disagree about which units are ours.
 A bundled stdlib module's docs are not shipped.
 

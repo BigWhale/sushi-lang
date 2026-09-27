@@ -50,15 +50,6 @@ def _own_unit_named(path: str, own_names: set[str]) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
-def collect_unit_source(units: list['Unit']) -> dict[str, str]:
-    """Read every own unit's complete source text, keyed by unit name.
-
-    Whole files, not the per-declaration slices the binary path ships: a source library
-    has no export closure to compute, because there is nothing to leave out.
-    """
-    return {u.name: u.file_path.read_text(encoding="utf-8") for u in own_units(units)}
-
-
 def _requires_compiler(compiler_version: str) -> str:
     """The constraint a build stamps: the building compiler's minor, when it parses."""
     from sushi_lang.internals.semver import InvalidVersion, Version, default_compiler_req
@@ -190,6 +181,14 @@ class LibraryManifestGenerator:
             text = unit.file_path.read_text(encoding="utf-8")
             self._sources[unit.name] = text
         return text
+
+    def source_map(self, units: list['Unit']) -> dict[str, str]:
+        """Every own unit's complete source text, keyed by unit name.
+
+        Whole files, not the per-declaration slices the binary path ships: a source
+        library has no export closure to compute, because there is nothing to leave out.
+        """
+        return {u.name: self._source(u) for u in own_units(units)}
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
                  templates: dict | None = None, library_version: str = "0.0.0",

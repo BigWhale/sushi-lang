@@ -6,11 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from sushi_lang.internals.diagnostics import (
-    InternalCompilerError,
-    StdlibBuildError,
-    SushiError,
-)
+from sushi_lang.internals.diagnostics import InternalCompilerError, SushiError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals.styling import COLOUR_CHOICES, set_colour_override
 from sushi_lang.internals.version import print_banner
@@ -211,16 +207,18 @@ def _validate_args(args: argparse.Namespace, reporter: Reporter) -> None:
 def _run(session: Session) -> int:
     """Everything the compiler does. Raises; never reports."""
     from sushi_lang.compiler.loader import check_duplicate_uses, read_source
-    from sushi_lang.compiler.pipeline import compile_multi_file
+    from sushi_lang.compiler.options import BuildOptions
+    from sushi_lang.compiler.pipeline import build_stdlib, compile_multi_file
     from sushi_lang.internals import errors as er
     from sushi_lang.internals.parser import parse_to_ast
 
     args = session.args
+    options = BuildOptions.from_args(args)
 
     if args.clean_cache:
         from sushi_lang.compiler.cache import CacheManager
         root = Path(args.source).resolve().parent if args.source else Path.cwd()
-        cm = CacheManager.for_run(args, root)
+        cm = CacheManager.for_run(options, root)
         if cm.cache_path.exists():
             cm.wipe()
             print(f"Removed cache: {cm.cache_path}")
@@ -235,14 +233,7 @@ def _run(session: Session) -> int:
 
     if args.build_stdlib:
         print("Building standard library...")
-        from sushi_lang.backend.stdlib_builder import detect_platform
-        from sushi_lang.sushi_stdlib.build import build_all
-        try:
-            build_all(detect_platform())
-        except SushiError:
-            raise
-        except Exception as e:
-            raise StdlibBuildError("CE0007", detail=str(e)) from e
+        build_stdlib(rebuild=True)
         print()
 
         if not args.source:
@@ -280,7 +271,7 @@ def _run(session: Session) -> int:
 
     check_duplicate_uses(ast, session.reporter)
 
-    return compile_multi_file(ast, src_path, session.reporter, args, is_library=args.lib)
+    return compile_multi_file(ast, src_path, session.reporter, options)
 
 
 def _as_ice(exc: Exception) -> InternalCompilerError:

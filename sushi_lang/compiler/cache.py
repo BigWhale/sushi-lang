@@ -6,11 +6,14 @@ import os
 import shutil
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.backend.platform_detect import default_triple
 
 from sushi_lang import __version__ as compiler_version
+
+if TYPE_CHECKING:
+    from sushi_lang.compiler.options import BuildOptions
 
 
 CACHE_DIR_NAME = "__sushi_cache__"
@@ -40,12 +43,11 @@ class CacheManager:
         self._target_triple = default_triple()
 
     @classmethod
-    def for_run(cls, args, project_root: Path) -> "CacheManager":
+    def for_run(cls, options: "BuildOptions", project_root: Path) -> "CacheManager":
         """The cache of one compilation: `--cache-dir` when given, made absolute
         against the user's directory, else `__sushi_cache__/` in `project_root`."""
-        cache_dir = Path(args.cache_dir).resolve() if getattr(args, "cache_dir", None) else None
-        return cls(project_root, opt_level=getattr(args, "opt", "mem2reg"),
-                   cache_dir=cache_dir)
+        cache_dir = Path(options.cache_dir).resolve() if options.cache_dir else None
+        return cls(project_root, opt_level=options.opt, cache_dir=cache_dir)
 
     @property
     def global_key(self) -> str:

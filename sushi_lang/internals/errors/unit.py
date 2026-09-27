@@ -85,3 +85,7 @@ _add(ErrorMessage("CE3017", Severity.ERROR,
 _add(ErrorMessage("CE3018", Severity.ERROR,
     "no source file to compile",
     Category.UNIT, "`sushic` needs a `.sushi` file to compile, unless the run only rebuilds the standard library (`--build-stdlib`) or only removes the cache (`--clean-cache`). Name the source file: `sushic app.sushi`."))
+
+_add(ErrorMessage("CE3019", Severity.ERROR,
+    "cannot write '{path}': '{directory}' is not a directory",
+    Category.UNIT, "The output path named with `-o` is in a directory that does not exist, or its parent is not a directory. The binary, the object file, the `.ll` file and the `.slib` are all written beside that path, so the build is refused after the analysis and before any code is generated. The compiler does not create the directory: a mistyped path would otherwise create a directory nobody asked for. This is an input condition and not a compiler bug, which is why it is not CE0000; it used to reach the top-level guard as an internal error, or the linker as CE3008 on an incremental build. Create the directory, or fix the path."))
