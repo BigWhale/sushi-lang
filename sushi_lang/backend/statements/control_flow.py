@@ -12,6 +12,19 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import If, While
 
 
+def _emit_scoped_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
+    """Emit a condition in a scope of its own, and free its temporaries before the branch.
+
+    The condition's value is an i1 when it is complete, so a temporary it made is not read
+    again. Each evaluation frees what it made: a `while` condition runs once per iteration,
+    and a later `if` test runs only when the tests before it are false.
+    """
+    codegen.memory.push_scope()
+    cond = utils.emit_condition(codegen, expr)
+    codegen.memory.pop_scope()
+    return cond
+
+
 def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
     """Emit if statement with proper basic block structure."""
     builder, func = require_both_initialized(codegen)
@@ -28,13 +41,13 @@ def emit_if(codegen: 'LLVMCodegen', node: 'If') -> None:
     # With no else, the false edge of the last test is a branch to the merge block.
     merge_reached = else_bb is None
 
-    cond0 = utils.emit_condition(codegen, arms[0][0])
+    cond0 = _emit_scoped_condition(codegen, arms[0][0])
     false0 = test_bbs[0] if n > 1 else (else_bb or after_bb)
     codegen.builder.cbranch(cond0, body_bbs[0], false0)
 
     for i in range(1, n):
         codegen.builder.position_at_end(test_bbs[i - 1])
-        cond_i = utils.emit_condition(codegen, arms[i][0])
+        cond_i = _emit_scoped_condition(codegen, arms[i][0])
         false_i = test_bbs[i] if (i + 1) < n else (else_bb or after_bb)
         codegen.builder.cbranch(cond_i, body_bbs[i], false_i)
 
@@ -86,7 +99,7 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
     codegen.builder.branch(cond_bb)
 
     codegen.builder.position_at_end(cond_bb)
-    cond_val = utils.emit_condition(codegen, node.cond)
+    cond_val = _emit_scoped_condition(codegen, node.cond)
     codegen.builder.cbranch(cond_val, body_bb, end_bb)
 
     codegen.builder.position_at_end(body_bb)

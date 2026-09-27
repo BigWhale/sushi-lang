@@ -1,0 +1,19 @@
+# An owning string temporary in a comparison under not is freed.
+# EXPECT_STDOUT_EXACT: "false\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn word(string s) string:
+    return Result.Ok(s.s(0, 8))
+
+fn look(bool b) i32:
+    if (b):
+        return Result.Ok(1)
+    return Result.Ok(0)
+
+fn main() i32:
+    let string a = "manifest x"
+    let bool b = not (a.s(0, 8) == "manifest")
+    println(b)
+    return Result.Ok(0)
