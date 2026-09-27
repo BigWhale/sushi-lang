@@ -1,6 +1,6 @@
 """Parser for array types (fixed and dynamic)."""
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Tuple
 from lark import Tree, Token
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
@@ -29,11 +29,11 @@ def parse_array_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[ArrayTyp
     if base_type is None:
         return None
 
-    size = _array_size(size_node, ast_builder)
-    return ArrayType(base_type=base_type, size=size)
+    size, size_name = _array_size(size_node, ast_builder)
+    return ArrayType(base_type=base_type, size=size, size_name=size_name)
 
 
-def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
+def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[int, Optional[str]]:
     """The element count of a fixed array. CE2099 when it is not one.
 
     An array size is the second consumer of a numeric token, so it goes through the
@@ -44,7 +44,8 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
     A NAME is a constant of THIS unit, read from the constants the builder has
     already built. The size has to be a number before the type exists, which is
     long before any pass has a program-wide constant table -- so a constant next
-    door is reachable as a value and not as a size.
+    door is reachable as a value and not as a size. The name is answered beside the
+    count, because the count alone keeps no trace of the constant it came from.
     """
     from sushi_lang.semantics.ast_builder.expressions.literals import expr_from_token
     from sushi_lang.semantics.ast import IntLit, Name
@@ -65,11 +66,13 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
                 reason="a size is read while this unit is parsed, before any alias is "
                        "bound").help(
                 "declare an integer constant in this unit and name it bare"),
-            1)
+            1), None
 
     size_expr = expr_from_token(token, ast_builder)
+    size_name = None
 
     if isinstance(size_expr, Name):
+        size_name = size_expr.id
         named = ast_builder.integer_constant(size_expr.id)
         value = named if named is not None else _reject(
             token, ast_builder,
@@ -81,7 +84,7 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> int:
 
     if value < 1:
         value = _reject(token, ast_builder, "an array holds at least one element")
-    return value
+    return value, size_name
 
 
 def _reject(token: Token, ast_builder: 'ASTBuilder', reason: str) -> int:

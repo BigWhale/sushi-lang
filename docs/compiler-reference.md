@@ -50,6 +50,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--color WHEN`      | `always`, `never` or `auto` (the default)          |
 | `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
 | `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
+| `--warn-unused`     | Warn about a dead private declaration (CW1004) and an unused import (CW3006) |
 | `--traceback`       | Show full Python traceback on errors               |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
@@ -81,6 +82,36 @@ Every declaration is asked, public and private. `fn main()` and the `unsafe exte
 are the only exemptions, and a library's units are never linted. The five codes and the
 rules behind them are in
 [Documentation Blocks](documentation-blocks.md#completeness-warn-missing-docs).
+
+### Unused Declarations and Imports
+
+```bash
+./sushic --warn-unused main.sushi
+```
+
+The flag adds two warnings. It is off by default.
+
+```
+main.sushi:3:1: warning [CW3006]: '<time>' brings nothing this unit names.
+main.sushi:7:4: warning [CW1004]: private function 'helper' is never used in this unit.
+```
+
+**CW1004** is a private top-level declaration that nothing in its unit reaches. A private
+name is visible only in its own unit, so the lint checks each unit alone. The roots are
+every `public` declaration, every `extend` block (an extension method and a perk
+implementation), the `unsafe external` blocks, and `fn main()`. A private declaration that
+only another dead declaration names is also dead, so the lint reports both. A public
+declaration is API, and the lint never reports it.
+
+**CW3006** is a `use` line whose unit names nothing that the import brings. The import
+brings the names it declares or re-exports, the member names behind its alias, the
+extension and perk methods of the imported unit, and for `<collections/strings>` the
+string methods that the module enables. A `public use` re-exports to the importers of the
+unit, so the lint never reports it. The lint does not report an import of a library.
+
+The lint does not check the units of a library, and it does not check the bundled stdlib
+units. The test runner sets the hidden variable `SUSHI_STDLIB_DEAD_GATE=1` to check the
+bundled stdlib units too.
 
 ### Library Compilation
 

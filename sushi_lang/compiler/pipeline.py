@@ -414,7 +414,7 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
     analyzer = SemanticAnalyzer(
         reporter, filename=entry_name, unit_manager=unit_manager,
         library_linker=library_linker,
-        warn_missing_docs=options.warn_missing_docs,
+        lints=options.lints,
         generated_symbols=_generated_symbols(compilation_order), is_library=options.lib)
     analyzer.check()
     return analyzer

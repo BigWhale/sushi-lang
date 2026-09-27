@@ -687,6 +687,11 @@ gains `warn_missing_docs: bool = False`, beside `unit_manager`, `library_linker`
 `BuildOptions` the way `--ignore-compiler-version` is read. A `CompilerOptions` object is the right
 answer to the SECOND warning flag and the wrong answer to the first.
 
+The second warning flag came with #959 (`--warn-unused`), and the object came with it. The
+keyword is now `lints: Lints`, a frozen dataclass in `semantics/semantic_analyzer.py` with
+one field for each warning-control flag (`missing_docs`, `unused`). `BuildOptions.lints`
+makes it from the command line, and `compile_multi_file` passes it to the analyzer.
+
 **R36 — the test runner gains a `COMPILER_FLAGS:` directive.** A `.sushi` fixture could not
 turn a compiler flag on, so a flag-gated diagnostic had no fixture. One field on
 `TestMetadata`, one branch in the directive parser, and one insertion at each of the two

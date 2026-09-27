@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
@@ -39,21 +40,36 @@ def enum_base_names(*tables) -> set[str]:
 
 
 
-# The test runner's stdlib doc-block gate (#953). Hidden, like SUSHI_SPELLING_GATE: set, the
-# `docs` pass also checks the BUNDLED stdlib units; a source library stays skipped.
+# The test runner's stdlib gates, hidden like SUSHI_SPELLING_GATE. Set, a lint also checks
+# the BUNDLED stdlib units; a source library stays skipped. One for the doc blocks (#953),
+# one for the dead-code lint (#959).
 STDLIB_DOC_GATE_ENV = "SUSHI_STDLIB_DOC_GATE"
+STDLIB_DEAD_GATE_ENV = "SUSHI_STDLIB_DEAD_GATE"
 
 
-def _doc_gate_checks(unit: Unit) -> bool:
-    """Does the stdlib doc-block gate ask the `docs` pass to check this provenance unit?"""
-    if os.environ.get(STDLIB_DOC_GATE_ENV, "").lower() in ("", "0", "off"):
+def _lint_checks(unit: Unit, gate_env: str) -> bool:
+    """Does a lint check this unit? Always a unit of the program; a bundled stdlib unit
+    only when its stdlib gate is set; a library unit never."""
+    if unit.provenance is None:
+        return True
+    if os.environ.get(gate_env, "").lower() in ("", "0", "off"):
         return False
     return not unit.from_library and unit.name in SOURCE_STDLIB_MODULES
+
+
+@dataclass(frozen=True)
+class Lints:
+    """The warning-control flags: `--warn-missing-docs` and `--warn-unused`.
+
+    The second warning-control flag is what earned an object (documentation.md R35).
+    """
+    missing_docs: bool = False
+    unused: bool = False
 
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
-    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, warn_missing_docs: bool = False,
+    def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, lints: Optional[Lints] = None,
                  generated_symbols: frozenset[str] = frozenset(),
                  is_library: bool = False) -> None:
         self.reporter = reporter
@@ -67,10 +83,7 @@ class SemanticAnalyzer:
         # A NAME list and nothing else: no semantic table holds these symbols, which is
         # why CE5013 could not see them (#472).
         self.generated_symbols = generated_symbols
-        # `--warn-missing-docs`. A keyword and not an options object on purpose: this is
-        # the compiler's FIRST warning-control flag, and a second one is what earns the
-        # object (documentation.md section 6).
-        self.warn_missing_docs = warn_missing_docs
+        self.lints = lints if lints is not None else Lints()
         # `--lib`. The `entrypoint` pass is the one home of main's rule and the rule
         # turns on the build kind: an executable needs a main, a library refuses one.
         self.is_library = is_library
@@ -95,6 +108,7 @@ class SemanticAnalyzer:
             stage         what it does                           method                            where it lives
             collect       constants, headers, generic types      _collect                          passes/collect/
             docs          doc blocks against their declarations  _check_docs                       passes/docs.py
+            unused        --warn-unused: dead privates, imports  _check_unused                     unused.py
             externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
             libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
@@ -160,6 +174,7 @@ class SemanticAnalyzer:
 
         libraries = self._collect(compilation_order)
         self._check_docs(compilation_order)
+        self._check_unused(compilation_order, self.unit_manager.units)
         self._check_externs(compilation_order)
         self._register_libraries(compilation_order, libraries)
         self._build_namespaces(compilation_order, self.unit_manager.units)
@@ -259,7 +274,7 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is None:
                 continue
-            if unit.provenance is not None and not _doc_gate_checks(unit):
+            if not _lint_checks(unit, STDLIB_DOC_GATE_ENV):
                 continue
             unit_reporter = self._unit_reporter(unit)
             check_docs(unit_reporter, unit.ast)
@@ -267,8 +282,23 @@ class SemanticAnalyzer:
             # `register_synthesized_function` appends a monomorphized clone to a unit's
             # own `ast.functions`, so a lint that ran after `monomorphize` would demand
             # a doc block on every instance the program asked for.
-            if self.warn_missing_docs:
+            if self.lints.missing_docs:
                 check_missing_docs(unit_reporter, unit.ast)
+            self._merge_unit(unit_reporter)
+
+    def _check_unused(self, compilation_order: list[Unit], all_units: dict) -> None:
+        """unused: `--warn-unused`, a dead private declaration and an unused import."""
+        # Beside `docs` and for its reason: it reads the WRITTEN declarations, before
+        # `libraries` appends a binary library's constants to a host unit and before
+        # `monomorphize` appends the instances.
+        if not self.lints.unused:
+            return
+        from sushi_lang.semantics.unused import check_unused
+        for unit in compilation_order:
+            if unit.ast is None or not _lint_checks(unit, STDLIB_DEAD_GATE_ENV):
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            check_unused(unit_reporter, unit, self.tables, all_units)
             self._merge_unit(unit_reporter)
 
     def _check_externs(self, compilation_order: list[Unit]) -> None:
