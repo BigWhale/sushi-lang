@@ -1,0 +1,3 @@
+public const string GREETING = "hi"
+public const i32 N = 4
+public var string LOG = "log"

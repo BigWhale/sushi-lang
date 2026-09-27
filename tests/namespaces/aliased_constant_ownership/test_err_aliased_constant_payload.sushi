@@ -1,0 +1,9 @@
+# A variant payload that names a constant of an owning type behind an alias
+# takes it, as for the flat name (#1016).
+# EXPECT_ERROR_CODES_EXACT: CE2436
+use "helpers/libc5" as c
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some(c.GREETING)
+    println(m.realise(""))
+    return Result.Ok(0)

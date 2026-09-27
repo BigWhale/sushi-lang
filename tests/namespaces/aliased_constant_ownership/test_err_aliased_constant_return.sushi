@@ -1,0 +1,11 @@
+# A constant of an owning type behind an alias in a return is a move out of
+# storage the program keeps, as the flat name is (#1016).
+# EXPECT_ERROR_CODES_EXACT: CE2436
+use "helpers/libc5" as c
+
+fn back() string:
+    return Result.Ok(c.GREETING)
+
+fn main() i32:
+    println(back().realise(""))
+    return Result.Ok(0)
