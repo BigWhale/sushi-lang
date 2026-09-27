@@ -1,9 +1,10 @@
 """Library manifest generation for .slib files."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
@@ -111,6 +112,40 @@ def resolve_library_version(source_dir: Path, explicit: str | None,
     return chosen
 
 
+class _ScopedIndex:
+    """A `(unit, name)` index: the own unit first, then the name's first declaration.
+
+    First declaration is insertion order, which is the compilation order (#494).
+    """
+
+    def __init__(self) -> None:
+        self._by_key: dict[tuple[str, str], tuple] = {}
+        self._first: dict[str, tuple[str, str]] = {}
+
+    def add(self, unit: str, name: str, payload: tuple) -> None:
+        self._by_key[(unit, name)] = payload
+        self._first.setdefault(name, (unit, name))
+
+    def resolve(self, unit: str, name: str):
+        key: tuple[str, str] | None = (unit, name)
+        if key not in self._by_key:
+            key = self._first.get(name)
+        if key is None:
+            return None, None
+        return key, self._by_key[key]
+
+
+@dataclass
+class _ClosureKind:
+    """One index of the export closure, and what a reference into it does."""
+    index: _ScopedIndex
+    binds: bool = False
+    refuses: Callable[[Any], bool] = lambda _node: False
+    ships: Callable[[Any], bool] = lambda _node: True
+    child_sink: Callable[[tuple[str, str]], dict | None] = lambda _key: None
+    shipped: dict[tuple[str, str], tuple] = field(default_factory=dict)
+
+
 class LibraryManifestGenerator:
     """Generates .slib library files."""
 
@@ -119,6 +154,15 @@ class LibraryManifestGenerator:
         self.analyzer = analyzer
         self.structs = analyzer.tables.structs
         self.enums = analyzer.tables.enums
+        self._sources: dict[str, str] = {}
+
+    def _source(self, unit: 'Unit') -> str:
+        """The unit's source text, read from disk once per generator."""
+        text = self._sources.get(unit.name)
+        if text is None:
+            text = unit.file_path.read_text(encoding="utf-8")
+            self._sources[unit.name] = text
+        return text
 
     def generate(self, units: list['Unit'], output_path: Path, bitcode: bytes,
                  templates: dict | None = None, library_version: str = "0.0.0",
@@ -326,17 +370,14 @@ class LibraryManifestGenerator:
         for unit in own_units(units):
             if unit.ast is None:
                 continue
-            source = None
             for const in unit.ast.constants:
                 if not const.is_public or isinstance(const, VarDef):
                     continue
-                if source is None:
-                    source = unit.file_path.read_text()
                 public_consts.append(with_doc({
                     "name": const.name,
                     "unit": unit.name,
                     "type": self._type_to_string(const.ty),
-                    "source": slice_decl_source(const, source),
+                    "source": slice_decl_source(const, self._source(unit)),
                 }, const))
 
         return public_consts
@@ -356,17 +397,14 @@ class LibraryManifestGenerator:
         for unit in own_units(units):
             if unit.ast is None:
                 continue
-            source = None
             for var in unit.ast.constants:
                 if not isinstance(var, VarDef) or not var.is_public:
                     continue
-                if source is None:
-                    source = unit.file_path.read_text()
                 records.append(with_doc({
                     "name": var.name,
                     "unit": unit.name,
                     "type": self._type_to_string(var.ty),
-                    "source": slice_decl_source(var, source),
+                    "source": slice_decl_source(var, self._source(unit)),
                     "link_symbol": mangle_unit_symbol(unit.name, var.name),
                 }, var))
         return records
@@ -515,50 +553,46 @@ class LibraryManifestGenerator:
         over-rejects at worst, and CE5006 already refuses a template that names one.
         """
         import sushi_lang.internals.errors as er
-        from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
-        priv_concrete_fns: dict[tuple[str, str], tuple] = {}
-        priv_generic_fns: dict[tuple[str, str], tuple] = {}
-        constants: dict[tuple[str, str], tuple] = {}
-        types_by_name: dict[tuple[str, str], tuple] = {}
+        priv_concrete_fns = _ScopedIndex()
+        priv_generic_fns = _ScopedIndex()
+        constants = _ScopedIndex()
+        types_by_name = _ScopedIndex()
         external_namespaces: set[str] = set()
 
         for unit in own_units(units):
             if unit.ast is None:
                 continue
-            source = unit.file_path.read_text()
+            source = self._source(unit)
             for fn in unit.ast.functions:
-                if fn.type_params:
-                    if not getattr(fn, "is_public", False):
-                        priv_generic_fns[(unit.name, fn.name)] = (fn, source)
-                elif not getattr(fn, "is_public", False):
-                    priv_concrete_fns[(unit.name, fn.name)] = (fn, source)
+                if getattr(fn, "is_public", False):
+                    continue
+                index = priv_generic_fns if fn.type_params else priv_concrete_fns
+                index.add(unit.name, fn.name, (fn, source))
             for c in unit.ast.constants:
-                constants[(unit.name, c.name)] = (c, source)
+                constants.add(unit.name, c.name, (c, source))
             for s in unit.ast.structs:
-                types_by_name[(unit.name, s.name)] = (s, source)
+                types_by_name.add(unit.name, s.name, (s, source))
             for e in unit.ast.enums:
-                types_by_name[(unit.name, e.name)] = (e, source)
+                types_by_name.add(unit.name, e.name, (e, source))
             for ext in getattr(unit.ast, "externals", None) or []:
                 external_namespaces.add(ext.namespace)
 
-        def _resolve(index: dict, unit: str, name: str):
-            """Own unit first, then the flat view -- first declaration wins, which is
-            insertion order, which is the compilation order."""
-            hit = index.get((unit, name))
-            if hit is not None:
-                return (unit, name), hit
-            for (u, n), payload in index.items():
-                if n == name:
-                    return (u, n), payload
-            return None, None
-
-        shipped_fns: dict[tuple[str, str], tuple] = {}
-        shipped_generic_fns: dict[tuple[str, str], tuple] = {}
-        shipped_consts: dict[tuple[str, str], tuple] = {}
-        shipped_types: dict[tuple[str, str], tuple] = {}
         bindings: dict[tuple[str, str], dict[str, str]] = {}
         visited: set[tuple[str, str]] = set()
+
+        # One row per index, in the order a reference is resolved. A concrete function
+        # ships as bitcode, so the template records its symbol and its own body resolves
+        # at the producer's link; a generic one ships as source with a bindings map of
+        # its own. A type ships only when it is private: the public index carries the rest.
+        kinds = (
+            _ClosureKind(priv_concrete_fns, binds=True, refuses=self._unshippable_fn),
+            _ClosureKind(priv_generic_fns,
+                         child_sink=lambda key: bindings.setdefault(key, {})),
+            _ClosureKind(constants),
+            _ClosureKind(types_by_name,
+                         ships=lambda node: not getattr(node, "is_public", True)),
+        )
 
         rejected = False
 
@@ -597,57 +631,23 @@ class LibraryManifestGenerator:
                 if name in external_namespaces:
                     _reject(root, name)
                     return
-                key, payload = _resolve(priv_concrete_fns, unit, name)
-                if payload is not None:
-                    fn, src = payload
-                    if sink is not None:
+                for kind in kinds:
+                    key, payload = kind.index.resolve(unit, name)
+                    if key is None:
+                        continue
+                    if kind.binds and sink is not None:
                         sink[name] = mangle_unit_symbol(key[0], name)
                     if key in visited:
-                        continue
-                    if any(getattr(p, "is_variadic", False) for p in fn.params):
-                        _reject(root, name)
-                        return
-                    if self._contains_foreign_ptr(fn.ret) or any(
-                        self._contains_foreign_ptr(p.ty) for p in fn.params
-                    ):
+                        break
+                    target = payload[0]
+                    if kind.refuses(target):
                         _reject(root, name)
                         return
                     visited.add(key)
-                    shipped_fns[key] = (fn, src)
-                    _walk(fn, root, key[0], None)
-                    continue
-                key, payload = _resolve(priv_generic_fns, unit, name)
-                if payload is not None:
-                    if key in visited:
-                        continue
-                    fn, src = payload
-                    visited.add(key)
-                    shipped_generic_fns[key] = (fn, src)
-                    _walk(fn, root, key[0], bindings.setdefault(key, {}))
-                    continue
-                key, payload = _resolve(constants, unit, name)
-                if payload is not None:
-                    if key in visited:
-                        continue
-                    c, src = payload
-                    visited.add(key)
-                    shipped_consts[key] = (c, src)
-                    _walk(c, root, key[0], None)
-                    continue
-                key, payload = _resolve(types_by_name, unit, name)
-                if payload is not None:
-                    if key in visited:
-                        continue
-                    tnode, src = payload
-                    visited.add(key)
-                    # A private type has to travel with the template that names it. The
-                    # public list is gated on the marker, so before this the template
-                    # arrived at the consumer with a type nothing had registered, and the
-                    # transplanted body was CE2001 "unknown type" about the library's own
-                    # struct.
-                    if not getattr(tnode, "is_public", True):
-                        shipped_types[key] = (tnode, src)
-                    _walk(tnode, root, key[0], None)
+                    if kind.ships(target):
+                        kind.shipped[key] = payload
+                    _walk(target, root, key[0], kind.child_sink(key))
+                    break
 
         for node, _source, unit_name in exported:
             _walk(node, node, unit_name,
@@ -655,65 +655,98 @@ class LibraryManifestGenerator:
             if rejected:
                 break
 
+        def listed(kind: _ClosureKind) -> list[tuple]:
+            return [(node, src, u) for (u, _n), (node, src) in kind.shipped.items()]
+
         return {
-            "private_functions": [(fn, src, u) for (u, _n), (fn, src) in shipped_fns.items()],
-            "private_generic_functions": [(fn, src, u) for (u, _n), (fn, src) in shipped_generic_fns.items()],
-            "constants": [(c, src, u) for (u, _n), (c, src) in shipped_consts.items()],
-            "private_types": [(t, src, u) for (u, _n), (t, src) in shipped_types.items()],
+            "private_functions": listed(kinds[0]),
+            "private_generic_functions": listed(kinds[1]),
+            "constants": listed(kinds[2]),
+            "private_types": listed(kinds[3]),
             "bindings": bindings,
         }
 
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source)."""
-        from sushi_lang.semantics.library_templates import (
-            serialize_generic_function, serialize_generic_struct,
-            serialize_generic_enum, serialize_perk, serialize_perk_impl,
-            serialize_generic_perk_impl, slice_decl_source,
-        )
         from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
 
-        generic_functions: list[dict] = []
-        generic_structs: list[dict] = []
-        generic_enums: list[dict] = []
+        own = own_units(units)
         referenced_perks: set[str] = set()
-        exported: list[tuple] = []
-
-        # Every record names the unit that declared it. A template has no `link_symbol`
-        # -- it is monomorphized at the consumer, so its instances take the consumer's
-        # mangling -- but the unit is what an alias binds to, and for a BINARY library
-        # the manifest is the only place that can say (section 3.1).
-        for unit in own_units(units):
-            if unit.ast is None:
-                continue
-            source = unit.file_path.read_text()
-            for func in unit.ast.functions:
-                if not (func.is_public and func.type_params):
-                    continue
-                exported.append((func, source, unit.name))
-                record = serialize_generic_function(func, source)
-                record["unit"] = unit.name
-                generic_functions.append(record)
-                referenced_perks.update(record.get("free_perks", []))
-            for struct in unit.ast.structs:
-                if not struct.type_params:
-                    continue
-                exported.append((struct, source, unit.name))
-                record = serialize_generic_struct(struct, source)
-                record["unit"] = unit.name
-                generic_structs.append(record)
-                referenced_perks.update(record.get("free_perks", []))
-            for enum in unit.ast.enums:
-                if not enum.type_params:
-                    continue
-                exported.append((enum, source, unit.name))
-                record = serialize_generic_enum(enum, source)
-                record["unit"] = unit.name
-                generic_enums.append(record)
-                referenced_perks.update(record.get("free_perks", []))
+        generic_functions, generic_structs, generic_enums, exported = (
+            self._generic_templates(own, referenced_perks))
 
         # Walk the export closure: collect transitive private dependencies
         # (shipping them below) and reject un-shippable references (CE5006).
         closure = self._compute_export_closure(units, exported)
+        shipped = self._closure_records(closure, generic_functions, referenced_perks)
+
+        generic_perk_impls, template_keys = self._generic_perk_impl_templates(
+            own, referenced_perks)
+        perks, shipped_perks = self._shipped_perks(own, referenced_perks)
+        perk_impls = self._concrete_perk_impls(own, shipped_perks, template_keys)
+
+        return {
+            # 5: every record carries its unit, and a source-shipped template carries
+            # `bindings` (D4). An older consumer resolves the flat way, so an old
+            # compiler is refused by the container's requires_compiler, and an old
+            # LIBRARY is refused by the consumer's templates gate (decision B).
+            # 6: every public perk ships, and a generic-target perk implementation
+            # ships as a template (#543). A version-5 library carries neither, so a
+            # consumer would answer CE2008 for a method the library implements.
+            "version": TEMPLATES_SCHEMA_VERSION,
+            "generic_functions": generic_functions,
+            "generic_structs": generic_structs,
+            "generic_enums": generic_enums,
+            "perks": perks,
+            "perk_impls": perk_impls,
+            "generic_perk_impls": generic_perk_impls,
+            **shipped,
+        }
+
+    def _generic_templates(self, own: list['Unit'], referenced_perks: set[str]):
+        """The public generic functions and every generic struct and enum, as templates.
+
+        Every record names the unit that declared it. A template has no `link_symbol`
+        -- it is monomorphized at the consumer, so its instances take the consumer's
+        mangling -- but the unit is what an alias binds to, and for a BINARY library
+        the manifest is the only place that can say (section 3.1). `exported` keeps the
+        declaration order, unit by unit, because the closure walk reads it in order.
+        """
+        from sushi_lang.semantics.library_templates import (
+            serialize_generic_enum, serialize_generic_function, serialize_generic_struct,
+        )
+
+        functions: list[dict] = []
+        structs: list[dict] = []
+        enums: list[dict] = []
+        exported: list[tuple] = []
+        for unit in own:
+            if unit.ast is None:
+                continue
+            source = self._source(unit)
+            rows = (
+                ([f for f in unit.ast.functions if f.is_public and f.type_params],
+                 serialize_generic_function, functions),
+                ([s for s in unit.ast.structs if s.type_params],
+                 serialize_generic_struct, structs),
+                ([e for e in unit.ast.enums if e.type_params],
+                 serialize_generic_enum, enums),
+            )
+            for decls, serialize, records in rows:
+                for decl in decls:
+                    exported.append((decl, source, unit.name))
+                    record = serialize(decl, source)
+                    record["unit"] = unit.name
+                    records.append(record)
+                    referenced_perks.update(record.get("free_perks", []))
+        return functions, structs, enums, exported
+
+    def _closure_records(self, closure: dict, generic_functions: list[dict],
+                         referenced_perks: set[str]) -> dict:
+        """The records the export closure ships, and the summary that names them."""
+        from sushi_lang.semantics.library_templates import (
+            serialize_generic_function, slice_decl_source,
+        )
 
         # D4: each template that ships as SOURCE carries the map from every free
         # name its body resolved to the symbol the producer resolved it to. Absent
@@ -765,73 +798,89 @@ class LibraryManifestGenerator:
             {"name": node.name, "unit": unit_name, "source": slice_decl_source(node, src)}
             for node, src, unit_name in closure["private_types"]
         ]
-        closure_summary = {
-            "private_functions": sorted({r["name"] for r in private_functions}),
-            "private_generic_functions": sorted(
-                {fn.name for fn, _, _ in closure["private_generic_functions"]}
-            ),
-            "constants": sorted({r["name"] for r in shipped_constants}),
-            "private_types": sorted({r["name"] for r in shipped_types}),
+        return {
+            "private_functions": private_functions,
+            "constants": shipped_constants,
+            "private_types": shipped_types,
+            "closure_summary": {
+                "private_functions": sorted({r["name"] for r in private_functions}),
+                "private_generic_functions": sorted(
+                    {fn.name for fn, _, _ in closure["private_generic_functions"]}
+                ),
+                "constants": sorted({r["name"] for r in shipped_constants}),
+                "private_types": sorted({r["name"] for r in shipped_types}),
+            },
         }
 
-        # A generic-target perk implementation is a TEMPLATE (#543). The collect pass
-        # filed it in `generic_perk_impls`; what `perk_impls` below holds for it are the
-        # monomorphized copies, which the consumer cuts for itself from this source.
-        generic_perk_impls: list[dict] = []
+    def _generic_perk_impl_templates(self, own: list['Unit'], referenced_perks: set[str]):
+        """Every generic-target perk implementation, as a TEMPLATE (#543).
+
+        The collect pass filed it in `generic_perk_impls`; what `perk_impls` holds for
+        it are the monomorphized copies, which the consumer cuts for itself from this
+        source. The keys name those copies, so the concrete index can leave them out.
+        """
+        from sushi_lang.semantics.library_templates import serialize_generic_perk_impl
+
+        records: list[dict] = []
         template_keys: set[tuple[str, str]] = set()
-        for unit in own_units(units):
+        for unit in own:
             if unit.ast is None:
                 continue
-            source = unit.file_path.read_text()
             for impl in getattr(unit.ast, "generic_perk_impls", None) or []:
                 template_keys.add((impl.target_type.base_name, impl.perk_name))
-                if any(
-                    self._contains_foreign_ptr(m.ret)
-                    or any(self._contains_foreign_ptr(p.ty) for p in m.params)
-                    for m in impl.methods
-                ):
+                if self._impl_exposes_ptr(impl):
                     continue
-                record = serialize_generic_perk_impl(impl, source)
+                record = serialize_generic_perk_impl(impl, self._source(unit))
                 record["unit"] = unit.name
-                generic_perk_impls.append(record)
+                records.append(record)
                 referenced_perks.add(impl.perk_name)
+        return records, template_keys
 
-        # Every PUBLIC perk ships: it is part of the API, whether or not a generic
-        # constraint names it (#543 -- a contract a consumer could not name was a
-        # contract whose implementation could not be registered). A perk a template
-        # names ships too, as before.
+    def _shipped_perks(self, own: list['Unit'],
+                       referenced_perks: set[str]) -> tuple[list[dict], set[str]]:
+        """Every PUBLIC perk, and every perk a template names.
+
+        A public perk is part of the API whether or not a generic constraint names it
+        (#543 -- a contract a consumer could not name was a contract whose
+        implementation could not be registered).
+        """
+        from sushi_lang.semantics.library_templates import serialize_perk
+
         perks: list[dict] = []
-        seen_perks: set[str] = set()
-        for unit in own_units(units):
+        seen: set[str] = set()
+        for unit in own:
             if unit.ast is None:
                 continue
-            source = unit.file_path.read_text()
             for perk in unit.ast.perks:
-                if perk.name in seen_perks:
+                if perk.name in seen:
                     continue
                 if not (perk.is_public or perk.name in referenced_perks):
                     continue
-                seen_perks.add(perk.name)
-                record = serialize_perk(perk, source)
+                seen.add(perk.name)
+                record = serialize_perk(perk, self._source(unit))
                 record["unit"] = unit.name
                 perks.append(record)
+        return perks, seen
 
+    def _concrete_perk_impls(self, own: list['Unit'], shipped_perks: set[str],
+                             template_keys: set[tuple[str, str]]) -> list[dict]:
+        """Every concrete implementation of a shipped perk, once per (type, perk)."""
+        from sushi_lang.semantics.library_templates import serialize_perk_impl
         from sushi_lang.semantics.passes.collect.perks import _get_type_name
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
-        perk_impls: list[dict] = []
-        seen_impls: set[tuple[str, str]] = set()
-        for unit in own_units(units):
+        records: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for unit in own:
             if unit.ast is None:
                 continue
-            source = unit.file_path.read_text()
             for impl in unit.ast.perk_impls:
-                if impl.perk_name not in seen_perks:
+                if impl.perk_name not in shipped_perks:
                     continue
                 if isinstance(impl.target_type, GenericTypeRef):
                     continue
                 type_name = _get_type_name(impl.target_type)
-                if type_name is None or (type_name, impl.perk_name) in seen_impls:
+                if type_name is None or (type_name, impl.perk_name) in seen:
                     continue
                 # A monomorphized copy of a template is an ordinary implementation by
                 # design, and its source slice is the TEMPLATE's: shipping it as a
@@ -840,37 +889,29 @@ class LibraryManifestGenerator:
                 base_name = getattr(impl.target_type, "generic_base", None) or type_name
                 if (base_name, impl.perk_name) in template_keys:
                     continue
-                if any(
-                    self._contains_foreign_ptr(m.ret)
-                    or any(self._contains_foreign_ptr(p.ty) for p in m.params)
-                    for m in impl.methods
-                ):
+                if self._impl_exposes_ptr(impl):
                     continue
-                seen_impls.add((type_name, impl.perk_name))
-                record = serialize_perk_impl(impl, source)
+                seen.add((type_name, impl.perk_name))
+                record = serialize_perk_impl(impl, self._source(unit))
                 record["unit"] = unit.name
-                perk_impls.append(record)
+                records.append(record)
+        return records
 
-        return {
-            # 5: every record carries its unit, and a source-shipped template carries
-            # `bindings` (D4). An older consumer resolves the flat way, so an old
-            # compiler is refused by the container's requires_compiler, and an old
-            # LIBRARY is refused by the consumer's templates gate (decision B).
-            # 6: every public perk ships, and a generic-target perk implementation
-            # ships as a template (#543). A version-5 library carries neither, so a
-            # consumer would answer CE2008 for a method the library implements.
-            "version": TEMPLATES_SCHEMA_VERSION,
-            "generic_functions": generic_functions,
-            "generic_structs": generic_structs,
-            "generic_enums": generic_enums,
-            "perks": perks,
-            "perk_impls": perk_impls,
-            "generic_perk_impls": generic_perk_impls,
-            "private_functions": private_functions,
-            "constants": shipped_constants,
-            "private_types": shipped_types,
-            "closure_summary": closure_summary,
-        }
+    def _impl_exposes_ptr(self, impl) -> bool:
+        """Whether a perk implementation's methods expose a foreign `ptr`."""
+        return any(
+            self._contains_foreign_ptr(m.ret)
+            or any(self._contains_foreign_ptr(p.ty) for p in m.params)
+            for m in impl.methods
+        )
+
+    def _unshippable_fn(self, fn) -> bool:
+        """A private concrete function the closure cannot ship: a native variadic has no
+        template to monomorphize, and a foreign `ptr` may not cross the boundary."""
+        return any(getattr(p, "is_variadic", False) for p in fn.params) or (
+            self._contains_foreign_ptr(fn.ret)
+            or any(self._contains_foreign_ptr(p.ty) for p in fn.params)
+        )
 
     def _extract_reexports(self, units: list['Unit']) -> list[dict]:
         """What each own unit RE-EXPORTS: one record per `public use` (#585).
