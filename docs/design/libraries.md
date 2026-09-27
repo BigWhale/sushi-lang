@@ -387,7 +387,7 @@ record, both raising and aborting the `.slib` write (no partial artifact):
   This check does not apply on the source path, where the declaration ships whole.
 - **CE5002** — a public function whose signature (param or return, recursively
   including inside `Result`/`Maybe`) exposes a foreign `ptr` cannot appear in a public
-  API at all. FFI is a private unit detail (`_contains_foreign_ptr`, shared with the
+  API at all. FFI is a private unit detail (`contains_foreign_ptr`, shared with the
   in-program unit-boundary check that raises CE5008).
 
 At the consumer, `LibraryRegistry._parse_functions` turns each record back into a

@@ -150,11 +150,7 @@ SUSHI_READER: dict[str, set[str]] = {
 }
 
 # A read no writer answers, known and not yet fixed. It may only shrink.
-KNOWN_UNWRITTEN = {
-    # `LibraryMetadata.version` is filled from a key the manifest never carried (the
-    # writer says `library_version`), and nothing reads the field back.
-    (REGISTRY, Y + "register_library", "manifest", "version"),
-}
+KNOWN_UNWRITTEN: set[tuple[str, str, str, str]] = set()
 
 
 def _tree(path: str) -> ast.Module:

@@ -172,14 +172,6 @@ _add(ErrorMessage("CE2041", Severity.ERROR,
     "duplicate match arm for variant '{variant}'",
     Category.TYPE, "The same enum variant cannot be matched more than once."))
 
-_add(ErrorMessage("CE2042", Severity.ERROR,
-    "unreachable match arm",
-    Category.TYPE, "This match arm can never be reached because previous arms cover all cases."))
-
-_add(ErrorMessage("CE2043", Severity.ERROR,
-    "pattern type mismatch: expected '{expected}', got '{got}'",
-    Category.TYPE, "Pattern binding type does not match the expected type from the enum variant."))
-
 _add(ErrorMessage("CE2044", Severity.ERROR,
     "wrong number of pattern bindings: variant '{variant}' expects {expected}, got {got}",
     Category.TYPE, "Pattern must bind the exact number of variables for the variant's associated data."))

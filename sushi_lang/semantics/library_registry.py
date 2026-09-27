@@ -31,7 +31,6 @@ class LibraryMetadata:
     name: str
     path: Path
     platform: str
-    version: str
     functions: dict[str, 'FuncSig'] = field(default_factory=dict)
     # Export-closure private helpers (C4b/C5): signature-only records whose
     # definitions link from the library bitcode. Kept separate from
@@ -83,7 +82,6 @@ class LibraryRegistry:
             name=lib_name,
             path=lib_path,
             platform=manifest.get("platform", "unknown"),
-            version=manifest.get("version", "0.0.0"),
             dependencies=manifest.get("dependencies", []),
             reexports=manifest_reexports(manifest),
             raw_manifest=manifest,
@@ -256,8 +254,3 @@ class LibraryRegistry:
             result.update(lib.enums)
         return result
 
-    def clear(self) -> None:
-        """Clear all registered libraries."""
-        self._libraries.clear()
-        self._struct_table.clear()
-        self._enum_table.clear()

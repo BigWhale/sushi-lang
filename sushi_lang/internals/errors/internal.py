@@ -272,10 +272,6 @@ _add(ErrorMessage("CE0073", Severity.ERROR,
     "unknown primitive type: {type}",
     Category.INTERNAL, "Primitive type not recognized during codegen."))
 
-_add(ErrorMessage("CE0074", Severity.ERROR,
-    "unknown builtin primitive method: {type}.{method}",
-    Category.INTERNAL, "Primitive type method not implemented."))
-
 _add(ErrorMessage("CE0075", Severity.ERROR,
     "unknown conversion kind: {kind}",
     Category.INTERNAL, "Type conversion operation not recognized."))
