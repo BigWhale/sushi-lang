@@ -1,0 +1,9 @@
+# A typed binding whose function type does not solve the type arguments of a
+# generic behind an alias is refused, as for the flat name (#1017).
+# EXPECT_ERROR_CODES_EXACT: CE2093
+use "helpers/libg" as l
+
+fn main() i32:
+    let fn(i32, i32) -> i32 f = l.gen
+    println(f(1, 2).realise(0))
+    return Result.Ok(0)

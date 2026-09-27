@@ -172,13 +172,19 @@ def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_fun
     return substituted_call_result(generic_func, type_args)
 
 
-def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty):
-    """Resolve a bare generic-fn reference against an expected FunctionType (T2.3)."""
+def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,
+                                 generic_func=None):
+    """Resolve a generic-fn reference against an expected FunctionType (T2.3).
+
+    A bare name reads the unit's own view; a name behind an alias hands in the
+    declaration its provider resolved (#1017).
+    """
     from sushi_lang.semantics.typesys import FunctionType, UnknownType
     from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
     if not isinstance(expected_ty, FunctionType):
         return None
-    generic_func = validator.generic_sig(name)
+    if generic_func is None:
+        generic_func = validator.generic_sig(name)
     if generic_func is None:
         return None
     type_params = generic_func.type_params or []

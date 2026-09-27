@@ -450,17 +450,40 @@ class ExpressionScanner:
             generic_func, arg_types,
             self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {})
 
-    def scan_generic_fn_reference(self, name: str, expected_ty) -> None:
-        """Record an instantiation for a bare generic-fn reference (T2.3)."""
+    def scan_generic_fn_reference(self, value, expected_ty) -> None:
+        """Record an instantiation for a generic-fn reference with an expected fn type.
+
+        A bare name reads the unit's own view (T2.3); a name behind an alias reads the
+        declaration the alias's provider resolves, as a qualified call does (#1017).
+        """
+        from sushi_lang.semantics.ast import MemberAccess, Name
         from sushi_lang.semantics.typesys import FunctionType
-        from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
         if not isinstance(expected_ty, FunctionType):
             return
-        if not self.generic_funcs or name not in self.generic_funcs:
-            return
-        if self._declares_concrete(name):
-            return
-        generic_func = self.generic_funcs[name]
+        if isinstance(value, Name):
+            name = value.id
+            if not self.generic_funcs or name not in self.generic_funcs:
+                return
+            if self._declares_concrete(name):
+                return
+            self._record_fn_reference(name, self.generic_funcs[name], expected_ty)
+        elif isinstance(value, MemberAccess):
+            binding = self._namespaced_binding(value.receiver, value.member)
+            if binding is not None and binding.kind == "generic function":
+                self._record_fn_reference(binding.name, binding.record, expected_ty)
+
+    def _namespaced_binding(self, receiver, member: str):
+        """What `<alias>.<member>` names, or None when the receiver is not an alias."""
+        from sushi_lang.semantics.ast import Name
+        if self.namespaces is None or not isinstance(receiver, Name):
+            return None
+        if receiver.id in self.type_inferrer.variable_types:
+            return None
+        return self.namespaces.lookup(receiver.id, member)
+
+    def _record_fn_reference(self, name: str, generic_func, expected_ty) -> None:
+        """Solve the type arguments from the expected fn type and record the instance."""
+        from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
         type_args = solve_leading_type_args(
             generic_func, list(expected_ty.param_types),
             self.type_inferrer.struct_table or {}, self.type_inferrer.enum_table or {},
