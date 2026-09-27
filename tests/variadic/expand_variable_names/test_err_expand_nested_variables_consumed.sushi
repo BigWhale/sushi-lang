@@ -1,0 +1,22 @@
+# Nested `expand`s over one pack: in the copy where both loop variables stand for the
+# same pack element, `a` and `b` are one hidden name. Each diagnostic still names the
+# written variable of its own node.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'a'
+# EXPECT_STDERR_CONTAINS: cannot consume 'b'
+
+fn eat2(nom string s, nom string t) ~:
+    println("{s}{t}")
+    return Result.Ok(~)
+
+fn f@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        expand(b in args):
+            eat2(nom a, nom b)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match f("x", "y"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

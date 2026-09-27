@@ -1,0 +1,15 @@
+# A field write through a `let poke` binding is a use of the binding. The owner `p`
+# changes while `w` still lives, so `w.x := 5` is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+struct Pt:
+    i32 x
+    string tag
+
+fn main() i32:
+    let Pt p = Pt(1, "a".clone())
+    let poke Pt w = p
+    p := Pt(2, "b".clone())
+    w.x := 5
+    println(p.x)
+    return Result.Ok(0)

@@ -8,6 +8,7 @@ from sushi_lang.semantics.ast import (
     Break,
     Continue,
     DotCall,
+    Expr,
     ExprStmt,
     Foreach,
     If,
@@ -33,6 +34,7 @@ from .bindings import (
     BindingScope,
     freeze_for_a_view,
     register_pattern_bindings,
+    reject_a_second_reference,
     ScrutineeKind,
     reject_partial_take,
     release_binding_borrow,
@@ -48,7 +50,7 @@ from .consume import (
     reconcile_closure_bind,
     source_provenance,
 )
-from .expressions import check_expr
+from .expressions import check_expr, reject_a_use_after_the_change
 from .flow import (
     FlowFacts,
     LoopFlow,
@@ -171,8 +173,12 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
             # storage cannot be rebound, a name with storage of its own can. A `poke`
             # reference is the middle case and stays legal -- the store goes through the
             # pointer, which is what the mode is for.
-            reject_readonly_write(checker, target.id, stmt.loc, "rebind the name",
-                                  rebind=True)
+            refused = reject_readonly_write(checker, target.id, stmt.loc,
+                                            "rebind the name", rebind=True)
+            # The store goes through the pointer, so it is a USE of the reference: after
+            # a change of its owner it writes into storage the owner no longer holds.
+            if not refused and isinstance(state.var_type, ReferenceType):
+                reject_a_use_after_the_change(checker, target.id, target.loc)
             # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag,
             # never set it on a value that owns heap.
             state.owns_no_heap = binds_a_bare_literal_string(state.var_type, stmt.value)
@@ -319,8 +325,14 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         iterator = (scope.bind_iterator(stmt.iterable)
                     if stmt.protocol_next is None else None)
         if stmt.item_borrow is not None:
+            owner: Optional[Expr] = stmt.iterable
+            # An item over an owned temporary has no named owner to conflict with.
+            if not walks_a_temporary(checker, stmt.iterable) and reject_a_second_reference(
+                    checker, stmt.iterable, stmt.item_borrow,
+                    stmt.item_borrow_span or span):
+                owner = None
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
-                           owner=stmt.iterable, declared_at=stmt.item_borrow_span)
+                           owner=owner, declared_at=stmt.item_borrow_span)
         elif stmt.protocol_next is not None:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:

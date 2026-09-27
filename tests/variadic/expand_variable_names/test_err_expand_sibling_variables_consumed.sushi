@@ -1,0 +1,25 @@
+# Two sibling `expand`s over one pack rename `a` and `b` to the same hidden names.
+# Each diagnostic names its own written variable, because the record of the written
+# name sits on each renamed node and not on the hidden name.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'a'
+# EXPECT_STDERR_CONTAINS: `a.clone()`
+# EXPECT_STDERR_CONTAINS: cannot consume 'b'
+# EXPECT_STDERR_CONTAINS: `b.clone()`
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn f@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        eat(nom a)??
+    expand(b in args):
+        eat(nom b)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match f("x", "y"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

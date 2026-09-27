@@ -1,0 +1,17 @@
+# The same rule over a bare local owner: `s` changes while `w` still lives, so the
+# store `w := ...` is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+enum Shade:
+    Dim(string)
+    Lit(i32)
+
+fn main() i32:
+    let Shade s = Shade.Dim("abc".clone())
+    let poke Shade w = s
+    s := Shade.Lit(2)
+    w := Shade.Lit(3)
+    match s:
+        Shade.Dim(t) -> println(t)
+        Shade.Lit(n) -> println(n)
+    return Result.Ok(0)

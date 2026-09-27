@@ -7,7 +7,7 @@ import itertools
 from typing import Dict, Iterator, List, Optional, Tuple, cast
 
 from sushi_lang.semantics.ast import (
-    Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
+    Block, Expand, Name, Lambda, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
 )
 from sushi_lang.semantics.hidden_names import expand_copy_local_name
 from sushi_lang.internals.report import Span
@@ -18,11 +18,12 @@ _COPY_IDS = itertools.count(1)
 
 @dataclasses.dataclass(eq=False)
 class WrittenLet:
-    """One `let` as it is written in an `expand` body.
+    """One binder as it is written in an `expand` body: a `let`, or another binder.
 
-    Every copy of that `let`, at every depth of nesting, points to one record, so a
+    Every copy of that binder, at every depth of nesting, points to one record, so a
     diagnostic about the declaration is told once and with the written name (#1019).
-    The record is compared by identity.
+    The other binders are the loop variable of an `expand`, a `foreach` item, a pattern
+    binding and a lambda parameter (#1031). The record is compared by identity.
     """
     name: str
 
@@ -36,6 +37,47 @@ def written_let(stmt: Let) -> Optional[WrittenLet]:
     """The written declaration of a `let` that the unroll copied, or None."""
     entry = _WRITTEN.get(id(stmt))
     if entry is None or entry[0] is not stmt:
+        return None
+    return entry[1]
+
+
+# The nodes that bind a name without a `let`: an `Expand` (its loop variable), a
+# `Foreach` (its item), a `Pattern` / `OwnPattern` (its bindings) and a `Lambda` (its
+# parameters). A node -> the records of its written names, one dict for the written
+# node and all its copies. Same keying rule as `_WRITTEN`.
+_BINDER_NODES = (Expand, Foreach, Pattern, OwnPattern, Lambda)
+_WRITTEN_BINDERS: Dict[int, Tuple[object, Dict[str, WrittenLet]]] = {}
+
+
+def written_binder(node: object, name: str) -> Optional[WrittenLet]:
+    """The record of the written name ``name`` that a copied binder node binds, or None."""
+    entry = _WRITTEN_BINDERS.get(id(node))
+    if entry is None or entry[0] is not node:
+        return None
+    return entry[1].setdefault(name, WrittenLet(name))
+
+
+def _binders_of(node: object) -> Dict[str, WrittenLet]:
+    """The records of a binder node, shared with the node it was copied from."""
+    entry = _WRITTEN_BINDERS.get(id(node))
+    if entry is not None and entry[0] is node:
+        return entry[1]
+    records: Dict[str, WrittenLet] = {}
+    _WRITTEN_BINDERS[id(node)] = (node, records)
+    return records
+
+
+# A `Name` the unroll renamed from an `expand` loop variable to a pack element -> the
+# record of the written loop variable. Keyed by the node, because one hidden pack
+# element name stands for a different written variable in a sibling or a nested
+# `expand`.
+_WRITTEN_VARIABLES: Dict[int, Tuple[Name, WrittenLet]] = {}
+
+
+def written_variable(name: Name) -> Optional[WrittenLet]:
+    """The written `expand` loop variable a renamed ``name`` stands for, or None."""
+    entry = _WRITTEN_VARIABLES.get(id(name))
+    if entry is None or entry[0] is not name:
         return None
     return entry[1]
 
@@ -140,21 +182,33 @@ def _unroll_expand(
     fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []
-    lets, spans = _written_nodes(node.body)
+    lets, binders, variables, spans = _written_nodes(node.body)
     written = [(let, written_let(let) or WrittenLet(let.name)) for let in lets]
+    binder_origins = [(binder, _binders_of(binder)) for binder in binders]
+    # A loop variable of an enclosing `expand` that this body names was renamed
+    # already; each copy of that `Name` keeps its record.
+    variable_origins = [(name, cast(WrittenLet, written_variable(name)))
+                        for name in variables]
     span_origins = [(span, written_span(span) or span) for span in spans]
+    variable = _binders_of(node).setdefault(node.var, WrittenLet(node.var))
     for elem_name in fanout:
         memo: Dict[int, object] = {}
         body_copy = copy.deepcopy(node.body, memo)
         for let, origin in written:
             let_copy = cast(Let, memo[id(let)])
             _WRITTEN[id(let_copy)] = (let_copy, origin)
+        for binder, records in binder_origins:
+            binder_copy = memo[id(binder)]
+            _WRITTEN_BINDERS[id(binder_copy)] = (binder_copy, records)
+        for name, origin in variable_origins:
+            name_copy = cast(Name, memo[id(name)])
+            _WRITTEN_VARIABLES[id(name_copy)] = (name_copy, origin)
         for span, span_origin in span_origins:
             span_copy = memo.get(id(span))
             if isinstance(span_copy, Span):
                 _WRITTEN_SPANS[id(span_copy)] = (span_copy, span_origin)
         renamed = _rename_block_statements(
-            body_copy.statements, node.var, elem_name, _seen=set()
+            body_copy.statements, node.var, elem_name, _seen=set(), written=variable
         )
         # Hygiene: alpha-rename each top-level local declared in THIS copy to a
         # copy-unique name, so the N copies don't re-declare the same local in
@@ -170,18 +224,21 @@ def _unroll_expand(
     return out
 
 
-def _written_nodes(body: Block) -> Tuple[List[Let], List[Span]]:
-    """Every `Let` and every `Span` in ``body``, at every depth."""
+def _written_nodes(body: Block) -> Tuple[List[Let], List[object], List[Name], List[Span]]:
+    """Every `Let`, other binder node, renamed loop variable and `Span` in ``body``."""
     lets: List[Let] = []
+    binders: List[object] = []
+    variables: List[Name] = []
     spans: List[Span] = []
-    _collect_written(body, set(), lets, spans)
-    return lets, spans
+    _collect_written(body, set(), (lets, binders, variables, spans))
+    return lets, binders, variables, spans
 
 
-def _collect_written(obj, _seen, lets: List[Let], spans: List[Span]) -> None:
+def _collect_written(obj, _seen, found: Tuple[list, list, list, list]) -> None:
+    lets, binders, variables, spans = found
     if isinstance(obj, (list, tuple)):
         for item in obj:
-            _collect_written(item, _seen, lets, spans)
+            _collect_written(item, _seen, found)
         return
     if not dataclasses.is_dataclass(obj) or _is_frozen_dataclass(obj) or id(obj) in _seen:
         return
@@ -191,8 +248,12 @@ def _collect_written(obj, _seen, lets: List[Let], spans: List[Span]) -> None:
         return
     if isinstance(obj, Let):
         lets.append(obj)
+    elif isinstance(obj, _BINDER_NODES):
+        binders.append(obj)
+    elif isinstance(obj, Name) and written_variable(obj) is not None:
+        variables.append(obj)
     for f in dataclasses.fields(obj):
-        _collect_written(getattr(obj, f.name), _seen, lets, spans)
+        _collect_written(getattr(obj, f.name), _seen, found)
 
 
 def _rename_copy_locals(statements: List[Stmt], copy_number: int) -> List[Stmt]:
@@ -251,7 +312,8 @@ def _walk_unroll_value(value, pack_param_fanout, copy_numbers, _seen) -> None:
         _walk_unroll(value, pack_param_fanout, copy_numbers, _seen)
 
 
-def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
+def _rename_walk(obj, var: str, new_name: str, _seen,
+                 written: Optional[WrittenLet] = None) -> None:
     """Recurse into a dataclass node, renaming FREE ``Name(id == var)`` within."""
     if not dataclasses.is_dataclass(obj):
         return
@@ -266,11 +328,13 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
     _seen.add(obj_id)
 
     if isinstance(obj, Foreach) and obj.item_name == var:
-        _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
+        _set_if_changed(obj, "iterable",
+                        _rename_value(obj.iterable, var, new_name, _seen, written))
         return
 
     if isinstance(obj, Expand) and obj.var == var:
-        _set_if_changed(obj, "iterable", _rename_value(obj.iterable, var, new_name, _seen))
+        _set_if_changed(obj, "iterable",
+                        _rename_value(obj.iterable, var, new_name, _seen, written))
         return
 
     # A Match: the scrutinee is in the outer scope and is renamed normally, but a
@@ -278,15 +342,17 @@ def _rename_walk(obj, var: str, new_name: str, _seen) -> None:
     # arm's body -- the pattern binding is a distinct variable and must not be
     # renamed inside its arm. Other arms are renamed as usual.
     if isinstance(obj, Match):
-        _set_if_changed(obj, "scrutinee", _rename_value(obj.scrutinee, var, new_name, _seen))
+        _set_if_changed(obj, "scrutinee",
+                        _rename_value(obj.scrutinee, var, new_name, _seen, written))
         for arm in obj.arms:
             if isinstance(arm, MatchArm) and var in _pattern_binding_names(arm.pattern):
                 continue
-            _rename_walk(arm, var, new_name, _seen)
+            _rename_walk(arm, var, new_name, _seen, written)
         return
 
     for f in dataclasses.fields(obj):
-        _set_if_changed(obj, f.name, _rename_value(getattr(obj, f.name), var, new_name, _seen))
+        _set_if_changed(obj, f.name, _rename_value(getattr(obj, f.name), var, new_name,
+                                                   _seen, written))
 
 
 def _set_if_changed(obj, field_name: str, new_value) -> None:
@@ -295,34 +361,42 @@ def _set_if_changed(obj, field_name: str, new_value) -> None:
         setattr(obj, field_name, new_value)
 
 
-def _rename_value(value, var: str, new_name: str, _seen):
-    """Rename within a single field value, returning the (possibly replaced) value."""
+def _rename_value(value, var: str, new_name: str, _seen,
+                  written: Optional[WrittenLet] = None):
+    """Rename within a single field value, returning the (possibly replaced) value.
+
+    ``written`` is the record of the written loop variable when ``var`` is one; each
+    renamed `Name` is filed under it.
+    """
     if isinstance(value, Name):
         if value.id == var:
             replacement = copy.copy(value)
             replacement.id = new_name
+            if written is not None:
+                _WRITTEN_VARIABLES[id(replacement)] = (replacement, written)
             return replacement
         return value
 
     if isinstance(value, Block):
         value.statements = _rename_block_statements(
-            value.statements, var, new_name, _seen
+            value.statements, var, new_name, _seen, written
         )
         return value
 
     if isinstance(value, list):
-        return [_rename_value(item, var, new_name, _seen) for item in value]
+        return [_rename_value(item, var, new_name, _seen, written) for item in value]
     if isinstance(value, tuple):
-        return tuple(_rename_value(item, var, new_name, _seen) for item in value)
+        return tuple(_rename_value(item, var, new_name, _seen, written) for item in value)
 
     if dataclasses.is_dataclass(value):
-        _rename_walk(value, var, new_name, _seen)
+        _rename_walk(value, var, new_name, _seen, written)
         return value
 
     return value
 
 
-def _rename_block_statements(statements, var: str, new_name: str, _seen):
+def _rename_block_statements(statements, var: str, new_name: str, _seen,
+                             written: Optional[WrittenLet] = None):
     """Rename within a statement list, respecting sequential ``let`` shadowing."""
     out = []
     shadowed = False
@@ -332,9 +406,9 @@ def _rename_block_statements(statements, var: str, new_name: str, _seen):
             continue
         if isinstance(stmt, Let) and stmt.name == var:
             if stmt.value is not None:
-                stmt.value = _rename_value(stmt.value, var, new_name, _seen)
+                stmt.value = _rename_value(stmt.value, var, new_name, _seen, written)
             out.append(stmt)
             shadowed = True
             continue
-        out.append(_rename_value(stmt, var, new_name, _seen))
+        out.append(_rename_value(stmt, var, new_name, _seen, written))
     return out
