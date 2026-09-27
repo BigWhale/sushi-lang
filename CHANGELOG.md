@@ -427,6 +427,40 @@ All notable changes to Sushi Lang will be documented in this file.
   `slib-info` tool change together, and `--docs` prints a perk method's block under its
   signature, which the record could not carry before.
 
+### Language
+- **`foreach(_ in ...)` discards the item** (#968). `_` binds nothing, as in a `match` pattern, and
+  never gives CW1001; a named binder the body never reads still does. It holds for every form: a
+  plain or typed binder, `peek`/`poke _`, and `foreach(_?? in ...)`, which propagates an `Err` and
+  discards the `Ok` value. The six stdlib `while` loops that existed only for an unread counter
+  are `foreach(_ in ...)` now.
+
+### Fixed
+- **A source that is not UTF-8 is CE3017, not the internal error CE0000** (#979). The main source
+  and every imported unit go through one reader, and the diagnostic names the file and the byte
+  (`byte 0xff on line 2 is not valid UTF-8`) or the system reason (`Is a directory`). A run with no
+  source is CE3018. A failed `--write-ll` is the warning CW0002 and the build exits 1; it printed a
+  bare line and exited 0.
+- **A flag that has no effect is the warning CW0003** (#980): `--docs` without `--lib-info`,
+  `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib` or on the
+  incremental path (which writes no program object), and `--write-ll` on the incremental path.
+  `--write-ll` on a program of two or more units now exits 1.
+- **`UdpSocket.close()` consumes the handle** (#961), as `TcpStream.close()` does: a use after the
+  close is CE2435. The shared close helper is the public `close_socket` in `<net/error>`.
+
+### Changed
+- **The manifest writer has one extractor per pair** (#985): types, and constants with variables.
+  The type-name scan walks through `walk_nodes`. `TEMPLATES_SCHEMA_VERSION` lives in
+  `backend/library_format.py`, and a pytest source scan checks that every key a reader of the
+  manifest reads is a key a writer writes. A binary library that imports `<io/fs>` has a fixture.
+- **`remove_all` through a regular file is documented as an error** (#960): a path such as
+  `dir/plainfile/child` answers `FileError.InvalidPath`; only a missing path is success.
+
+### Testing
+- **The runner reads a fixture as bytes** (#979). A fixture whose directive block the runner could
+  not decode passed WITHOUT its directives checked; it now fails. The corpus gates read through one
+  reader (`corpus_files`, `corpus_text` in `tests/test_metadata.py`) that yields files only, and a
+  file that is not UTF-8 is allowed only beside a `test_err_` fixture that declares CE3017.
+
 ### Fixed
 - **The compiler works in the user's directory** (#976, #974, #971). The `sushic` wrapper changes
   into the checkout, and the compiler read the checkout where it meant the user's directory: a
