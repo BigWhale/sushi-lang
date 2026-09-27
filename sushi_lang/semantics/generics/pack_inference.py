@@ -43,9 +43,15 @@ def solve_leading_type_args(
     does not hold, in declaration order. `param_types` replaces the declared parameter
     types when the caller substituted them first, and `type_param_names` the names read
     off the map.
+
+    A None argument type in a FUNCTION-typed parameter is a generic function value the
+    callee types (#1029): the first pass leaves it out, and the other arguments must
+    solve every type parameter. The caller then solves the value against the substituted
+    parameter type, as against any declared position.
     """
     from sushi_lang.semantics.generics.unify import unify_types
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.typesys import FunctionType
 
     if param_types is None:
         param_types = [p.ty for p in generic_func.params
@@ -63,6 +69,8 @@ def solve_leading_type_args(
         if partial:
             if param_ty is not None and arg_type is not None:
                 unify_types(param_ty, arg_type, type_param_map)
+        elif arg_type is None and isinstance(param_ty, FunctionType):
+            continue
         elif param_ty is None or not unify_types(param_ty, arg_type, type_param_map):
             return None
     if ret_type is not None and generic_func.ret is not None:
@@ -90,13 +98,15 @@ def infer_flat_type_args(
     """The flat tuple of type arguments for a generic call: the leading ones, then the pack.
 
     The arguments before the pack value-parameter solve the leading type parameters;
-    each argument from it on is one element of the pack, taken as it is.
+    each argument from it on is one element of the pack, taken as it is. A None leading
+    type is a generic function value the callee types (see `solve_leading_type_args`);
+    a pack element must have a type of its own.
     """
     pack_idx = _pack_value_param_index(generic_func)
     arg_types = list(arg_types)
     if pack_idx is None:
         return solve_leading_type_args(generic_func, arg_types, structs, enums)
-    if len(arg_types) < pack_idx:
+    if len(arg_types) < pack_idx or any(t is None for t in arg_types[pack_idx:]):
         return None
     leading = solve_leading_type_args(generic_func, arg_types[:pack_idx], structs, enums)
     if leading is None:
