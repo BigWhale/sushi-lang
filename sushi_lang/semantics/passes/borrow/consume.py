@@ -10,7 +10,12 @@ from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit,
 from sushi_lang.semantics.ownership import Ownership, Provenance, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
-from .diagnostics import emit_consume_of_borrow, emit_consume_of_read
+from .diagnostics import (
+    emit_consume_of_borrow,
+    emit_consume_of_read,
+    no_clone_reason,
+    refuses_clone,
+)
 from .reads import (
     constant_sig, read_type, reads_through_owner, root_owner, unwrap_try)
 from .state import BorrowState
@@ -217,9 +222,14 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
             if state.first_borrow_span is not None:
                 diag.note_at("borrowed here, in the same statement",
                              state.first_borrow_span)
-            diag.help(f"the new owner frees this value while the borrow still points "
-                      f"at it; borrow it twice, or clone what the owning position "
-                      f"needs: `{name}.clone()`").emit()
+            if refuses_clone(checker, state.var_type):
+                diag.help(f"the new owner frees this value while the borrow still "
+                          f"points at it; borrow it twice: {no_clone_reason(name)}")
+            else:
+                diag.help(f"the new owner frees this value while the borrow still "
+                          f"points at it; borrow it twice, or clone what the owning "
+                          f"position needs: `{name}.clone()`")
+            diag.emit()
             return
         # Handing the owner away leaves every binding reading out of it pointing at
         # storage the new owner frees (#242).

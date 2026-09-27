@@ -1,0 +1,25 @@
+# A call reads a `let`-borrow of a `List@(File)` field while it changes the field. The
+# CE2412 help offers no `.clone()`, because the list owns a resource (CE2431) (#994).
+# EXPECT_ERROR_CODE: CE2412
+# EXPECT_STDERR_CONTAINS: help: 'v' owns a resource and cannot be cloned, so no call can read it while it changes 'h'
+
+use <io/fs>
+
+struct H:
+    List@(File) items
+
+fn take(List@(File) v, poke List@(File) dst) ~:
+    println(v.len())
+    dst.clear()
+    return Result.Ok(~)
+
+fn go() ~:
+    let H h = H(List.new())
+    let List@(File) v = h.items
+    take(v, poke h.items)??
+    return Result.Ok(~)
+
+fn main() i32:
+    if (go().is_err()):
+        return Result.Ok(1)
+    return Result.Ok(0)
