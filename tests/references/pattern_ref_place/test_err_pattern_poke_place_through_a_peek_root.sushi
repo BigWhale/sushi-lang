@@ -1,0 +1,23 @@
+# A `poke` binding into a place rooted in a `peek` parameter would write the caller's
+# value through a read-only borrow: CE2408 (#788).
+# EXPECT_ERROR_CODES_EXACT: CE2408
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+fn bump(peek Box b) ~:
+    match b.s:
+        Shade.Dim(poke r) -> r := 9
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(~)
+
+fn main() i32:
+    let Box b = Box(Shade.Dim(1))
+    match bump(peek b):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

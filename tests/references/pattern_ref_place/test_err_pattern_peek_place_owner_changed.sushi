@@ -1,0 +1,19 @@
+# The owner of a place is its root, frozen for the arm (#788): a change to `b` while the
+# binding into `b.s` is still read is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+fn main() i32:
+    let Box b = Box(Shade.Dim(8))
+    match b.s:
+        Shade.Dim(peek r) ->
+            b := Box(Shade.Lit(1))
+            println("{r}")
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(0)

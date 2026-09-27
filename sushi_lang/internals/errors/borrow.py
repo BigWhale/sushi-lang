@@ -40,7 +40,7 @@ _add(ErrorMessage("CE2403", Severity.ERROR,
 
 _add(ErrorMessage("CE2404", Severity.ERROR,
     "cannot borrow '{expr}': expression has no stable address",
-    Category.BORROW, "A borrow is a pointer, so it needs storage that the frame keeps. A `peek x` / `poke x` argument takes a name or a field chain off one (`poke obj.field`). A `let peek T x = <place>` / `let poke T x = <place>` takes a place: a name, a member or index chain off one, or an `Own@(T).get()` on one. A `poke` pattern binding points into the scrutinee, so the scrutinee must be a name or a temporary that the match owns (ruling R11). A call result, a `??`, a literal and a construction are temporaries and have no address. Bind the value first (`let T x = make()`), and then borrow the name."))
+    Category.BORROW, "A borrow is a pointer, so it needs storage that the frame keeps. A `peek x` / `poke x` argument takes a name or a field chain off one (`poke obj.field`). A `let peek T x = <place>` / `let poke T x = <place>` takes a place: a name, a member or index chain off one, or an `Own@(T).get()` on one. A `peek` / `poke` pattern binding points into the scrutinee, so the scrutinee must be a place (the same places a reference `let` takes, #788) or a temporary that the match owns (ruling R11). A call result, a `??`, a literal and a construction are temporaries and have no address. Bind the value first (`let T x = make()`), and then borrow the name."))
 
 _add(ErrorMessage("CE2405", Severity.ERROR,
     "cannot borrow moved variable '{name}'",

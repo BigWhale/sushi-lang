@@ -1,0 +1,21 @@
+# CE2404 stays for a borrowed scrutinee that is not a place (#788): a get-out behind a
+# `??` names no storage the binding could point into.
+# EXPECT_ERROR_CODES_EXACT: CE2404
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+fn bump(poke List@(Shade) l) ~:
+    match l.get(0)??:
+        Shade.Dim(poke r) -> r := 7
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(~)
+
+fn main() i32:
+    let List@(Shade) l = List.new()
+    l.push(Shade.Dim(1))
+    match bump(poke l):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)
