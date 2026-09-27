@@ -1,0 +1,12 @@
+# `h.get(0)??` reads an element that `h` still keeps. A `foreach` over its iterator
+# freezes `h`, so a `push` on `h` in the body is refused (#1014).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let List@(i32[]) h = List.new()
+    h.push(from([1, 2, 3]))
+    foreach(x in h.get(0)??.iter()):
+        if (x == 1):
+            h.push(from([4]))
+    println(h.len())
+    return Result.Ok(0)

@@ -1,0 +1,14 @@
+# A `break` in a `match` arm ends that arm's path for the loop's next round too (#993).
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    foreach(x in a.iter()):
+        match x:
+            1 ->
+                a.push(5)
+                break
+            _ -> println(x)
+    println(a.len())
+    return Result.Ok(0)

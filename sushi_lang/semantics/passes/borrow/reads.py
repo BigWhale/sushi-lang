@@ -94,6 +94,22 @@ def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     return False
 
 
+def names_kept_storage(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
+    """Is `expr` storage that a named local keeps, and not an owned temporary (#1014)?
+
+    A place (member and index steps to a name) is kept storage, and so is a get-out
+    (`h.get(0)??`) whose receiver is kept storage. Any other call makes a new owned value
+    (`a.clone()`, `a.s(0, 3)`), and nothing keeps that value but its reader.
+    """
+    end = walk_place(expr, Step.MEMBER | Step.INDEX).node
+    if isinstance(end, Name):
+        return True
+    receiver = called_on(unwrap_try(end), "get", "first", "last")
+    if receiver is None or not reads_through_owner(checker, end):
+        return False
+    return names_kept_storage(checker, receiver)
+
+
 def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     """Is `expr` the parenthesis-free spelling of a payload-free variant (#289)?"""
     if not isinstance(expr, MemberAccess) or not isinstance(expr.receiver, Name):

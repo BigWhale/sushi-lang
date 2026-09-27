@@ -52,6 +52,7 @@ class BorrowState:
     declared_at_span: Optional[Span] = None   # where the variable was introduced
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
+    move_reported_by: Optional[str] = None    # the iterator whose CE2412 reports the move
     borrows_from: Optional[str] = None        # the root owner a `let`-borrow reads out of
     views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
     covered_by: Optional[str] = None          # the iterator whose freeze covers this one

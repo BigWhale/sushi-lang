@@ -1,0 +1,16 @@
+# A `let`-borrow of a `List@(File)` field is used after a change of the field. The CE2412
+# help offers no `.clone()`, because the list owns a resource (CE2431) (#994).
+# EXPECT_ERROR_CODE: CE2412
+# EXPECT_STDERR_CONTAINS: help: call `.clear()` after the last use of 'v': 'v' owns a resource and cannot be cloned
+
+use <io/fs>
+
+struct H:
+    List@(File) items
+
+fn main() i32:
+    let H h = H(List.new())
+    let List@(File) v = h.items
+    h.items.clear()
+    println(v.len())
+    return Result.Ok(0)

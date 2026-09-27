@@ -14,7 +14,7 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .expressions import INERT_EXPRS, check_expr
-from .flow import FlowFacts
+from .flow import FlowFacts, LoopFrame
 from .reads import unit_variables
 from .state import BorrowState
 from .statements import check_block
@@ -84,6 +84,8 @@ class BorrowChecker:
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
         self._scope_binding_borrows: list[list[tuple[str, str]]] = []
+        # One frame per loop body being checked: the `break` and `continue` paths (#993).
+        self._loop_frames: list[LoopFrame] = []
         # THE mode resolver. Which kind of callee a `Call` names, and what each of its
         # parameters declares. Built from the same tables the backend's copy reads, so
         # the two halves cannot reach different answers (docs/design/borrow-model.md S1).
@@ -146,6 +148,7 @@ class BorrowChecker:
         self.borrow_state = {}
         self.active_borrows = set()
         self._scope_binding_borrows = []
+        self._loop_frames = []
         # Conditional-move tracking (#414): `branch_depth` counts the if/match/loop
         # bodies entered; a move at a depth greater than the owner's declaration depth
         # cannot dominate the scope exit, so the backend must guard that owner's frees

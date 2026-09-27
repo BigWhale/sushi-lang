@@ -1,0 +1,12 @@
+# A `List@(File)` has no `.clone()` (CE2431), so the CE2412 help of a change under the
+# iterator offers the "after the loop" escape and no clone header (#994).
+# EXPECT_ERROR_CODE: CE2412
+# EXPECT_STDERR_CONTAINS: help: call `.clear()` after the loop: 'l' owns a resource and cannot be cloned
+
+use <io/fs>
+
+fn main() i32:
+    let List@(File) l = List.new()
+    foreach(_f in l.iter()):
+        l.clear()
+    return Result.Ok(0)
