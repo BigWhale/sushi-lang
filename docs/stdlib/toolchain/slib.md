@@ -2,8 +2,9 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A `.slib` metadata reader, written in Sushi: `read_metadata`, `sizes` and
-`bitcode_size`. It mirrors the Python reader `LibraryFormat.read_metadata_only`.
+A `.slib` reader, written in Sushi: `read_metadata`, `sizes` and `bitcode_size` for the
+metadata and the section lengths, and `read_library` and `check_manifest` for a whole
+library whose manifest shape is checked. It mirrors the Python reader of `--lib-info`.
 
 ## Import
 
@@ -40,6 +41,29 @@ public enum SlibError:
 public struct SlibSizes:
     u64 source          # the length of the source section
     u64 bitcode         # the length of the bitcode section
+```
+
+`read_library` and `check_manifest` report a `SlibFault`, which names the cause in more
+detail than `SlibError`:
+
+```
+public enum SlibFault:
+    Io(IoError)                         # the open or a read failed
+    BadMagic()                          # the 16 magic bytes do not match
+    BadVersion(u32)                     # header version is not 4
+    Truncated(SlibSection, u64, u64)    # the section, the bytes it needs, the bytes left
+    TooLarge(u64)                       # the file is larger than 1 GiB; the file size
+    Decode(MpError)                     # the metadata blob does not decode
+    Invalid(string)                     # the manifest has the wrong shape; the reason
+
+public enum SlibSection:
+    Metadata()          # the header and the metadata blob
+    Source()            # the source section and its length field
+    Bitcode()           # the bitcode section and its length field
+
+public struct SlibLibrary:
+    MsgValue metadata   # the manifest, with its shape checked
+    SlibSizes sizes     # the lengths of the two payload sections
 ```
 
 ## Functions
@@ -93,6 +117,41 @@ fn main() i32:
 
 The `bitcode` field of `sizes`, on its own. The reader reads only the two 8-byte
 length fields, never a payload.
+
+### `read_library(string path) -> SlibLibrary | SlibFault`
+
+Read a whole library: the manifest and the lengths of both payload sections. The checks
+are the ones the Python reader of `sushic --lib-info` makes, in the same order, so both
+halves of the command report the same fault for a damaged file: the magic first, then the
+1 GiB limit, then each declared length against what is left of the file, before any bytes
+are read. The manifest must then pass `check_manifest`.
+
+```sushi
+use <toolchain/slib>
+
+fn describe(string path) string:
+    match read_library(path):
+        Result.Ok(library) ->
+            return Result.Ok("source {library.sizes.source}, bitcode {library.sizes.bitcode}")
+        Result.Err(SlibFault.Truncated(_, need, have)) ->
+            return Result.Ok("truncated: needs {need} bytes, has {have}")
+        Result.Err(SlibFault.Invalid(reason)) ->
+            return Result.Ok("not a manifest: {reason}")
+        Result.Err(_) ->
+            return Result.Ok("cannot read {path}")
+
+fn main() i32:
+    println(describe("mylib.slib").realise("error"))
+    return Result.Ok(0)
+```
+
+### `check_manifest(MsgValue meta) -> ~ | SlibFault`
+
+Check that a metadata map has the shape of a manifest: every required field is present
+and has its type. The Python reader checks the same rows (`MANIFEST_SCHEMA` in
+`sushi_lang/backend/library_format.py`) and gives the same reason, as
+`SlibFault.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
+partial map still reads.
 
 ## Error handling
 

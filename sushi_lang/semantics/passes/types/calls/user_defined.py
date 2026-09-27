@@ -128,8 +128,8 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
     # generic resolves through the same per-unit ladder a concrete function walks.
     own_concrete = None
     if validator.current_unit_name is not None:
-        own_concrete = validator.func_table.by_unit.get(
-            validator.current_unit_name, {}).get(function_name)
+        own_concrete = validator.func_table.declared(
+            function_name, validator.current_unit_name)
     if own_concrete is None and validator.generic_sig(function_name) is not None:
         from .generics import validate_generic_function_call
         validate_generic_function_call(validator, call, function_name)
