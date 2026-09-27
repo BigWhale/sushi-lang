@@ -1,4 +1,4 @@
-##: Shapes for the unused-declaration fixtures. :##
+# Shapes for the unused-declaration fixtures.
 
 public struct Square:
     i32 side
