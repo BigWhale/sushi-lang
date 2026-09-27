@@ -19,6 +19,19 @@ if TYPE_CHECKING:
     from .. import TypeValidator
 
 
+def own_concrete_function(func_table, name: str, unit: Optional[str]):
+    """The concrete function the unit itself declares under a bare name, or None.
+
+    Section 8's ladder crosses the two function tables here: the asking unit's OWN
+    concrete declaration answers a bare name before a generic an import brought, in
+    every position -- a call and a function value alike (#495, #963, #1003). The
+    typecheck pass and the instantiate pass both ask this, so the two cannot drift.
+    """
+    if func_table is None or unit is None:
+        return None
+    return func_table.declared(name, unit)
+
+
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                                     fixed_count: int, array_ty, element_ty) -> None:
     """Validate the trailing arguments of a variadic call (native '...T' or stdlib)."""
@@ -123,13 +136,8 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_indirect_call(validator, call, callee_var_ty)
         return
 
-    # Section 8's ladder crosses the two function tables here: the asking unit's OWN
-    # concrete declaration answers before a generic from next door does (#495), and a
-    # generic resolves through the same per-unit ladder a concrete function walks.
-    own_concrete = None
-    if validator.current_unit_name is not None:
-        own_concrete = validator.func_table.declared(
-            function_name, validator.current_unit_name)
+    own_concrete = own_concrete_function(
+        validator.func_table, function_name, validator.current_unit_name)
     if own_concrete is None and validator.generic_sig(function_name) is not None:
         from .generics import validate_generic_function_call
         validate_generic_function_call(validator, call, function_name)

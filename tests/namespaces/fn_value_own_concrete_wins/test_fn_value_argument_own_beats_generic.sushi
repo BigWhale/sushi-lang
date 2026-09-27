@@ -1,0 +1,15 @@
+# The function value `pick` in an argument position names the unit's own
+# concrete function, and not the imported generic of the same name (#1003).
+# EXPECT_STDOUT_EXACT: "4\n"
+use "helpers/pick_any"
+use <collections/strings>
+
+fn pick(string s) i32:
+    return Result.Ok(s.len())
+
+fn apply(fn(string) -> i32 f) i32:
+    return Result.Ok(f("abcd").realise(0))
+
+fn main() i32:
+    println(apply(pick).realise(0))
+    return Result.Ok(0)

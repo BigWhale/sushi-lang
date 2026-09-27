@@ -305,6 +305,9 @@ class ExpressionValidator(RecursiveVisitor):
         # manifest holds the name and the kind, and that is the whole origin (#487).
         if reject_private_kept(tv, node.id, node.loc, kinds={"constant", "variable"}):
             return
+        from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
+        if own_concrete_function(tv.func_table, node.id, tv.current_unit_name) is not None:
+            return
         if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.

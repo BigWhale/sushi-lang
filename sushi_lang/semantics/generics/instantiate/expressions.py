@@ -369,16 +369,15 @@ class ExpressionScanner:
         return generic_func, type_args
 
     def _declares_concrete(self, name: str) -> bool:
-        """The unit declares a concrete function of this name, which wins its bare call.
+        """The unit declares a concrete function of this name, which wins its bare name.
 
         Section 8's ladder, as the typecheck pass reads it: the unit's own declaration
         answers before a generic an import brought (#963).
         """
+        from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
         funcs = getattr(self.type_validator, "func_table", None)
         unit = getattr(getattr(self.namespaces, "scope", None), "unit", None)
-        if funcs is None or unit is None:
-            return False
-        return funcs.declared(name, unit) is not None
+        return own_concrete_function(funcs, name, unit) is not None
 
     def generic_call_type(self, expr):
         """What a generic call yields, as this pass can know it (#549).
@@ -458,6 +457,8 @@ class ExpressionScanner:
         if not isinstance(expected_ty, FunctionType):
             return
         if not self.generic_funcs or name not in self.generic_funcs:
+            return
+        if self._declares_concrete(name):
             return
         generic_func = self.generic_funcs[name]
         type_args = solve_leading_type_args(

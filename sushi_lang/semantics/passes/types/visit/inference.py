@@ -244,7 +244,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # A generic-fn reference with an explicit expected fn type (T2.3): solve the
             # type args and return the concrete FunctionType (the node is rewritten to
             # the mangled name during validation).
-            if tv.generic_sig(node.id) is not None:
+            from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
+            if (own_concrete_function(tv.func_table, node.id, tv.current_unit_name) is None
+                    and tv.generic_sig(node.id) is not None):
                 from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
                 resolved = resolve_generic_fn_reference(
                     tv, node.id, getattr(node, "expected_type", None))
