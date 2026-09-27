@@ -1,0 +1,15 @@
+# A generic function is a function value in a return: the declared return type
+# solves its type arguments (#1021).
+# EXPECT_STDOUT_EXACT: "7\n"
+fn gen@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn pick() fn(i32) -> i32:
+    return Result.Ok(gen)
+
+fn main() i32:
+    match pick():
+        Result.Ok(f) -> println(f(1).realise(0))
+        Result.Err(_) -> println("none")
+    return Result.Ok(0)

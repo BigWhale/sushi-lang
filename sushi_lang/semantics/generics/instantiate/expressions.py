@@ -42,8 +42,9 @@ class ExpressionScanner:
         # Templates by name, for reading a variant's payload types off a GenericTypeRef
         # whose interned instance does not exist yet (#539).
         self.generic_enums = generic_enums
-        # Callback to scan a lambda's block body (a statement Block). Wired by the
-        # InstantiationCollector to its FunctionCollector._collect_from_block; left None on
+        # Callback to scan a lambda's block body (a statement Block) with the lambda's
+        # declared return. Wired by the InstantiationCollector to its
+        # FunctionCollector.collect_from_body; left None on
         # the unit-test paths that drive the scanner directly (a block-body lambda is a
         # `let` RHS, which those paths do not construct).
         self.scan_block = None
@@ -72,6 +73,7 @@ class ExpressionScanner:
             self._scan_call(expr)
             for arg in expr.args:
                 self.scan_expression(arg)
+            self.scan_fn_value_arguments(expr, self._call_param_types)
 
         elif isinstance(expr, DotCall):
             # Chained method calls (result.method())
@@ -83,6 +85,7 @@ class ExpressionScanner:
             for arg in expr.args:
                 self.scan_expression(arg)
             self._scan_static_call(expr)
+            self.scan_fn_value_arguments(expr, self._dot_call_param_types)
 
         elif isinstance(expr, BinaryOp):
             self.scan_expression(expr.left)
@@ -104,6 +107,8 @@ class ExpressionScanner:
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self.scan_expression(arg)
+            self.scan_fn_value_arguments(
+                expr, lambda node: self._payload_types(node.enum_name, node.variant_name))
 
         elif isinstance(expr, CastExpr):
             self.scan_expression(expr.expr)
@@ -134,6 +139,7 @@ class ExpressionScanner:
             for arg in expr.args:
                 self.scan_expression(arg)
             self._scan_static_call(expr)
+            self.scan_fn_value_arguments(expr, self._method_param_types)
 
         elif isinstance(expr, DynamicArrayFrom):
             self.scan_expression(expr.elements)
@@ -146,7 +152,7 @@ class ExpressionScanner:
             # inferred here -- that is the pre-existing bare-param limitation, not a new gap.
             if isinstance(expr.body, Block):
                 if self.scan_block is not None:
-                    self.scan_block(expr.body)
+                    self.scan_block(expr.body, expr.ret)
             else:
                 self.scan_expression(expr.body)
 
@@ -464,6 +470,8 @@ class ExpressionScanner:
             name = value.id
             if not self.generic_funcs or name not in self.generic_funcs:
                 return
+            if name in self.type_inferrer.variable_types:
+                return
             if self._declares_concrete(name):
                 return
             self._record_fn_reference(name, self.generic_funcs[name], expected_ty)
@@ -471,6 +479,150 @@ class ExpressionScanner:
             binding = self._namespaced_binding(value.receiver, value.member)
             if binding is not None and binding.kind == "generic function":
                 self._record_fn_reference(binding.name, binding.record, expected_ty)
+
+    def scan_fn_value_arguments(self, call, position_types) -> None:
+        """Record each generic-fn value among a call's arguments against its position's type.
+
+        An argument, a struct field and an enum payload solve a generic function value
+        from the declared type of the position, as a typed `let` does (#1021). The
+        position types are read only for a call that holds a candidate, so no other call
+        is typed here.
+        """
+        if not any(self.may_name_generic_fn(arg) for arg in call.args):
+            return
+        for arg, expected in zip(call.args, position_types(call), strict=False):
+            self.scan_generic_fn_reference(arg, expected)
+
+    def may_name_generic_fn(self, value) -> bool:
+        """The value is a bare generic-function name, or a name behind an alias."""
+        from sushi_lang.semantics.ast import MemberAccess, Name
+        locals_ = self.type_inferrer.variable_types
+        if isinstance(value, Name):
+            return value.id in (self.generic_funcs or {}) and value.id not in locals_
+        return (isinstance(value, MemberAccess) and isinstance(value.receiver, Name)
+                and value.receiver.id not in locals_)
+
+    def _call_param_types(self, call) -> tuple:
+        """The declared types of a direct call's argument positions, or () when unknown.
+
+        A concrete function gives its parameter types, a struct construction its field
+        types. A generic callee gives nothing: its parameter types name its own type
+        parameters, which the arguments solve.
+        """
+        from sushi_lang.semantics.ast import Name
+        callee = call.callee
+        if not isinstance(callee, Name):
+            return ()
+        name = callee.id
+        if name in (self.generic_funcs or {}) and not self._declares_concrete(name):
+            return ()
+        sig = self._visible_function(name)
+        if sig is not None:
+            return tuple(p.ty for p in sig.params)
+        return self._field_types(name, call.field_names)
+
+    def _dot_call_param_types(self, call) -> tuple:
+        """The declared types of `X.Y(args)`'s argument positions, or () when unknown.
+
+        `alias.f(...)` gives the concrete function's parameter types, `alias.S(...)` the
+        struct's field types, `Enum.Variant(...)` the variant's payload types,
+        `Type.static(...)` the static's parameter types (the type bare or behind an
+        alias), and a method call on a value its method's parameter types.
+        """
+        from sushi_lang.semantics.ast import MemberAccess, Name
+        receiver = call.receiver
+        type_name = None
+        if isinstance(receiver, MemberAccess):
+            binding = self._namespaced_binding(receiver.receiver, receiver.member)
+            if binding is not None and binding.kind in ("struct", "enum"):
+                type_name = binding.name
+        elif (isinstance(receiver, Name)
+                and receiver.id not in self.type_inferrer.variable_types):
+            binding = self._namespaced_binding(receiver, call.method)
+            if binding is not None:
+                if binding.kind == "function" and binding.record is not None:
+                    return tuple(p.ty for p in binding.record.params)
+                if binding.kind == "struct":
+                    return self._field_types(binding.name, None)
+                return ()
+            type_name = receiver.id
+        if type_name is None:
+            return self._method_param_types(call)
+        return (self._payload_types(type_name, call.method)
+                or self._static_param_types(type_name, call.method))
+
+    def _method_param_types(self, call) -> tuple:
+        """A concrete method's parameter types on the receiver's type, or () when unknown.
+
+        A perk implementation answers first, then a plain extension, as the method ladder
+        reads them. A generic-target method gives nothing: its parameter types name the
+        target's type parameters.
+        """
+        validator = self.type_validator
+        if validator is None:
+            return ()
+        receiver_type = self._infer_arg_type(call.receiver)
+        if receiver_type is None:
+            return ()
+        if call.method == "realise":
+            return self._realise_default_type(receiver_type)
+        method = validator.perk_impl_table.get_method(receiver_type, call.method)
+        if method is None:
+            method = validator.extension_table.get_method(receiver_type, call.method)
+        if method is None or getattr(method, "is_static", False):
+            return ()
+        return tuple(p.ty for p in method.params)
+
+    @staticmethod
+    def _realise_default_type(receiver_type) -> tuple:
+        """The type a `.realise(default)` default expects: the Ok or Some arm of the receiver."""
+        from sushi_lang.semantics.typesys import EnumType
+        base = getattr(receiver_type, "generic_base", None) or getattr(
+            receiver_type, "base_name", None)
+        if base not in ("Result", "Maybe"):
+            return ()
+        if isinstance(receiver_type, EnumType):
+            variant = receiver_type.get_variant("Ok" if base == "Result" else "Some")
+            return tuple(variant.associated_types[:1]) if variant is not None else ()
+        type_args = getattr(receiver_type, "type_args", None)
+        return (type_args[0],) if type_args else ()
+
+    def _static_param_types(self, type_name: str, method_name: str) -> tuple:
+        """A concrete type's static method parameter types, or () when there is none."""
+        validator = self.type_validator
+        target = ((self.type_inferrer.struct_table or {}).get(type_name)
+                  or (self.type_inferrer.enum_table or {}).get(type_name))
+        if validator is None or target is None:
+            return ()
+        method = validator.extension_table.get_method(target, method_name)
+        if method is None or not getattr(method, "is_static", False):
+            return ()
+        return tuple(p.ty for p in method.params)
+
+    def _visible_function(self, name: str):
+        """The concrete function a bare call of `name` reaches in this unit, or None."""
+        funcs = getattr(self.type_validator, "func_table", None)
+        if funcs is None:
+            return (self.type_inferrer.func_table or {}).get(name)
+        scope = getattr(self.namespaces, "scope", None)
+        return funcs.lookup(name, getattr(scope, "unit", None), scope)
+
+    def _field_types(self, name: str, field_names) -> tuple:
+        """A concrete struct's field types in argument order, or () when `name` is none."""
+        struct = (self.type_inferrer.struct_table or {}).get(name)
+        fields = getattr(struct, "fields", None)
+        if fields is None:
+            return ()
+        if field_names:
+            by_name = dict(fields)
+            return tuple(by_name.get(field) for field in field_names)
+        return tuple(ty for _, ty in fields)
+
+    def _payload_types(self, enum_name: str, variant_name: str) -> tuple:
+        """A concrete enum variant's payload types, or () when there is none."""
+        enum = (self.type_inferrer.enum_table or {}).get(enum_name)
+        variant = enum.get_variant(variant_name) if hasattr(enum, "get_variant") else None
+        return tuple(variant.associated_types) if variant is not None else ()
 
     def _namespaced_binding(self, receiver, member: str):
         """What `<alias>.<member>` names, or None when the receiver is not an alias."""

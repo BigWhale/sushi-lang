@@ -149,7 +149,7 @@ def _named_or_inferred_type_args(validator: 'TypeValidator', call: Call,
     """The explicit type arguments resolved, or the inferred ones. The arity is checked."""
     if call.type_args:
         return resolve_explicit_type_args(
-            call.type_args, validator.struct_table, validator.enum_table)
+            call.type_args, validator.struct_table.by_name, validator.enum_table.by_name)
     return _infer_type_args_from_call_site(validator, call, generic_func)
 
 
@@ -192,7 +192,8 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
         return None
     type_args = solve_leading_type_args(
         generic_func, list(expected_ty.param_types),
-        validator.struct_table, validator.enum_table, ret_type=expected_ty.ok_type)
+        validator.struct_table.by_name, validator.enum_table.by_name,
+        ret_type=expected_ty.ok_type)
     if type_args is None:
         return None
 
@@ -220,16 +221,14 @@ def _infer_type_args_from_call_site(
     from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
     call_args = getattr(call, "args", []) or []
     arg_types = []
     for arg_expr in call_args:
         arg_type = validator.infer_expression_type(arg_expr)
         if arg_type is None or isinstance(arg_type, UnknownType):
             return None
-        resolved = resolve_unknown_type(
-            arg_type, validator.struct_table, validator.enum_table
-        )
-        arg_types.append(resolved)
+        arg_types.append(resolve_unknown_type(arg_type, structs, enums))
 
-    return infer_flat_type_args(
-        generic_func, arg_types, validator.struct_table, validator.enum_table)
+    return infer_flat_type_args(generic_func, arg_types, structs, enums)
