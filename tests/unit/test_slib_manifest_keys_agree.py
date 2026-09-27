@@ -23,7 +23,7 @@ TEMPLATES = "sushi_lang/semantics/library_templates.py"
 PIPELINE = "sushi_lang/compiler/pipeline.py"
 REGISTRATION = "sushi_lang/semantics/library_registration.py"
 REGISTRY = "sushi_lang/semantics/library_registry.py"
-CLI = "sushi_lang/compiler/cli.py"
+LIB_INFO = "sushi_lang/compiler/lib_info.py"
 
 G = "LibraryManifestGenerator."
 R = "LibraryRegistration."
@@ -94,21 +94,30 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRY, Y + "_parse_enums"): {"enum_info": "enum", "v": "variant"},
     (REGISTRY, Y + "_parse_functions"): {"func_info": "function", "p": "param"},
     (TEMPLATES, "deserialize_perk_impl"): {"record": "perk_impl"},
-    (CLI, "_render_params"): {"param": "param"},
-    (CLI, "_render_type_params"): {"tp": "type_param"},
-    (CLI, "_render_signature"): {"func": ("function", "method")},
-    (CLI, "_print_generic_named"): {"templates": "templates", "record": "generic_type"},
-    (CLI, "_reexport_target"): {"record": "reexport"},
-    (CLI, "_doc_tags"): {"doc": "doc", "p": "param"},
-    (CLI, "_print_doc_record"): {"doc": "doc", "example": "example"},
-    (CLI, "_print_doc"): {"owner": "function"},
-    (CLI, "_render_impl_target"): {"impl": "perk_impl"},
-    (CLI, "_print_methods"): {"owner": "perk"},
-    (CLI, "print_library_info"): {
-        "metadata": "manifest", "templates": "templates", "record": "reexport",
-        "const": "constant", "var": "constant", "struct": "struct", "field": "field",
-        "enum": "enum", "variant": "variant", "perk": "perk", "impl": "perk_impl",
-        "claim": "foreign_extension"},
+    (LIB_INFO, "_render_params"): {"param": "param"},
+    (LIB_INFO, "_render_type_params"): {"tp": "type_param"},
+    (LIB_INFO, "_render_signature"): {"func": ("function", "method")},
+    (LIB_INFO, "_reexport_target"): {"record": "reexport"},
+    (LIB_INFO, "_doc_tags"): {"doc": "doc", "p": "param"},
+    (LIB_INFO, "_print_doc_record"): {"doc": "doc", "example": "example"},
+    (LIB_INFO, "_print_doc"): {"owner": "function"},
+    (LIB_INFO, "_render_impl_target"): {"impl": "perk_impl"},
+    (LIB_INFO, "_named_suffix"): {"record": ("struct", "enum")},
+    (LIB_INFO, "_reexport_line"): {"record": "reexport"},
+    (LIB_INFO, "_constant_line"): {"const": "constant"},
+    (LIB_INFO, "_variable_line"): {"var": "constant"},
+    (LIB_INFO, "_struct_line"): {"struct": "struct"},
+    (LIB_INFO, "_field_line"): {"field": "field"},
+    (LIB_INFO, "_enum_line"): {"enum": "enum"},
+    (LIB_INFO, "_variant_line"): {"variant": "variant"},
+    (LIB_INFO, "_perk_line"): {"perk": "perk"},
+    (LIB_INFO, "_impl_line"): {"impl": "perk_impl"},
+    (LIB_INFO, "_foreign_line"): {"claim": "foreign_extension"},
+    (LIB_INFO, "_own_doc"): {"record": "function"},
+    (LIB_INFO, "_unit_doc"): {"metadata": "manifest"},
+    (LIB_INFO, "_generic_named"): {"record": "generic_type"},
+    (LIB_INFO, "_print_section"): {"metadata": "manifest"},
+    (LIB_INFO, "print_library_info"): {"metadata": "manifest"},
 }
 
 WHOLE_MODULE_READERS = (REGISTRATION, REGISTRY)
@@ -342,3 +351,20 @@ def test_the_sushi_schema_is_the_python_schema():
     rows = re.findall(r"^    '([^']*)',?$", block.group(2), re.M)
     assert rows == [" ".join(row) for row in MANIFEST_SCHEMA]
     assert int(block.group(1)) == len(MANIFEST_SCHEMA)
+
+
+def test_every_report_section_key_is_written():
+    """The report reads its sections through the `_SECTIONS` table, by a key the scan
+    above cannot see: each section key and each member key must be written."""
+    from sushi_lang.compiler.lib_info import _SECTIONS
+    written = written_by_kind()
+    member_kinds = {"fields": ("struct",), "variants": ("enum",),
+                    "methods": ("perk", "perk_impl")}
+    unwritten = [(section.title, key) for section in _SECTIONS for key in section.keys
+                 if key not in written["templates" if section.in_templates else "manifest"]]
+    for section in _SECTIONS:
+        if section.members is not None:
+            key = section.members[0]
+            unwritten += [(section.title, key) for kind in member_kinds.get(key, ("",))
+                          if key not in written.get(kind, set())]
+    assert not unwritten, unwritten

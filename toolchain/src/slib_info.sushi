@@ -2,7 +2,7 @@
 The `slib-info` tool: it prints the metadata report of a `.slib` library.
 
 On the success path, the report is the same as the report of the Python fallback
-(`print_library_info` in `sushi_lang/compiler/cli.py`), line for line. The exit code is 0
+(`print_library_info` in `sushi_lang/compiler/lib_info.py`), line for line. The exit code is 0
 for a report or for `--help`, and 2 for a usage error or a read error. The design records
 are in `docs/design/slib-info.md`.
 :##

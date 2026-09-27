@@ -28,7 +28,7 @@ implementation when one does not. The contract:
 
 - `sushic --lib-info FILE` runs `toolchain/bin/slib-info FILE` and returns its
   exit code. The tool owns the full report; the Python fallback
-  (`print_library_info` in `sushi_lang/compiler/cli.py`) prints the same body.
+  (`print_library_info` in `sushi_lang/compiler/lib_info.py`) prints the same body.
   The parity of the two is not gated today: pytest runs no compiler, and no
   fixture compares the tool with the fallback yet.
 - **A switch is spelled the same at both ends.** `sushic --lib-info FILE --docs`
