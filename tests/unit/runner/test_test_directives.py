@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-TESTS_ROOT = Path(__file__).resolve().parents[1]
+TESTS_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TESTS_ROOT))
 
 from test_metadata import header_block  # noqa: E402
@@ -24,6 +24,7 @@ KNOWN_DIRECTIVES = frozenset({
     "EXPECT_NO_LEAKS",
     "EXPECT_NO_OPEN_FDS",
     "EXPECT_ERROR_CODE",
+    "EXPECT_ERROR_CODES_EXACT",
 })
 
 

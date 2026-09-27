@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = TESTS_DIR.parent
 RUN_TESTS = TESTS_DIR / "run_tests.py"
 if str(TESTS_DIR) not in sys.path:

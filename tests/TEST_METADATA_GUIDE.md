@@ -197,6 +197,25 @@ compilation failed but *which* diagnostic fired.
   forces `NO_COLOR` so the token is never split by color escapes.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
+- It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
+  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the set.
+
+#### EXPECT_ERROR_CODES_EXACT
+
+Asserts the WHOLE set of diagnostic codes the compiler printed, warnings included, for a
+`test_err_*` / `test_warn_*` test. A code that is missing fails the test, and so does a
+code that is printed and not listed.
+
+```sushi
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_ERROR_CODES_EXACT: CW1001, CE1001, CE2002
+```
+
+- A comma/space separated list; the directive may be repeated, and the lists add up
+- It compares SETS: a code printed twice is listed once
+- A code is read from the head of each diagnostic (`error [CE1001]`,
+  `warning [CW1001]`); a code inside a message or a note does not count
+- The failure names each missing code and each code that was not expected
 
 ### Advanced Metadata Directives
 
@@ -295,7 +314,7 @@ Test files must follow naming conventions to indicate expected compilation behav
 A test file name must also be UNIQUE across the whole of `tests/`, whatever directory it
 sits in. The runners report each test by its file name and key their quarantine sets on
 it, so a name that picks out two files drops one of them from the count and makes a
-failure unattributable. `tests/unit/test_fixture_identity_is_its_path.py` refuses a
+failure unattributable. `tests/unit/runner/test_fixture_identity_is_its_path.py` refuses a
 duplicate. Give the name enough of its subject to stand alone:
 `test_run_socket_close_then_scope_exit.sushi`, not `test_run_close_then_scope_exit.sushi`
 next to another of that name.

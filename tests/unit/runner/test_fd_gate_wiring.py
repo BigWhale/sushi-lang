@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parent.parent
+TESTS_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = TESTS_DIR.parent
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 FD_FIXTURE = FIXTURES_DIR / "fd_leaking_program.sushi"

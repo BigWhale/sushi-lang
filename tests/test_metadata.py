@@ -33,6 +33,9 @@ class TestMetadata:
     # Compilation diagnostics expectations (error/warning categories).
     # Enforced on the compilation path, not the runtime path.
     expect_error_code: Optional[List[str]] = None
+    # The WHOLE set of codes the compiler printed, warnings included (#959). None when
+    # the fixture does not say; EXPECT_ERROR_CODE is a substring check and cannot pin it.
+    expect_error_codes_exact: Optional[List[str]] = None
 
     # Opt-in leak assertion, enforced by every enhanced run that executes the test.
     # --leaks-only narrows the selection to the tests carrying it; it does not decide
@@ -179,6 +182,14 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
                 for token in re.split(r'[,\s]+', value):
                     if token:
                         metadata.expect_error_code.append(token)
+
+            elif directive.startswith('EXPECT_ERROR_CODES_EXACT:'):
+                value = directive.split(':', 1)[1].strip().strip('"')
+                codes = [token for token in re.split(r'[,\s]+', value) if token]
+                if not codes:
+                    _warn(f"Empty EXPECT_ERROR_CODES_EXACT in {test_file}")
+                metadata.expect_error_codes_exact = (
+                    (metadata.expect_error_codes_exact or []) + codes)
 
             elif directive.startswith('COMPILER_FLAGS:'):
                 value = directive.split(':', 1)[1].strip()

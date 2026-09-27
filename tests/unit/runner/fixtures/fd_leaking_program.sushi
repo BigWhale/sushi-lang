@@ -1,5 +1,5 @@
 # A program that deliberately leaks a DESCRIPTOR, used by
-# tests/unit/test_fd_gate_wiring.py.
+# tests/unit/runner/test_fd_gate_wiring.py.
 #
 # It is NOT named test_*.sushi on purpose, for the same reason the malloc fixture
 # beside it is not: the suite discovers tests/**/test_*.sushi, and a permanently

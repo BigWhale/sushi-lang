@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parent.parent
+TESTS_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = TESTS_DIR.parent
 
 if str(TESTS_DIR) not in sys.path:

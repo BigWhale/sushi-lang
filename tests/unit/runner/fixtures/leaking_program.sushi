@@ -1,4 +1,4 @@
-# A program that deliberately leaks, used by tests/unit/test_leak_gate_wiring.py.
+# A program that deliberately leaks, used by tests/unit/runner/test_leak_gate_wiring.py.
 #
 # It is NOT named test_*.sushi on purpose: the suite discovers tests/**/test_*.sushi,
 # so a leak-annotated failing program under that glob would make the suite permanently

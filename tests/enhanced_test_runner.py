@@ -36,6 +36,13 @@ RUNTIME_QUARANTINE: set[str] = set()
 
 
 _NUMERIC = re.compile(r"-?\d+")
+# The code of one compiler diagnostic, `error [CE1001]` or `warning [CW1001]`.
+_DIAGNOSTIC_CODE = re.compile(r"\b(?:error|warning) \[(C[EW]\d{4})\]")
+
+
+def diagnostic_codes(stderr: str) -> set:
+    """Every distinct diagnostic code the compiler printed."""
+    return set(_DIAGNOSTIC_CODE.findall(stderr or ""))
 
 # Why a leak assertion was not evaluated. A skip is never a pass, so the reason has to
 # survive as far as the summary; these constants are what _check_leaks records and what
@@ -306,9 +313,12 @@ class TestRunner:
     def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False,
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
-                 compile_only: bool = False):
+                 compile_only: bool = False, project_root: Optional[Path] = None):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
+        # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
+        # every real run; a runner test that selects from a temporary directory names it.
+        self.project_root = project_root or tests_dir.parent
         self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
@@ -544,7 +554,7 @@ class TestRunner:
             # codes/messages land in stderr without ANSI escapes, keeping
             # substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS)
             # robust.
-            project_root = self.tests_dir.parent
+            project_root = self.project_root
             cmd = ["./sushic", str(test_file), "-o", str(binary_path),
                    *metadata.compiler_flags]
             result = subprocess.run(
@@ -603,6 +613,16 @@ class TestRunner:
                 + ", ".join(missing)
                 + f"\nSTDERR: {stderr.strip()}"
             )
+        if metadata.expect_error_codes_exact is not None:
+            expected = set(metadata.expect_error_codes_exact)
+            printed = diagnostic_codes(stderr)
+            if printed != expected:
+                return False, (
+                    "✗ Compilation: the diagnostic codes are not the exact set"
+                    f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
+                    f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
+                    f"\nSTDERR: {stderr.strip()}"
+                )
         return True, "✓ Compilation: diagnostics matched"
 
     def _run_runtime_test(self, test_name: str, test_file: Path, metadata: TestMetadata) -> Tuple[bool, str]:
@@ -674,7 +694,7 @@ class TestRunner:
     def _check_leaks(self, test_name: str, binary_path: Path,
                      metadata: TestMetadata) -> Tuple[Optional[bool], str]:
         """Re-run a binary under the malloc-interposer and assert it leaks nothing."""
-        shim = leakcheck_lib_path(self.tests_dir.parent)
+        shim = leakcheck_lib_path(self.project_root)
         if shim is None:
             return self._skip_leak_check(test_name, SKIP_UNSUPPORTED_PLATFORM)
         if not shim.exists():
