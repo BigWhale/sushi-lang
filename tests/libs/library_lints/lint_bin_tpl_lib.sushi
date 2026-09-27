@@ -1,0 +1,7 @@
+public fn one() i32:
+    return Result.Ok(1)
+
+public fn count_three@(T)(T a) i32:
+    let i32 spare = 3
+    one()
+    return Result.Ok(3)
