@@ -17,8 +17,7 @@ def _format_downloads(count: int) -> str:
 
 
 def _print_results(packages: list) -> None:
-    use_ansi = should_colour(sys.stdout)
-    p = Palette(use_ansi)
+    p = Palette(should_colour(sys.stdout))
 
     # Compute dynamic column widths
     name_w = max(len(p.get("name", "")) for p in packages)
@@ -35,13 +34,11 @@ def _print_results(packages: list) -> None:
     )
     print(f"{p.bold}{header}{p.reset}")
 
-    # Separator
-    if use_ansi:
-        sep = (
-            f"  {'\u2500' * name_w}  {'\u2500' * ver_w}  "
-            f"{'\u2500' * lic_w}  {'\u2500' * dl_w}  {'\u2500' * 11}"
-        )
-        print(f"{p.dim}{sep}{p.reset}")
+    sep = (
+        f"  {'\u2500' * name_w}  {'\u2500' * ver_w}  "
+        f"{'\u2500' * lic_w}  {'\u2500' * dl_w}  {'\u2500' * 11}"
+    )
+    print(f"{p.dim}{sep}{p.reset}")
 
     # Rows
     for pkg in packages:
