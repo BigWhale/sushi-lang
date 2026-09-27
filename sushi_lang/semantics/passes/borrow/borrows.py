@@ -51,7 +51,8 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
             return
         # A `poke` may mutate or free, so it conflicts with a live `let`-borrow like a
         # mutating method (#242). CE2412 not CE2407: the user wrote no `peek`.
-        check_owner_not_borrowed(checker, name, borrow.loc, "take `poke`")
+        check_owner_not_borrowed(checker, name, borrow.loc, "take `poke`",
+                                 place=borrow.expr)
 
     acquire_borrow(checker, state, borrow.loc, is_poke=is_poke)
 

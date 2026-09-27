@@ -1,0 +1,13 @@
+# The item is not the only view: after its last use the iterator still reads the list's
+# storage for the next round, so a `push` after the item's last use is refused (#956).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let List@(string) l = List.new()
+    l.push("one".clone())
+    l.push("two".clone())
+    foreach(x in l.iter()):
+        println(x)
+        l.push("more".clone())
+    println("{l.len()}")
+    return Result.Ok(0)

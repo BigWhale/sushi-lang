@@ -38,6 +38,7 @@ from .bindings import (
     release_binding_borrow,
 )
 from .borrows import clear_borrows
+from .diagnostics import emit_change_under_iterator
 from .consume import (
     bind,
     binds_a_bare_literal_string,
@@ -174,7 +175,7 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     check_expr(checker, stmt.value)
     # Both rebind shapes take ownership, and replacing what the owner holds invalidates
     # every binding reading out of it (#242).
-    check_owner_not_borrowed(checker, owner, stmt.loc, "assign")
+    check_owner_not_borrowed(checker, owner, stmt.loc, "assign", place=target)
 
     if isinstance(target, Name):
         consume(checker, stmt.value)
@@ -293,8 +294,13 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     # (#300) and a value binding of an owning element (#919) freeze the container for the
     # loop. Both end with the scope, so an outer local the item shadows gets its state
     # back (#337).
+    # The iterator over a container freezes it against a change that moves or frees its
+    # storage, for the whole loop (#956). The item's freeze stays for an in-place change;
+    # a change that hits both is the iterator's to report.
     span = stmt.item_name_span or stmt.loc
     with BindingScope(checker) as scope:
+        iterator = (scope.bind_iterator(stmt.iterable)
+                    if stmt.protocol_next is None else None)
         if stmt.item_borrow is not None:
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
                            owner=stmt.iterable, declared_at=stmt.item_borrow_span)
@@ -304,7 +310,11 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
             freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
                               stmt.iterable, ScrutineeKind.BORROWED)
+        if iterator is not None:
+            checker.borrow_state[stmt.item_name].covered_by = iterator.name
         check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.item_name}))
+        if iterator is not None and iterator.invalidated_at is not None:
+            emit_change_under_iterator(checker, iterator, stmt.iterable, stmt.loc)
 
 
 def check_loop_body(checker: 'BorrowChecker', body: Block,

@@ -1,0 +1,15 @@
+# A body that only reads the iterated container stays legal (#956). After the loop the
+# container is free to change again.
+# EXPECT_STDOUT_EXACT: "11 3\n22 3\n33 3\n4\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(11)
+    l.push(22)
+    l.push(33)
+    foreach(x in l.iter()):
+        println("{x} {l.len()}")
+    l.push(44)
+    println("{l.len()}")
+    return Result.Ok(0)

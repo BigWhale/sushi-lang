@@ -13,14 +13,16 @@ from dataclasses import dataclass
 class MethodEffect:
     """The borrow-pass facts about one built-in method name."""
     mutates: bool = False        # changes or releases what the receiver holds (CE2412, CE2408)
+    moves_storage: bool = False  # can reallocate, shrink or free the receiver's storage (#956)
     consumes_args: bool = False  # stores each argument, so each is a consuming use
     bulk_writes: bool = False    # grows the receiver from a borrowed source (CE2430)
     refills: bool = False        # frees each slot, then stores a copy of its argument (CE2430)
 
 
-_MUTATES = MethodEffect(mutates=True)
-_INSERTS = MethodEffect(mutates=True, consumes_args=True)
-_BULK_WRITES = MethodEffect(mutates=True, bulk_writes=True)
+_MUTATES = MethodEffect(mutates=True, moves_storage=True)
+_WRITES_IN_PLACE = MethodEffect(mutates=True)
+_INSERTS = MethodEffect(mutates=True, moves_storage=True, consumes_args=True)
+_BULK_WRITES = MethodEffect(mutates=True, moves_storage=True, bulk_writes=True)
 _REFILLS = MethodEffect(mutates=True, refills=True)
 _NO_EFFECT = MethodEffect()
 
@@ -41,7 +43,7 @@ METHOD_EFFECTS: dict[str, MethodEffect] = {
     "destroy": _MUTATES,
     "free": _MUTATES,
     "fill": _REFILLS,
-    "reverse": _MUTATES,
+    "reverse": _WRITES_IN_PLACE,
 }
 
 

@@ -7,7 +7,8 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, MethodLike
+from sushi_lang.semantics.ast import Expr, MemberAccess, MethodLike
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
@@ -137,7 +138,10 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
     what = f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return
-    check_owner_not_borrowed(checker, root, expr.loc, what)
+    # A `poke self` method the table does not carry is taken to move storage.
+    effect = effect_of(expr.method)
+    check_owner_not_borrowed(checker, root, expr.loc, what, place=receiver,
+                             moves_storage=effect.moves_storage or not effect.mutates)
 
 
 def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
@@ -187,8 +191,14 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
 
 
 def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
-                             span: Optional[Span], what: str) -> None:
-    """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242)."""
+                             span: Optional[Span], what: str, *,
+                             place: Optional[Expr] = None,
+                             moves_storage: bool = True) -> None:
+    """Reject a change to `owner` while a `let`-borrow binding reads out of it (#242).
+
+    `place` is what the change writes and `moves_storage` whether it can move or free
+    the storage there; together they decide whether a foreach iterator's view is hit.
+    """
     if owner is None:
         return
     state = checker.borrow_state.get(owner)
@@ -196,13 +206,61 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
         return
     # INVALIDATE, do not report: the change is an error only on a read AFTER it.
     # Reporting here would reject `let g = fns.get(0)??; g(10); fns.free()`.
-    for name, bound_at in state.binding_borrows:
+    # An iterator comes first, so a binding it covers is left to its one report.
+    hit: set[str] = set()
+    kept: list = []
+    entries = sorted(state.binding_borrows,
+                     key=lambda entry: _views_storage(checker, entry[0]) is None)
+    for name, bound_at in entries:
         binding = checker.borrow_state.get(name)
-        if binding is not None and binding.invalidated_at is None:
+        if binding is None:
+            continue
+        if binding.views_storage_of is not None and not changes_storage_of(
+                place, moves_storage, binding.views_storage_of):
+            kept.append((name, bound_at))
+            continue
+        if binding.covered_by is not None and binding.covered_by in hit:
+            kept.append((name, bound_at))
+            continue
+        hit.add(name)
+        if binding.invalidated_at is None:
             binding.invalidated_at = span
             binding.invalidated_by = (owner, what)
             binding.bound_at_span = binding.bound_at_span or bound_at
     # Invalidate ONCE, but NOT during a suppressed (loop-discovery) round: clearing in
     # round 1 leaves round 2 with no live borrows to invalidate.
     if not checker.err.suppressed:
-        state.binding_borrows = []
+        state.binding_borrows = [entry for entry in state.binding_borrows
+                                 if entry in kept]
+
+
+def _views_storage(checker: 'BorrowChecker', name: str) -> Optional[Expr]:
+    """The container a foreach iterator binding walks, or None for any other binding."""
+    binding = checker.borrow_state.get(name)
+    return binding.views_storage_of if binding is not None else None
+
+
+def _place_shape(expr: Optional[Expr]) -> Optional[tuple[str, ...]]:
+    """A place as its root and its steps, every index one step: `a.b[i]` -> a, b, []."""
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX)
+    if walked.name is None:
+        return None
+    steps = [node.member if isinstance(node, MemberAccess) else "[]"
+             for node in reversed(walked.path)]
+    return (walked.name.id, *steps)
+
+
+def changes_storage_of(place: Optional[Expr], moves_storage: bool,
+                       viewed: Expr) -> bool:
+    """Can a change at `place` move or free the storage of the container `viewed`?
+
+    A change at the container itself does when it moves storage; a change at a place
+    that holds the container does always; a change inside the container, or beside
+    it, never does. A place the walk cannot read is taken to hold the container.
+    """
+    changed, walked = _place_shape(place), _place_shape(viewed)
+    if changed is None or walked is None:
+        return True
+    if walked[:len(changed)] != changed:
+        return False
+    return moves_storage or len(changed) < len(walked)
