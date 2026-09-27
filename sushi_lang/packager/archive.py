@@ -5,7 +5,7 @@ import tarfile
 from pathlib import Path
 
 from sushi_lang.packager.constants import MANIFEST_NAME
-from sushi_lang.packager.manifest import NoriManifest, load_manifest_from_string
+from sushi_lang.packager.manifest import ManifestError, NoriManifest, load_manifest_from_string
 
 
 class ArchiveError(Exception):
@@ -42,29 +42,44 @@ class PackageArchive:
 
     @staticmethod
     def extract(archive_path: Path, dest_dir: Path) -> Path:
-        """Extract a .nori archive."""
-        with tarfile.open(archive_path, "r:gz") as tar:
-            # Find the top-level directory name
-            members = tar.getnames()
-            if not members:
-                raise ArchiveError("Empty archive")
-            top_dir = members[0].split("/")[0]
+        """Extract a .nori archive; answer its package directory, `<name>-<version>/`."""
+        top_dir = PackageArchive.read_manifest(archive_path).archive_name
+        with _open(archive_path) as tar:
+            try:
+                tar.extractall(path=dest_dir, filter="data")
+            except (tarfile.TarError, EOFError) as e:
+                raise ArchiveError(f"{archive_path}: {e}") from e
 
-            tar.extractall(path=dest_dir, filter="data")
-
-        return dest_dir / top_dir
+        extracted = dest_dir / top_dir
+        if not extracted.is_dir():
+            raise ArchiveError(f"{archive_path}: no package directory {top_dir}/ in archive")
+        return extracted
 
     @staticmethod
     def read_manifest(archive_path: Path) -> NoriManifest:
         """Read the manifest from a .nori archive without full extraction."""
-        with tarfile.open(archive_path, "r:gz") as tar:
-            for member in tar.getmembers():
+        with _open(archive_path) as tar:
+            try:
+                members = tar.getmembers()
+            except (tarfile.TarError, EOFError) as e:
+                raise ArchiveError(f"{archive_path}: {e}") from e
+            for member in members:
                 if member.name.endswith(f"/{MANIFEST_NAME}"):
                     f = tar.extractfile(member)
                     if f is None:
-                        raise ArchiveError(f"Cannot read {MANIFEST_NAME} from archive")
-                    return load_manifest_from_string(f.read().decode("utf-8"))
-        raise ArchiveError(f"No {MANIFEST_NAME} found in archive")
+                        raise ArchiveError(f"{archive_path}: cannot read {member.name}")
+                    try:
+                        return load_manifest_from_string(f.read(), member.name)
+                    except ManifestError as e:
+                        raise ArchiveError(f"{archive_path}: {e}") from e
+        raise ArchiveError(f"{archive_path}: no {MANIFEST_NAME} in archive")
+
+
+def _open(archive_path: Path) -> tarfile.TarFile:
+    try:
+        return tarfile.open(archive_path, "r:gz")
+    except (tarfile.TarError, OSError, EOFError) as e:
+        raise ArchiveError(f"{archive_path}: not a readable .nori archive ({e})") from e
 
 
 def _add_file(
