@@ -1,0 +1,13 @@
+# A consumer of a BINARY library whose unit writes `use <io/fs>`, and which imports
+# <io/fs> itself. The manifest carries the library's own declarations only; a manifest
+# that also carried the injected stdlib module's perks, implementations and functions
+# put a second copy of each into this build (CE4001).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+use <io/fs>
+use <lib/fs_user_bin_lib>
+
+fn main() i32:
+    match stdout.write("{answer().realise(0)}\n"):
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
