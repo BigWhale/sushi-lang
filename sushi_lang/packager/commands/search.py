@@ -53,9 +53,9 @@ def _print_results(packages: list) -> None:
 
         row = (
             f"  {p.bold}{p.cyan}{name:<{name_w}}{p.reset}  "
-            f"{p.blue}{version:<{ver_w}}{p.reset}  "
+            f"{p.green}{version:<{ver_w}}{p.reset}  "
             f"{p.dim}{license_:<{lic_w}}{p.reset}  "
-            f"{downloads:>{dl_w}}  "
+            f"{p.yellow}{downloads:>{dl_w}}{p.reset}  "
             f"{description}"
         )
         print(row)
