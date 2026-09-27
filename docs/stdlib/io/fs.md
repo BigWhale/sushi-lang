@@ -155,7 +155,12 @@ fn main() i32:
 
 ### `remove_all(string path) -> Result@(~, FileError)`
 
-Remove a path and, for a directory, everything under it. A missing path is success: the goal state already holds. A symlink is removed as the link; its target stays.
+Remove a path and, for a directory, everything under it. A missing path (ENOENT) is
+success: the goal state already holds. Any other failure to read the path is an error,
+and nothing is removed. A path that goes through a regular file -- `dir/plainfile/child`,
+where `plainfile` is not a directory (ENOTDIR) -- is such an error and answers
+`Err(FileError.InvalidPath)`, the `shutil.rmtree` answer and not the `rm -rf` one. A
+symlink is removed as the link; its target stays.
 
 ```sushi
 use <io/fs>
