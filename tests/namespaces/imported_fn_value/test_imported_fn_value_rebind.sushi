@@ -1,0 +1,15 @@
+# A public function of another unit, brought by a flat import, is a function
+# value in a rebind (#1013).
+# EXPECT_STDOUT_EXACT: "1\n5\n"
+use "helpers/lib3"
+use <collections/strings>
+
+fn one(string s) i32:
+    return Result.Ok(s.len() - s.len() + 1)
+
+fn main() i32:
+    let fn(string) -> i32 f = one
+    println(f("abc").realise(0))
+    f := plain
+    println(f("abc").realise(0))
+    return Result.Ok(0)

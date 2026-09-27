@@ -38,7 +38,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None, function_tables: tuple[Any, ...] = ()) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -62,7 +62,9 @@ class ScopeAnalyzer:
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
-        self.function_names: set[str] = set()
+        # The collected function tables, concrete and generic. The function rung reads
+        # them through this unit's scope, as the typecheck pass does (#1013).
+        self.function_tables = function_tables
         # One per enclosing lambda, innermost last. A use resolving to a scope BELOW a
         # collector's boundary is captured by that lambda and every enclosing one.
         self._capture_collectors: List[dict] = []
@@ -72,11 +74,6 @@ class ScopeAnalyzer:
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis."""
-        # Collect top-level function names so a bare reference resolves to a function
-        # value rather than CE1001. (The type pass decides whether the reference is
-        # legal — e.g. CE2093 for generic functions.)
-        self.function_names = {func.name for func in program.functions}
-
         for const in program.constants:
             self._check_constant(const)
 
@@ -207,12 +204,16 @@ class ScopeAnalyzer:
         return lookup_stdlib_constant(name, self.namespaces.scope) is not None
 
     def is_function(self, name: str) -> bool:
-        """A function of this program, referenced as a value.
+        """A function this unit may name, referenced as a value.
 
-        Flat, unlike the constant rung: an out-of-scope CALL is the typecheck pass's
-        CE2008, which says which unit declares it.
+        The unit's own, a flat import's, a `public use` re-export's: the same lookup the
+        typecheck pass reads for this rung (#1013). A private function of an imported
+        unit is in the scope, so the typecheck pass says CE3005; a generic is here too,
+        and the typecheck pass decides CE2093.
         """
-        return name in self.function_names
+        scope = self.namespaces.scope
+        return any(table.lookup(name, scope.unit, scope) is not None
+                   for table in self.function_tables)
 
     def is_namespace(self, name: str) -> bool:
         """A `use ... as` alias or an `unsafe external` block's namespace."""

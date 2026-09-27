@@ -52,6 +52,12 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     if isinstance(expr, Name):
         return name_provenance(checker, expr.id)
 
+    # `alias.fn` is a function value, built new at each read as the bare `fn` is: it
+    # reads no storage (#1013).
+    ref = getattr(expr, "namespace_ref", None)
+    if ref is not None and ref.kind == "function":
+        return Provenance.FRESH
+
     # A marked field take is the one read through an owner that is not a borrow: the
     # owner is a local this function holds, and the take spends it (ruling R28).
     if field_take(checker, expr) is not None:

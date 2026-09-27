@@ -1,0 +1,10 @@
+# Two imports bring a function of one name. The bare function value is
+# ambiguous, as the bare call is (#1013).
+# EXPECT_ERROR_CODES_EXACT: CE3012
+use "helpers/lib3"
+use "helpers/lib4"
+
+fn main() i32:
+    let fn(string) -> i32 f = plain
+    println(f("abc").realise(0))
+    return Result.Ok(0)

@@ -151,8 +151,14 @@ def infer_namespaced_call(validator: 'TypeValidator',
 
 def infer_namespaced_member(validator: 'TypeValidator',
                             node: 'MemberAccess') -> Optional[Type]:
-    """The type of `<namespace>.<name>` read as a value -- a constant."""
+    """The type of `<namespace>.<name>` read as a value -- a constant or a function."""
     binding = validator.resolve_namespaced(node.receiver, node.member)
+    if binding is not None and binding.provider.namespace_kind == "unit":
+        if binding.kind == "function":
+            return _infer_namespaced_function_value(validator, node, binding)
+        if binding.kind == "generic function":
+            _reject_generic_function_value(validator, node)
+            return None
     if binding is None or binding.kind != "constant":
         _reject_unknown_member(validator, node.receiver, node.member,
                                getattr(node, "loc", None))
@@ -169,6 +175,32 @@ def infer_namespaced_member(validator: 'TypeValidator',
 
     _stamp(node, binding)
     return binding.record.const_type
+
+
+def _infer_namespaced_function_value(validator: 'TypeValidator', node: 'MemberAccess',
+                                     binding: 'Binding') -> Optional[Type]:
+    """`<alias>.<fn>` as a function value: the fences of the call, then its fn type (#1013)."""
+    from sushi_lang.semantics.passes.types.visibility import reject_private_name
+    from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
+    from sushi_lang.semantics.visibility import VALUE_VERB
+    if getattr(node, "namespace_ref", None) is None:
+        loc = getattr(node, "loc", None)
+        if not _first_report(validator, loc):
+            return None
+        if reject_private_name(validator, "function", binding.record, loc,
+                               verb=VALUE_VERB):
+            return None
+        _stamp(node, binding)
+    return function_type_of_sig(binding.record)
+
+
+def _reject_generic_function_value(validator: 'TypeValidator', node: 'MemberAccess') -> None:
+    """CE2093: a generic function behind an alias is not a function value (#1013)."""
+    loc = getattr(node, "loc", None)
+    if _first_report(validator, loc):
+        er.emit(validator.reporter, er.ERR.CE2093, loc,
+                name=_written(node.receiver, node.member),
+                reason="generic function references are deferred (v1)")
 
 
 def fold_namespaced_enum(validator: 'TypeValidator', node) -> bool:
@@ -249,6 +281,20 @@ def _written(receiver, name: str) -> str:
     return f"{getattr(receiver, 'id', '?')}.{name}"
 
 
+def _first_report(validator: 'TypeValidator', loc) -> bool:
+    """True the first time a qualified name at `loc` is judged, False after that.
+
+    The validator walks an expression and the inference visitor follows, and only one
+    of them may speak.
+    """
+    if getattr(validator, "_namespaced_reported", None) is None:
+        validator._namespaced_reported = set()
+    if id(loc) in validator._namespaced_reported:
+        return False
+    validator._namespaced_reported.add(id(loc))
+    return True
+
+
 def _reject_unknown_member(validator: 'TypeValidator', receiver, name: str,
                            loc) -> None:
     """The namespace does not hold this name, or does not hold it as a callable.
@@ -257,13 +303,8 @@ def _reject_unknown_member(validator: 'TypeValidator', receiver, name: str,
     letting the receiver fall through to the ordinary expression rules would report an
     undeclared variable, which names the wrong thing.
     """
-    # Reported once. The validator walks a call and the inference visitor follows, and
-    # only the validating pass may speak.
-    if getattr(validator, "_namespaced_reported", None) is None:
-        validator._namespaced_reported = set()
-    if id(loc) in validator._namespaced_reported:
+    if not _first_report(validator, loc):
         return
-    validator._namespaced_reported.add(id(loc))
     from sushi_lang.semantics.namespaces import suggest_member
     written = _written(receiver, name)
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=written)

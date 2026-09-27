@@ -164,12 +164,14 @@ def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
     return True
 
 
-def _reject(validator: 'TypeValidator', origin: DeclOrigin, loc: Any) -> bool:
+def _reject(validator: 'TypeValidator', origin: DeclOrigin, loc: Any,
+            verb: Optional[str] = None) -> bool:
     return reject_private_cross_unit_use(
         validator.reporter, origin, loc,
         current_unit=validator.current_unit_name,
         table=getattr(validator, "visibility", None),
         in_library_body=bool(getattr(validator, "in_library_body", False)),
+        verb=verb,
     )
 
 
@@ -212,13 +214,13 @@ def reject_private_kept(validator: 'TypeValidator', name: str, loc: Any,
 
 
 def reject_private_name(validator: 'TypeValidator', kind: str, record: Any,
-                        loc: Any) -> bool:
+                        loc: Any, *, verb: Optional[str] = None) -> bool:
     """Reject a bare mention of another unit's private declaration (a constant).
 
     A constant has no call to hang the rule on: `visit_name` is where a bare name is
-    validated, so it is where the fence sits (D3).
+    validated, so it is where the fence sits (D3). A function value passes `VALUE_VERB`.
     """
-    return _reject(validator, origin_of(kind, record), loc)
+    return _reject(validator, origin_of(kind, record), loc, verb)
 
 
 def reject_private_type(validator: 'TypeValidator', name: str, loc: Any) -> bool:

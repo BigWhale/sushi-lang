@@ -656,7 +656,8 @@ class SemanticAnalyzer:
             scope_analyzer = ScopeAnalyzer(unit_reporter, self.tables.constants, self.tables.structs, self.tables.enums, self.tables.generic_enums, self.tables.generic_structs, external_table=self.tables.externals,
                                            kept_constants=libraries.kept_constant_names(),
                                            namespaces=namespaces,
-                                           visibility=self.tables.visibility)
+                                           visibility=self.tables.visibility,
+                                           function_tables=(self.tables.funcs, self.tables.generic_funcs))
             scope_analyzer.run(unit.ast)
 
             type_validator = TypeValidator(
@@ -1011,8 +1012,8 @@ class SemanticAnalyzer:
         throwaway = Reporter(source=self.reporter.source, filename=self.reporter.filename)
         capture_scope = ScopeAnalyzer(throwaway, self.tables.constants, self.tables.structs, self.tables.enums,
                                       self.tables.generic_enums, self.tables.generic_structs,
-                                      external_table=self.tables.externals)
-        capture_scope.function_names = set(self.tables.funcs.by_name)
+                                      external_table=self.tables.externals,
+                                      function_tables=(self.tables.funcs,))
 
         lifter = None
         if lift_target is not None:
