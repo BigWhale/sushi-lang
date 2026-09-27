@@ -1,0 +1,8 @@
+# A returned value is not compared against a refused return type.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+
+fn mk(i32[] a) Iterator@(i32):
+    return Result.Ok(a.iter())
+
+fn main() i32:
+    return Result.Ok(0)

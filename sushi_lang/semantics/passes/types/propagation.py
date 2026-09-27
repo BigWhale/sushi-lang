@@ -350,6 +350,28 @@ def _note_declared_position(validator: 'TypeValidator', node: Expr,
     _declared_positions(validator).add(id(node))
 
 
+def _note_refused_declared_type(validator: 'TypeValidator', node: Expr) -> None:
+    """A refused declared type reaches a constructor, and every constructor in its payload.
+
+    The type gives no instance, but it is a declared type, so no constructor it reaches
+    reports CE2112 (#991). The walk follows the payload of a generic enum constructor
+    only: that is where a declared type would go.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if isinstance(node, EnumConstructor):
+        enum_name: Optional[str] = node.enum_name
+    elif isinstance(node, (DotCall, MemberAccess)):
+        enum_name = _enum_receiver_name(validator, node.receiver)
+    else:
+        return
+    if enum_name not in validator.generic_enum_table.by_name:
+        return
+    _declared_positions(validator).add(id(node))
+    for arg in getattr(node, "args", None) or ():
+        _note_refused_declared_type(validator, arg)
+
+
 def _declared_positions(validator: 'TypeValidator') -> set:
     positions = getattr(validator, "_declared_positions", None)
     if positions is None:
@@ -366,6 +388,10 @@ def holds_declared_type(validator: 'TypeValidator', node: Expr) -> bool:
 def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""
+    from .utils import names_no_type
+    if names_no_type(validator, expected_type):
+        _note_refused_declared_type(validator, value_expr)
+        return
     _note_declared_position(validator, value_expr, expected_type)
     if isinstance(expected_type, BuiltinType) and (
             expected_type in _NUMERIC_INT or expected_type in _NUMERIC_FLOAT):

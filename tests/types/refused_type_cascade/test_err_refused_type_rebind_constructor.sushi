@@ -1,0 +1,8 @@
+# A constructor rebound to a variable with a refused type is not CE2112.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+
+fn main() i32:
+    let Nope@(i32) m = Maybe.None()
+    m := Maybe.None()
+    println(m)
+    return Result.Ok(0)
