@@ -10,7 +10,7 @@ from sushi_lang.packager.archive import PackageArchive
 from sushi_lang.packager.constants import (
     BIN_DIR, CACHE_DIR, BENTO_DIR, STORE_DIR, MANIFEST_NAME,
 )
-from sushi_lang.packager.errors import NoriError
+from sushi_lang.packager.errors import NoriError, from_os_error
 from sushi_lang.packager.manifest import NoriManifest, load_manifest, load_manifest_from_string
 from sushi_lang.packager.paths import (
     ensure_sushi_home, package_dir, store_package_dir, project_deps_dir,
@@ -25,9 +25,9 @@ def _append_manifest(packages: list[NoriManifest], manifest_path: Path) -> None:
     """Append one installed manifest; a corrupt one is skipped with a warning, not hidden."""
     try:
         packages.append(load_manifest_from_string(manifest_path.read_bytes(), str(manifest_path)))
-    except Exception as e:
-        reason = e if isinstance(e, NoriError) else f"{manifest_path}: {e}"
-        print(f"Warning: skipping an unreadable manifest: {reason}", file=sys.stderr)
+    except (NoriError, OSError) as e:
+        err = e if isinstance(e, NoriError) else from_os_error(e)
+        print(f"Warning: skipping an unreadable manifest: [{err.code}] {err}", file=sys.stderr)
 
 
 class PackageInstaller:

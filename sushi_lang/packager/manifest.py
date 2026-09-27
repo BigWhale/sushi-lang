@@ -1,6 +1,7 @@
 """Nori manifest (nori.toml) loading and validation."""
 from __future__ import annotations
 
+import datetime
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -68,6 +69,61 @@ def load_manifest_from_string(text: str | bytes, origin: str = MANIFEST_NAME) ->
         raise e.recast(ManifestError, path=origin) from e
 
 
+STRING = "a string"
+STRING_LIST = "a list of strings"
+
+# The expected TOML type of every manifest field that nori reads. [dependencies] is a
+# table of names to versions and has its own codes (NE1007, NE1008).
+FIELD_TYPES: dict[tuple[str, str], str] = {
+    ("package", "name"): STRING,
+    ("package", "version"): STRING,
+    ("package", "description"): STRING,
+    ("package", "author"): STRING,
+    ("package", "license"): STRING,
+    ("files", "libraries"): STRING_LIST,
+    ("files", "executables"): STRING_LIST,
+    ("files", "data"): STRING_LIST,
+    ("install", "source"): STRING,
+}
+
+# The TOML name of each type that tomllib produces; a datetime is a date, so it goes first.
+_TOML_KINDS: tuple[tuple[type, str], ...] = (
+    (bool, "a boolean"),
+    (str, "a string"),
+    (int, "an integer"),
+    (float, "a float"),
+    (list, "a list"),
+    (dict, "a table"),
+    (datetime.datetime, "a date-time"),
+    (datetime.date, "a date"),
+    (datetime.time, "a time"),
+)
+
+
+def _kind(value: object) -> str:
+    return next((name for cls, name in _TOML_KINDS if isinstance(value, cls)),
+                type(value).__name__)
+
+
+def _mismatch(value: object, expected: str) -> str | None:
+    """The found type when `value` is not `expected`, else None."""
+    if expected == STRING:
+        return None if isinstance(value, str) else _kind(value)
+    if not isinstance(value, list):
+        return _kind(value)
+    bad = next((item for item in value if not isinstance(item, str)), None)
+    return None if bad is None else f"a list that holds {_kind(bad)}"
+
+
+def _check_field_types(tables: dict[str, dict]) -> None:
+    for (table, key), expected in FIELD_TYPES.items():
+        if key not in tables[table]:
+            continue
+        found = _mismatch(tables[table][key], expected)
+        if found is not None:
+            raise ManifestError("NE1011", field=f"[{table}].{key}", expected=expected, found=found)
+
+
 def _table(data: dict, key: str) -> dict:
     value = data.get(key, {})
     if not isinstance(value, dict):
@@ -80,6 +136,7 @@ def _parse_manifest(data: dict) -> NoriManifest:
     files = _table(data, "files")
     install = _table(data, "install")
     deps = _table(data, "dependencies")
+    _check_field_types({"package": pkg, "files": files, "install": install})
     if not pkg.get("name"):
         raise ManifestError("NE1004", field="name")
     if not pkg.get("version"):
