@@ -207,11 +207,13 @@ sys.exit(main())
 
 @dataclass
 class DocGateResult:
-    """What the stdlib doc-block gate found, or why it did not run."""
+    """What the stdlib doc-block gate or the dead-code gate found, or why it did not run."""
     modules: List[str] = field(default_factory=list)
     failures: Dict[str, List[str]] = field(default_factory=dict)
     skip_reason: Optional[str] = None
     duration: float = 0.0
+    title: str = "Stdlib doc-block gate"
+    noun: str = "module(s)"
 
     @property
     def ran(self) -> bool:
@@ -229,8 +231,8 @@ class DocGateResult:
     def report(self) -> List[str]:
         """The lines the text report prints."""
         if not self.ran:
-            return [f"Stdlib doc-block gate SKIPPED: {self.skip_reason}."]
-        lines = [f"Stdlib doc-block gate: {len(self.modules)} module(s), "
+            return [f"{self.title} SKIPPED: {self.skip_reason}."]
+        lines = [f"{self.title}: {len(self.modules)} {self.noun}, "
                  f"{len(self.failures)} failed ({self.duration:.2f}s)"]
         for name, findings in sorted(self.failures.items()):
             lines.append(f"  {name}: {len(findings)} finding(s)")
@@ -264,6 +266,14 @@ def doc_gate_modules() -> Tuple[Dict[str, Path], bool]:
     return dict(SOURCE_STDLIB_MODULES), False
 
 
+def _spelled_path(path: Path, project_root: Path) -> str:
+    """A path as a `--filter` reads it: relative to the project root when it is under it."""
+    try:
+        return path.resolve().relative_to(project_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _doc_gate_selection(modules: Dict[str, Path], project_root: Path,
                         filter_pattern: Optional[str], leaks_only: bool
                         ) -> Tuple[Dict[str, Path], Optional[str]]:
@@ -278,14 +288,8 @@ def _doc_gate_selection(modules: Dict[str, Path], project_root: Path,
     if not filter_pattern:
         return modules, None
 
-    def spelled(path: Path) -> str:
-        try:
-            return path.resolve().relative_to(project_root.resolve()).as_posix()
-        except ValueError:
-            return path.as_posix()
-
     chosen = {name: path for name, path in modules.items()
-              if filter_pattern in name or filter_pattern in spelled(path)}
+              if filter_pattern in name or filter_pattern in _spelled_path(path, project_root)}
     if not chosen:
         return {}, f"--filter {filter_pattern!r} selects no stdlib module"
     return chosen, None
@@ -298,9 +302,9 @@ def doc_gate_program(modules: Dict[str, Path]) -> str:
                       *uses, "", "fn main() i32:", "    return Result.Ok(0)", ""])
 
 
-def _doc_findings(output: str, cwd: Path,
-                  modules: Dict[str, Path]) -> Dict[str, List[str]]:
-    """Every doc-pass diagnostic whose location is one of the checked module files.
+def _doc_findings(output: str, cwd: Path, modules: Dict[str, Path],
+                  codes: re.Pattern = _DOC_CODE) -> Dict[str, List[str]]:
+    """Every diagnostic of `codes` whose location is one of the checked module files.
 
     The compiler prints a location relative to its working directory, so `cwd` must hold
     every module file; outside it the compiler prints the bare file name.
@@ -309,7 +313,7 @@ def _doc_findings(output: str, cwd: Path,
     found: Dict[str, List[str]] = {}
     for line in output.splitlines():
         head = _DIAGNOSTIC_HEAD.match(line.strip())
-        if head is None or not _DOC_CODE.match(head["code"]):
+        if head is None or not codes.match(head["code"]):
             continue
         name = owner.get((cwd / head["path"]).resolve())
         if name is not None:
@@ -362,6 +366,93 @@ def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
         result.failures["(the gate program)"] = [
             f"the compilation failed with exit {done.returncode}: "
             f"{errors[0] if errors else 'no diagnostic printed'}"]
+    result.duration = time.time() - start
+    return result
+
+
+# The dead-code gate (#959, ruling 5): the two `--warn-unused` codes.
+_DEAD_CODE = re.compile(r"^CW(?:1004|3006)$")
+# A list of program paths, separated by `os.pathsep`, that replaces the programs under
+# `toolchain/src/`. Only the runner tests set it.
+DEAD_GATE_PROGRAMS_ENV = "SUSHI_DEAD_GATE_PROGRAMS"
+
+
+def dead_gate_programs(project_root: Path) -> List[Path]:
+    """The programs the dead-code gate compiles: each `toolchain/src/` file with a main."""
+    override = os.environ.get(DEAD_GATE_PROGRAMS_ENV)
+    if override is not None:
+        return [Path(p).resolve() for p in override.split(os.pathsep) if p]
+    return sorted(path for path in (project_root / "toolchain" / "src").glob("*.sushi")
+                  if re.search(r"^fn main\(", path.read_text(encoding="utf-8"), re.M))
+
+
+def _dead_gate_compile(command: List[str], cwd: Path, env: Dict[str, str],
+                       label: str, result: DocGateResult) -> str:
+    """One compilation of the dead-code gate; its output, and a failure when it did not build."""
+    try:
+        done = subprocess.run(command, cwd=cwd, capture_output=True, text=True,
+                              timeout=600, env=env)
+    except subprocess.TimeoutExpired:
+        result.failures[label] = ["the compilation timed out"]
+        return ""
+    output = done.stdout + done.stderr
+    if done.returncode not in (0, 1):
+        # A program that does not compile is a program the lint did not finish.
+        errors = [line.strip() for line in output.splitlines() if " error [" in line]
+        result.failures[label] = [
+            f"the compilation failed with exit {done.returncode}: "
+            f"{errors[0] if errors else 'no diagnostic printed'}"]
+    return output
+
+
+def stdlib_dead_code_gate(project_root: Path, filter_pattern: Optional[str] = None,
+                          leaks_only: bool = False) -> DocGateResult:
+    """Fail on a `--warn-unused` finding in the bundled stdlib or in `toolchain/src/` (#959).
+
+    The facts come from the compiler. The gate compiles the program that imports every
+    stdlib module with SUSHI_STDLIB_DEAD_GATE set, so the lint checks the bundled units
+    too, and each toolchain program; a finding located in a checked file fails the run.
+    """
+    from sushi_lang.semantics.semantic_analyzer import STDLIB_DEAD_GATE_ENV
+
+    result = DocGateResult(title="Dead-code gate", noun="module(s) and program(s)")
+    every, is_override = doc_gate_modules()
+    chosen, _ = _doc_gate_selection(every, project_root, filter_pattern, leaks_only)
+    programs = [] if leaks_only else [
+        path for path in dead_gate_programs(project_root)
+        if not filter_pattern or filter_pattern in _spelled_path(path, project_root)]
+    if not chosen and not programs:
+        result.skip_reason = ("--leaks-only selects no stdlib module or toolchain program"
+                              if leaks_only else
+                              f"--filter {filter_pattern!r} selects no stdlib module or "
+                              "toolchain program")
+        return result
+
+    start = time.time()
+    result.modules = [*sorted(chosen), *(p.name for p in programs)]
+    with tempfile.TemporaryDirectory(prefix="sushi_dead_gate_") as tmp:
+        if chosen:
+            program = Path(tmp) / "dead_gate.sushi"
+            program.write_text(doc_gate_program(chosen), encoding="utf-8")
+            flags = ["--warn-unused", str(program), "-o", str(Path(tmp) / "dead_gate"),
+                     "--cache-dir", str(Path(tmp) / "cache")]
+            env = {**os.environ, STDLIB_DEAD_GATE_ENV: "1"}
+            cwd = project_root
+            if is_override:
+                command, extra = stdlib_override_command(project_root, chosen, flags)
+                cwd = Path(os.path.commonpath([p.parent for p in chosen.values()]))
+                env.update(extra)
+            else:
+                command = [str(project_root / "sushic"), *flags]
+            output = _dead_gate_compile(command, cwd, env, "(the stdlib program)", result)
+            result.failures.update(_doc_findings(output, cwd, chosen, _DEAD_CODE))
+        for index, path in enumerate(programs):
+            flags = ["--warn-unused", str(path), "-o", str(Path(tmp) / f"program_{index}"),
+                     "--cache-dir", str(Path(tmp) / "cache")]
+            output = _dead_gate_compile([str(project_root / "sushic"), *flags], path.parent,
+                                        dict(os.environ), path.name, result)
+            units = {p.name: p for p in path.parent.glob("*.sushi")}
+            result.failures.update(_doc_findings(output, path.parent, units, _DEAD_CODE))
     result.duration = time.time() - start
     return result
 
@@ -993,9 +1084,11 @@ def main():
     report_gate = lib_info_report_gate(Path(__file__).resolve().parent.parent,
                                        filter_pattern=args.filter,
                                        leaks_only=args.leaks_only)
-    for line in gate.report() + report_gate.report():
+    dead_gate = stdlib_dead_code_gate(Path(__file__).resolve().parent.parent,
+                                      filter_pattern=args.filter, leaks_only=args.leaks_only)
+    for line in gate.report() + report_gate.report() + dead_gate.report():
         print(line, file=sys.stderr if args.json else sys.stdout)
-    return rc or (0 if gate.passed and report_gate.passed else 1)
+    return rc or (0 if gate.passed and report_gate.passed and dead_gate.passed else 1)
 
 
 if __name__ == "__main__":

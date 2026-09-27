@@ -1,0 +1,37 @@
+# Test: --warn-unused reports a private declaration that nothing in its unit reaches
+# (CW1004), and an import whose unit names nothing it brings (CW3006). `helper` is
+# reached only from `lonely`, which is dead, so both are reported. The constant, the
+# struct and the enum are never named. `<time>` and the aliased unit bring names the
+# unit never writes.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW1004 CW3006
+# EXPECT_STDERR_CONTAINS: "private function 'lonely' is never used"
+# EXPECT_STDERR_CONTAINS: "private function 'helper' is never used"
+# EXPECT_STDERR_CONTAINS: "private constant 'UNREAD' is never used"
+# EXPECT_STDERR_CONTAINS: "private struct 'Crate' is never used"
+# EXPECT_STDERR_CONTAINS: "private enum 'Colour' is never used"
+# EXPECT_STDERR_CONTAINS: "private perk 'Loud' is never used"
+# EXPECT_STDERR_CONTAINS: "'<time>' brings nothing this unit names"
+# EXPECT_STDERR_CONTAINS: "'"helpers/unused_shapes"' brings nothing this unit names"
+use <time>
+use "helpers/unused_shapes" as sh
+
+const i32 UNREAD = 42
+
+struct Crate:
+    i32 weight
+
+enum Colour:
+    Red
+
+perk Loud:
+    fn shout() string
+
+fn helper() i32:
+    return Result.Ok(1)
+
+fn lonely() i32:
+    return Result.Ok(helper()??)
+
+fn main() i32:
+    return Result.Ok(0)

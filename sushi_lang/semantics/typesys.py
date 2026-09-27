@@ -50,6 +50,8 @@ class UnknownType:
 class ArrayType:
     base_type: "Type"  # The element type
     size: int          # Array size (compile-time constant)
+    # The constant a written size named (`i32[SIZE]`), for the `unused` pass. Not identity.
+    size_name: Optional[str] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         return f"{self.base_type}[{self.size}]"

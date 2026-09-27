@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.semantic_analyzer import Lints
 
 
 @dataclass(frozen=True)
@@ -15,6 +18,7 @@ class BuildOptions:
     keep_object: bool
     ignore_compiler_version: bool
     warn_missing_docs: bool
+    warn_unused: bool
     lib: bool
     lib_kind: str
     lib_version: Optional[str]
@@ -32,6 +36,7 @@ class BuildOptions:
             keep_object=args.keep_object,
             ignore_compiler_version=args.ignore_compiler_version,
             warn_missing_docs=args.warn_missing_docs,
+            warn_unused=args.warn_unused,
             lib=args.lib,
             lib_kind=args.lib_kind,
             lib_version=args.lib_version,
@@ -40,3 +45,9 @@ class BuildOptions:
             no_incremental=args.no_incremental,
             cache_dir=args.cache_dir,
         )
+
+    @property
+    def lints(self) -> "Lints":
+        """The warning-control flags, as the one object the analyzer takes."""
+        from sushi_lang.semantics.semantic_analyzer import Lints
+        return Lints(missing_docs=self.warn_missing_docs, unused=self.warn_unused)

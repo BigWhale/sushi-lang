@@ -16,6 +16,7 @@ each named for the stage it runs.
 |---|---|---|
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
 | `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
+| `unused` | under `--warn-unused`: a private declaration nothing in its unit reaches (CW1004), an import whose unit names nothing it brings (CW3006) | `semantics/unused.py` |
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
@@ -251,6 +252,44 @@ it is set, the pass also checks each BUNDLED stdlib unit, the units whose name i
 completeness lint on them. A unit of a source library stays skipped. The runner compiles
 one program that imports every bundled module, because a stdlib module is never built
 alone. When the variable is not set, the pass skips every library unit.
+
+## The `unused` pass: dead private declarations and unused imports
+
+The pass runs only under `--warn-unused`. A private name is visible only in its own unit,
+so the pass checks each unit alone, over the WRITTEN declarations of the unit.
+
+**CW1004.** The roots of a unit are every `public` declaration, every `extend` block (an
+extension method and a perk implementation, which a call reaches through a receiver and
+not through a name), the `unsafe external` blocks, and `fn main()`. The pass starts at the
+roots and follows each name that a reached declaration mentions. A private constant,
+variable, struct, enum, perk or function that it does not reach is dead.
+
+**CW3006.** A `use` line is used when the unit mentions a name that the import brings: a
+name the imported unit declares or re-exports (`Provider.members`, the walk the
+`namespaces` pass reads), the alias of an `as` import, an extension or perk method of a
+unit it reaches, and for `<collections/strings>` a string method, which is the per-unit
+rule of CE3015. A `public use` is a root and the pass never reports it. The pass does not
+report an import of a library.
+
+The names that a declaration mentions are all the strings in its subtree, but not the doc
+blocks and not the string literals. This is more than the declaration uses: a local that
+has the same name as a private function keeps the function alive. Thus the lint can miss a
+dead declaration, but it does not report a live one. The AST builder folds the size of a
+fixed array to a number. It also keeps the name of the constant that the size names, in
+`ArrayType.size_name`, and the pass reads that field. The field is not part of the type
+identity.
+
+### Placement
+
+The pass runs immediately after `docs`, for the same reason: it must read the written
+declarations. The `libraries` step adds the constants of a binary library to a host unit,
+and `monomorphize` adds the instances.
+
+Library units are skipped. The test runner's dead-code gate (#959) sets the hidden
+environment variable `SUSHI_STDLIB_DEAD_GATE=1`. When it is set, the pass also checks each
+bundled stdlib unit, in the same way that `SUSHI_STDLIB_DOC_GATE=1` works for the `docs`
+pass. The runner compiles the program that imports every bundled module, and each program
+under `toolchain/src/`, and fails the run on a CW1004 or CW3006 in one of those files.
 
 ## The `externs` pass: FFI signature validation
 
