@@ -1,0 +1,18 @@
+# A write through a bare pattern binding is CE2414. The payload owns a resource, so
+# there is no copy to store back: the help names the modes and the escapes that
+# compile, and it does not end in "and store it back".
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "where the match owns its scrutinee -- otherwise a descriptor cannot be deep-copied, so there is no `items.clone()`, and its type has no `share()` that gives a second owner; restructure so only one owner is needed\n"
+
+use <io/fs>
+
+enum Slot:
+    Held(List@(File))
+    Empty
+
+fn main() i32:
+    let Slot s = Slot.Held(List.new())
+    match s:
+        Slot.Held(items) -> items.clear()
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

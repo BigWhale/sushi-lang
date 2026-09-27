@@ -12,7 +12,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .diagnostics import escape_help
+from .diagnostics import write_escape
 from .methods import effect_of
 from .reads import chain_call_boundary, root_owner
 from .state import BorrowState
@@ -96,7 +96,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         help="'{name}' is a view of the owner's value and not storage of its own, so "
              "the write ({what}) cannot stand; bind the payload `poke` to write "
              "through to the owner, or `nom` to take it where the match owns its "
-             "scrutinee -- otherwise {escape}, and store it back",
+             "scrutinee -- otherwise {escape}",
         refuses_a_rebind=True,
     ),
     ReadOnlyReceiver(
@@ -114,8 +114,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         help="the write ({what}) reaches storage another value owns and still frees, so "
              "it is lost from the owner's view, a reallocating write frees the owner's "
              "buffer, and a rebind frees a value the owner still holds; write to the "
-             "owner directly, or take an independent value with `{name}.clone()`, "
-             "mutate it, and store it back",
+             "owner directly -- otherwise {escape}",
         refuses_a_rebind=True,
     ),
 )
@@ -184,8 +183,7 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         if note_span is not None:
             diag.note_at(kind.note.format(name=name), note_span)
         diag.help(kind.help.format(name=name, what=what,
-                                   escape=escape_help(checker, name, state.var_type,
-                                                      handover=False)))
+                                   escape=write_escape(checker, name, state.var_type)))
         diag.emit()
         return True
     return False
