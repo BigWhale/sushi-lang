@@ -7,6 +7,7 @@ from pathlib import Path
 from sushi_lang.packager.api_client import api_upload_multipart, ApiError
 from sushi_lang.packager.constants import MANIFEST_NAME
 from sushi_lang.packager.credentials import load_token
+from sushi_lang.packager.errors import RELOGIN_HELP, NoriError
 from sushi_lang.packager.manifest import load_manifest
 from sushi_lang.packager.repository import resolve_repository
 
@@ -25,28 +26,20 @@ def cmd_publish(args: argparse.Namespace) -> int:
     ns = getattr(args, "namespace", "stable")
     plat = getattr(args, "platform", None) or _detect_platform()
 
-    # Require nori.toml
     manifest_path = Path.cwd() / MANIFEST_NAME
-    if not manifest_path.exists():
-        print(f"No {MANIFEST_NAME} found in current directory.")
-        print("Run 'nori publish' from a project directory with a nori.toml.")
-        return 1
-
     manifest = load_manifest()
 
     # Locate built archive
     archive_path = Path.cwd() / "dist" / f"{manifest.archive_name}.nori"
     if not archive_path.exists():
-        print(f"Archive not found: {archive_path}")
-        print("Run 'nori build' first to create the package archive.")
-        return 1
+        raise NoriError("NE2007", path=archive_path,
+                        helps=["run 'nori build' first to create the package archive"])
 
     # Require authentication
     token = load_token(repository)
     if not token:
-        print(f"Not logged in to {repository}.")
-        print("Use 'nori login <api-key>' to authenticate first.")
-        return 1
+        raise NoriError("NE5003", repository=repository,
+                        helps=["run 'nori login' to authenticate first"])
 
     # Read archive and compute SHA-256
     archive_data = archive_path.read_bytes()
@@ -77,30 +70,28 @@ def cmd_publish(args: argparse.Namespace) -> int:
             extra_headers={"X-Sha256": sha256},
         )
     except ApiError as e:
-        if e.status == 401:
-            print("Authentication failed. Token may be expired or revoked.")
-            print("Use 'nori login <api-key>' to re-authenticate.")
-            return 1
-        if e.status == 403:
-            print(f"Permission denied. You are not the owner of '{manifest.name}'.")
-            return 1
-        if e.status == 409:
-            print(f"Version {manifest.version} already exists for '{manifest.name}'.")
-            return 1
-        if e.status == 413:
-            print("Archive exceeds the maximum size limit (50 MB).")
-            return 1
-        if e.status == 422:
-            print(f"Validation error: {e.message}")
-            return 1
-        print(f"Server error: {e.message}")
-        return 1
-    except ConnectionError as e:
-        print(str(e))
-        return 1
+        refusal = _refusal(e, repository, manifest.name, manifest.version)
+        if refusal is None:
+            raise
+        raise refusal from e
 
     published_at = result.get("published_at", "")
     print(f"Published {manifest.name} v{manifest.version}")
     if published_at:
         print(f"  Published at: {published_at}")
     return 0
+
+
+def _refusal(e: ApiError, repository: str, name: str, version: str) -> NoriError | None:
+    """The code of an HTTP status that publish names; None keeps NE5002."""
+    if e.status == 401:
+        return NoriError("NE5004", repository=repository, helps=[RELOGIN_HELP])
+    if e.status == 403:
+        return NoriError("NE5006", name=name)
+    if e.status == 409:
+        return NoriError("NE5007", version=version, name=name)
+    if e.status == 413:
+        return NoriError("NE5008")
+    if e.status == 422:
+        return NoriError("NE5009", detail=e.message)
+    return None

@@ -5,10 +5,11 @@ import tarfile
 from pathlib import Path
 
 from sushi_lang.packager.constants import MANIFEST_NAME
+from sushi_lang.packager.errors import NoriError
 from sushi_lang.packager.manifest import ManifestError, NoriManifest, load_manifest_from_string
 
 
-class ArchiveError(Exception):
+class ArchiveError(NoriError):
     pass
 
 
@@ -48,11 +49,11 @@ class PackageArchive:
             try:
                 tar.extractall(path=dest_dir, filter="data")
             except (tarfile.TarError, EOFError) as e:
-                raise ArchiveError(f"{archive_path}: {e}") from e
+                raise ArchiveError("NE2001", path=archive_path, reason=e) from e
 
         extracted = dest_dir / top_dir
         if not extracted.is_dir():
-            raise ArchiveError(f"{archive_path}: no package directory {top_dir}/ in archive")
+            raise ArchiveError("NE2002", path=archive_path, directory=top_dir)
         return extracted
 
     @staticmethod
@@ -62,24 +63,25 @@ class PackageArchive:
             try:
                 members = tar.getmembers()
             except (tarfile.TarError, EOFError) as e:
-                raise ArchiveError(f"{archive_path}: {e}") from e
+                raise ArchiveError("NE2001", path=archive_path, reason=e) from e
             for member in members:
                 if member.name.endswith(f"/{MANIFEST_NAME}"):
                     f = tar.extractfile(member)
                     if f is None:
-                        raise ArchiveError(f"{archive_path}: cannot read {member.name}")
+                        raise ArchiveError("NE2003", path=archive_path, member=member.name)
                     try:
                         return load_manifest_from_string(f.read(), member.name)
                     except ManifestError as e:
-                        raise ArchiveError(f"{archive_path}: {e}") from e
-        raise ArchiveError(f"{archive_path}: no {MANIFEST_NAME} in archive")
+                        where = f"{archive_path} ({e.params.get('path', member.name)})"
+                        raise e.recast(ArchiveError, path=where) from e
+        raise ArchiveError("NE2004", path=archive_path, manifest=MANIFEST_NAME)
 
 
 def _open(archive_path: Path) -> tarfile.TarFile:
     try:
         return tarfile.open(archive_path, "r:gz")
     except (tarfile.TarError, OSError, EOFError) as e:
-        raise ArchiveError(f"{archive_path}: not a readable .nori archive ({e})") from e
+        raise ArchiveError("NE2001", path=archive_path, reason=e) from e
 
 
 def _add_file(
@@ -92,9 +94,9 @@ def _add_file(
     """Add a single file to the archive."""
     full_path = base_dir / file_path
     if not full_path.exists():
-        raise ArchiveError(f"File not found: {file_path}")
+        raise ArchiveError("NE2005", path=file_path)
     if not full_path.is_file():
-        raise ArchiveError(f"Not a file: {file_path}")
+        raise ArchiveError("NE2006", path=file_path)
     arcname = f"{arc_subdir}/{full_path.name}"
     info = tar.gettarinfo(full_path, arcname=arcname)
     if executable:
@@ -112,7 +114,7 @@ def _add_data(
     """Add a data file or directory to the archive."""
     full_path = base_dir / data_entry
     if not full_path.exists():
-        raise ArchiveError(f"Data path not found: {data_entry}")
+        raise ArchiveError("NE2005", path=data_entry)
     if full_path.is_file():
         arcname = f"{arc_subdir}/{full_path.name}"
         tar.add(full_path, arcname=arcname)

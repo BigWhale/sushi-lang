@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import os
-import tomllib
 
 from sushi_lang.packager.constants import SUSHI_HOME
+from sushi_lang.packager.errors import load_toml
 
 CREDENTIALS_FILE = SUSHI_HOME / "credentials.toml"
 
@@ -34,8 +34,7 @@ def load_token(repository: str) -> str | None:
     """Load the API token for a repository. Returns None if not found."""
     if not CREDENTIALS_FILE.exists():
         return None
-    with open(CREDENTIALS_FILE, "rb") as f:
-        data = tomllib.load(f)
+    data = load_toml(CREDENTIALS_FILE)
     entry = data.get(repository, {})
     return entry.get("token")
 
@@ -44,8 +43,7 @@ def save_token(repository: str, token: str) -> None:
     """Save an API token for a repository. Creates or updates credentials.toml."""
     data: dict[str, dict] = {}
     if CREDENTIALS_FILE.exists():
-        with open(CREDENTIALS_FILE, "rb") as f:
-            data = tomllib.load(f)
+        data = load_toml(CREDENTIALS_FILE)
 
     data[repository] = {"token": token}
     _write_credentials(data)

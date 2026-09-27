@@ -1,7 +1,7 @@
 """nori remove - uninstall a package."""
 import argparse
 
-from sushi_lang.packager.installer import PackageInstaller
+from sushi_lang.packager.installer import InstallError, PackageInstaller
 from sushi_lang.packager.paths import find_project_root
 
 
@@ -16,8 +16,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
         # Project mode: remove from .sushi_bento/ and nori.toml
         removed = installer.unlink_from_project(project_root, name)
         if not removed:
-            print(f"Package '{name}' is not a project dependency.")
-            return 1
+            raise InstallError("NE3004", name=name)
         from sushi_lang.packager.commands.install import _remove_manifest_dependency
         _remove_manifest_dependency(project_root, name)
         print(f"Removed {name} from project dependencies")
@@ -25,8 +24,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
 
     # Global mode
     if not installer.is_installed(name):
-        print(f"Package '{name}' is not installed.")
-        return 1
+        raise InstallError("NE3003", name=name)
 
     installer.uninstall(name)
     print(f"Removed {name}")

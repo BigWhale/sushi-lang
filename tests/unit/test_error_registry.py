@@ -30,12 +30,17 @@ REFERENCE_PATTERNS = [
     re.compile(r"""emit_runtime_error(?:_with_values)?\(\s*["'](RE\d{4})["']"""),
 ]
 
+# The packager raises an NE code through NoriError and its subclasses, and recasts one
+# under another class, so every NE literal in the packager is a reference.
+PACKAGER_ROOT = SOURCE_ROOT / "packager"
+PACKAGER_REFERENCE = re.compile(r"""["'](NE\d{4})["']""")
+
 # The number of registered codes, and a tripwire: a code that goes missing while this
 # package is reorganized fails here instead of at a user. Bumping it is deliberate.
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 366
+REGISTRY_SIZE = 406
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -55,6 +60,8 @@ def _referenced_codes() -> set[str]:
         text = path.read_text(encoding="utf-8")
         for pattern in REFERENCE_PATTERNS:
             found.update(pattern.findall(text))
+        if PACKAGER_ROOT in path.parents:
+            found.update(PACKAGER_REFERENCE.findall(text))
     return found
 
 
@@ -105,6 +112,8 @@ def _category_of_range(code: str) -> set[Category]:
     if code.startswith("RE"):
         return {Category.RUNTIME}
     number = int(code[2:])
+    if code.startswith("NE"):
+        return {Category.INTERNAL} if number < 100 else {Category.PACKAGER}
     if number < 100:
         return {Category.INTERNAL, Category.GENERAL}
     if number < 200:
@@ -201,3 +210,17 @@ def test_every_registered_code_has_a_severity_and_category():
         assert isinstance(msg.severity, Severity), code
         assert isinstance(msg.category, Category), code
         assert msg.text, code
+
+
+def test_the_nori_family_is_the_packagers():
+    """NE codes are registered by `errors/nori.py` alone and referenced from the packager alone."""
+    nori_module = SOURCE_ROOT / "internals" / "errors" / "nori.py"
+    outside = []
+    for path in SOURCE_ROOT.rglob("*.py"):
+        if path == nori_module or PACKAGER_ROOT in path.parents:
+            continue
+        if PACKAGER_REFERENCE.search(path.read_text(encoding="utf-8")):
+            outside.append(str(path.relative_to(SOURCE_ROOT)))
+    assert outside == []
+    registered = set(re.findall(r'_nori\("(NE\d{4})"', nori_module.read_text(encoding="utf-8")))
+    assert registered == {code for code in REGISTRY if code.startswith("NE")}

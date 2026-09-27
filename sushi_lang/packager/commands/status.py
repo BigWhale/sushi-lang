@@ -5,6 +5,7 @@ import sys
 from sushi_lang.internals.styling import Palette, should_colour
 from sushi_lang.packager.api_client import api_request, ApiError
 from sushi_lang.packager.credentials import load_token
+from sushi_lang.packager.errors import RELOGIN_HELP, NoriError
 from sushi_lang.packager.repository import resolve_repository
 
 
@@ -14,21 +15,15 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     if not token:
         print(f"Not logged in to {repository}.")
-        print("Use 'nori login <api-key>' to authenticate.")
+        print("Use 'nori login' to authenticate.")
         return 0
 
     try:
         user = api_request(repository, "/users/me", token=token)
     except ApiError as e:
         if e.status == 401:
-            print(f"Token for {repository} is expired or revoked.")
-            print("Use 'nori login <api-key>' to re-authenticate.")
-            return 1
-        print(f"Server error: {e.message}")
-        return 1
-    except ConnectionError as e:
-        print(str(e))
-        return 1
+            raise NoriError("NE5004", repository=repository, helps=[RELOGIN_HELP]) from e
+        raise
 
     p = Palette(should_colour(sys.stdout))
     BOLD, DIM, RESET = p.bold, p.dim, p.reset

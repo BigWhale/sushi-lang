@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 
 from sushi_lang.packager.constants import BIN_DIR, ARCHIVE_EXT, MANIFEST_NAME
-from sushi_lang.packager.installer import PackageInstaller
+from sushi_lang.packager.installer import InstallError, PackageInstaller
 from sushi_lang.packager.paths import find_project_root, project_deps_dir
 from sushi_lang.packager.repository import resolve_repository
 
@@ -73,8 +73,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     # Validate "from" keyword if source is provided
     if source is not None and args.from_keyword != "from":
-        print("Usage: nori install <package> from <source>")
-        return 1
+        raise InstallError("NE3011", found=args.from_keyword,
+                           helps=["usage: nori install <package> from <source>"])
 
     # Detect project context
     project_root = None if is_global else find_project_root()
@@ -91,14 +91,12 @@ def cmd_install(args: argparse.Namespace) -> int:
     if _is_path(package):
         path = Path(package).expanduser().resolve()
         if not path.exists():
-            print(f"Path not found: {package}")
-            return 1
+            raise InstallError("NE3005", path=package)
         if path.is_file() and path.name.endswith(ARCHIVE_EXT):
             return _install_archive(path, project_root)
         if path.is_dir():
             return _install_directory(path, project_root)
-        print(f"Cannot install from: {package}")
-        return 1
+        raise InstallError("NE3006", source=package)
 
     # Package name -> remote repository
     repository = resolve_repository(args)
@@ -108,9 +106,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 def _restore_project_deps(project_root: Path | None) -> int:
     """Restore all dependencies from nori.toml into .sushi_bento/."""
     if project_root is None:
-        print("Not in a Sushi project (no nori.toml found).")
-        print("Usage: nori install <package>")
-        return 1
+        raise InstallError("NE3008", manifest=MANIFEST_NAME,
+                           helps=["usage: nori install <package>"])
 
     from sushi_lang.packager.manifest import load_manifest
     manifest = load_manifest(project_root)
@@ -131,16 +128,16 @@ def _restore_project_deps(project_root: Path | None) -> int:
     if restored:
         print(f"Restored {restored} dependency(ies) to {project_deps_dir(project_root)}")
     if missing:
-        print(f"Missing from store (install manually): {', '.join(missing)}")
-        return 1
+        raise InstallError("NE3002", packages=", ".join(missing),
+                           helps=["install each one from its source: "
+                                  "nori install <package> from <path>"])
     return 0
 
 
 def _install_from_source(package: str, source: str, project_root: Path | None) -> int:
     source_path = Path(source).resolve()
     if not source_path.exists():
-        print(f"Source not found: {source}")
-        return 1
+        raise InstallError("NE3005", path=source)
 
     if source_path.is_file() and source_path.name.endswith(ARCHIVE_EXT):
         return _install_archive(source_path, project_root)
@@ -154,11 +151,9 @@ def _install_from_source(package: str, source: str, project_root: Path | None) -
         # Try as a source directory with nori.toml
         if (source_path / "nori.toml").exists():
             return _install_directory(source_path, project_root)
-        print(f"No .nori archive for '{package}' found in {source_path}")
-        return 1
+        raise InstallError("NE3007", package=package, directory=source_path)
 
-    print(f"Cannot install from: {source}")
-    return 1
+    raise InstallError("NE3006", source=source)
 
 
 def _install_archive(path: Path, project_root: Path | None) -> int:
@@ -191,9 +186,8 @@ def _install_directory(path: Path, project_root: Path | None) -> int:
 
 def _install_remote(package: str, repository: str) -> int:
     """Stub for installing a package from a remote repository."""
-    print(f"Remote install from {repository} is not yet implemented.")
-    print("Install from a local source: nori install <package> from <path>")
-    return 1
+    raise InstallError("NE3009", repository=repository,
+                       helps=["install from a local source: nori install <package> from <path>"])
 
 
 def _print_path_hint() -> None:

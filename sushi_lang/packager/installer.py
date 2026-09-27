@@ -10,14 +10,24 @@ from sushi_lang.packager.archive import PackageArchive
 from sushi_lang.packager.constants import (
     BIN_DIR, CACHE_DIR, BENTO_DIR, STORE_DIR, MANIFEST_NAME,
 )
-from sushi_lang.packager.manifest import NoriManifest, load_manifest
+from sushi_lang.packager.errors import NoriError
+from sushi_lang.packager.manifest import NoriManifest, load_manifest, load_manifest_from_string
 from sushi_lang.packager.paths import (
     ensure_sushi_home, package_dir, store_package_dir, project_deps_dir,
 )
 
 
-class InstallError(Exception):
+class InstallError(NoriError):
     pass
+
+
+def _append_manifest(packages: list[NoriManifest], manifest_path: Path) -> None:
+    """Append one installed manifest; a corrupt one is skipped with a warning, not hidden."""
+    try:
+        packages.append(load_manifest_from_string(manifest_path.read_bytes(), str(manifest_path)))
+    except Exception as e:
+        reason = e if isinstance(e, NoriError) else f"{manifest_path}: {e}"
+        print(f"Warning: skipping an unreadable manifest: {reason}", file=sys.stderr)
 
 
 class PackageInstaller:
@@ -29,7 +39,7 @@ class PackageInstaller:
         """Install a package from a .nori archive file."""
         archive_path = archive_path.resolve()
         if not archive_path.exists():
-            raise InstallError(f"Archive not found: {archive_path}")
+            raise InstallError("NE2007", path=archive_path)
 
         manifest = PackageArchive.read_manifest(archive_path)
         dest = package_dir(manifest.name)
@@ -137,17 +147,7 @@ class PackageInstaller:
         for pkg_dir in sorted(BENTO_DIR.iterdir()):
             manifest_path = pkg_dir / MANIFEST_NAME
             if manifest_path.exists():
-                import tomllib
-                with open(manifest_path, "rb") as f:
-                    data = tomllib.load(f)
-                from sushi_lang.packager.manifest import _parse_manifest
-                try:
-                    packages.append(_parse_manifest(data))
-                except Exception as e:
-                    # A corrupt manifest must not abort the listing, but silently
-                    # skipping it made a broken package invisible.
-                    print(f"Warning: skipping unreadable manifest {manifest_path}: {e}",
-                          file=sys.stderr)
+                _append_manifest(packages, manifest_path)
         return packages
 
     def _link_executables(self, pkg_name: str) -> None:
@@ -178,7 +178,7 @@ class PackageInstaller:
         """Install a package from a .nori archive into the global store."""
         archive_path = archive_path.resolve()
         if not archive_path.exists():
-            raise InstallError(f"Archive not found: {archive_path}")
+            raise InstallError("NE2007", path=archive_path)
 
         manifest = PackageArchive.read_manifest(archive_path)
         dest = store_package_dir(manifest.name, manifest.version)
@@ -251,7 +251,7 @@ class PackageInstaller:
         """Create a symlink in the project's .sushi_bento/ pointing to the store."""
         store_dir = store_package_dir(name, version)
         if not store_dir.exists():
-            raise InstallError(f"Package {name} v{version} not found in store")
+            raise InstallError("NE3001", name=name, version=version)
 
         deps_dir = project_deps_dir(project_root)
         deps_dir.mkdir(exist_ok=True)
@@ -286,17 +286,7 @@ class PackageInstaller:
         for pkg_link in sorted(deps_dir.iterdir()):
             manifest_path = pkg_link / MANIFEST_NAME
             if manifest_path.exists():
-                import tomllib
-                with open(manifest_path, "rb") as f:
-                    data = tomllib.load(f)
-                from sushi_lang.packager.manifest import _parse_manifest
-                try:
-                    packages.append(_parse_manifest(data))
-                except Exception as e:
-                    # A corrupt manifest must not abort the listing, but silently
-                    # skipping it made a broken package invisible.
-                    print(f"Warning: skipping unreadable manifest {manifest_path}: {e}",
-                          file=sys.stderr)
+                _append_manifest(packages, manifest_path)
         return packages
 
     def _stamp_store_source(self, pkg_name: str, version: str, source: str) -> None:
