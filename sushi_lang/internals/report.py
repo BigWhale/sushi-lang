@@ -381,9 +381,8 @@ class Reporter:
         marker = _marker(start, end, use_unicode)
         if use_unicode:
             bar = _paint(C.GRAY, prefix + "│", use_color)
-            gap = " " if use_color else "  "
-            out.append(f"{bar}{gap}{line_text}")
-            out.append(f"{bar}{gap}{_paint(color, marker, use_color)}")
+            out.append(f"{bar} {line_text}")
+            out.append(f"{bar} {_paint(color, marker, use_color)}")
         else:
             out.append(f"{prefix}| {line_text}")
             out.append(f"{prefix}` {marker}")
