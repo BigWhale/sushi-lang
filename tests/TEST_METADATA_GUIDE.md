@@ -308,7 +308,8 @@ lives behind a compiler flag.
 - A flag the RUNNER owns is refused with a printed warning: `-o`, `--lib`, `--lib-info`,
   `--clean-cache`, `--build-stdlib` and `--cache-dir` decide the output path, the build
   kind and the cache, so a fixture that changed one would break the run rather than test
-  anything
+  anything. The one exception is `--lib` in a fixture that has `OUTPUT_PATH`: that fixture
+  names its own output, so the build kind is its own too
 - Pair the fixture with a second one that carries the same source and NO directive. The
   quiet twin is what proves the flag is a gate; without it a lint that became always-on
   would pass both ways
@@ -366,7 +367,8 @@ fixture file itself, because the one set of directives describes both steps.
 - The runner passes no `--cache-dir`, unless the fixture has `FIXTURE_CACHE_DIR`: the
   compiler picks its own cache, as it does for a user, and that cache is in the copy.
 - The binary also runs in the copy, unless `TEST_CWD` names another directory.
-- `-o` stays the runner's, and it is an absolute path outside the copy.
+- `-o` stays the runner's, and it is an absolute path outside the copy, unless the fixture
+  has `OUTPUT_PATH`.
 
 #### FIXTURE_CACHE_DIR
 
@@ -394,6 +396,30 @@ fixture file itself, because the one set of directives describes both steps.
   `THEN_CLEAN_CACHE` one when the fixture has it) and before the binary runs.
 - The compilation must first pass its other compilation checks.
 - An absolute path, or a path with a `..` part, fails the fixture.
+
+#### OUTPUT_PATH
+
+```sushi
+# OUTPUT_PATH: nodir/out
+# EXPECT_ERROR_CODES_EXACT: CE3019
+# EXPECT_STDERR_CONTAINS: "is not a directory"
+```
+
+- The runner passes `-o <the fixture's copy>/nodir/out`. With `RUN_IN_FIXTURE_DIR`, it
+  passes the relative spelling `-o nodir/out`, and the compiler resolves it against the
+  copy. The directive gives the fixture a copy of its own.
+- The runner never creates the parent of the path. A parent that the fixture's directory
+  does not hold is missing; a parent that is a file of the fixture's directory (`afile/out`
+  beside a file `afile`) is a file. That parent is the subject of the test.
+- `--lib` in `COMPILER_FLAGS` is accepted in such a fixture (`OUTPUT_PATH: nodir/x.slib`
+  with `COMPILER_FLAGS: --lib --lib-version 1.0.0`). A library has no binary to run, so a
+  library fixture that would run one (a success fixture, or a `test_warn_` fixture with a
+  runtime directive) fails before it compiles.
+- A fixture that expects success writes its output at the path: its directory must hold
+  the parent (for example a directory `out/` for `OUTPUT_PATH: out/x`). The runtime
+  directives describe the binary at that path, and `EXPECT_PATH_EXISTS: out/x` can read
+  it. A missing parent then fails the fixture with the compiler's CE3019.
+- An empty path, an absolute path, or a path with a `..` part fails the fixture.
 
 #### THEN_CLEAN_CACHE
 

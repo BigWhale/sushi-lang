@@ -1,0 +1,8 @@
+# An -o path whose directory does not exist is refused with CE3019, not an internal error.
+# OUTPUT_PATH: nodir/out
+# EXPECT_ERROR_CODES_EXACT: CE3019
+# EXPECT_STDERR_CONTAINS: "is not a directory"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

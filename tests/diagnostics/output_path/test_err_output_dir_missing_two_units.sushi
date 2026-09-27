@@ -1,0 +1,10 @@
+# A two-unit program takes the incremental path; a missing -o directory is CE3019 there too.
+# OUTPUT_PATH: nodir/out
+# EXPECT_ERROR_CODES_EXACT: CE3019
+# EXPECT_STDERR_CONTAINS: "is not a directory"
+
+use "output_path_dep"
+
+fn main() i32:
+    println("{ANSWER}")
+    return Result.Ok(0)

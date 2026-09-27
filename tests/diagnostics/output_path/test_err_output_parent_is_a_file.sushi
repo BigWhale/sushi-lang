@@ -1,0 +1,8 @@
+# An -o path whose parent is a regular file (`afile`, beside this fixture) is CE3019.
+# OUTPUT_PATH: afile/out
+# EXPECT_ERROR_CODES_EXACT: CE3019
+# EXPECT_STDERR_CONTAINS: "is not a directory"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)
