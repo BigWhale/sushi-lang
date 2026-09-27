@@ -585,8 +585,7 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
 
     out_path = Path(args.out).resolve() if args.out else Path.cwd() / src_path.stem
 
-    cache_dir = Path(args.cache_dir) if getattr(args, 'cache_dir', None) else None
-    cache = CacheManager(src_path.parent, opt_level=args.opt, cache_dir=cache_dir)
+    cache = CacheManager.for_run(args, src_path.parent)
 
     cache.prepare()
 

@@ -39,6 +39,14 @@ class CacheManager:
         self.libsrc_path = self.cache_path / LIBSRC_DIR
         self._target_triple = default_triple()
 
+    @classmethod
+    def for_run(cls, args, project_root: Path) -> "CacheManager":
+        """The cache of one compilation: `--cache-dir` when given, made absolute
+        against the user's directory, else `__sushi_cache__/` in `project_root`."""
+        cache_dir = Path(args.cache_dir).resolve() if getattr(args, "cache_dir", None) else None
+        return cls(project_root, opt_level=getattr(args, "opt", "mem2reg"),
+                   cache_dir=cache_dir)
+
     @property
     def global_key(self) -> str:
         """Digest of the settings every cached object depends on."""

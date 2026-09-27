@@ -708,9 +708,8 @@ def _run(session: Session) -> int:
 
     if args.clean_cache:
         from sushi_lang.compiler.cache import CacheManager
-        effective_cwd = Path(args.source).resolve().parent if args.source else Path.cwd()
-        cache_dir = Path(args.cache_dir) if args.cache_dir else None
-        cm = CacheManager(effective_cwd, cache_dir=cache_dir)
+        root = Path(args.source).resolve().parent if args.source else Path.cwd()
+        cm = CacheManager.for_run(args, root)
         if cm.cache_path.exists():
             cm.wipe()
             print(f"Removed cache: {cm.cache_path}")
