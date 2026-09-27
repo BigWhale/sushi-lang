@@ -111,10 +111,14 @@ def build_stdlib(project_root: Path, verbose: bool = False) -> bool:
 # own extension on a library's generic type. A source library's units are collected
 # beside the consumer's, so the base is in the tables either way and the seed under test
 # is never read (#728).
+# fs_user_bin_lib backs tests/libs/binary_stdlib_import: a unit that imports <io/fs>. A
+# source library ships its text and no manifest index, so the fault it pins (the
+# injected stdlib unit shipped as the library's own API, CE4001 at the consumer) is a
+# binary-path fault (#985).
 BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "var_bin_lib",
                        "mangle_closure_lib", "twolib_bin", "channel_bin_lib",
                        "generic_perk_bin_lib", "binary_api_lib", "private_generic_type_lib",
-                       "generic_ext_bin_lib"}
+                       "generic_ext_bin_lib", "fs_user_bin_lib"}
 
 
 def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
