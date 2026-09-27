@@ -1,0 +1,12 @@
+# A binary library ships its generic template in the manifest, and the consumer checks
+# the instance it makes. The unused parameter, the unused local and the discarded Result
+# in that template are the author's warnings: the consumer reports none of them and
+# exits 0 (#1007).
+# BUILD_LIB_BINARY: lint_bin_tpl_lib.sushi
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_STDERR_EMPTY
+use <lib/lint_bin_tpl_lib>
+
+fn main() i32:
+    println(count_three(5).realise(0))
+    return Result.Ok(0)

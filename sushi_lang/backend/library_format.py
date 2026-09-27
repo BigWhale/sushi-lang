@@ -381,7 +381,9 @@ class LibraryFormat:
         source_blob = msgpack.packb(source, use_bin_type=True) if source else b""
         kind = KIND_BY_NAME.get(metadata.get("kind", "binary"), KIND_BINARY)
 
-        with open(output_path, 'wb') as f:
+        from sushi_lang.backend.driver import writing_output
+
+        with writing_output(output_path), open(output_path, 'wb') as f:
             f.write(LibraryFormat.MAGIC)
 
             f.write(struct.pack("<I", LibraryFormat.VERSION))

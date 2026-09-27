@@ -600,7 +600,7 @@ class TestRunner:
                 and should_run_runtime_test(test_file, metadata)):
             return None, (f"✗ Compilation: OUTPUT_PATH with {LIB_FLAG}: a library has no "
                           f"binary to run, so the fixture is a test_err_ or a test_warn_ one")
-        if not (rebuild or metadata.run_in_fixture_dir or metadata.build_libs
+        if not (rebuild or metadata.run_in_fixture_dir or metadata.libs_on_the_path
                 or metadata.stdlib_modules or metadata.reads_the_copy):
             return None, None
 
@@ -646,25 +646,29 @@ class TestRunner:
         return None
 
     def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
-        """Build each BUILD_LIB and BUILD_LIB_AT source library; the failure, or None.
+        """Build each BUILD_LIB, BUILD_LIB_BINARY and BUILD_LIB_AT library; the failure, or None.
 
-        A BUILD_LIB library goes to the directory the runner puts on SUSHI_LIB_PATH; a
-        BUILD_LIB_AT library goes where the fixture says, inside the copy. Each build has
-        a cache outside the copy, so a library build leaves nothing in it but the `.slib`.
-        The version is 0.0.0, unless a `nori.toml` beside the source states one: the
-        compiler refuses a second version (CE3505).
+        A BUILD_LIB or BUILD_LIB_BINARY library goes to the directory the runner puts on
+        SUSHI_LIB_PATH; a BUILD_LIB_AT library goes where the fixture says, inside the copy.
+        BUILD_LIB_BINARY builds `--lib-kind binary`, the others `--lib-kind source`. Each
+        build has a cache outside the copy, so a library build leaves nothing in it but the
+        `.slib`. The version is 0.0.0, unless a `nori.toml` beside the source states one:
+        the compiler refuses a second version (CE3505).
         """
         workspace.libs.mkdir(parents=True, exist_ok=True)
-        builds = [("BUILD_LIB", source, workspace.libs / f"{Path(source).stem}.slib")
+        builds = [("BUILD_LIB", "source", source, workspace.libs / f"{Path(source).stem}.slib")
                   for source in metadata.build_libs]
-        builds += [("BUILD_LIB_AT", source, workspace.root / target)
+        builds += [("BUILD_LIB_BINARY", "binary", source,
+                    workspace.libs / f"{Path(source).stem}.slib")
+                   for source in metadata.build_libs_binary]
+        builds += [("BUILD_LIB_AT", "source", source, workspace.root / target)
                    for source, target in metadata.build_libs_at]
-        for directive, source, target in builds:
+        for directive, kind, source, target in builds:
             target.parent.mkdir(parents=True, exist_ok=True)
             stated = ((workspace.root / source).parent / "nori.toml").is_file()
             version = [] if stated else ["--lib-version", "0.0.0"]
             done = subprocess.run(
-                [str(self.project_root / "sushic"), "--lib", *version,
+                [str(self.project_root / "sushic"), "--lib", *version, "--lib-kind", kind,
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
                 capture_output=True, text=True, cwd=workspace.home,
@@ -711,7 +715,7 @@ class TestRunner:
                     output = os.path.relpath(binary_path, workspace.root)
             if workspace.cache is not None:
                 cache_flags = ["--cache-dir", str(workspace.cache)]
-            if metadata.build_libs:
+            if metadata.libs_on_the_path:
                 env["SUSHI_LIB_PATH"] = os.pathsep.join(
                     [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
         if clean == "bare":
@@ -810,7 +814,7 @@ class TestRunner:
         try:
             binary_path = self._binary_path(test_file, metadata)
 
-            builds_libs = bool(metadata.build_libs or metadata.build_libs_at)
+            builds_libs = metadata.libs_on_the_path or bool(metadata.build_libs_at)
             if workspace is not None and builds_libs:
                 failure = self._build_libraries(metadata, workspace)
                 if failure is not None:

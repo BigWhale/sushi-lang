@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
+import errno
+import os
 import time
 from pathlib import Path
 
@@ -268,15 +270,19 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     provenance = (f"'{lib_name}' {version} is a source library, "
                   f"compiled here because of `use <{lib_path}>`")
 
+    from sushi_lang.backend.driver import writing_output
+
     out_dir = cache.library_source_dir(lib_name)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    with writing_output(out_dir):
+        out_dir.mkdir(parents=True, exist_ok=True)
     own = set(sources)
 
     for unit_name, text in sources.items():
         file_path = out_dir / f"{unit_name}.sushi"
-        file_path.parent.mkdir(parents=True, exist_ok=True)
         if not file_path.exists() or file_path.read_text(encoding="utf-8") != text:
-            file_path.write_text(text, encoding="utf-8")
+            with writing_output(file_path):
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(text, encoding="utf-8")
 
         try:
             module_ast, _tree = parse_to_ast(text, dump_parse=False)
@@ -311,18 +317,32 @@ def build_stdlib(rebuild: bool = False) -> None:
 
 
 def _resolve_out_path(options: BuildOptions, src_path: Path) -> Path:
-    """The one output path: `-o` against the user's directory, else the source's stem
-    there (`.slib` for a library). The object, the `.ll` and the `.slib` are written
-    beside it, so a directory that does not exist is refused here (CE3019)."""
+    """The one output path and its one check, after the analysis and before code
+    generation: `-o` against the user's directory, else the source's stem there (`.slib`
+    for a library). A library path needs the `.slib` extension (CE3500). The object, the
+    `.ll` and the `.slib` are written beside the path, so a directory that does not exist
+    is CE3019, and a path that is a directory or is in a directory that cannot be written
+    is CE3020."""
+    from sushi_lang.compiler.cli import COMMAND_LINE
+
+    if options.lib and options.out and not options.out.endswith(".slib"):
+        raise SushiError("CE3500", filename=COMMAND_LINE, path=options.out)
     if options.out:
         out_path = Path(options.out).resolve()
     else:
         suffix = ".slib" if options.lib else ""
         out_path = Path.cwd() / (src_path.stem + suffix)
     if not out_path.parent.is_dir():
-        from sushi_lang.compiler.cli import COMMAND_LINE
         raise SushiError("CE3019", filename=COMMAND_LINE, path=options.out,
                          directory=out_path.parent)
+    refusal = None
+    if out_path.is_dir():
+        refusal = errno.EISDIR
+    elif not os.access(out_path.parent, os.W_OK):
+        refusal = errno.EACCES
+    if refusal is not None:
+        raise SushiError("CE3020", filename=COMMAND_LINE, path=options.out or out_path,
+                         reason=os.strerror(refusal))
     return out_path
 
 

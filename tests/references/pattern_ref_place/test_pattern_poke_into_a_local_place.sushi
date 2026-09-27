@@ -1,0 +1,51 @@
+# A `poke` pattern binding into a place writes the place itself, not a copy (#788): a
+# field, a dynamic and a fixed array element, a field chain, and a field of a `var`.
+# EXPECT_STDOUT_EXACT: "9\n20\n21\n22\n24\n"
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+struct Crate:
+    Box b
+
+var Box G = Box(Shade.Dim(1))
+
+extend Shade val() i32:
+    match self:
+        Shade.Dim(v) -> return v
+        Shade.Lit(_) -> return 0
+
+fn main() i32:
+    let Box b = Box(Shade.Dim(8))
+    match b.s:
+        Shade.Dim(poke r) -> r := 9
+        Shade.Lit(_) -> println("lit")
+    println("{b.s.val()}")
+
+    let Shade[] xs = from([Shade.Lit(1), Shade.Dim(2)])
+    match xs[1]:
+        Shade.Dim(poke r) -> r := 20
+        Shade.Lit(_) -> println("lit")
+    println("{xs[1].val()}")
+
+    let Shade[2] fs = [Shade.Lit(1), Shade.Dim(2)]
+    match fs[1]:
+        Shade.Dim(poke r) -> r := 21
+        Shade.Lit(_) -> println("lit")
+    println("{fs[1].val()}")
+
+    let Crate c = Crate(Box(Shade.Dim(1)))
+    match c.b.s:
+        Shade.Dim(poke r) -> r := 22
+        Shade.Lit(_) -> println("lit")
+    println("{c.b.s.val()}")
+
+    match G.s:
+        Shade.Dim(poke r) -> r := 24
+        Shade.Lit(_) -> println("lit")
+    println("{G.s.val()}")
+    return Result.Ok(0)

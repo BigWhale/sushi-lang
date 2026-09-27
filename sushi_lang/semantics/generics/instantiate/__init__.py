@@ -109,7 +109,7 @@ class InstantiationCollector:
             file_of=lambda: self.current_file,
         )
 
-        expression_scanner.scan_block = function_collector._collect_from_block
+        expression_scanner.scan_block = function_collector.collect_from_body
         expression_scanner.collect_type = function_collector._collect_from_type
         return function_collector
 
@@ -206,7 +206,7 @@ class InstantiationCollector:
                             if declared is not None:
                                 function_collector._collect_from_type(declared)
                         function_collector._reset_scope()
-                        function_collector._collect_from_block(ext.body)
+                        function_collector.collect_from_body(ext.body, ext.ret)
                         continue
 
                     param_names = [str(arg) for arg in target.type_args]

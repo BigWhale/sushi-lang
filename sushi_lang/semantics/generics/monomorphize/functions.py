@@ -584,8 +584,8 @@ class FunctionMonomorphizer:
         from sushi_lang.semantics.generics.pack_inference import (
             infer_call_arg_type, infer_flat_type_args)
 
-        structs = self.monomorphizer.struct_table or {}
-        enums = self.monomorphizer.enum_table or {}
+        structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
+        enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
         if call.type_args:
             if check_explicit_type_arg_arity(generic_func, len(call.type_args)) is not None:
                 return None

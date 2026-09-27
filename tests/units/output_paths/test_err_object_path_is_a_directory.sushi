@@ -1,0 +1,8 @@
+# The object file is written beside the -o path; a directory at that place (`objdir/x.o`) is CE3020.
+# OUTPUT_PATH: objdir/x
+# EXPECT_ERROR_CODES_EXACT: CE3020
+# EXPECT_STDERR_CONTAINS: "Is a directory"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

@@ -1,0 +1,11 @@
+# A constant of a plain type behind an alias copies out in an owning position
+# (#1016).
+# EXPECT_STDOUT_EXACT: "4\n"
+use "helpers/libc5" as c
+
+fn back() i32:
+    return Result.Ok(c.N)
+
+fn main() i32:
+    println(back().realise(0))
+    return Result.Ok(0)

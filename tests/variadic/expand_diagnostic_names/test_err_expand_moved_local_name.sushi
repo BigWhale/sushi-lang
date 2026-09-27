@@ -1,0 +1,33 @@
+# A `let` in an `expand` body is moved twice. Each pack element makes one copy of
+# the body, and the unroll gives the local of each copy a hidden name. The borrow
+# pass names the WRITTEN local 's' (#1022), and the fault is told one time for the
+# written statement: the copies of one written `let` share one record, and the
+# borrow pass keys a repeat on that record and on the written location, never on
+# the text. The reporter also drops an identical repeat in an instance, so a probe
+# with that drop turned off measured the count: one CE2405.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: :26:17: error [CE2405]: cannot borrow moved variable 's'.
+# EXPECT_STDERR_CONTAINS: note: 's' was moved here
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let string s = a.display()
+        eat(nom s)??
+        eat(nom s)??
+    return Result.Ok(~)
+
+fn main() i32:
+    match f(1, 2):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

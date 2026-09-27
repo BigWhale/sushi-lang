@@ -1,0 +1,26 @@
+# A write through a bare pattern binding of a user type that implements `Drop` and has no
+# `share()`. The CE2414 help does not offer `share()`, and it does not offer a `nom`
+# parameter, which is no escape for a binding (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: otherwise a descriptor cannot be deep-copied, so there is no `h.clone()`, and its type has no `share()` that gives a second owner; restructure so only one owner is needed
+
+struct Handle:
+    i32 id
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+extend Handle bump(poke self) ~:
+    self.id := self.id + 1
+
+enum Slot:
+    Full(Handle)
+    Empty
+
+fn main() i32:
+    let Slot s = Slot.Full(Handle(1))
+    match s:
+        Slot.Full(h) -> h.bump()
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

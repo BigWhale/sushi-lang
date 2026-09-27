@@ -86,7 +86,8 @@ A plain `fn` of another unit is referenceable wherever the unit may name it (#10
 flat `use`, a `public use` re-export, or behind an alias (`l.plain`). The scope pass and the
 typecheck pass read one unit-scoped lookup for this rung, the unit's own concrete `fn` wins over
 an imported one (#1003), and the fences of the call apply to the value: CE3005 for a private
-`fn`, CE3012 for a name two imports bring. A generic behind an alias is CE2093 in every position.
+`fn`, CE3012 for a name two imports bring. A generic behind an alias (`l.gen`) follows the bare
+name: legal where an expected function type solves it, CE2093 where nothing does (#1017).
 
 ## 2. Lambda syntax
 
@@ -487,14 +488,16 @@ fn run() i32:
     return Result.Ok(g(41)?? + 1)     # 42
 ```
 
-This is a **minimal, expected-type-driven slice**, not a general lift of CE2093: the instantiate pass collects
-the instantiation from a `let` whose declared type is a `FunctionType` and whose value is a
-generic-fn name (unifying the signature against the expected type); the type pass then solves the
+This is an **expected-type-driven** rule, not a general lift of CE2093: the instantiate pass collects
+the instantiation wherever an expected `FunctionType` meets a generic-fn name -- a `let`, an
+argument, a rebind, a `return`, a struct field, an enum payload, a `.realise()` default (#1021,
+ruling of 2026-09-27) -- by unifying the signature against the expected type; the type pass then solves the
 type args, rewrites the `Name` to the mangled concrete name, and infers the concrete `FunctionType`.
 The backend is unchanged — the mangled monomorphized function materializes as an ordinary fn value.
 
-A generic-fn reference **into a higher-order function** works the same way, via a typed local
-binding first (not directly as a bare argument):
+A generic-fn reference **into a higher-order function** works the same way. With a concrete
+parameter type the bare argument is enough (`take(identity)` against `fn(i32) -> i32`); a generic
+callee whose own type argument must come from the value still needs a typed local first:
 
 ```sushi
 use <collections/iter>
@@ -515,7 +518,7 @@ What still stays CE2093 is covered once, in Part II §4.
 
 Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 `tests/generics/test_generic_fn_ref_higher_order.sushi`,
-`tests/generics/test_err_generic_fn_ref_no_type.sushi`.
+`tests/generics/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`.
 
 ## 9. Diagnostics (live)
 
@@ -671,29 +674,32 @@ an owning accumulator, still need move-aware handling the bodies do not do. See
 
 ## 4. What still stays CE2093
 
-A generic-function reference is CE2093 **except** the T2.3 annotated slice (§8): an explicit
-expected function type (an fn-typed `let` annotation) must be present at the reference site. A bare
-reference with **no** expected fn type — e.g. passing a generic function directly as an argument
-without first binding it to a typed local — is still CE2093:
+A generic-function reference is CE2093 where **no** expected function type solves its type
+arguments: a position with no expected type at all (`println(identity)`, an expression statement),
+or an expected type whose shape does not fit the generic's signature (a two-parameter function type
+for a one-parameter generic). Every position that has an expected function type -- a `let`, an
+argument, a rebind, a `return`, a field, a payload, a `.realise()` default -- solves it, and the
+answer never depends on another call in the program (#1021):
 
-<!-- docs-sweep: error CE2093 -->
 ```sushi
 fn identity@(T)(T x) T:
     return Result.Ok(x)
 
 fn take(fn(i32) -> i32 f) i32:
-    return Result.Ok(f(1)??)
+    return Result.Ok(f(1).realise(0))
 
 fn main() i32:
-    let i32 r = take(identity)??      # CE2093 -- no expected type at this reference
+    let i32 r = take(identity).realise(0)      # T = i32 from the parameter type
     println(r)
     return Result.Ok(0)
 ```
 
-Bind it to a typed local first (`let fn(i32) -> i32 id = identity; take(id)`) to get the T2.3 path.
-Extension methods, perk methods, and FFI externals remain outside CE2093 entirely — they are not in
-the function table at all, so a bare reference to one is CE1001 (undeclared identifier), a distinct
-diagnostic for a distinct reason (incompatible ABI, not deferred capability).
+A generic callee whose own type argument must come from the function value
+(`apply@(T)(fn(T) -> i32 f, T x)` called as `apply(gen, 3)`) is still CE2060 + CE2093; bind the
+value to a typed local first. Extension methods, perk methods, and FFI externals remain outside
+CE2093 entirely -- they are not in the function table at all, so a bare reference to one is CE1001
+(undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
+deferred capability).
 
 ## 5. The `|T x|` lambda-parameter monomorphization gap
 

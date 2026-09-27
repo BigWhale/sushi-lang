@@ -184,7 +184,8 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         if note_span is not None:
             diag.note_at(kind.note.format(name=name), note_span)
         diag.help(kind.help.format(name=name, what=what,
-                                   escape=escape_help(checker, name, state.var_type)))
+                                   escape=escape_help(checker, name, state.var_type,
+                                                      handover=False)))
         diag.emit()
         return True
     return False

@@ -232,10 +232,6 @@ def _run(session: Session) -> int:
         if not args.source:
             return 1 if session.reporter.has_warnings else 0
 
-    if args.lib and args.out and not args.out.endswith('.slib'):
-        er.emit(session.reporter, er.ERR.CE3500, None, path=args.out)
-        return 2
-
     if args.build_stdlib:
         print("Building standard library...")
         build_stdlib(rebuild=True)

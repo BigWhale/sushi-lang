@@ -1,0 +1,26 @@
+# A `let` in an inner `expand` body declares the name of a `let` of the outer
+# `expand` body. The inner copies stand in the same block as the outer copy, but
+# the written inner `let` is in an inner block, so it is a shadow of 'u' (#1022).
+# One CW1002 for the written `let`; a probe with the reporter's repeat drop turned
+# off measured one.
+# EXPECT_ERROR_CODES_EXACT: CW1002
+# EXPECT_STDERR_CONTAINS: :19:13: warning [CW1002]: declared variable 'u' already exists in an outer scope.
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "{self}"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let i32 u = 1
+        expand(b in args):
+            let i32 u = 2
+            println("{u} {b.display()}")
+        println("{u} {a.display()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)

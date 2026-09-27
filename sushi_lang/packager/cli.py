@@ -1,13 +1,10 @@
 """Nori CLI - command line interface for the Sushi package manager."""
 import argparse
-import sys
 import traceback
 from typing import Callable
 
 from sushi_lang.internals.styling import COLOUR_CHOICES, set_colour_override
 from sushi_lang.internals.version import print_banner
-from sushi_lang.packager.api_client import ApiError
-from sushi_lang.packager.archive import ArchiveError
 from sushi_lang.packager.commands.build import cmd_build
 from sushi_lang.packager.commands.info import cmd_info
 from sushi_lang.packager.commands.init import cmd_init
@@ -18,8 +15,7 @@ from sushi_lang.packager.commands.publish import cmd_publish
 from sushi_lang.packager.commands.remove import cmd_remove
 from sushi_lang.packager.commands.search import cmd_search
 from sushi_lang.packager.commands.status import cmd_status
-from sushi_lang.packager.installer import InstallError
-from sushi_lang.packager.manifest import ManifestError
+from sushi_lang.packager.errors import NoriError, from_os_error, report, report_internal
 
 
 NORI_TITLE = "\U0001f96c Nori (\u6d77\u82d4) Package Manager"
@@ -162,9 +158,6 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "status": cmd_status,
 }
 
-USER_ERRORS = (ManifestError, ArchiveError, InstallError, ApiError, ConnectionError)
-
-
 def run(args: argparse.Namespace) -> int:
     set_colour_override(args.color)
     print_banner(NORI_TITLE)
@@ -187,17 +180,16 @@ def cli_main() -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.")
         return 130
-    except USER_ERRORS as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except NoriError as e:
+        report(e)
+        _print_traceback(args, e)
+        return 1
+    except OSError as e:
+        report(from_os_error(e))
         _print_traceback(args, e)
         return 1
     except Exception as e:
-        detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
-        print(f"Internal error: {detail}", file=sys.stderr)
-        print("note: this is a bug in nori, not in your package", file=sys.stderr)
-        if not args.traceback:
-            print("help: re-run with --traceback for the full Python traceback, "
-                  "then please report it", file=sys.stderr)
+        report_internal(e, show_help=not args.traceback)
         _print_traceback(args, e)
         return 2
 

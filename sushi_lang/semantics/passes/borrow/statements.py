@@ -38,6 +38,7 @@ from .bindings import (
     release_binding_borrow,
     walks_a_temporary,
 )
+from sushi_lang.semantics.generics.monomorphize.unroll import written_let
 from .borrows import clear_borrows
 from .diagnostics import emit_change_under_iterator
 from .consume import (
@@ -81,6 +82,9 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
     match stmt:
         case Let():
             _check_let(checker, stmt)
+            state = checker.borrow_state.get(stmt.name)
+            if state is not None:
+                state.written = written_let(stmt)
         case Rebind():
             _check_rebind(checker, stmt)
         case Return():

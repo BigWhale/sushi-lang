@@ -1,0 +1,30 @@
+# A borrowed user type that implements `Drop` and declares `share()` answering its own type
+# is consumed. The CE2411 help offers `share()`: the answer comes from the method tables,
+# not from a list of type names (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: take a second owner with `t.share()`
+
+struct Token:
+    i32 id
+
+extend Token with Drop:
+    fn drop(poke self) ~:
+        println("drop")
+
+extend Token share() Token:
+    return Token(self.id)
+
+fn eat(nom Token t) ~:
+    println(t.id)
+    return Result.Ok(~)
+
+fn go(Token t) ~:
+    eat(nom t)??
+    return Result.Ok(~)
+
+fn main() i32:
+    let Token t = Token(1)
+    match go(t):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

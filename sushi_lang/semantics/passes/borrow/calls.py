@@ -135,6 +135,7 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
     place = _place_of(receiver)
     if place is None or place != _place_of(expr.args[0]):
         return
+    place = checker.err.shown(place)
     er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc, name=place, target=place)
 
 
@@ -153,7 +154,8 @@ def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> 
     if target is None or source is None or source[:len(target)] != target:
         return
     er.emit(checker.reporter, er.ERR.CE2430, expr.args[0].loc,
-            name=expr_to_string(expr.args[0]), target=expr_to_string(expr.receiver))
+            name=checker.err.shown(expr_to_string(expr.args[0])),
+            target=checker.err.shown(expr_to_string(expr.receiver)))
 
 
 _ANY_SLOT = "[]"

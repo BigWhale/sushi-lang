@@ -1,9 +1,9 @@
 # CE2411's help offers `.clone()`, and a resource type has no clone. For a resource it
-# must name `.share()` instead and say why: a rejection with no escape is what the clone
-# gate exists to prevent.
+# must say why, and it names `.share()` only for a type that has one (#1023): a rejection
+# with no escape is what the clone gate exists to prevent.
 # TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
-# EXPECT_STDERR_CONTAINS: ".share()"
+# EXPECT_STDERR_CONTAINS: "has no `share()` that gives a second owner"
 struct Handle:
     i32 id
 

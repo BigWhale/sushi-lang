@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 
 from sushi_lang.packager.constants import MANIFEST_NAME
+from sushi_lang.packager.manifest import ManifestError
 
 TEMPLATE = """\
 [package]
@@ -24,8 +25,7 @@ data = []
 def cmd_init(args: argparse.Namespace) -> int:
     manifest_path = Path.cwd() / MANIFEST_NAME
     if manifest_path.exists():
-        print(f"{MANIFEST_NAME} already exists in this directory.")
-        return 1
+        raise ManifestError("NE1009", path=manifest_path)
 
     # Derive default package name from directory name
     dir_name = Path.cwd().name.lower().replace("_", "-").replace(" ", "-")

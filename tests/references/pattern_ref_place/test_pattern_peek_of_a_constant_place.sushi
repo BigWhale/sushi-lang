@@ -1,0 +1,22 @@
+# A `peek` pattern binding takes the places a `let peek` takes (#788): a field and an
+# element of a constant are places, and a `peek` of a constant reads it.
+# EXPECT_STDOUT_EXACT: "3\n4\n"
+
+enum Shade:
+    Dim(i32)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+const Box B = Box(Shade.Dim(3))
+const Shade[2] TS = [Shade.Dim(4), Shade.Lit(5)]
+
+fn main() i32:
+    match B.s:
+        Shade.Dim(peek r) -> println("{r}")
+        Shade.Lit(_) -> println("lit")
+    match TS[0]:
+        Shade.Dim(peek r) -> println("{r}")
+        Shade.Lit(_) -> println("lit")
+    return Result.Ok(0)

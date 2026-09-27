@@ -516,13 +516,16 @@ Sushi uses structured error codes for diagnosing issues.
 ### Driver Diagnostics
 
 The driver reads the command line and the source files before the analysis starts.
-It gives these diagnostics:
+It checks the output path (CE3019, CE3020, CE3500) in one place, after the analysis and
+before code generation. It gives these diagnostics:
 
 | Code | Text | Cause |
 |------|------|-------|
 | CE3017 | `cannot read '<path>': <reason>` | The main source or an imported unit cannot be read: the path is a directory, the file cannot be opened, or the text is not valid UTF-8 (the reason names the first bad byte and its line) |
 | CE3018 | `no source file to compile` | The command line names no `.sushi` file, and the run is not `--build-stdlib` or `--clean-cache` alone |
 | CE3019 | `cannot write '<path>': '<directory>' is not a directory` | The `-o` path is in a directory that does not exist. The compiler does not create it |
+| CE3020 | `cannot write '<path>': <reason>` | The compiler cannot write a file that the command line asks for: the `-o` path is a directory or is in a directory that you cannot write, or a write of the object file, the `.slib` or the `--cache-dir` cache fails. The reason is the operating system's |
+| CE3500 | `library output path must have .slib extension: '<path>'` | A `--lib` build names an `-o` path with no `.slib` extension |
 | CW0002 | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
 | CW0003 | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, or `--write-ll` / `--keep-object` on the incremental build |
 

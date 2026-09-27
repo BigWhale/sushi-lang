@@ -167,24 +167,56 @@ def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
                                                    resolve=checker.types.resolve_named)
 
 
+def answers_share(checker: 'BorrowChecker', ty) -> bool:
+    """Does `x.share()` compile on a value of `ty` and give a second `ty`? (#1023)
+
+    The one type test of every `.share()` escape. It reads the two table rungs the
+    typecheck pass reads for an instance call (`resolve_method`): a perk implementation
+    first, then an extension method. A static, a method with arguments, or one that
+    answers another type is no second owner.
+    """
+    types = checker.types
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    ty = types.resolve_named(ty)
+    if ty is None:
+        return False
+    perk_method = checker.tables.perk_impls.get_method(ty, "share")
+    if perk_method is not None:
+        return not perk_method.params and types.resolve_named(perk_method.ret) == ty
+    method = checker.tables.extensions.get_method(ty, "share")
+    return (method is not None and not method.is_static and not method.params
+            and types.resolve_named(method.ret_type) == ty)
+
+
 def no_clone_reason(text: str) -> str:
     """The clause a help gives in place of a clone escape that CE2431 refuses."""
     return f"'{text}' owns a resource and cannot be cloned"
 
 
-def escape_help(checker: 'BorrowChecker', text: str, ty) -> str:
+def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
+                handover: bool = True) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
     offering one there would be a rejection with no escape -- the exact hole the clone
     totality gate exists to prevent (HANDLES.md ruling R3). For a resource the second
-    owner is `.share()`, and the message says why a descriptor cannot be deep-copied.
+    owner is `.share()` when the type of `text` has one (#1023); otherwise the help names
+    only the escapes that compile. `value_type` is the type of `text` when `ty` is the
+    type of its owner. `handover` is False where a `nom` parameter is no escape (a write
+    through a pattern binding).
     """
-    if refuses_clone(checker, ty):
-        return (f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`; "
-                f"take a second owner with `{text}.share()`, or restructure so only one "
-                f"owner is needed")
-    return f"clone it to take an independent value: `{text}.clone()`"
+    if not refuses_clone(checker, ty):
+        return f"clone it to take an independent value: `{text}.clone()`"
+    no_clone = f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`"
+    if answers_share(checker, ty if value_type is None else value_type):
+        return (f"{no_clone}; take a second owner with `{text}.share()`, or restructure "
+                f"so only one owner is needed")
+    no_share = f"{no_clone}, and its type has no `share()` that gives a second owner"
+    if handover:
+        return (f"{no_share}; hand the value over with a `nom` parameter, or restructure "
+                f"so only one owner is needed")
+    return f"{no_share}; restructure so only one owner is needed"
 
 
 def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
@@ -202,7 +234,7 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(escape_help(checker, text, owner_type))
+    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr)))
     diag.emit()
 
 

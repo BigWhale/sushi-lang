@@ -359,7 +359,8 @@ def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scruti
         # A reference binding points into the SCRUTINEE'S own payload storage, never this
         # arm's temporary copy -- a pointer into the copy makes every write silently lost
         # (#253). The payload base is 8-aligned, so the interior pointer is naturally
-        # aligned; the borrow pass guarantees the scrutinee is a bare name (CE2404).
+        # aligned; the borrow pass guarantees the scrutinee is a place -- a name, or a
+        # member or index chain off one (CE2404 otherwise).
         if isinstance(binding_item, RefBindingNode):
             from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
             from sushi_lang.backend.statements.loops import bind_element_reference

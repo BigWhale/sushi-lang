@@ -17,7 +17,8 @@ from .diagnostics import (
     refuses_clone,
 )
 from .reads import (
-    constant_sig, read_type, reads_through_owner, root_owner, unwrap_try)
+    constant_sig, namespaced_storage, read_type, reads_through_owner, root_owner,
+    unwrap_try)
 from .state import BorrowState
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
@@ -62,6 +63,11 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     ref = getattr(expr, "namespace_ref", None)
     if ref is not None and ref.kind == "function":
         return Provenance.FRESH
+
+    # `alias.name` that reaches a `const` or a `var` is the same storage as the bare name,
+    # and has the bare name's provenance (#1016).
+    if namespaced_storage(checker, expr) is not None:
+        return Provenance.OWNED
 
     # A marked field take is the one read through an owner that is not a borrow: the
     # owner is a local this function holds, and the take spends it (ruling R28).
@@ -149,6 +155,9 @@ def consume(checker: 'BorrowChecker', expr: Expr) -> None:
         consume_named(checker, expr.id, provenance, expr.loc)
         return
 
+    if reject_move_of_namespaced(checker, expr, provenance):
+        return
+
     take = field_take(checker, expr)
     if take is not None:
         spend(checker, take[0], expr.loc)
@@ -183,10 +192,31 @@ def reject_move_of_constant(checker: 'BorrowChecker', name: str,
     sig = constant_sig(checker, name)
     if sig is None or sig.is_var:
         return False
+    return reject_move_of_storage(checker, sig, name, provenance, use_span)
+
+
+def reject_move_of_namespaced(checker: 'BorrowChecker', expr: Expr,
+                              provenance: Provenance) -> bool:
+    """CE2436 for a take of `alias.name` that reaches a `const` or a `var` (#1016).
+
+    The bare name's rule, in both halves: a name behind an alias is the same declaration.
+    """
+    sig = namespaced_storage(checker, expr)
+    if sig is None:
+        return False
+    alias = getattr(expr.receiver, "id", None)
+    name = f"{alias}.{expr.member}" if alias is not None else expr.member
+    return reject_move_of_storage(checker, sig, name, provenance, expr.loc)
+
+
+def reject_move_of_storage(checker: 'BorrowChecker', sig, name: str,
+                           provenance: Provenance, use_span: Optional[Span]) -> bool:
+    """CE2436 when a take of the unit storage `sig` records would be a move."""
     if classify(provenance,
                 checker.types.type_class(sig.const_type)) is not Ownership.MOVE:
         return False
-    checker.err.emit(er.ERR.CE2436, use_span, name=name, kind="a constant")
+    kind = "a unit variable" if sig.is_var else "a constant"
+    checker.err.emit(er.ERR.CE2436, use_span, name=name, kind=kind)
     return True
 
 
@@ -260,6 +290,9 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     take = field_take(checker, expr)
     if take is not None:
         spend(checker, take[0], expr.loc)
+        return
+
+    if reject_move_of_namespaced(checker, expr, provenance):
         return
 
     src_state = checker.borrow_state.get(expr.id) if isinstance(expr, Name) else None

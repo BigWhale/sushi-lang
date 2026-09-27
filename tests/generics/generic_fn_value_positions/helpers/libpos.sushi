@@ -1,0 +1,12 @@
+public fn gen@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+public fn apply(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(1).realise(0))
+
+public struct Holder:
+    fn(i32) -> i32 f
+
+public enum Op:
+    Apply(fn(i32) -> i32)

@@ -35,6 +35,9 @@ class FunctionCollector:
         # `InstantiationCollector.sites`. A plain dict on the unit-test paths.
         self.sites = sites if sites is not None else {}
         self.file_of = file_of or (lambda: None)
+        # The declared return type of the body being walked, which solves a generic-fn
+        # value in a `return` (#1021). None where nothing is declared.
+        self.return_type: "Type | None" = None
 
     def _reset_scope(self) -> None:
         """Clear the per-function variable scope in place."""
@@ -178,7 +181,16 @@ class FunctionCollector:
         self._reset_scope()
         self.collect_from_signature(func.ret, getattr(func, "err_type", None), func.params,
                                     ret_span=getattr(func, "ret_span", None))
-        self._collect_from_block(func.body)
+        self.collect_from_body(func.body, func.ret)
+
+    def collect_from_body(self, block, return_type) -> None:
+        """Walk a body whose `return` expects `return_type`, and restore the outer one."""
+        outer = self.return_type
+        self.return_type = return_type
+        try:
+            self._collect_from_block(block)
+        finally:
+            self.return_type = outer
 
     def collect_from_signature(self, ret, err_type, params, ret_span=None) -> None:
         """The instantiations a signature names: the return, the Result it answers, the parameters.
@@ -215,7 +227,7 @@ class FunctionCollector:
         for param in ext.params:
             self._collect_from_param(param)
 
-        self._collect_from_block(ext.body)
+        self.collect_from_body(ext.body, ext.ret)
 
     def _collect_from_channel(self, decl) -> None:
         """The instantiation a `| E` channel names.
@@ -259,7 +271,7 @@ class FunctionCollector:
             for param in method.params:
                 self._collect_from_param(param)
 
-            self._collect_from_block(method.body)
+            self.collect_from_body(method.body, method.ret)
 
     def collect_from_const(self, const) -> None:
         """Collect generic instantiations from constant definition."""
@@ -292,7 +304,7 @@ class FunctionCollector:
 
     def _collect_from_statement(self, stmt) -> None:
         """Collect generic instantiations from a statement."""
-        from sushi_lang.semantics.ast import Let, Foreach, If, While, Match, Return, ExprStmt, Print, PrintLn, Rebind, Break, Continue
+        from sushi_lang.semantics.ast import Let, Foreach, If, While, Match, Return, ExprStmt, Print, PrintLn, Rebind, Break, Continue, Name
 
         if isinstance(stmt, Let):
             if stmt.ty is not None:
@@ -306,7 +318,7 @@ class FunctionCollector:
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
                 if stmt.ty is not None:
-                    self.expression_scanner.scan_generic_fn_reference(stmt.value, stmt.ty)
+                    self._scan_fn_value(stmt.value, stmt.ty)
 
         elif isinstance(stmt, Foreach):
             if stmt.item_type is not None:
@@ -350,6 +362,7 @@ class FunctionCollector:
         elif isinstance(stmt, Return):
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
+                self._scan_returned_fn_value(stmt.value)
 
         elif isinstance(stmt, (ExprStmt, Print, PrintLn)):
             expr = stmt.expr if hasattr(stmt, 'expr') else stmt.value
@@ -359,9 +372,67 @@ class FunctionCollector:
         elif isinstance(stmt, Rebind):
             if stmt.value is not None:
                 self.expression_scanner.scan_expression(stmt.value)
+                if self._holds_fn_candidate(stmt.value):
+                    target_type = self.expression_scanner._infer_arg_type(stmt.target)
+                    if target_type is None and isinstance(stmt.target, Name):
+                        target_type = self.variable_types.get(stmt.target.id)
+                    self._scan_fn_value(stmt.value, target_type)
 
         elif isinstance(stmt, (Break, Continue)):
             pass
+
+    def _scan_returned_fn_value(self, value) -> None:
+        """Record a generic-fn value that a `return` hands out, against the declared return.
+
+        `return Result.Ok(gen)` and a bare extension's `return gen` both reach it; the
+        declared type is the written return, or the success arm of a written Result.
+        """
+        from sushi_lang.semantics.ast import DotCall, EnumConstructor, Name
+        expected = self.return_type
+        if isinstance(expected, GenericTypeRef) and expected.base_name == "Result":
+            expected = expected.type_args[0] if expected.type_args else None
+        if expected is None:
+            return
+        if (isinstance(value, DotCall) and isinstance(value.receiver, Name)
+                and value.receiver.id == "Result" and value.method == "Ok"
+                and len(value.args) == 1):
+            value = value.args[0]
+        elif (isinstance(value, EnumConstructor) and value.enum_name == "Result"
+                and value.variant_name == "Ok" and len(value.args) == 1):
+            value = value.args[0]
+        self._scan_fn_value(value, expected)
+
+    def _holds_fn_candidate(self, value) -> bool:
+        """The value, or a constructor argument inside it, may name a generic function."""
+        from sushi_lang.semantics.ast import DotCall, EnumConstructor
+        if isinstance(value, (DotCall, EnumConstructor)):
+            return any(self._holds_fn_candidate(arg) for arg in value.args)
+        return self.expression_scanner.may_name_generic_fn(value)
+
+    def _scan_fn_value(self, value, expected) -> None:
+        """Record a generic-fn value that a position of type `expected` holds (#1021).
+
+        The value itself, or a payload of a variant of a GENERIC enum that `expected`
+        names (`let Maybe@(fn(i32) -> i32) m = Maybe.Some(gen)`): the declared type
+        arguments substitute the payload types, which a concrete enum's constructor
+        does not need.
+        """
+        from sushi_lang.semantics.ast import DotCall, EnumConstructor, Name
+        if expected is None:
+            return
+        base = getattr(expected, "base_name", None) or getattr(expected, "generic_base", None)
+        variant = None
+        if (isinstance(value, DotCall) and isinstance(value.receiver, Name)
+                and value.receiver.id == base):
+            variant = value.method
+        elif isinstance(value, EnumConstructor) and value.enum_name == base:
+            variant = value.variant_name
+        if variant is None:
+            self.expression_scanner.scan_generic_fn_reference(value, expected)
+            return
+        payloads = self._variant_payload_types(expected, variant)
+        for arg, payload in zip(value.args, payloads, strict=False):
+            self._scan_fn_value(arg, self._resolve_local_type(payload))
 
     def _collect_from_type(self, ty: "Type", site=None) -> None:
         """Collect generic instantiations from a type annotation.

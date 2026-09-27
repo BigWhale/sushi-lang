@@ -1,0 +1,8 @@
+# An -o path that is an existing directory (`adir`, beside this fixture) is CE3020, not a link failure.
+# OUTPUT_PATH: adir
+# EXPECT_ERROR_CODES_EXACT: CE3020
+# EXPECT_STDERR_CONTAINS: "Is a directory"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return Result.Ok(0)

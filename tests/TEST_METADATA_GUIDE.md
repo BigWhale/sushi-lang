@@ -453,12 +453,30 @@ fixture file itself, because the one set of directives describes both steps.
 ```
 
 - Before each compilation, the runner builds the named file of the fixture's directory
-  as a SOURCE `.slib` (`--lib --lib-version 0.0.0`), and puts the directory that holds
-  it first on `SUSHI_LIB_PATH`. The fixture imports it as `use <lib/geolib>`.
+  as a SOURCE `.slib` (`--lib --lib-version 0.0.0 --lib-kind source`), and puts the
+  directory that holds it first on `SUSHI_LIB_PATH`. The fixture imports it as
+  `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one.
 - In a rebuild fixture the library is built again after `v2/` is copied in.
 - A library that does not build fails the fixture.
 - The build has a cache of its own, outside the copy. The version is `0.0.0`, unless a
   `nori.toml` beside the library source states one.
+
+#### BUILD_LIB_BINARY
+
+```sushi
+# BUILD_LIB_BINARY: geolib.sushi
+```
+
+- As `BUILD_LIB`, but the runner builds a BINARY `.slib` (`--lib-kind binary`). Use it
+  to test what a consumer does with a binary library: the manifest, the bitcode, a
+  generic template that the consumer monomorphizes.
+- The library goes to the same directory as a `BUILD_LIB` library, first on
+  `SUSHI_LIB_PATH`. The fixture imports it as `use <lib/geolib>`. Do not name one file
+  in both directives.
+- The build, the version, the rebuild and a failed build are as for `BUILD_LIB`. A
+  binary library is bound to the platform that built it; the runner builds it again for
+  each run, so the fixture stays portable.
+- There is no binary form of `BUILD_LIB_AT`.
 
 #### BUILD_LIB_AT
 

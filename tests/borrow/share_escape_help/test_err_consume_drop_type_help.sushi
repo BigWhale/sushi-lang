@@ -1,0 +1,26 @@
+# A borrowed user type that implements `Drop` is consumed. It declares no `share()`, so the
+# CE2411 help does not offer one (#1023).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: help: a descriptor cannot be deep-copied, so there is no `t.clone()`, and its type has no `share()`
+
+struct Token:
+    i32 id
+
+extend Token with Drop:
+    fn drop(poke self) ~:
+        println("drop")
+
+fn eat(nom Token t) ~:
+    println(t.id)
+    return Result.Ok(~)
+
+fn go(Token t) ~:
+    eat(nom t)??
+    return Result.Ok(~)
+
+fn main() i32:
+    let Token t = Token(1)
+    match go(t):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return Result.Ok(0)

@@ -1,0 +1,11 @@
+# An imported generic function behind the alias of its import is a function
+# value in an argument position, as the bare name is (#1013, #1021).
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/lib3" as l
+
+fn take(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(1)??)
+
+fn main() i32:
+    println(take(l.gen).realise(0))
+    return Result.Ok(0)
