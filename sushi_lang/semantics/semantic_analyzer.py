@@ -47,12 +47,16 @@ STDLIB_DOC_GATE_ENV = "SUSHI_STDLIB_DOC_GATE"
 STDLIB_DEAD_GATE_ENV = "SUSHI_STDLIB_DEAD_GATE"
 
 
-def _lint_checks(unit: Unit, gate_env: str) -> bool:
+def _lint_checks(unit: Unit, gate_env: Optional[str] = None) -> bool:
     """Does a lint check this unit? Always a unit of the program; a bundled stdlib unit
-    only when its stdlib gate is set; a library unit never."""
+    only when its stdlib gate is set; a library unit never.
+
+    The one answer to "whose warning is this" (#1007): a unit's reporter keeps its
+    warnings only when this says yes, so a consumer hears no lint in code it did not
+    write, and the exit status does not change for one."""
     if unit.provenance is None:
         return True
-    if os.environ.get(gate_env, "").lower() in ("", "0", "off"):
+    if gate_env is None or os.environ.get(gate_env, "").lower() in ("", "0", "off"):
         return False
     return not unit.from_library and unit.name in SOURCE_STDLIB_MODULES
 
@@ -144,10 +148,14 @@ class SemanticAnalyzer:
         self._check_multi_file()
 
     @staticmethod
-    def _unit_reporter(unit) -> Reporter:
-        """A Reporter that knows one unit's file and source, for a per-unit pass."""
+    def _unit_reporter(unit, gate_env: Optional[str] = None) -> Reporter:
+        """A Reporter that knows one unit's file and source, for a per-unit pass.
+
+        `gate_env` names the stdlib gate of a lint pass, which keeps a stdlib unit's
+        warnings while it is set."""
         return Reporter(source=unit.read_source(), filename=str(unit.file_path),
-                        provenance=unit.provenance)
+                        provenance=unit.provenance,
+                        keeps_warnings=_lint_checks(unit, gate_env))
 
     def _merge_unit(self, unit_reporter: Reporter) -> None:
         """Hand one unit's findings to the program reporter, in source order.
@@ -276,7 +284,7 @@ class SemanticAnalyzer:
                 continue
             if not _lint_checks(unit, STDLIB_DOC_GATE_ENV):
                 continue
-            unit_reporter = self._unit_reporter(unit)
+            unit_reporter = self._unit_reporter(unit, STDLIB_DOC_GATE_ENV)
             check_docs(unit_reporter, unit.ast)
             # Completeness rides in the SAME loop, and nowhere later:
             # `register_synthesized_function` appends a monomorphized clone to a unit's
@@ -297,7 +305,7 @@ class SemanticAnalyzer:
         for unit in compilation_order:
             if unit.ast is None or not _lint_checks(unit, STDLIB_DEAD_GATE_ENV):
                 continue
-            unit_reporter = self._unit_reporter(unit)
+            unit_reporter = self._unit_reporter(unit, STDLIB_DEAD_GATE_ENV)
             check_unused(unit_reporter, unit, self.tables, all_units)
             self._merge_unit(unit_reporter)
 

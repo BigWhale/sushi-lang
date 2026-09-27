@@ -234,7 +234,8 @@ class DiagnosticBuilder:
 
 class Reporter:
     def __init__(self, source: Optional[str] = None, filename: str = "<input>",
-                 provenance: Optional[str] = None) -> None:
+                 provenance: Optional[str] = None,
+                 keeps_warnings: Optional[bool] = None) -> None:
         self.source = source
         self.filename = filename
         # A one-line explanation of whose code this reporter covers, attached as a note
@@ -242,6 +243,11 @@ class Reporter:
         # where the failure is in code the consumer never wrote and an unattributed
         # error would be unreadable.
         self.provenance = provenance
+        # A warning belongs to the author of the code (#1007). A reporter over code the
+        # consumer did not write records its errors and drops its warnings, so they
+        # neither print nor change the exit status. The caller can say otherwise: the
+        # stdlib gates make the bundled stdlib's author the one who compiles it.
+        self.keeps_warnings = provenance is None if keeps_warnings is None else keeps_warnings
         # Set while a pass checks a body that is NOT this reporter's file: a
         # monomorphized instance of a binary library's template. Its spans came from
         # parsing the manifest slice, so rendering them against the consumer's file
@@ -291,6 +297,8 @@ class Reporter:
                 d.sub.append(SubDiagnostic("note", self.origin.provenance))
         elif self.provenance:
             d.sub.append(SubDiagnostic("note", self.provenance))
+        if d.kind == "warning" and not self._author_compiles():
+            return d
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)
@@ -299,6 +307,13 @@ class Reporter:
         self._identities.add(identity)
         self.items.append(d)
         return d
+
+    def _author_compiles(self) -> bool:
+        """Is the code under report the compiling user's own? A library template's
+        instance never is; otherwise the reporter's unit decides."""
+        if self.origin is not None and self.origin.provenance is not None:
+            return False
+        return self.keeps_warnings
 
     def error(self, code: str, msg: str, span: Optional[Span], filename: Optional[str] = None):
         self._record(Diagnostic("error", code, msg, span, filename=filename or self.filename))

@@ -1,0 +1,11 @@
+# A Sushi-source stdlib module is code the consumer did not write. Its unused
+# parameter, unused local and discarded Result, in a concrete function, give the
+# consumer no warning and do not change the exit status (#1007).
+# STDLIB_MODULE: fixture/lint_mod=lint_mod.sushi
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_STDERR_EMPTY
+use <fixture/lint_mod>
+
+fn main() i32:
+    println(run_it(1).realise(0))
+    return Result.Ok(0)

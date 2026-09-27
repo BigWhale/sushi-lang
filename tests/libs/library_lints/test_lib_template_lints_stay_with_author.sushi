@@ -1,0 +1,11 @@
+# A source library's generic template is checked when the consumer instantiates it.
+# Its unused parameter, unused local and discarded Result are the author's warnings:
+# the consumer reports none of them and exits 0 (#1007).
+# BUILD_LIB: lint_tpl_lib.sushi
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_STDERR_EMPTY
+use <lib/lint_tpl_lib>
+
+fn main() i32:
+    println(count_two(5).realise(0))
+    return Result.Ok(0)
