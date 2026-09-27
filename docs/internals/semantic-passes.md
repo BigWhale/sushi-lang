@@ -1115,6 +1115,25 @@ while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a by-
 **CE2411**. A value binding and a reference binding (rule 1) are tracked the same way; the
 reference binding adds the WRITE path -- a store through it reaches the owner.
 
+6. **A loop body is checked in rounds, and `break` / `continue` end a path**
+
+`check_loop_body` (`passes/borrow/statements.py`) checks a `while` or `foreach` body in two
+rounds and returns a `LoopFlow` (`passes/borrow/flow.py`):
+
+- `entry`: the facts before the loop.
+- `fixed_point`: `entry` joined with the facts that reach the back edge after round 1. Round 2,
+  the reporting round, starts here, so a move in one round is seen by the next.
+- `back_edge`: the facts on the paths that reach the next round -- the end of the body and every
+  `continue`. A `foreach` reads its iterator's invalidation (CE2412) from these paths only.
+- `exit`: `fixed_point` joined with every `break` path. This is the state after the loop, so a
+  move before a `break` is still seen after the loop.
+
+A `break` or a `continue` ends its path for the joins of an `if` or a `match` inside the body
+(`terminates(..., leaves_round=True)`). A `foreach` over an owned temporary (`a.clone().iter()`)
+freezes nothing (`walks_a_temporary`). When the iterator reports a move of its container that
+came round the back edge, the owner's state records it (`move_reported_by`), and the move gives
+no second CE2405 in round 2.
+
 ### Borrow Tracking
 
 **Data structures:**
