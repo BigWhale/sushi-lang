@@ -1,0 +1,15 @@
+# An in-place write keeps the storage the loop's iterator reads, so `fill`, `reverse` and
+# an indexed assignment stay legal in the body over a plain element (#956). Each round
+# reads the slot as the body left it.
+# EXPECT_STDOUT_EXACT: "1\n5\n5\n5 5 5\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    foreach(x in a.iter()):
+        println(x)
+        a[1] := 9
+        a.reverse()
+        a.fill(5)
+    println("{a[0]} {a[1]} {a[2]}")
+    return Result.Ok(0)

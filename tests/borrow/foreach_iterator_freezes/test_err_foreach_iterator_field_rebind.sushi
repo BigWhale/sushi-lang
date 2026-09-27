@@ -1,0 +1,13 @@
+# The loop walks a field. A rebind of that field frees the storage the iterator reads, so
+# it is refused in the body (#956).
+# EXPECT_ERROR_CODE: CE2412
+
+struct Bag:
+    i32[] items
+
+fn main() i32:
+    let Bag b = Bag(from([1, 2, 3]))
+    foreach(x in b.items.iter()):
+        println(x)
+        b.items := from([4])
+    return Result.Ok(0)

@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Optional
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.internals.report import Span
 
@@ -52,6 +53,8 @@ class BorrowState:
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
     borrows_from: Optional[str] = None        # the root owner a `let`-borrow reads out of
+    views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
+    covered_by: Optional[str] = None          # the iterator whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released
     invalidated_by: tuple = ()                # (owner name, what the change was)
     # A tuple per entry, not a set: `Span` is an unfrozen dataclass and so unhashable.

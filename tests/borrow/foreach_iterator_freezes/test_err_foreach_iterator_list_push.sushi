@@ -1,0 +1,15 @@
+# A `foreach` over `l.iter()` views the list's storage from the loop entry to the loop
+# exit. A `push` can move that storage, so it is refused in the body even for a plain
+# element type (#956).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(11)
+    l.push(22)
+    l.push(33)
+    foreach(x in l.iter()):
+        println(x)
+        l.push(7)
+    println("{l.len()}")
+    return Result.Ok(0)

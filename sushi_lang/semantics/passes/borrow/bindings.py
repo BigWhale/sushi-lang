@@ -6,7 +6,9 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Name, NomBinding, Pattern, RefBinding
+from sushi_lang.semantics.ast import (
+    DotCall, Expr, MethodCall, Name, NomBinding, Pattern, RefBinding,
+)
 from sushi_lang.semantics.constant_borrow import (
     READ_ONLY_MODE, has_an_address, may_be_written,
 )
@@ -21,6 +23,8 @@ from .state import BorrowState
 
 if TYPE_CHECKING:
     from . import BorrowChecker
+
+CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries"})
 
 
 def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> None:
@@ -110,6 +114,25 @@ class BindingScope:
         if owner is not None:
             self.freeze_owner(state, owner, span, poke_span=declared_at or span)
 
+    def bind_iterator(self, iterable: Expr) -> Optional[BorrowState]:
+        """Freeze the container a `foreach` walks, for the whole loop (#956).
+
+        The iterator reads the container's storage on every round, whatever the item
+        does, so it is a `let`-borrow of the container with a name no source can spell.
+        A range and a `next()` protocol value own their state; the caller does not ask.
+        """
+        if not isinstance(iterable, (MethodCall, DotCall)) or iterable.args:
+            return None
+        if iterable.method not in CONTAINER_ITERATORS:
+            return None
+        state = BorrowState(name=f"<iterator {id(iterable)}>",
+                            bound_at_span=iterable.loc,
+                            views_storage_of=iterable.receiver)
+        self.register(state)
+        self.freeze_owner(state, iterable, iterable.loc)
+        frozen = any(binding == state.name for _owner, binding in self._frozen)
+        return state if frozen else None
+
     def freeze_owner(self, state: BorrowState, source: Expr, span: Optional[Span],
                      poke_span: Optional[Span] = None) -> None:
         """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
@@ -192,7 +215,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     if is_poke:
         # A writer invalidates every value binding read out of the owner, exactly as
         # `f(poke x)` does (#242).
-        check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`")
+        check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`", place=place)
 
     state.borrows_from = owner
     owner_state.binding_borrows.append((stmt.name, stmt.loc))

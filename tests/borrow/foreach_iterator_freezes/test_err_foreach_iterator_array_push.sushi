@@ -1,0 +1,11 @@
+# A `foreach` over `a.iter()` views the array's storage for the whole loop, so a `push`
+# onto the array in the body is refused (#956).
+# EXPECT_ERROR_CODE: CE2412
+
+fn main() i32:
+    let i32[] a = from([11, 22, 33])
+    foreach(x in a.iter()):
+        println(x)
+        a.push(7)
+    println("{a.len()}")
+    return Result.Ok(0)
