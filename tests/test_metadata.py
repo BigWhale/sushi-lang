@@ -70,6 +70,8 @@ class TestMetadata:
     run_in_fixture_dir: bool = False
     # Source `.slib` files the runner builds in the fixture's copy before each compilation.
     build_libs: Optional[List[str]] = None
+    # Binary `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
+    build_libs_binary: Optional[List[str]] = None
     # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
     stdlib_modules: Optional[Dict[str, str]] = None
     # Source `.slib` files built at a path inside the copy: (source, target), both relative.
@@ -108,6 +110,8 @@ class TestMetadata:
             self.compiler_flags = []
         if self.build_libs is None:
             self.build_libs = []
+        if self.build_libs_binary is None:
+            self.build_libs_binary = []
         if self.stdlib_modules is None:
             self.stdlib_modules = {}
         if self.build_libs_at is None:
@@ -120,6 +124,11 @@ class TestMetadata:
             self.expect_paths_exist_before_clean = []
         if self.directive_errors is None:
             self.directive_errors = []
+
+    @property
+    def libs_on_the_path(self) -> bool:
+        """A library the runner builds into the directory it puts on SUSHI_LIB_PATH."""
+        return bool(self.build_libs or self.build_libs_binary)
 
     @property
     def reads_the_copy(self) -> bool:
@@ -363,6 +372,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_CACHED': _extend('expect_cached', lambda v: _split(_unquote(v))),
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
     'BUILD_LIB': _extend('build_libs', lambda v: _split(_unquote(v))),
+    'BUILD_LIB_BINARY': _extend('build_libs_binary', lambda v: _split(_unquote(v))),
     'STDLIB_MODULE': _stdlib_module,
     'BUILD_LIB_AT': _build_lib_at,
     'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),
