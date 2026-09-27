@@ -251,6 +251,32 @@ explanation of why code they did not write is being compiled.
 mechanism. A source library gets this for free because it arrives as a `Unit` with a
 `provenance`, and every per-unit pass runs against `_unit_reporter(unit)`.
 
+**A warning belongs to the author of the code** (#1007). The consumer reports an error
+in library code, with the note above, because it cannot build without a fix. It does
+not report a WARNING whose location is in code it did not write: a unit of a source
+library, a bundled stdlib unit, or the instance of a binary library's template. Such a
+warning does not change the exit status. This is the rule of Cargo, which compiles a
+dependency with `--cap-lints allow`. The author sees the warning when the library is
+built, because the library's own units carry no provenance in that build.
+
+The decision is made at ONE place, from provenance, and not per warning code.
+`Reporter._record` drops a warning when the reporter's `keeps_warnings` is false, or
+when the body under report has an `Origin` with a provenance (a binary template).
+`keeps_warnings` defaults to "the reporter has no provenance", and
+`SemanticAnalyzer._unit_reporter` sets it from `_lint_checks`, the same predicate
+that decides whether a lint pass reads a unit at all. The one exception it holds is the
+test runner's stdlib gates: while `SUSHI_STDLIB_DOC_GATE` or `SUSHI_STDLIB_DEAD_GATE`
+is set, the `docs` or the `unused` pass keeps the warnings of a bundled stdlib unit, so
+the gates still see them. A source library stays silent under both gates.
+
+**The limit: a generic template is checked only when code instantiates it.** A generic
+function that no code calls is never checked, in a program and in a `--lib` build
+alike. So the author of a library sees the lints of a template only when the library's
+own code, or the author's own tests, instantiate it. There is NO author-side template
+check at `--lib`; this is the position of C++ and Zig, where a template body is checked
+at its instantiation. The consequence is that a template's warning reaches nobody when
+the author never instantiates it: the consumer drops it by the rule above.
+
 ### 4.5 Where CE5007 went
 
 The binary path needs CE5007 because an export-closure private shares the consumer's

@@ -1,0 +1,4 @@
+public fn widen@(T)(T a) i32:
+    let i32 spare = 3
+    let i32 x = a
+    return Result.Ok(x)

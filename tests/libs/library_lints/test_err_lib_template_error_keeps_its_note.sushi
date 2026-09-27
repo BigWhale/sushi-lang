@@ -1,0 +1,11 @@
+# An error in library code is always reported, with the note that says whose code it
+# is. The warning beside it in the same template is the author's and is not reported
+# (#1007).
+# BUILD_LIB: lint_err_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: is a source library, compiled here because of `use <lib/lint_err_lib>`
+use <lib/lint_err_lib>
+
+fn main() i32:
+    println(widen("text").realise(0))
+    return Result.Ok(0)
