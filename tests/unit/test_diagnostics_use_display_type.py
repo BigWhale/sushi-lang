@@ -24,6 +24,8 @@ ALLOWED_EXPRESSIONS = {
     # CE2070/CE2073 render the offending numeric literal's *value*, not a type.
     "str(value)",
     "str(node.value)",
+    # CE3017 names the source file it cannot read: a path, not a type.
+    "str(path)",
 }
 
 

@@ -143,7 +143,7 @@ authority, and the index is a cache of it.
 | `dependencies` | see `TODO.md` 6b |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
-declarations. `_extract_public_functions`, `_extract_structs` and `_extract_enums` all
+declarations. `_extract_public_functions` and `_extract_public_types` (structs and enums) both
 explicitly `continue` past anything with `type_params`: a generic function is not a
 concrete callable, so listing it here would hand the consumer a bogus `FuncSig` with
 unresolved type parameters. There is no `public` keyword for struct/enum *types* —

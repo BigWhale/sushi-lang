@@ -52,6 +52,17 @@ runtime validation.
 Metadata is specified using special comments at the top of the test file (within the first 20 lines). These directives
 configure expected runtime behavior for validation.
 
+The runner reads a fixture as bytes and decodes only its leading comment block, which
+must be UTF-8. A later line can hold any byte. A fixture whose directive block holds a
+byte that is not UTF-8 FAILS; it never passes with its directives unread.
+
+Every gate that scans the corpus reads it through `corpus_files` and `corpus_text` in
+`tests/test_metadata.py`. `corpus_files` gives files only (a directory named `x.sushi` is
+not a source). A file that is not UTF-8 is allowed only when a `test_err_` fixture in the
+SAME directory declares CE3017 (the code of an unreadable source) in its directives; for
+such a file, `corpus_text` gives the leading comment block alone. Any other file that is
+not UTF-8 fails the gate that reads it.
+
 ### Basic Metadata Directives
 
 #### EXPECT_RUNTIME_EXIT

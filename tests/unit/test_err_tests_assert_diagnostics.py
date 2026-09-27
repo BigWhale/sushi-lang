@@ -1,23 +1,29 @@
 """Guard: a test_err_ / test_warn_ test must assert WHICH diagnostic it expects."""
 
 import re
+import sys
 from pathlib import Path
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
+
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 EXCLUDED_DIRS = {"helpers", "bin"}
 
-_DIRECTIVE = re.compile(r"^\s*#\s*(EXPECT_ERROR_CODE|EXPECT_STDERR_CONTAINS)\s*:", re.M)
+_DIRECTIVE = re.compile(r"^\s*#\s*(EXPECT_ERROR_CODE|EXPECT_ERROR_CODES_EXACT|EXPECT_STDERR_CONTAINS)\s*:", re.M)
 
 
 def _scan() -> list[str]:
     """Return test_err_/test_warn_ files that assert no specific diagnostic."""
     naked = []
-    for f in sorted(TESTS_ROOT.rglob("test_*.sushi")):
+    for f in corpus_files(TESTS_ROOT, "test_*.sushi"):
         if any(d in EXCLUDED_DIRS for d in f.relative_to(TESTS_ROOT).parts):
             continue
         if not (f.name.startswith("test_err_") or f.name.startswith("test_warn_")):
             continue
-        if not _DIRECTIVE.search(f.read_text(encoding="utf-8")):
+        if not _DIRECTIVE.search(corpus_text(f)):
             naked.append(str(f.relative_to(TESTS_ROOT)))
     return naked
 

@@ -12,8 +12,8 @@ one binding owns a socket is enforced by the compiler rather than written down
 here, and handing a stream to a `nom` parameter is what transfers it.
 
 close() stays, for the caller who has to SEE that the close failed -- a
-destructor cannot answer a Result. It writes -1 into the binding, so the drop
-that follows is a no-op and the descriptor is released exactly once.
+destructor cannot answer a Result. It consumes the handle, so the descriptor
+is released exactly once and a use after the close is refused (CE2435).
 
 Limitations: blocking sockets only, so connect has no timeout of its own
 and an unreachable address waits for the kernel to give up. read_bytes() answers
@@ -67,25 +67,6 @@ extend TcpListener with Drop:
     :##
     fn drop(poke self) ~:
         close_socket(poke self.fd)
-
-##:
-Releases a descriptor exactly once, and writes -1 over it.
-
-Private to this module, and the ONE place the guard and the sock_close() call are
-spelled: close() consumes its handle and cannot be reached from a destructor, which owns
-nothing to hand away, so the four callers meet here instead of each carrying a copy of
-the rule.
-
-- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
-- Errors: NetError, when the descriptor could not be closed.
-:##
-fn close_socket(poke i32 fd) ~ | NetError:
-    if (fd < 0):
-        return Result.Ok(~)
-    let i32 held = fd
-    fd := -1
-    sock_close(held)??
-    return Result.Ok(~)
 
 ##:
 Reads bytes from the stream. The same contract a File satisfies, so one generic serves

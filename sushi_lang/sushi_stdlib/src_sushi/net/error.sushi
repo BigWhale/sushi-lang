@@ -12,6 +12,26 @@ payload, so a variant is only ever appended.
 :##
 
 use <io/contracts>
+use <net/socket>
+
+##:
+Releases a socket descriptor exactly once, and writes -1 over it.
+
+The ONE place the guard and the sock_close() call are spelled. The close() method and the
+destructor of every socket handle in <net/tcp> and <net/udp> call it. A slot that already
+reads -1 is a success, and nothing is closed.
+
+- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
+- Returns: Nothing.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+public fn close_socket(poke i32 fd) ~ | NetError:
+    if (fd < 0):
+        return Result.Ok(~)
+    let i32 held = fd
+    fd := -1
+    sock_close(held)??
+    return Result.Ok(~)
 
 ##:
 Turns a socket error into the one channel the io contracts answer.

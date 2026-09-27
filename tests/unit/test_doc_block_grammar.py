@@ -10,11 +10,17 @@ are decided at LEX time, before the AST builder has an opinion about anything.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT / "tests") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "tests"))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
+
 SKIP_DIRS = {"__sushi_cache__", ".git", "node_modules", ".venv", "venv", "build", "dist"}
 
 # Named roots rather than the repository root, for the reason
@@ -53,7 +59,7 @@ DOC_SOURCES = (
 def _sushi_files() -> list[Path]:
     found: list[Path] = []
     for root in SCAN_ROOTS:
-        for path in sorted((PROJECT_ROOT / root).rglob("*.sushi")):
+        for path in corpus_files(PROJECT_ROOT / root):
             if not any(part in SKIP_DIRS for part in path.relative_to(PROJECT_ROOT).parts):
                 found.append(path)
     return found
@@ -70,7 +76,7 @@ def test_no_doc_delimiters_outside_the_doc_tests():
         rel = str(path.relative_to(PROJECT_ROOT))
         if rel.startswith(DOC_SOURCES):
             continue
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = corpus_text(path)
         for number, line in enumerate(text.splitlines(), start=1):
             if ":#" in line or line.lstrip().startswith("##"):
                 offenders.append(f"{rel}:{number}: {line.strip()}")

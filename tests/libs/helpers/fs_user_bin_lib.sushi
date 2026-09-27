@@ -1,0 +1,8 @@
+# A BINARY library whose unit imports a Sushi-source stdlib module. The module is
+# injected into the build as an ordinary unit, and the manifest must carry only what
+# this unit declares: one public function, and no stdlib struct, perk or perk
+# implementation.
+use <io/fs>
+
+public fn answer() i32:
+    return Result.Ok(42)

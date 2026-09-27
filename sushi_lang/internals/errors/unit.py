@@ -77,3 +77,11 @@ _add(ErrorMessage("CE3015", Severity.ERROR,
 _add(ErrorMessage("CE3016", Severity.ERROR,
     "a `public use` takes no `as`",
     Category.UNIT, "`public use X` re-exports what X brings: the importing unit takes X's public names as its own and hands them to its importers, flat behind a flat `use` of it and behind the dot of an aliased one (`docs/design/unit-namespaces.md` section 8.1, Ruling 7). A re-export is of NAMES and never of a namespace, so there is nothing an alias could bind: an alias is local to the unit that wrote it (section 8) and is not exported, and a re-export that carried one would make the importer's spelling depend on a name it never wrote. The alias still binds here, as a plain `use ... as` would, so the one fault gets one diagnostic. Drop the `public` to keep the alias for this unit alone, or drop the `as` to re-export."))
+
+_add(ErrorMessage("CE3017", Severity.ERROR,
+    "cannot read '{path}': {reason}",
+    Category.UNIT, "The compiler could not read a source file: the main source or a unit it imports. The reason is the operating system's (the path is a directory, the file cannot be opened) or the text is not valid UTF-8, and then the reason names the first byte that is not and its line. Sushi source is UTF-8. This is an input condition and not a compiler bug, which is why it is not CE0000: a source that was not UTF-8 used to reach the top-level guard as an internal error, and an unreadable unit printed a bare line with no code. Save the file as UTF-8, or fix the path."))
+
+_add(ErrorMessage("CE3018", Severity.ERROR,
+    "no source file to compile",
+    Category.UNIT, "`sushic` needs a `.sushi` file to compile, unless the run only rebuilds the standard library (`--build-stdlib`) or only removes the cache (`--clean-cache`). Name the source file: `sushic app.sushi`."))

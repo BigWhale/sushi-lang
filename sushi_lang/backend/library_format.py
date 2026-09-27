@@ -116,6 +116,15 @@ def _skip_source_section(f: BinaryIO, path: str) -> bytes:
     return _read_bytes(f, src_len, path, "source")
 
 
+# The templates schema this compiler writes and reads, beside the container's own
+# VERSION: the producer (`library_manifest.py`) and the consumer's CE3512 gate import it
+# from here. 5: every record carries its unit and a source-shipped template its
+# `bindings` (D4). 6: every public perk ships, and a generic-target perk implementation
+# ships as a template (#543). 7: every perk method record carries its signature and
+# receiver mode (#537).
+TEMPLATES_SCHEMA_VERSION = 7
+
+
 class LibraryFormat:
     """Binary format reader/writer for .slib files."""
 

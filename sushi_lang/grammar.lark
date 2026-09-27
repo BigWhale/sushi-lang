@@ -99,8 +99,9 @@ while_stmt: WHILE "(" expr ")" ":" block
 // iterator: the item is an ordinary Result and the marker propagates its Err, exactly
 // as `??` does in any other position. A reference binding takes no marker -- a `peek`
 // or `poke` binding points INTO storage, and there is nothing to unwrap there.
-foreach_stmt: FOREACH "(" [type] NAME [DOUBLE_QUESTION] "in" expr ")" ":" block
-            | FOREACH "(" BORROW_MODE NAME "in" expr ")" ":" block -> foreach_ref
+// A `_` binder discards the item, as `_` does in a `match` pattern (#968).
+foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr ")" ":" block
+            | FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT

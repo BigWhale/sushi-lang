@@ -8,9 +8,15 @@ test green. Each half of this file scans the channel its corpus actually uses.
 
 import ast
 import re
+import sys
 from pathlib import Path
 
 TESTS_ROOT = Path(__file__).parent.parent  # tests/
+
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 EXCLUDED_DIRS = {"helpers", "bin"}
 
 # Phrases that mean "this test is not exercising something, because of a defect".
@@ -33,13 +39,13 @@ BUG_DODGE_REGISTRY: dict[str, dict] = {}
 def _scan() -> list[tuple[str, int, str]]:
     """Return (relpath, lineno, text) for each dodging comment outside the registry."""
     hits = []
-    for f in sorted(TESTS_ROOT.rglob("test_*.sushi")):
+    for f in corpus_files(TESTS_ROOT, "test_*.sushi"):
         rel = str(f.relative_to(TESTS_ROOT))
         if any(d in EXCLUDED_DIRS for d in f.relative_to(TESTS_ROOT).parts):
             continue
         if rel in BUG_DODGE_REGISTRY:
             continue
-        for lineno, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(corpus_text(f).splitlines(), 1):
             stripped = line.strip()
             if stripped.startswith("#") and _DODGE.search(stripped):
                 hits.append((rel, lineno, stripped))

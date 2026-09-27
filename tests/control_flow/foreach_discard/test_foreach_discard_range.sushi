@@ -1,0 +1,12 @@
+# A `_` binder discards the item: the loop repeats its body once per item and binds no
+# name, so no CW1001 is printed: the compile exits 0.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "x\nx\nx\ny\ny\n"
+# EXPECT_STDERR_EMPTY: true
+
+fn main() i32:
+    foreach(_ in 0..3):
+        println("x")
+    foreach(i32 _ in 5..=4):
+        println("y")
+    return Result.Ok(0)

@@ -4,13 +4,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
 )
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
-from sushi_lang.semantics.ast import VarDef
+from sushi_lang.semantics.ast import Node, VarDef
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
@@ -112,6 +112,33 @@ def resolve_library_version(source_dir: Path, explicit: str | None,
     return chosen
 
 
+# The plain ast records a node field can hold, and the attributes that carry their types.
+# The node walk treats a record as a leaf (`ast_walk.field_kind`), so the type scan
+# opens it here.
+_RECORD_TYPE_SLOTS = {
+    "Param": ("ty",),
+    "StructField": ("ty",),
+    "EnumVariant": ("associated_types",),
+    "PerkMethodSignature": ("params", "ret", "err_type"),
+}
+
+
+def _written_types(value) -> Iterator:
+    """Every type one node field value holds: directly, in a list, or in a record."""
+    if isinstance(value, Node):
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _written_types(item)
+        return
+    slots = _RECORD_TYPE_SLOTS.get(type(value).__name__)
+    if slots is None:
+        yield value
+        return
+    for slot in slots:
+        yield from _written_types(getattr(value, slot))
+
+
 class _ScopedIndex:
     """A `(unit, name)` index: the own unit first, then the name's first declaration.
 
@@ -199,10 +226,10 @@ class LibraryManifestGenerator:
             "platform": platform_name,
             "compiler_version": VERSION,
             "public_functions": public_functions,
-            "public_constants": self._extract_public_constants(units),
-            "public_variables": self._extract_public_variables(units),
-            "structs": self._extract_structs(units),
-            "enums": self._extract_enums(units),
+            "public_constants": self._extract_public_bindings(units, variables=False),
+            "public_variables": self._extract_public_bindings(units, variables=True),
+            "structs": self._extract_public_types(units, "structs"),
+            "enums": self._extract_public_types(units, "enums"),
             "templates": templates_section,
             "dependencies": self._extract_dependencies(units),
         }
@@ -349,47 +376,15 @@ class LibraryManifestGenerator:
                  "unit": claim.unit_name}
                 for claim in foreign_extension_claims(own_units(units))]
 
-    def _extract_public_constants(self, units: list['Unit']) -> list[dict]:
-        """The constants this library MARKS public.
+    def _extract_public_bindings(self, units: list['Unit'], variables: bool) -> list[dict]:
+        """The constants, or the unit variables, this library MARKS public.
 
-        Two gates, and both were missing. `own_units` is the filter the `units` index and
-        the source section already use: a bundled stdlib module arrives as an ordinary
-        unit at build time, so without it `<encoding/msgpack>`'s constants shipped as this
-        library's API. And a constant carries a marker now, so an unmarked one is a
-        decoder detail and not a promise.
-
-        Each record carries the declaration's SOURCE as well as its type, because that is
-        what a consumer needs to read the constant at all: a binary library ships bodies
-        as bitcode, and a constant has no body to ship. It is the answer the export
-        closure has always given for a private constant a template body names (#487).
-        """
-        from sushi_lang.semantics.library_templates import slice_decl_source
-
-        public_consts = []
-
-        for unit in own_units(units):
-            if unit.ast is None:
-                continue
-            for const in unit.ast.constants:
-                if not const.is_public or isinstance(const, VarDef):
-                    continue
-                public_consts.append(with_doc({
-                    "name": const.name,
-                    "unit": unit.name,
-                    "type": self._type_to_string(const.ty),
-                    "source": slice_decl_source(const, self._source(unit)),
-                }, const))
-
-        return public_consts
-
-    def _extract_public_variables(self, units: list['Unit']) -> list[dict]:
-        """The unit variables this library MARKS public.
-
-        The record mirrors a constant's -- the type, and the declaration as source, so
-        the consumer's typecheck pass has the declared type -- plus the `link_symbol`
-        of the data symbol: a `var` is ONE storage, defined in this library's bitcode,
-        and the consumer declares it as external storage rather than re-evaluating it
-        (docs/design/unit-storage.md).
+        `own_units` keeps a bundled stdlib module's declarations out, and an unmarked
+        declaration is a decoder detail and not a promise. Each record carries the
+        declaration's SOURCE as well as its type: a binary library ships bodies as
+        bitcode, and a constant has no body to ship (#487). A variable's record adds the
+        `link_symbol` of its ONE storage, which the consumer declares as external rather
+        than re-evaluating (docs/design/unit-storage.md).
         """
         from sushi_lang.semantics.library_templates import slice_decl_source
 
@@ -397,93 +392,59 @@ class LibraryManifestGenerator:
         for unit in own_units(units):
             if unit.ast is None:
                 continue
-            for var in unit.ast.constants:
-                if not isinstance(var, VarDef) or not var.is_public:
+            for decl in unit.ast.constants:
+                if not decl.is_public or isinstance(decl, VarDef) != variables:
                     continue
-                records.append(with_doc({
-                    "name": var.name,
+                record = {
+                    "name": decl.name,
                     "unit": unit.name,
-                    "type": self._type_to_string(var.ty),
-                    "source": slice_decl_source(var, self._source(unit)),
-                    "link_symbol": mangle_unit_symbol(unit.name, var.name),
-                }, var))
+                    "type": self._type_to_string(decl.ty),
+                    "source": slice_decl_source(decl, self._source(unit)),
+                }
+                if variables:
+                    record["link_symbol"] = mangle_unit_symbol(unit.name, decl.name)
+                records.append(with_doc(record, decl))
         return records
 
-    def _extract_structs(self, units: list['Unit']) -> list[dict]:
-        """The structs this library MARKS public.
-
-        It had no gate, so a decoder detail shipped as frozen API and `--lib-info`
-        printed its whole field layout.
-        """
-        structs = []
+    def _extract_public_types(self, units: list['Unit'], key: str) -> list[dict]:
+        """The concrete structs (`key` "structs") or enums ("enums") this library MARKS
+        public. A generic one ships as a template (`_extract_templates`) instead."""
+        members = {"structs": self._struct_members, "enums": self._enum_members}[key]
+        records = []
         seen_names = set()
-
         for unit in own_units(units):
             if unit.ast is None:
                 continue
-            for struct_def in unit.ast.structs:
-                # Generic structs ship as re-parsable templates (see
-                # _extract_templates), never as concrete entries.
-                if struct_def.type_params:
+            for decl in getattr(unit.ast, key):
+                if decl.type_params or not decl.is_public or decl.name in seen_names:
                     continue
-                if not struct_def.is_public:
-                    continue
-                if struct_def.name in seen_names:
-                    continue
-                seen_names.add(struct_def.name)
-
-                structs.append(with_doc({
-                    "name": struct_def.name,
+                seen_names.add(decl.name)
+                records.append(with_doc({
+                    "name": decl.name,
                     "unit": unit.name,
-                    "fields": [
-                        with_doc({"name": field.name,
-                                  "type": self._type_to_string(field.ty)}, field)
-                        for field in struct_def.fields
-                    ],
+                    **members(decl),
                     "is_generic": False,
                     "type_params": [],
-                }, struct_def))
+                }, decl))
+        return records
 
-        return structs
+    def _struct_members(self, struct_def) -> dict:
+        return {"fields": [
+            with_doc({"name": f.name, "type": self._type_to_string(f.ty)}, f)
+            for f in struct_def.fields
+        ]}
 
-    def _extract_enums(self, units: list['Unit']) -> list[dict]:
-        """The enums this library MARKS public. It had no gate either."""
-        enums = []
-        seen_names = set()
-
-        for unit in own_units(units):
-            if unit.ast is None:
-                continue
-            for enum_def in unit.ast.enums:
-                # Generic enums ship as re-parsable templates (see
-                # _extract_templates), never as concrete entries.
-                if enum_def.type_params:
-                    continue
-                if not enum_def.is_public:
-                    continue
-                if enum_def.name in seen_names:
-                    continue
-                seen_names.add(enum_def.name)
-
-                variants = []
-                for variant in enum_def.variants:
-                    has_data = len(variant.associated_types) > 0
-                    data_type = self._type_to_string(variant.associated_types[0]) if has_data else None
-                    variants.append(with_doc({
-                        "name": variant.name,
-                        "has_data": has_data,
-                        "data_type": data_type,
-                    }, variant))
-
-                enums.append(with_doc({
-                    "name": enum_def.name,
-                    "unit": unit.name,
-                    "variants": variants,
-                    "is_generic": False,
-                    "type_params": [],
-                }, enum_def))
-
-        return enums
+    def _enum_members(self, enum_def) -> dict:
+        variants = []
+        for variant in enum_def.variants:
+            has_data = len(variant.associated_types) > 0
+            variants.append(with_doc({
+                "name": variant.name,
+                "has_data": has_data,
+                "data_type": (self._type_to_string(variant.associated_types[0])
+                              if has_data else None),
+            }, variant))
+        return {"variants": variants}
 
     def _extract_unit_docs(self, units: list['Unit']) -> dict[str, dict]:
         """Each own unit's own doc block, keyed by unit name.
@@ -520,25 +481,23 @@ class LibraryManifestGenerator:
 
     def _scan_referenced_type_names(self, node, acc: set[str]) -> None:
         """Walk a declaration collecting referenced user-TYPE names."""
-        from sushi_lang.semantics.typesys import UnknownType
+        from sushi_lang.semantics import ast as A
+        from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
         from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.type_walk import walk_named_types
+        from sushi_lang.semantics.typesys import UnknownType
 
-        if node is None:
-            return
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                self._scan_referenced_type_names(item, acc)
-            return
+        def collect(current: A.Node) -> bool:
+            for _name, value in node_fields(current):
+                for written in _written_types(value):
+                    for ty in walk_named_types(written, struct_type_args=True):
+                        if isinstance(ty, UnknownType):
+                            acc.add(ty.name)
+                        elif isinstance(ty, GenericTypeRef):
+                            acc.add(ty.base_name)
+            return True
 
-        if isinstance(node, UnknownType):
-            acc.add(node.name)
-        elif isinstance(node, GenericTypeRef):
-            acc.add(node.base_name)
-
-        import dataclasses
-        if dataclasses.is_dataclass(node) and not isinstance(node, type):
-            for f in dataclasses.fields(node):
-                self._scan_referenced_type_names(getattr(node, f.name, None), acc)
+        walk_nodes(node, collect)
 
     def _compute_export_closure(self, units: list['Unit'], exported: list) -> dict:
         """Walk every exported generic and collect the library-private symbols its body
@@ -668,7 +627,7 @@ class LibraryManifestGenerator:
 
     def _extract_templates(self, units: list['Unit']) -> dict:
         """Extract instantiable public generic templates (re-parsable source)."""
-        from sushi_lang.compiler.pipeline import TEMPLATES_SCHEMA_VERSION
+        from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 
         own = own_units(units)
         referenced_perks: set[str] = set()
@@ -686,13 +645,6 @@ class LibraryManifestGenerator:
         perk_impls = self._concrete_perk_impls(own, shipped_perks, template_keys)
 
         return {
-            # 5: every record carries its unit, and a source-shipped template carries
-            # `bindings` (D4). An older consumer resolves the flat way, so an old
-            # compiler is refused by the container's requires_compiler, and an old
-            # LIBRARY is refused by the consumer's templates gate (decision B).
-            # 6: every public perk ships, and a generic-target perk implementation
-            # ships as a template (#543). A version-5 library carries neither, so a
-            # consumer would answer CE2008 for a method the library implements.
             "version": TEMPLATES_SCHEMA_VERSION,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,

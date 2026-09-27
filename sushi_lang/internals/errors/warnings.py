@@ -30,6 +30,14 @@ _add(ErrorMessage("CW0001", Severity.WARNING,
     "missing trailing newline", Category.GENERAL,
     "Source file should end with a newline character."))
 
+_add(ErrorMessage("CW0002", Severity.WARNING,
+    "cannot write LLVM IR to '{path}': {reason}", Category.GENERAL,
+    "`--write-ll` asked for the IR beside the output, and the file could not be written, for example because the path is a directory or a directory on it is a regular file. The build itself succeeded and the binary or the library is written; only the IR is missing. The warning used to be a bare line that the reporter did not count, so the build exited 0 as if the IR were there. Fix the path, or choose another output with `-o`."))
+
+_add(ErrorMessage("CW0003", Severity.WARNING,
+    "'{flag}' has no effect {reason}", Category.GENERAL,
+    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
+
 # Rebinding / scope warnings
 _add(ErrorMessage("CW1001", Severity.WARNING,
     "unused variable '{name}'", Category.SCOPE,

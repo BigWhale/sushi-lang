@@ -78,11 +78,9 @@ Reads an unsigned big-endian integer.
 :##
 fn mp_be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
     let u64 acc = 0
-    let i32 i = 0
-    while (i < nbytes):
+    foreach(_ in 0..nbytes):
         let u8 b = mp_take(peek buf, poke cur)??
         acc := (acc << 8) | (b as u64)
-        i := i + 1
     return Result.Ok(acc)
 
 ##:
@@ -173,11 +171,9 @@ Decodes the elements of an array.
 :##
 fn mp_take_arr(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let MsgValue[] items = new()
-    let i32 i = 0
-    while (i < count):
+    foreach(_ in 0..count):
         let MsgValue child = mp_decode_value(peek buf, poke cur)??
         items.push(child)
-        i := i + 1
     return Result.Ok(MsgValue.Arr(items))
 
 ##:
@@ -192,13 +188,11 @@ Decodes the key and value pairs of a map into parallel arrays, in wire order.
 fn mp_take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     let MsgValue[] keys = new()
     let MsgValue[] vals = new()
-    let i32 i = 0
-    while (i < count):
+    foreach(_ in 0..count):
         let MsgValue k = mp_decode_value(peek buf, poke cur)??
         keys.push(k)
         let MsgValue v = mp_decode_value(peek buf, poke cur)??
         vals.push(v)
-        i := i + 1
     return Result.Ok(MsgValue.Map(keys, vals))
 
 ##:

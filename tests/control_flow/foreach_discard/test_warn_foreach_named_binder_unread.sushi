@@ -1,0 +1,8 @@
+# A NAMED binder that the body never reads is still an unused variable.
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: "unused variable 'i'"
+
+fn main() i32:
+    foreach(i in 0..3):
+        println("x")
+    return Result.Ok(0)

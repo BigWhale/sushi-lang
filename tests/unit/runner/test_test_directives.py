@@ -9,7 +9,7 @@ import pytest
 TESTS_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TESTS_ROOT))
 
-from test_metadata import header_block  # noqa: E402
+from test_metadata import corpus_files, corpus_text, header_block  # noqa: E402
 
 
 # Every directive prefix `parse_test_metadata` dispatches on. Kept as a literal rather
@@ -35,7 +35,7 @@ KNOWN_DIRECTIVES = frozenset({
 
 
 def _sushi_tests():
-    return sorted(TESTS_ROOT.rglob("*.sushi"))
+    return corpus_files(TESTS_ROOT)
 
 
 def _directive_name(comment: str) -> str:
@@ -52,7 +52,7 @@ def test_every_directive_is_inside_the_parsed_header():
     """A directive below the leading comment block is never read."""
     stranded = []
     for path in _sushi_tests():
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = corpus_text(path).split("\n")
         header_len = len(header_block(lines))
         for lineno, line in enumerate(lines[header_len:], start=header_len + 1):
             stripped = line.strip()
@@ -72,7 +72,7 @@ def test_every_directive_name_is_one_the_parser_knows():
     """A misspelled directive is discarded in silence, so it must not exist."""
     unknown = []
     for path in _sushi_tests():
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = corpus_text(path).split("\n")
         for lineno, line in enumerate(header_block(lines), start=1):
             stripped = line.strip()
             if not stripped.startswith("#"):
@@ -121,3 +121,13 @@ def test_no_corpus_file_makes_the_parser_warn(capsys):
     assert not warnings, (
         "parsing the corpus emitted warnings, so these files assert less than they "
         "spell:\n  " + "\n  ".join(warnings))
+
+
+def test_no_corpus_file_has_a_directive_block_the_runner_cannot_read():
+    """A directive block that is not UTF-8 fails its fixture; none may be in the corpus."""
+    from test_metadata import parse_test_metadata
+
+    unreadable = [f"{path.relative_to(TESTS_ROOT)}: {'; '.join(errors)}"
+                  for path in _sushi_tests()
+                  if (errors := parse_test_metadata(path).directive_errors)]
+    assert not unreadable, "\n  ".join(["directive errors:"] + unreadable)

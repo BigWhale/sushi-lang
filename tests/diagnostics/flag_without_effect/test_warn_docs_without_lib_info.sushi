@@ -1,0 +1,7 @@
+# --docs is read only by the library report, so the flag is ignored and the compiler says so.
+# COMPILER_FLAGS: --docs
+# EXPECT_ERROR_CODES_EXACT: CW0003
+# EXPECT_STDERR_CONTAINS: "'--docs' has no effect without --lib-info"
+
+fn main() i32:
+    return Result.Ok(0)

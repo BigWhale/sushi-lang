@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 
@@ -9,6 +10,11 @@ from sushi_lang.internals.errors import REGISTRY, Category, Severity, _fmt
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 TEST_ROOT = Path(__file__).resolve().parents[1]
+
+if str(TEST_ROOT) not in sys.path:
+    sys.path.insert(0, str(TEST_ROOT))
+
+from test_metadata import corpus_files, corpus_text  # noqa: E402
 
 # How a diagnostic code is referenced in compiler source.
 REFERENCE_PATTERNS = [
@@ -29,7 +35,7 @@ REFERENCE_PATTERNS = [
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 362
+REGISTRY_SIZE = 366
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -141,8 +147,8 @@ def test_expect_error_code_directives_are_registered():
     """A typo'd EXPECT_ERROR_CODE header would silently assert nothing."""
     directive = re.compile(r"#\s*EXPECT_ERROR_CODE:\s*([A-Z]{2}\d{4})")
     unknown: list[str] = []
-    for path in TEST_ROOT.rglob("test_*.sushi"):
-        for code in directive.findall(path.read_text(encoding="utf-8")):
+    for path in corpus_files(TEST_ROOT, "test_*.sushi"):
+        for code in directive.findall(corpus_text(path)):
             if code not in REGISTRY:
                 unknown.append(f"{path.name}: {code}")
     assert not unknown, f"EXPECT_ERROR_CODE names an unregistered code: {unknown}"

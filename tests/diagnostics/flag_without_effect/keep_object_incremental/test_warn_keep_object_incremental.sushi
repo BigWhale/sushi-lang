@@ -1,0 +1,11 @@
+# A program of two units takes the incremental build, which links the cached object of
+# each unit and writes no object of its own beside the output. --keep-object has nothing
+# to keep there, and the compiler says so.
+# COMPILER_FLAGS: --keep-object
+# EXPECT_ERROR_CODES_EXACT: CW0003
+# EXPECT_STDERR_CONTAINS: "'--keep-object' has no effect on the incremental build"
+
+use "answer"
+
+fn main() i32:
+    return Result.Ok(answer().realise(0) - 42)

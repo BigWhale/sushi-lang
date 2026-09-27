@@ -393,7 +393,7 @@ def sushi_files() -> list[Path]:
     found: list[Path] = []
     for root in SUSHI_ROOTS:
         for path in sorted((PROJECT_ROOT / root).rglob("*.sushi")):
-            if not any(part in SKIP_DIRS for part in path.parts):
+            if path.is_file() and not any(part in SKIP_DIRS for part in path.parts):
                 found.append(path)
     return found
 

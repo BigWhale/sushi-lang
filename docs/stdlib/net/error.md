@@ -47,6 +47,19 @@ contract method can answer is lost; the rest map to `IoError.Other`. The convers
 INSIDE the stdlib -- `TcpStream.read` is `sock_recv` with its error passed through
 `to_io()` -- and a program never needs to call it.
 
+### `close_socket(poke i32 fd) ~ | NetError`
+
+```sushi
+public fn close_socket(poke i32 fd) ~ | NetError
+```
+
+Releases a socket descriptor exactly once, and writes `-1` over the slot. A slot that
+already reads `-1` is a success, and nothing is closed. This is the one place the guard
+and the close are spelled: `close()` and the destructor of every handle in
+[`<net/tcp>`](tcp.md) and [`<net/udp>`](udp.md) call it. A program that holds its sockets
+as `TcpStream`, `TcpListener` or `UdpSocket` values never needs to call it; it is for a
+descriptor that no handle owns.
+
 ## Example
 
 ```sushi
