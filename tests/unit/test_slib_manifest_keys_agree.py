@@ -75,6 +75,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "seed_perks"): {"record": "perk"},
     (REGISTRATION, R + "_template_records"): {"manifest": "manifest"},
     (REGISTRATION, R + "_build_registry"): {"manifest": "manifest"},
+    (REGISTRATION, R + "_library_file"): {"manifest": "manifest"},
     (REGISTRATION, R + "_register_constants"): {
         "manifest": "manifest", "templates": "templates"},
     (REGISTRATION, R + "_register_one_constant"): {"record": "constant"},

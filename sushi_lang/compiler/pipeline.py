@@ -199,7 +199,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
     dependencies are unsupported, and a consumer states each library it uses.
     """
     from sushi_lang.backend.library_errors import LibraryError
-    from sushi_lang.backend.library_format import LibraryFormat
+    from sushi_lang.backend.library_format import LibraryFormat, check_manifest
     from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.internals import errors as er
 
@@ -219,6 +219,7 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter, args
         try:
             slib_path = resolver.resolve_library(lib_path)
             metadata = LibraryFormat.read_metadata_only(slib_path)
+            check_manifest(metadata, str(slib_path))
             _check_library_platform(metadata, lib_path)
             _check_library_compiler_version(
                 metadata, lib_path,

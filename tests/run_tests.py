@@ -385,21 +385,29 @@ public fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
 ##:
-Counts its two arguments.
+Gives its argument back.
 
-- Parameter a: The first value.
-- Parameter b: The second value.
-- Returns: Two.
+- Parameter value: The value.
+- Returns: The value.
 :##
-public fn count_two@(T)(T a, T b) i32:
-    return Result.Ok(2)
+public fn same@(T)(nom T value) T:
+    return Result.Ok(value)
+
+##: A box that holds one value. :##
+public struct Box@(T):
+    ##: The value. :##
+    T item
+
+##: The answer. :##
+public const i32 ANSWER = 42
 """
 
 _GATE_CONSUMER = """\
 use <lib/{name}>
 
 fn main() i32:
-    println(count_two(add(40, 2).realise(0), 1).realise(0))
+    let i32 n = add(40, 2).realise(0)
+    println(same(nom n).realise(0))
     return Result.Ok(0)
 """
 
@@ -475,9 +483,35 @@ LIB_INFO_CASES = (
         d / "gate_lib.txt", (libs / "gate_lib.slib").read_bytes())),
 )
 
+def _append(text: str, *keys):
+    """An edit that appends `text` to the string at the end of a path of keys."""
+    def edit(meta):
+        node = meta
+        for key in keys[:-1]:
+            node = node[key]
+        node[keys[-1]] += text
+    return edit
+
+
+_SECOND_DECLARATION = "\npublic fn extra() i32:\n    return Result.Ok(0)\n"
+
 # (case, expected code or None, the edit of the binary library's manifest). A consumer
 # that imports the edited library is compiled for each case.
-CONSUMER_CASES: Tuple = ()
+CONSUMER_CASES = (
+    ("a whole library", None, None),
+    ("a generic function record with no name", "CE3512",
+     _drop("templates", "generic_functions", 0, "name")),
+    ("no library_name", "CE3512", _drop("library_name")),
+    ("templates is a string", "CE3512", _put("x", "templates")),
+    ("a generic function source that does not parse", "CE3512",
+     _put("fn broken@(T)(T a T:\n", "templates", "generic_functions", 0, "source")),
+    ("a generic function source with two declarations", "CE3512",
+     _append(_SECOND_DECLARATION, "templates", "generic_functions", 0, "source")),
+    ("a generic struct source that does not parse", "CE3512",
+     _put("public struct Box@(T:\n", "templates", "generic_structs", 0, "source")),
+    ("a constant source with two declarations", "CE3512",
+     _append("\npublic const i32 OTHER = 1\n", "public_constants", 0, "source")),
+)
 
 
 @dataclass
@@ -551,8 +585,11 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
                 if k not in ("SUSHI_TOOLCHAIN", "SUSHI_TOOLCHAIN_BIN")}
 
     def run(command: List[str], cwd: Path, env: Dict[str, str]) -> subprocess.CompletedProcess:
-        return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
-                              timeout=300, env={**base_env, **env})
+        try:
+            return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
+                                  timeout=120, env={**base_env, **env})
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(command, -1, "", "timed out after 120s")
 
     with tempfile.TemporaryDirectory(prefix="sushi_lib_reader_gate_") as tmp_name:
         tmp = Path(tmp_name)
