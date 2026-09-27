@@ -111,12 +111,15 @@ public fn mkdir_all(string path, i32 dir_mode) ~ | FileError:
 ##:
 Removes a path and, for a directory, everything under it.
 
-A missing path is success: the goal state already holds. A path that cannot
-be read for any other reason is an error, and nothing is removed. A symlink is
-removed as the link; its target stays.
+A missing path (ENOENT) is success: the goal state already holds. A path that
+cannot be read for any other reason is an error, and nothing is removed. A path
+that goes through a regular file (`dir/plainfile/child`, ENOTDIR) is such an
+error: it answers FileError.InvalidPath. A symlink is removed as the link; its
+target stays.
 
 - Parameter path: The path to remove.
-- Errors: FileError, when an entry cannot be removed.
+- Errors: FileError, when an entry cannot be removed; FileError.InvalidPath,
+  when a prefix of the path is a regular file.
 :##
 public fn remove_all(string path) ~ | FileError:
     let bool link = false

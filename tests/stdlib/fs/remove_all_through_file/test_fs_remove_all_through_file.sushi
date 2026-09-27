@@ -1,0 +1,49 @@
+# remove_all on a path that goes through a regular file (<dir>/plainfile/child)
+# answers Err(FileError.InvalidPath): lstat fails with ENOTDIR, and only a missing
+# path (ENOENT) is success. The condition holds for root too. A missing path is
+# still Ok. The fixture works in its own directory and removes it.
+# EXPECT_STDOUT_EXACT: "made\nthrough file: InvalidPath\nmissing: Ok\ncleaned: true\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/files>
+use <io/fs>
+
+unsafe external "C" as posix because "the test names its directory by the process id":
+    fn getpid() i32 = "getpid"
+
+fn write_one(string path) bool:
+    match open(path, FileMode.Write()):
+        Result.Ok(nom f) ->
+            f.write("x")
+            f.close()
+            return Result.Ok(true)
+        Result.Err(_) ->
+            return Result.Ok(false)
+
+fn main() i32:
+    let i32 pid = posix.getpid()
+    let string root = "/tmp/sushi_fs_remove_all_through_file_{pid}"
+    match mkdir_all(root, 0o755):
+        Result.Ok(_) -> println("made")
+        Result.Err(_) ->
+            println("mkdir_all failed")
+            return Result.Ok(1)
+    if (not write_one("{root}/plainfile").realise(false)):
+        println("write failed")
+        return Result.Ok(1)
+
+    match remove_all("{root}/plainfile/child"):
+        Result.Ok(_) -> println("through file: Ok")
+        Result.Err(FileError.InvalidPath) -> println("through file: InvalidPath")
+        Result.Err(_) -> println("through file: other Err")
+
+    match remove_all("{root}/missing"):
+        Result.Ok(_) -> println("missing: Ok")
+        Result.Err(_) -> println("missing: Err")
+
+    match remove_all(root):
+        Result.Ok(_) ->
+            let bool cleaned = not exists(root)
+            println("cleaned: {cleaned}")
+        Result.Err(_) -> println("cleanup failed")
+    return Result.Ok(0)
