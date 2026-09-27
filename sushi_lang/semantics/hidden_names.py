@@ -15,3 +15,13 @@ HIDDEN_MARK = "#"
 def hidden_name(kind: str, n: Optional[int] = None) -> str:
     """`#<kind><n>`, or `#<kind>` when the name needs no number."""
     return f"{HIDDEN_MARK}{kind}" if n is None else f"{HIDDEN_MARK}{kind}{n}"
+
+
+def pack_element_name(pack_param: str, index: int) -> str:
+    """The local of element `index` of the variadic pack parameter `pack_param` (#1015)."""
+    return hidden_name(f"pack_{pack_param}_", index)
+
+
+def expand_copy_local_name(local: str, copy_index: int) -> str:
+    """The local `local` of the unrolled `expand` copy `copy_index` (#1015)."""
+    return hidden_name(f"{local}_x", copy_index)
