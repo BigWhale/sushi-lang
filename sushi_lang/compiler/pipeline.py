@@ -685,8 +685,13 @@ def _compile_incremental(compilation_order, analyzer, src_path, reporter, args,
         link_desc += f" + {lib_count} libs"
     print(f"Linking: {link_desc} in {link_time:.2f}s")
 
-    if args.write_ll:
-        print("(note: --write-ll not supported in incremental mode)")
+    from sushi_lang.compiler.cli import COMMAND_LINE
+    from sushi_lang.internals import errors as er
+    for flag, given in (("--write-ll", args.write_ll), ("--keep-object", args.keep_object)):
+        if given:
+            er.emit(reporter, er.ERR.CW0003, None, filename=COMMAND_LINE, flag=flag,
+                    reason="on the incremental build of a program of more than one unit; "
+                           "add --no-incremental")
 
     print(f"Success! Wrote native binary: {out_path}")
 

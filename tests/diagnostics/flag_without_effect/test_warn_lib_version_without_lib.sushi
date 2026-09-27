@@ -1,0 +1,7 @@
+# --lib-version stamps a library, and this build is a program, so the flag is ignored and the compiler says so.
+# COMPILER_FLAGS: --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CW0003
+# EXPECT_STDERR_CONTAINS: "'--lib-version' has no effect without --lib"
+
+fn main() i32:
+    return Result.Ok(0)

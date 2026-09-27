@@ -5,7 +5,7 @@ import argparse
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from sushi_lang.internals.diagnostics import (
     InternalCompilerError,
@@ -598,69 +598,8 @@ class Session:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(prog="compiler", description="Language compiler")
-
     ap.add_argument("source", nargs='?', help="Path to source file (.sushi)")
     ap.add_argument("--version", action="store_true", help="Show version and exit")
-    ap.add_argument("--dump-parse", action="store_true", help="Print raw Lark tree")
-    ap.add_argument("--dump-ast", action="store_true", help="Print AST")
-    ap.add_argument("-o", "--out", metavar="OUT",
-                    help="Output binary path (default: source filename without extension)")
-    ap.add_argument("--write-ll", action="store_true",
-                    help="Write LLVM IR to <OUT>.ll file")
-    ap.add_argument("--dump-ll", action="store_true",
-                    help="Dump generated LLVM IR to terminal")
-    ap.add_argument(
-        "--opt",
-        choices=["none", "mem2reg", "O1", "O2", "O3"],
-        default="mem2reg",
-        help="Optimization level. 'mem2reg' promotes locals to SSA without a full pipeline.",
-    )
-    ap.add_argument(
-        "--no-verify",
-        action="store_true",
-        help="Disable LLVM IR verification (pre/post optimization).",
-    )
-    ap.add_argument(
-        "--keep-object",
-        action="store_true",
-        help="Keep the generated .o file after linking",
-    )
-    ap.add_argument(
-        "--traceback",
-        action="store_true",
-        help="Print full traceback on backend errors (for debugging)",
-    )
-    ap.add_argument(
-        "--build-stdlib",
-        action="store_true",
-        help="Rebuild standard library from source",
-    )
-    ap.add_argument(
-        "--lib",
-        action="store_true",
-        help="Compile to library bitcode (no main() required)",
-    )
-    ap.add_argument(
-        "--lib-kind",
-        choices=["source", "binary", "hybrid"],
-        default="source",
-        help="How the library ships: source text, compiled bitcode, or both",
-    )
-    ap.add_argument(
-        "--lib-version",
-        metavar="X.Y.Z",
-        help="Version of the library being built (a nori.toml beside the sources wins)",
-    )
-    ap.add_argument(
-        "--lib-info",
-        metavar="FILE",
-        help="Display metadata from a .slib library file",
-    )
-    ap.add_argument(
-        "--docs",
-        action="store_true",
-        help="With --lib-info: print the documentation block of every symbol that has one",
-    )
     ap.add_argument(
         "--color",
         choices=list(COLOUR_CHOICES),
@@ -668,33 +607,125 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="When to use ANSI colour. 'auto' reads NO_COLOR, CLICOLOR_FORCE, TERM and "
              "whether the stream is a terminal.",
     )
-    ap.add_argument(
+
+    build = ap.add_argument_group("build")
+    library = ap.add_argument_group(
+        "library", "Read only by a --lib build; --docs only by --lib-info.")
+    inspect = ap.add_argument_group("inspection")
+    cache = ap.add_argument_group(
+        "cache", "The incremental build of a program of more than one unit.")
+    build.add_argument("-o", "--out", metavar="OUT",
+                       help="Output binary path (default: source filename without extension)")
+    build.add_argument(
+        "--opt",
+        choices=["none", "mem2reg", "O1", "O2", "O3"],
+        default="mem2reg",
+        help="Optimization level. 'mem2reg' promotes locals to SSA without a full pipeline.",
+    )
+    build.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Disable LLVM IR verification (pre/post optimization).",
+    )
+    build.add_argument(
+        "--keep-object",
+        action="store_true",
+        help="Keep the generated .o file after linking (not on the incremental build; "
+             "add --no-incremental)",
+    )
+    build.add_argument(
+        "--build-stdlib",
+        action="store_true",
+        help="Rebuild standard library from source",
+    )
+    build.add_argument(
         "--ignore-compiler-version",
         action="store_true",
         help="Load libraries whose requires_compiler excludes this compiler (CE3503)",
     )
-    ap.add_argument(
+    build.add_argument(
         "--warn-missing-docs",
         action="store_true",
         help="Warn about a declaration, a parameter, a return value, an error arm or a "
              "unit with no documentation (CW7002-CW7006)",
     )
-    ap.add_argument(
+    library.add_argument(
+        "--lib",
+        action="store_true",
+        help="Compile to library bitcode (no main() required)",
+    )
+    library.add_argument(
+        "--lib-kind",
+        choices=["source", "binary", "hybrid"],
+        help="How the library ships: source text, compiled bitcode, or both "
+             "(default: source)",
+    )
+    library.add_argument(
+        "--lib-version",
+        metavar="X.Y.Z",
+        help="Version of the library being built (a nori.toml beside the sources wins)",
+    )
+    library.add_argument(
+        "--lib-info",
+        metavar="FILE",
+        help="Display metadata from a .slib library file",
+    )
+    library.add_argument(
+        "--docs",
+        action="store_true",
+        help="With --lib-info: print the documentation block of every symbol that has one",
+    )
+    inspect.add_argument("--dump-parse", action="store_true", help="Print raw Lark tree")
+    inspect.add_argument("--dump-ast", action="store_true", help="Print AST")
+    inspect.add_argument("--write-ll", action="store_true",
+                         help="Write LLVM IR to <OUT>.ll file")
+    inspect.add_argument("--dump-ll", action="store_true",
+                         help="Dump generated LLVM IR to terminal")
+    inspect.add_argument(
+        "--traceback",
+        action="store_true",
+        help="Print full traceback on backend errors (for debugging)",
+    )
+    cache.add_argument(
         "--no-incremental",
         action="store_true",
         help="Force full rebuild, ignoring cached object files",
     )
-    ap.add_argument(
+    cache.add_argument(
         "--clean-cache",
         action="store_true",
         help="Remove __sushi_cache__/ directory and exit",
     )
-    ap.add_argument(
+    cache.add_argument(
         "--cache-dir",
         metavar="PATH",
         help="Custom cache directory location (default: __sushi_cache__/)",
     )
     return ap.parse_args(argv)
+
+
+COMMAND_LINE = "<command line>"
+
+# (flag attribute, spelling, when it has no effect, why)
+_NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ...] = (
+    ("docs", "--docs", lambda a: not a.lib_info, "without --lib-info"),
+    ("lib_kind", "--lib-kind", lambda a: not a.lib, "without --lib"),
+    ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),
+    ("keep_object", "--keep-object", lambda a: a.lib,
+     "with --lib: a library build writes no object file"),
+)
+
+
+def _validate_args(args: argparse.Namespace, reporter: Reporter) -> None:
+    """Every flag-combination rule, read once after parsing (CW0003)."""
+    from sushi_lang.internals import errors as er
+
+    for attr, flag, ignored, reason in _NO_EFFECT:
+        if getattr(args, attr) and ignored(args):
+            er.emit(reporter, er.ERR.CW0003, None, filename=COMMAND_LINE,
+                    flag=flag, reason=reason)
+    if args.lib_kind is None:
+        args.lib_kind = "source"
 
 
 def _run(session: Session) -> int:
@@ -738,7 +769,7 @@ def _run(session: Session) -> int:
             return 0
 
     if not args.source:
-        er.emit(session.reporter, er.ERR.CE3018, None, filename="sushic")
+        er.emit(session.reporter, er.ERR.CE3018, None, filename=COMMAND_LINE)
         return 2
 
     src_path = Path(args.source).resolve()
@@ -830,6 +861,7 @@ def main(argv: list[str] | None = None) -> int:
         return library_info_command(Path(args.lib_info), args.docs, args.color)
 
     session = Session(args=args)
+    _validate_args(args, session.reporter)
 
     try:
         rc = _run(session)
