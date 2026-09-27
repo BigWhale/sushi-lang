@@ -83,6 +83,11 @@ class TestMetadata:
     expect_paths_exist_before_clean: Optional[List[str]] = None
     # A last invocation, `sushic --clean-cache`: "bare", or "source" (with the source and -o).
     then_clean_cache: Optional[str] = None
+    # The `-o` path, relative to the fixture's copy; the runner never creates its parent.
+    output_path: Optional[str] = None
+    # Where `--lib` stood in COMPILER_FLAGS, held until the parse knows whether OUTPUT_PATH
+    # is there. None when the fixture does not spell it.
+    held_lib_flag: Optional[int] = None
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
@@ -122,7 +127,8 @@ class TestMetadata:
         return bool(self.build_libs_at or self.fixture_cache_dir is not None
                     or self.expect_paths_exist or self.expect_paths_absent
                     or self.expect_paths_exist_before_clean
-                    or self.then_clean_cache is not None or self.directive_errors)
+                    or self.then_clean_cache is not None or self.directive_errors
+                    or self.output_path is not None)
 
     @property
     def declares_a_rebuild(self) -> bool:
@@ -143,6 +149,10 @@ class TestMetadata:
 RUNNER_OWNED_FLAGS = frozenset({
     '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
 })
+
+# The one runner-owned flag a fixture may spell once it names its own output (OUTPUT_PATH):
+# the build kind is then the fixture's, because the runner no longer picks the file.
+LIB_FLAG = '--lib'
 
 
 # The directory beside a rebuild fixture whose files replace their namesakes before the
@@ -250,6 +260,9 @@ def _exact_codes(metadata: TestMetadata, value: str, test_file: Path) -> None:
 
 def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
     for token in _split(value):
+        if token == LIB_FLAG:
+            metadata.held_lib_flag = len(metadata.compiler_flags)
+            continue
         if token in RUNNER_OWNED_FLAGS:
             _warn(f"{token} is the runner's to spell in {test_file}; COMPILER_FLAGS ignored it")
             continue
@@ -304,6 +317,26 @@ def _then_clean_cache(metadata: TestMetadata, value: str, test_file: Path) -> No
             f"THEN_CLEAN_CACHE takes {' or '.join(CLEAN_CACHE_FORMS)}, not {value!r}")
 
 
+def _output_path(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    path = _unquote(value).strip()
+    if not path or Path(path).is_absolute() or ".." in Path(path).parts:
+        metadata.directive_errors.append(
+            f"OUTPUT_PATH takes a relative path inside the fixture's copy, not {value!r}")
+    else:
+        metadata.output_path = path
+
+
+def _release_lib_flag(metadata: TestMetadata, test_file: Path) -> None:
+    """`--lib` joins the flags beside OUTPUT_PATH, and is refused without it."""
+    if metadata.held_lib_flag is None:
+        return
+    if metadata.output_path is not None:
+        metadata.compiler_flags.insert(metadata.held_lib_flag, LIB_FLAG)
+    else:
+        _warn(f"{LIB_FLAG} is the runner's to spell in {test_file} without OUTPUT_PATH; "
+              f"COMPILER_FLAGS ignored it")
+
+
 # Every directive that takes a value (`NAME: value`), and its handler. ONE table, so a
 # directive the parser knows is a row here and nowhere else.
 VALUED_DIRECTIVES = {
@@ -338,6 +371,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_PATH_EXISTS_BEFORE_CLEAN': _extend('expect_paths_exist_before_clean',
                                                lambda v: _split(_unquote(v))),
     'THEN_CLEAN_CACHE': _then_clean_cache,
+    'OUTPUT_PATH': _output_path,
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.
@@ -374,6 +408,8 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     except Exception as e:
         # A fixture whose directives cannot be read FAILS; it never passes unchecked.
         metadata.directive_errors.append(f"the directives cannot be read: {e}")
+
+    _release_lib_flag(metadata, test_file)
 
     _apply_category_defaults(test_file, metadata)
 
