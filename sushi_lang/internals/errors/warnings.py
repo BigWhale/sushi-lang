@@ -47,6 +47,10 @@ _add(ErrorMessage("CW1002", Severity.WARNING,
     "declared variable '{name}' already exists in an outer scope", Category.SCOPE,
     "A variable was declared with 'let' outside of this scope."))
 
+_add(ErrorMessage("CW1004", Severity.WARNING,
+    "private {kind} '{name}' is never used in this unit", Category.SCOPE,
+    "Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every `extend` block (an extension method and a perk implementation alike, because a call reaches it through a receiver and not through a name), the `unsafe external` blocks, and `fn main()`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI_STDLIB_DEAD_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API."))
+
 # Unit/module warnings
 _add(ErrorMessage("CW3001", Severity.WARNING,
     "duplicate use statement for unit '{unit}'", Category.UNIT,
@@ -145,6 +149,10 @@ _add(ErrorMessage("CW5001", Severity.WARNING,
 _add(ErrorMessage("CW3004", Severity.WARNING,
     "'{alias}' binds an empty namespace", Category.UNIT,
     "The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`."))
+
+_add(ErrorMessage("CW3006", Severity.WARNING,
+    "'{import_}' brings nothing this unit names", Category.UNIT,
+    "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule CE3015 reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))
 
 _add(ErrorMessage("CW3005", Severity.WARNING,
     "`public use` of '{origin}' re-exports nothing", Category.UNIT,

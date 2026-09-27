@@ -1,0 +1,19 @@
+# Test: the unused lints are off by default. The same dead declarations and unused
+# imports as test_warn_unused_declarations_and_imports.sushi, with no COMPILER_FLAGS.
+# EXPECT_STDERR_EMPTY
+use <time>
+use "helpers/unused_shapes" as sh
+
+const i32 UNREAD = 42
+
+struct Crate:
+    i32 weight
+
+fn helper() i32:
+    return Result.Ok(1)
+
+fn lonely() i32:
+    return Result.Ok(helper()??)
+
+fn main() i32:
+    return Result.Ok(0)

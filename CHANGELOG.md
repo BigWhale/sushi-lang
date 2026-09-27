@@ -409,6 +409,17 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Tooling
+- **`--warn-unused` reports dead code** (#959). Two warnings, off by default: CW1004, a private
+  top-level declaration nothing in its unit reaches (the roots are every `public` declaration,
+  every `extend` block and perk implementation, the `unsafe external` blocks and `main`), and
+  CW3006, a `use` line whose unit names nothing it brings (a `public use` is never reported). A new
+  semantic pass, `unused`, runs after `docs`. An array size written as a constant keeps that
+  constant alive: the array type records the written name (`ArrayType.size_name`). The internal
+  variable `SUSHI_STDLIB_DEAD_GATE=1` makes the lint check the bundled stdlib units, and a runner
+  step compiles the all-modules program and each `toolchain/src/` program with both and fails on
+  a finding; today there are none.
+
+### Tooling
 - **Cyclomatic complexity is gated, as a ratchet.** Ruff selected `F`, `E`, `W` and `B`, so
   no complexity rule ran and the worst functions in the tree were invisible to CI. `C901`
   is on with the threshold at the worst function in the lint scope,

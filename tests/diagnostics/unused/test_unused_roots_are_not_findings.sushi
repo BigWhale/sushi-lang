@@ -1,0 +1,45 @@
+# Test: what --warn-unused never reports. A private function reached only from an
+# `extend` block; a private name used only by a public one; a constant used only as an
+# array size; a generic reached from main; a `public use`, which re-exports and is a
+# root (here and in the bridge unit); an import used through what a `public use` in it
+# hands on, and through an extension method; an import used only behind its alias;
+# and <collections/strings>, used only through a string method.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_STDERR_EMPTY
+# EXPECT_STDOUT_EXACT: "6\n3\n8\n6\n5\ntrue\n"
+use <collections/strings>
+use <math> as m
+use "helpers/unused_bridge"
+public use <time>
+
+const i32 WIDTH = 3
+
+struct Counter:
+    i32 n
+
+fn triple(i32 x) i32:
+    return Result.Ok(x * 3)
+
+extend Counter tripled() i32:
+    return triple(self.n).realise(0)
+
+fn secret() i32:
+    return Result.Ok(8)
+
+public fn exposed() i32:
+    return Result.Ok(secret()??)
+
+fn same@(T)(nom T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let Counter c = Counter(2)
+    println(c.tripled())
+    let i32[WIDTH] cells = [1, 2, 3]
+    println(cells[2])
+    println(exposed().realise(0))
+    let i32 side = square_of(3).realise(Square(0)).side
+    println(same(nom side).realise(0).doubled())
+    println(m.abs(-5))
+    println("abc".starts_with("a"))
+    return Result.Ok(0)

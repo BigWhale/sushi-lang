@@ -124,6 +124,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Warn about a declaration, a parameter, a return value, an error arm or a "
              "unit with no documentation (CW7002-CW7006)",
     )
+    build.add_argument(
+        "--warn-unused",
+        action="store_true",
+        help="Warn about a private declaration nothing in its unit reaches (CW1004) and "
+             "an import whose unit names nothing it brings (CW3006)",
+    )
     library.add_argument(
         "--lib",
         action="store_true",

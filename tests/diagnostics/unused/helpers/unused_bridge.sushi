@@ -1,0 +1,2 @@
+# A unit that re-exports the shapes and names nothing of them itself.
+public use "helpers/unused_shapes"
