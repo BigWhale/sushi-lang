@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import itertools
-from typing import Dict, Iterator, List
+from typing import Dict, Iterator, List, Optional, Tuple, cast
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
@@ -13,6 +13,30 @@ from sushi_lang.semantics.hidden_names import expand_copy_local_name
 
 
 _COPY_IDS = itertools.count(1)
+
+
+@dataclasses.dataclass(eq=False)
+class WrittenLet:
+    """One `let` as it is written in an `expand` body.
+
+    Every copy of that `let`, at every depth of nesting, points to one record, so a
+    diagnostic about the declaration is told once and with the written name (#1019).
+    The record is compared by identity.
+    """
+    name: str
+
+
+# A copy `Let` -> its written declaration. The key is the copy's `id`; the value holds
+# the copy, so the key is never used again for a different object.
+_WRITTEN: Dict[int, Tuple[Let, WrittenLet]] = {}
+
+
+def written_let(stmt: Let) -> Optional[WrittenLet]:
+    """The written declaration of a `let` that the unroll copied, or None."""
+    entry = _WRITTEN.get(id(stmt))
+    if entry is None or entry[0] is not stmt:
+        return None
+    return entry[1]
 
 
 def _is_frozen_dataclass(obj) -> bool:
@@ -101,8 +125,14 @@ def _unroll_expand(
     fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []
+    written = [(let, written_let(let) or WrittenLet(let.name))
+               for let in _lets_in(node.body, _seen=set())]
     for elem_name in fanout:
-        body_copy = copy.deepcopy(node.body)
+        memo: Dict[int, object] = {}
+        body_copy = copy.deepcopy(node.body, memo)
+        for let, origin in written:
+            let_copy = cast(Let, memo[id(let)])
+            _WRITTEN[id(let_copy)] = (let_copy, origin)
         renamed = _rename_block_statements(
             body_copy.statements, node.var, elem_name, _seen=set()
         )
@@ -118,6 +148,19 @@ def _unroll_expand(
             stmt.expand_copies = (copy_id, *stmt.expand_copies)
         out.extend(renamed)
     return out
+
+
+def _lets_in(obj, _seen) -> List[Let]:
+    """Every `Let` in ``obj``, at every depth, in written order."""
+    if isinstance(obj, (list, tuple)):
+        return [let for item in obj for let in _lets_in(item, _seen)]
+    if not dataclasses.is_dataclass(obj) or _is_frozen_dataclass(obj) or id(obj) in _seen:
+        return []
+    _seen.add(id(obj))
+    found = [obj] if isinstance(obj, Let) else []
+    for f in dataclasses.fields(obj):
+        found.extend(_lets_in(getattr(obj, f.name), _seen))
+    return found
 
 
 def _rename_copy_locals(statements: List[Stmt], copy_number: int) -> List[Stmt]:

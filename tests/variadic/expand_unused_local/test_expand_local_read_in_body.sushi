@@ -1,0 +1,21 @@
+# A `let` in an `expand` body that the body reads is used in every copy, so no
+# CW1001 is reported for it (#1019).
+# EXPECT_STDERR_EMPTY
+# EXPECT_STDOUT_EXACT: "int\n1\nint\n1\n"
+perk Display:
+    fn display() string
+
+extend i32 with Display:
+    fn display() string:
+        return "int"
+
+fn f@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        let i32 u = 1
+        println(a.display())
+        println(u)
+    return Result.Ok(~)
+
+fn main() i32:
+    f(1, 2)
+    return Result.Ok(0)
