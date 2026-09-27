@@ -1,0 +1,21 @@
+# A store through a `poke` pattern binding is a use of the binding. The owner `s` is
+# rebound to another variant while `r` still lives, so the store `r := ...` is CE2412,
+# the same code a read of `r` gets. Without the check the string lands in the storage
+# of the `Lit` payload.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+enum Shade:
+    Dim(string)
+    Lit(i32)
+
+fn main() i32:
+    let Shade s = Shade.Dim("abc".clone())
+    match s:
+        Shade.Dim(poke r) ->
+            s := Shade.Lit(2)
+            r := "zz".clone()
+        Shade.Lit(_) -> println("lit")
+    match s:
+        Shade.Dim(t) -> println(t)
+        Shade.Lit(n) -> println(n)
+    return Result.Ok(0)

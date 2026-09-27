@@ -1,0 +1,11 @@
+# An indexed write through a `let poke` binding is a use of the binding. The owner `a`
+# changes while `w` still lives, so `w[0] := 7` is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let poke i32[] w = a
+    a := from([4, 5])
+    w[0] := 7
+    println(a.len())
+    return Result.Ok(0)

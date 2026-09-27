@@ -1,0 +1,21 @@
+# A store through a `poke` binding BEFORE the owner changes is legal: the binding is
+# not used after the change, so the freeze is not broken.
+# EXPECT_STDOUT_EXACT: "zz\n2\n"
+# EXPECT_NO_LEAKS
+
+enum Shade:
+    Dim(string)
+    Lit(i32)
+
+fn main() i32:
+    let Shade s = Shade.Dim("abc".clone())
+    match s:
+        Shade.Dim(poke r) ->
+            r := "zz".clone()
+            println(r)
+            s := Shade.Lit(2)
+        Shade.Lit(_) -> println("lit")
+    match s:
+        Shade.Dim(t) -> println(t)
+        Shade.Lit(n) -> println(n)
+    return Result.Ok(0)

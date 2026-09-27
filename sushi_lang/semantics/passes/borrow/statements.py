@@ -48,7 +48,7 @@ from .consume import (
     reconcile_closure_bind,
     source_provenance,
 )
-from .expressions import check_expr
+from .expressions import check_expr, reject_a_use_after_the_change
 from .flow import (
     FlowFacts,
     LoopFlow,
@@ -171,8 +171,12 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
             # storage cannot be rebound, a name with storage of its own can. A `poke`
             # reference is the middle case and stays legal -- the store goes through the
             # pointer, which is what the mode is for.
-            reject_readonly_write(checker, target.id, stmt.loc, "rebind the name",
-                                  rebind=True)
+            refused = reject_readonly_write(checker, target.id, stmt.loc,
+                                            "rebind the name", rebind=True)
+            # The store goes through the pointer, so it is a USE of the reference: after
+            # a change of its owner it writes into storage the owner no longer holds.
+            if not refused and isinstance(state.var_type, ReferenceType):
+                reject_a_use_after_the_change(checker, target.id, target.loc)
             # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag,
             # never set it on a value that owns heap.
             state.owns_no_heap = binds_a_bare_literal_string(state.var_type, stmt.value)
