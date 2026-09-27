@@ -409,6 +409,43 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A `peek`/`poke` pattern binding takes a place** (#788). `match b.s: Shade.Dim(poke r)` over a
+  field or an element of a local or a constant was CE2404 "no stable address", and `let poke`
+  took the same place. A reference pattern binding now takes the places `let peek` / `let poke`
+  take: the root is frozen for the arm (CE2412), one `poke` at a time (CE2403, CE2407 -- which a
+  bare-name pattern binding did not check either), a constant root refuses only `poke` (CE2400).
+  CE2404 stays for a scrutinee that is not a place.
+- **A constant or `var` behind an alias is never moved out of** (#1016). `return Result.Ok(c.GREETING)`
+  was the internal error CE0129, and `let string s = c.GREETING` compiled; both are CE2436, as the
+  flat name is.
+- **Inside an `expand` body a diagnostic names the written local** (#1022): a borrow error printed the
+  copy name (`#s_x0`) once per copy, and a shadowing `let` gave no CW1002.
+- **The CE2411 help offers `.share()` only for a type that has it** (#1023): it offered `l.share()`
+  for a `List@(File)`, which is CE2008.
+- **An output that cannot be written is a coded error** (#1010). An `-o` that names a directory was
+  CE3008 from the linker, and an unwritable output, `.slib`, object or cache directory was CE0000.
+  All are the new **CE3020** ("cannot write '<path>': <reason>"), checked in the one home of the
+  output path before code generation; CE3500 moved into the same check.
+- **A library's warnings stay with its author** (#1007). A consumer showed every lint of a binary
+  template or a source library and exited 1. A warning located in a library unit is not reported
+  and does not change the exit status; errors still show; the stdlib gates still see the stdlib.
+  There is no template check at `--lib`: a template is checked when code instantiates it.
+- **A generic function value is legal in every position its type is solved** (#1021): an argument, a
+  rebind, a `return`, a field, a payload, a `.realise()` default -- it was legal only in a `let`, and
+  elsewhere only when another call happened to make the instance.
+- **A nested generic `.realise()` chain as an argument no longer crashes** (#1028): the solver was
+  handed a table object where it needs the name dict (CE0000).
+
+### Tooling
+- **nori errors carry codes** (#1000). A new `NExxxx` family (40 codes) in the one registry,
+  rendered through the compiler's reporter on stderr. An operating-system error or a malformed
+  TOML file from the user's environment was "a bug in nori" with exit 2; it is NE4001 / NE1002
+  with exit 1. `nori search` prints its table separator with colour off too (#999).
+
+### Testing
+- **`BUILD_LIB_BINARY: x.sushi`** builds a fixture's own library as a binary `.slib`.
+
+### Fixed
 - **A generic enum constructor with no declared type takes its type from the payload** (#1005).
   `match Maybe.Some(1):`, `Maybe.Some(1).is_some()`, `Maybe.Some(5)??`, a `foreach` over one, an
   interpolation hole and a generic argument reached the backend with no instance and stopped
