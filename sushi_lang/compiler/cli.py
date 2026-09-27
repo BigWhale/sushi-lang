@@ -747,7 +747,7 @@ def _run(session: Session) -> int:
         else:
             print("No cache found.")
         if not args.source:
-            return 0
+            return 1 if session.reporter.has_warnings else 0
 
     if args.lib and args.out and not args.out.endswith('.slib'):
         er.emit(session.reporter, er.ERR.CE3500, None, path=args.out)
@@ -766,7 +766,7 @@ def _run(session: Session) -> int:
         print()
 
         if not args.source:
-            return 0
+            return 1 if session.reporter.has_warnings else 0
 
     if not args.source:
         er.emit(session.reporter, er.ERR.CE3018, None, filename=COMMAND_LINE)

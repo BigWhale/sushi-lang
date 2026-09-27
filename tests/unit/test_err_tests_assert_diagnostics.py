@@ -12,7 +12,7 @@ if str(TESTS_ROOT) not in sys.path:
 from test_metadata import corpus_files, corpus_text  # noqa: E402
 EXCLUDED_DIRS = {"helpers", "bin"}
 
-_DIRECTIVE = re.compile(r"^\s*#\s*(EXPECT_ERROR_CODE|EXPECT_STDERR_CONTAINS)\s*:", re.M)
+_DIRECTIVE = re.compile(r"^\s*#\s*(EXPECT_ERROR_CODE|EXPECT_ERROR_CODES_EXACT|EXPECT_STDERR_CONTAINS)\s*:", re.M)
 
 
 def _scan() -> list[str]:
