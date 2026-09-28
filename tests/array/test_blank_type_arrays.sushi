@@ -1,7 +1,12 @@
+# A blank-typed `new()` takes the element type of its `let`, and push and destroy work on it.
+# EXPECT_NO_LEAKS
+
 fn test_push() ~:
   let i32[] arr = new()
   arr.push(42)
   arr.push(100)
+  if (arr.len() != 2 or arr[1] != 100):
+    return Result.Err(StdError.Error)
   arr.destroy()
   return Result.Ok(~)
 
@@ -11,6 +16,8 @@ fn test_destroy() ~:
   return Result.Ok(~)
 
 fn main() i32:
-  test_push()
-  test_destroy()
+  if (not test_push().is_ok()):
+    return Result.Ok(1)
+  if (not test_destroy().is_ok()):
+    return Result.Ok(2)
   return Result.Ok(0)

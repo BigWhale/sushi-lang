@@ -1,4 +1,5 @@
 # FFI: a `because` clause silences CW5001; the block compiles clean (exit 0).
+# A compile-only claim: the point is the absence of CW5001, and a warning exits 1. The run asserts exit 0 and nothing more.
 unsafe external "C" as libc because "bootstrap: call libc for the self-hosted backend":
     fn strlen(string s) i64 = "strlen"
 

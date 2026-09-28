@@ -17,6 +17,8 @@ extend Point with Displayable:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    p.describe()
-    p.display()
+    if (p.describe() != "point"):
+        return Result.Ok(1)
+    if (p.display() != "point"):
+        return Result.Ok(2)
     return Result.Ok(0)

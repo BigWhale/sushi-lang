@@ -5,7 +5,7 @@
 # if the rule came back somewhere that does not cover the aliasing read. The four pushes
 # grow a 2-element buffer past its capacity, so the read after them is a read of the
 # reallocated storage -- the exact operation the aliased version got wrong (it printed 2).
-# EXPECT_STDOUT_CONTAINS: 33
+# EXPECT_STDOUT_EXACT: "33\n"
 # EXPECT_NO_LEAKS
 
 struct Holder:

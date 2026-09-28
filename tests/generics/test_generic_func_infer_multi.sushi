@@ -1,17 +1,15 @@
 # Test: Generic function with multiple type parameters
-# Phase 2: Verifies generic function definition parsing with two type params
-#
-# This test defines a generic swap function that takes two values
-# of different types (T and U). The function definition is collected
-# in the collect pass and added to the GenericFunctionTable.
-#
-# Note: Actual calls to generic functions will work in Phase 3
-# when monomorphization is implemented.
+# The call infers T and U, two different types, from its two arguments.
 
-fn swap@(T, U)(T a, U b) ~:
-    return Result.Ok(~)
+struct Pair@(A, B):
+    A first
+    B second
+
+fn swap@(T, U)(T a, U b) Pair@(U, T):
+    return Result.Ok(Pair(b, a))
 
 fn main() i32:
-    # Phase 2: Generic function defined but not yet callable
-    # Phase 3 will add monomorphization to generate concrete versions
+    let Pair@(bool, i32) p = swap(42, true).realise(Pair(false, 0))
+    if (p.first != true or p.second != 42):
+        return Result.Ok(1)
     return Result.Ok(0)

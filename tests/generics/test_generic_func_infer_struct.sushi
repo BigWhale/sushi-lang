@@ -1,12 +1,5 @@
 # Test: Generic function with struct type parameter
-# Phase 2: Verifies generic function definition parsing with struct types
-#
-# This test defines a generic identity function that can accept
-# user-defined struct types. The function should work with Point
-# once Phase 3 monomorphization is implemented.
-#
-# Note: Actual calls to generic functions will work in Phase 3
-# when monomorphization is implemented.
+# The call infers T = Point from its argument, and the instance returns the value it was given.
 
 struct Point:
     i32 x
@@ -16,6 +9,7 @@ fn identity@(T)(T value) T:
     return Result.Ok(value)
 
 fn main() i32:
-    # Phase 2: Generic function defined but not yet callable
-    # Phase 3 will add monomorphization to generate concrete versions
+    let Point p = identity(Point(3, 4)).realise(Point(0, 0))
+    if (p.x != 3 or p.y != 4):
+        return Result.Ok(1)
     return Result.Ok(0)
