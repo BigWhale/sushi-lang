@@ -1,9 +1,9 @@
 # A library-shaped unit, and deliberately not a test. It declares no `main`, so
 # `tests/run_tests.py` does not collect it and the doc-example collector CAN import it
 # (documentation.md section 10, R18 and R21). One declaration per fence attribute:
-# `tests/unit/test_doc_examples_runner.py` sweeps this file and asserts PASS, PASS,
-# SKIP, EXPECTED-ERROR, and `python tests/docs_sweep.py --only examples` prints the
-# same four outcomes.
+# `tests/unit/test_doc_examples_runner.py` sweeps this file and asserts four outcomes:
+# pass, pass, skip, expected-error. `python tests/docs_sweep.py --only examples` prints
+# the same four.
 
 ##:
 Doubles a number.

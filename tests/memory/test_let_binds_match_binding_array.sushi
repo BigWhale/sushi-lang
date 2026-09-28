@@ -1,7 +1,7 @@
 # `let` BINDS. It does not take ownership (#242).
 #
-# `p` is a borrowed `match` payload binding of type `i32[]`. `let i32[] q = p` therefore
-# BINDS: `q` names the same buffer, the enum keeps owning it, and neither `q` nor `p` frees
+# `p` is a borrowed `match` payload binding of type `i32[]`. `let i32[] q = p`
+# therefore BINDS: `q` names the same buffer, the enum keeps owning it, and neither `q` nor `p` frees
 # it. Reading through the binding is free, which is what the length print asserts.
 #
 # This file asserted CE2411 until #242, because `let` was one of the eleven consuming uses.

@@ -1,4 +1,4 @@
-# RAII for a self-referential `List@(Tree)` (#257). Every node's List buffer is freed
+# The RAII for a self-referential `List@(Tree)` (#257). Every node's List buffer is freed
 # exactly once, at every level of the tree.
 #
 # This is the gate that matters for defect B, whose real failure mode is not a crash. The

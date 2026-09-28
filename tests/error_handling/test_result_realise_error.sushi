@@ -2,7 +2,6 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test: Using Result@(T).realise() with error case where T is a user-defined generic
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Default: Left(99)
 
 enum Either@(T, U):
     Left(T)

@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Point created successfully\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Point created successfully
 
 # Test that generic types (Maybe@(T), Result@(T)) work as struct field types
 

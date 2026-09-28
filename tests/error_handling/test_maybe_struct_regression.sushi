@@ -4,12 +4,6 @@
 # This was claimed not to work - this test proves it does
 #
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: test_struct_in_maybe: 1
-# EXPECTED_OUTPUT: test_struct_in_control_flow: 1
-# EXPECTED_OUTPUT: test_nested_struct_in_maybe: 1
-# EXPECTED_OUTPUT: test_struct_pattern_matching: 1
-# EXPECTED_OUTPUT: test_multiple_maybe_structs: 1
-# EXPECTED_OUTPUT: All tests passed: 5
 
 # Simple struct
 struct Point:

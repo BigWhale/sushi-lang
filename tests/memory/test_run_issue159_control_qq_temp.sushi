@@ -1,4 +1,4 @@
-# ANTI-DOUBLE-FREE CONTROL for #159 -- green before the fix, and it MUST stay green after it.
+# The anti-double-free CONTROL for #159 -- green before the fix, and it MUST stay green after it.
 # `??` MOVES the payload out of the temporary to a new owner, which frees it exactly once. The
 # temporary is clean today purely by OMISSION (it is invisible to every cleanup registry). A fix that
 # blindly destroys every temporary would free this payload a second time. This cell is the tripwire.

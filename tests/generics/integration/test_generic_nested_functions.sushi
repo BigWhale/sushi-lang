@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: 42
 
 # Test functions returning nested generics
 # "Forty-two!" yelled Loonquawl. "Is that all you've got to show for seven and a half million years' work?"

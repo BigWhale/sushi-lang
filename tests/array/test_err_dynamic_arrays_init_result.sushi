@@ -1,4 +1,4 @@
-# ERROR TEST: CE2505
+# Error test: CE2505
 # EXPECT_ERROR_CODE: CE2505
 # Test that directly assigning Result@(T[]) to T[] without unwrapping is an error
 

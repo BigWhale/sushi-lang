@@ -1,9 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Created pair successfully\nFirst value: 42\nSecond value: Thanks for all the fish.\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Created pair successfully
-# EXPECTED_OUTPUT: First value: 42
-# EXPECTED_OUTPUT: Second value: Thanks for all the fish.
 
 # Test user-defined generic enum (simplified version that works)
 

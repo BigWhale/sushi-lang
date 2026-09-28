@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Value: 42\n"
 # Test: Simple pattern binding to reproduce Issue #8
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Value: 42
 
 enum Either@(T, U):
     Left(T)

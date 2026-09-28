@@ -1,5 +1,5 @@
-# The point of implementing a perk on a generic target: the instantiation satisfies the
-# CONTRACT, so a function that asks for the perk takes it.
+# The point of implementing a perk on a generic target: the instantiation satisfies
+# the CONTRACT, so a function that asks for the perk takes it.
 # TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "boxed 42\n"

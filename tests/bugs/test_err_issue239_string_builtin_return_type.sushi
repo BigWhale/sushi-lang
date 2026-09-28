@@ -1,6 +1,6 @@
 # Issue #239: `string.to_str()` / `string.hash()` stayed un-inferred even with a warm
-# registry, for a second and independent reason. METHOD_TYPE_REGISTRY.infer_method_type is
-# FIRST-MATCH-WINS, and check_string_methods is registered ahead of check_primitive_methods
+# registry, for a second and independent reason. METHOD_TYPE_REGISTRY.infer_method_type
+# is FIRST-MATCH-WINS, and check_string_methods is registered ahead of check_primitive_methods
 # and matched on the receiver type ALONE. So it claimed every method name on a string,
 # including ones its METHOD_SPECS has no entry for -- its inferrer then returned None and
 # the chain stopped there. (_PRIMITIVE_INFER_TYPES also excluded STRING outright.)

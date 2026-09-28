@@ -1,10 +1,5 @@
 # EXPECT_STDOUT_EXACT: "ASCII text: Hello\nMulti-byte char: 世\nEmoji: 🌍\nMixed: Hello世界🌍\nBytes: 20\nPrintable ASCII count: 95\n"
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: ASCII text: Hello
-# EXPECTED_OUTPUT: Multi-byte char: 世
-# EXPECTED_OUTPUT: Emoji: 🌍
-# EXPECTED_OUTPUT: Mixed: Hello世界🌍
-# EXPECTED_OUTPUT: Bytes: 20
 # Test UTF-8 encoding and multi-byte characters
 use <collections/strings>
 

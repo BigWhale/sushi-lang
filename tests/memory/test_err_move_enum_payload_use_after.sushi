@@ -2,8 +2,8 @@
 # `from([...])` element (the `DynamicArrayFrom` arm of `borrow/expressions.py`) and an
 # array-literal element. The
 # backend already moved it (move_owning_arg_into_container), but the borrow checker did not
-# mark it, so this compiled clean and read through a stale descriptor -- printing plausible
-# WRONG data (a[0] == 2, not 1) with exit 0 once the enum's scope had freed the buffer.
+# mark it, so this compiled clean and read through a stale descriptor -- printing
+# plausible WRONG data (a[0] == 2, not 1) with exit 0 once the enum's scope had freed the buffer.
 # EXPECT_ERROR_CODE: CE2405
 # EXPECT_STDERR_CONTAINS: was moved here
 

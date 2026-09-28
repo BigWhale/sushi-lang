@@ -1,6 +1,6 @@
 # Two spellings of ONE nominal type must be the same type (#240).
 #
-# NOTHING here is recursive -- this is the plain, non-recursive half of the same
+# Nothing here is recursive -- this is the plain, non-recursive half of the same
 # bug, and it failed on its own with:
 #
 #   error [CE2002]: type mismatch: cannot assign Own@(Holder) to Own@(Holder)

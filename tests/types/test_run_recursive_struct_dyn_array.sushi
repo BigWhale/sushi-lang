@@ -8,8 +8,8 @@
 #
 # Widened from declaration-only to CONSTRUCTION by #257. The dynamic-array shape
 # failed differently from the List one -- `TypeError: Can only insert
-# {i32, i32, {}*} at [1] in {i32, {i32, i32, {}*}}` -- because the struct's own
-# LLVM type had captured the empty `{}` placeholder while a freshly computed
+# {i32, i32, {}*} at [1] in {i32, {i32, i32, {}*}}` -- because the struct's
+# own LLVM type had captured the empty `{}` placeholder while a freshly computed
 # `Node[]` had the resolved element, so the two disagreed at the constructor.
 # EXPECT_STDOUT_EXACT: "v=1 n=0\n"
 # EXPECT_RUNTIME_EXIT: 0

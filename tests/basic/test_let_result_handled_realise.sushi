@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "x = 42\n"
 # TEST_TYPE: runtime
-# TEST_EXPECTED_OUTPUT: x = 42
 # Success test for a handled Result@(T) with .realise()
 # Should pass: using .realise() to handle Result@(T)
 

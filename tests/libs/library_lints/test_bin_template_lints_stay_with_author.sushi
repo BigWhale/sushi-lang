@@ -4,7 +4,7 @@
 # exits 0 (#1007).
 # BUILD_LIB_BINARY: lint_bin_tpl_lib.sushi
 # EXPECT_STDOUT_EXACT: "3\n"
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 use <lib/lint_bin_tpl_lib>
 
 fn main() i32:

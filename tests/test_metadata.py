@@ -391,7 +391,38 @@ FLAG_DIRECTIVES = {
     'RUN_IN_FIXTURE_DIR': 'run_in_fixture_dir',
 }
 
-_DIRECTIVE_NAME = re.compile(r"[A-Z_]+")
+# A header line that starts with one of these names IS a directive: the parser reads it,
+# or the fixture fails. A line that starts with a diagnostic code is prose.
+_DIRECTIVE_NAME = re.compile(r"[A-Z][A-Z0-9_]{3,}\b")
+_CODE_PREFIX = re.compile(r"(?:CE|CW|RE|NE)\d{4}\b")
+
+
+def _read_directive(metadata: TestMetadata, directive: str, number: int,
+                    test_file: Path) -> None:
+    match = _DIRECTIVE_NAME.match(directive)
+    if match is None or _CODE_PREFIX.match(directive):
+        return
+    name, rest = match.group(), directive[match.end():].lstrip()
+    where = f"line {number} of the directive block"
+    if name in FLAG_DIRECTIVES:
+        flag = _flag_value(rest)
+        if flag is None:
+            metadata.directive_errors.append(
+                f"{where}: {name} is a flag; write `{name}` or `{name}: true`, "
+                f"not {directive!r}")
+        else:
+            setattr(metadata, FLAG_DIRECTIVES[name], flag)
+    elif name in VALUED_DIRECTIVES:
+        if rest.startswith(':'):
+            VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
+        else:
+            metadata.directive_errors.append(
+                f"{where}: {name} takes a value; write `{name}: <value>`, "
+                f"not {directive!r}")
+    else:
+        metadata.directive_errors.append(
+            f"{where}: {name} is not a directive the runner knows; reword the line "
+            f"if it is prose")
 
 
 def parse_test_metadata(test_file: Path) -> TestMetadata:
@@ -399,21 +430,10 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     metadata = TestMetadata()
 
     try:
-        for line in directive_block(test_file):
+        for number, line in enumerate(directive_block(test_file), start=1):
             line = line.strip()
-            if not line.startswith('#'):
-                continue
-            directive = line[1:].strip()
-            match = _DIRECTIVE_NAME.match(directive)
-            if match is None:
-                continue
-            name, rest = match.group(), directive[match.end():]
-            if name in FLAG_DIRECTIVES:
-                flag = _flag_value(rest)
-                if flag is not None:
-                    setattr(metadata, FLAG_DIRECTIVES[name], flag)
-            elif name in VALUED_DIRECTIVES and rest.startswith(':'):
-                VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
+            if line.startswith('#'):
+                _read_directive(metadata, line[1:].strip(), number, test_file)
 
     except Exception as e:
         # A fixture whose directives cannot be read FAILS; it never passes unchecked.

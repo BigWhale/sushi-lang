@@ -1,5 +1,5 @@
-# Issue #277: re-wrapping an enum-payload match binding into a constructor used to
-# COMPILE and then double-free the payload (exit 133) -- the constructor sink moved the
+# Issue #277: re-wrapping an enum-payload match binding into a constructor used
+# to COMPILE and then double-free the payload (exit 133) -- the constructor sink moved the
 # binding out from under the arm's copy. On the ownership-refactor branch a match
 # binding is a BORROW and a constructor field is a consuming position, so the shape is
 # rejected at compile time with CE2411; the escape is `Shape.Poly(p.clone())`, pinned by

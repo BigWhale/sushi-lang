@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
 # TEST_TYPE: runtime
-# EXPECTED_OUTPUT: 42
 
 # Enhanced runtime test for nested generics
 # Tests Result@(Maybe@(T)) in a realistic scenario

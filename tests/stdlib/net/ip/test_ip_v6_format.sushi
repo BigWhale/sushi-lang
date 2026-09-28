@@ -1,5 +1,5 @@
-# RFC 5952 in full. Lowercase hex, no leading zero in a group, `::` over the
-# LONGEST run of zero groups, the LEFTMOST run when two runs tie, and never
+# RFC 5952 in full. Lowercase hex, no leading zero in a group, `::` over
+# the LONGEST run of zero groups, the LEFTMOST run when two runs tie, and never
 # over a run of one. An IPv4-mapped address prints in the mixed form.
 # EXPECT_STDOUT_EXACT: "::1\n::\nfe80::1\n2001:db8::1:0:0:1\n2001:db8:0:1:1:1:1:1\n::ffff:192.168.0.1\n2001:db8:85a3::8a2e:370:7334\n"
 # EXPECT_NO_LEAKS: true
