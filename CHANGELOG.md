@@ -429,6 +429,15 @@ All notable changes to Sushi Lang will be documented in this file.
   `tests/<area>/<feature>/`; `tests/bugs/` is gone. A move changed the path only: a dump of every
   fixture's parsed directives and body hash is equal before and after (3473 fixtures).
 
+### Testing
+- **The test runner compiles through a fork-server** (#1059). One server process imports the
+  compiler and builds its grammar once, then forks one child per compile; each child runs the real
+  CLI entry with the fixture's arguments, directory and environment. `--fresh-processes` keeps a
+  fresh `sushic` per compile, and the `test-linux` CI job runs that way. The rebuild and
+  `STDLIB_MODULE` fixtures always get a fresh process. A runner test compiles a fixed sample in both
+  modes and requires the same exit code, stdout, stderr and leak result. An error fixture's compile
+  fell from about 270 ms to 34 ms.
+
 ### Fixed
 - **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
   `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of
