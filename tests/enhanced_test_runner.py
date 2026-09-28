@@ -717,9 +717,12 @@ class TestRunner:
         env = {**os.environ, "NO_COLOR": "1"}
         cwd = self.project_root
         source = str(test_file)
-        cache_flags: List[str] = []
+        # A fixture with no copy of its own shares the run's cache: the compiler's
+        # default puts it beside the source, in the tree.
+        cache_flags: List[str] = ["--cache-dir", str(Path(self.temp_dir) / "cache")]
         output = str(binary_path)
         if workspace is not None:
+            cache_flags = []
             source = str(workspace.source)
             if metadata.run_in_fixture_dir:
                 cwd, source = workspace.root, workspace.source.name

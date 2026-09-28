@@ -7,7 +7,6 @@ import re
 import subprocess
 import sys
 import os
-import shutil
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -905,15 +904,6 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
     return result
 
 
-def purge_unit_caches(project_root: Path, verbose: bool = False) -> None:
-    """Delete every tests/**/__sushi_cache__ before a run."""
-    for cache in (project_root / "tests").rglob("__sushi_cache__"):
-        if cache.is_dir():
-            if verbose:
-                print(f"  Removing stale cache: {cache}")
-            shutil.rmtree(cache, ignore_errors=True)
-
-
 def leakcheck_platform() -> Optional[str]:
     """The interposer's platform key, or None where leak checking is not supported.
 
@@ -1053,15 +1043,12 @@ def main():
     runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
 
     What remains here is what both halves always shared -- the stdlib and helper builds,
-    the leak interposer, the cache purge and the spelling gate -- plus the argument
+    the leak interposer and the spelling gate -- plus the argument
     parsing. `enhanced_test_runner` runs the tests.
     """
     args = build_parser().parse_args()
 
     arm_spelling_gate()
-
-    # A warm cache can outlive a codegen change (see purge_unit_caches).
-    purge_unit_caches(Path(__file__).parent.parent, verbose=args.verbose)
 
     import enhanced_test_runner
     sys.argv = [sys.argv[0]]
