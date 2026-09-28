@@ -1,0 +1,10 @@
+# The library build starts in the run's directory, and the nori.toml beside the library
+# source is not in that directory, so --lib does not read it: the build uses the
+# --lib-version of the runner. The file is not TOML, so a read of it refuses the build (#1066).
+# BUILD_LIB: towel.sushi
+# EXPECT_STDOUT_EXACT: "42\n"
+use <lib/towel>
+
+fn main() i32:
+    println(towel().realise(0))
+    return Result.Ok(0)

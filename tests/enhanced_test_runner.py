@@ -684,8 +684,9 @@ class TestRunner:
         SUSHI_LIB_PATH; a BUILD_LIB_AT library goes where the fixture says, inside the copy.
         BUILD_LIB_BINARY builds `--lib-kind binary`, the others `--lib-kind source`. Each
         build has a cache outside the copy, so a library build leaves nothing in it but the
-        `.slib`. The version is 0.0.0, unless a `nori.toml` beside the source states one:
-        the compiler refuses a second version (CE3505).
+        `.slib`. The version is 0.0.0, unless a `nori.toml` in the directory the build
+        starts in states one: the compiler reads that file alone and refuses a second
+        version (CE3505).
         """
         workspace.libs.mkdir(parents=True, exist_ok=True)
         builds = [("BUILD_LIB", "source", source, workspace.libs / f"{Path(source).stem}.slib")
@@ -697,7 +698,7 @@ class TestRunner:
                    for source, target in metadata.build_libs_at]
         for directive, kind, source, target in builds:
             target.parent.mkdir(parents=True, exist_ok=True)
-            stated = ((workspace.root / source).parent / "nori.toml").is_file()
+            stated = (workspace.home / "nori.toml").is_file()
             version = [] if stated else ["--lib-version", "0.0.0"]
             done = self._sushic(
                 ["--lib", *version, "--lib-kind", kind,

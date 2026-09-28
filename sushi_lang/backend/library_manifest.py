@@ -64,34 +64,36 @@ def _requires_compiler(compiler_version: str) -> str:
         return ""
 
 
-def resolve_library_version(source_dir: Path, explicit: str | None,
-                            library_name: str) -> str:
+def resolve_library_version(explicit: str | None, library_name: str) -> str:
     """The library's own version: nori.toml when present, else --lib-version (CE3505).
 
-    A package IS one version, so a nori.toml beside the sources is the source of truth.
+    The nori.toml is the one in the working directory, never one in a parent directory
+    or beside the sources. A package IS one version, so that file is the source of truth.
     An explicit flag that contradicts it is rejected rather than silently preferred --
     either way round, a package could otherwise ship under a version it does not claim.
-    A nori.toml that is not TOML, or that has a table or a field of the wrong TOML type,
-    is CE3517. A value fault the compiler does not read (a package name, a dependency)
-    stays nori's to report, and the build uses --lib-version.
+    A nori.toml that exists must be valid: a file that cannot be read is CE3518, and
+    every fault that nori's manifest reader refuses is CE3517.
     """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.internals.semver import InvalidVersion, Version
-    from sushi_lang.packager.manifest import (
-        ManifestError, MalformedManifestError, load_manifest,
-    )
+    from sushi_lang.packager.constants import MANIFEST_NAME
+    from sushi_lang.packager.manifest import ManifestError, load_manifest_from_string
     from sushi_lang.packager.paths import find_project_root
 
     declared: str | None = None
-    try:
-        root = find_project_root(source_dir)
-        if root is not None:
-            declared = load_manifest(root).version
-    except MalformedManifestError as e:
-        raise LibraryError("CE3517", lib=library_name, reason=str(e),
-                           nori_code=e.code) from e
-    except (ManifestError, OSError, ValueError):
-        declared = None
+    root = find_project_root()
+    if root is not None:
+        manifest_path = root / MANIFEST_NAME
+        try:
+            text = manifest_path.read_bytes()
+        except OSError as e:
+            raise LibraryError("CE3518", lib=library_name, path=manifest_path,
+                               reason=e.strerror or str(e)) from e
+        try:
+            declared = load_manifest_from_string(text, str(manifest_path)).version
+        except ManifestError as e:
+            raise LibraryError("CE3517", lib=library_name, reason=str(e),
+                               nori_code=e.code) from e
 
     if declared is not None and explicit is not None and declared != explicit:
         raise LibraryError("CE3505", lib=library_name,
@@ -100,7 +102,7 @@ def resolve_library_version(source_dir: Path, explicit: str | None,
     chosen = declared if declared is not None else explicit
     if chosen is None:
         raise LibraryError("CE3505", lib=library_name,
-                           reason="no nori.toml beside the sources and no --lib-version")
+                           reason="no nori.toml in the current directory and no --lib-version")
 
     try:
         Version.parse(chosen)

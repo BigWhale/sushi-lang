@@ -555,8 +555,7 @@ def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path:
     # Resolve the library's own version FIRST: a missing or contradicted version is
     # CE3505, and there is no point compiling bitcode for a library that cannot be
     # stamped (the same reasoning as the export closure below).
-    library_version = resolve_library_version(
-        src_path.resolve().parent, options.lib_version, out_path.stem)
+    library_version = resolve_library_version(options.lib_version, out_path.stem)
     manifest_gen = LibraryManifestGenerator(analyzer)
     # Extract the templates section FIRST: the export closure decides which private
     # functions must carry external (not internal) linkage in the bitcode (their

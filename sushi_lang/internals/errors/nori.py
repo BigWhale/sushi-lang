@@ -72,6 +72,10 @@ _nori("NE2006", "listed path is not a file: '{path}'",
       "A library or an executable in the [files] section must be a regular file.")
 _nori("NE2007", "archive not found: '{path}'",
       "The .nori archive to install or to publish does not exist.")
+_nori("NE2008", "listed path leaves the package directory: '{path}'",
+      "Every path in the [files] section is relative to the directory of the nori.toml and "
+      "stays at or below it: an absolute path or a path with a `..` step is refused, so an "
+      "archive never packs a file from outside the package.")
 
 # Installed packages (NE30xx)
 _nori("NE3001", "package {name} v{version} is not in the store",

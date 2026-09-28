@@ -131,8 +131,9 @@ objects, so one file works on every platform. `--lib-kind binary` ships LLVM bit
 instead, which binds the library to the platform that built it, and `--lib-kind hybrid`
 ships both.
 
-Every library states its own version. `--lib-version` supplies it, unless a `nori.toml`
-beside the sources does; neither is **CE3505**. A build also stamps `requires_compiler` --
+Every library states its own version. `--lib-version` supplies it, unless the `nori.toml`
+in the current directory does; neither is **CE3505**, and a `nori.toml` there that cannot be
+read (**CE3518**) or is not valid (**CE3517**) stops the build. A build also stamps `requires_compiler` --
 `~<major>.<minor>` of the building compiler -- because a source library is compiled by the
 consumer's compiler and a later one may reject it. A consumer outside that range is
 **CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.

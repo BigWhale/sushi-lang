@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import tarfile
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from sushi_lang.packager.constants import MANIFEST_NAME
 from sushi_lang.packager.errors import NoriError
@@ -84,6 +84,14 @@ def _open(archive_path: Path) -> tarfile.TarFile:
         raise ArchiveError("NE2001", path=archive_path, reason=e) from e
 
 
+def _listed_path(base_dir: Path, entry: str) -> Path:
+    """The path of a [files] entry, which must stay at or below the package directory."""
+    listed = PurePath(entry)
+    if listed.is_absolute() or ".." in listed.parts:
+        raise ArchiveError("NE2008", path=entry)
+    return base_dir / listed
+
+
 def _add_file(
     tar: tarfile.TarFile,
     base_dir: Path,
@@ -92,7 +100,7 @@ def _add_file(
     executable: bool = False,
 ) -> None:
     """Add a single file to the archive."""
-    full_path = base_dir / file_path
+    full_path = _listed_path(base_dir, file_path)
     if not full_path.exists():
         raise ArchiveError("NE2005", path=file_path)
     if not full_path.is_file():
@@ -112,7 +120,7 @@ def _add_data(
     arc_subdir: str,
 ) -> None:
     """Add a data file or directory to the archive."""
-    full_path = base_dir / data_entry
+    full_path = _listed_path(base_dir, data_entry)
     if not full_path.exists():
         raise ArchiveError("NE2005", path=data_entry)
     if full_path.is_file():

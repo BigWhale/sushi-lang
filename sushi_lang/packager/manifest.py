@@ -21,10 +21,6 @@ class ManifestError(NoriError):
     pass
 
 
-class MalformedManifestError(ManifestError):
-    """The file is not UTF-8 TOML, or a table or a field has the wrong TOML type."""
-
-
 @dataclass
 class NoriManifest:
     name: str
@@ -66,9 +62,9 @@ def load_manifest_from_string(text: str | bytes, origin: str = MANIFEST_NAME) ->
             text = text.decode("utf-8")
         return _parse_manifest(tomllib.loads(text))
     except tomllib.TOMLDecodeError as e:
-        raise toml_error(origin, e).recast(MalformedManifestError) from e
+        raise toml_error(origin, e).recast(ManifestError) from e
     except UnicodeDecodeError as e:
-        raise MalformedManifestError("NE1010", path=origin) from e
+        raise ManifestError("NE1010", path=origin) from e
     except ManifestError as e:
         raise e.recast(type(e), path=origin) from e
 
@@ -125,13 +121,13 @@ def _check_field_types(tables: dict[str, dict]) -> None:
             continue
         found = _mismatch(tables[table][key], expected)
         if found is not None:
-            raise MalformedManifestError("NE1011", field=f"[{table}].{key}", expected=expected, found=found)
+            raise ManifestError("NE1011", field=f"[{table}].{key}", expected=expected, found=found)
 
 
 def _table(data: dict, key: str) -> dict:
     value = data.get(key, {})
     if not isinstance(value, dict):
-        raise MalformedManifestError("NE1003", table=key, kind=type(value).__name__)
+        raise ManifestError("NE1003", table=key, kind=type(value).__name__)
     return value
 
 
