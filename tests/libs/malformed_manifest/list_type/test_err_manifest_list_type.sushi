@@ -1,4 +1,5 @@
 # A nori.toml beside a library whose [files].libraries is a string and not a list refuses the build (#1040).
+# RUN_IN_FIXTURE_DIR
 # OUTPUT_PATH: towel.slib
 # COMPILER_FLAGS: --lib --lib-version 1.0.0
 # EXPECT_ERROR_CODES_EXACT: CE3517

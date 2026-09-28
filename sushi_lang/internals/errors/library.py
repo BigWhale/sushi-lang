@@ -46,8 +46,9 @@ _add(ErrorMessage("CE3505", Severity.ERROR,
     Category.LIBRARY,
     "A .slib records `library_version`, which it never used to: `library_name` came from the "
     "output filename and nothing stated a version at all. The value comes from `[package] "
-    "version` in a nori.toml beside the sources when one exists, otherwise from an explicit "
-    "--lib-version. Neither present is this error, and so is a --lib-version that CONTRADICTS "
+    "version` in the nori.toml in the current directory when one exists, otherwise from an "
+    "explicit --lib-version. A nori.toml in a parent directory or beside the sources is not "
+    "read (#1066). Neither present is this error, and so is a --lib-version that CONTRADICTS "
     "the nori.toml -- silently preferring one would let a package ship under a version it does "
     "not claim."))
 
@@ -107,14 +108,27 @@ _add(ErrorMessage("CE3516", Severity.ERROR,
 _add(ErrorMessage("CE3517", Severity.ERROR,
     "cannot build library '{lib}': {reason} [{nori_code}]",
     Category.LIBRARY,
-    "A --lib build reads the nori.toml of the package that holds the sources for the "
-    "library version. When that file is not TOML, or a table or a field in it has the wrong "
-    "TOML type, the build stops here: the user wrote a manifest and it is wrong. The reason "
-    "is the text of the nori code in brackets -- the one manifest reader makes the check for "
-    "the compiler and for nori, so both name the file and the field in the same words. It "
-    "used to be a silent skip, and before that CE0000 (#1040). A missing nori.toml is not "
-    "this error. A field that is well typed but has a bad value (a package name, a "
-    "dependency) is not this error either: the compiler does not read it."))
+    "A --lib build reads the nori.toml in the current directory for the library version. "
+    "A nori.toml that exists must be valid: every fault that nori's manifest reader refuses "
+    "stops the build here, a file that is not TOML or UTF-8, a field of the wrong TOML type, "
+    "and also a field with a bad value (a missing field, a bad package name, a bad version, "
+    "a bad dependency), although the compiler reads the version alone. The user wrote a "
+    "manifest and it is wrong, and a build that used --lib-version would hide the fault and "
+    "the version conflict of CE3505. The reason is the text of the nori code in brackets -- "
+    "the one manifest reader makes the check for the compiler and for nori, so both name "
+    "the file and the field in the same words. It used to be a silent skip, and before that "
+    "CE0000 (#1040); a value fault was a silent skip until #1066. A missing nori.toml is "
+    "not this error, and a nori.toml that cannot be read is CE3518."))
+
+_add(ErrorMessage("CE3518", Severity.ERROR,
+    "cannot build library '{lib}': cannot read '{path}': {reason}",
+    Category.LIBRARY,
+    "A --lib build reads the nori.toml in the current directory for the library version. "
+    "A nori.toml that exists but cannot be opened or read (no read permission, a directory, "
+    "a broken link) stops the build here, and the reason is the one that the operating "
+    "system gives. It is not a missing manifest: a build that used --lib-version would hide "
+    "a manifest that the user wrote. A nori.toml that can be read and is not valid is "
+    "CE3517 (#1066)."))
 
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled

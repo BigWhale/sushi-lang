@@ -451,3 +451,13 @@ _add(ErrorMessage("CE0005", Severity.ERROR,
 _add(ErrorMessage("CE0006", Severity.ERROR,
     "{kind} '{name}' already defined as {other}",
     Category.TYPE, "A struct and an enum share one type name for the whole program. The second declaration of a name, in collection order and of either kind, is refused where it is written, and the note points at the first. Structs are collected before enums in one unit, but across units the order is the unit order, so a struct can be the second declaration too (#901). Rename one of the two types."))
+
+_add(ErrorMessage("CE0142", Severity.ERROR,
+    "unit '{unit}' has no source text for its cache key",
+    Category.INTERNAL,
+    "The cache key of a unit hashes the text that the parser read, which every unit "
+    "carries as its source. A unit with no source text means a loader built it without "
+    "the text, which is a compiler fault and not a user error. It is fatal ON PURPOSE: "
+    "the key read the file again, so a file that changed after the parse stored the old "
+    "object under the key of the new text, and a file that was gone left the source out "
+    "of the key with no diagnostic (#1062)."))

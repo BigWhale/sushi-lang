@@ -1,0 +1,9 @@
+# A nori.toml in the working directory must be valid, also in a field that --lib does not
+# read: a bad package name refuses the build and does not fall back to --lib-version (#1066).
+# RUN_IN_FIXTURE_DIR
+# OUTPUT_PATH: towel.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CE3517
+# EXPECT_STDERR_CONTAINS: "NE1005"
+public fn towel() i32:
+    return Result.Ok(42)

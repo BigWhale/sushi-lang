@@ -1,4 +1,5 @@
 """Path helpers for ~/.sushi/ directory structure."""
+import os
 from pathlib import Path
 
 from sushi_lang.packager.constants import (
@@ -21,19 +22,14 @@ def store_package_dir(name: str, version: str) -> Path:
     return STORE_DIR / f"{name}-{version}"
 
 
-def find_project_root(start: Path | None = None) -> Path | None:
-    """Walk up from start (default: cwd) looking for a nori.toml with [dependencies]."""
-    if start is None:
-        start = Path.cwd()
-    current = start.resolve()
-    while True:
-        manifest_path = current / MANIFEST_NAME
-        if manifest_path.is_file():
-            return current
-        parent = current.parent
-        if parent == current:
-            return None
-        current = parent
+def find_project_root() -> Path | None:
+    """The working directory when it holds a nori.toml, else None.
+
+    There is no walk up to a parent directory. A nori.toml that exists in any form (a
+    broken link, a directory) counts, so that a reader refuses it instead of skipping it.
+    """
+    root = Path.cwd()
+    return root if os.path.lexists(root / MANIFEST_NAME) else None
 
 
 def project_deps_dir(project_root: Path) -> Path:
