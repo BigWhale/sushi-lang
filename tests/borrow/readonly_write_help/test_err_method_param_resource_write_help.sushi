@@ -1,0 +1,17 @@
+# A write through a by-value parameter of a method is CE2422. A `List@(File)` owns a
+# resource, so `v.clone()` is refused (CE2431) and the help must not offer the copy
+# escape: it names the escapes that compile.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+# EXPECT_STDERR_CONTAINS: "declare the parameter `poke` if the method must write through it -- otherwise a descriptor cannot be deep-copied, so there is no `v.clone()`, and its type has no `share()` that gives a second owner; restructure so only one owner is needed\n"
+
+use <io/fs>
+
+struct Box:
+    i32 n
+
+extend Box drain(List@(File) v) i32:
+    v.clear()
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)

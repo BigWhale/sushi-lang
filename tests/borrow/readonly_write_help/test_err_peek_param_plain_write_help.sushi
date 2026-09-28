@@ -1,0 +1,11 @@
+# A write through a `peek` parameter of a plain `List@(i32)` is CE2408. The type can be
+# cloned, so the help still offers the copy escape.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "declare it `poke` if the write must reach the owner, or take an independent value with `v.clone()`\n"
+
+fn f(peek List@(i32) v) ~:
+    v.clear()
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

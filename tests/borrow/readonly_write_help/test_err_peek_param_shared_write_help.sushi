@@ -1,0 +1,13 @@
+# A write through a `peek File` parameter is CE2408. A `File` has no clone (CE2431) but
+# it has `share()`, so the help offers the second owner and not the copy.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "declare it `poke` if the write must reach the owner -- otherwise a descriptor cannot be deep-copied, so there is no `out.clone()`; take a second owner with `out.share()`, or restructure so only one owner is needed\n"
+
+use <io/fs>
+
+fn banner(peek File out) ~ | IoError:
+    out.write("Mostly Harmless\n")??
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

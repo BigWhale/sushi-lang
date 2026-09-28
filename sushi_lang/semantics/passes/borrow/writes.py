@@ -12,7 +12,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .diagnostics import write_escape
+from .diagnostics import parameter_escape, write_escape
 from .methods import effect_of
 from .reads import chain_call_boundary, root_owner
 from .state import BorrowState
@@ -65,8 +65,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         note_span=lambda state: state.declared_at_span,
         note="'{name}' is declared here as a read-only borrow",
         help="the write ({what}) would change the borrowed value through a read-only "
-             "reference; declare it `poke` if the write must reach the owner, or take "
-             "an independent value with `{name}.clone()`",
+             "reference; declare it `poke` if the write must reach the owner{copy}",
         refuses_a_rebind=True,
     ),
     ReadOnlyReceiver(
@@ -80,7 +79,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         note="'{name}' is declared here, as a by-value parameter of a method",
         help="the write ({what}) would land on the method's private copy of the "
              "argument; declare the parameter `poke` if the method must write through "
-             "it, or take an independent value with `{name}.clone()`",
+             "it{copy}",
     ),
     ReadOnlyReceiver(
         # `and not is_let_borrow`: a match binding is a private deep copy, so the write
@@ -183,7 +182,8 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         if note_span is not None:
             diag.note_at(kind.note.format(name=name), note_span)
         diag.help(kind.help.format(name=name, what=what,
-                                   escape=write_escape(checker, name, state.var_type)))
+                                   escape=write_escape(checker, name, state.var_type),
+                                   copy=parameter_escape(checker, name, state.var_type)))
         diag.emit()
         return True
     return False
