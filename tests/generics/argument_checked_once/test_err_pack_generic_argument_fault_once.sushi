@@ -1,0 +1,8 @@
+# A variadic generic call walks each argument once, the fixed ones and the pack alike.
+# EXPECT_ERROR_CODES_EXACT: CE0112
+fn lead@(H, ...Ts)(H a, ...Ts rest) H:
+    return Result.Ok(a)
+
+fn main() i32:
+    println(lead(1 / 0, 2, 3 % 0).realise(0))
+    return Result.Ok(0)

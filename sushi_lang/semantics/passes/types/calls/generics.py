@@ -13,7 +13,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
     check_explicit_type_arg_arity,
 )
 from ..visibility import name_is_contested, reject_private_call
-from ..arguments import check_arguments
+from ..arguments import check_arguments, reject_misplaced_spread
 from .user_defined import validate_call_arguments
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ def validate_generic_function_call(
 
     type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
-        _walk_generic_fn_values(validator, call)
+        _walk_unchecked_arguments(validator, call)
         if not contested:
             er.emit(
                 validator.reporter,
@@ -98,7 +98,7 @@ def validate_generic_function_call(
     home_unit = getattr(generic_func, "unit_name", None)
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
     if func_sig is None:
-        _walk_generic_fn_values(validator, call)
+        _walk_unchecked_arguments(validator, call)
         er.emit(
             validator.reporter,
             er.ERR.CE2061,
@@ -122,29 +122,32 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
 
     A miscount cannot be solved, and CE2060 then spoke about inference where the user
     miscounted. The count is the template's: its fixed parameters, and at least that
-    many when a pack parameter takes the rest. The types are not compared here; that is
-    the instance's check, once the count fits.
+    many when a pack parameter takes the rest.
 
-    A generic function value is walked later, against its substituted parameter type
-    (#1029): walked here with no type, it was CE2093 before the callee was solved.
+    The check measures the COUNT and walks no argument. Each argument is walked one time
+    per call: by the check of the solved instance, or by `_walk_unchecked_arguments` when
+    no instance is solved. A walk here too reported a fault in an argument two times
+    (#1037).
     """
     count = sum(1 for p in generic_func.params if not p.is_pack)
     has_pack = count != len(generic_func.params)
     args = call.args
-    fits = len(args) >= count if has_pack else len(args) == count
-    typed = [arg for arg in args if not names_generic_fn_value(validator, arg)]
-    if fits and len(typed) != len(args):
-        args, count, has_pack = typed, len(typed), False
+    if (len(args) >= count) if has_pack else (len(args) == count):
+        return False
     return not check_arguments(
         validator, written, [None] * count, args, call.callee.loc,
         mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
         minimum_arity=has_pack, stop_on_arity=True)
 
 
-def _walk_generic_fn_values(validator: 'TypeValidator', call: Call) -> None:
-    """Walk the generic function values the count check left, when no instance is solved."""
+def _walk_unchecked_arguments(validator: 'TypeValidator', call: Call) -> None:
+    """Walk each argument when no instance is solved, so a fault in one is still said.
+
+    The check of the instance is the walk on the solved path; this is the walk on the
+    other path, and the two never run for one call.
+    """
     for arg in call.args:
-        if names_generic_fn_value(validator, arg):
+        if not reject_misplaced_spread(validator, arg):
             validator.validate_expression(arg)
 
 

@@ -1,0 +1,9 @@
+# A bloom spread in an argument of a generic call that is not variadic is one CE0120.
+# EXPECT_ERROR_CODES_EXACT: CE0120
+fn size@(T)(T[] x) i32:
+    return Result.Ok(x.len())
+
+fn main() i32:
+    let i32[] a = from([1])
+    println(size(a...).realise(0))
+    return Result.Ok(0)
