@@ -494,7 +494,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             compilation_order, analyzer, out_path, reporter, options,
             stdlib_units, library_imports, library_linker, unit_manager, cache,
         )
-    return _compile_monolithic(compilation_order, analyzer, src_path, out_path, reporter,
+    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
                                options, library_linker)
 
 
@@ -546,7 +546,7 @@ def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
     print(f"wrote LLVM IR: {ll_path}")
 
 
-def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path: Path,
+def _emit_library(driver, analyzer, compilation_order, out_path: Path,
                   reporter: Reporter, options: BuildOptions) -> bool:
     """Write the `.slib`. False when a gate refused it; the reporter holds why."""
     from sushi_lang.backend.library_manifest import (
@@ -596,7 +596,7 @@ def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path:
     return not reporter.has_errors
 
 
-def _compile_monolithic(compilation_order, analyzer, src_path: Path, out_path: Path,
+def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                         reporter: Reporter, options: BuildOptions, library_linker) -> int:
     """One module for the whole program: a native binary, or a `.slib`."""
     from sushi_lang.backend.driver import LLVMDriver
@@ -604,7 +604,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path: Path, out_path: P
     driver = LLVMDriver(cg)
 
     if options.lib:
-        if not _emit_library(driver, analyzer, compilation_order, src_path, out_path,
+        if not _emit_library(driver, analyzer, compilation_order, out_path,
                              reporter, options):
             return 2
         written = "library"
