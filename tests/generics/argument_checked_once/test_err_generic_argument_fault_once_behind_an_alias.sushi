@@ -1,0 +1,7 @@
+# A generic call behind an alias walks each argument once, as the bare call does.
+# EXPECT_ERROR_CODES_EXACT: CE0112
+use "helpers/checked_once_id" as co
+
+fn main() i32:
+    println(co.id(5 / 0).realise(0))
+    return Result.Ok(0)
