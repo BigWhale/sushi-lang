@@ -1,0 +1,7 @@
+# A nori.toml beside a library whose [package] is a string and not a table refuses the build (#1040).
+# OUTPUT_PATH: towel.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CE3517
+# EXPECT_STDERR_CONTAINS: "[package] must be a table, not str"
+public fn towel() i32:
+    return Result.Ok(42)

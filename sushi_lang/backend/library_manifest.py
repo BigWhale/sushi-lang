@@ -71,21 +71,26 @@ def resolve_library_version(source_dir: Path, explicit: str | None,
     A package IS one version, so a nori.toml beside the sources is the source of truth.
     An explicit flag that contradicts it is rejected rather than silently preferred --
     either way round, a package could otherwise ship under a version it does not claim.
+    A nori.toml that is not TOML, or that has a table or a field of the wrong TOML type,
+    is CE3517. A value fault the compiler does not read (a package name, a dependency)
+    stays nori's to report, and the build uses --lib-version.
     """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.internals.semver import InvalidVersion, Version
+    from sushi_lang.packager.manifest import (
+        ManifestError, MalformedManifestError, load_manifest,
+    )
+    from sushi_lang.packager.paths import find_project_root
 
     declared: str | None = None
     try:
-        from sushi_lang.packager.manifest import ManifestError, load_manifest
-        from sushi_lang.packager.paths import find_project_root
-
         root = find_project_root(source_dir)
         if root is not None:
             declared = load_manifest(root).version
+    except MalformedManifestError as e:
+        raise LibraryError("CE3517", lib=library_name, reason=str(e),
+                           nori_code=e.code) from e
     except (ManifestError, OSError, ValueError):
-        # An unreadable or invalid nori.toml is the packager's problem to report, not a
-        # reason to fail a --lib build that carries its own --lib-version.
         declared = None
 
     if declared is not None and explicit is not None and declared != explicit:
