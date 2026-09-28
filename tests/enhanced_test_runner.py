@@ -29,6 +29,7 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command)
+from fork_server import ForkServer
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -335,7 +336,8 @@ class TestRunner:
     def __init__(self, tests_dir: Path, verbose: bool = False,
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
-                 compile_only: bool = False, project_root: Optional[Path] = None):
+                 compile_only: bool = False, project_root: Optional[Path] = None,
+                 fresh_processes: bool = True):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
@@ -347,6 +349,15 @@ class TestRunner:
         self.leaks_only = leaks_only
         self.allow_leak_skips = allow_leak_skips
         self.compile_only = compile_only
+        # How a compile starts (#1059): a new `sushic` process for each, or without
+        # `fresh_processes` a child of the fork-server. The answer is the same. The
+        # command line picks the server unless `--fresh-processes` is given; a caller
+        # in this process that wants the server says so.
+        self.fresh_processes = fresh_processes
+        self._server: Optional[ForkServer] = None
+        # The compiles of this run by how they started, as (fixture key, arguments).
+        self.forked_compiles: List[Tuple[str, List[str]]] = []
+        self.fresh_compiles: List[Tuple[str, List[str]]] = []
         # A run that selected no fixture is a FAILURE, not a pass (#765). An empty
         # result dict reads as "nothing failed" to any caller that counts failures,
         # which is how a chunk that ran nothing reported exit 0 for as long as it did.
@@ -371,10 +382,15 @@ class TestRunner:
     def __enter__(self):
         """Create temporary directory for test binaries."""
         self.temp_dir = tempfile.mkdtemp(prefix="sushi_tests_")
+        if not self.fresh_processes:
+            self._server = ForkServer(self.project_root, Path(self.temp_dir) / "fork-server")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Clean up temporary directory."""
+        """Stop the fork-server, then clean up temporary directory."""
+        if self._server is not None:
+            self._server.close()
+            self._server = None
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
@@ -454,6 +470,9 @@ class TestRunner:
 
         if not self.json_output:
             print(f"Running {len(test_files)} tests with {self.parallel_jobs} parallel jobs...")
+            print("Each compile starts as "
+                  + ("a fresh sushic process" if self.fresh_processes
+                     else "a child of the fork-server"))
             print(f"Using temporary directory: {self.temp_dir}")
             print()
 
@@ -680,12 +699,11 @@ class TestRunner:
             target.parent.mkdir(parents=True, exist_ok=True)
             stated = ((workspace.root / source).parent / "nori.toml").is_file()
             version = [] if stated else ["--lib-version", "0.0.0"]
-            done = subprocess.run(
-                [str(self.project_root / "sushic"), "--lib", *version, "--lib-kind", kind,
+            done = self._sushic(
+                ["--lib", *version, "--lib-kind", kind,
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
-                capture_output=True, text=True, cwd=workspace.home,
-                env={**os.environ, "NO_COLOR": "1"}, timeout=60)
+                cwd=workspace.home, env={**os.environ, "NO_COLOR": "1"}, timeout=60)
             if done.returncode != 0:
                 return (f"✗ Compilation: {directive} {source} failed with exit "
                         f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
@@ -748,11 +766,44 @@ class TestRunner:
                 args)
             env.update(extra)
             env["SUSHI_CWD"] = str(cwd)
-            cwd = self.project_root
-        else:
-            command = [str(self.project_root / "sushic"), *args]
-        return subprocess.run(command, capture_output=True, text=True, cwd=cwd, env=env,
-                              timeout=30)
+            self.fresh_compiles.append((self._key(test_file), args))
+            return subprocess.run(command, capture_output=True, text=True,
+                                  cwd=self.project_root, env=env, timeout=30)
+        return self._sushic(args, cwd=cwd, env=env, timeout=30,
+                            fresh=self.needs_fresh_process(test_file, metadata))
+
+    @staticmethod
+    def needs_fresh_process(test_file: Path, metadata: TestMetadata) -> bool:
+        """Does this fixture keep a fresh `sushic` process for each compile (#1059)?
+
+        A STDLIB_MODULE fixture starts its own bootstrap and never the wrapper. A fixture
+        that asserts what the incremental cache does over two compiles (the rebuild form,
+        EXPECT_REBUILT / EXPECT_CACHED, THEN_CLEAN_CACHE) tests it across two processes,
+        as a user runs them.
+        """
+        return bool(metadata.stdlib_modules or is_rebuild_fixture(test_file)
+                    or metadata.declares_a_rebuild
+                    or metadata.then_clean_cache is not None)
+
+    def _sushic(self, args: List[str], cwd, env: Dict[str, str], timeout: float,
+                fresh: bool = False) -> subprocess.CompletedProcess:
+        """One compile, as `sushic <args>` started in `cwd` with `env` would give it.
+
+        The fork-server gives the answer unless the run or the fixture asks for a fresh
+        process, or the environment differs from the server's where the compiler reads it
+        before the fork.
+        """
+        test_file = getattr(self._running, "test_file", None)
+        key = self._key(test_file) if test_file is not None else ""
+        if not fresh and self._server is not None:
+            done = self._server.run(args, str(cwd), env, timeout)
+            if done is not None:
+                self.forked_compiles.append((key, args))
+                return done
+        self.fresh_compiles.append((key, args))
+        return subprocess.run([str(self.project_root / "sushic"), *args],
+                              capture_output=True, text=True, cwd=cwd, env=env,
+                              timeout=timeout)
 
     def _first_build(self, test_file: Path, metadata: TestMetadata,
                      binary_path: Path) -> Optional[str]:
@@ -1369,6 +1420,14 @@ def build_parser() -> argparse.ArgumentParser:
              "asserted in full"
     )
 
+    parser.add_argument(
+        "--fresh-processes",
+        action="store_true",
+        help="Start a fresh sushic process for every compile, as a user does, and not a "
+             "child of the fork-server. An execution STRATEGY: the answer is the same, "
+             "and every check runs"
+    )
+
     return parser
 
 
@@ -1417,7 +1476,8 @@ def main():
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
     with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
-                    args.leaks_only, args.allow_leak_skips, args.compile_only) as runner:
+                    args.leaks_only, args.allow_leak_skips, args.compile_only,
+                    fresh_processes=args.fresh_processes) as runner:
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
                                           leaks_only=args.leaks_only)

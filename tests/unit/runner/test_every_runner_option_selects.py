@@ -29,8 +29,11 @@ NO_EFFECT = {"--enhanced"}
 # The one escape, and the only one: a platform with no interposer cannot check a leak,
 # and a skip fails the run without it (#605).
 ESCAPES = {"--allow-leak-skips"}
+# The options that change how a compile STARTS and nothing it asserts: the answer must
+# be the same, and `test_fork_server_gives_the_fresh_answer.py` holds that (#1059).
+STRATEGIES = {"--fresh-processes"}
 
-KNOWN = SELECTS | REPORTS | PREPARES | NO_EFFECT | ESCAPES
+KNOWN = SELECTS | REPORTS | PREPARES | NO_EFFECT | ESCAPES | STRATEGIES
 
 
 def _options(parser) -> set[str]:
