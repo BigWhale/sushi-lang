@@ -1007,20 +1007,8 @@ def spelling_gate_tripped(stderr: str) -> bool:
 
 
 
-def main():
-    """The front end: build what a run needs, then hand it to the ONE runner.
-
-    `run_tests.py` used to carry a second runner of its own that compiled every fixture
-    and checked the compiler's exit status alone -- it read no `EXPECT_*` directive, so a
-    `test_err_` fixture passed it whatever diagnostic the compiler printed (#760). It was
-    not the compile HALF of the suite; it was the whole suite with the assertions turned
-    off, and it bought no speed for them: over `tests/diagnostics/`, where almost nothing
-    runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
-
-    What remains here is what both halves always shared -- the stdlib and helper builds,
-    the leak interposer, the cache purge and the spelling gate -- plus the argument
-    parsing. `enhanced_test_runner` runs the tests.
-    """
+def build_parser() -> argparse.ArgumentParser:
+    """The front end's options. Each one SELECTS fixtures or shapes the report; none weakens a check."""
     # allow_abbrev=False: with --leaks deleted, argparse would otherwise accept it as a
     # unique prefix of --leaks-only and silently narrow a full run to the leak subset.
     # A removed flag has to fail, not quietly mean something else.
@@ -1051,7 +1039,24 @@ def main():
                             "test_err_ and most test_warn_). A selector, not a weaker "
                             "check: what it selects is asserted in full")
 
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    """The front end: build what a run needs, then hand it to the ONE runner.
+
+    `run_tests.py` used to carry a second runner of its own that compiled every fixture
+    and checked the compiler's exit status alone -- it read no `EXPECT_*` directive, so a
+    `test_err_` fixture passed it whatever diagnostic the compiler printed (#760). It was
+    not the compile HALF of the suite; it was the whole suite with the assertions turned
+    off, and it bought no speed for them: over `tests/diagnostics/`, where almost nothing
+    runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
+
+    What remains here is what both halves always shared -- the stdlib and helper builds,
+    the leak interposer, the cache purge and the spelling gate -- plus the argument
+    parsing. `enhanced_test_runner` runs the tests.
+    """
+    args = build_parser().parse_args()
 
     arm_spelling_gate()
 
