@@ -14,26 +14,6 @@ failed when it fails.
 from __future__ import annotations
 
 
-
-
-# (id, declaration, the interned name the declaration must make exist)
-
-
-
-
-
-
-# A TEMPLATE target reads its signature per instantiation of the target. This case used to
-# assert the OPPOSITE -- the restriction that kept a template's signature unread, because
-# every instantiation shared one body AST and the per-instantiation stamps collided on it.
-# Each instantiation owns its body now (#391), so the restriction is gone and the positive
-# case takes its place.
-
-
-
-
-
-
 # -- the array-target classifier (ruling 3 of the UFCS epic) ----------------------------
 #
 # `extend T[]` and `extend Crate[]` are spelled the same way -- a bare name in the
@@ -77,5 +57,3 @@ def test_array_element_of_any_other_shape_is_invalid():
 
     nested = DynamicArrayType(base_type=UnknownType(name="T"))
     assert classify_array_extension_target(nested, lambda name: False) is None
-
-

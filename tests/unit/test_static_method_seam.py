@@ -18,18 +18,6 @@ from sushi_lang.semantics.statics import (
 from sushi_lang.semantics.typesys import BuiltinType
 
 
-# 1. The declaration
-
-
-
-
-
-
-
-
-
-
-
 # 2. The shared type-name predicate
 
 def test_every_primitive_but_blank_is_a_type_name():
@@ -58,32 +46,3 @@ def test_the_builtin_statics_are_named_in_one_table():
     assert not is_builtin_static("Box", "new")
     assert not is_builtin_static(None, "new")
     assert set(BUILTIN_STATICS) == {"List", "HashMap", "Own", "f64", "f32"}
-
-
-# 3. The refusals, through the real compiler
-
-
-
-
-
-
-
-
-
-
-
-
-# No parameter names T and the position declares no type: neither source reaches it
-# (#573). `Cage.holding(9)` was this shape until the argument became the first source.
-
-
-
-
-
-
-
-
-
-
-
-

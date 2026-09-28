@@ -114,26 +114,12 @@ def _outcome(docs, tmp_path):
             for doc, outcome, detail in run_doc_files(docs, tmp_path / "work")]
 
 
-
-
-
-
-
-
-
-
-
-
 def test_a_marked_skip_is_not_compiled(tmp_path):
     doc = doc_file_at(_write(tmp_path / "skipped.sushi",
                              "# docs-sweep: skip (needs a live socket)\n\nfn main() i32:\n    let i32 x = nope()\n"))
     file, outcome, detail = _outcome([doc], tmp_path)[0]
     assert outcome == "SKIP"
     assert detail == "needs a live socket"
-
-
-
-
 
 
 # -- the snippet includes -------------------------------------------------------

@@ -88,12 +88,3 @@ def test_the_scanner_sees_every_import_form():
     for form in forms:
         assert _backend_imports_in(form, parts), f"scanner is blind to: {form}"
     assert not _backend_imports_in("from sushi_lang.semantics import ast", parts)
-
-
-
-# A primitive-method call whose RETURN TYPE the typecheck pass must infer from the
-# builtin-method registry -- the exact state #239 left unpopulated.
-
-
-
-

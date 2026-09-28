@@ -60,14 +60,6 @@ def test_by_pointer_agrees_with_the_mode_name(mode):
     assert (mode.marker is None) == (mode is ParamMode.BORROW)
 
 
-# Invariant 1, through the real parser: a declaration and its derived mode
-
-
-
-
-
-
-
 # Invariant 1, on a FunctionType: normalization makes the two spellings one type
 
 def test_normalize_reads_peek_poke_off_the_type():
@@ -130,5 +122,3 @@ def test_a_marked_mode_survives_every_kind(kind):
     assert effective_modes((ParamMode.POKE,), kind)[0] is not ParamMode.NOM
     # An explicit `nom` stays a consume everywhere.
     assert effective_modes((ParamMode.NOM,), kind) == (ParamMode.NOM,)
-
-

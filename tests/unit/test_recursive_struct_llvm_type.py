@@ -4,19 +4,6 @@ from __future__ import annotations
 from llvmlite import ir
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_identified_type_is_set_body_not_recached():
     """The mechanism itself: set_body fills IN PLACE, so a mid-walk pointer stays valid."""
     module = ir.Module(name="pin")

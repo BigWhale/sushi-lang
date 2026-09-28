@@ -10,13 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-
 ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
-
-
-
-
-
 
 
 def test_one_emit_site():
@@ -27,9 +21,3 @@ def test_one_emit_site():
         if "CE2434" in path.read_text():
             sites.append(str(path.relative_to(ROOT)))
     assert sites == ["semantics/ast_builder/statements/matching.py"], sites
-
-
-
-
-
-

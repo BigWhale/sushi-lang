@@ -11,8 +11,6 @@ from sushi_lang.semantics.param_modes import (
 )
 
 
-# 1. The resolver returns the declared mode, for every kind
-
 # The kinds whose parameters are DECLARED in Sushi source. The other three consume by
 # position and declare nothing: a struct field, an enum payload and a container slot.
 DECLARING_KINDS = [
@@ -35,16 +33,7 @@ def test_every_callee_kind_is_in_exactly_one_group():
     assert not set(DECLARING_KINDS) & set(POSITIONAL_KINDS)
 
 
-
-
-
-
-
-
-
-
 # 3. The callee registers cleanup iff the mode is nom
-
 
 
 def test_ownership_does_not_depend_on_the_kind_of_callee():
@@ -52,29 +41,6 @@ def test_ownership_does_not_depend_on_the_kind_of_callee():
     import inspect
     signature = inspect.signature(callee_owns_param)
     assert list(signature.parameters) == ["param"]
-
-
-# 2. A later use is CE2405 iff the mode is nom -- through the real compiler
-
-
-
-
-
-
-
-
-
-# 3. A callee the compiler could not resolve declares nothing, so nothing is judged
-
-
-
-
-
-
-
-
-
-
 
 
 # 5. The RECEIVER's mode is read through the same seam
@@ -103,15 +69,3 @@ def test_only_the_consuming_receiver_takes_ownership():
     consuming = [m for m in RECEIVER_DECLARATIONS
                  if receiver_mode(RECEIVER_DECLARATIONS[m]).consumes]
     assert consuming == [ParamMode.NOM]
-
-
-
-
-# 6. A STATIC method declares parameters and no receiver (#542, ruling R4)
-
-
-
-
-
-
-

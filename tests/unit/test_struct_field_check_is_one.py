@@ -15,24 +15,6 @@ from pathlib import Path
 from sushi_lang.semantics.passes.types.calls import structs as structs_module
 
 
-# The variable is USED in every row, so no CW1001 rides along and each row reads
-# the whole diagnostic list.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_the_field_argument_loop_is_written_once():
     """The gate: one loop, one resolution, one interning site, whatever the code is.
 

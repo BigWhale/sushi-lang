@@ -80,19 +80,6 @@ def test_the_sentinel_is_used_by_exactly_the_five_interned_names():
     assert carried == INTERNED_NAMES
 
 
-# ------------------------------------------------------------------- the answer arrives
-
-
-
-
-
-
-
-
-
-
-
-
 # ------------------------------------------------------------------------- the backend
 
 

@@ -37,5 +37,3 @@ def test_replace_takes_over_the_pair_and_returns_the_displaced_one():
     assert table.replace(second, "Box", unit_name="main") is first
     assert table.implementations[("Box", "Loud")] is second
     assert table.owner("Box", "Loud") == "main"
-
-

@@ -18,55 +18,6 @@ prove that a code does NOT appear. This module counts the codes.
 from __future__ import annotations
 
 
-
-
-
-
-
-# --- CE2048: the scrutinee itself ------------------------------------------------
-
-
-
-
-
-
-# --- CE2107: a pattern names another enum ----------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- CE2108: a nested pattern over a value that is not an enum -------------------
-
-
-
-
-
-
-
-
-# --- CE2109: an Own(...) pattern over a value that is not an Own@(T) -------------
-
-
-
-
-
-
-
-
 # --- The registry contract -------------------------------------------------------
 
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 from sushi_lang.semantics.passes.borrow import MUTATING_METHODS
 
 
-
-
 _HASHMAP = "use <collections/hashmap>\n\n"
 
 # One case per member of `MUTATING_METHODS`: (parameter type, the call, extra source).
@@ -31,21 +29,6 @@ CASES = {
 }
 
 
-
-
 def test_every_mutating_method_has_a_case():
     """A method added to the set without a case here is a hole in this gate."""
     assert set(CASES) == set(MUTATING_METHODS)
-
-
-
-
-
-
-# The two write shapes that are not method calls. They share the one gate, so a
-# regression in it shows up here as well as above.
-
-
-
-
-

@@ -22,37 +22,6 @@ from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.typesys import BuiltinType
 
 
-
-
-
-
-
-
-# One expression per checked operator, valued so only the operation leaves the type.
-
-# One expression per width-defined operator, with a result the width alone decides.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize("ty,value,fits", [
     (BuiltinType.U8, 255, True),
     (BuiltinType.U8, 256, False),
@@ -70,5 +39,3 @@ from sushi_lang.semantics.typesys import BuiltinType
 def test_the_range_of_an_integer_type(ty, value, fits):
     """One table answers the range question, for the checker and for the literals."""
     assert fits_integer_type(value, ty) is fits
-
-

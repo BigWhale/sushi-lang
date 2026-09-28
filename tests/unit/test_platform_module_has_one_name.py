@@ -10,18 +10,6 @@ from types import SimpleNamespace
 import pytest
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def test_an_unsupported_platform_is_one_clear_error(monkeypatch):
     import sushi_lang.sushi_stdlib.src._platform as platform_pkg
 

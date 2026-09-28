@@ -233,5 +233,3 @@ def test_reference_receivers_unwrap():
     arr = DynamicArrayType(base_type=BuiltinType.I32)
     assert builtin_method_exists(ReferenceType(referenced_type=arr), "len",
                                  NOTHING_DERIVED)
-
-

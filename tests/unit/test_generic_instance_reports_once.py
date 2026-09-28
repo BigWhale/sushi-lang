@@ -14,32 +14,6 @@ from __future__ import annotations
 from sushi_lang.internals.report import Diagnostic, Reporter, Span
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_a_reporter_keeps_a_repeat_by_default():
     """Collapsing is scoped to an instance body: nothing else loses a second copy."""
     reporter = Reporter(filename="a.sushi")

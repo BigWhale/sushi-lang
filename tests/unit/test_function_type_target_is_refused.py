@@ -9,28 +9,14 @@ method is not an undefined name.
 A method call on a function value is still INFERRED: inference asks the method-family
 table for every receiver, so `f.clone()` has the type of `f`.
 
-`EXPECT_ERROR_CODE` is a substring test and cannot prove a code is absent, so the code
-LIST is asserted here, on the analyze path.
+This module checks the tuple: a function type is not in it.
 """
 from __future__ import annotations
-
 
 
 from sushi_lang.semantics.generics.extension_targets import CONCRETE_EXTENSION_TARGETS
 from sushi_lang.semantics.typesys import FunctionType
 
 
-
-
-
-
-
-
 def test_a_function_type_is_not_an_extension_target():
     assert not issubclass(FunctionType, CONCRETE_EXTENSION_TARGETS)
-
-
-
-
-
-

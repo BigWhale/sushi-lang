@@ -4,9 +4,8 @@
 attributes, R19 and R20 for the wrapper, R21 for the two skips, R22 for the parsing
 collector, and R27 for the nested-fence rule the Markdown collector never had.
 
-The sweep is a by-hand tool, so this module is where its rules are gated. It compiles
-a handful of examples end to end, which is slower than the rest of the unit layer and
-is the only way to assert that the generated file is a program.
+The sweep is a by-hand tool, so this module is where its rules are gated. It reads the
+collector and the wrapper as Python and compiles nothing.
 """
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ from tests.docs_sweep import (
     parse_attrs,
     wrap_example,
 )
-
 
 
 def _write(path: Path, text: str) -> Path:
@@ -120,16 +118,9 @@ def test_an_indented_snippet_body_keeps_its_own_shape():
 # -- the collector (R21, R22) ---------------------------------------------------
 
 
-
-
-
-
-
 def test_a_file_that_does_not_parse_yields_no_examples(tmp_path):
     unit = _write(tmp_path / "broken.sushi", "fn main( i32:\n    nonsense\n")
     assert examples_in(unit) == []
-
-
 
 
 # -- the Markdown collector honours the fence rule (R27) ------------------------
@@ -172,9 +163,3 @@ def test_an_ordinary_block_is_still_collected():
     blocks = blocks_in("synthetic.md", text)
     assert len(blocks) == 1
     assert blocks[0].line == 3
-
-
-# -- end to end -----------------------------------------------------------------
-
-
-

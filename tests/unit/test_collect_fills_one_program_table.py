@@ -29,13 +29,6 @@ FILLED_LATER = {
 }
 
 
-
-
-
-
-
-
-
 def test_every_program_table_is_the_collect_pass_own_or_filled_later():
     """Totality over `SymbolTables`: no field is left for a merge step to forget."""
     collector = CollectorPass(Reporter())
@@ -52,5 +45,3 @@ def test_every_program_table_is_the_collect_pass_own_or_filled_later():
     assert not unaccounted, (
         "these `SymbolTables` fields are neither the collect pass's own table nor "
         f"named in FILLED_LATER: {unaccounted}")
-
-

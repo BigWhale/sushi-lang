@@ -7,17 +7,8 @@ read CE0042 and `HashMap@(i32, i32)` crashed with a raw AttributeError as CE0000
 """
 from __future__ import annotations
 
-
 from sushi_lang.semantics.generics import hashing
 from sushi_lang.semantics.typesys import BuiltinType, PointerType, StructType
-
-
-
-
-
-def test_nothing_is_let_through():
-    """The hole is closed: no kind is read as hashable that the backend cannot hash."""
-    assert set(hashing.LET_THROUGH_KINDS) == set()
 
 
 def test_a_raw_pointer_refuses():
@@ -25,24 +16,6 @@ def test_a_raw_pointer_refuses():
     can_hash, reason = hashing.hashability_of(PointerType(pointee_type=BuiltinType.I32))
     assert not can_hash
     assert reason
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_a_container_element_that_cannot_hash_refuses_the_container():

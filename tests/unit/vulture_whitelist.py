@@ -1,6 +1,8 @@
-"""The names under `sushi_lang/` that are live by a path vulture cannot see.
+"""The names that are live by a path vulture cannot see.
 
-`tests/unit/test_no_dead_code.py` reads this module. Each entry is
+`tests/unit/test_no_dead_code.py` reads this module. It runs vulture twice: over
+`sushi_lang/` (IGNORE_DECORATORS, WHITELIST, RATCHET) and over `tests/unit/`
+(TEST_IGNORE_DECORATORS, TEST_WHITELIST). Each entry is
 `(path pattern, name pattern, reason)`, matched with `fnmatch` against one vulture
 candidate: the path is relative to the repository root. A pattern names a FAMILY;
 a single name names one entry. An entry that matches no candidate fails the gate,
@@ -103,3 +105,50 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()
+
+# -- the scan of `tests/unit/` ---------------------------------------------------------
+
+TEST_IGNORE_DECORATORS: dict[str, str] = {
+    "@pytest.fixture": "pytest calls a fixture that a test names as a parameter, or an autouse one",
+}
+
+_FIXTURE = "a test requests this fixture by its parameter name"
+_STAND_IN = "a stand-in keeps the parameter name of the function it replaces"
+_READ_BY_CODE = "code under test reads this attribute of the stand-in; this scan does not see sushi_lang/"
+
+TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
+    # -- the pytest protocol ---------------------------------------------------------
+    ("tests/unit/*", "pytest_*", "pytest calls a hook by its name"),
+    ("tests/unit/*", "pytestmark", "pytest reads the module-level mark"),
+    ("tests/unit/compiler_stage_gate.py", "longrepr", "pytest prints the longrepr of a report"),
+    ("tests/unit/compiler_stage_gate.py", "exitstatus", "pytest exits with the session exitstatus"),
+    ("tests/unit/runner/test_a_skipped_leak_check_is_not_a_pass.py", "no_interposer", _FIXTURE),
+    ("tests/unit/test_diagnostic_spelling_gate.py", "armed", _FIXTURE),
+    ("tests/unit/test_diagnostic_spelling_gate.py", "disarmed", _FIXTURE),
+    # -- a stand-in for a real object ------------------------------------------------
+    ("tests/unit/runner/test_leak_gate_wiring.py", "binary_path", _STAND_IN),
+    ("tests/unit/test_nori_colour.py", "repo", _STAND_IN),
+    ("tests/unit/test_nori_colour.py", "mp", "every RENDERERS row takes the monkeypatch"),
+    ("tests/unit/test_nori_errors.py", "repo", _STAND_IN),
+    ("tests/unit/test_pack_substitution.py", "template_file", _STAND_IN),
+    ("tests/unit/test_pack_substitution.py", "_validate_type_constraints", _READ_BY_CODE),
+    ("tests/unit/test_lambda_annotate_seam.py", "infer_expression_type", _READ_BY_CODE),
+    ("tests/unit/test_library_registration_records.py", "loaded_libraries", _READ_BY_CODE),
+    ("tests/unit/test_drop_invalidates_cache.py", "file_path", _READ_BY_CODE),
+    ("tests/unit/test_drop_invalidates_cache.py", "public_symbols", _READ_BY_CODE),
+    ("tests/unit/test_drop_invalidates_cache.py", "dependencies", _READ_BY_CODE),
+    ("tests/unit/test_nori_colour.py", "isatty", "the colour decision asks the stream isatty()"),
+    ("tests/unit/test_report_colour.py", "isatty", "the colour decision asks the stream isatty()"),
+    ("tests/unit/test_nori_errors.py", "size", "tarfile reads TarInfo.size when it adds the member"),
+    # -- a write to a real object that the code under test reads ---------------------
+    ("tests/unit/test_cache.py", "_target_triple", "BuildCache.global_key reads the field"),
+    ("tests/unit/test_generic_instance_reports_once.py", "collapse_repeats",
+     "Reporter.error reads the flag"),
+    ("tests/unit/test_stdlib_build_is_one_table.py", "stdlib_dir",
+     "StdlibLinker._resolve_stdlib_unit reads the field"),
+    ("tests/unit/test_ast_nodes_are_slotted.py", "some_analysis_result",
+     "the test writes it to show that __slots__ refuses it"),
+    # -- read by name ----------------------------------------------------------------
+    ("tests/unit/test_bare_name_ladder_is_one.py", "is_*",
+     "the test reads each Rungs method by name with getattr"),
+)

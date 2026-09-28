@@ -15,9 +15,6 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[2] / "sushi_lang" / "backend"
 
 
-
-
-
 def test_no_backend_module_reads_the_lifecycle_state_through_getattr():
     pattern = re.compile(r"getattr\([^)]*['\"]_(clone|dtor)_(funcs|inprogress)['\"]")
     hits = [

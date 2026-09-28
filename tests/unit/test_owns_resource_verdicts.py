@@ -12,7 +12,6 @@ from sushi_lang.semantics.typesys import (
 )
 
 
-
 I32, STR = BuiltinType.I32, BuiltinType.STRING
 
 # No type in this table declares a resource; `owns_resource` still requires the answer.
@@ -60,8 +59,6 @@ VERDICTS = [
 @pytest.mark.parametrize("t,expected", VERDICTS, ids=[str(t) for t, _ in VERDICTS])
 def test_verdict(t, expected):
     assert owns_resource(t, NO_DROPS) is expected
-
-
 
 
 def test_the_deleted_tier_is_really_gone():

@@ -91,5 +91,9 @@ def test_type_node_names_is_the_grammars_own_set_too():
     hand-written set that has been right all along on the other side.
     """
     trees, tokens = _root_kinds("type")
-    assert trees == set(TYPE_NODE_NAMES)
+    assert trees == set(TYPE_NODE_NAMES), (
+        f"the grammar makes {sorted(trees - TYPE_NODE_NAMES)} and the set does not hold "
+        f"them; the set holds {sorted(TYPE_NODE_NAMES - trees)} and the grammar does not "
+        "make them. A missing member refuses a type in the one position that reads the "
+        "set, as CE0002.")
     assert tokens == set()

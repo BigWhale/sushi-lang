@@ -25,24 +25,6 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 SEAM = SOURCE_ROOT / "semantics" / "constant_borrow.py"
 
 
-# Each position writes the name `{n}`; `{e}` is an enum-typed name for the match arm.
-# The mode is the position's own: a `poke` writes through the pointer, a `peek` reads.
-
-# kind -> (the extra local lines, the i32 name, the Shade name)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # --- The seam: one emit site for the code, and every caller reads the scoped lookup.
 
 def _emitters_of(code: str) -> list[str]:
@@ -101,10 +83,3 @@ def test_every_caller_names_the_mode():
                 and node.name == "reject_borrow_of_constant")
     assert [arg.arg for arg in gate.args.kwonlyargs][:1] == ["mode"], ast.dump(gate.args)
     assert gate.args.kw_defaults[0] is None, "the mode has a default, so a caller can skip it"
-
-
-# --- The take is NOT this gate's: a `nom` is a consuming use (#726).
-
-
-
-

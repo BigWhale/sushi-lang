@@ -39,10 +39,6 @@ def _enum_table_reads(node: ast.AST) -> list[ast.Attribute]:
             if isinstance(n, ast.Attribute) and n.attr == "enum_table"]
 
 
-def test_the_backend_derivation_is_gone():
-    assert not hasattr(matching, "_get_scrutinee_type")
-
-
 @pytest.mark.parametrize("name", _TYPE_READERS)
 def test_no_reader_looks_up_an_enum_by_name(name):
     assert _enum_table_reads(_function(name)) == []

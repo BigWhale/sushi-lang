@@ -11,7 +11,7 @@ The readers:
 
 | reader | what it takes from the row |
 |---|---|
-| `semantics/stdlib_registry.py` | the parameter types |
+| `semantics/stdlib_registry.py` | the parameter types (every table, not only these two) |
 | the module's `get_builtin_*_return_type` | the Ok type and the error enum |
 | `semantics/generics/instantiate/expressions.py` | the Result (and Maybe) to intern |
 | `backend/expressions/calls/stdlib/` | the LLVM parameter types and the marshalling |
@@ -65,15 +65,34 @@ def test_every_row_is_a_signature(layer, name, sig):
 
 # -- the readers ---------------------------------------------------------------
 
-@pytest.mark.parametrize(("layer", "name", "sig"), EVERY_ROW, ids=ROW_IDS)
-def test_the_registry_reads_the_table(layer, name, sig):
-    """The registry's parameter spec IS the row, never a second spelling."""
+# The registry keys a parameter spec by the last segment of the module's `use` path.
+REGISTRY_KEYS = {
+    "time": "time", "sys/env": "env", "sys/process": "process", "math": "math",
+    "random": "random", "io/files": "files", "net/socket": "socket",
+}
+
+
+def _every_table_row():
+    from sushi_lang.semantics.stdlib_registry import signature_tables
+
+    return [(module_path, name, sig)
+            for module_path, table in sorted(signature_tables().items())
+            for name, sig in table.items()]
+
+
+EVERY_TABLE_ROW = _every_table_row()
+
+
+@pytest.mark.parametrize(("module_path", "name", "sig"), EVERY_TABLE_ROW,
+                         ids=[f"{m}:{n}" for m, n, _s in EVERY_TABLE_ROW])
+def test_the_registry_reads_the_table(module_path, name, sig):
+    """The registry's parameter spec IS the row, never a second spelling -- in every table."""
     from sushi_lang.semantics.stdlib_registry import _get_param_specs
 
     specs = _get_param_specs()
-    module = "socket" if layer == "socket" else "files"
-    assert (module, name) in specs, f"the registry has no spec for {name}"
-    assert specs[(module, name)] == [param.ty for param in sig.params]
+    key = (REGISTRY_KEYS[module_path], name)
+    assert key in specs, f"the registry has no spec for {module_path}:{name}"
+    assert specs[key] == [param.ty for param in sig.params]
 
 
 @pytest.mark.parametrize(("layer", "name", "sig"), EVERY_ROW, ids=ROW_IDS)

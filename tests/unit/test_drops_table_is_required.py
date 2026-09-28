@@ -11,10 +11,6 @@ from sushi_lang.semantics.passes.borrow.types import TypeQueries
 from sushi_lang.semantics.tables import SymbolTables
 
 
-
-
-
-
 def test_borrow_checker_refuses_missing_tables():
     with pytest.raises(TypeError):
         BorrowChecker(Reporter(source="", filename="probe.sushi"))

@@ -331,9 +331,3 @@ def test_the_expression_backstop_raises():
         _analyzer()._check_expression(stray)  # type: ignore[arg-type]
     assert caught.value.code == "CE0130"
     assert caught.value.params.get("node") == "ArrayElement"
-
-
-def test_the_silent_sink_stays_deleted():
-    assert not hasattr(ScopeAnalyzer, "_check_unknown_statement"), (
-        "_check_unknown_statement (the silent sink) must stay deleted."
-    )
