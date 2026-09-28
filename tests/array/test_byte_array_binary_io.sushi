@@ -1,5 +1,4 @@
-# TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Hello, World!
+# EXPECT_STDOUT_EXACT: "Hello, World!"
 # Test binary I/O operations with byte arrays
 
 use <io/fs>

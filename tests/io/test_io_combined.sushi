@@ -1,6 +1,6 @@
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Welcome to Sushi I/O!\nThis is stdout\nTesting variables\n"
+# EXPECT_STDERR_CONTAINS: "This is stderr\n"
 
 use <io/fs>
 
