@@ -8,7 +8,7 @@
 # EXPECT_STDERR_CONTAINS: note: 'first' borrows from 'xs' here
 # EXPECT_STDERR_CONTAINS: note: 'first' is used here, after the change
 # EXPECT_STDERR_CONTAINS: help: call `.push()` after the last use of 'first', or bind an independent value with `.clone()`
-# EXPECT_STDERR_CONTAINS: :31:19: error [CE2411]: cannot consume 'xs[0]': another owner keeps this value.
+# EXPECT_STDERR_CONTAINS: :31:17: error [CE2411]: cannot consume 'xs[0]': another owner keeps this value.
 # EXPECT_STDERR_CONTAINS: note: 'xs' owns this value and still frees it
 # EXPECT_STDERR_CONTAINS: help: clone it to take an independent value: `xs[0].clone()`
 perk Display:

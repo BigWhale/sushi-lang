@@ -69,6 +69,7 @@ def validate_generic_function_call(
 
     type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
+        _walk_generic_fn_values(validator, call)
         if not contested:
             er.emit(
                 validator.reporter,
@@ -97,6 +98,7 @@ def validate_generic_function_call(
     home_unit = getattr(generic_func, "unit_name", None)
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
     if func_sig is None:
+        _walk_generic_fn_values(validator, call)
         er.emit(
             validator.reporter,
             er.ERR.CE2061,
@@ -122,13 +124,28 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
     miscounted. The count is the template's: its fixed parameters, and at least that
     many when a pack parameter takes the rest. The types are not compared here; that is
     the instance's check, once the count fits.
+
+    A generic function value is walked later, against its substituted parameter type
+    (#1029): walked here with no type, it was CE2093 before the callee was solved.
     """
-    fixed = [p for p in generic_func.params if not p.is_pack]
-    has_pack = len(fixed) != len(generic_func.params)
+    count = sum(1 for p in generic_func.params if not p.is_pack)
+    has_pack = count != len(generic_func.params)
+    args = call.args
+    fits = len(args) >= count if has_pack else len(args) == count
+    typed = [arg for arg in args if not names_generic_fn_value(validator, arg)]
+    if fits and len(typed) != len(args):
+        args, count, has_pack = typed, len(typed), False
     return not check_arguments(
-        validator, written, [None] * len(fixed), call.args, call.callee.loc,
+        validator, written, [None] * count, args, call.callee.loc,
         mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
         minimum_arity=has_pack, stop_on_arity=True)
+
+
+def _walk_generic_fn_values(validator: 'TypeValidator', call: Call) -> None:
+    """Walk the generic function values the count check left, when no instance is solved."""
+    for arg in call.args:
+        if names_generic_fn_value(validator, arg):
+            validator.validate_expression(arg)
 
 
 def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Optional[tuple]:
@@ -217,18 +234,46 @@ def _infer_type_args_from_call_site(
     call: Call,
     generic_func
 ) -> Optional[tuple]:
-    """Infer type arguments from call site arguments."""
+    """Infer type arguments from call site arguments.
+
+    A generic function value is not typed here: the callee types it, once the other
+    arguments solve the callee (#1029).
+    """
     from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
     call_args = getattr(call, "args", []) or []
-    arg_types = []
+    arg_types: list = []
     for arg_expr in call_args:
+        if names_generic_fn_value(validator, arg_expr):
+            arg_types.append(None)
+            continue
         arg_type = validator.infer_expression_type(arg_expr)
         if arg_type is None or isinstance(arg_type, UnknownType):
             return None
         arg_types.append(resolve_unknown_type(arg_type, structs, enums))
 
     return infer_flat_type_args(generic_func, arg_types, structs, enums)
+
+
+def names_generic_fn_value(validator: 'TypeValidator', expr) -> bool:
+    """The expression is a generic function written as a value, bare or behind an alias.
+
+    A local and the unit's own concrete function win the bare name, as they do in
+    `visit_name`.
+    """
+    from sushi_lang.semantics.ast import MemberAccess, Name
+    from .user_defined import own_concrete_function
+    if isinstance(expr, Name):
+        return (expr.id not in validator.variable_types
+                and own_concrete_function(validator.func_table, expr.id,
+                                          validator.current_unit_name) is None
+                and validator.generic_sig(expr.id) is not None)
+    if isinstance(expr, MemberAccess) and isinstance(expr.receiver, Name):
+        if expr.receiver.id in validator.variable_types:
+            return False
+        binding = validator.resolve_namespaced(expr.receiver, expr.member)
+        return binding is not None and binding.kind == "generic function"
+    return False

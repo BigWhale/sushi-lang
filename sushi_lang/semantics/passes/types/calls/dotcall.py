@@ -164,6 +164,7 @@ def validate_variant_spelling(validator: 'TypeValidator', node, variant_name: st
         variant_name=variant_name,
         args=args,
         enum_name_span=node.receiver.loc,
+        variant_name_span=getattr(node, 'member_span', None),
         loc=node.loc,
     )
     constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)

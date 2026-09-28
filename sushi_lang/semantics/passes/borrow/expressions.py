@@ -1,9 +1,10 @@
 """Expression walking. Every `Expr` node has an arm; the `else` is a hard CE0125."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
     ArrayLiteral,
     BinaryOp,
@@ -121,6 +122,7 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
 
 def _check_name(checker: 'BorrowChecker', expr: Name) -> None:
     """A bare name: report a use after a move, after a destroy, or after an invalidation."""
+    checker.err.meet(expr)
     state = checker.borrow_state.get(expr.id)
     if state is None:
         return
@@ -128,9 +130,21 @@ def _check_name(checker: 'BorrowChecker', expr: Name) -> None:
         emit_use_after_move(checker, expr.id, expr.loc, state)
     elif state.is_destroyed:
         checker.err.emit(er.ERR.CE2406, expr.loc, name=expr.id)
-    elif state.invalidated_at is not None:
-        # A `let`-borrow binding read after its owner changed (#242).
-        emit_use_of_invalidated_borrow(checker, expr.id, expr.loc, state)
+    else:
+        reject_a_use_after_the_change(checker, expr.id, expr.loc)
+
+
+def reject_a_use_after_the_change(checker: 'BorrowChecker', name: str,
+                                  span: Optional[Span]) -> bool:
+    """Report CE2412 for a use of a binding whose owner changed; True when reported.
+
+    A read and a store through a `poke` reference are both uses (#242, #1026).
+    """
+    state = checker.borrow_state.get(name)
+    if state is None or state.invalidated_at is None:
+        return False
+    emit_use_of_invalidated_borrow(checker, name, span, state)
+    return True
 
 
 def _check_call(checker: 'BorrowChecker', expr: Call) -> None:

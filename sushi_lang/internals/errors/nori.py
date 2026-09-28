@@ -53,6 +53,9 @@ _nori("NE1009", "'{path}' already exists",
       "`nori init` does not write over a manifest.")
 _nori("NE1010", "'{path}' is not UTF-8 text",
       "A manifest is TOML, and TOML is UTF-8.")
+_nori("NE1011", "'{path}': {field} must be {expected}, not {found}",
+      "Each manifest field has one TOML type: a string, or a list of strings. The reader "
+      "checks every field before it uses one, so a string is never read as a list.")
 
 # The archive (NE20xx)
 _nori("NE2001", "'{path}' is not a readable .nori archive: {reason}",

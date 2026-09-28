@@ -1,0 +1,13 @@
+# One `poke` reference to an owner at a time. The `foreach(poke r in a.iter())` item
+# is a second writer of `a` while the `let poke` binding `w` still lives, so the loop
+# is CE2403, with a note at the `let poke`.
+# EXPECT_ERROR_CODES_EXACT: CE2403
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let poke i32[] w = a
+    foreach(poke r in a.iter()):
+        r := 7
+    w.push(9)
+    println(a.len())
+    return Result.Ok(0)

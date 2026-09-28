@@ -152,6 +152,7 @@ def consume(checker: 'BorrowChecker', expr: Expr) -> None:
     expr.ownership_provenance = provenance
 
     if isinstance(expr, Name):
+        checker.err.meet(expr)
         consume_named(checker, expr.id, provenance, expr.loc)
         return
 

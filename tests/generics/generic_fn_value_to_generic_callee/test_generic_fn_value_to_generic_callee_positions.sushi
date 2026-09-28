@@ -1,0 +1,25 @@
+# A generic function value to a generic callee is solved in any argument
+# position, for a value whose return names the type parameter, and behind an
+# alias on the value and on the callee (#1029).
+# EXPECT_STDOUT_EXACT: "7\n41\n5\n7\n"
+use "helpers/libcallee" as l
+
+fn seven@(T)(T x) i32:
+    let u64 h = x.hash()
+    return Result.Ok(7 + (h & 0) as i32)
+
+fn same@(T)(T x) T:
+    return Result.Ok(x)
+
+fn flip@(T)(T x, fn(T) -> i32 f) i32:
+    return Result.Ok(f(x).realise(0))
+
+fn run@(T)(fn(T) -> T f, T x) T:
+    return Result.Ok(f(x).realise(x))
+
+fn main() i32:
+    println(flip("s", seven).realise(0))
+    println(run(same, 41).realise(0))
+    println(l.apply(l.five, 3).realise(0))
+    println(l.apply(seven, 3).realise(0))
+    return Result.Ok(0)

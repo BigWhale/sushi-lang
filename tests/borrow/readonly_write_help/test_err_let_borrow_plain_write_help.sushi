@@ -1,0 +1,14 @@
+# A write through a `let`-borrow of a plain `i32[]` is CE2426, and the type can be
+# cloned, so the help still offers the copy escape in full.
+# EXPECT_ERROR_CODES_EXACT: CE2426
+# EXPECT_STDERR_CONTAINS: "take an independent value with `v.clone()`, mutate it, and store it back"
+
+struct H:
+    i32[] items
+
+fn main() i32:
+    let H h = H(from([1, 2]))
+    let i32[] v = h.items
+    v.push(3)
+    println(h.items.len())
+    return Result.Ok(0)

@@ -12,7 +12,9 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
-from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
+from sushi_lang.semantics.generics.monomorphize.unroll import (
+    WrittenLet, written_binder, written_let,
+)
 from sushi_lang.semantics.name_ladder import BareName, classify
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
@@ -43,7 +45,8 @@ class VariableInfo:
     name: str
     declared_at: Optional[Span]
     used: bool = False
-    # The `let` as written in an `expand` body, when this is one of its copies (#1019).
+    # The binder as written in an `expand` body, when this is one of its copies
+    # (#1019, #1031).
     written: Optional[WrittenLet] = None
 
 
@@ -383,7 +386,7 @@ class ScopeAnalyzer:
         self._capture_collectors.append(collector)
         self._push_scope()
         for p in lam.params:
-            self._declare_variable(p.name, p.name_span)
+            self._declare_variable(p.name, p.name_span, written_binder(lam, p.name))
         if isinstance(lam.body, Block):
             self._check_block(lam.body)
         else:
@@ -582,7 +585,8 @@ class ScopeAnalyzer:
                     no_frame_slot=True)
 
         self._push_scope()
-        self._declare_variable(stmt.item_name, stmt.item_name_span)
+        self._declare_variable(stmt.item_name, stmt.item_name_span,
+                               written_binder(stmt, stmt.item_name))
         self._loop_depth += 1
         self._check_block(stmt.body)
         self._loop_depth -= 1
@@ -623,20 +627,23 @@ class ScopeAnalyzer:
         for binding_item in pattern.bindings:
             if isinstance(binding_item, str):
                 if binding_item != "_":
-                    self._declare_variable(binding_item, pattern.loc)
+                    self._declare_variable(binding_item, pattern.loc,
+                                           written_binder(pattern, binding_item))
             elif isinstance(binding_item, Pattern):
                 self._declare_pattern_bindings(binding_item)
             elif isinstance(binding_item, OwnPattern):
                 inner = binding_item.inner_pattern
                 if isinstance(inner, str):
                     if inner != "_":
-                        self._declare_variable(inner, binding_item.loc or pattern.loc)
+                        self._declare_variable(inner, binding_item.loc or pattern.loc,
+                                               written_binder(binding_item, inner))
                 elif isinstance(inner, Pattern):
                     self._declare_pattern_bindings(inner)
             else:
                 # A RefBinding (#300 phase 3) declares its name like a plain binding;
                 # it carries its own span.
-                self._declare_variable(binding_item.name, binding_item.loc or pattern.loc)
+                self._declare_variable(binding_item.name, binding_item.loc or pattern.loc,
+                                       written_binder(pattern, binding_item.name))
 
     def _check_break(self, stmt: Break) -> None:
         """Check a break statement (only legal inside a loop)."""

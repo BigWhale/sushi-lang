@@ -387,8 +387,10 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     is the extension symbol -- one authority for the name, shared with the declaration
     and every ordinary call site.
     """
+    from sushi_lang.backend.ownership import drops_of
+
     name = getattr(value_type, "name", None)
-    if name is None or not codegen.perk_impl_table.implements(name, "Drop"):
+    if name is None or name not in drops_of(codegen):
         return
 
     from sushi_lang.semantics.generics.name_mangling import extension_symbol

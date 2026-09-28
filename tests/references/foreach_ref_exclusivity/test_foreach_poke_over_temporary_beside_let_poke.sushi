@@ -1,0 +1,13 @@
+# A `foreach(poke r in ...)` over an owned temporary has no named owner: the loop owns
+# the temporary, so its item conflicts with no live reference of `a`.
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let poke i32[] w = a
+    foreach(poke r in a.clone().iter()):
+        r := 7
+    w.push(9)
+    println(a.len())
+    return Result.Ok(0)

@@ -1,0 +1,15 @@
+# A generic function value passed to a generic callee is solved against the
+# parameter type that the other arguments fix: T = i32 from `3`, then
+# gen@(i32) from fn(i32) -> i32 (#1029).
+# EXPECT_STDOUT_EXACT: "true\n7\n"
+fn gen@(T)(T x) i32:
+    let u64 h = x.hash()
+    println(h > 0)
+    return Result.Ok(7)
+
+fn apply@(T)(fn(T) -> i32 f, T x) i32:
+    return Result.Ok(f(x).realise(0))
+
+fn main() i32:
+    println(apply(gen, 3).realise(0))
+    return Result.Ok(0)

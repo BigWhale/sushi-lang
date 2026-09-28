@@ -496,8 +496,14 @@ type args, rewrites the `Name` to the mangled concrete name, and infers the conc
 The backend is unchanged — the mangled monomorphized function materializes as an ordinary fn value.
 
 A generic-fn reference **into a higher-order function** works the same way. With a concrete
-parameter type the bare argument is enough (`take(identity)` against `fn(i32) -> i32`); a generic
-callee whose own type argument must come from the value still needs a typed local first:
+parameter type the bare argument is enough (`take(identity)` against `fn(i32) -> i32`). A GENERIC
+callee is solved in two steps (#1029, ruling of 2026-09-28): the solver leaves the generic-fn
+value out of its first pass and solves the callee's type arguments from the other arguments; then
+it puts them into that parameter's type and solves the value against it, as against any declared
+position. `apply@(T)(fn(T) -> i32 f, T x)` called as `apply(gen, 3)` gets `T = i32` from `3` and
+then `gen@(i32)` from `fn(i32) -> i32`. This is not general unification: a callee type argument
+that only the value can supply (`U` in `map`, below) is not solved, and the value needs a typed
+local first:
 
 ```sushi
 use <collections/iter>
@@ -518,7 +524,8 @@ What still stays CE2093 is covered once, in Part II §4.
 
 Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
 `tests/generics/test_generic_fn_ref_higher_order.sushi`,
-`tests/generics/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`.
+`tests/generics/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`,
+`tests/generics/generic_fn_value_to_generic_callee/`.
 
 ## 9. Diagnostics (live)
 
@@ -694,9 +701,12 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-A generic callee whose own type argument must come from the function value
-(`apply@(T)(fn(T) -> i32 f, T x)` called as `apply(gen, 3)`) is still CE2060 + CE2093; bind the
-value to a typed local first. Extension methods, perk methods, and FFI externals remain outside
+A generic callee is solved from its other arguments first, and the value then from the
+substituted parameter type (#1029): `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
+solves. A value that the substituted type does not solve is CE2093; a callee whose type argument
+comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is CE2060 + CE2093.
+Bind the value to a typed local first. Inside a generic body a generic-fn value is still CE2093,
+for a concrete callee and a generic one alike. Extension methods, perk methods, and FFI externals remain outside
 CE2093 entirely -- they are not in the function table at all, so a bare reference to one is CE1001
 (undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
 deferred capability).

@@ -24,34 +24,14 @@ class TypeResolver:
         return resolve_unknown_type(ty, self.struct_table, self.enum_table)
 
     def resolve_type_args(self, type_args: Tuple['Type', ...]) -> Tuple['Type', ...]:
-        """Resolve all UnknownType instances in type_args tuple."""
-        from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
-        from sushi_lang.semantics.generics.types import GenericTypeRef
+        """Every type argument resolved through `type_walk.map_named_types`.
 
-        resolved_args = []
-        for arg in type_args:
-            resolved_arg = resolve_unknown_type(arg, self.struct_table, self.enum_table)
+        A descent of its own entered an array element and a `GenericTypeRef`'s arguments
+        alone, so a name in a function type's arms came back unresolved (#791).
+        """
+        from sushi_lang.semantics.type_walk import map_named_types
 
-            if isinstance(resolved_arg, (ArrayType, DynamicArrayType)):
-                resolved_base = resolve_unknown_type(
-                    resolved_arg.base_type,
-                    self.struct_table,
-                    self.enum_table
-                )
-                if isinstance(resolved_arg, ArrayType):
-                    resolved_arg = ArrayType(base_type=resolved_base, size=resolved_arg.size)
-                else:
-                    resolved_arg = DynamicArrayType(base_type=resolved_base)
-            elif isinstance(resolved_arg, GenericTypeRef):
-                resolved_nested_args = self.resolve_type_args(resolved_arg.type_args)
-                resolved_arg = GenericTypeRef(
-                    base_name=resolved_arg.base_name,
-                    type_args=resolved_nested_args
-                )
-
-            resolved_args.append(resolved_arg)
-
-        return tuple(resolved_args)
+        return tuple(map_named_types(arg, self.resolve) for arg in type_args)
 
     def resolve_generic_type_ref(self, ty: 'Type') -> 'Type':
         """Resolve GenericTypeRef to monomorphized EnumType or StructType."""

@@ -1,0 +1,12 @@
+# A `peek` reference and a `poke` reference to one owner cannot live together. The
+# `foreach(poke r in a.iter())` item writes `a` while the `let peek` binding `w` still
+# reads it, so the loop is CE2407.
+# EXPECT_ERROR_CODES_EXACT: CE2407
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let peek i32[] w = a
+    foreach(poke r in a.iter()):
+        r := 7
+    println(w.len())
+    return Result.Ok(0)

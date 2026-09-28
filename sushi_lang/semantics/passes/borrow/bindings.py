@@ -448,13 +448,25 @@ def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
         return
     owner = scrutinee if kind is ScrutineeKind.BORROWED or isinstance(scrutinee, Name) \
         else None
-    root = root_owner(owner)
-    owner_state = checker.borrow_state.get(root) if root else None
-    if owner_state is not None and reject_a_second_writer(
-            checker, root, owner_state, marker != READ_ONLY_MODE, span,
-            siblings=scope.frozen_bindings()):
+    if owner is not None and reject_a_second_reference(
+            checker, owner, marker, span, siblings=scope.frozen_bindings()):
         owner = None
     scope.bind_ref(name, ty, marker, span, owner=owner, declared_at=span)
+
+
+def reject_a_second_reference(checker: 'BorrowChecker', place: Expr, marker: str,
+                              span: Optional[Span],
+                              siblings: frozenset = frozenset()) -> bool:
+    """Report a new reference into `place` that a live reference of its root excludes.
+
+    A pattern binding and a `foreach` item both ask this before they bind (#1027).
+    """
+    root = root_owner(place)
+    owner_state = checker.borrow_state.get(root) if root else None
+    if owner_state is None:
+        return False
+    return reject_a_second_writer(checker, root, owner_state, marker != READ_ONLY_MODE,
+                                  span, siblings=siblings)
 
 
 def _is_a_place(expr: Expr) -> bool:

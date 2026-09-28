@@ -1,11 +1,18 @@
 """The borrow pass's diagnostics name the written local of an `expand` copy (#1022).
 
 The unroll gives each top-level `let` of an `expand` copy a hidden name, and every
-copy of one written `let` carries one `WrittenLet` record. This reporter is the one
-seam between the borrow pass and the diagnostic: a hidden name that is a copy local of
-this body prints as its written name, and a fault that names a copy local is told once
-per written statement. "The same fault" is the code, the record of each copy local it
-names, and the written span (`written_span`) -- identities, never text or columns.
+copy of one written `let` carries one `WrittenLet` record. The loop variable becomes
+the hidden name of a pack element, and each renamed `Name` carries the record of the
+written variable (#1031). This reporter is the one seam between the borrow pass and
+the diagnostic: a hidden name that is a copy local or a loop variable of this body
+prints as its written name, and a fault that names one is told once per written
+statement. "The same fault" is the code, the record of each name it names, and the
+written span (`written_span`) -- identities, never text or columns.
+
+One pack element name stands for a different loop variable in a sibling or a nested
+`expand`, so the reporter reads the record from the NODE: the pass calls `meet` on
+each `Name` it reads, and a hidden name then prints as the variable of the last node
+met with that name.
 """
 
 from __future__ import annotations
@@ -16,7 +23,10 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional, Set
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import DiagnosticBuilder, Reporter, Span
 from sushi_lang.semantics.error_reporter import PassErrorReporter, _NullDiagnosticBuilder
-from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_span
+from sushi_lang.semantics.ast import Name
+from sushi_lang.semantics.generics.monomorphize.unroll import (
+    WrittenLet, written_span, written_variable,
+)
 from sushi_lang.semantics.hidden_names import HIDDEN_MARK
 
 if TYPE_CHECKING:
@@ -33,10 +43,18 @@ class WrittenNameReporter(PassErrorReporter):
         super().__init__(reporter)
         self._states = states
         self._told: Set[tuple] = set()
+        self._variables: Dict[str, WrittenLet] = {}
 
     def enter_body(self) -> None:
-        """Forget the faults told in the previous body."""
+        """Forget the faults told and the loop variables met in the previous body."""
         self._told = set()
+        self._variables = {}
+
+    def meet(self, name: Name) -> None:
+        """Read the written loop variable that a renamed ``name`` stands for, if any."""
+        record = written_variable(name)
+        if record is not None:
+            self._variables[name.id] = record
 
     def emit(self, error_msg: er.ErrorMessage, span: Optional[Span], **kwargs) -> None:
         self.emit_with(error_msg, span, **kwargs).emit()
@@ -59,7 +77,9 @@ class WrittenNameReporter(PassErrorReporter):
 
     def _record_of(self, name: str) -> Optional[WrittenLet]:
         state = self._states().get(name)
-        return state.written if state is not None else None
+        if state is not None and state.written is not None:
+            return state.written
+        return self._variables.get(name)
 
     def _told_before(self, code: str, span: Optional[Span], values) -> bool:
         written = written_span(span)

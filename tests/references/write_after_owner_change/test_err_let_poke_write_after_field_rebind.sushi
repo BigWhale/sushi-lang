@@ -1,0 +1,20 @@
+# A `let poke` binding freezes its owner. The field `b.s` changes while `w` still lives,
+# so the store `w := ...` is a use after the change and is CE2412.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+enum Shade:
+    Dim(string)
+    Lit(i32)
+
+struct Box:
+    Shade s
+
+fn main() i32:
+    let Box b = Box(Shade.Dim("abc".clone()))
+    let poke Shade w = b.s
+    b.s := Shade.Lit(2)
+    w := Shade.Lit(3)
+    match b.s:
+        Shade.Dim(t) -> println(t)
+        Shade.Lit(n) -> println(n)
+    return Result.Ok(0)

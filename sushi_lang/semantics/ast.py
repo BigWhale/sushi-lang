@@ -635,6 +635,7 @@ class IndexAccess(Node):
                                             # as CE0019 (#286). Siblings:
                                             # `inferred_return_type`,
                                             # `inferred_unwrapped_type`.
+    index_span: Optional[Span] = None  # the `[index]` postfix; `loc` is the whole read
 
 UnOp = Literal["neg", "not", "~"]
 @dataclass(slots=True)
@@ -803,6 +804,7 @@ class MemberAccess(Node):
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
     resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
     expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
+    member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
 
 @dataclass(slots=True)
 class EnumConstructor(Node):

@@ -591,9 +591,15 @@ class FunctionMonomorphizer:
                 return None
             return resolve_explicit_type_args(call.type_args, structs, enums)
 
+        from sushi_lang.semantics.passes.types.calls.generics import names_generic_fn_value
         inferrer = self._get_arg_inferrer(var_types)
-        arg_types = []
+        arg_types: list[Type | None] = []
         for arg_expr in getattr(call, "args", []) or []:
+            # A generic function value is typed by the callee, as in the passes around
+            # this one (#1029).
+            if inferrer is not None and names_generic_fn_value(inferrer, arg_expr):
+                arg_types.append(None)
+                continue
             # The var-type map is the fallback for unit-test paths with no SymbolTables.
             arg_type = infer_call_arg_type(inferrer, arg_expr)
             if arg_type is None and isinstance(arg_expr, Name) and arg_expr.id in var_types:

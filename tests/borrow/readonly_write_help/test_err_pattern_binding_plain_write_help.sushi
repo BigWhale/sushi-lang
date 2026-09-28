@@ -1,0 +1,15 @@
+# A write through a bare pattern binding of a plain `i32[]` payload is CE2414. The type
+# can be cloned, so the help offers the copy escape with its "store it back" tail.
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "where the match owns its scrutinee -- otherwise take an independent value with `items.clone()`, mutate it, and store it back"
+
+enum Slot:
+    Held(i32[])
+    Empty
+
+fn main() i32:
+    let Slot s = Slot.Held(from([1, 2]))
+    match s:
+        Slot.Held(items) -> items.push(3)
+        Slot.Empty -> println("empty")
+    return Result.Ok(0)

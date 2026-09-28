@@ -219,6 +219,19 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     return f"{no_share}; restructure so only one owner is needed"
 
 
+def write_escape(checker: 'BorrowChecker', text: str, ty) -> str:
+    """The escape clause a refused write through a view offers after its own modes.
+
+    The copy escape is the one with the "mutate it, and store it back" tail. A type
+    that owns a resource has no copy (CE2431), so it gets only the escapes that compile
+    (#1033).
+    """
+    if not refuses_clone(checker, ty):
+        return (f"take an independent value with `{text}.clone()`, mutate it, and store "
+                f"it back")
+    return escape_help(checker, text, ty, handover=False)
+
+
 def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
     text = expr_to_string(expr)

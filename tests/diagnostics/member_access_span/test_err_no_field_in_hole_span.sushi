@@ -1,0 +1,11 @@
+# A member access inside an interpolation hole keeps its member span in the file,
+# not in the text of the hole (#1030).
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: test_err_no_field_in_hole_span.sushi:10:16: error [CE2106]
+struct P:
+    i32 x
+
+fn main() i32:
+    let P p = P(1)
+    println("{p.y}")
+    return Result.Ok(0)

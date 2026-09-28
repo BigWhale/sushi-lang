@@ -710,7 +710,7 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
         return
 
     shown = display_type(receiver_type)
-    builder = er.emit_with(validator.reporter, er.ERR.CE2106, node.loc,
+    builder = er.emit_with(validator.reporter, er.ERR.CE2106, node.member_span or node.loc,
                            type=shown, field=node.member)
     if _is_a_method(validator, receiver_type, node.member):
         builder.note(f"'{shown}.{node.member}()' is a method, not a field").help(
