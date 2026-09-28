@@ -1,0 +1,14 @@
+# A write through a by-value parameter of a method of a plain `List@(i32)` is CE2422.
+# The type can be cloned, so the help still offers the copy escape.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+# EXPECT_STDERR_CONTAINS: "declare the parameter `poke` if the method must write through it, or take an independent value with `v.clone()`\n"
+
+struct Box:
+    i32 n
+
+extend Box drain(List@(i32) v) i32:
+    v.clear()
+    return self.n
+
+fn main() i32:
+    return Result.Ok(0)
