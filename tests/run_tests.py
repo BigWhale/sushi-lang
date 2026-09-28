@@ -1092,6 +1092,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Run only the fixtures that never execute a binary (every "
                             "test_err_ and most test_warn_). A selector, not a weaker "
                             "check: what it selects is asserted in full")
+    parser.add_argument("--fresh-processes", action="store_true",
+                       help="Start a fresh sushic process for every compile, not a child "
+                            "of the fork-server. An execution strategy: the answer is "
+                            "the same, and every check runs")
 
     return parser
 
@@ -1131,6 +1135,8 @@ def main():
         sys.argv.append("--allow-leak-skips")
     if args.compile_only:
         sys.argv.append("--compile-only")
+    if args.fresh_processes:
+        sys.argv.append("--fresh-processes")
     rc = enhanced_test_runner.main()
 
     # After the run, which builds the stdlib the gate's libraries import. The report
