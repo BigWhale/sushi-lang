@@ -1,0 +1,40 @@
+perk Scored:
+    fn score() i32
+
+perk Named:
+    fn name() string
+
+struct Player:
+    string handle
+    i32 points
+
+extend Player with Scored:
+    fn score() i32:
+        return self.points
+
+extend Player with Named:
+    fn name() string:
+        return self.handle.clone()
+
+fn best@(T: Scored)(nom T a, nom T b) T:
+    if (a.score() >= b.score()):
+        return Result.Ok(a)
+    return Result.Ok(b)
+
+fn announce@(T: Scored + Named)(T who) ~:
+    println("{who.name()} has {who.score()} points")
+    return Result.Ok(~)
+
+struct Keyed@(K: Hashable):
+    K key
+    string note
+
+fn main() i32:
+    let Player ford = Player("Ford", 17)
+    let Player arthur = Player("Arthur", 42)
+    let Player winner = best(nom ford, nom arthur).realise(Player("nobody", 0))
+    announce(winner)
+
+    let Keyed@(string) k = Keyed("towel", "always know where it is")
+    println("key {k.key}: {k.note}")
+    return Result.Ok(0)

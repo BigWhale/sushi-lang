@@ -1,0 +1,28 @@
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "Box({self.item})"
+
+struct Label@(T):
+    T value
+
+extend Label@(i32) with Show:
+    fn show() string:
+        return "label number {self.value}"
+
+fn render@(S: Show)(S thing) string:
+    return Result.Ok("rendered {thing.show()}")
+
+fn main() i32:
+    let Box@(i32) n = Box(42)
+    let Box@(string) s = Box("towel")
+    let Label@(i32) l = Label(7)
+    println(render(n).realise("failed"))
+    println(render(s).realise("failed"))
+    println(render(l).realise("failed"))
+    return Result.Ok(0)

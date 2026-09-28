@@ -1,0 +1,16 @@
+fn identity@(T)(nom T x) T:
+    return Result.Ok(x)
+
+fn empty_list@(T)() List@(T):
+    let List@(T) xs = List.new()
+    return Result.Ok(xs)
+
+fn main() i32:
+    let i32 n = identity@(i32)(nom 5).realise(0)
+    println("identity@(i32) gives {n}")
+
+    let List@(string) names = empty_list@(string)().realise(List.new())
+    names.push("Zaphod")
+    println("empty_list@(string) now holds {names.len()} name")
+
+    return Result.Ok(0)

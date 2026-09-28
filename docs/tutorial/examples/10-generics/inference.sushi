@@ -2,8 +2,6 @@ struct Pair@(T, U):
     T first
     U second
 
-# A pass-through hands its argument onward, so it declares `nom`: the mode is part of the
-# signature and does not vary per instantiation.
 fn identity@(T)(nom T x) T:
     return Result.Ok(x)
 

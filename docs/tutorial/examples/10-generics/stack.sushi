@@ -1,0 +1,41 @@
+use <collections/strings>
+
+struct Stack@(T):
+    List@(T) items
+
+extend Stack@(T) static new() Stack@(T):
+    return Stack(List.new())
+
+extend Stack@(T) push(poke self, nom T v) ~:
+    self.items.push(v)
+
+extend Stack@(T) pop(poke self) Maybe@(T):
+    return self.items.pop()
+
+extend Stack@(T) size() i32:
+    return self.items.len()
+
+extend Stack@(T) mapped@(U)(fn(T) -> U f) Stack@(U) | StdError:
+    let Stack@(U) out = Stack.new()
+    foreach(x in self.items.iter()):
+        out.push(nom f(x)??)
+    return Result.Ok(out)
+
+fn main() i32:
+    let Stack@(string) crew = Stack.new()
+    crew.push(nom "Arthur")
+    crew.push(nom "Ford")
+    crew.push(nom "Zaphod")
+    println("the stack holds {crew.size()} names")
+
+    match crew.pop():
+        Maybe.Some(top) -> println("popped {top}")
+        Maybe.None() -> println("the stack is empty")
+
+    let Stack@(i32) lengths = crew.mapped(|string s| s.size()).realise(Stack.new())
+    while (lengths.size() > 0):
+        match lengths.pop():
+            Maybe.Some(n) -> println("a name of {n} bytes")
+            Maybe.None() -> println("the stack is empty")
+
+    return Result.Ok(0)

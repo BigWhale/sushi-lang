@@ -1,0 +1,30 @@
+enum ParseError@(T):
+    Empty
+    TooLarge(T)
+
+fn first_below@(T)(T[] xs, i32 limit) i32 | ParseError@(i32):
+    if (xs.len() == 0):
+        return Result.Err(ParseError.Empty)
+    if (xs.len() > limit):
+        return Result.Err(ParseError.TooLarge(xs.len()))
+    return Result.Ok(xs.len())
+
+fn check(string[] words) i32 | ParseError@(i32):
+    let i32 n = first_below(words, 3)??
+    return Result.Ok(n * 10)
+
+fn report(string[] words) ~:
+    match check(words):
+        Result.Ok(n) -> println("accepted, score {n}")
+        Result.Err(ParseError.Empty) -> println("refused: no words")
+        Result.Err(ParseError.TooLarge(count)) -> println("refused: {count} words is too many")
+    return Result.Ok(~)
+
+fn main() i32:
+    let string[] two = from(["Mostly", "Harmless"])
+    let string[] none = from([])
+    let string[] four = from(["So", "long", "and", "thanks"])
+    report(two)
+    report(none)
+    report(four)
+    return Result.Ok(0)
