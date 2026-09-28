@@ -356,7 +356,7 @@ deadline.
 | A body-level pass may not read the AST | `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
 | The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | when the old backend is deleted |
 
-A sibling gate is also already in force: `tests/unit/test_llvmlite_containment.py` — no
+A sibling gate is also already in force: the ruff rule `TID251` (`pyproject.toml`) — no
 llvmlite IMPORT outside `backend/` and `sushi_stdlib/`. `semantics` no longer names an
 LLVM type, which is the precondition for both IRs living there.
 

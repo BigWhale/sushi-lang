@@ -76,7 +76,7 @@ exclude = [
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["F", "E", "W", "B", "C901", "S101"]
+select = ["F", "E", "W", "B", "C901", "S101", "TID251"]
 # E501: no formatter is in use (black was dropped unadopted); a line-length gate
 # without a formatter is hand-wrapping busywork with no bug-finding value.
 ignore = ["E501"]
@@ -87,6 +87,14 @@ ignore = ["E501"]
 # S101: `python -O` removes an `assert`, so an invariant in the backend or the driver is
 # `raise_internal_error(<code>)` (#880, #981). An `assert` is legal everywhere else.
 "!sushi_lang/{backend,compiler}/**" = ["S101"]
+# TID251 bans llvmlite: `semantics` must never learn what an LLVM type is, so only the
+# backend and the stdlib generators may import it. The rule is a fence on the compiler
+# package; the tests and the tools may read llvmlite.
+"sushi_lang/{backend,sushi_stdlib}/**" = ["TID251"]
+"!sushi_lang/**" = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"llvmlite".msg = "only sushi_lang/backend and sushi_lang/sushi_stdlib may import llvmlite"
 
 [tool.ruff.lint.mccabe]
 # A RATCHET, set at the worst function in the lint scope and not at a target.
