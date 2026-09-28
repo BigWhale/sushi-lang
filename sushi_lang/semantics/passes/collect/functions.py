@@ -19,6 +19,7 @@ from sushi_lang.semantics.ast import (
     BoundedTypeParam,
     Block,
 )
+from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import (
     Type,
     ArrayType,
@@ -477,6 +478,7 @@ class FunctionCollector:
         self.r = reporter
         self.current_unit_file: Optional[str] = None  # File of the unit being collected
         self.current_unit_name: Optional[str] = None
+        self.refused = RefusedDeclarations()
         # Unit names that came from a source library. A consumer definition that
         # collides with one of theirs SHADOWS it silently, which is the rule a binary
         # library already follows (docs/design/libraries.md section 7). Without this,
@@ -501,7 +503,7 @@ class FunctionCollector:
         funcs = root.functions
         if isinstance(funcs, list):
             for fn in funcs:
-                if isinstance(fn, FuncDef):
+                if isinstance(fn, FuncDef) and self.refused.admits(fn):
                     self._collect_function_def(fn)
 
     def collect_extensions(self, root: Program) -> None:

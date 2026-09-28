@@ -12,6 +12,7 @@ from sushi_lang.semantics.visibility import (
     reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
     PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
+from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
@@ -221,6 +222,7 @@ class PerkCollector:
         # library one silently -- the rule a binary library already follows
         # (docs/design/libraries.md section 7).
         self.current_unit_name: Optional[str] = None
+        self.refused = RefusedDeclarations()
         self.library_units: Set[str] = set()
         # Library impls a consumer replaced. Their bodies are real Sushi code in a real
         # unit, so unless they are dropped from that unit's AST the backend emits both
@@ -235,7 +237,7 @@ class PerkCollector:
         perks = root.perks
         if isinstance(perks, list):
             for perk in perks:
-                if isinstance(perk, PerkDef):
+                if isinstance(perk, PerkDef) and self.refused.admits(perk):
                     self._collect_perk_def(perk)
 
     def collect_implementations(self, root: Program) -> None:

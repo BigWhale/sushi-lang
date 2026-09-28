@@ -1446,6 +1446,26 @@ where the unqualified name is written and nothing says which one is meant, and t
 wins, so it never becomes ambiguous, and a flat `use <math>` no longer takes `sin` away
 from a unit that declares its own.
 
+**In one unit, one name has one declaration, whatever its kind.** A `fn`, a `const`, a
+`var`, a `struct`, an `enum` and a `perk` share one set of names. The second declaration
+of a name in source order is `CE1005`, with a note at the first, and the first keeps the
+name. Two declarations of one kind keep that kind's code (`CE0004`, `CE2046`, `CE4001`,
+`CE0101`, `CE0105`), and a struct beside an enum is `CE0006`. Across units the name may
+be used again: a unit's own `fn box` takes the call `box()` when a flat import brings a
+struct `box`, and the struct is reached behind an alias, `sh.box(2)`. Two TYPES of one
+name in two units stay refused, because a type is one per program.
+
+<!-- docs-sweep: error CE1005 -->
+```sushi
+const i32 box = 3
+
+fn box() i32:               # CE1005: function 'box' already declared in this unit as a constant
+    return Result.Ok(4)
+
+fn main() i32:
+    return Result.Ok(0)
+```
+
 **A local variable wins.** A variable named `my_math` shadows the alias for the rest of
 its scope, exactly as one shadows an FFI namespace.
 

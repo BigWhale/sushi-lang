@@ -89,6 +89,15 @@ identity program-wide, so two units still cannot each declare a `Node`. The line
 this document's to move (phase 2 qualifies the interned name), and a function's
 per-unit identity is a step toward it, not a substitute for it.
 
+A struct and an enum share one type name, so a struct and an enum of one name are
+`CE0006` in every order. The SOURCE order decides which one is the fault (#1069): in one
+unit the declaration written first holds the name and the later one is refused, with a
+note at the first; across units the order is the unit order, and a dependency comes
+first. The holder keeps its table entry, so its uses give no more errors. This rule is for
+TYPE names across units. In ONE unit every kind shares one set of names, and a type beside
+a function, a constant or a perk of the same name is `CE1005`
+(`unit-namespaces.md` section 8).
+
 ## What this does *not* decide
 
 Whether a recursive type is well-*formed* is a separate question, answered by a

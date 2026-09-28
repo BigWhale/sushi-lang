@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.decide.outputs.code }}
+      runner: ${{ steps.decide.outputs.runner }}
 
     steps:
       - name: Checkout code
@@ -45,9 +46,19 @@ jobs:
               - 'tests/**'
               - '.github/**'
               - 'sushic'
+              - 'pytest.ini'
             manifest:
               - 'pyproject.toml'
               - 'uv.lock'
+            runner:
+              - 'tests/run_tests.py'
+              - 'tests/enhanced_test_runner.py'
+              - 'tests/test_metadata.py'
+              - 'tests/fork_server.py'
+              - 'tests/unit/runner/**'
+              - 'tests/leakcheck/**'
+              - 'pytest.ini'
+              - '.github/workflows/test.yml'
 
       - name: Decide whether the suite has to run
         id: decide
@@ -55,6 +66,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           CODE: ${{ steps.paths.outputs.code }}
           MANIFEST: ${{ steps.paths.outputs.manifest }}
+          RUNNER: ${{ steps.paths.outputs.runner }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -74,6 +86,15 @@ jobs:
           fi
           echo "code=$answer" >> "$GITHUB_OUTPUT"
           echo "the suite runs: $answer"
+          # The runner tests test the test runner, so a pull request runs them only when
+          # the runner changes (#1071). Every other event runs them, as for `code`.
+          if [ "$EVENT" != "pull_request" ] || [ "$RUNNER" = "true" ]; then
+            runner=true
+          else
+            runner=false
+          fi
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "the runner tests run: $runner"
 
   # Stage 0: lint. Cheap (seconds) and blocking - the quality gate Tier 5.1
   # installed so the F821/F841 bug class cannot regenerate.
@@ -142,30 +163,43 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: ./.github/actions/setup-sushi
 
+      # Absolute paths: --junit-xml has resolved relative to cwd vs rootdir differently
+      # across pytest majors, and the badges job has to find the file afterwards.
       - name: Run unit tests (pytest)
         if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          # Absolute path: --junit-xml has resolved relative to cwd vs rootdir differently
-          # across pytest majors, and the badges job has to find the file afterwards.
-          # Two runs: the Python layer serially, and the runner tests (`-m runner`, they
-          # start the runner and the compiler) on 4 workers. A runner test that writes the
-          # checkout holds a lock alone (tests/unit/runner/conftest.py). Both runs always
-          # go, and one report holds the two, because the badge reads one file.
-          status=0
-          uv run pytest -q -m "not runner" --junit-xml="$RUNNER_TEMP/pytest-python.xml" || status=1
-          uv run pytest -q -m runner -n 4 --junit-xml="$RUNNER_TEMP/pytest-runner.xml" || status=1
+          uv run pytest -q --junit-xml="$RUNNER_TEMP/pytest-python.xml"
+
+      # The runner tests (`-m runner`) start the runner and the compiler, and they write
+      # the checkout, so they run serially, one instance at a time (#1071). They run
+      # after a failure of the Python layer too.
+      - name: Run runner tests (pytest -m runner)
+        if: ${{ !cancelled() && needs.changes.outputs.code == 'true'
+                && needs.changes.outputs.runner == 'true' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run pytest -q -m runner --junit-xml="$RUNNER_TEMP/pytest-runner.xml"
+
+      # One report holds the runs that ran, because the badge reads one file. A skipped
+      # runner step leaves no report, and the merge accepts that.
+      - name: Merge the pytest reports
+        if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
           uv run python - "$RUNNER_TEMP/pytest-python.xml" "$RUNNER_TEMP/pytest-runner.xml" \
             "$GITHUB_WORKSPACE/pytest-report.xml" <<'EOF'
+          import os
           import sys
           import xml.etree.ElementTree as ET
           merged = ET.Element("testsuites")
           for path in sys.argv[1:-1]:
+              if not os.path.exists(path):
+                  continue
               root = ET.parse(path).getroot()
               merged.extend([root] if root.tag == "testsuite" else list(root.iter("testsuite")))
           ET.ElementTree(merged).write(sys.argv[-1], encoding="utf-8", xml_declaration=True)
           EOF
-          exit $status
 
       # !cancelled(), not success(): a FAILING pytest run is precisely the run whose
       # numbers the badge must publish. Only a cancellation leaves nothing worth reading.

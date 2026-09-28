@@ -1,0 +1,17 @@
+# A generic enum and a struct share one type name, and source order decides
+# (#1069). The generic enum is first; the struct is the error, and the header
+# names the generic kind of the other declaration.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+# EXPECT_STDERR_CONTAINS: :13:8: error [CE0006]: struct 'Box' already defined as generic enum
+# EXPECT_STDERR_CONTAINS: already defined as a generic enum here
+# EXPECT_STDERR_CONTAINS: :9:6
+
+enum Box@(T):
+    Big(T)
+    Huge
+
+struct Box:
+    i32 w
+
+fn main() i32:
+    return Result.Ok(0)

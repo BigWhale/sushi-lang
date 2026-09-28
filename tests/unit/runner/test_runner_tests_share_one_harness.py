@@ -1,19 +1,17 @@
-"""The runner tests share one harness, carry one marker, and can run under `pytest -n`.
+"""The runner tests share one harness and carry one marker.
 
 `_harness.py` holds the paths and one helper for each action: `run_single` runs one
 fixture in this process, `run_tests` starts the front end. `conftest.py` gives every test
-here the `runner` marker, so `pytest -m "not runner"` is the fast Python layer, and holds
-`checkout_lock` around each test on a `pytest -n` worker.
+here the `runner` marker, so `pytest -m "not runner"` is the fast Python layer.
 """
 from __future__ import annotations
 
 import re
 import subprocess
 import sys
-import threading
 from pathlib import Path
 
-from _harness import PROJECT_ROOT, checkout_lock
+from _harness import PROJECT_ROOT
 
 RUNNER_DIR = Path(__file__).resolve().parent
 RUNNER_PREFIX = "tests/unit/runner/"
@@ -76,42 +74,3 @@ def test_each_pattern_finds_the_copy_it_names():
     assert copies.keys() == REPEATS.keys()
     for what, source in copies.items():
         assert REPEATS[what].search(source), what
-
-
-def _hold(lock_dir: Path, exclusive: bool, held: threading.Event,
-          release: threading.Event) -> threading.Thread:
-    def body() -> None:
-        with checkout_lock(lock_dir, exclusive):
-            held.set()
-            release.wait(10)
-
-    thread = threading.Thread(target=body, daemon=True)
-    thread.start()
-    return thread
-
-
-def test_the_checkout_lock_shares_readers_and_gives_a_writer_its_turn(tmp_path):
-    first_held, first_release = threading.Event(), threading.Event()
-    second_held, second_release = threading.Event(), threading.Event()
-    writer_held, writer_release = threading.Event(), threading.Event()
-    late_held, late_release = threading.Event(), threading.Event()
-
-    threads = [_hold(tmp_path, False, first_held, first_release)]
-    assert first_held.wait(5)
-    threads.append(_hold(tmp_path, False, second_held, second_release))
-    assert second_held.wait(5), "two readers must hold the lock at one time"
-
-    threads.append(_hold(tmp_path, True, writer_held, writer_release))
-    assert not writer_held.wait(0.5), "a writer must wait for the readers"
-    threads.append(_hold(tmp_path, False, late_held, late_release))
-    assert not late_held.wait(0.5), "a reader must not pass a waiting writer"
-
-    first_release.set()
-    second_release.set()
-    assert writer_held.wait(5), "the writer must get the lock when the readers go"
-    assert not late_held.wait(0.5), "a reader must wait while the writer holds the lock"
-    writer_release.set()
-    assert late_held.wait(5), "the reader must get the lock when the writer goes"
-    late_release.set()
-    for thread in threads:
-        thread.join(5)

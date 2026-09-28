@@ -450,7 +450,7 @@ _add(ErrorMessage("CE0005", Severity.ERROR,
 
 _add(ErrorMessage("CE0006", Severity.ERROR,
     "{kind} '{name}' already defined as {other}",
-    Category.TYPE, "A struct and an enum share one type name for the whole program. The second declaration of a name, in collection order and of either kind, is refused where it is written, and the note points at the first. Structs are collected before enums in one unit, but across units the order is the unit order, so a struct can be the second declaration too (#901). Rename one of the two types."))
+    Category.TYPE, "A struct and an enum share one type name for the whole program. The second declaration of a name, in SOURCE order and of either kind, is refused where it is written, and the note points at the first. The first declaration keeps the name, so its uses give no more errors. In one unit the position in the file decides; across units the order is the unit order, and a dependency comes first (#901). Until #1069 the order in one unit was the collection order: structs were collected before enums, so an enum written first was the one refused, and the struct that was written second kept the name and its uses cascaded. The header says `generic` when a declaration is generic. Rename one of the two types."))
 
 _add(ErrorMessage("CE0142", Severity.ERROR,
     "unit '{unit}' has no source text for its cache key",

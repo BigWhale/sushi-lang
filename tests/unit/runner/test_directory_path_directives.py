@@ -260,7 +260,6 @@ def test_a_path_before_the_clean_needs_the_clean(tmp_path):
     assert "needs THEN_CLEAN_CACHE" in result.compilation_message, result.compilation_message
 
 
-@pytest.mark.writes_the_checkout  # it writes into the checkout's `__sushi_cache__/`
 def test_a_bare_clean_never_removes_the_checkouts_cache(tmp_path):
     """The runner fails a bare clean after which the checkout's own cache is gone.
 

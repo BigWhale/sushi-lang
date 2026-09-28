@@ -8,6 +8,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import StructDef, Program
+from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import Type, StructType
 from sushi_lang.semantics.generics.types import GenericStructType
 
@@ -69,6 +70,7 @@ class StructCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
+        self.refused = RefusedDeclarations()
         self.library_units: Set[str] = set()
         # The names this collector refused with CE3011 (#814): the analyzer stops on them.
         self.refused_library_types: list[str] = []
@@ -95,7 +97,7 @@ class StructCollector:
         structs = root.structs
         if isinstance(structs, list):
             for struct in structs:
-                if isinstance(struct, StructDef):
+                if isinstance(struct, StructDef) and self.refused.admits(struct):
                     self._collect_struct_def(struct)
 
     def register_predefined_structs(self) -> None:
@@ -151,7 +153,8 @@ class StructCollector:
         if reject_duplicate_type_name(self.r, "struct", name, name_span, type_name_rules(
             "struct", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
-        ), library_clash=self._reject_library_clash, visibility=self.visibility):
+        ), library_clash=self._reject_library_clash, visibility=self.visibility,
+                generic=bool(type_params)):
             return
 
         fields_list: List[Tuple[str, Type]] = []

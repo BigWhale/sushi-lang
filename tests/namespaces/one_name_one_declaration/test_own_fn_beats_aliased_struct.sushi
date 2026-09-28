@@ -1,0 +1,12 @@
+# Across units a name may be used again (#1076). The unit's own `fn box` takes
+# the bare call, and the imported struct is reached behind its alias.
+# EXPECT_STDOUT_EXACT: "6\n"
+use "helpers/shapes" as sh
+
+fn box() i32:
+    return Result.Ok(4)
+
+fn main() i32:
+    let sh.box b = sh.box(2)
+    println(box().realise(0) + b.n)
+    return Result.Ok(0)

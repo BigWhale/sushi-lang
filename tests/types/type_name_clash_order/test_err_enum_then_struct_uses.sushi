@@ -1,0 +1,18 @@
+# The enum is first, so it holds the name, and its uses give no more errors
+# (#1069): no CE2105 and no CE2048 cascade from the refused struct.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+# EXPECT_STDERR_CONTAINS: struct 'Box' already defined as enum
+
+enum Box:
+    Big
+    Huge
+
+struct Box:
+    i32 w
+
+fn main() i32:
+    let Box b = Box.Big
+    match b:
+        Box.Big -> println(1)
+        Box.Huge -> println(2)
+    return Result.Ok(0)
