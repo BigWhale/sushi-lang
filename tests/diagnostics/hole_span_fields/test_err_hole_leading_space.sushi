@@ -1,0 +1,14 @@
+# Blank space at the start of an interpolation hole is not in the parsed text, and
+# the spans of the hole still count from the file (#1038).
+# EXPECT_ERROR_CODES_EXACT: CE2062
+# EXPECT_STDERR_CONTAINS: test_err_hole_leading_space.sushi:10:30: error [CE2062]
+fn pick@(T)(T x) i32:
+    return Result.Ok(1)
+
+
+fn show() ~:
+    println("value {   pick@(i32, i32)(5)??}")
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

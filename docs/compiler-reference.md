@@ -256,6 +256,21 @@ Success! Wrote native binary: main
   `.ll` file or the object file
 - The cache directory (`__sushi_cache__/`) is already in `.gitignore`
 
+### Grammar Cache
+
+The parser tables of `grammar.lark` are kept in one file in the user cache directory:
+`~/Library/Caches/sushi` on macOS, `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi` on Linux.
+The first compile writes the file, and each later compile loads it instead of building
+the tables again. Set `SUSHI_GRAMMAR_CACHE_DIR=DIR` to use a different directory, or
+`SUSHI_GRAMMAR_CACHE_DIR=off` to build the tables in each process.
+
+The cache never changes a result. The file name holds a hash of the grammar and of the
+Lark and Python versions, so a changed grammar does not read an old file. A broken file
+is built again. The compiler reads the file only when it is a regular file of the user
+in a directory of the user that no other user can write, because the file is a Python
+pickle. When the directory cannot be made or used, the compiler builds the tables in
+the process and gives no message.
+
 ## Optimization Levels
 
 Sushi provides a complete LLVM optimization pipeline with multiple levels.
