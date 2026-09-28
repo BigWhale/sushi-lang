@@ -1,0 +1,24 @@
+struct Box@(T):
+    T item
+
+extend Box@(T) current() T:
+    return self.item.clone()
+
+extend Box@(T) replace(poke self, nom T fresh) ~:
+    self.item := fresh
+
+extend Box@(i32) describe() string:
+    return "a box of the number {self.item}"
+
+extend Box@(string) describe() string:
+    return "a box of the text '{self.item}'"
+
+fn main() i32:
+    let Box@(i32) n = Box(41)
+    n.replace(nom 42)
+    println("current gives {n.current()}")
+    println(n.describe())
+
+    let Box@(string) s = Box("Mostly Harmless")
+    println(s.describe())
+    return Result.Ok(0)

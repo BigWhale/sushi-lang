@@ -1,0 +1,25 @@
+struct Cage@(T):
+    T item
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(item)
+
+struct Pair@(A, B):
+    A first
+    B[] rest
+
+extend Pair@(A, B) static of_first(A a) Pair@(A, B):
+    return Pair(a, from([]))
+
+fn weight(Cage@(i32) c) i32:
+    return Result.Ok(c.item)
+
+fn main() i32:
+    let Cage@(i32) c = Cage.holding(9)
+    println("the cage holds {c.item}")
+
+    println("an argument gives the type too: {weight(Cage.holding(12)).realise(0)}")
+
+    let Pair@(i32, string) p = Pair.of_first(3)
+    println("first {p.first}, {p.rest.len()} more")
+    return Result.Ok(0)

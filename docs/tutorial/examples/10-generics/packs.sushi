@@ -1,0 +1,19 @@
+perk Show:
+    fn show() string
+
+extend i32 with Show:
+    fn show() string:
+        return "i32 {self}"
+
+extend string with Show:
+    fn show() string:
+        return "string '{self}'"
+
+fn show_all@(...Ts: Show)(...Ts items) ~:
+    expand(it in items):
+        println(it.show())
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all(42, "towel", 7)
+    return Result.Ok(0)

@@ -1,0 +1,18 @@
+struct Shelf@(T):
+    string label
+    List@(T) items
+
+fn main() i32:
+    let Shelf@(string) books = Shelf("Guides", List.new())
+    books.items.push("The Hitchhiker's Guide to the Galaxy")
+    books.items.push("The Restaurant at the End of the Universe")
+
+    let Shelf@(i32) numbers = Shelf("Answers", List.new())
+    numbers.items.push(42)
+
+    println("{books.label}: {books.items.len()} items")
+    foreach(title in books.items.iter()):
+        println("  {title}")
+    println("{numbers.label}: {numbers.items.len()} item")
+
+    return Result.Ok(0)
