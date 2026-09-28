@@ -9,14 +9,16 @@ import sys
 import os
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
+from test_metadata import corpus_files  # noqa: E402
 
 
 DEFAULT_JOBS = 4
@@ -120,66 +122,128 @@ BINARY_ONLY_HELPERS = {"private_closure_lib", "kept_private_lib", "const_lib", "
                        "generic_ext_bin_lib", "fs_user_bin_lib"}
 
 
-def build_test_helpers(project_root: Path, verbose: bool = False) -> bool:
-    """Build test helper libraries. Returns True on success."""
+def helper_sources(helpers_dir: Path) -> List[Path]:
+    """The entry point of each helper library under `helpers_dir`.
+
+    A SUBDIRECTORY is one MULTI-UNIT library: its entry point is the .sushi file that
+    carries the directory's name, and the other .sushi files beside it are the units the
+    entry imports (PL P0).
+    """
+    if not helpers_dir.exists():
+        return []
+    sources = list(helpers_dir.glob("*.sushi"))
+    sources += [d / f"{d.name}.sushi" for d in helpers_dir.iterdir()
+                if d.is_dir() and (d / f"{d.name}.sushi").exists()]
+    return sorted(sources)
+
+
+_LIBRARY_IMPORT = re.compile(r"^\s*(?:public\s+)?use\s+<lib/([A-Za-z0-9_]+)>", re.MULTILINE)
+_UNIT_IMPORT = re.compile(r'^\s*(?:public\s+)?use\s+"([^"]*)"', re.MULTILINE)
+
+
+def _directory_library_imports(directory: Path) -> Optional[Set[str]]:
+    """Every `use <lib/NAME>` in a .sushi file under `directory`, or None when an import
+    could reach a file outside it (a `..` step or an absolute unit path)."""
+    names: Set[str] = set()
+    for source in corpus_files(directory):
+        text = source.read_bytes().decode("utf-8", errors="replace")
+        for unit in _UNIT_IMPORT.findall(text):
+            if unit.startswith("/") or ".." in Path(unit).parts:
+                return None
+        names.update(_LIBRARY_IMPORT.findall(text))
+    return names
+
+
+def helpers_for_selection(tests_dir: Path, fixtures: List[Path]) -> Optional[Set[str]]:
+    """The helper libraries the selected fixtures can import, or None for all of them.
+
+    A fixture reaches a helper only through a `use <lib/NAME>` line, in its own source or
+    in a unit it imports. Every unit import in the corpus is a path relative to the
+    fixture and goes down, so each .sushi file under the fixture's directory is read: its
+    units, its `v2/` rebuild copy and its BUILD_LIB sources are all there. That is a
+    superset of the reach. A unit import that can go up or out answers None, and the
+    caller builds every helper.
+    """
+    helper_names = {s.stem for s in helper_sources(Path(tests_dir) / "libs" / "helpers")}
+    needed: Set[str] = set()
+    seen: Dict[Path, Optional[Set[str]]] = {}
+    for fixture in fixtures:
+        directory = Path(fixture).parent
+        if directory not in seen:
+            seen[directory] = _directory_library_imports(directory)
+        names = seen[directory]
+        if names is None:
+            return None
+        needed |= names & helper_names
+    return needed
+
+
+def _build_one_helper(sushic: Path, lib_file: Path, bin_dir: Path,
+                      project_root: Path) -> Optional[str]:
+    """Compile one helper library. Returns None on success, or the reason it failed."""
+    name = lib_file.stem
+    try:
+        result = subprocess.run(
+            # A .slib must state its own version (CE3505). These helpers are not
+            # packages, so there is no nori.toml to read one from.
+            [str(sushic), "--lib", "--lib-version", "0.0.0",
+             "--lib-kind", "binary" if name in BINARY_ONLY_HELPERS else "source",
+             str(lib_file), "-o", str(bin_dir / f"{name}.slib")],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+    except subprocess.TimeoutExpired:
+        return f"Compilation of {name} timed out"
+    except Exception as e:
+        return f"Error compiling {name}: {e}"
+    if result.returncode != 0:
+        return f"Failed to compile {name}: {result.stderr}"
+    return None
+
+
+def build_test_helpers(project_root: Path, verbose: bool = False, jobs: int = 1,
+                       only: Optional[Set[str]] = None) -> bool:
+    """Build the test helper libraries, `jobs` at a time. Returns True on success.
+
+    `only` names the helpers a selection needs (`helpers_for_selection`); None builds
+    every helper. A helper outside `only` has its `.slib` removed, so that a library from
+    an earlier run cannot answer for this one: a need that was not read fails loudly.
+    Every failure is printed, and one failure fails the build.
+    """
     helpers_dir = project_root / "tests" / "libs" / "helpers"
     bin_dir = project_root / "tests" / "libs" / "bin"
     sushic = project_root / "sushic"
 
-    if not helpers_dir.exists():
-        if verbose:
-            print("No test helpers directory found, skipping...")
-        return True
-
-    helper_files = list(helpers_dir.glob("*.sushi"))
-    # A SUBDIRECTORY is one MULTI-UNIT library: its entry point is the .sushi
-    # file that carries the directory's name, and the other .sushi files beside
-    # it are the units the entry imports (PL P0).
-    helper_files += [d / f"{d.name}.sushi" for d in helpers_dir.iterdir()
-                     if d.is_dir() and (d / f"{d.name}.sushi").exists()]
+    helper_files = helper_sources(helpers_dir)
     if not helper_files:
         if verbose:
             print("No test helper libraries found, skipping...")
         return True
 
-    if verbose:
-        print("Building test helper libraries...")
-
     bin_dir.mkdir(parents=True, exist_ok=True)
-
-    for lib_file in helper_files:
-        name = lib_file.stem
-        output_path = bin_dir / f"{name}.slib"
-
-        if verbose:
-            print(f"  Compiling {name}...")
-
-        try:
-            result = subprocess.run(
-                # A .slib must state its own version (CE3505). These helpers are not
-                # packages, so there is no nori.toml to read one from.
-                [str(sushic), "--lib", "--lib-version", "0.0.0",
-                 "--lib-kind", "binary" if name in BINARY_ONLY_HELPERS else "source",
-                 str(lib_file), "-o", str(output_path)],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            if result.returncode != 0:
-                print(f"Failed to compile {name}: {result.stderr}")
-                return False
-        except subprocess.TimeoutExpired:
-            print(f"Compilation of {name} timed out")
-            return False
-        except Exception as e:
-            print(f"Error compiling {name}: {e}")
-            return False
+    if only is not None:
+        for lib_file in helper_files:
+            if lib_file.stem not in only:
+                (bin_dir / f"{lib_file.stem}.slib").unlink(missing_ok=True)
+        helper_files = [f for f in helper_files if f.stem in only]
 
     if verbose:
+        print(f"Building {len(helper_files)} test helper libraries...")
+
+    with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+        failures = [reason for reason in pool.map(
+            lambda f: _build_one_helper(sushic, f, bin_dir, project_root), helper_files)
+            if reason is not None]
+
+    for reason in failures:
+        print(reason)
+
+    if verbose and not failures:
         print(f"  Libraries compiled to {bin_dir}")
 
-    return True
+    return not failures
 
 
 DOC_GATE_MODULES_ENV = "SUSHI_DOC_GATE_MODULES"

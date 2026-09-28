@@ -24,6 +24,7 @@ from test_metadata import (parse_test_metadata, get_test_category, should_run_ru
                           TestMetadata, fixture_binary_name, fixture_id,
                           select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
+                       helpers_for_selection,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
@@ -1387,7 +1388,12 @@ def main():
             if not args.json:
                 print("Failed to build stdlib, aborting tests")
             return 1
-        if not build_test_helpers(project_root, args.verbose):
+        # A whole run builds every helper; a narrowed one, the helpers it can import.
+        narrowed = args.filter or args.leaks_only or args.compile_only
+        needed = (helpers_for_selection(tests_dir, select_fixtures(
+            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
+            compile_only=args.compile_only)) if narrowed else None)
+        if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
             return 1
