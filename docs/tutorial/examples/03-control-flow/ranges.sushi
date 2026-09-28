@@ -11,7 +11,7 @@ fn main() i32:
     foreach(i in 3..0):
         println("  {i}")
 
-    println("Over a list:")
+    println("Over an array:")
     let string[] crew = from(["Arthur", "Ford", "Trillian"])
     foreach(name in crew.iter()):
         println("  {name}")

@@ -28,13 +28,15 @@ feature the language has:
 
 ## How to read this
 
-Read the chapters in order — each one builds on the last. Every code example on these
-pages is a **real, complete program** that was compiled and run to produce the output you
-see. You can copy any example, save it as a `.sushi` file, and run it yourself.
+Read the chapters in order — each one builds on the last. Each example program on these
+pages is a **real, complete program**. We compiled and ran it to get the output that you
+see. You can copy an example program, save it as a `.sushi` file, and run it yourself. Some
+short blocks show only one or two lines, to explain a part of a larger program; these
+blocks do not compile alone.
 
 ### Running an example
 
-Every example is a standalone program. To compile and run one:
+To compile and run an example program:
 
 ```bash
 ./sushic mostly-harmless.sushi

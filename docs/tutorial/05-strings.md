@@ -139,9 +139,38 @@ Highlights:
     The bare essentials — interpolation, escapes, the literal syntaxes — are built into the
     language and need no import. The richer methods (`contains`, `find`, `count`, `upper`,
     `lower`, `trim`, `pad_left`, `pad_right`, `split`, `join`, `replace`, `reverse`,
-    `repeat`, slicing helpers, and more) come from `use <collections/strings>`. If the
+    `repeat`, the slices `s` and `ss`, and more) come from `use <collections/strings>`. If the
     compiler complains that a method needs a stdlib unit, that import is almost always the
     fix.
+
+## Slices and comparison
+
+Two methods cut a part out of a string. `.s(start, end)` takes the characters from `start`
+up to, but not including, `end`. `.ss(start, count)` takes `count` characters from
+`start`. Both count in characters, not bytes. A range that goes past the end of the string
+is clamped to the end, and a range that selects nothing gives an empty string. A slice
+never stops the program.
+
+Strings compare with the usual operators. `==` and `!=` compare the contents. `<`, `<=`,
+`>` and `>=` compare the bytes one by one; when one string is a prefix of the other, the
+shorter string is less. This is byte order, not dictionary order, so every upper-case
+ASCII letter comes before every lower-case letter.
+
+```sushi
+--8<-- "docs/tutorial/examples/05-strings/slices-and-order.sushi"
+```
+
+Output:
+
+```
+s(0, 5):   Heart
+ss(9, 4):  Gold
+s(9, 99):  Gold
+equal:     true
+Arthur < Ford: true
+Zaphod < arthur: true
+Ford < Fordo: true
+```
 
 ## What you learned
 
@@ -151,7 +180,9 @@ Highlights:
 - Escape sequences (`\n`, `\t`, `\\`, `\'`, `\"`) work in both quote styles.
 - `use <collections/strings>` unlocks the method library: `len`/`size`, `contains`,
   `starts_with`/`ends_with`, `find` (returns `Maybe@(i32)`), `count`, `trim`, `upper`/`lower`,
-  `pad_left`/`pad_right`, `split`, and `join`.
+  `pad_left`/`pad_right`, `split`, `join`, and the slices `.s(start, end)` and
+  `.ss(start, count)`.
+- `==`, `!=` and the order operators compare strings byte by byte.
 
 We kept bumping into `Maybe` and `Result`. It's time to meet them head-on. On to
 [Error Handling](06-error-handling.md).

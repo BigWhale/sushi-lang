@@ -12,4 +12,8 @@ fn main() i32:
     if (arthur.has_towel):
         println("{arthur.name} knows where his towel is.")
 
+    # Write a field in place with :=.
+    arthur.age := 31
+    println("A birthday later, {arthur.name} is {arthur.age}.")
+
     return Result.Ok(0)

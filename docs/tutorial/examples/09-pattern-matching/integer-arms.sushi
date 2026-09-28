@@ -1,0 +1,17 @@
+fn describe(i32 n) string:
+    match n:
+        0 ->
+            return Result.Ok("nothing at all")
+        42 ->
+            return Result.Ok("the answer")
+        0x2A_00 ->
+            return Result.Ok("a much larger answer")
+        _ ->
+            return Result.Ok("just a number")
+
+fn main() i32:
+    println("0: {describe(0).realise('?')}")
+    println("42: {describe(42).realise('?')}")
+    println("10752: {describe(10752).realise('?')}")
+    println("7: {describe(7).realise('?')}")
+    return Result.Ok(0)

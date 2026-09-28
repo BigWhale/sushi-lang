@@ -6,7 +6,7 @@ fn main() i32:
     println("Index 0 is now {crew[0]}.")
 
     # A loop of writes is the usual way to fill an array with computed values.
-    let i32[5] squares = [0, 0, 0, 0, 0]
+    let i32[5] squares = [0; 5]
     foreach(i in 0..5):
         squares[i] := i * i
 
