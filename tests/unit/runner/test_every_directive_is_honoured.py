@@ -10,21 +10,14 @@ substring (`test_fixture_selection_is_one.py`).
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from run_tests import SPELLING_GATE_ENV, build_leakcheck  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import PROJECT_ROOT, run_single
+import enhanced_test_runner
+from run_tests import SPELLING_GATE_ENV, build_leakcheck
+from test_metadata import parse_test_metadata
 
 PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
 EXITS_3 = "fn main() i32:\n    return Result.Ok(3)\n"
@@ -48,8 +41,7 @@ TRIPS_THE_SPELLING_GATE = 'use "a<b"\n\n' + EXITS_0
 def _run(tmp_path: Path, name: str, header: str, body: str):
     path = tmp_path / name
     path.write_text(header + "\n" + body, encoding="utf-8")
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
+    return run_single(path)
 
 
 CASES = [
@@ -170,6 +162,7 @@ def interposer():
     assert build_leakcheck(PROJECT_ROOT), "the interposer must build"
 
 
+@pytest.mark.writes_the_checkout  # the `interposer` fixture builds the interposer
 def test_a_clean_program_passes_the_leak_check(tmp_path, interposer):
     result = _run(tmp_path, "test_no_leak.sushi",
                   '# EXPECT_NO_LEAKS\n# EXPECT_STDOUT_CONTAINS: "Mostly"\n', PRINTS)
@@ -177,6 +170,7 @@ def test_a_clean_program_passes_the_leak_check(tmp_path, interposer):
     assert "no leaks" in result.runtime_message, result.runtime_message
 
 
+@pytest.mark.writes_the_checkout  # the `interposer` fixture builds the interposer
 def test_a_program_that_closes_its_descriptors_passes_the_fd_check(tmp_path, interposer):
     result = _run(tmp_path, "test_no_open_fd.sushi",
                   '# EXPECT_NO_OPEN_FDS\n# EXPECT_STDOUT_CONTAINS: "Mostly"\n', PRINTS)

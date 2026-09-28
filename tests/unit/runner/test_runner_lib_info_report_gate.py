@@ -8,27 +8,13 @@ fallback), and runs a consumer that binds both payloads of a variant.
 from __future__ import annotations
 
 import stat
-import sys
-from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from run_tests import (  # noqa: E402
+from _harness import PROJECT_ROOT
+from run_tests import (
     LIB_READER_TOOL_ENV, REPORT_KINDS, REPORT_LINES, lib_info_report_gate,
 )
 
 SILENT_TOOL = "#!/bin/sh\necho 'Library: whatever'\nexit 0\n"
-
-
-def test_the_gate_passes_on_this_tree(monkeypatch):
-    monkeypatch.delenv(LIB_READER_TOOL_ENV, raising=False)
-    result = lib_info_report_gate(PROJECT_ROOT)
-    assert result.ran
-    assert result.passed, "\n".join(result.failures)
-    assert result.checks == len(REPORT_KINDS) * (2 * len(REPORT_LINES) + 1)
 
 
 def test_the_gate_fails_a_tool_that_prints_no_report(monkeypatch, tmp_path):

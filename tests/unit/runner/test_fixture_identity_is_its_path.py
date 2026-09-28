@@ -20,21 +20,14 @@ corpus of its own.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-
-# tests/ is not a package; the harness modules import each other flat.
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-import run_tests  # noqa: E402
-from test_metadata import (  # noqa: E402
+from _harness import TESTS_DIR
+import enhanced_test_runner
+import run_tests
+from test_metadata import (
     collect_fixtures,
     fixture_binary_name,
     fixture_id,

@@ -9,17 +9,11 @@ temporary directory and does not purge.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-import run_tests  # noqa: E402
+from _harness import PROJECT_ROOT
+import enhanced_test_runner
+import run_tests
 
 PROGRAM = (
     '# EXPECT_STDOUT_EXACT: "{word}\\n"\n'

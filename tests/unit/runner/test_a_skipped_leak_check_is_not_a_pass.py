@@ -13,19 +13,15 @@ from __future__ import annotations
 
 import shutil
 import sys
-from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
+from _harness import TESTS_DIR
+import enhanced_test_runner
+import run_tests
 
-# tests/ is not a package; the harness modules import each other flat.
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-import run_tests  # noqa: E402
+# This module stages a fixture in tests/, where every corpus scan reads it.
+pytestmark = pytest.mark.writes_the_checkout
 
 LEAK_ASSERTED = (
     "# EXPECT_NO_LEAKS: true\n"

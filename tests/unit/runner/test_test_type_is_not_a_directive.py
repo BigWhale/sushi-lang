@@ -8,16 +8,9 @@ fails its fixture, and no fixture carries one.
 from __future__ import annotations
 
 import dataclasses
-import sys
-from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import test_metadata  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+import test_metadata
+from test_metadata import parse_test_metadata
 
 
 def test_metadata_has_no_test_type_field():

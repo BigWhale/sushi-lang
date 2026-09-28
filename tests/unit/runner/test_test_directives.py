@@ -1,15 +1,10 @@
 """Every directive-shaped header line in the corpus is one the runner actually reads."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-TESTS_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(TESTS_ROOT))
-
-from test_metadata import (  # noqa: E402
+from _harness import TESTS_DIR
+from test_metadata import (
     _CODE_PREFIX,
     _DIRECTIVE_NAME,
     FLAG_DIRECTIVES,
@@ -25,7 +20,7 @@ PARSER_NAMES = frozenset(VALUED_DIRECTIVES) | frozenset(FLAG_DIRECTIVES)
 
 
 def _sushi_tests():
-    return corpus_files(TESTS_ROOT)
+    return corpus_files(TESTS_DIR)
 
 
 def _directive_name(comment: str) -> str | None:
@@ -53,7 +48,7 @@ def test_every_directive_is_inside_the_parsed_header():
                 continue
             comment = stripped[1:].strip()
             if _directive_name(comment) in PARSER_NAMES:
-                rel = path.relative_to(TESTS_ROOT)
+                rel = path.relative_to(TESTS_DIR)
                 stranded.append(f"{rel}:{lineno}: {comment}")
 
     assert not stranded, (
@@ -72,7 +67,7 @@ def test_every_directive_name_is_one_the_parser_knows():
                 continue
             name = _directive_name(stripped[1:].strip())
             if name is not None and name not in PARSER_NAMES:
-                rel = path.relative_to(TESTS_ROOT)
+                rel = path.relative_to(TESTS_DIR)
                 unknown.append(f"{rel}:{lineno}: {name}")
 
     assert not unknown, (
@@ -85,7 +80,7 @@ def test_the_leak_gated_memory_tests_really_are_gated(name):
     """Spot-check the parser end to end on files that exist to prove an absence of leaks."""
     from test_metadata import parse_test_metadata
 
-    path = TESTS_ROOT / "memory" / f"{name}.sushi"
+    path = TESTS_DIR / "memory" / f"{name}.sushi"
     assert path.is_file(), f"{path} moved; update this test or the name"
     assert parse_test_metadata(path).expect_no_leaks
 
@@ -117,7 +112,7 @@ def test_no_corpus_file_has_a_directive_block_the_runner_cannot_read():
     """A directive block that is not UTF-8 fails its fixture; none may be in the corpus."""
     from test_metadata import parse_test_metadata
 
-    unreadable = [f"{path.relative_to(TESTS_ROOT)}: {'; '.join(errors)}"
+    unreadable = [f"{path.relative_to(TESTS_DIR)}: {'; '.join(errors)}"
                   for path in _sushi_tests()
                   if (errors := parse_test_metadata(path).directive_errors)]
     assert not unreadable, "\n  ".join(["directive errors:"] + unreadable)

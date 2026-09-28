@@ -10,18 +10,11 @@ from __future__ import annotations
 
 import os
 import stat
-import subprocess
-import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-RUN_TESTS = TESTS_DIR / "run_tests.py"
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from run_tests import (  # noqa: E402
-    CONSUMER_CASES, LIB_INFO_CASES, LIB_READER_GATE_PATH, LIB_READER_TOOL_ENV,
+from _harness import PROJECT_ROOT, run_tests
+from run_tests import (
+    LIB_INFO_CASES, LIB_READER_GATE_PATH, LIB_READER_TOOL_ENV,
     lib_reader_gate,
 )
 
@@ -36,14 +29,6 @@ def _silent_tool(tmp_path: Path) -> Path:
     tool.write_text(SILENT_TOOL, encoding="utf-8")
     tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
     return bin_dir
-
-
-def test_the_gate_passes_on_this_tree(monkeypatch):
-    monkeypatch.delenv(LIB_READER_TOOL_ENV, raising=False)
-    result = lib_reader_gate(PROJECT_ROOT)
-    assert result.ran
-    assert result.passed, "\n".join(result.failures)
-    assert result.checks == 2 * len(LIB_INFO_CASES) + len(CONSUMER_CASES)
 
 
 def test_the_gate_fails_a_tool_that_prints_no_code(monkeypatch, tmp_path):
@@ -69,9 +54,7 @@ def test_the_selection():
 def test_a_failed_gate_fails_the_run(tmp_path):
     env = dict(os.environ)
     env[LIB_READER_TOOL_ENV] = str(_silent_tool(tmp_path))
-    done = subprocess.run(
-        [sys.executable, str(RUN_TESTS), "--skip-build", "--filter", LIB_READER_GATE_PATH],
-        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=600, env=env)
+    done = run_tests("--skip-build", "--filter", LIB_READER_GATE_PATH, env=env)
     assert done.returncode == 1, done.stdout[-3000:]
     assert "Failed: 0" in done.stdout, "the fixtures must pass:\n" + done.stdout[-3000:]
     assert "Library-reader gate:" in done.stdout and "(tool)" in done.stdout, (

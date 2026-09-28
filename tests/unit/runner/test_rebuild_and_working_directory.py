@@ -8,19 +8,13 @@ second compilation served `[cached]` and which it `[rebuilt]`. `RUN_IN_FIXTURE_D
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import collect_fixtures, parse_test_metadata  # noqa: E402
+from _harness import run_single, detail
+import enhanced_test_runner
+from test_metadata import collect_fixtures, parse_test_metadata
 
 MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
 DEP_V1 = "public const i32 N = 1\n"
@@ -43,23 +37,14 @@ def _fixture(tmp_path: Path, header: str, v2: dict | None = None,
     return home / name
 
 
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
-
-
-def _detail(result) -> str:
-    return f"{result.compilation_message}\n{result.runtime_message}"
-
-
 HELD = ('# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "1\\n"\n'
         '# EXPECT_STDOUT_EXACT: "2\\n"\n'
         "# EXPECT_REBUILT: dep, test_rebuild\n")
 
 
 def test_a_rebuild_that_holds_passes(tmp_path):
-    result = _run(_fixture(tmp_path, HELD, {"dep.sushi": DEP_V2}))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, HELD, {"dep.sushi": DEP_V2}))
+    assert result.total_success, detail(result)
 
 
 @pytest.mark.parametrize("header, says", [
@@ -76,25 +61,25 @@ def test_a_rebuild_that_holds_passes(tmp_path):
 ], ids=["a rebuilt unit named cached", "a rebuilt unit not named", "a unit never reported",
         "the stdout after the rebuild", "the stdout before the rebuild"])
 def test_a_rebuild_that_does_not_hold_fails(tmp_path, header, says):
-    result = _run(_fixture(tmp_path, header, {"dep.sushi": DEP_V2}))
-    assert not result.total_success, _detail(result)
-    assert says in _detail(result), _detail(result)
+    result = run_single(_fixture(tmp_path, header, {"dep.sushi": DEP_V2}))
+    assert not result.total_success, detail(result)
+    assert says in detail(result), detail(result)
 
 
 def test_an_unchanged_rebuild_is_all_cached(tmp_path):
     header = '# EXPECT_STDOUT_EXACT: "1\\n"\n# EXPECT_CACHED: dep, test_rebuild\n'
-    result = _run(_fixture(tmp_path, header, {"dep.sushi": DEP_V1}))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header, {"dep.sushi": DEP_V1}))
+    assert result.total_success, detail(result)
 
 
 def test_a_rebuild_directive_without_v2_fails(tmp_path):
-    result = _run(_fixture(tmp_path, HELD))
+    result = run_single(_fixture(tmp_path, HELD))
     assert not result.total_success
     assert "v2/" in result.compilation_message, result.compilation_message
 
 
 def test_v2_may_not_replace_the_fixture_itself(tmp_path):
-    result = _run(_fixture(tmp_path, HELD, {"dep.sushi": DEP_V2,
+    result = run_single(_fixture(tmp_path, HELD, {"dep.sushi": DEP_V2,
                                             "test_rebuild.sushi": MAIN}))
     assert not result.total_success
     assert "v2/" in result.compilation_message, result.compilation_message
@@ -103,7 +88,7 @@ def test_v2_may_not_replace_the_fixture_itself(tmp_path):
 def test_the_fixture_directory_is_never_written(tmp_path):
     path = _fixture(tmp_path, HELD, {"dep.sushi": DEP_V2})
     before = sorted(p.relative_to(path.parent) for p in path.parent.rglob("*"))
-    assert _run(path).total_success
+    assert run_single(path).total_success
     assert sorted(p.relative_to(path.parent) for p in path.parent.rglob("*")) == before
     assert (path.parent / "dep.sushi").read_text(encoding="utf-8") == DEP_V1
 
@@ -164,15 +149,15 @@ def _cwd_fixture(tmp_path: Path, header: str) -> Path:
 
 def test_run_in_fixture_dir_runs_the_binary_there(tmp_path):
     header = '# RUN_IN_FIXTURE_DIR\n# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'
-    result = _run(_cwd_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_cwd_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
 
 
 def test_without_the_directive_the_binary_runs_elsewhere(tmp_path):
     """The control: the same fixture, run from the runner's directory, finds no file."""
-    result = _run(_cwd_fixture(tmp_path, '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'))
+    result = run_single(_cwd_fixture(tmp_path, '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'))
     assert not result.total_success
-    assert "no data.txt here" in _detail(result), _detail(result)
+    assert "no data.txt here" in detail(result), detail(result)
 
 
 def test_run_in_fixture_dir_starts_sushic_there_with_a_relative_path(tmp_path, monkeypatch):
@@ -188,7 +173,7 @@ def test_run_in_fixture_dir_starts_sushic_there_with_a_relative_path(tmp_path, m
     monkeypatch.setattr(enhanced_test_runner.subprocess, "run", _spy)
     path = _cwd_fixture(tmp_path, '# RUN_IN_FIXTURE_DIR\n'
                                   '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n')
-    assert _run(path).total_success
+    assert run_single(path).total_success
     (cmd, cwd, holds_the_data), = seen
     assert cmd[1] == "test_in_its_dir.sushi", cmd
     assert holds_the_data, f"{cwd} is not a copy of the fixture's directory"
@@ -213,8 +198,8 @@ def _module_fixture(tmp_path: Path, header: str, use: str, dep: str) -> Path:
     ('# EXPECT_STDOUT_EXACT: "1\\n"\n', False),
 ], ids=["with the directive", "without it"])
 def test_build_lib_builds_a_source_library_the_fixture_imports(tmp_path, header, passes):
-    result = _run(_module_fixture(tmp_path, header, "use <lib/dep>", "dep.sushi"))
-    assert result.total_success is passes, _detail(result)
+    result = run_single(_module_fixture(tmp_path, header, "use <lib/dep>", "dep.sushi"))
+    assert result.total_success is passes, detail(result)
 
 
 @pytest.mark.parametrize("header, passes", [
@@ -222,14 +207,14 @@ def test_build_lib_builds_a_source_library_the_fixture_imports(tmp_path, header,
     ('# EXPECT_STDOUT_EXACT: "1\\n"\n', False),
 ], ids=["with the directive", "without it"])
 def test_stdlib_module_registers_a_module_the_fixture_imports(tmp_path, header, passes):
-    result = _run(_module_fixture(tmp_path, header, "use <fixture/dep>", "dep.sushi"))
-    assert result.total_success is passes, _detail(result)
+    result = run_single(_module_fixture(tmp_path, header, "use <fixture/dep>", "dep.sushi"))
+    assert result.total_success is passes, detail(result)
 
 
 def test_a_library_that_does_not_build_fails_the_fixture(tmp_path):
     path = _module_fixture(tmp_path, '# BUILD_LIB: dep.sushi\n# EXPECT_STDOUT_EXACT: "1\\n"\n',
                            "use <lib/dep>", "dep.sushi")
     (path.parent / "dep.sushi").write_text("public const i32 N = \n", encoding="utf-8")
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
     assert "BUILD_LIB dep.sushi failed" in result.compilation_message, result.compilation_message

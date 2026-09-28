@@ -9,18 +9,13 @@ reads 1 for a `BUILD_LIB` library, so a reader that answers 2 for every file can
 from __future__ import annotations
 
 import struct
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import run_single, detail
+import enhanced_test_runner
+from test_metadata import parse_test_metadata
 
 MAGIC = "\U0001f363SUSHILIB\U0001f363".encode("utf-8")
 KIND_OFFSET = 24
@@ -38,15 +33,6 @@ def _fixture(tmp_path: Path, header: str, dep: str = DEP) -> Path:
     path = home / "test_bin_lib.sushi"
     path.write_text(header + "\n" + USES_LIB, encoding="utf-8")
     return path
-
-
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
-
-
-def _detail(result) -> str:
-    return f"{result.compilation_message}\n{result.runtime_message}"
 
 
 def _kind_of(slib: Path) -> str:
@@ -84,20 +70,20 @@ def test_the_directive_parses(tmp_path):
 ], ids=["binary", "control: source"])
 def test_the_library_has_the_kind_the_directive_names(tmp_path, monkeypatch, directive, kind):
     built = _record_library_kinds(monkeypatch)
-    result = _run(_fixture(tmp_path, f"# {directive}: dep.sushi\n" + OUT_1))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, f"# {directive}: dep.sushi\n" + OUT_1))
+    assert result.total_success, detail(result)
     assert [k for _, k in built] == [kind], built
 
 
 def test_without_a_directive_the_library_is_missing(tmp_path):
-    result = _run(_fixture(tmp_path, OUT_1))
+    result = run_single(_fixture(tmp_path, OUT_1))
     assert not result.total_success
-    assert "CE3502" in _detail(result), _detail(result)
+    assert "CE3502" in detail(result), detail(result)
 
 
 def test_a_binary_library_that_does_not_build_fails_the_fixture(tmp_path):
     path = _fixture(tmp_path, "# BUILD_LIB_BINARY: dep.sushi\n" + OUT_1,
                     dep="public const i32 N = y\n")
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
-    assert "BUILD_LIB_BINARY dep.sushi failed" in result.compilation_message, _detail(result)
+    assert "BUILD_LIB_BINARY dep.sushi failed" in result.compilation_message, detail(result)

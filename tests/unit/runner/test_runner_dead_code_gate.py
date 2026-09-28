@@ -11,16 +11,10 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-RUN_TESTS = TESTS_DIR / "run_tests.py"
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from run_tests import (  # noqa: E402
+from _harness import PROJECT_ROOT, run_tests
+from run_tests import (
     DEAD_GATE_PROGRAMS_ENV, DOC_GATE_MODULES_ENV, dead_gate_programs,
 )
 
@@ -95,10 +89,7 @@ def _run(*flags: str, modules: list[Path] | None = None,
         env[DOC_GATE_MODULES_ENV] = os.pathsep.join(str(m) for m in modules)
     if programs is not None:
         env[DEAD_GATE_PROGRAMS_ENV] = os.pathsep.join(str(p) for p in programs)
-    return subprocess.run(
-        [sys.executable, str(RUN_TESTS), "--skip-build", *flags],
-        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=300, env=env,
-    )
+    return run_tests("--skip-build", *flags, env=env)
 
 
 def test_a_dead_stdlib_declaration_and_import_fail_the_run(tmp_path):

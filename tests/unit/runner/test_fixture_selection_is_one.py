@@ -13,14 +13,10 @@ and the wave protocol trust. That is the shape #605 refused for a skipped leak a
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from test_metadata import (  # noqa: E402
+from _harness import TESTS_DIR
+from test_metadata import (
     collect_fixtures, parse_test_metadata, select_fixtures, should_run_runtime_test,
 )
 
