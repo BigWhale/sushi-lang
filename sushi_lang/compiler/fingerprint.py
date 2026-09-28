@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.diagnostics import InternalCompilerError
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit, UnitManager
@@ -18,10 +18,11 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     """Compute a semantic fingerprint for a compilation unit."""
     hasher = hashlib.sha256()
 
-    if unit.source is None:
-        raise_internal_error("CE0142", unit=unit.name)
+    source = unit.source
+    if source is None:
+        raise InternalCompilerError("CE0142", unit=unit.name)
     hasher.update(b"SOURCE:")
-    hasher.update(unit.source.encode("utf-8"))
+    hasher.update(source.encode("utf-8"))
 
     hasher.update(b"OWN_SYMBOLS:")
     for name in sorted(unit.public_symbols.keys()):
