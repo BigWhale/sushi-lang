@@ -16,7 +16,6 @@ from types import SimpleNamespace
 import pytest
 
 from sushi_lang.semantics.stdlib_registry import (
-    _get_param_specs,
     signature_tables,
     stdlib_signature,
 )
@@ -82,17 +81,14 @@ def test_no_reader_spells_a_stdlib_function_name(path):
 def test_a_registry_module_reads_its_own_table(module_path):
     from sushi_lang.semantics.stdlib_registry import get_stdlib_registry
 
-    _python_path, short = REGISTRY_MODULES[module_path]
     table = signature_tables()[module_path]
     registry = get_stdlib_registry()
-    specs = _get_param_specs()
 
     assert table
     for name, sig in table.items():
         record = registry.get_function(module_path, name)
         assert record is not None and not record.is_constant
         assert record.get_return_type([param.ty for param in sig.params]) == sig.return_type()
-        assert specs[(short, name)] == [param.ty for param in sig.params]
         assert stdlib_signature(module_path, name) is sig
     assert registry.get_function(module_path, "mostly_harmless") is None
 

@@ -76,17 +76,24 @@ exclude = [
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["F", "E", "W", "B", "C901"]
+select = ["F", "E", "W", "B", "C901", "S101"]
 # E501: no formatter is in use (black was dropped unadopted); a line-length gate
 # without a formatter is hand-wrapping busywork with no bug-finding value.
 ignore = ["E501"]
+
+# A rule that holds for part of the tree only is turned OFF where it does not apply.
+# These entries set the SCOPE of a rule; none of them excuses a violation.
+[tool.ruff.lint.per-file-ignores]
+# S101: `python -O` removes an `assert`, so an invariant in the backend or the driver is
+# `raise_internal_error(<code>)` (#880, #981). An `assert` is legal everywhere else.
+"!sushi_lang/{backend,compiler}/**" = ["S101"]
 
 [tool.ruff.lint.mccabe]
 # A RATCHET, set at the worst function in the lint scope and not at a target.
 # `emit_array_method` (`backend/types/arrays/dispatcher.py`) is that function at 41.
 # The gate therefore permits everything that stands today and refuses anything WORSE,
-# which is the one promise a threshold can keep with no exception list: there are no
-# per-file ignores here, and a new one is not the way to pass this rule.
+# which is the one promise a threshold can keep with no exception list: no per-file
+# ignore names C901, and a new one is not the way to pass this rule.
 #
 # Lower the number when a section's batch splits its own worst function. Wave C took
 # `_check_multi_file` from 38 to 5 and `scope._check_expression` from 44 to 2, S3 Wave 2

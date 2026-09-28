@@ -4,52 +4,18 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-import typing
 
-from sushi_lang.semantics import ast as sushi_ast
+from expr_dispatch import dispatched_names, expr_union_names, expression_fields
 from sushi_lang.semantics.passes.borrow import BorrowChecker, INERT_EXPRS
 from sushi_lang.semantics.passes.borrow import expressions as borrow_expressions
 
 
-def _expr_union_members() -> set[str]:
-    """Every node type in the `Expr` union (semantics/ast.py)."""
-    return {t.__name__ for t in typing.get_args(sushi_ast.Expr)}
-
-
 def _dispatched_names() -> set[str]:
-    """Every class name `check_expr` dispatches on, plus the inert tuple.
-
-    Reads both idioms: a `case Name():` class pattern (a `MatchOr` alternative is walked
-    like any other) and an `isinstance()` call, which is how the `INERT_EXPRS` guard arm
-    and the arms' inner shape tests are spelled.
-    """
-    src = inspect.getsource(borrow_expressions.check_expr)
-    tree = ast.parse(textwrap.dedent(src))
-
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.MatchClass):
-            if isinstance(node.cls, ast.Name):     # case Name():
-                names.add(node.cls.id)
-        elif isinstance(node, ast.Call) and getattr(node.func, "id", None) == "isinstance":
-            target = node.args[1]
-            if isinstance(target, ast.Name):
-                names.add(target.id)               # isinstance(expr, Name)
-            elif isinstance(target, ast.Tuple):
-                for elt in target.elts:            # isinstance(expr, (A, B))
-                    if isinstance(elt, ast.Name):
-                        names.add(elt.id)
-
-    # `INERT_EXPRS` is referenced by name in the source; resolve it to its members.
-    if "INERT_EXPRS" in names:
-        names.discard("INERT_EXPRS")
-        names |= {t.__name__ for t in INERT_EXPRS}
-
-    return names
+    return dispatched_names(borrow_expressions.check_expr, inert=INERT_EXPRS)
 
 
 def test_every_expression_node_has_an_arm():
-    missing = sorted(_expr_union_members() - _dispatched_names())
+    missing = sorted(expr_union_names() - _dispatched_names())
     assert not missing, (
         f"BorrowChecker._check_expr has no arm for: {missing}.\n"
         "An expression node with no arm gets NO borrow checking -- silently. Add a real "
@@ -59,7 +25,7 @@ def test_every_expression_node_has_an_arm():
 
 def test_no_arm_names_a_node_outside_the_expr_union():
     """The mirror: an arm for a node that is not an Expr is dead code or a typo."""
-    known = _expr_union_members() | {
+    known = expr_union_names() | {
         # Non-Expr types legitimately tested inside _check_expr's arms.
         "Pattern", "str",
     }
@@ -69,17 +35,11 @@ def test_no_arm_names_a_node_outside_the_expr_union():
 
 def test_inert_exprs_really_are_leaves():
     """An 'inert' node must have no sub-expression fields -- else we are skipping a subtree."""
-    expr_members = _expr_union_members()
-    for node_type in INERT_EXPRS:
-        hints = typing.get_type_hints(node_type, globalns=vars(sushi_ast))
-        for field, hint in hints.items():
-            referenced = {
-                t.__name__ for t in typing.get_args(hint) if hasattr(t, "__name__")
-            } | ({hint.__name__} if hasattr(hint, "__name__") else set())
-            assert not (referenced & expr_members), (
-                f"{node_type.__name__} is in INERT_EXPRS but its field '{field}' holds "
-                f"an expression ({hint}). It is not a leaf -- give it a real arm."
-            )
+    not_leaves = [f"{t.__name__}.{field}: {hint}"
+                  for t in INERT_EXPRS for field, hint in expression_fields(t)]
+    assert not not_leaves, (
+        f"INERT_EXPRS holds nodes with an expression field: {not_leaves}. "
+        "They are not leaves -- give each a real arm.")
 
 
 def test_run_walks_every_declaration_that_holds_a_body():
