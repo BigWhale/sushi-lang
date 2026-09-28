@@ -1,5 +1,7 @@
 # Comprehensive I/O demonstration
 # Shows stdin, stdout, and stderr functionality
+# EXPECT_STDOUT_EXACT: "=== Sushi I/O Demo ===\nThis demonstrates standard I/O operations\n\nHello from Sushi!\nLine 1\nLine 2\nLine 3\n"
+# EXPECT_STDERR_CONTAINS: "[INFO] Starting I/O operations...\n[INFO] I/O operations completed successfully\n"
 
 use <io/fs>
 
