@@ -25,13 +25,6 @@ class _Template:
         self.params = params
 
 
-
-
-
-
-
-
-
 # 1. The solver
 
 def test_an_argument_solves_the_parameter_it_names():
@@ -68,11 +61,3 @@ def test_an_argument_with_no_type_yet_solves_nothing():
     args, unsolved = solve_target_type_args(template, [None], None)
     assert args is None
     assert unsolved == ("T",)
-
-
-# 2. The refusal
-
-
-
-
-

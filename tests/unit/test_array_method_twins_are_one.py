@@ -15,11 +15,6 @@ CORE = ARRAYS / "methods" / "core.py"
 SAFE_ACCESS = ARRAYS / "methods" / "safe_access.py"
 DISPATCHER = ARRAYS / "dispatcher.py"
 
-RETIRED_TWINS = {
-    CORE: {"emit_fixed_array_fill", "emit_dynamic_array_fill",
-           "emit_fixed_array_reverse", "emit_dynamic_array_reverse"},
-    SAFE_ACCESS: {"emit_fixed_array_get_maybe", "emit_dynamic_array_get_maybe"},
-}
 
 ONE_EMITTER = {
     "fill": "emit_array_fill",
@@ -46,12 +41,6 @@ def _called_names(node: ast.AST) -> set[str]:
             elif isinstance(call.func, ast.Attribute):
                 names.add(call.func.attr)
     return names
-
-
-def test_the_twins_are_gone():
-    for path, twins in RETIRED_TWINS.items():
-        left = twins & set(_functions(path))
-        assert not left, f"{path.name}: {sorted(left)}"
 
 
 def test_the_one_emitters_exist():

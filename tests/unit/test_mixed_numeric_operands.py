@@ -15,10 +15,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-
-
-
-
 def test_ce2510_is_emitted_from_one_place():
     """The rule is one function. A second emitter is a second rule that will drift."""
     sites = subprocess.run(
@@ -27,15 +23,3 @@ def test_ce2510_is_emitted_from_one_place():
     ).stdout.splitlines()
     assert len(sites) == 1, "\n".join(sites)
     assert "passes/types/expressions.py" in sites[0], sites[0]
-
-
-
-
-
-
-
-
-
-
-
-

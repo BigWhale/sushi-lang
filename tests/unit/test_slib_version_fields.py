@@ -12,39 +12,6 @@ import pytest
 from sushi_lang.backend.library_errors import LibraryError
 
 
-
-
-
-
-
-# --- The manifest carries the new fields ------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- Where the library version comes from -----------------------------------
-
-
-
-
-
-
-
-
-
-
-
 # --- Enforcement of requires_compiler ---------------------------------------
 
 def _check(requires, current="0.11.1", ignore=False):
@@ -100,7 +67,3 @@ def test_an_unknown_running_compiler_does_not_block():
     # `sushi_lang.__version__` falls back to "unknown" when the package metadata and
     # pyproject.toml are both unreadable. That must not stop a build.
     _check("~0.11", current="unknown")
-
-
-# --- End to end --------------------------------------------------------------
-

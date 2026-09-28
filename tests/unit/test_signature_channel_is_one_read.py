@@ -29,14 +29,6 @@ SIGNATURE_RULES = {
     "perk_method": "perks.py",
 }
 
-# One channel, written at the same column in all three positions, so a span read that
-# points at the return type instead of the channel cannot pass.
-
-
-
-
-
-
 
 def _rule_body(rule: str) -> str:
     text = GRAMMAR.read_text()
@@ -67,17 +59,3 @@ def test_the_parser_of_each_position_calls_the_one_reader(rule: str) -> None:
     """A parser that reads the pair itself is the second reader this gate refuses."""
     source = (DECLARATIONS / SIGNATURE_RULES[rule]).read_text()
     assert source.count("read_signature_types(") == 1
-
-
-# -- the three positions answer one channel --------------------------------------
-
-
-
-
-
-
-
-
-
-# -- the reader answers what a caller cannot read off the parsed type ------------
-

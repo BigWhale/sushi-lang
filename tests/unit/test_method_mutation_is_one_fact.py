@@ -37,7 +37,3 @@ def test_every_array_method_the_table_marks_is_measured():
     """The control: the array rows the table marks as mutating are not an empty set."""
     marked = {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
     assert {"clear", "push", "pop", "fill", "reverse", "extend"} <= marked
-
-
-
-

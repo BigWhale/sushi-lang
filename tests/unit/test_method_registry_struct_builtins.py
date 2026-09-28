@@ -23,12 +23,6 @@ def check_struct_enum_builtin_methods(receiver_type, method_name, validator):
     return family.infer(receiver_type, method_name, validator)
 
 
-
-
-
-
-
-
 class _FakeValidator:
     """Minimal stand-in carrying only what the checker's guards consult.
 
@@ -47,26 +41,6 @@ class _EmptyPerkTable:
         return None
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_declines_a_type_with_no_builtins_at_all():
     assert check_struct_enum_builtin_methods(
         StructType(name="NeverAnalysed", fields=()), "hash", _FakeValidator()
@@ -77,27 +51,3 @@ def test_declines_a_non_struct_receiver():
     assert check_struct_enum_builtin_methods(
         BuiltinType.I32, "hash", _FakeValidator()
     ) is None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

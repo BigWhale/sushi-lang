@@ -35,13 +35,3 @@ def test_no_decision_names_a_node_outside_the_expr_union():
     stray = sorted(t.__name__ for t in
                    (set(ConstantEvaluator.HANDLERS) | set(NOT_CONSTANT)) - expr_union_types())
     assert not stray, f"the evaluator decides on non-Expr node(s): {stray}"
-
-
-# Every refused kind a writer can put in a `const` initializer, and the code it reads.
-# `new()` and `from(...)` are refused one step earlier by the declared `T[]` (CE2015),
-# `~` by the blank type (CE2032), and a `MethodCall`, an `EnumConstructor` and a `Spread`
-# never arrive: the parser spells the first two as a `DotCall` and the third is an
-# argument, whose `Call` is the node that answers.
-
-
-

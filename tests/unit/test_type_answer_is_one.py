@@ -22,14 +22,9 @@ from pathlib import Path
 _PASS_DIR = Path(__file__).resolve().parents[2] / "sushi_lang/semantics/passes/types"
 
 
-
-
 # --------------------------------------------------------------------------------------
 # The routing: every WRITTEN wrapper is interned through one function.
 # --------------------------------------------------------------------------------------
-
-
-
 
 
 def test_the_seam_answers_none_for_everything_that_is_not_a_written_wrapper():
@@ -55,30 +50,3 @@ def test_the_type_resolver_name_is_still_findable():
     """The control for the row above: the spelling it looks for still exists."""
     home = _PASS_DIR.parents[1] / "type_resolution.py"
     assert "class TypeResolver" in home.read_text(encoding="utf-8")
-
-
-# --------------------------------------------------------------------------------------
-# The characterization: what each home answers today, read off the diagnostic that
-# renders the resolved type.
-# --------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

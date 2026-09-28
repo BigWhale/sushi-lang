@@ -22,12 +22,6 @@ SOURCES = {
 }
 
 
-
-
-
-
-
-
 def test_every_marked_kind_is_private_when_unmarked():
     """Private is the default for every kind that carries a marker.
 

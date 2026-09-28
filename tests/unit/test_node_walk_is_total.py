@@ -46,8 +46,6 @@ def _found(root: object) -> list[str]:
     return seen
 
 
-
-
 # --- the kinds themselves ---------------------------------------------------------
 
 
@@ -189,14 +187,3 @@ def test_no_declared_field_wraps_a_node_in_a_container_the_walk_skips():
         "these fields hold a node inside a container walk_nodes does not descend: "
         f"{offenders}. Teach ast_walk.field_kind the container, or do not use it."
     )
-
-
-
-
-# The node kinds the corpus exists to put in front of the walk. A pick that is renamed
-# or rewritten until it no longer holds one of these makes the gate measure less than
-# it says, so the shapes are asserted and not assumed.
-
-
-
-

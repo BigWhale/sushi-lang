@@ -32,12 +32,6 @@ from test_metadata import collect_fixtures  # noqa: E402
 SPELLED_HEADER = re.compile(r"^\s*(public\s+)?fn\s+\w+\(.*\)\s+Result@\(", re.MULTILINE)
 
 
-
-
-
-
-
-
 def test_the_prototype_has_no_spelled_result_arm():
     source = inspect.getsource(declarations)
     assert "GenericTypeRef" not in source
@@ -72,12 +66,6 @@ def test_an_unstamped_spelled_return_is_an_internal_error():
     assert "CE0015" in str(caught.value)
 
 
-
-
-
-
-
-
 def _single_unit_fixtures_that_spell_a_result_return():
     for fixture in collect_fixtures(TESTS_DIR):
         if fixture.name.startswith(("test_err_", "test_warn_")):
@@ -93,5 +81,3 @@ CORPUS = list(_single_unit_fixtures_that_spell_a_result_return())
 
 def test_the_corpus_has_spelled_returns_to_check():
     assert len(CORPUS) >= 5
-
-

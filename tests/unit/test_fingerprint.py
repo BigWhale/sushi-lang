@@ -7,33 +7,6 @@ from sushi_lang.compiler.fingerprint import (
 )
 
 
-
-# Constant file bytes shared by the AST-isolation tests: the file content is
-# identical across variants, so any fingerprint difference comes from the AST.
-
-
-
-
-# Determinism and source sensitivity
-
-
-
-
-
-# AST-structure sensitivity (file bytes held constant, only AST varies)
-
-
-
-
-
-
-
-
-
-# Cross-unit visibility (a dependency's public signature affects dependents)
-
-
-
 # stdlib / library fingerprints
 
 def test_stdlib_fingerprint_is_order_independent(tmp_path):
@@ -62,30 +35,6 @@ def test_lib_fingerprint_changes_with_content(tmp_path):
     assert compute_lib_fingerprint(slib) != fp1
 
 
-# Imported-library template sensitivity (Phase 2 cross-library generics)
-
-
-
-
-
-
-
-# Generic exporters (regression: BoundedTypeParam join TypeError)
-
-
-
-
-
-# Monomorphized-extension key: signature AND body, span-insensitive
-
-
-
-
-
-
-
-
-
 # Stdlib generator-source coverage (regression: silently-skipped dead path)
 
 def test_stdlib_generator_sources_all_exist():
@@ -110,37 +59,3 @@ def test_stdlib_generator_sources_cover_primitives_package():
     sources = _stdlib_generator_sources()
     prim = [p for p in sources if "backend" in p.parts and "primitives" in p.parts]
     assert prim, "no backend/types/primitives/ files in the stdlib source fingerprint"
-
-
-# A dependency's declaration SHAPE, not just its public signatures (#593)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# The dependency EDGE: an injected unit and a re-exported one (#593)
-
-
-

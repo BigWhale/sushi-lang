@@ -11,54 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 
 
-
-
-
-# A public generic whose body names a private: the closure ships `helper`, so it is
-# booked there and not in `not_exported`.
-
-# The bundled module arrives as an ordinary unit at build time, and its nine private
-# helpers are not this library's to declare.
-
-
-
-
-
-
-
-
-
-
-
-
-# --- The manifest key --------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-# --- The diagnostic ----------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-# --- Forward compatibility ----------------------------------------------------------
-
-
-
 # --- The registry, without a build --------------------------------------------------
 
 def test_the_registry_reads_the_key():

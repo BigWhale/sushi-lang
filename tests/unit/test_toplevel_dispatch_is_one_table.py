@@ -17,15 +17,12 @@ from sushi_lang.semantics.ast_builder.declarations.toplevel import (
 GRAMMAR = Path(__file__).resolve().parents[2] / "sushi_lang" / "grammar.lark"
 
 
-
 def _alternatives(rule: str) -> set[str]:
     """The alternatives of one rule of `grammar.lark`, as bare names."""
     text = GRAMMAR.read_text()
     line = re.search(rf"^{rule}: (.+)$", text, re.MULTILINE)
     assert line is not None, f"no rule named {rule}"
     return {part.strip() for part in line.group(1).split("|")}
-
-
 
 
 def test_the_table_covers_every_alternative_of_toplevel():
@@ -37,11 +34,3 @@ def test_the_table_covers_every_alternative_of_toplevel():
 def test_program_holds_nothing_but_a_toplevel_a_doc_block_and_a_newline():
     """The invariant that makes a second, bare-node dispatch unreachable."""
     assert _alternatives("program") == {"(_NEWLINE", "DOC_BLOCK", "toplevel)+"}
-
-
-
-
-
-
-
-

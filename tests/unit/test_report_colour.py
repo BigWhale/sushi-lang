@@ -32,12 +32,6 @@ from sushi_lang.internals.report import Reporter, Span  # noqa: E402
 from sushi_lang.internals.styling import should_colour  # noqa: E402
 
 
-
-
-
-
-
-
 class _Stream(io.StringIO):
     def __init__(self, tty: bool):
         super().__init__()
@@ -48,7 +42,6 @@ class _Stream(io.StringIO):
 
 
 # ------------------------------------------------------------------ the ladder
-
 
 
 @pytest.mark.parametrize("tty,expected", [(True, True), (False, False)])
@@ -126,11 +119,3 @@ def test_painting_changes_no_text_of_a_diagnostic(use_unicode):
     plain = _report().format(use_color=False, use_unicode=use_unicode)
     assert painted != plain
     assert _ESCAPE.sub("", painted) == plain
-
-
-# ------------------------------------------------------------------- the banner
-
-
-
-
-

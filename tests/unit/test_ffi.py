@@ -2,38 +2,6 @@
 from __future__ import annotations
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_foreign_ptr_sizing():
     """ForeignPtrType must size and align like the other pointer types (issue #85)."""
     from sushi_lang.backend.types.core.sizing import TypeSizing

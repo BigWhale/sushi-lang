@@ -6,19 +6,12 @@ name and each method name the implementation declares, beside the extension path
 record, so a call of one of those methods adds no CE2008. A method the implementation
 never declared is still an undefined name.
 
-`EXPECT_ERROR_CODE` is a substring test and cannot prove a code is absent, so the code
-LIST is asserted here, on the analyze path.
+This module holds the source check: the extension collector and the perk collector
+emit CE2098 from one helper.
 """
 from __future__ import annotations
 
 from pathlib import Path
-
-
-
-
-
-
-
 
 
 def test_one_helper_emits_ce2098():

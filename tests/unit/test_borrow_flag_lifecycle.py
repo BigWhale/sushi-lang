@@ -7,8 +7,6 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import BorrowState, FlowFacts
 
 
-
-
 # The join algebra, asserted directly. A field's join rule is the whole design.
 
 def test_monotone_facts_join_by_union():
@@ -113,26 +111,6 @@ def test_rebind_keeps_the_storage_facts(flag):
     assert getattr(_reinitialized(flag), flag) == _LIVE[flag]
 
 
-
-
-# BRANCH JOIN. Exclusive paths must not see each other's facts.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # KNOWN-CONSERVATIVE cells. Decisions, not omissions.
 
 def test_break_does_not_terminate_a_path():
@@ -155,5 +133,3 @@ def test_an_if_without_an_else_never_terminates():
 
     assert terminates(with_else) is True
     assert terminates(without_else) is False
-
-

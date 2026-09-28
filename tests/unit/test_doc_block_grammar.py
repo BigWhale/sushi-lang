@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT / "tests") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "tests"))
@@ -54,11 +53,6 @@ DOC_SOURCES = (
     "tests/diagnostics/doc_delimiter_in_hole/",
 )
 
-# `.sushi` files that do not parse, and did not before doc blocks existed. Each entry
-# carries its reason; adding one is deliberate. A `test_err_` file declaring a CE6xxx
-# code is exempt by its own header and is not listed here.
-
-
 
 def _sushi_files() -> list[Path]:
     found: list[Path] = []
@@ -67,8 +61,6 @@ def _sushi_files() -> list[Path]:
             if not any(part in SKIP_DIRS for part in path.relative_to(PROJECT_ROOT).parts):
                 found.append(path)
     return found
-
-
 
 
 # -- the corpus regression ------------------------------------------------------
@@ -89,41 +81,3 @@ def test_no_doc_delimiters_outside_the_doc_tests():
         "doc-block delimiters outside " + str(DOC_SOURCES) + " -- these sources changed "
         "meaning when the terminals landed:\n  " + "\n  ".join(offenders)
     )
-
-
-
-
-# -- ordinary comments still behave ---------------------------------------------
-
-
-
-
-
-
-
-# -- the block is one token -----------------------------------------------------
-
-
-
-
-
-# -- the three lex-time diagnostics ---------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

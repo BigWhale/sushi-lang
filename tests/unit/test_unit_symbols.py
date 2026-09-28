@@ -8,7 +8,6 @@ one does. The symbol therefore carries the declaring unit
 from __future__ import annotations
 
 
-
 from sushi_lang.semantics.unit_symbols import (
     UNIT_SEP, UnitKeyedSymbols, mangle_unit_symbol,
 )
@@ -85,17 +84,3 @@ def test_a_symbol_with_no_unit_lives_in_the_flat_view_alone():
 
     assert table.get("identity__i32") == "instance"
     assert table.by_unit == {}
-
-
-# --- what a `.slib` records ------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-

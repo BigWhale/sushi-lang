@@ -18,24 +18,6 @@ def test_a_raw_pointer_refuses():
     assert reason
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_a_container_element_that_cannot_hash_refuses_the_container():
     """The container inherits its element's refusal -- one walk, not a special case."""
     from sushi_lang.semantics.typesys import FunctionType

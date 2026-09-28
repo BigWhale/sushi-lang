@@ -24,15 +24,6 @@ STAMPS = (
 )
 
 
-
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize("name", STAMPS)
 def test_every_stamp_name_is_an_ast_field(name):
     from dataclasses import fields

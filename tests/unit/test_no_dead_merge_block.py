@@ -19,7 +19,6 @@ from sushi_lang.backend.functions.helpers import FunctionHelpers
 from sushi_lang.internals.diagnostics import InternalCompilerError
 
 
-
 _DEFINE = re.compile(r'^define\s.*?@"?([^"(]+)"?\(')
 _LABEL = re.compile(r'^"?([^":]+)"?:')
 _TARGET = re.compile(r'label %"?([^",\s\]]+)"?')
@@ -48,10 +47,6 @@ def _blocks_without_predecessor(ir_text: str) -> dict[str, list[str]]:
             continue
         targets.update(_TARGET.findall(line))
     return found
-
-
-
-
 
 
 def test_the_detector_sees_a_dead_block():

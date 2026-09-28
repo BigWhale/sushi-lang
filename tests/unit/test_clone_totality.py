@@ -113,12 +113,6 @@ def test_a_generic_type_argument_has_a_clone(name, ty):
     )
 
 
-# The auto-derived pair, which needs the analyzer to have run
-
-
-
-
-
 # The former known hole, now closed
 #
 # `test_hashmap_clone_is_a_known_hole_owned_by_phase_10` lived here. It asserted that

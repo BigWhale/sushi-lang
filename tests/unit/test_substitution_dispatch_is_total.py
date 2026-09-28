@@ -88,4 +88,3 @@ def test_the_backstop_fires():
             assert exc.code == "CE0135"
         else:
             raise AssertionError(f"{walk.__name__} copied an unknown node instead of raising")
-

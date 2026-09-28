@@ -10,14 +10,8 @@ from __future__ import annotations
 from sushi_lang.internals.report import Diagnostic, Span, in_source_order
 
 
-
-
 def make(code: str, line: int, col: int = 1, filename: str = "a.sushi") -> Diagnostic:
     return Diagnostic("error", code, code, Span(line, col, line, col), filename=filename)
-
-
-
-
 
 
 def test_the_helper_orders_by_line_then_column():
