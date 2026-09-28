@@ -28,10 +28,6 @@ def test_the_driver_holds_the_compile_and_link_methods():
     assert not hasattr(LLVMCodegen, "_link_executable")
 
 
-
-
-
-
 def _stack_reads(path: Path) -> list[int]:
     return [
         node.lineno for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
@@ -44,8 +40,3 @@ def test_no_module_reaches_into_the_frame_stacks():
     hits = [f"{path.relative_to(ROOT)}:{line}"
             for path in sorted(ROOT.rglob("*.py")) for line in _stack_reads(path)]
     assert hits == []
-
-
-def test_the_forwarding_properties_are_gone():
-    for name in ("printf", "strcmp", "fmt_i32", "fmt_str", "fmt_f32", "fmt_f64"):
-        assert not hasattr(LLVMCodegen, name), name

@@ -1,6 +1,7 @@
 # Test: Dynamic array rebinding with move semantics
 # This test verifies that rebinding transfers ownership correctly
 # Move semantics prevent double-free by nullifying the source array
+# EXPECT_NO_LEAKS
 
 fn main() i32:
   # Move semantics ensure ownership transfer
@@ -9,6 +10,10 @@ fn main() i32:
 
   # This transfers ownership: arr2 is nullified and arr1 now owns the memory
   arr1 := arr2
+
+  # arr1 now holds what arr2 held
+  if (arr1.len() != 5 or arr1[0] != 10 or arr1[4] != 50):
+    return Result.Ok(1)
 
   # At scope exit, only arr1 is freed (arr2 was moved and marked as invalid)
   return Result.Ok(0)

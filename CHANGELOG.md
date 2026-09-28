@@ -408,6 +408,21 @@ All notable changes to Sushi Lang will be documented in this file.
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
 
+### Testing
+- **One home per pytest property** (#1051): three duplicate checks deleted, five split properties
+  merged (one shared `tests/unit/expr_dispatch.py` for the dispatch-totality gates, one registry
+  check over all seven signature tables), `test_diagnostic_coverage.py` renamed
+  `test_error_fixtures_name_their_code.py`. `test_backend_has_no_assert.py` is now the ruff rule
+  `S101` (backend and driver), and `test_llvmlite_containment.py` the ruff rule `TID251`.
+- **The pytest layer holds no dead residue** (#1052): the dead `needs_sushic` guard, three vacuous
+  operand tables, eight tombstone tests and about 60 empty section comments are gone; vulture now
+  scans `tests/unit/` too, with its own whitelist.
+- **20 redundant fixtures are deleted** (#1049), and four twins now test what their header claimed:
+  the enum-first CE0006 order, the CE2002 note, and the CE0108 and CE0111 spans.
+- **Success fixtures assert their value** (#1050): 17 fixtures whose only assertion was a short
+  `CONTAINS` now assert the exact stdout, 14 exit-0-only fixtures check what they compute, and a
+  text gate refuses a success fixture whose every stdout assertion is 3 characters or fewer.
+
 ### Fixed
 - **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
   `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of

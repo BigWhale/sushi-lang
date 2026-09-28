@@ -119,9 +119,3 @@ def test_non_pack_delegates():
 def test_non_pack_arg_count_mismatch():
     g = _non_pack()
     assert _infer(g, [I32]) is None
-
-
-# end-to-end: real front-end + the instantiate pass collector discovers the pack key
-
-
-

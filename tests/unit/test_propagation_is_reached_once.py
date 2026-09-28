@@ -18,33 +18,6 @@ from pathlib import Path
 SUSHI_LANG = Path(__file__).resolve().parents[2] / "sushi_lang"
 PROPAGATION = SUSHI_LANG / "semantics" / "passes" / "types" / "propagation.py"
 
-#: Both shims are gone outright: nothing may name either again.
-_RETIRED_SHIMS = (
-    "propagate_struct_type_to_dotcall",
-    "propagate_enum_type_to_dotcall",
-)
-
-
-def _sources():
-    for path in sorted(SUSHI_LANG.rglob("*.py")):
-        yield path.relative_to(SUSHI_LANG).as_posix(), path.read_text(encoding="utf-8")
-
-
-def test_the_propagation_shims_are_gone():
-    offenders = [f"{module}: {shim}"
-                 for module, source in _sources()
-                 for shim in _RETIRED_SHIMS if shim in source]
-    assert not offenders, (
-        "a retired propagation shim is named again:\n  " + "\n  ".join(offenders)
-        + "\nCall propagation.propagate_types_to_value once instead."
-    )
-
-
-def test_the_detector_sees_a_name():
-    """The always-fires control: a sweep that answers zero must be a sweep that works."""
-    modules = [module for module, source in _sources() if "propagate_types_to_value" in source]
-    assert len(modules) > 3, modules
-
 
 def test_the_idempotency_guard_is_still_there():
     """The guard is live, not dead code left over from the shims."""
@@ -57,5 +30,3 @@ def test_the_idempotency_guard_is_still_there():
               and any(isinstance(inner, ast.Return) for inner in node.body)]
     assert guards, ("_stamp_numeric_literal no longer returns early for a literal that "
                     "is already stamped: a second reach reports its range fault twice")
-
-

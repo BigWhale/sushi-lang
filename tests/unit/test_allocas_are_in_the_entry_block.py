@@ -51,18 +51,3 @@ def test_only_the_seam_calls_the_builder_alloca():
         "A slot placed at the current position grows the frame on every pass of a loop "
         "that reaches it (#589)."
     )
-
-
-# ---------------------------------------------------------------------------
-# The IR gate.
-
-
-
-
-
-# Each program drives emitters that the issue named, and each puts them under a loop, so
-# a slot at the current position is one this gate can see.
-
-
-
-

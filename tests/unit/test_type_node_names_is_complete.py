@@ -6,62 +6,19 @@ Seventeen readers asked "is this child a written type", and sixteen of them adde
 (`foreach`) did not, so a `foreach` with a bare user type in the item position stopped
 with an internal error while every other position took the same name (#595). The set is
 now complete and `is_type_node` is the one question, so the two halves of that fault
-each have a gate here: the set against the grammar, and the readers against the set.
+each have a gate: the set against the grammar
+(`test_expression_nodes_match_the_grammar.py`), and the readers against the set (here).
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from lark import Token, Tree
 
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import is_type_node
-from sushi_lang.semantics.typesys import TYPE_NODE_NAMES
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-GRAMMAR = PROJECT_ROOT / "sushi_lang" / "grammar.lark"
 AST_BUILDER = PROJECT_ROOT / "sushi_lang" / "semantics" / "ast_builder"
-
-# The two rules that spell a written type. Everything a `type` can be is an
-# alternative of one of them, so their aliases ARE the set.
-TYPE_RULES = ("?type", "?atom_type")
-
-
-def _rule_body(text: str, rule: str) -> str:
-    """The alternatives of one rule: its header line plus every continuation line."""
-    lines = text.splitlines()
-    start = next(i for i, ln in enumerate(lines) if ln.startswith(f"{rule}:"))
-    body = [lines[start]]
-    for ln in lines[start + 1:]:
-        if not ln.startswith((" ", "\t")):
-            break
-        body.append(ln)
-    return "\n".join(body)
-
-
-def _grammar_type_aliases() -> set[str]:
-    text = GRAMMAR.read_text()
-    aliases: set[str] = set()
-    for rule in TYPE_RULES:
-        aliases |= set(re.findall(r"->\s*(\w+)", _rule_body(text, rule)))
-    return aliases
-
-
-def test_the_set_is_every_type_node_the_grammar_makes():
-    missing = sorted(_grammar_type_aliases() - TYPE_NODE_NAMES)
-    assert not missing, (
-        f"the grammar makes type nodes the set does not hold: {missing}.\n"
-        "A missing member is not a missing feature: the position that reads the set "
-        "refuses a type every other position takes, and it refuses it as CE0002."
-    )
-
-
-def test_the_set_names_only_type_nodes():
-    extra = sorted(TYPE_NODE_NAMES - _grammar_type_aliases())
-    assert not extra, (
-        f"the set holds names the grammar's type rules do not make: {extra}. "
-        "A dead entry either renamed itself in the grammar or never existed."
-    )
 
 
 def test_one_reader_of_the_set():

@@ -1,4 +1,5 @@
 # Test: Generic function definitions parse correctly
+# A compile-only claim: the point is that the generic declarations parse. The run asserts exit 0 and nothing more.
 
 fn identity@(T)(T x) T:
     return Result.Ok(x)

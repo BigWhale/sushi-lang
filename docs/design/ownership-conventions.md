@@ -721,8 +721,9 @@ are the same rule with four rationales: a write through any of them cannot reach
 it appears to write. Each was found as its own bug, and each time all three write shapes
 had to be re-covered by hand. The checker now holds them as a TABLE of kinds behind one
 dispatcher (`_reject_readonly_write`), called from the four write sites, so a fifth kind is
-one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` pins all
-twelve cells and fails if a kind in the table has no row in the matrix. The codes stay
+one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` fails if a
+kind in the table has no code; the per-cell programs went with the pytest tests that ran the
+compiler. The codes stay
 separate for the reason the six position codes do (§8.5): each carries its own escape.
 Here the escapes are what separate the last two — a by-value parameter is redeclared
 `poke T`, and a receiver `poke self` (#327, shipped 2026-08-16).

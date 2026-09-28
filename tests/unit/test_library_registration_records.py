@@ -54,5 +54,3 @@ def test_no_linker_leaves_no_registry():
     registration.register([])
 
     assert registration.registry is None
-
-

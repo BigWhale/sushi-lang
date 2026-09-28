@@ -4,7 +4,7 @@
 # local impl NEGATES, so pick_bigger(3, 5) picks 3 - with the library's
 # doubling impl the result would be 5.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "3"
+# EXPECT_STDOUT_EXACT: "3\n"
 
 use <lib/perk_impl_lib>
 

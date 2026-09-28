@@ -1,7 +1,7 @@
 # The public half of the same library: marking the generic makes it callable,
 # which is what makes `public` the discriminator and not an accident (#467).
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "7"
+# EXPECT_STDOUT_EXACT: "7\n"
 
 use <lib/private_generic_lib>
 

@@ -16,10 +16,6 @@ from sushi_lang.semantics.passes.collect import EnumTable, StructTable
 from sushi_lang.semantics.typesys import StructType, UnknownType
 
 
-
-
-
-
 class _CountingSig:
     """A constant record that counts how often the pass writes its declared type."""
 

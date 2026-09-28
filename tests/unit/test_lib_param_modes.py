@@ -35,17 +35,6 @@ def test_a_dynamic_array_referent_round_trips():
     assert str(ty) == "peek i32[]"
 
 
-# The manifest carries the mode as its own field
-
-
-
-
-
-
-
-
-
-
 # A v2 library is rejected, not guessed at
 
 def test_a_v2_library_is_rejected(tmp_path):

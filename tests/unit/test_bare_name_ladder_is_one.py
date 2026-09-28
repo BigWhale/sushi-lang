@@ -18,8 +18,6 @@ import typing
 from sushi_lang.semantics.name_ladder import RUNGS, BareName, Rungs, classify
 
 
-
-
 class _Claims:
     """A `Rungs` that claims every name at exactly the rungs it is given."""
 
@@ -93,21 +91,3 @@ def test_both_consumers_answer_every_rung(consumer):
     for method in sorted(asked):
         assert callable(getattr(answerer, method, None)), \
             f"{answerer.__name__} does not answer {method}"
-
-
-# Every value position a bare name can stand in. Each used to answer something that was
-# not about the position: an enum name reached the emitter (CE0055), a struct name read
-# "undeclared identifier" (CE1001), and the borrow position read CE2400 for one and
-# CE1001 for the other.
-
-# The four kinds of type name the ladder's TYPE rung knows. A primitive is absent: a
-# bare `i32` in an expression is a parse error (CE6001), so it never reaches the ladder.
-
-
-
-
-
-
-
-
-

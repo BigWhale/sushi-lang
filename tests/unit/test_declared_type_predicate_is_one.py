@@ -6,12 +6,11 @@ hand-kept set of plain types, the function collector from the four type tables a
 perk -- so `extend Box@(Cage) with Show` bound a type PARAMETER named after a declared
 generic while `extend Box@(Cage) g()` constrained, and a perk name went the other way.
 
-Three gates:
+Two gates:
   - the seam answers for every declared kind, the built-ins included, and for nothing
     else, and it reads the tables live (#690 retired the hand-kept set),
   - both collectors hold the ONE seam and every classifier call hands it in; no second
-    predicate is defined anywhere under `sushi_lang/`,
-  - the two paths classify one spelling alike, through the real compiler.
+    predicate is defined anywhere under `sushi_lang/`.
 """
 from __future__ import annotations
 
@@ -120,12 +119,3 @@ def test_every_classifier_call_hands_in_the_seam():
         assert isinstance(predicate.value, ast.Name) and predicate.value.id == "self", \
             f"{path}: {ast.unparse(call)}"
         assert predicate.attr == "is_declared_type", f"{path}: {ast.unparse(call)}"
-
-
-# 3. The two paths, through the real compiler
-
-
-
-# kind -> (the bare name written, whether it is a declared name)
-
-

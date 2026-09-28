@@ -2,18 +2,7 @@
 from __future__ import annotations
 
 
-
-
 TRACEBACK_MARKER = "Traceback (most recent call last)"
-
-
-
-
-
-
-# (id, source, expected_code, has_location)
-
-
 
 
 def test_internal_compiler_error_is_reported_not_dumped(tmp_path, monkeypatch):

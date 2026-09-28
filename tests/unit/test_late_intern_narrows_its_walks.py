@@ -96,11 +96,3 @@ def test_derive_over_enums_takes_only():
 def test_the_array_hash_collector_takes_only():
     structs, enums = _plain_tables()
     assert derive_pass.collect_array_types(structs, enums, only=["New"]) == set()
-
-
-# Two solved method-level type arguments, so `List<bool>` and `List<string>` are named
-# nowhere else and are interned after `resolve`, `finite-types` and `derive` are over.
-
-# Every entry point the late interner re-runs, with the table each one walks.
-
-

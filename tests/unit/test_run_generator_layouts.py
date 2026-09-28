@@ -1,10 +1,8 @@
 """The `run()` generator of `<sys/process>` reads the `T[]` layout through `gep_utils`, and
 it checks every `malloc` (#896).
 
-The descriptor-GEP gate compiles a probe program, and a stdlib generator runs only when
-the stdlib is built, so that gate does not see this generator. This gate calls the
-generator directly. A failed `malloc` raises RE2021, the rule of the `<io/files>`
-generators.
+This gate calls the generator directly and records each descriptor GEP it makes. A
+failed `malloc` raises RE2021, the rule of the `<io/files>` generators.
 """
 from __future__ import annotations
 

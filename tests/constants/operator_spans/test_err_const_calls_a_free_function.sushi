@@ -1,4 +1,5 @@
 # EXPECT_ERROR_CODE: CE0108
+# EXPECT_STDERR_CONTAINS: test_err_const_calls_a_free_function.sushi:8:15: error [CE0108]
 # A constant cannot call a function.
 
 fn seven() i32:

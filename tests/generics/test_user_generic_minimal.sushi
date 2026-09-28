@@ -1,4 +1,5 @@
 # Minimal test - just define a user generic enum
+# A compile-only claim: the point is that the declaration alone is collected. The run asserts exit 0 and nothing more.
 
 enum Pair@(T, U):
     Both(T, U)

@@ -11,38 +11,7 @@ from sushi_lang.semantics.library_templates import (
 )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # P2-T4: consumer-side registration of library generic templates.
-
 
 
 def _registration_with_loaded_libraries(loaded: dict) -> LibraryRegistration:
@@ -50,12 +19,6 @@ def _registration_with_loaded_libraries(loaded: dict) -> LibraryRegistration:
     reporter = Reporter(source="", filename="consumer")
     fake_linker = SimpleNamespace(loaded_libraries=loaded)
     return LibraryRegistration(reporter, SymbolTables(), fake_linker, None)
-
-
-
-
-
-
 
 
 def test_register_library_generic_function_guards_missing_templates():
@@ -72,20 +35,6 @@ def test_register_library_generic_function_guards_missing_templates():
 # Phase 2 Step A: perk DEFINITION shipping (definitions only, no impls).
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_seed_library_perks_guards_missing_templates():
     """A manifest without a templates section seeds nothing and does not crash."""
     libraries = _registration_with_loaded_libraries(
@@ -99,35 +48,7 @@ def test_seed_library_perks_guards_missing_templates():
     assert table.by_name == {}
 
 
-# P2-5 Phase 1 (C3): generic STRUCT / ENUM templates.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # C4a: concrete perk-impl shipping (templates.perk_impls)
-
-
-
-
-
-
-
 
 
 def test_impl_method_symbol_matches_extension_naming():
@@ -137,17 +58,3 @@ def test_impl_method_symbol_matches_extension_naming():
     assert impl_method_symbol("i32", "doubled") == "i32_doubled"
     assert impl_method_symbol("Box<i32>", "unwrap") == "Box__i32_unwrap"
     assert impl_method_symbol("HashMap<string, i32>", "get") == "HashMap__string_i32_get"
-
-
-
-
-
-
-
-
-
-
-
-
-
-

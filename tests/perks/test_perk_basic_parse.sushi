@@ -9,4 +9,7 @@ extend i32 with Display:
         return "42"
 
 fn main() i32:
+    let i32 n = 7
+    if (n.display() != "42"):
+        return Result.Ok(1)
     return Result.Ok(0)

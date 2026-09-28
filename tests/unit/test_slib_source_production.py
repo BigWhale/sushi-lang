@@ -12,36 +12,6 @@ import pytest
 from sushi_lang.backend.library_errors import LibraryError
 
 
-
-
-
-
-
-
-# --- What a source library contains -----------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- The other two kinds ----------------------------------------------------
-
-
-
-
-
-
-
 # --- A source library is not platform-bound ---------------------------------
 
 def _load(metadata, kind):

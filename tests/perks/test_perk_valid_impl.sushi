@@ -13,5 +13,7 @@ extend Point with Hashable:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    p.hash()
+    # 10 * 31 + 20: the override, not the derived hash
+    if (p.hash() != 330 as u64):
+        return Result.Ok(1)
     return Result.Ok(0)

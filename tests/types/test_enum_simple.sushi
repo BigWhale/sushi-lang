@@ -10,5 +10,7 @@ fn test_color() Color:
 
 fn main() i32:
     let Result@(Color, StdError) result = test_color()
-    result.realise(Color.Blue())
-    return Result.Ok(0)
+    match result.realise(Color.Blue()):
+        Color.Red -> return Result.Ok(0)
+        Color.Green -> return Result.Ok(1)
+        Color.Blue -> return Result.Ok(2)

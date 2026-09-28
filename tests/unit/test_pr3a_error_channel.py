@@ -84,13 +84,3 @@ def test_library_error_renders_through_the_reporter_path():
     assert isinstance(err, SushiError)
     assert err.code == "CE3504"
     assert "platform mismatch" in err.message
-
-
-# CE3501 -- main() rejected in --lib mode (end to end)
-
-
-
-
-
-# CE3507 -- a .slib whose bitcode payload is corrupt (end to end)
-

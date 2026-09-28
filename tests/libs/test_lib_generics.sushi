@@ -2,7 +2,7 @@
 # site (Phase 2 cross-library generics). The library ships first_of<T> as a
 # template; the consumer instantiates it at T = i32 with no explicit type args.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "3"
+# EXPECT_STDOUT_EXACT: "3\n"
 
 use <lib/generics_lib>
 

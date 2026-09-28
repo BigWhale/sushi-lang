@@ -15,16 +15,6 @@ from __future__ import annotations
 from sushi_lang.semantics.generics import hashing
 
 
-
-
-
-
-
-
-
-
-
-
 def _struct(name, fields):
     from sushi_lang.semantics.typesys import StructType
     return StructType(name=name, fields=tuple(fields))

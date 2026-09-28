@@ -13,5 +13,7 @@ fn main() i32:
     let HashMap@(ValidKey, string) map = HashMap.new()
     let ValidKey p = ValidKey(1, 2)
     map.insert(p, "test")
+    if (map.len() != 1 or not map.contains_key(ValidKey(1, 2))):
+        return Result.Ok(1)
 
     return Result.Ok(0)

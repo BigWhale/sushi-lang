@@ -18,8 +18,6 @@ from sushi_lang.semantics.ast_builder.declarations.imports import (
 GRAMMAR = Path(__file__).resolve().parents[2] / "sushi_lang" / "grammar.lark"
 
 
-
-
 # -- the table covers the grammar ------------------------------------------------
 
 def test_the_table_and_the_quoted_form_cover_every_import_the_grammar_spells():
@@ -39,39 +37,3 @@ def test_a_bracketed_form_spells_a_use_path_and_the_quoted_form_does_not():
         body = re.search(rf"^{rule}: (.+)$", text, re.MULTILINE)
         assert body is not None, f"no rule named {rule}"
         assert ("use_path" in body.group(1)) is (rule in BRACKETED_IMPORTS)
-
-
-# -- the path, and which flag the form sets -------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-# -- `public use`, on each of the three forms -----------------------------------
-
-
-
-
-
-# -- `use ... as NAME`, on each of the three forms ------------------------------
-
-
-
-
-
-# -- the span of the statement itself -------------------------------------------
-
-
-
-# -- a path node with no path is a malformed tree --------------------------------
-
-
-

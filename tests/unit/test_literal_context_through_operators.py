@@ -17,31 +17,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# One expression per operator, built only from bare literals -- the declared type is the
-# only thing that can type them -- and valued so it is legal at every width below.
-
-# Both signednesses, narrowest and widest of each.
-
-# Every way the pass reports a literal that never took its context type.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 def test_the_type_preserving_set_lives_in_one_place():
     """One list of operators. A second copy is a second rule, and it will drift."""

@@ -34,13 +34,6 @@ OWNING = StructType(name="Owning", fields=(("s", BuiltinType.STRING),))
 DROPS = frozenset({"Handle"})
 
 
-
-
-# name -> (type, what every predicate must answer)
-
-
-
-
 def test_the_drop_set_is_what_makes_the_difference():
     """Without the answer, a handle reads as owning nothing -- the ruling R2a hazard.
 

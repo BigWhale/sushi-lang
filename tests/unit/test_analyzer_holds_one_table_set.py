@@ -19,7 +19,6 @@ from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.tables import SymbolTables
 
 
-
 def test_the_analyzer_declares_no_shadow_of_a_program_table():
     """One home for each table: an attribute of the same name is a second one."""
     analyzer = SemanticAnalyzer(Reporter())
@@ -40,5 +39,3 @@ def test_every_program_table_answers_before_check():
     for field in dataclasses.fields(SymbolTables):
         assert getattr(analyzer.tables, field.name) is not None or \
             field.name == "intern_generic_ref"
-
-

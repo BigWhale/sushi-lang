@@ -4,7 +4,7 @@
 # registers it for constraint checking and dispatch, declares the i32_doubled
 # symbol, and links the body from the library bitcode.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "5"
+# EXPECT_STDOUT_EXACT: "5\n"
 
 use <lib/perk_impl_lib>
 
