@@ -24,7 +24,6 @@ FOREIGN_ATTRIBUTES = {
     "__dataclass_fields__": "the dataclasses runtime",
     "__dataclass_params__": "the dataclasses runtime",
     "frozen": "dataclasses `__dataclass_params__.frozen`",
-    "__version__": "llvmlite",
     "llvm_version_info": "llvmlite",
     "token": "a Lark parse exception",
     "expected": "a Lark parse exception",
