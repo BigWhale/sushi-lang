@@ -70,6 +70,15 @@ Collect global definitions before analyzing function bodies.
    the body is `CE0134`, and a static spelling a variant of the enum it extends is
    `CE2103`. A `static` inside a perk implementation is `CE4014`, in the perk collector.
 
+### Source order decides the holder of a name in one unit
+
+The collectors run kind by kind, so the collection order is not the source order. Before
+they run, `claim_unit_names` (`collect/unit_names.py`) sorts the unit's top-level
+declarations by position and refuses each later declaration of a name that an earlier one
+of another kind holds: `CE0006` for a struct beside an enum, `CE1005` for every other
+pair (#1069, #1076). A refused declaration enters no table. Two declarations of one kind
+stay with that kind's collector and its own code.
+
 ### A unit is collected after the units it depends on
 
 The compilation order (`UnitManager.topological_sort`) yields every unit AFTER the units

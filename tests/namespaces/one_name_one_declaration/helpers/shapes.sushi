@@ -1,0 +1,2 @@
+public struct box:
+    i32 n

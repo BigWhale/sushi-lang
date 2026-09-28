@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Union
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
+from sushi_lang.semantics.name_ladder import call_constructs_struct
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
@@ -34,7 +35,8 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         fat_value, fn_type = fn_value
         return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
-    if callee in codegen.struct_table.by_name:
+    if call_constructs_struct(callee, codegen.struct_table.by_name,
+                              codegen.func_table, codegen.emitting_unit):
         from sushi_lang.backend.expressions import structs
         return structs.emit_struct_constructor(codegen, expr, to_i1)
 

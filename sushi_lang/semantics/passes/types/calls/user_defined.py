@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
+from sushi_lang.semantics.name_ladder import call_constructs_struct
 from ..visibility import (name_is_contested, out_of_scope_help, type_name_is_contested,
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
@@ -30,6 +31,12 @@ def own_concrete_function(func_table, name: str, unit: Optional[str]):
     if func_table is None or unit is None:
         return None
     return func_table.declared(name, unit)
+
+
+def struct_takes_the_call(validator: 'TypeValidator', name: str) -> bool:
+    """Whether a bare call `name(...)` constructs the struct of that name here."""
+    return call_constructs_struct(name, validator.struct_table.by_name,
+                                  validator.func_table, validator.current_unit_name)
 
 
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
@@ -145,7 +152,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     # A type name this unit lost is a construction of the unit's own type (#921), even
     # when the name that won is an enum and the struct table has no such name.
-    if (function_name in validator.struct_table.by_name
+    if (struct_takes_the_call(validator, function_name)
             or type_name_is_contested(validator, function_name)):
         from .structs import validate_struct_constructor
         validate_struct_constructor(validator, call)

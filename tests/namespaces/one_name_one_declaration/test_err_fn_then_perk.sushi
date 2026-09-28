@@ -1,0 +1,19 @@
+# One name has one declaration in a unit, whatever its kind (#1076). The
+# perk is the second declaration of 'box' in source order, so it is the
+# error, with a note at the function. The function keeps the name, so its uses
+# give no more errors.
+# EXPECT_ERROR_CODES_EXACT: CE1005
+# EXPECT_STDERR_CONTAINS: :14:6: error [CE1005]: perk 'box' already declared in this unit as a function
+# EXPECT_STDERR_CONTAINS: first declared here, as a function
+# EXPECT_STDERR_CONTAINS: :11:4
+#
+
+fn box() i32:
+    return Result.Ok(4)
+
+perk box:
+    fn size() i32
+
+fn main() i32:
+    println(box().realise(0))
+    return Result.Ok(0)

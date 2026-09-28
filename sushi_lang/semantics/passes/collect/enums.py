@@ -11,6 +11,7 @@ from sushi_lang.internals.errors import ERR
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
 from sushi_lang.semantics.ast import EnumDef, Program
+from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.predefined_types import PREDEFINED_ENUMS, predefined_enums
 from sushi_lang.semantics.typesys import (
@@ -83,6 +84,7 @@ class EnumCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
+        self.refused = RefusedDeclarations()
         self.library_units: Set[str] = set()
         # The names this collector refused with CE3011 (#814): the analyzer stops on them.
         self.refused_library_types: list[str] = []
@@ -97,7 +99,7 @@ class EnumCollector:
         enums = root.enums
         if isinstance(enums, list):
             for enum in enums:
-                if isinstance(enum, EnumDef):
+                if isinstance(enum, EnumDef) and self.refused.admits(enum):
                     self._collect_enum_def(enum)
 
     def register_predefined_enums(self) -> None:
@@ -135,7 +137,8 @@ class EnumCollector:
         if reject_duplicate_type_name(self.r, "enum", name, name_span, type_name_rules(
             "enum", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
-        ), library_clash=self._reject_library_clash, visibility=self.visibility):
+        ), library_clash=self._reject_library_clash, visibility=self.visibility,
+                generic=bool(type_params)):
             return
 
         variants_list: List[EnumVariantInfo] = []

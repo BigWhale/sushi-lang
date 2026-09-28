@@ -842,6 +842,26 @@ A type name stays legal in every WRITTEN-name position, and none of them reaches
 ladder: an annotation, a constraint, and its own dot, where the name is a member of the
 type and not a value (section 5, and `method-resolution.md`).
 
+#### One name, one declaration, in one unit (#1076)
+
+Row 2 holds ONE declaration for a name. In one unit, one name has one declaration, whatever
+its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names. The
+SECOND declaration in source order is `CE1005`, and its note points at the first. The first
+keeps the name, and the refused declaration enters no table, so the uses of the first give
+no more errors. Two declarations of ONE kind keep that kind's code (`CE0004`, `CE2046`,
+`CE4001`, `CE0101`, `CE0105`), and a struct beside an enum is `CE0006` (#1069). The
+collectors run kind by kind, so the collection order is not the source order: one walk over
+the unit's declarations, sorted by position, decides the holder of each name before any
+collector runs (`semantics/passes/collect/unit_names.py`).
+
+Across units a name may be used again, and the ladder above decides: the unit's own
+declaration wins over a flat import, and two imported names are reached with `use ... as`.
+A CALL follows the same order. `box()` calls the unit's own `fn box` when a flat import
+brings a struct `box`, and the struct is `sh.box(...)` behind the alias
+(`name_ladder.call_constructs_struct`, asked by the typecheck pass and by the back end).
+Two TYPES of one name in two units stay refused, because a type is one per program
+(`type-identity.md`).
+
 Row 2 beating row 3 is the rule the compiler already follows and the linker already agrees
 with: a private function has internal linkage, so the consumer's call binds to the
 consumer's definition (`visibility.md` decision 10). It keeps warning — `CW3002` survives
@@ -1145,6 +1165,7 @@ document takes the next three errors and the next two warnings:
 | **CE3014** | the `use` statement | a `use` below a declaration; every import comes first (section 2.1) |
 | **CW3003** | an `extend` of a foreign type, at `--lib` build time ONLY | this library claims a method on a type it did not declare (section 8). Not gated on either phase: it needs the target's declaring unit and the `--lib` flag, and nothing else this document adds |
 | **CW3004** | the `use` statement | `as` bound an empty namespace (section 4.4). A warning because a namespace is empty for three reasons and only one is a mistake |
+| **CE1005** | the second declaration | one unit declares one name twice, in two kinds (section 8, #1076); the note points at the first declaration. Added after this document's delivery, in the scope family |
 
 Reused rather than duplicated:
 

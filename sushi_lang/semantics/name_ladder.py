@@ -17,7 +17,7 @@ higher rung wins over a lower one.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Protocol
+from typing import Any, Container, Optional, Protocol
 
 
 class BareName(Enum):
@@ -87,3 +87,17 @@ def classify(name: str, rungs: Rungs) -> BareName:
     if rungs.is_type(name):
         return BareName.TYPE
     return BareName.NOTHING
+
+
+def call_constructs_struct(name: str, structs: Container[str], functions: Any,
+                           unit: Optional[str]) -> bool:
+    """Whether a bare call `name(...)` constructs the struct of that name.
+
+    The call's ladder has the FUNCTION rung above the TYPE rung too: the unit's own
+    function wins over a struct of another unit (#1076). One unit cannot declare both
+    (CE1005), so a struct beside an own function is a foreign one, and the unit reaches
+    it behind its alias. The typecheck pass and the backend ask this one question.
+    """
+    if name not in structs:
+        return False
+    return unit is None or functions is None or functions.declared(name, unit) is None

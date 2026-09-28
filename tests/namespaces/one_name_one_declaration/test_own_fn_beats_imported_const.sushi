@@ -1,0 +1,11 @@
+# Across units a name may be used again (#1076). A flat import brings the
+# public constant `box`, and the unit's own `fn box` takes the bare call.
+# EXPECT_STDOUT_EXACT: "4\n"
+use "helpers/consts"
+
+fn box() i32:
+    return Result.Ok(4)
+
+fn main() i32:
+    println(box().realise(0))
+    return Result.Ok(0)
