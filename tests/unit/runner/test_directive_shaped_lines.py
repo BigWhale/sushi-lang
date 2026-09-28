@@ -8,18 +8,12 @@ line that starts with a diagnostic code (`CE2510: ...`) is prose.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import run_single
+from test_metadata import parse_test_metadata
 
 BODY = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
 STDOUT = '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'
@@ -31,11 +25,6 @@ def _fixture(tmp_path: Path, header: str) -> Path:
     path = home / "test_directive_probe.sushi"
     path.write_text(STDOUT + header + BODY)
     return path
-
-
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
 
 
 REFUSED = [
@@ -55,7 +44,7 @@ def test_a_line_the_parser_cannot_read_is_a_directive_error(tmp_path, header, na
 
 @pytest.mark.parametrize("header,name", REFUSED[:2])
 def test_a_line_the_parser_cannot_read_fails_the_fixture(tmp_path, header, name):
-    result = _run(_fixture(tmp_path, header))
+    result = run_single(_fixture(tmp_path, header))
     assert not result.total_success, (
         f"the fixture passed with {header.strip()!r} unread: {result.compilation_message}")
     assert name in result.compilation_message
@@ -72,5 +61,5 @@ def test_a_line_that_is_prose_or_a_known_directive_is_no_error(tmp_path, header)
 
 
 def test_a_code_prefixed_prose_line_passes_the_fixture(tmp_path):
-    result = _run(_fixture(tmp_path, "# CE2510: prose that names a diagnostic code\n"))
+    result = run_single(_fixture(tmp_path, "# CE2510: prose that names a diagnostic code\n"))
     assert result.total_success, result.compilation_message

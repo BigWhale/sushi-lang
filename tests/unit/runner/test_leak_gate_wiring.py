@@ -3,34 +3,19 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+from _harness import TESTS_DIR, PROJECT_ROOT, FIXTURES_DIR, run_tests
+import enhanced_test_runner
+from test_metadata import parse_test_metadata, should_run_runtime_test
+
+# This module stages a fixture in tests/, moves the interposer away, and starts the front end
+# without --skip-build, which builds the stdlib and the helper libraries again.
+pytestmark = pytest.mark.writes_the_checkout
+
 LEAKING_FIXTURE = FIXTURES_DIR / "leaking_program.sushi"
-
-# tests/ is not a package; the harness modules import each other flat.
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata, should_run_runtime_test  # noqa: E402
-
-
-def _run_harness(*args: str) -> subprocess.CompletedProcess:
-    """Invoke tests/run_tests.py the way a developer or CI does."""
-    return subprocess.run(
-        [sys.executable, str(TESTS_DIR / "run_tests.py"), *args],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
 
 
 @pytest.fixture
@@ -48,7 +33,7 @@ def leaking_test_in_suite():
 
 def test_leaking_program_fails_plain_enhanced(leaking_test_in_suite):
     """A leaking `EXPECT_NO_LEAKS` test must fail `--enhanced` with no extra flags."""
-    proc = _run_harness("--enhanced", "--filter", leaking_test_in_suite)
+    proc = run_tests("--enhanced", "--filter", leaking_test_in_suite)
     output = proc.stdout + proc.stderr
 
     assert proc.returncode != 0, (
@@ -70,7 +55,7 @@ def test_enhanced_builds_the_interposer(leaking_test_in_suite, tmp_path):
         stashed = tmp_path / shim.name
         shutil.move(str(shim), stashed)
     try:
-        proc = _run_harness("--enhanced", "--filter", leaking_test_in_suite)
+        proc = run_tests("--enhanced", "--filter", leaking_test_in_suite)
         assert shim.exists(), (
             "--enhanced did not build the leak interposer\n"
             + proc.stdout + proc.stderr
@@ -112,7 +97,7 @@ def test_check_leaks_runs_without_any_leak_flag(tmp_path, monkeypatch):
 
 def test_leaks_flag_no_longer_exists():
     """`--leaks` is gone: `--enhanced` enforces, `--leaks-only` selects."""
-    proc = _run_harness("--leaks", "--filter", "no_such_test_pattern")
+    proc = run_tests("--leaks", "--filter", "no_such_test_pattern")
     assert proc.returncode != 0, "--leaks was accepted; it should be an argparse error"
     assert "unrecognized arguments: --leaks" in proc.stderr, proc.stderr
 

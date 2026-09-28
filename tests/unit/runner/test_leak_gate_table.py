@@ -17,15 +17,11 @@ from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "leakcheck"
+from _harness import PROJECT_ROOT, FIXTURES_DIR
+from run_tests import leakcheck_platform
+
+FIXTURES = FIXTURES_DIR / "leakcheck"
 LEAKCHECK_DIR = PROJECT_ROOT / "tests" / "leakcheck"
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from run_tests import leakcheck_platform  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     leakcheck_platform() is None,

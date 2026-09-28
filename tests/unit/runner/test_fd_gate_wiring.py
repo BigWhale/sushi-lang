@@ -18,28 +18,15 @@ from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+from _harness import TESTS_DIR, PROJECT_ROOT, FIXTURES_DIR, run_tests
+import enhanced_test_runner
+from test_metadata import parse_test_metadata, should_run_runtime_test
+
+# This module stages a fixture in tests/, builds the interposer, and starts the front end
+# without --skip-build, which builds the stdlib and the helper libraries again.
+pytestmark = pytest.mark.writes_the_checkout
+
 FD_FIXTURE = FIXTURES_DIR / "fd_leaking_program.sushi"
-
-# tests/ is not a package; the harness modules import each other flat.
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata, should_run_runtime_test  # noqa: E402
-
-
-def _run_harness(*args: str) -> subprocess.CompletedProcess:
-    """Invoke tests/run_tests.py the way a developer or CI does."""
-    return subprocess.run(
-        [sys.executable, str(TESTS_DIR / "run_tests.py"), *args],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
 
 
 @pytest.fixture
@@ -74,7 +61,7 @@ def test_a_warning_test_with_only_a_descriptor_assertion_is_executed():
 def test_a_leaked_descriptor_fails_the_gate(fd_leaking_test_in_suite):
     """The whole point: a program the BYTE gate calls clean must fail this one."""
     marker, _staged = fd_leaking_test_in_suite
-    result = _run_harness("--enhanced", "--filter", marker)
+    result = run_tests("--enhanced", "--filter", marker)
     assert result.returncode != 0, (
         "a program that opens a file and never closes it passed the suite. "
         f"stdout:\n{result.stdout}"

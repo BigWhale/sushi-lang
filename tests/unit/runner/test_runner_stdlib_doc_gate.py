@@ -13,16 +13,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-RUN_TESTS = TESTS_DIR / "run_tests.py"
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-from run_tests import (  # noqa: E402
+from _harness import PROJECT_ROOT, run_tests
+from run_tests import (
     DOC_GATE_MODULES_ENV, _doc_gate_selection, doc_gate_modules, doc_gate_program,
 )
 
@@ -61,10 +55,7 @@ def _run(*flags: str, modules: list[Path] | None = None) -> subprocess.Completed
     env.pop(DOC_GATE_MODULES_ENV, None)
     if modules is not None:
         env[DOC_GATE_MODULES_ENV] = os.pathsep.join(str(m) for m in modules)
-    return subprocess.run(
-        [sys.executable, str(RUN_TESTS), "--skip-build", *flags],
-        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=300, env=env,
-    )
+    return run_tests("--skip-build", *flags, env=env)
 
 
 def test_an_undocumented_public_function_fails_the_run(tmp_path):
