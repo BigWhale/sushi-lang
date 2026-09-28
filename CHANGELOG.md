@@ -423,6 +423,12 @@ All notable changes to Sushi Lang will be documented in this file.
   `CONTAINS` now assert the exact stdout, 14 exit-0-only fixtures check what they compute, and a
   text gate refuses a success fixture whose every stdout assertion is 3 characters or fewer.
 
+### Testing
+- **Every fixture lives in a feature directory** (#1054-#1058). The 1,377 fixtures that sat flat at
+  an area root (40% of the corpus) and the issue-numbered `tests/bugs/` directory are moved to
+  `tests/<area>/<feature>/`; `tests/bugs/` is gone. A move changed the path only: a dump of every
+  fixture's parsed directives and body hash is equal before and after (3473 fixtures).
+
 ### Fixed
 - **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
   `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of

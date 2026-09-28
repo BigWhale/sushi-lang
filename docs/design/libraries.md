@@ -491,7 +491,7 @@ No special case at all: a pack function carries `type_params` (with `is_pack=Tru
 the pack parameter) exactly like any other generic function, so it is collected into
 `generic_functions` and monomorphized per (arity, type-tuple) at the consumer's call
 site through the same path as §5.2. `tests/libs/helpers/format_lib.sushi` +
-`tests/libs/test_lib_pack.sushi` exercise this: the library ships `perk Display` and
+`tests/libs/consumer_generics/test_lib_pack.sushi` exercise this: the library ships `perk Display` and
 `show_all@(...Ts: Display)`; the consumer supplies `Display` impls for `i32`/`string`
 and calls with zero and two arguments.
 

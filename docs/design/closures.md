@@ -251,8 +251,8 @@ for the captured variable's provenance and type class, not a closures-specific r
    It was declared `peek` until the `peek` write rule became total: nothing
    enforced read-only before that, so the untruthful mode had no consequence. Once it was
    enforced, it made two legal shapes a **CE2408** — a mutating method on a capture
-   (`tests/closures/test_closure_list_mutate.sushi`) and a `poke` borrow of a capture
-   (`tests/closures/test_closure_env_poke_borrow.sushi`). The declaration was corrected rather
+   (`tests/closures/capture/test_closure_list_mutate.sushi`) and a `poke` borrow of a capture
+   (`tests/closures/capture/test_closure_env_poke_borrow.sushi`). The declaration was corrected rather
    than the rule carved out.
 
    The mode is a SEMANTIC declaration only: no backend code reads `ReferenceType.mutability`, so
@@ -340,7 +340,7 @@ and run. Two gaps were closed to make this possible:
   environment at its own scope exit, exactly like any other owning `nom` parameter; a caller-side
   registration there would double-free. Binding to a local is still not required either way.
 
-Validated as **free generic functions** (`tests/generics/test_ho_*`): `map@(T, U)(List@(T), fn(T) ->
+Validated as **free generic functions** (`tests/generics/higher_order/test_ho_*`): `map@(T, U)(List@(T), fn(T) ->
 U)` with a capturing closure and with `U` genuinely differing from `T` (i32 -> bool);
 `filter@(T)(List@(T), fn(T) -> bool)` with a capturing predicate; `fold@(T, U)(List@(T), U, fn(U, T) ->
 U)` with two independently-inferred type params; `apply@(T)(fn(T) -> T, T)` with a bare fn reference.
@@ -421,7 +421,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Test coverage: `tests/stdlib/test_iter_module_map.sushi`, `test_iter_module_filter.sushi`,
+Test coverage: `tests/stdlib/iter/combinators/test_iter_module_map.sushi`, `test_iter_module_filter.sushi`,
 `test_iter_module_fold.sushi`, `test_iter_module_fnref.sushi`, `test_iter_compose.sushi`,
 `test_err_iter_unknown_module.sushi`.
 
@@ -470,9 +470,9 @@ fn run() i32:
 Two former backend cast failures on this path are now precise front-end **CE2002** diagnostics
 instead.
 
-Test coverage: `tests/closures/test_closure_capture_closure.sushi`,
-`tests/functions/test_call_index_result.sushi`, `tests/functions/test_fn_value_field_call.sushi`,
-`tests/functions/test_fn_value_in_struct.sushi`.
+Test coverage: `tests/closures/capture/test_closure_capture_closure.sushi`,
+`tests/functions/function_values/test_call_index_result.sushi`, `tests/functions/function_values/test_fn_value_field_call.sushi`,
+`tests/functions/function_values/test_fn_value_in_struct.sushi`.
 
 ## 8. Generic-function references — the T2.3 annotated slice
 
@@ -522,9 +522,9 @@ fn run() i32:
 
 What still stays CE2093 is covered once, in Part II §4.
 
-Test coverage: `tests/generics/test_generic_fn_ref.sushi`,
-`tests/generics/test_generic_fn_ref_higher_order.sushi`,
-`tests/generics/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`,
+Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
+`tests/generics/generic_fn_reference/test_generic_fn_ref_higher_order.sushi`,
+`tests/generics/generic_fn_reference/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`,
 `tests/generics/generic_fn_value_to_generic_callee/`.
 
 ## 9. Diagnostics (live)
@@ -750,10 +750,10 @@ treat this as a known authoring gotcha rather than a validated error path.
 1. Read Part I (above) for current capability, then this Part II for what's left and why.
 2. `git log --oneline 430b5bd..HEAD -- sushi_lang docs/design/closures.md` — the closures + T1.8 +
    T2.3/T2.4 feature commits are the phase history; everything is on `main`.
-3. Reproduce the working baseline: compile+run `tests/closures/test_closure_escaping.sushi` (prints
-   15), `tests/closures/test_closure_owned_move_capture.sushi` (13),
-   `tests/closures/test_closure_capture_closure.sushi` (16), `tests/stdlib/test_iter_compose.sushi`
-   (22), `tests/generics/test_generic_fn_ref.sushi` (42).
+3. Reproduce the working baseline: compile+run `tests/closures/escaping_values/test_closure_escaping.sushi` (prints
+   15), `tests/closures/capture/test_closure_owned_move_capture.sushi` (13),
+   `tests/closures/capture/test_closure_capture_closure.sushi` (16), `tests/stdlib/iter/combinators/test_iter_compose.sushi`
+   (22), `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi` (42).
 4. Pick the remaining item by leverage:
    - **Gap B (§1)** — the method form `xs.map(f)`; start with the grammar acceptance-gate, reuse
      the higher-order unifier for method-call inference, then bridge the extension monomorphizer to
@@ -769,6 +769,6 @@ treat this as a known authoring gotcha rather than a validated error path.
 ## Test strategy (repo conventions)
 
 `tests/run_tests.py`: `test_*` -> exit 0, `test_err_*` -> exit 2, `test_warn_*` -> exit 1; runtime
-validated via `--enhanced`. Ground truth lives in `tests/closures/`, `tests/generics/test_ho_*`,
-`tests/generics/test_generic_fn_ref*`, and `tests/stdlib/test_iter_*` — see the test-coverage lines
+validated via `--enhanced`. Ground truth lives in `tests/closures/`, `tests/generics/higher_order/test_ho_*`,
+`tests/generics/generic_fn_reference/test_generic_fn_ref*`, and `tests/stdlib/iter/combinators/test_iter_*` — see the test-coverage lines
 under each Part I section above for the full file list.

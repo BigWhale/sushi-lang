@@ -174,7 +174,7 @@ evaluator answered 0 for the smallest signed value `% -1`, and it reports CE2077
 - **The evaluator computes at the width.** `~0` on a `u32` becomes 4294967295 and no longer
   Python `-1`. The printed answer does not move, so
   `tests/types/unary_literal_context/test_run_const_not_of_a_literal.sushi` and
-  `tests/constants/test_constants_bitwise.sushi:17` keep the output they expect. The held
+  `tests/constants/scalar_folding/test_constants_bitwise.sushi:17` keep the output they expect. The held
   value stops being a lie.
 - **The check belongs to the typecheck pass.** The back end does not report a language error,
   so `_fold_arithmetic_constants` is the wrong place. The typecheck pass already calls the

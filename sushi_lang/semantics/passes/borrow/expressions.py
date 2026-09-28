@@ -182,7 +182,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
     # holds STRUCTURALLY: an FFI call arrives as a DotCall, and this function consumes
     # only for an enum constructor, an indirect call and a container insert. Do NOT add
     # a blanket `consume(arg, CALL_ARG)` loop -- it would make every `libc.*(s)` call
-    # site a false CE2405. `tests/ffi/test_ffi_string_arg_not_consumed.sushi` is the gate.
+    # site a false CE2405. `tests/ffi/extern_calls/test_ffi_string_arg_not_consumed.sushi` is the gate.
     unchanged = unchanged_borrowed_roots(checker, expr)
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)

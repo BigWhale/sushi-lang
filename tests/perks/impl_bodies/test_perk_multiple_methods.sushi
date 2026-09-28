@@ -1,0 +1,10 @@
+# tests/perks/impl_bodies/test_perk_multiple_methods.sushi
+# Perk with multiple methods
+# A compile-only claim: the perk has no implementation, so there is no value to check. The run asserts exit 0 and nothing more.
+
+perk Comparable:
+    fn equals(poke i32 other) bool
+    fn less_than(poke i32 other) bool
+
+fn main() i32:
+    return Result.Ok(0)

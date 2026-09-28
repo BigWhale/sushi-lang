@@ -228,7 +228,7 @@ searching for them.
 
 `CE3014` is the one rule in this document that refuses source which compiles today, so it
 was measured: **one file** in the tree puts a `use` below a declaration
-(`tests/memory/test_consume_hashmapinsert_owned_array.sushi:25`, a
+(`tests/memory/consume_matrix/test_consume_hashmapinsert_owned_array.sushi:25`, a
 `use <collections/hashmap>` under a `struct`), and moving the line up is the whole
 migration. Ruling 1's promise is about the `as` clause, which no program carries; this
 clause is the exception to it, and it costs one line.
@@ -291,7 +291,7 @@ in a way that passes every test a first implementer would write:
 
 | What the binding could hold | Verdict |
 |---|---|
-| the **written path** — `h -> "helpers"` | Wrong, and not for the reason it looks. A `use` path is resolved against the MAIN file's directory (`UnitManager(root_path=src_path.parent)`, `compiler/pipeline.py:241`, and `resolve_unit_path`, `semantics/units.py:126-129`), so one written path names one file from every importing unit — `tests/basic/helpers/bar_module.sushi` writes `use "helpers/math_utils"` from inside `helpers/` and proves it. It fails on packaging instead, which the paragraph below measures |
+| the **written path** — `h -> "helpers"` | Wrong, and not for the reason it looks. A `use` path is resolved against the MAIN file's directory (`UnitManager(root_path=src_path.parent)`, `compiler/pipeline.py:241`, and `resolve_unit_path`, `semantics/units.py:126-129`), so one written path names one file from every importing unit — `tests/basic/multifile/helpers/bar_module.sushi` writes `use "helpers/math_utils"` from inside `helpers/` and proves it. It fails on packaging instead, which the paragraph below measures |
 | the **resolved unit name** — `h -> "lib/foo/helpers"` | Correct, and only if the resolved name is the one stored. A `str` field cannot say which string it wants |
 | the **`Unit` object** | Correct, and more than the table needs: it couples a namespace to a unit's identity when all it uses is that unit's symbols |
 | the **provider** — `h -> UnitNamespace(...)` | **The ruling.** There is no string to get wrong |
@@ -926,7 +926,7 @@ implementing unit declares itself. That is why the foreign-target count is zero.
 names is a claim with no escape: a consumer holding two colliding plain extensions can edit
 neither. A perk implementation's claim has the escape built in — the consumer's OWN
 implementation is the sanctioned override and wins over a shipped one
-(`tests/libs/test_lib_perk_impl_local_override.sushi` is the measured proof). So
+(`tests/libs/shipped_perks/test_lib_perk_impl_local_override.sushi` is the measured proof). So
 `extend i32 with Doubler` in a library stays quiet, and the two library fixtures of that
 shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
 function for both consumers: the CW3003 emitter in the pipeline and the manifest extractor.

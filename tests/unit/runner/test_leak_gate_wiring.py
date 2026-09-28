@@ -104,7 +104,7 @@ def test_leaks_flag_no_longer_exists():
 
 def test_warning_test_with_leak_assertion_is_executed():
     """A `test_warn_*` test declaring `EXPECT_NO_LEAKS` is run, unconditionally."""
-    warn_tests = sorted(TESTS_DIR.glob("memory/test_warn_shadow_owning_*.sushi"))
+    warn_tests = sorted(TESTS_DIR.glob("memory/shadowing/test_warn_shadow_owning_*.sushi"))
     assert warn_tests, "expected the shadow-owning warning tests to exist"
 
     for test_file in warn_tests:

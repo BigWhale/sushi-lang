@@ -162,7 +162,7 @@ passed once. The coercion is a property of the position, not of the type pair, s
 NOT apply to a stored function type: `fn(peek T)` and `fn(poke T)` are different types
 in both directions (CE2002). Without that invariance, one indirection defeats the write
 gate (#335). The single coercion site is `semantics/passes/types/compatibility.py`;
-`tests/references/test_borrow_coercion_matrix.sushi` and its two rejection companions pin
+`tests/references/call_site_marks/test_borrow_coercion_matrix.sushi` and its two rejection companions pin
 every position where the coercion does and does not apply.
 
 ## 5. One gate for each rule
