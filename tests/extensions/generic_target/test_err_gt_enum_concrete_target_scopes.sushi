@@ -1,6 +1,5 @@
 # A concrete ENUM target is a constraint (#393 rule, #394 enum half): the method
 # answers its own instantiation and no other.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2008
 # EXPECT_STDERR_CONTAINS: "Wrap@(string).tag"
 enum Wrap@(T):

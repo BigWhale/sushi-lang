@@ -2,7 +2,6 @@
 # NetError a read can answer has its IoError twin, so a second name carried nothing of its
 # own. send() stays, because a socket's partial write is information a file's is not, and
 # the contract's write_bytes() writes everything.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2008
 use <net/tcp>
 

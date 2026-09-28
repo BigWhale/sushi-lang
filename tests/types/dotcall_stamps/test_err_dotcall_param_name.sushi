@@ -1,7 +1,6 @@
 # The `callee_param_names` stamp on an `X.Y(args)` node. CE2427 names the parameter the
 # marker belongs to, and the name comes off the call node. Without it the diagnostic can
 # only count the position.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2427
 # EXPECT_STDERR_CONTAINS: 'swallowed'
 

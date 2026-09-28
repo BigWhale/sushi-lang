@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Got 9876543210\n"
-# TEST_TYPE: runtime
 
 fn returns_i64() i64:
     return Result.Ok(9876543210 as i64)

@@ -2,7 +2,6 @@
 # a `poke self` method -- it arrives as an ADDRESS, and handing that to a perk method's
 # array parameter reached codegen unconverted and answered CE0017, an INTERNAL code, for
 # an ordinary program.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "took 3\n"
 perk Sink:

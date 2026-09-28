@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "10\n0\n100\n"
-# TEST_TYPE: runtime
 
 # Mix of nested patterns and wildcards
 # This tests that wildcards work correctly with nested patterns

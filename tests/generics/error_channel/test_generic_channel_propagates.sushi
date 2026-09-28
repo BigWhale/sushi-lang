@@ -1,7 +1,6 @@
 # A GENERIC function declares `| E`, and the channel survives monomorphization: the call
 # site types the call `Result@(T, StepError)`, so `??` inside a caller that declares the
 # same channel is legal and CE2511 does not fire (#538).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "7\ncaught\n"
 

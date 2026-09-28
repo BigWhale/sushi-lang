@@ -1,7 +1,6 @@
 # Capturing an OWNING `self` move-captures a BORROW: another owner keeps the
 # value. The existing (BORROWED, MOVE) cell rejects it; the escape is
 # .clone() (#399 pins that the gate fires once captures are stamped).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 struct Bag:
     string label

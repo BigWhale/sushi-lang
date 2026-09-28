@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Got 42\n"
-# TEST_TYPE: runtime
 
 fn returns_i32() i32:
     return Result.Ok(42)

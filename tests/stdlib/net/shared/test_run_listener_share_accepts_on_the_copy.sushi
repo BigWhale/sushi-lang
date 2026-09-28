@@ -1,7 +1,6 @@
 # share() on a listener is dup(2): a second descriptor over the same listening socket,
 # which is the shared-listener pattern. Closing the original leaves the copy accepting,
 # and a connection accepted through the copy carries the bytes the client sent.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "accepted on the copy: Mostly Harmless\n"

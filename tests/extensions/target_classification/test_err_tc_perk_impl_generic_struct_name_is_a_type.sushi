@@ -3,7 +3,6 @@
 # constraint on the perk-implementation path exactly as it is on the extension path,
 # and `Box@(i32)` does not get the method. The perk collector used to read a generic's
 # name as a fresh parameter, so this implementation applied to every Box (#653).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2001
 perk Named:
     fn name() string

@@ -1,7 +1,6 @@
 # A `from([...])` literal handed to `.extend()` or `.extend_range()` takes the receiver's
 # element type, as a `let u8[]` and a user function's `u8[]` parameter already do (#544).
 # It defaulted to `i32[]` here and was CE2023 (#576).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "6 250\n"

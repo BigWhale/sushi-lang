@@ -1,6 +1,5 @@
 # A channel on a generic-target extension: '| StdError' substitutes through per
 # instantiation, and each instantiation returns its own interned Result.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n1\n"

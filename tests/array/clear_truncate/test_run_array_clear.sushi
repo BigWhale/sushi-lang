@@ -1,7 +1,6 @@
 # `clear()` empties the array and KEEPS the buffer: len goes to 0, capacity and the
 # data pointer stay -- the point is reuse in a loop without a realloc. An owning
 # element is destroyed, not leaked.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "0\ntrue\n9\n1\n0\n"

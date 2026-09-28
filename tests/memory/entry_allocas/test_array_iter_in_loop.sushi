@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "1800000\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for #589: the iterator a protocol `foreach` walks lives in a slot, and the slot
 # used to be made where the loop stands rather than in the entry block.
 

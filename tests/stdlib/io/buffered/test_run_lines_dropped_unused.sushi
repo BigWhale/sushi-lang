@@ -1,7 +1,6 @@
 # Three owning levels deep, and nothing iterates it: a Lines owns a BufReader owns a
 # File. The scope exit destroys all three in one go, so the descriptor closes exactly
 # once. Phase 2 measured two levels; this is the third.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

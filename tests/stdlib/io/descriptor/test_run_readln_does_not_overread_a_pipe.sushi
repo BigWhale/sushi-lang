@@ -3,7 +3,6 @@
 # could never give them back. Reading one line and then taking the rest with fd_read
 # is what proves it -- an over-reading readln would lose "second" and "third" here.
 # Descriptor 0 is a pipe when the runner feeds STDIN_INPUT.
-# TEST_TYPE: runtime
 # STDIN_INPUT: "first\nsecond\nthird\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

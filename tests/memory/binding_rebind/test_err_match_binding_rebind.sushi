@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2414
 # EXPECT_STDERR_CONTAINS: poke
 # A bare `match` binding is a view of the owner's value, not storage of its own, so a

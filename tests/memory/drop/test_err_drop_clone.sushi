@@ -1,6 +1,5 @@
 # A copy verb must not quietly mean a second handle. A derived clone would copy the
 # descriptor number, and both copies would drop.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2431
 struct Handle:
     i32 id

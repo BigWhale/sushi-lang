@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Left: 99\nRight: test\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 
 # Test rebinding of user-defined generic enum variables
 # This test verifies Issue #2 fix: rebinding user-defined generic enum variables

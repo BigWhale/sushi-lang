@@ -1,6 +1,5 @@
 # An unsigned value read through a struct FIELD must print unsigned (issue #379).
 # A nested field and a field of an array element are the same read, one level down.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "255\n65535\n40000\n4294967295\n18446744073709551615\n4294967295\n255\n65535\n40000\n4294967295\n18446744073709551615\n"

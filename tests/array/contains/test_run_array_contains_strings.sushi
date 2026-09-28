@@ -1,7 +1,6 @@
 # A string element compares by CONTENT: size, then bytes -- the `==` the language
 # already defines. The needle is a BORROW: it stays usable after the call, and the
 # array keeps every element, so nothing double frees.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\n1\nfalse\nnone\n0\ntrue\ngamma\n3\n"

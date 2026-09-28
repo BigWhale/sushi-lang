@@ -2,7 +2,6 @@
 # unit variables. They carry owned = false, so a rebind that drops one does NOT close the
 # descriptor -- the same guarded shape a string literal uses for its buffer -- and a borrow
 # of one ends with the call. That is what lets one type serve both.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

@@ -2,7 +2,6 @@
 # integer width and in both array kinds (issue #378). A value outside the i32 range
 # is the only one that proves the context was read: a small literal passes the
 # default-i32 range check and is widened afterwards, which is what hid this.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "127\n32767\n2147483647\n4294967303\n255\n65535\n4294967295\n18446744073709551615\n127\n32767\n2147483647\n4294967303\n255\n65535\n4294967295\n18446744073709551615\n4294967303\n18446744073709551615\n18446744073709551615\n-128\n-32768\n-4294967303\n1.5\n2.5\n"

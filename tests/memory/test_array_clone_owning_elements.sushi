@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "a=2 b=2 first=3\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for #158: `.clone()` on an array of owning elements must deep-copy each
 # element, not shallow-copy it. Before the fix the cloned element shared the source
 # element's heap buffer, so both arrays freed it at scope exit and the process aborted

@@ -3,7 +3,6 @@
 # every consumer that did not carry a load-if-pointer workaround crashed on one: passing
 # `s.to_bytes()` straight to a callee that borrows the array was CE0000, an internal
 # error, while `.clone()` in the same position worked.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

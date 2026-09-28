@@ -1,5 +1,4 @@
 # EXPECT_RUNTIME_EXIT: 1
-# TEST_TYPE: runtime
 fn main() i32:
   let i32 a = 2
   let i32 b = 3

@@ -1,7 +1,6 @@
 # A bare-param lambda argument cannot be inferred (Known Limitation 7), so the
 # method-level parameter stays unsolved: CE2063, and the diagnostic names the escape
 # (annotate the lambda's parameter).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2063
 # EXPECT_STDERR_CONTAINS: "annotate"
 extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:

@@ -1,7 +1,6 @@
 # Leaving the loop with `break` abandons the iterator mid-stream. The Lines value is the
 # loop's own, so the break path has to destroy it -- and no iterator before this phase
 # owned anything, which is why the exit paths get a test each.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

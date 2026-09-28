@@ -1,6 +1,5 @@
 # The enum a match arm missed is named with the SOURCE spelling, not with the
 # internal `Maybe<i32>` identity name.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2045
 # EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
 fn main() i32:

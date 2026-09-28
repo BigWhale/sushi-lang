@@ -1,7 +1,6 @@
 # A `nom` binding hands the payload to the arm, and a generic may then take it. This is the
 # shape the io contracts need: `match open(...): Result.Ok(nom f) -> use_it(nom f)`. A taken
 # payload has the payload's OWN type, with no reference wrapper (#539).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "ate 3\n"

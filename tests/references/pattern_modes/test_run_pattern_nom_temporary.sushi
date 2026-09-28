@@ -1,6 +1,5 @@
 # Ruling R11: `Ok(nom x)` on a scrutinee the match owns TAKES the payload, so it may be
 # handed to a `nom` parameter. The arm is the new owner, and the match frees nothing.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "eating 3\n"

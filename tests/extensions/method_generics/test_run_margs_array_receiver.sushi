@@ -1,6 +1,5 @@
 # The T[] composition: the array binder (ruling 3) and the method-level parameter
 # compose -- T from the receiver's element, U from the closure argument.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "n1\nn2\nn3\n"

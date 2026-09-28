@@ -1,6 +1,5 @@
 # '~ | E' on a perk method: the shape Writer.flush() needs. A blank success wraps
 # into Ok(~), and the spelled Err reaches the caller untouched.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "flushed\nfailed\n"

@@ -2,7 +2,6 @@
 # has none: the item is the value next() answered, held in the loop's own slot. The
 # iterable is spelled `iter()` here on purpose -- the name is on the addressability
 # allowlist, so the refusal has to come from the protocol and not from the spelling.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2423
 
 struct Countdown:

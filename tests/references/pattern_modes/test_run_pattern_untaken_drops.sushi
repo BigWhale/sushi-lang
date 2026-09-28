@@ -1,7 +1,6 @@
 # Ruling R11, the destruction half: one arm TAKES the payload and the other does not, so
 # whether the match still owns its scrutinee at the end is a run-time fact. The arm that
 # takes drops once at the new owner; the arm that borrows drops once at the match's end.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "eating 1\ndrop 1\nend\nkept 2\ndrop 2\nend\n"

@@ -1,7 +1,6 @@
 # The close helper has one home, <net/error>, and both socket modules reach it. A program
 # that imports <net/tcp> and <net/udp> closes a handle of each kind, and the helper is
 # public: a slot that already reads -1 is a success and stays -1.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "listener closed\nsocket closed\nslot -1\n"

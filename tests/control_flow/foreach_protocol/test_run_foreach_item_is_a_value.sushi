@@ -1,7 +1,6 @@
 # Without the marker the item is the plain Result, so every tool the language already has
 # works on it: this body SKIPS the failure and carries on, which the short form cannot
 # express and which is the reason the item is a value rather than a loop-head channel.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "ok 1\nok 2\nskipped\nok 4\nend\n"
 

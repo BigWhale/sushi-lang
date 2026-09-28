@@ -1,6 +1,5 @@
 # A perk-CONSTRAINED generic keeps its channel too. This is the shape every buffered
 # helper wants: `fn drain@(R: Reader)(R r) u8[] | IoError` (#538).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "24\n"
 

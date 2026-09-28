@@ -1,7 +1,6 @@
 # A share() receiver is a plain borrow and its answer is a second OWNER: closing the copy
 # spends only the copy, and closing the original spends only the original. Either way the
 # handle left standing still reads, because each one holds its own descriptor.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

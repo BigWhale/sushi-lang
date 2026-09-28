@@ -1,7 +1,6 @@
 # Ruling R11, the scrutinee side: `match nom r:` hands the local to the match, so a
 # `nom` binding is legal and the value SURVIVES the statement -- the arm rebinds it into
 # an outer local, and the rebind releases what that local held.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "kept 3\n"

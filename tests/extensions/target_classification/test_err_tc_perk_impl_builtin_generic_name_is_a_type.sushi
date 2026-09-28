@@ -1,6 +1,5 @@
 # A BUILT-IN generic's name is a declared name too: `Maybe` is in the generic enum
 # table, so `Box@(Maybe)` constrains on the perk-implementation path (#653).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2001
 perk Named:
     fn name() string

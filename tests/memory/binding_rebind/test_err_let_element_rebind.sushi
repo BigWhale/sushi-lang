@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2426
 # The index twin of the field read: `rows[0]` borrows too (#590).
 

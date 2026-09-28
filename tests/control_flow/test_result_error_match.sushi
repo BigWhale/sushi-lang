@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Got error\n"
-# TEST_TYPE: runtime
 
 fn returns_error() i32:
     return Result.Err(StdError.Error)

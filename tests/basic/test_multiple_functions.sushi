@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "test"
 # EXPECT_RUNTIME_EXIT: 14
-# TEST_TYPE: runtime
 
 
 fn helper1(i32 x) i32:

@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Using default config (file not found)\nConfig: default=true\n"
-# TEST_TYPE: runtime
 
 # Realistic nested pattern example over a handle's error channel, which is IoError
 # This tests nested pattern matching with the file I/O system

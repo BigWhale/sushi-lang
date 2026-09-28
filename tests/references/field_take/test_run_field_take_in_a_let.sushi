@@ -1,6 +1,5 @@
 # A marked field take: `nom s.out` hands the handle out of a value this function owns.
 # The handle still works afterwards, and it closes exactly once.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

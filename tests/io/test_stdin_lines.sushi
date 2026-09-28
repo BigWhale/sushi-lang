@@ -1,7 +1,6 @@
 # Reading standard input line by line: a BufReader takes a handle it OWNS, and the console
 # handle is a unit variable that is never moved out of (CE2436) -- so `stdin.share()` hands
 # over a second descriptor on the same input, and dropping the reader closes that one only.
-# TEST_TYPE: runtime
 # STDIN_INPUT: "First\nSecond\nThird\n"
 # EXPECT_STDOUT_EXACT: "Reading lines from stdin:\n  > First\n  > Second\n  > Third\nDone!\n"
 # EXPECT_RUNTIME_EXIT: 0

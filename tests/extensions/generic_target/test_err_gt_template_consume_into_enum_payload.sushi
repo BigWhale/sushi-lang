@@ -1,7 +1,6 @@
 # The same consume, carried out through an enum payload. It reached the backend with no
 # ownership decision and surfaced as the CE0129 internal error rather than as a double
 # free -- the same gap wearing the loud face instead of the silent one (#391).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 struct Box@(T):
     T value

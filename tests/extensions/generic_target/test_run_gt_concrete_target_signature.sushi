@@ -3,7 +3,6 @@
 # and the AST builder puts every extension with a `@(...)` target in the second list -- so
 # `Maybe<i32>` was never collected and the declaration was a false CE2001 unknown type.
 # Naming the same type anywhere else in the program was the workaround.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "4\n42\n43\n1\nford\nnone\n"

@@ -1,7 +1,6 @@
 # A pwrite at an offset replaces exactly the bytes it covers and leaves the rest
 # of the file alone. A pread that asks for more than the file holds answers what is
 # there, not what was asked for.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

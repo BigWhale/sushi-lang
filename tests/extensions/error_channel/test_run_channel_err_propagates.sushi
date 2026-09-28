@@ -1,6 +1,5 @@
 # An Err spelled in a channel body propagates: through '??' inside another channel
 # holder, and into a match at the outermost call.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\nerr\n"

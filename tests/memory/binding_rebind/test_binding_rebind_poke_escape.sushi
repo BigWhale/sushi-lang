@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "rebound 7\nrebound 7\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# TEST_TYPE: runtime
 # The escape when the rebind meant the OWNER: `poke` binds a pointer into the payload, so
 # the store reaches what the enum holds and the old value is freed once (#590).
 

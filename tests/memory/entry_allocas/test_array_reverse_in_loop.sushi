@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "3 300000\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for #589: `reverse()` walks the array with a counter and swaps through a scratch
 # slot. Both used to be made at the call site, so a call in a loop paid for them again on
 # every pass.

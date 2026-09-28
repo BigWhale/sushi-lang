@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2408
 # A `peek` reference binding was already refused, by a check of its own beside the gate.
 # It reads the same code through the gate now, and gains the note and the help the

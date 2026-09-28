@@ -1,7 +1,6 @@
 # A `nom` binding nested inside an `Own(...)` pattern takes the value out of the heap
 # cell, which leaves the cell with nothing to free it. `match nom r:` owns the scrutinee,
 # so the fault is the Own position (CE2434) and not a borrowed scrutinee (CE2432).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2434
 enum Inner:
     Word(string)

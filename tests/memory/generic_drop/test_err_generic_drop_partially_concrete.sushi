@@ -1,7 +1,6 @@
 # A partially-concrete target is partial specialization, and `Drop` reads the same code
 # every other perk does (CE2098). The `Drop` arm runs before the template registration,
 # so this row proves it hands the mixed shape on rather than answering for it.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2098
 struct Pair@(T, U):
     T first

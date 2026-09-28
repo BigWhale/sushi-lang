@@ -253,16 +253,11 @@ Override the default test timeout (default: 10 seconds).
 # TIMEOUT_SECONDS: 10
 ```
 
-#### TEST_TYPE
+#### No TEST_TYPE directive
 
-Explicitly categorize the test type.
-
-```sushi
-# TEST_TYPE: runtime
-```
-
-- Values: `default`, `runtime`, `compilation`, `error`, `warning`
-- Usually auto-detected from filename, rarely needs explicit specification
+The file name prefix sets the category of a test (`test_err_`, `test_warn_`, and the
+others). There is no `TEST_TYPE` directive: the runner did not read it, so it was
+removed (#1043). A `TEST_TYPE` line is an unknown directive and fails its fixture.
 
 #### CMD_ARGS
 

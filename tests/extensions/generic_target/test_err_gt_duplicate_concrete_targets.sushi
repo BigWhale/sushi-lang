@@ -2,7 +2,6 @@
 # duplicate, and stay rejected (#393). The distinction from the legal case is the argument
 # list, so the diagnostic has to render it: `Box@(i32)`, not the elided `Box@(...)` that
 # could not tell this apart from `extend Box@(string) tag()`.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0101
 # EXPECT_STDERR_CONTAINS: "extension method 'tag' for 'Box@(i32)'"
 struct Box@(T):

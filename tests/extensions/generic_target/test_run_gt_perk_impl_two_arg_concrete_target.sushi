@@ -6,7 +6,6 @@
 #
 # The single-argument case matched by coincidence, which is what hid it. Found by this
 # batch, not by the issue.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\nmarvin\n"

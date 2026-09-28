@@ -93,9 +93,6 @@ class TestMetadata:
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
-    # Test categorization
-    test_type: str = "default"  # "default", "runtime", "compilation"
-
     def __post_init__(self):
         """Post-initialization processing."""
         if self.expect_stdout_contains is None:
@@ -278,14 +275,6 @@ def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None
         metadata.compiler_flags.append(token)
 
 
-def _test_type(metadata: TestMetadata, value: str, test_file: Path) -> None:
-    value = value.lower()
-    if value in ('default', 'runtime', 'compilation', 'error', 'warning'):
-        metadata.test_type = value
-    else:
-        _warn(f"Invalid TEST_TYPE value in {test_file}: {value}")
-
-
 def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:
     # One KEY=VALUE per directive; the directive may be repeated to set several
     # variables. Lets a test pin HOME/USER/etc. instead of baking the developer's host
@@ -360,7 +349,6 @@ VALUED_DIRECTIVES = {
     'EXPECT_ERROR_CODES_EXACT': _exact_codes,
     'COMPILER_FLAGS': _compiler_flags,
     'TIMEOUT_SECONDS': _int_into('timeout_seconds', 'TIMEOUT_SECONDS'),
-    'TEST_TYPE': _test_type,
     # Stored as-is; the runner splits it on whitespace.
     'CMD_ARGS': _set('cmd_args', str),
     'STDIN_INPUT': _set('stdin_input', _text),
@@ -452,7 +440,6 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
 
     # test_err_* never produces a binary, so there is nothing to run.
     if filename.startswith('test_err_'):
-        metadata.test_type = 'compilation_only'
         metadata.requires_runtime = False
         return
 
@@ -469,17 +456,12 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
                             or metadata.expect_no_leaks
                             or metadata.expect_no_open_fds)
         if not declares_runtime:
-            metadata.test_type = 'compilation_only'
             metadata.requires_runtime = False
             return
-        metadata.test_type = 'runtime'
         metadata.requires_runtime = True
         if metadata.expect_runtime_exit is None:
             metadata.expect_runtime_exit = 0
         return
-
-    if filename.startswith('test_run_'):
-        metadata.test_type = 'runtime'
 
     metadata.requires_runtime = True
     if metadata.expect_runtime_exit is None:

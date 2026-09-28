@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "a=2 b=2\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for #158: `.clone()` of an array whose elements are a recursive owning enum
 # (the #139/#157 shape, a variant carrying a dynamic array) must deep-copy each element's
 # heap payload. Before the fix the clone shallow-shared the payload and the process

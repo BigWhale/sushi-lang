@@ -1,7 +1,6 @@
 # The free function read_all() takes anything that satisfies Reader: a File, a
 # BufReader@(File) and a user type alike. The methods File.read_all() and
 # BufReader.read_all() give the same answer.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

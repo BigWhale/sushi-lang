@@ -94,8 +94,8 @@ def test_no_corpus_file_makes_the_parser_warn(capsys):
     """A warning means the runner discarded something the file meant to assert.
 
     The value gate to `test_every_directive_name_is_one_the_parser_knows`'s name gate:
-    `TEST_TYPE: compile_error` names a real directive and still asserts nothing, because
-    the parser accepts five values and that is not one of them. The warning is also what
+    `TIMEOUT_SECONDS: soon` names a real directive and still asserts nothing, because
+    the parser accepts only an integer there. The warning is also what
     breaks the badge job -- `--json` stdout is piped straight into `corpus-results.json`.
     """
     from test_metadata import parse_test_metadata

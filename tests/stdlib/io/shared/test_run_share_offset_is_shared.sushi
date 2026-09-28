@@ -2,7 +2,6 @@
 # is part of that description, so a read through one handle moves the other. That is the
 # fact a reader gets wrong, and it is why read_at() and not share() is the answer for
 # concurrent reads of one file. Both handles own a descriptor, and both close on drop.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

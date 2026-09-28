@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "x = 42\n"
-# TEST_TYPE: runtime
 # Success test for storing a Result@(T) in a Result variable
 # Should pass: storing in Result@(i32) variable then calling .realise()
 

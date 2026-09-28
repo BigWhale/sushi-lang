@@ -1,6 +1,5 @@
 # An Own@(Res) and a Res in one scope are destroyed in reverse declaration order, on
 # the return and at the end of a nested block.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "inner plain-2 own-2\ndrop own-2\ndrop plain-2\nouter plain-1 own-1\ndrop plain-1\ndrop own-1\n"

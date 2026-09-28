@@ -1,7 +1,6 @@
 # The whole point of the phase: `foreach(line?? in r.lines())`. The loop ends at
 # Maybe.None, the Lines owns the BufReader which owns the File, and one drop closes the
 # descriptor -- so the leak and descriptor gates are the assertion, not the printing.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

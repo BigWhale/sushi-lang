@@ -1,6 +1,5 @@
 # An Own@(Res) whose payload implements Drop is dropped when its block ends, before
 # the code after the block runs.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "in inner\ndrop inner\nafter block\nin outer\ndrop outer\n"

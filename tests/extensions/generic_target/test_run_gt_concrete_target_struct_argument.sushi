@@ -7,7 +7,6 @@
 # The struct name in the SIGNATURE is the same cell one position over: a return type and a
 # parameter type used to be rewritten to the type parameter and substituted back, which
 # happened to land on the right type only for the matching instantiation.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n42\n3\n14\n"

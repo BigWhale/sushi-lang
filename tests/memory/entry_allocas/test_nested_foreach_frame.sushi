@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "600000\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for #589: a `foreach` inside another loop used to put its range slots and its
 # counter in the LOOP BODY block, so the frame grew by one set on every pass of the outer
 # loop until the program hit the guard page. The count is large on purpose: a slot in the

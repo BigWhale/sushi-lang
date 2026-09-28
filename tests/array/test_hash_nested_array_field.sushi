@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Hash: 8826233181697643150\n"
-# TEST_TYPE: error
 # Test that nested structs with array fields show error path
 
 struct Inner:

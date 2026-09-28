@@ -3,7 +3,6 @@
 # Regression test for Maybe@(StructType) support
 # This was claimed not to work - this test proves it does
 #
-# TEST_TYPE: runtime
 
 # Simple struct
 struct Point:

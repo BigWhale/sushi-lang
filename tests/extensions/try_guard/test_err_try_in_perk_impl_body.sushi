@@ -1,6 +1,5 @@
 # A perk-impl method returns a bare value, exactly like an extension method,
 # so a `??` in its body is rejected with the same dedicated code (#398).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0131
 perk Tagged:
     fn tagit() i32

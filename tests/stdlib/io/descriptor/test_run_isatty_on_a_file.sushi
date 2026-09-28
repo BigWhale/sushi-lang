@@ -1,7 +1,6 @@
 # fd_isatty answers a BARE bool: asking whether a descriptor is a terminal cannot fail.
 # A regular file is never one, and the suite captures stdout, so descriptor 1 is not one
 # either while this runs.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

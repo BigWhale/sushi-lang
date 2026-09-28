@@ -1,6 +1,5 @@
 # The method-form filter ships fully general: the body clones each kept element, so
 # an OWNING element type works where the free function stays copy-only.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n"

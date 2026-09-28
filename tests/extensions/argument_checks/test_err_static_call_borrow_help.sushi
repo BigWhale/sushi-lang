@@ -1,7 +1,6 @@
 # A static method's arguments are measured by the one argument check, so CE2006 on a
 # parameter that wants a borrow names the repair the user types, exactly as it does on a
 # plain call.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2006
 # EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek t`
 struct Tag:

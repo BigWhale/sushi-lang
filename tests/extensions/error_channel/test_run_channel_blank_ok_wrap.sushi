@@ -1,6 +1,5 @@
 # A blank success in a channel body is spelled Result.Ok(~) (#848), and
 # the spelled Err reaches the call site untouched.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "even ok\nodd err\n"

@@ -1,6 +1,5 @@
 # A NESTED pattern reads the same rule: the enum it names is spelled the way the
 # source spells it.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2045
 # EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
 enum Outer:

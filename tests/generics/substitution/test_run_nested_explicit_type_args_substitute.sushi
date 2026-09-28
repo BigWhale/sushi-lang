@@ -1,7 +1,6 @@
 # Explicit call-site type arguments are a source-written type list. The walk copied the
 # call whole, so `ident@(T)` in a monomorphized body still asked for `T` and answered
 # CE2061 (#602).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n"

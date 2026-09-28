@@ -3,7 +3,6 @@
 # is what this test pins -- the gate is receiver-kind blind.
 # The code is CE2505, the one ruling 5's matrix names: #535 moved the assignment row
 # off the general CE2002.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2505
 enum SourceError:
     Closed

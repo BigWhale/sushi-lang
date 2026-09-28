@@ -1,6 +1,5 @@
 # The two shapes the method-call exclusion was written for. Both unwrap, so neither is a
 # Result at the binding and neither may be refused once the exclusion is gone (#535).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42 towel\n"
 

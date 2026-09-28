@@ -1,6 +1,5 @@
 # A write that fills the buffer exactly drains it and leaves nothing behind, so the final
 # flush has no bytes to send and still answers Ok.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
