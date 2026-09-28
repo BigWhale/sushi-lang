@@ -705,8 +705,9 @@ A generic callee is solved from its other arguments first, and the value then fr
 substituted parameter type (#1029): `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
 solves. A value that the substituted type does not solve is CE2093; a callee whose type argument
 comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is CE2060 + CE2093.
-Bind the value to a typed local first. Inside a generic body a generic-fn value is still CE2093,
-for a concrete callee and a generic one alike. Extension methods, perk methods, and FFI externals remain outside
+Bind the value to a typed local first. Inside a generic body the copy is walked for each instance,
+so a position solves a generic-fn value as it does in a concrete body (#1036); a value behind an
+alias in the copy of a generic-target extension is not solved yet (#1065). Extension methods, perk methods, and FFI externals remain outside
 CE2093 entirely -- they are not in the function table at all, so a bare reference to one is CE1001
 (undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
 deferred capability).
