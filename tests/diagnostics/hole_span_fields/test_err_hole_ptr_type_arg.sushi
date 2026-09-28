@@ -1,0 +1,14 @@
+# A `ptr` written as a type argument in an interpolation hole is reported at the
+# type argument in the file, not inside the text of the hole (#1038).
+# EXPECT_ERROR_CODES_EXACT: CE5009
+# EXPECT_STDERR_CONTAINS: test_err_hole_ptr_type_arg.sushi:10:27: error [CE5009]
+fn size@(T)() i32:
+    return Result.Ok(8)
+
+
+fn show() ~:
+    println("value {size@(ptr)()??}")
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)
