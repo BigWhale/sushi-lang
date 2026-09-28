@@ -2,7 +2,6 @@
 # `NetError`, the channel its constructors answer: `<net/tcp>` re-exports `<net/error>`
 # and `<io/contracts>` (#586). A read on a stream the peer closed answers through the
 # `IoError` arm, so the match below is on a value a read produced.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "refused\nread: empty\n"

@@ -1,7 +1,6 @@
 # A USER generic enum in the return position of an extension method, with one type
 # parameter and with two. Issue #387: not about `Maybe`, and not about enums -- about a
 # generic enum returned from an extension or perk method.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "wrap 42\nempty\nleft 3\nright zaphod\n"
 enum Box@(T):

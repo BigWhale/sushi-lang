@@ -1,8 +1,7 @@
 # A `??` on a foreach binder is a propagation too, so its span covers the whole binder,
 # from the item name to the end of `??`, as `<expr>??` does everywhere else.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2511
-# EXPECT_STDERR_CONTAINS: "test_err_try_binder_span_whole_binder.sushi:21:13: error [CE2511]"
+# EXPECT_STDERR_CONTAINS: "test_err_try_binder_span_whole_binder.sushi:20:13: error [CE2511]"
 # EXPECT_STDERR_CONTAINS: "  |     foreach(x?? in Items(0)):\n  `             -+-\n"
 enum E1:
     A

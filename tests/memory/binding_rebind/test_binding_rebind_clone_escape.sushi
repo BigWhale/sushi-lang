@@ -1,7 +1,6 @@
 # EXPECT_STDOUT_EXACT: "rebound\nvalue 7\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# TEST_TYPE: runtime
 # The escape when the rebind meant a LOCAL. A plain `let` off the binding borrows again
 # and is refused with it, so the copy has to be asked for: `.clone()` (#590).
 

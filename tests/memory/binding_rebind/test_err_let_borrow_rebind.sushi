@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2426
 # A `let` bound from a field read borrows storage the owner keeps, so a rebind frees a
 # value the owner still holds (#590). It compiled, and the program aborted.

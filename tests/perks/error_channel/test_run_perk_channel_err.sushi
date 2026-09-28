@@ -1,6 +1,5 @@
 # A spelled Result.Err in a perk channel body propagates through '??' and reaches
 # the match at the outermost call.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "ok 7\nerr\n"

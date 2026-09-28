@@ -1,7 +1,6 @@
 # A `match` arm binding's type comes from a generic function's SUBSTITUTED return type,
 # and nothing else in the program names `Wrap@(i32)`. The generic-target extension has
 # to be cut for it all the same; it was CE2008 "undefined function" (#549).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n"

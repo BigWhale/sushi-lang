@@ -1,7 +1,6 @@
 # R2b, the orphan rule narrowed to Drop: only the unit that declares the type may
-# say what happens when it drops. A consumer's implementation would otherwise
-# REPLACE a library's and silently stop a handle from closing.
-# TEST_TYPE: error
+# say what happens when it drops. A consumer's implementation would
+# otherwise REPLACE a library's and silently stop a handle from closing.
 # EXPECT_ERROR_CODE: CE4012
 use "helpers/gadget"
 

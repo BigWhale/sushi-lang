@@ -1,7 +1,6 @@
 # The `callee_param_modes` stamp on an `X.Y(args)` node. The borrow pass reads the declared
 # modes off the call node, so a `nom` parameter of a METHOD spends its argument exactly as a
 # free function's does. Without the stamp every `nom` parameter of a method is inert.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2405
 
 struct Sink:

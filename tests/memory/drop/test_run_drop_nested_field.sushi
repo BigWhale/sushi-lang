@@ -1,7 +1,6 @@
 # A struct that HOLDS a Drop type: the outer drop() runs first, then the fields are
 # destroyed. The order is stated so a handle is still readable while its owner
 # closes itself down.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "9\ndrop wrapper 9\ndrop 1\n"

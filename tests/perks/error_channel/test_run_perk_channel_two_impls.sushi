@@ -1,6 +1,5 @@
 # Two types implement one fallible contract, and a generic constrained by that
 # contract dispatches to each. This is the Reader shape Phase 6 needs.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "0 1\n"

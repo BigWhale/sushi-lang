@@ -1,6 +1,5 @@
 # Ruling R20: the data path is IoError, and open() and close() moved onto it. A missing path
 # answers IoError.NotFound, and the two variants R20 added are matchable.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

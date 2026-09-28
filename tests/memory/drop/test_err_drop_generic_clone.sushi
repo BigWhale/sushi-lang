@@ -1,7 +1,6 @@
 # A generic body that clones, instantiated at a resource type. The refusal is
 # reported at the INSTANTIATION: one monomorphized body serves every argument, so
 # the argument is what makes it illegal.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2431
 struct Handle:
     i32 id

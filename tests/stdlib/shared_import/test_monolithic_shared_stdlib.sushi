@@ -1,5 +1,5 @@
-# Two units import one stdlib module. The monolithic path gives every unit the
-# SAME LLVM module, so the module has to be linked in exactly once (#493).
+# Two units import one stdlib module. The monolithic path gives every unit
+# the SAME LLVM module, so the module has to be linked in exactly once (#493).
 # COMPILER_FLAGS: --no-incremental
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n3 2\n"
 use <collections/strings>

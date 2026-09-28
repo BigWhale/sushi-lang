@@ -1,7 +1,6 @@
-# Extensions are program-wide and unit-blind (the stated asymmetry, ruling 2): the
-# HELPER unit imports <collections/iter>, and the methods answer in THIS unit, which
+# Extensions are program-wide and unit-blind (the stated asymmetry, ruling 2):
+# the HELPER unit imports <collections/iter>, and the methods answer in THIS unit, which
 # never wrote the import.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "6\n"

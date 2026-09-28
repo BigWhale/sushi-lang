@@ -1,6 +1,6 @@
 # Test: the unused lints are off by default. The same dead declarations and unused
 # imports as test_warn_unused_declarations_and_imports.sushi, with no COMPILER_FLAGS.
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 use <time>
 use "helpers/unused_shapes" as sh
 

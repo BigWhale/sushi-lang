@@ -3,7 +3,6 @@
 # substituted positionally for every instantiation, so a copy of `doubled()` was emitted
 # for `Box@(string)` as well and `self.value * 2` reached the backend with a string
 # operand: `CE0000 ... Operands must be the same type, got ({i8*, i32, i8}, i32)`.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "84\n6\n"

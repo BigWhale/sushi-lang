@@ -1,7 +1,6 @@
 # `truncate(n)` keeps the first n elements and destroys the rest. A count past the
 # length is a no-op -- truncate never grows. A negative count clamps to 0, the way
 # the slice family clamps. Capacity and the buffer stay.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n2\n2\n0\n1\nalpha\n"

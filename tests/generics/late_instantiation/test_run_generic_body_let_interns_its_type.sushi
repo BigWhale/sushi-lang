@@ -2,7 +2,6 @@
 # function's signature interns it on the way: `Box@(string)` exists only once
 # `outer@(string)` is substituted. The copy's own annotations intern it, and the late
 # instantiation gets its templates (#555).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "box towel\n"

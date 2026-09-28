@@ -1,7 +1,6 @@
 # A cast is not always at the top level of a statement. Inside an interpolation hole the
 # substitution walk used to deepcopy it, so the cast kept the type PARAMETER and the
 # internal name `T` reached the user as CE2014 plus CE2035 (#602).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5\n0\n"

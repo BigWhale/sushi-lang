@@ -1,7 +1,6 @@
 # A File MOVES. Handing one to a `nom` parameter transfers the descriptor, the callee
 # closes it, and the caller's binding is gone -- the shape a BufWriter will use in
 # Phase 7. A copyable builtin could never express this.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

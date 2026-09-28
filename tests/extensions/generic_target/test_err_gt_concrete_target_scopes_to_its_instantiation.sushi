@@ -6,7 +6,6 @@
 #
 # A batch that instantiates ONE type argument cannot see this, which is why the #389 batch
 # passed over the same declaration.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2008
 # EXPECT_STDERR_CONTAINS: "Box@(string).tag"
 struct Box@(T):

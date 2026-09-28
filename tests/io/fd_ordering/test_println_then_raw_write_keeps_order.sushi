@@ -1,4 +1,4 @@
-# HANDLES.md Phase 5: every route to descriptor 1 keeps the order it was written in.
+# Handles epic, Phase 5: every route to descriptor 1 keeps the order it was written in.
 # `println` used to reach the descriptor through the libc stdio BUFFER, while a
 # descriptor write reaches the kernel at once. When stdout is a pipe -- which is how
 # this suite captures it -- stdio is FULLY buffered, so every println waited for exit

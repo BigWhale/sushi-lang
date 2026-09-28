@@ -1,6 +1,5 @@
 # The free functions stay: map/filter/fold as free calls beside the method twins,
 # in one program.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "10\n10\n"

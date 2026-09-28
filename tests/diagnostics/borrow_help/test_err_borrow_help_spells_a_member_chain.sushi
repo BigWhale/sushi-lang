@@ -1,6 +1,5 @@
 # The borrow help offers the argument back to the user, so it must be text the user could
 # type. A member chain spells its receiver first; the node itself has no source spelling.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2006
 # EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek b.inner.label`
 struct Inner:

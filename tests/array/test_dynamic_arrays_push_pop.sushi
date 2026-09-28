@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "00011000320304302201002helloworld"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Test dynamic array push/pop operations
 fn run_test() i32:
   # Start with empty array

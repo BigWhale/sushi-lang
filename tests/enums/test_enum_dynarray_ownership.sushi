@@ -1,5 +1,5 @@
-# Issue #139 + #134: an enum whose variant owns a dynamic array has correct RAII under
-# MOVE semantics. Exercises the sites that must move or explicitly clone (never shallow-
+# Issue #139 + #134: an enum whose variant owns a dynamic array has correct RAII
+# under MOVE semantics. Exercises the sites that must move or explicitly clone (never shallow-
 # share) so nothing leaks or double-frees: array-payload construction from live locals,
 # plain enum arrays, get-out, foreach + recursion, by-value (move) enum param, enum struct
 # field, and auto-derived .clone() to keep a source usable across several sinks.

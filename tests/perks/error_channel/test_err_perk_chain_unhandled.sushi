@@ -1,6 +1,5 @@
 # Ruling 5, row 1, through the perk door: a channel method stops the chain until
 # it is handled. The chain gate is receiver-kind blind, so CE2515 answers here too.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2515
 # EXPECT_STDERR_CONTAINS: "read_one()??.doubled()"
 enum SourceError:

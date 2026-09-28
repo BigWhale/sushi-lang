@@ -1,7 +1,5 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
-# EXPECTED_OUTPUT: 42
 
 # Test HashMap with nested generic values: HashMap@(string, Maybe@(i32))
 # "The Babel fish is small, yellow, leech-like, and probably the oddest thing in the Universe"

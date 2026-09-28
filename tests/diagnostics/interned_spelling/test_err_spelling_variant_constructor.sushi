@@ -1,6 +1,5 @@
-# A variant constructor that names no member of the enum reports the enum with the
-# SOURCE spelling, in the message and in the help.
-# TEST_TYPE: error
+# A variant constructor that names no member of the enum reports the enum with
+# the SOURCE spelling, in the message and in the help.
 # EXPECT_ERROR_CODE: CE2045
 # EXPECT_STDERR_CONTAINS: "not found in enum 'Maybe@(i32)'"
 # EXPECT_STDERR_CONTAINS: "extend Maybe@(i32) static Nope(...)"

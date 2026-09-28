@@ -2,7 +2,6 @@
 # on a BUILT-IN generic constrains the same way (#393). `extend List@(i32)` used to be
 # monomorphized for `List@(string)` as well, so `acc + x` reached the backend with a string
 # operand -- an internal error, where the honest answer is "no such method".
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2008
 # EXPECT_STDERR_CONTAINS: "List@(string).total"
 extend List@(i32) total() i32:

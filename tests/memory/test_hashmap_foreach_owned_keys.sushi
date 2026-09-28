@@ -7,8 +7,8 @@
 #
 # Every existing HashMap iteration test uses string LITERALS, whose `owned` bit is 0, so
 # the second free is a no-op and the bug is invisible. One interpolated value is enough.
-# This file covers `.keys()`. Iteration order is unspecified, so the stdout assertion is a
-# CONTAINS on the count; the real content is EXPECT_NO_LEAKS + exit 0.
+# This file covers `.keys()`. Iteration order is unspecified, so the stdout assertion is
+# a CONTAINS on the count; the real content is EXPECT_NO_LEAKS + exit 0.
 # EXPECT_STDOUT_CONTAINS: seen=3
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

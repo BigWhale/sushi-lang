@@ -1,5 +1,4 @@
 # A File satisfies Writer. The generic writes text and flushes, and neither call names File.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

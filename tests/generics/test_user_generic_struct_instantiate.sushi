@@ -1,4 +1,3 @@
-# TEST_TYPE: compilation
 # Test that generic struct instantiations are detected and collected
 
 

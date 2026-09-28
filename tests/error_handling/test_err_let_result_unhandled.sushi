@@ -1,4 +1,3 @@
-# TEST_TYPE: compilation
 # EXPECT_ERROR_CODE: CE2505
 # Error test for an unhandled Result@(T) assignment: CE2505 names the fix, and it is
 # now the only code the binding answers (#535).

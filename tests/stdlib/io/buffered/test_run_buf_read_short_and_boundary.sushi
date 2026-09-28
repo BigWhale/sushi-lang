@@ -2,7 +2,6 @@
 # not an end of input: the window holds "alpha-be", read(5) takes five of it and read(64)
 # takes the three left rather than reading again. read_all() then takes everything left,
 # across refills.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

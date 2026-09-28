@@ -1,7 +1,6 @@
 # Consuming a BORROW of a resource type is CE2411, unchanged. A `peek` parameter names
 # storage the caller keeps and still frees, so a field read out of it is a borrow and the
 # marker cannot make it a take -- ruling R28 needs a local this function OWNS.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 struct Handle:
     i32 id

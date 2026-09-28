@@ -1,6 +1,5 @@
 # collections/iter on a dynamic array: the T[] twins collect into a List@(U), and
 # fold reduces in place.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "10\n6\n"

@@ -2,7 +2,6 @@
 # the typecheck pass walks only copies (#391) -- so a `??` in the template body used to be
 # accepted SILENTLY (this program compiled and ran, exit 0). The collect pass walks the
 # declaration itself, so the guard fires once, at the declaration (#398).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0131
 struct Box@(T):
     T value

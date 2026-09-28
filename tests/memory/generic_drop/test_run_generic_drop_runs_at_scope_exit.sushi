@@ -1,7 +1,6 @@
 # A generic type may declare a resource. Feature A registers one perk implementation per
 # instantiation, under the interned name, so the key a concrete receiver resolves to is
 # the key the implementation is filed under -- which is what CE4013 refused before.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\nreleasing 1\n"

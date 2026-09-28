@@ -1,6 +1,5 @@
 # Ruling R11 leaves the bare binding alone: it is still a read-only view, so a mutating
 # method through it is still CE2414. The two markers are what the help now names.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2414
 # EXPECT_STDERR_CONTAINS: "`poke`"
 enum Slot:

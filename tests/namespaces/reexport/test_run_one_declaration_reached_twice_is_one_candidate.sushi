@@ -1,7 +1,6 @@
 # `shapes` and `twice_reached` both re-export `geometry`. An importer of both reaches
 # the SAME declaration of `Vec` and `origin` down two paths, and one declaration is one
 # candidate: no CE3012 (Ruling 7, shadows -- candidates count by declaring unit).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "8\n"
 use "helpers/shapes"

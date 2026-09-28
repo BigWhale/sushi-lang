@@ -1,6 +1,5 @@
 # The contract declares a channel and the implementation does not. CE0133 is
 # relational: the primary at the implementation, a note at the contract method.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0133
 # EXPECT_STDERR_CONTAINS: "perk 'Source' declares"
 enum SourceError:

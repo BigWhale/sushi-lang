@@ -1,7 +1,6 @@
 # An owning ARRAY temporary that no binding names is freed at scope exit, whichever
 # way it is read (issue #382). The bound spelling was already clean, so this is the
 # unbound column of that matrix: a call result, an inline `from(...)`, and a clone.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n2\n8\n7\n2\n7\n2\n"

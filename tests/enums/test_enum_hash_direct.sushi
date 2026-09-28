@@ -1,7 +1,7 @@
 # Test calling .hash() directly on an enum value.
 # Regression test for issue #32: calling .hash() on an inline enum construction
-# used to crash the compiler with CE0019 ("cannot determine language type for
-# LLVM type: {i32, [1 x i8]}") because the receiver's enum semantic type was not
+# used to crash the compiler with CE0019 ("cannot determine language type
+# for LLVM type: {i32, [1 x i8]}") because the receiver's enum semantic type was not
 # recovered, so the dispatcher fell back to mapping the enum LLVM layout.
 #
 # EXPECT_RUNTIME_EXIT: 0

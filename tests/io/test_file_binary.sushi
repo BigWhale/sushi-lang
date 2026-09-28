@@ -1,14 +1,5 @@
 # EXPECT_STDOUT_EXACT: "Wrote 5 bytes\nRead 5 bytes\nByte 0: 72\nByte 1: 101\nByte 2: 108\nByte 3: 108\nByte 4: 111\nBinary file test completed\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
-# EXPECTED_OUTPUT: Wrote 5 bytes
-# EXPECTED_OUTPUT: Read 5 bytes
-# EXPECTED_OUTPUT: Byte 0: 72
-# EXPECTED_OUTPUT: Byte 1: 101
-# EXPECTED_OUTPUT: Byte 2: 108
-# EXPECTED_OUTPUT: Byte 3: 108
-# EXPECTED_OUTPUT: Byte 4: 111
-# EXPECTED_OUTPUT: Binary file test completed
 
 use <io/files>
 use <io/fs>

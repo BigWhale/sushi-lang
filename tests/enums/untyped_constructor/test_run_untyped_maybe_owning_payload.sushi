@@ -1,6 +1,5 @@
 # An untyped constructor with an owning payload and a nested one (#1005). The scrutinee is
 # a temporary the match owns, and it is destroyed after the match.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n2\n"

@@ -1,7 +1,6 @@
 # Error types under '??' must match exactly (CE2511) -- in a channel extension body
 # exactly as in a function body: the closure's channel is StdError, the extension
 # declared '| MyError'.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2511
 enum MyError:
     Nope

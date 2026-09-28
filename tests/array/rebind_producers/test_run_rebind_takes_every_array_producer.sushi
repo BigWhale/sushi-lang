@@ -2,7 +2,6 @@
 # string's `to_bytes()` and `split()`, a `clone()`, a `from([...])`, a field read, a
 # function's return, a slice. The load-if-pointer branch the rebind used to carry was
 # reached by none of these (#553); this pins that none of them needs it.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 2 3 4 2 3 2\n"

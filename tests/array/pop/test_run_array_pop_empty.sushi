@@ -1,7 +1,6 @@
 # An empty pop is `Maybe.None()`, for every element type. It used to hand back a zeroed
 # value of the element type -- a real 0 for an `i32[]`, and for a `string[]` a fat pointer
 # with a null `data` that only escaped RAII because its owned bit was zero too (#377).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\nempty\n-1\n"

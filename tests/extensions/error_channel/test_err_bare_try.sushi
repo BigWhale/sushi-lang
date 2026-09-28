@@ -1,5 +1,4 @@
 # A BARE extension keeps CE0131: with no '| E' a '??' has nothing to propagate into.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0131
 extend i32 apply(fn(i32) -> i32 f) i32:
     let i32 r = f(self)??

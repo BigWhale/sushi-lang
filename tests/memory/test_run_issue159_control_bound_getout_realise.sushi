@@ -1,4 +1,4 @@
-# ANTI-DOUBLE-FREE CONTROL for #159 -- green before the fix, and it MUST stay green after it.
+# The anti-double-free CONTROL for #159 -- green before the fix, and it MUST stay green after it.
 # The SAME get-out as the leaking cell, but BOUND to a local first. The bound receiver is registered
 # in the ordinary cleanup registry and .realise() CLONES rather than adopts, so there are two
 # allocations and two frees. Holding the get-out fixed and varying only whether it is bound is what

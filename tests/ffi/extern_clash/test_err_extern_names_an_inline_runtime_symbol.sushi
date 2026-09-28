@@ -1,5 +1,5 @@
-# `llvm_strlen` is generated too, and no bitcode file holds it: the backend emits it
-# INLINE into the module it compiles. The reserved set answers for this half (#472).
+# `llvm_strlen` is generated too, and no bitcode file holds it: the backend emits
+# it INLINE into the module it compiles. The reserved set answers for this half (#472).
 # EXPECT_ERROR_CODE: CE5013
 
 unsafe external "C" as raw because "naming a symbol the backend emits inline":

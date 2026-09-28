@@ -1,6 +1,5 @@
 # A perk method reads the SAME argument check as an extension method, so CE2006 on a
 # parameter that wants a borrow names the repair here too. One rule, one code, one help.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2006
 # EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek t`
 

@@ -1,6 +1,5 @@
 # Two fully concrete ENUM targets are two methods, so one method name serves both
 # (#394, under the #393 constraint rule). Each answers its own instantiation.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n2\n"

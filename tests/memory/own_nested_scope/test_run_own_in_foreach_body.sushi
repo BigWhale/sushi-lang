@@ -1,5 +1,4 @@
 # An Own@(T) local in a `foreach` body is destroyed at the end of every iteration.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "10\n20\n30\ndone\n"

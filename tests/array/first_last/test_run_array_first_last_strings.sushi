@@ -1,6 +1,5 @@
 # `first()` and `last()` on an owning element type. Both are BORROWS, like `get()`:
 # the array keeps the element and still frees it, so the reads must not double free.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "alpha\ngamma\n3\nalpha\n"

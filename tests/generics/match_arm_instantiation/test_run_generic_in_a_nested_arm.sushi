@@ -1,7 +1,6 @@
 # A generic called inside a match nested in another match's arm. Both bindings have to be
 # recorded, so the walk recurses -- and an inner arm must not lose an outer binding of the
 # same name when it ends (#539).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "inner 9 outer 4\n"
 

@@ -1,7 +1,6 @@
 # The temporary's ELEMENTS are freed with it (issue #382): a `string[]` whose strings
 # are heap-allocated leaks one block per element as well as the data buffer, so the
 # element walk is what the block count proves.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "ford1\nford1\n2\n"

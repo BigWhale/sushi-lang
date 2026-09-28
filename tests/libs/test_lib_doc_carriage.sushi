@@ -5,7 +5,7 @@
 # library author's doc blocks.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "47 7\n"
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 
 use <lib/doc_lib>
 

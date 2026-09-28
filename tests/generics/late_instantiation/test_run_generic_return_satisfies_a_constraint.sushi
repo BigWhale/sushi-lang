@@ -1,6 +1,5 @@
 # The instantiation is known BEFORE the functions are monomorphized, so a constraint
 # checked while `show_it` is cut already sees `Box@(string)` implementing `Show` (#555).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "box\n"

@@ -1,7 +1,6 @@
 # The payload of the returned generic enum is every kind, owning ones included: the
 # propagation walks into the constructor's arguments, so a `List.new()` inside a
 # `Maybe.Some(...)` resolves too (the #265 family). Issue #387.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "marvin\n8\n2\n1\n"

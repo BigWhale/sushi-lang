@@ -1,5 +1,4 @@
 # An untyped generic enum constructor as the operand of `??` (#1005).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\n"
 

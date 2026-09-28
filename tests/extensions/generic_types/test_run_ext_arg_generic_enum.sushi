@@ -3,7 +3,6 @@
 # propagated the declared parameter type into none of them, so the constructor was
 # unstamped exactly as in the return position -- a CE0113. A plain function's call site
 # propagates, which is the control at the bottom.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n1\n43\n12\n41\n"
 struct Pair@(T, U):

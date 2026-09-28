@@ -1,4 +1,4 @@
-# ANTI-DOUBLE-FREE CONTROL for #159 -- green before the fix, and it MUST stay green after it.
+# The anti-double-free CONTROL for #159 -- green before the fix, and it MUST stay green after it.
 # .realise() on a TEMPORARY receiver ADOPTS the payload (it clones only for a BOUND receiver), so the
 # payload already has exactly one owner. Destroying the temporary as well would double-free it.
 # EXPECT_RUNTIME_EXIT: 0

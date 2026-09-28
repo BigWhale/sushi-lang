@@ -1,7 +1,6 @@
 # Under a plain `match r:` a `nom` binding nested inside an `Own(...)` pattern reads
 # CE2434, the same code as `Own(nom x)`: the Own position refuses it whatever the
 # scrutinee.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2434
 enum Inner:
     Word(string)

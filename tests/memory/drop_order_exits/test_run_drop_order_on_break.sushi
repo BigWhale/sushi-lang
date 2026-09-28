@@ -1,5 +1,4 @@
 # A break destroys the loop body's owning locals in reverse declaration order.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "x y\ndrop y\ndrop x\n"

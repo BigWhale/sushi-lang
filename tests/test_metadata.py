@@ -93,9 +93,6 @@ class TestMetadata:
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
-    # Test categorization
-    test_type: str = "default"  # "default", "runtime", "compilation"
-
     def __post_init__(self):
         """Post-initialization processing."""
         if self.expect_stdout_contains is None:
@@ -278,14 +275,6 @@ def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None
         metadata.compiler_flags.append(token)
 
 
-def _test_type(metadata: TestMetadata, value: str, test_file: Path) -> None:
-    value = value.lower()
-    if value in ('default', 'runtime', 'compilation', 'error', 'warning'):
-        metadata.test_type = value
-    else:
-        _warn(f"Invalid TEST_TYPE value in {test_file}: {value}")
-
-
 def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:
     # One KEY=VALUE per directive; the directive may be repeated to set several
     # variables. Lets a test pin HOME/USER/etc. instead of baking the developer's host
@@ -360,7 +349,6 @@ VALUED_DIRECTIVES = {
     'EXPECT_ERROR_CODES_EXACT': _exact_codes,
     'COMPILER_FLAGS': _compiler_flags,
     'TIMEOUT_SECONDS': _int_into('timeout_seconds', 'TIMEOUT_SECONDS'),
-    'TEST_TYPE': _test_type,
     # Stored as-is; the runner splits it on whitespace.
     'CMD_ARGS': _set('cmd_args', str),
     'STDIN_INPUT': _set('stdin_input', _text),
@@ -391,7 +379,38 @@ FLAG_DIRECTIVES = {
     'RUN_IN_FIXTURE_DIR': 'run_in_fixture_dir',
 }
 
-_DIRECTIVE_NAME = re.compile(r"[A-Z_]+")
+# A header line that starts with one of these names IS a directive: the parser reads it,
+# or the fixture fails. A line that starts with a diagnostic code is prose.
+_DIRECTIVE_NAME = re.compile(r"[A-Z][A-Z0-9_]{3,}\b")
+_CODE_PREFIX = re.compile(r"(?:CE|CW|RE|NE)\d{4}\b")
+
+
+def _read_directive(metadata: TestMetadata, directive: str, number: int,
+                    test_file: Path) -> None:
+    match = _DIRECTIVE_NAME.match(directive)
+    if match is None or _CODE_PREFIX.match(directive):
+        return
+    name, rest = match.group(), directive[match.end():].lstrip()
+    where = f"line {number} of the directive block"
+    if name in FLAG_DIRECTIVES:
+        flag = _flag_value(rest)
+        if flag is None:
+            metadata.directive_errors.append(
+                f"{where}: {name} is a flag; write `{name}` or `{name}: true`, "
+                f"not {directive!r}")
+        else:
+            setattr(metadata, FLAG_DIRECTIVES[name], flag)
+    elif name in VALUED_DIRECTIVES:
+        if rest.startswith(':'):
+            VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
+        else:
+            metadata.directive_errors.append(
+                f"{where}: {name} takes a value; write `{name}: <value>`, "
+                f"not {directive!r}")
+    else:
+        metadata.directive_errors.append(
+            f"{where}: {name} is not a directive the runner knows; reword the line "
+            f"if it is prose")
 
 
 def parse_test_metadata(test_file: Path) -> TestMetadata:
@@ -399,21 +418,10 @@ def parse_test_metadata(test_file: Path) -> TestMetadata:
     metadata = TestMetadata()
 
     try:
-        for line in directive_block(test_file):
+        for number, line in enumerate(directive_block(test_file), start=1):
             line = line.strip()
-            if not line.startswith('#'):
-                continue
-            directive = line[1:].strip()
-            match = _DIRECTIVE_NAME.match(directive)
-            if match is None:
-                continue
-            name, rest = match.group(), directive[match.end():]
-            if name in FLAG_DIRECTIVES:
-                flag = _flag_value(rest)
-                if flag is not None:
-                    setattr(metadata, FLAG_DIRECTIVES[name], flag)
-            elif name in VALUED_DIRECTIVES and rest.startswith(':'):
-                VALUED_DIRECTIVES[name](metadata, rest[1:].strip(), test_file)
+            if line.startswith('#'):
+                _read_directive(metadata, line[1:].strip(), number, test_file)
 
     except Exception as e:
         # A fixture whose directives cannot be read FAILS; it never passes unchecked.
@@ -432,7 +440,6 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
 
     # test_err_* never produces a binary, so there is nothing to run.
     if filename.startswith('test_err_'):
-        metadata.test_type = 'compilation_only'
         metadata.requires_runtime = False
         return
 
@@ -449,17 +456,12 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
                             or metadata.expect_no_leaks
                             or metadata.expect_no_open_fds)
         if not declares_runtime:
-            metadata.test_type = 'compilation_only'
             metadata.requires_runtime = False
             return
-        metadata.test_type = 'runtime'
         metadata.requires_runtime = True
         if metadata.expect_runtime_exit is None:
             metadata.expect_runtime_exit = 0
         return
-
-    if filename.startswith('test_run_'):
-        metadata.test_type = 'runtime'
 
     metadata.requires_runtime = True
     if metadata.expect_runtime_exit is None:

@@ -1,6 +1,5 @@
 # A registry module re-exports too: `<io/files>` hands on `<io/error>`, so `FileError`,
 # the enum its path utilities answer, is a bare name after `use <io/files>` alone (#586).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "not found\n"
 use <io/files>

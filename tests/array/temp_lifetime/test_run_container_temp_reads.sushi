@@ -1,7 +1,6 @@
 # `List@(T)` and `Own@(T)` temporaries leak the same way an array one does (issue
 # #382): all three are parked in a slot by the same seam, and it registered only the
 # subset of owner kinds `register_local_cleanup` knows. HashMap was never affected.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n7\n7\n1\n"

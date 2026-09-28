@@ -1,6 +1,5 @@
 # A last line with no newline after it is still a line. The end of file arrives on the
 # call AFTER it, as Maybe.None.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

@@ -2,7 +2,6 @@
 # elements (issue #378). `let` and `const` were the only two that did; a struct field,
 # a call argument, a return and an enum payload rejected a plain `[1, 2]` against an
 # `i64[2]` with a false type mismatch -- no wide literal needed to see it.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n4294967303\n"

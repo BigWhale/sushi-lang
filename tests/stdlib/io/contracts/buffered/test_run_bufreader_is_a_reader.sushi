@@ -1,6 +1,5 @@
 # `BufReader@(R)` implements `Reader`: a generic written over the contract takes a plain
 # `File` and a `BufReader@(File)` alike, and the buffered one answers from its window.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "plain: Mostly\nbuffered: Mostly\n"
 

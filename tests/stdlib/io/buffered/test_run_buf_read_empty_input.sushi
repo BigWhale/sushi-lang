@@ -1,6 +1,5 @@
 # An empty input is one None and nothing else. read_all() answers the empty string on the
 # same input, and neither reads the handle twice: end of input is sticky.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

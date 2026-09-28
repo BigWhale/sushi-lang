@@ -1,7 +1,6 @@
 # A perk implementation may target one INSTANTIATION of a generic struct. The target is
 # a constraint, exactly as it is for an extension method (#393): the implementation
 # applies to Box@(i32) and to nothing else.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "boxed 7\n"
 

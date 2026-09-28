@@ -1,7 +1,6 @@
 # Read a file line by line and count. The lines come off a BufReader now -- File keeps no
 # line loop, because an unbuffered handle yielding lines is one system call per line, and
 # removing that cost is the whole reason the buffer exists.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

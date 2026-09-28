@@ -1,6 +1,5 @@
 # A take spends the receiver, so every OTHER owning field is destroyed at the take. The
 # label owns heap here, and nothing frees it afterwards -- the leak check is the assertion.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

@@ -1,6 +1,5 @@
 # A rebind target is a PLACE, not only a bare name: a field and an array slot are the
 # same statement, so the inline arm takes them too (#552).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "7 9\n"
 

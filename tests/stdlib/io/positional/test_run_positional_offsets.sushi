@@ -1,7 +1,6 @@
 # pread and pwrite take the offset as an ARGUMENT, so neither moves the
 # descriptor's own file position. That is the whole point of the pair: nothing is
 # shared, so two readers of one descriptor cannot race over a position.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

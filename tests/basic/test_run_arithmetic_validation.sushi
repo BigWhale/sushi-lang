@@ -1,5 +1,4 @@
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # TIMEOUT_SECONDS: 10
 fn main() i32:
   # Test comprehensive arithmetic operations

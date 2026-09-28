@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2414
 # The `foreach` twin: one binding kind, one rule (#590).
 

@@ -1,7 +1,6 @@
 # CE2414's help offered `.clone()`, and a resource type has no clone (ruling R3). For a
 # resource payload it names `.share()` only for a type that has one, exactly as CE2411's
 # help does (#1023).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2414
 # EXPECT_STDERR_CONTAINS: "has no `share()` that gives a second owner"
 struct Handle:

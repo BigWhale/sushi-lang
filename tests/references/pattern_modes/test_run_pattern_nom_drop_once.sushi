@@ -1,7 +1,6 @@
 # Ruling R11 against ruling R2: a `Drop` payload taken by `nom` drops exactly ONCE, at
 # its new owner. The match must not drop it a second time -- for a handle that is a
 # double close.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "eating 5\ndrop 5\nafter\n"

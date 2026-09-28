@@ -2,7 +2,6 @@
 # leaves scope, with no close() written anywhere -- which EXPECT_NO_OPEN_FDS is what
 # proves. The builtin could not do this: a `file` was a copyable FILE* and leaked unless
 # the program remembered.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

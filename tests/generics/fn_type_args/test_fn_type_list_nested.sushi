@@ -1,5 +1,4 @@
 # A List of a function type whose own parameter is a function type (#794).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n14\n"

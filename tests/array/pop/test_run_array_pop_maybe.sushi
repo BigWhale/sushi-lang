@@ -1,7 +1,6 @@
 # `arr.pop()` returns `Maybe@(T)`, matching `List@(T).pop()` and `arr.get()` (issue #377).
 # A pop from an empty array has no element, so there is nothing to invent: the old bare
 # `T` returned a zero, which for an `i32[]` is indistinguishable from a genuinely popped 0.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "some 8\nsome 7\nnone\n0\ntrue\nfalse\n99\n42\n255\ntrue\n"

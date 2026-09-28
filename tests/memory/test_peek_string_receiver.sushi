@@ -2,8 +2,8 @@
 #
 # "The methods on `&T` are the methods on `T`." Semantics said so already
 # (`semantics/generics/builtin_methods.py` unwraps `ReferenceType` before it decides),
-# so a borrowed receiver produced no diagnostic at all. The backend dispatched on the
-# LLVM receiver instead, and a borrow is a POINTER to the string fat pointer, so
+# so a borrowed receiver produced no diagnostic at all. The backend dispatched on
+# the LLVM receiver instead, and a borrow is a POINTER to the string fat pointer, so
 # `is_string_type` answered False and every built-in string method fell through to the
 # user extension-method path. That path mangled the name to `string_len` and declared a
 # symbol nobody defines, so the program failed at LINK time and the linker error was

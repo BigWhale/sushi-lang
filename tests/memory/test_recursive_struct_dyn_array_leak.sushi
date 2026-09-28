@@ -1,4 +1,4 @@
-# RAII for a self-referential `Node[]` (#257) -- the dynamic-array twin of
+# The RAII for a self-referential `Node[]` (#257) -- the dynamic-array twin of
 # test_recursive_struct_list_leak.sushi.
 #
 # Same reasoning: the per-element cleanup of a recursive container is emitted out-of-line

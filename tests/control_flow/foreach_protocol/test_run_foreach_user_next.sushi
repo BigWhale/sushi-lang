@@ -1,7 +1,6 @@
 # A foreach walks anything whose next() answers Maybe@(T). There is no Iterator type to
 # implement and no perk to name: the loop calls next() until it answers None, so the
 # protocol is the METHOD and nothing else (HANDLES.md ruling R21).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "3\n2\n1\ndone\n"
 

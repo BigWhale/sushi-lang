@@ -2,7 +2,6 @@
 # has the address a `poke self` contract method needs. This is the reason R6 refused to
 # leave the console a builtin: a builtin could never enter a generic, so BufWriter over
 # the terminal would have been impossible on day one.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 use <io/fs>

@@ -1,6 +1,5 @@
 # A bare binding nested inside an `Own(...)` pattern reads through the heap cell, under
 # `match nom r:` as under a plain match, and frees everything once.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"

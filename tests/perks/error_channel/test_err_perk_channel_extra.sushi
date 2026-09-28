@@ -1,6 +1,5 @@
 # The contract is bare and the implementation declares a channel. The same
 # relational CE0133, read the other way.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0133
 # EXPECT_STDERR_CONTAINS: "perk 'Greet' declares"
 perk Greet:

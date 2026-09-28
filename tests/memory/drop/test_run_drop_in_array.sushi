@@ -1,5 +1,4 @@
 # The same rule for a dynamic array: every slot drops exactly once.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\ndrop 1\ndrop 2\n"

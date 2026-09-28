@@ -1,6 +1,5 @@
 # A BARE extension keeps CE2091 for BOTH Result constructors: with no '| E' there is
 # no channel, so 'return Result.Err(e)' has nowhere to go.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2091
 enum MyError:
     Nope

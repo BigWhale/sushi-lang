@@ -1,7 +1,6 @@
 # A blank line is data and end of file is the end. readln() answers Maybe@(string), so
 # the two are never the same answer: a file whose second line is empty reads FOUR lines,
 # where the empty-string contract truncated it to one.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

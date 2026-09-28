@@ -1,7 +1,6 @@
 # A unit's own declaration wins over a name a re-export offers, as it wins over a flat
 # import (section 8's ladder, row 2 over row 3). `origin` here is main's, and shapes'
 # `area` still reads geometry's `Vec`.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "30\n"
 use "helpers/shapes"

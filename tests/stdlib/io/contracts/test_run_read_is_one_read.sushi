@@ -1,7 +1,6 @@
 # read(max) is ONE read bounded by the caller, not the whole file: ruling R19. read_all() is
 # the whole-file method, and the two answers differ on a file larger than the bound. The
 # bound counts BYTES today; this input is ASCII, so it also counts characters.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

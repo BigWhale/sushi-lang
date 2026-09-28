@@ -1,7 +1,7 @@
 # Section 8, row 1: a local wins over everything, a stdlib constant included. The
 # local is READ here, so the program is also free of CW1001 (#560).
 # EXPECT_STDOUT_EXACT: "3\n"
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 use <math>
 
 fn main() i32:

@@ -1,6 +1,5 @@
 # An unsigned value read out of a container with `get()??` must print unsigned
 # (issue #379). Array, List and HashMap all reach the value the same way.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "255\n65535\n40000\n4294967295\n18446744073709551615\n255\n4294967295\n18446744073709551615\n65535\n4294967295\n"

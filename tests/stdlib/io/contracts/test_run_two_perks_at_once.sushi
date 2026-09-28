@@ -1,6 +1,5 @@
 # One generic may ask for two contracts. Probe P-B proved the mechanism; this pins it on the
 # real handles, so a copy loop can be written once for a file and a socket alike.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

@@ -1,6 +1,5 @@
 # A return destroys the owning locals in reverse declaration order, whatever registry
 # holds each one: a List@(Res) declared between two structs is destroyed between them.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "a c 1\ndrop c\ndrop b-in-list\ndrop a\n"

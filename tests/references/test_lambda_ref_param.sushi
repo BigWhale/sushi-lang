@@ -1,4 +1,4 @@
-# PROMOTED, not merely tolerated: a lambda may declare a reference PARAMETER
+# Promoted, not merely tolerated: a lambda may declare a reference PARAMETER
 # (`|peek i32 x| ...`), which is what satisfies a `fn(peek i32) -> i32` binding. Like
 # the fn-type position it worked by accident of the general machinery and had no test,
 # and the position rejections (CE2415-CE2420) carve it out on purpose.
