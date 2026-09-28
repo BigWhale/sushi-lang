@@ -1,4 +1,4 @@
-"""Every `# EXPECT_*` directive in the corpus is one the runner actually reads."""
+"""Every directive-shaped header line in the corpus is one the runner actually reads."""
 from __future__ import annotations
 
 import sys
@@ -9,38 +9,31 @@ import pytest
 TESTS_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TESTS_ROOT))
 
-from test_metadata import corpus_files, corpus_text, header_block  # noqa: E402
+from test_metadata import (  # noqa: E402
+    _CODE_PREFIX,
+    _DIRECTIVE_NAME,
+    FLAG_DIRECTIVES,
+    VALUED_DIRECTIVES,
+    corpus_files,
+    corpus_text,
+    header_block,
+)
 
 
-# Every directive prefix `parse_test_metadata` dispatches on. Kept as a literal rather
-# than scraped from the parser: a typo in the parser should fail this test, not be
-# mirrored by it.
-KNOWN_DIRECTIVES = frozenset({
-    "EXPECT_RUNTIME_EXIT",
-    "EXPECT_STDOUT_CONTAINS",
-    "EXPECT_STDOUT_EXACT",
-    "EXPECT_STDERR_CONTAINS",
-    "EXPECT_STDERR_EMPTY",
-    "EXPECT_NO_LEAKS",
-    "EXPECT_NO_OPEN_FDS",
-    "EXPECT_ERROR_CODE",
-    "EXPECT_ERROR_CODES_EXACT",
-    "EXPECT_REBUILT",
-    "EXPECT_CACHED",
-    "EXPECT_STDOUT_EXACT_BEFORE_REBUILD",
-    "EXPECT_PATH_EXISTS",
-    "EXPECT_PATH_ABSENT",
-    "EXPECT_PATH_EXISTS_BEFORE_CLEAN",
-})
+# The known names are the parser's own two tables: a name is known when it has a row.
+PARSER_NAMES = frozenset(VALUED_DIRECTIVES) | frozenset(FLAG_DIRECTIVES)
 
 
 def _sushi_tests():
     return corpus_files(TESTS_ROOT)
 
 
-def _directive_name(comment: str) -> str:
-    """`EXPECT_NO_LEAKS: true` -> `EXPECT_NO_LEAKS`."""
-    return comment.split(":", 1)[0].strip()
+def _directive_name(comment: str) -> str | None:
+    """`EXPECT_NO_LEAKS: true` -> `EXPECT_NO_LEAKS`; None for a line that is prose."""
+    match = _DIRECTIVE_NAME.match(comment)
+    if match is None or _CODE_PREFIX.match(comment):
+        return None
+    return match.group()
 
 
 def test_corpus_is_not_empty():
@@ -59,7 +52,7 @@ def test_every_directive_is_inside_the_parsed_header():
             if not stripped.startswith("#"):
                 continue
             comment = stripped[1:].strip()
-            if comment.startswith("EXPECT_"):
+            if _directive_name(comment) in PARSER_NAMES:
                 rel = path.relative_to(TESTS_ROOT)
                 stranded.append(f"{rel}:{lineno}: {comment}")
 
@@ -77,17 +70,14 @@ def test_every_directive_name_is_one_the_parser_knows():
             stripped = line.strip()
             if not stripped.startswith("#"):
                 continue
-            comment = stripped[1:].strip()
-            if not comment.startswith("EXPECT_"):
-                continue
-            name = _directive_name(comment)
-            if name not in KNOWN_DIRECTIVES:
+            name = _directive_name(stripped[1:].strip())
+            if name is not None and name not in PARSER_NAMES:
                 rel = path.relative_to(TESTS_ROOT)
                 unknown.append(f"{rel}:{lineno}: {name}")
 
     assert not unknown, (
         "these directive names match no branch of parse_test_metadata, so they assert "
-        f"nothing. Known names: {sorted(KNOWN_DIRECTIVES)}\n  " + "\n  ".join(unknown))
+        f"nothing. Known names: {sorted(PARSER_NAMES)}\n  " + "\n  ".join(unknown))
 
 
 @pytest.mark.parametrize("name", ["test_own_get_copy_at_call", "test_chained_clone_on_getout"])
@@ -104,8 +94,8 @@ def test_no_corpus_file_makes_the_parser_warn(capsys):
     """A warning means the runner discarded something the file meant to assert.
 
     The value gate to `test_every_directive_name_is_one_the_parser_knows`'s name gate:
-    `TEST_TYPE: compile_error` names a real directive and still asserts nothing, because
-    the parser accepts five values and that is not one of them. The warning is also what
+    `TIMEOUT_SECONDS: soon` names a real directive and still asserts nothing, because
+    the parser accepts only an integer there. The warning is also what
     breaks the badge job -- `--json` stdout is piped straight into `corpus-results.json`.
     """
     from test_metadata import parse_test_metadata

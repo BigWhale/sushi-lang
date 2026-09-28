@@ -1,6 +1,6 @@
 # A `let` in an `expand` body that the body reads is used in every copy, so no
 # CW1001 is reported for it (#1019).
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 # EXPECT_STDOUT_EXACT: "int\n1\nint\n1\n"
 perk Display:
     fn display() string

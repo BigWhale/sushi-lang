@@ -1,6 +1,5 @@
 # dup() gives a SECOND descriptor over the SAME open file description. Closing one
 # leaves the other usable, which is the shared-listener pattern Phase 8 needs.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

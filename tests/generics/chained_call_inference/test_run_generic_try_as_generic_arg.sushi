@@ -1,7 +1,6 @@
 # The same shape through `??` rather than `.realise()`: the inner generic call is typed
 # from its substituted signature and the `??` unwraps that, so the outer generic solves
 # its parameter (#556).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "carried 7\n"
 

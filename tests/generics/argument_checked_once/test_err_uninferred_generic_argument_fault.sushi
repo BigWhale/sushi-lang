@@ -1,0 +1,9 @@
+# When the call cannot be solved, a fault in an argument is still reported, next to
+# the CE2060 that says the call has no instance.
+# EXPECT_ERROR_CODES_EXACT: CE0112, CE2060
+fn pick@(T, U)(T x) i32:
+    return Result.Ok(0)
+
+fn main() i32:
+    println(pick(5 / 0).realise(0))
+    return Result.Ok(0)

@@ -2,7 +2,6 @@
 # answer is to accumulate BYTES and convert once, the way read_all() and read_line() do;
 # converting each chunk on its own would cut the character in two. The euro sign is three
 # bytes, so a bound of two lands inside it.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

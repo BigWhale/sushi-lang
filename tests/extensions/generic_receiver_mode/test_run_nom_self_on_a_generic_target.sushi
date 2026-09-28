@@ -1,7 +1,6 @@
 # A receiver's MODE is part of the signature, and the monomorphized copy has to carry
 # it: the call site reads the mode off the extension-table record. Dropped, a `nom self`
 # receiver on a generic target was freed twice -- in the method and again at the call.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "held 1\n7\n"

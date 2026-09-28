@@ -2,7 +2,6 @@
 # instantiation's interned name, so a nested argument has to render the same way on both
 # sides of the comparison -- this is the case that would silently stop matching if the
 # declared spelling and the interned name ever disagreed.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n9\n"

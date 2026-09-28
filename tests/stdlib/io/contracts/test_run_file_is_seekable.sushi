@@ -1,6 +1,5 @@
 # A File satisfies Seek, and seek() answers the NEW position rather than nothing. A socket
 # does not implement the perk at all, which is the layering the contract exists to state.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

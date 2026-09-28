@@ -1,7 +1,6 @@
 # A `poke self` receiver registers as a ReferenceType, and capturing a borrow
 # is CE2094 (deferred to Tier 2). Pins the existing gate for method bodies
 # (#399).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2094
 struct Counter:
     i32 n

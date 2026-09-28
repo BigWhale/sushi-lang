@@ -1,6 +1,5 @@
 # A List of sockets. Each element closes exactly once when the list is destroyed,
 # which is the container half of probe P2 on a real handle.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "2\ndone\n"

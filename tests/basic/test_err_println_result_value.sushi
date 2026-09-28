@@ -1,4 +1,3 @@
-# TEST_TYPE: compilation
 # EXPECT_ERROR_CODE: CE2037
 # Simpler test to isolate the issue
 

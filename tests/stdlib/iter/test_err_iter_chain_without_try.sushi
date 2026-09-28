@@ -1,6 +1,5 @@
 # The chain WITHOUT '??' stops at the first channel (ruling 5): .filter is missing on
 # the Result and present on the payload List, so CE2515 spells the fix.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2515
 use <collections/iter>
 

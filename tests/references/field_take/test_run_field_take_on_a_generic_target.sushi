@@ -1,7 +1,6 @@
 # The shape the buffered readers need: a generic wrapper hands its inner handle back.
 # The take reads the field type of the INSTANTIATION, so `Wrap@(File)` takes a handle
 # while `Wrap@(i32)` would copy an integer.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

@@ -3,7 +3,6 @@
 # `use <io/contracts> as io`, and a registry module's `m.MathError` behind `use <math> as m`.
 # The dot works in every written-name position: a type, a constructor, a match arm, a
 # channel.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "read\nnot found\nzero\n"

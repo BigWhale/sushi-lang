@@ -1,7 +1,6 @@
 # A diagnostic names a type with the SOURCE spelling. `List<i32>` is the internal
 # identity name: the user cannot write it, and the source line under the message
 # spells the same type `List@(i32)`.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE4002
 # EXPECT_STDERR_CONTAINS: "type List@(i32) already implements perk Show"
 perk Show:

@@ -4,7 +4,6 @@
 # other returned a value of the wrong shape -- invalid IR ("value doesn't match function
 # result type"). Each instantiation owns its body now (#391), which is also what lets a
 # generic type be named in a template's signature at all (#389).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3\nmarvin\n1\n1\n9\nzaphod\n42\n"

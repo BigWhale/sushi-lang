@@ -1,6 +1,6 @@
 # The remove() half of the same hole (see test_err_hashmap_insert_after_destroy).
 #
-# HISTORY: remove() on a map destroyed through a poke parameter probed a null bucket
+# History: remove() on a map destroyed through a poke parameter probed a null bucket
 # array and segfaulted. Tier 4.2's bounded probe gave it an honest answer instead --
 # the key is not there, so it returns Maybe.None -- and this test pinned that.
 #

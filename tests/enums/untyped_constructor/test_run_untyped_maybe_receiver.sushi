@@ -1,6 +1,5 @@
 # An untyped generic enum constructor as a method receiver, in a `let` initializer and
 # in an interpolation hole (#1005). The payload gives the type in each position.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "true\ntrue\n3\n"
 

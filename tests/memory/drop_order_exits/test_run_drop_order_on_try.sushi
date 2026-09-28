@@ -1,5 +1,4 @@
 # A `??` propagation destroys the owning locals in reverse declaration order.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "before\ndrop c\ndrop b-in-list\ndrop a\nfailed\n"

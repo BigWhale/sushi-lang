@@ -1,6 +1,5 @@
 # One step only. A chain reads through the intermediate field, which is a borrow, so the
 # marker cannot make it a take -- CE2411, and `.clone()` is what the help offers.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 use <io/fs>
 

@@ -1,5 +1,5 @@
-# Guards issue #168, transitive case: the destroy-effect summary must propagate through a
-# FORWARDING callee. `outer` never calls .destroy() itself -- it hands its own poke param
+# Guards issue #168, transitive case: the destroy-effect summary must propagate through
+# a FORWARDING callee. `outer` never calls .destroy() itself -- it hands its own poke param
 # to `wreck`, which does. The summary iterates to a fixed point, so `outer` inherits the
 # effect and the call site in main marks `map` destroyed.
 # EXPECT_ERROR_CODE: CE2406

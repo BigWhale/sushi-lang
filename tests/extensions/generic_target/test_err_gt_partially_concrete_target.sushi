@@ -5,7 +5,6 @@
 # overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against
 # `Pair@(T, string)` -- equally specific, ambiguous -- cannot arise. That ambiguity is where
 # Rust's specialization has stalled for years.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2098
 # EXPECT_STDERR_CONTAINS: "extension target 'Pair@(i32, U)'"
 struct Pair@(A, B):

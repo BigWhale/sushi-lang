@@ -1,6 +1,5 @@
 # One body per instantiation, and each instantiation drops. Scope exit still destroys in
 # reverse declaration order, so the two bodies are told apart by the order they run in.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "towel 7\nreleasing 1\nreleasing 2\n"

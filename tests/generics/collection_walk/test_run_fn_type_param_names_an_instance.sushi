@@ -1,6 +1,5 @@
 # A function TYPE holds types too, and a generic instance in its return is named by the
 # parameter that carries it. The walk had no function arm either (#603).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"

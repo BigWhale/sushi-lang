@@ -1,7 +1,6 @@
 # The refusal is for the UNSTAMPED position only: every stamped one -- a `let`, a return,
 # a struct field, a function argument, a container insert, an extension's bare return --
 # binds as before (#570).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "0 0 5 1 0 0 3 1\n"

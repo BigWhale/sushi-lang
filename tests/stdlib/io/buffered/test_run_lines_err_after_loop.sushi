@@ -1,6 +1,5 @@
 # The loop runs to its end and the function fails AFTER it, so the iterator is already
 # destroyed by the time the error path runs. Nothing may be freed twice.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

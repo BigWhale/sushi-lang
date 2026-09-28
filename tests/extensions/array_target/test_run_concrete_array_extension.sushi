@@ -1,7 +1,6 @@
 # A concrete dynamic-array target registers and resolves. The isinstance tuple in the
 # collect pass lacked DynamicArrayType, so `extend i32[]` was silently never registered
 # and every call was CE2008.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "10\n"

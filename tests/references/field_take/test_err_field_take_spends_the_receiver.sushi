@@ -1,7 +1,6 @@
 # The all-or-nothing rule CE2433 states for a match arm, carried over to a struct: what
 # suppresses the receiver's free is the WHOLE value and not one field, so a take spends
 # it. A later mention is CE2405 -- a real move, with the marker visible on the page.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2405
 use <io/fs>
 

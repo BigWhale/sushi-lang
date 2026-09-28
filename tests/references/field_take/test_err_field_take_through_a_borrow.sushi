@@ -1,7 +1,6 @@
 # A take needs a value the function OWNS. A `peek` parameter names storage the caller
 # keeps and still frees, so taking a field out of it would be a second owner: CE2411,
 # the same code every other read through a live owner answers.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 use <io/fs>
 

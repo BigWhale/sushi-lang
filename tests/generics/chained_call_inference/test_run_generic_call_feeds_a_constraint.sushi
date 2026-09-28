@@ -1,7 +1,6 @@
 # A generic call chained through a BARE extension method, then handed to a constrained
 # generic. The chain's receiver is the inner call's substituted return, so the extension
 # resolves and the constraint is checked against a real type (#556).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "seeded 1\n9\n"
 

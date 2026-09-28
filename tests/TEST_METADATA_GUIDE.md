@@ -56,6 +56,19 @@ The runner reads a fixture as bytes and decodes only its leading comment block, 
 must be UTF-8. A later line can hold any byte. A fixture whose directive block holds a
 byte that is not UTF-8 FAILS; it never passes with its directives unread.
 
+A line of the leading comment block that starts with an upper-case name of four or more
+characters (`^[A-Z][A-Z0-9_]{3,}`, a whole word) IS a directive, and the runner reads it
+or FAILS the fixture with a message that names the line. So these fail:
+
+- a name that is in neither directive table (`# EXPECTED_OUTPUT: 42`, `# NOTE: ...`);
+- a valued directive with no `:` (`# EXPECT_STDERR_EMPTY`, `# EXPECT_RUNTIME_EXIT 3`);
+- a flag directive followed by text that is not `: value` (`# EXPECT_NO_LEAKS true`).
+
+A line that starts with a diagnostic code (`CE`, `CW`, `RE` or `NE` and four digits, as
+in `# CE2510: ...`) is prose. Other prose must not start with an upper-case word: write
+`# Note: ...`, not `# NOTE: ...`. The known names are the rows of `VALUED_DIRECTIVES`
+and `FLAG_DIRECTIVES` in `tests/test_metadata.py`, and nothing else.
+
 Every gate that scans the corpus reads it through `corpus_files` and `corpus_text` in
 `tests/test_metadata.py`. `corpus_files` gives files only (a directory named `x.sushi` is
 not a source). A file that is not UTF-8 is allowed only when a `test_err_` fixture in the
@@ -123,7 +136,9 @@ Validates that stderr produces no output.
 ```
 
 - Common for happy path tests
-- Values: `true`, `yes`, `1` (case-insensitive)
+- Values: `true`, `yes`, `1` (case-insensitive). The value is REQUIRED: the bare
+  `# EXPECT_STDERR_EMPTY` fails the fixture.
+- It reads the stderr of the binary, on the runtime path.
 
 #### EXPECT_NO_LEAKS
 
@@ -238,16 +253,11 @@ Override the default test timeout (default: 10 seconds).
 # TIMEOUT_SECONDS: 10
 ```
 
-#### TEST_TYPE
+#### No TEST_TYPE directive
 
-Explicitly categorize the test type.
-
-```sushi
-# TEST_TYPE: runtime
-```
-
-- Values: `default`, `runtime`, `compilation`, `error`, `warning`
-- Usually auto-detected from filename, rarely needs explicit specification
+The file name prefix sets the category of a test (`test_err_`, `test_warn_`, and the
+others). There is no `TEST_TYPE` directive: the runner did not read it, so it was
+removed (#1043). A `TEST_TYPE` line is an unknown directive and fails its fixture.
 
 #### CMD_ARGS
 

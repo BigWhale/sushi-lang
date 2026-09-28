@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "first=3\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # Regression for the `realise` ownership bug found while fixing #159: when the receiver is a
 # named `Maybe` binding whose payload owns heap, the success path returned a shallow alias of
 # that payload, so the result and the binding both freed the same buffer at scope exit

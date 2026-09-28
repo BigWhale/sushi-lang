@@ -1,7 +1,6 @@
 # fd_write_str writes a string's own bytes with no to_bytes() copy, and fd_readln reads
 # one line back in a Maybe: a blank line is Some(""), the end of the file is None, and
 # the two are never the same answer (HANDLES.md, ruling R22).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

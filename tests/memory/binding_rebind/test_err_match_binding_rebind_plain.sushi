@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2414
 # The RETRACTED half of the #253 rule (#590). A plain payload never faulted, because there
 # is no heap to free twice, but the binding is the same read-only view whatever it holds --

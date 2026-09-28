@@ -1,6 +1,5 @@
 # A PERK implementation method declaring a generic enum return type, and an extension
 # method on a STRUCT receiver. Both go through the same unstamped return arm (#387).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "4\nnone\n42\n"
 struct P:

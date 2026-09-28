@@ -1,6 +1,5 @@
 # write_at() replaces exactly the bytes it covers, answers the count it took, and moves
 # nothing: the position a sequential write left behind is where tell() still finds it.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

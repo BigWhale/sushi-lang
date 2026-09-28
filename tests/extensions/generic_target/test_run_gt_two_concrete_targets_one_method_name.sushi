@@ -2,7 +2,6 @@
 # serves both (#393). Both declarations used to be templates for one `(base name, method)`
 # slot, so the second was rejected as a duplicate function -- and the message elided the
 # arguments as `Box@(...)` because the table had nowhere to put them.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "70\n6\n"

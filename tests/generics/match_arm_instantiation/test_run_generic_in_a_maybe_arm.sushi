@@ -1,6 +1,5 @@
 # The same gap through Maybe rather than Result: a variant's payload type is read off the
 # scrutinee either way, so one fix serves both (#539).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "got 3\n"

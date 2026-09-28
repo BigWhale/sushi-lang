@@ -24,7 +24,6 @@ from test_metadata import parse_test_metadata  # noqa: E402
 BAD_HEADERS = [
     pytest.param("# EXPECT_RUNTIME_EXIT: nope\n", id="runtime-exit"),
     pytest.param("# TIMEOUT_SECONDS: soon\n", id="timeout"),
-    pytest.param("# TEST_TYPE: compile_error\n", id="test-type"),
     pytest.param("# TEST_ENV: sideways\n", id="test-env"),
     pytest.param("# COMPILER_FLAGS: --clean-cache\n", id="runner-owned-flag"),
 ]
@@ -50,7 +49,7 @@ def test_a_directive_warning_goes_to_stderr(tmp_path, capsys, header):
 def test_an_unreadable_directive_block_fails_and_keeps_stdout_clean(tmp_path, capsys):
     """A directive block the runner cannot decode is a directive error, never stdout."""
     path = tmp_path / "test_probe.sushi"
-    path.write_bytes(b"# TEST_TYPE: runtime\n# \xff\xfe not utf-8\n")
+    path.write_bytes(b"# EXPECT_RUNTIME_EXIT: 0\n# \xff\xfe not utf-8\n")
 
     metadata = parse_test_metadata(path)
 

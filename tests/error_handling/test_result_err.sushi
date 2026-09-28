@@ -1,5 +1,4 @@
 # Test Err() returns - variables should get zero values
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 
 

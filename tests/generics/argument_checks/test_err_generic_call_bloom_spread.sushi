@@ -1,7 +1,6 @@
 # A bloom argument `arr...` is only allowed as the last argument of a variadic '...T'
 # call. A GENERIC callee is no exception, so the generic argument check must refuse it
 # with CE0120 exactly as the plain one does.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0120
 fn label@(T)(T tag, i32 n) i32:
     println("{tag}")

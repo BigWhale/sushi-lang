@@ -3,7 +3,6 @@
 # to corrupt the heap on glibc (SIGABRT, "sysmalloc: corrupted top size") because
 # string[] was allocated using the 12-byte string data size while GEP strides by
 # the 16-byte alloc size; i32[] was unaffected.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "hello"
 

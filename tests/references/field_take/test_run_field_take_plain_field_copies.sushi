@@ -1,6 +1,5 @@
 # The marker bites only where there is something to take. A field that owns no heap is
 # copied, exactly as an unmarked read of it is, and the receiver is untouched.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 5\n"

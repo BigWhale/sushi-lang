@@ -1,6 +1,5 @@
 # Moved in one arm of an `if` and not the other. It drops exactly once on each
 # path, which is the runtime move flag doing its work.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "eating 1\ndrop 1\nrun end\nrun end\ndrop 1\n"

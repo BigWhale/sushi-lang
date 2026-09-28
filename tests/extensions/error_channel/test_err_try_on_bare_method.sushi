@@ -1,6 +1,5 @@
 # Ruling 5, row 4 (pin): '??' on a BARE method's value is today's CE2507 -- a bool
 # carries no channel to handle.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2507
 extend bool is_false() bool:
     return not self

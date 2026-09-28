@@ -1,7 +1,5 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
-# EXPECTED_OUTPUT: 42
 # Tests: Generic struct type compatibility in function parameters
 # Fixed: 2025-10-17 - StructType equality/hashing and GenericTypeRef resolution
 

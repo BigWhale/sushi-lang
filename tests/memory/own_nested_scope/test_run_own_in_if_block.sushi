@@ -1,6 +1,5 @@
 # An Own@(T) local in an `if` body is destroyed on the `return` inside the block and
 # is not visited by the `return` after the block.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3 0\n"

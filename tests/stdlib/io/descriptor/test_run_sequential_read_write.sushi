@@ -1,7 +1,6 @@
 # fd_read and fd_write move the descriptor's OWN file position, which is what separates
 # them from the positional pair. A write leaves the position at the end, so reading needs
 # a seek back to the start first.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

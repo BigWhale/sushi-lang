@@ -1,6 +1,5 @@
 # A function that returns a socket hands ownership to its caller, and the caller's
 # scope exit is what closes it.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "got one\ndone\n"

@@ -1,6 +1,5 @@
 # The shape the issue reports: `BufReader.new` answers `BufReader@(File)`, the arm takes the
 # payload, and `into_inner` is the stdlib's generic-target extension on it (#549).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

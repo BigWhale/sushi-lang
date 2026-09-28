@@ -2,7 +2,6 @@
 # four instantiations -- BufReader and BufWriter over File and over TcpStream -- so a
 # monomorphization that only worked for File would not compile. No socket is opened; the
 # instantiation is what is under test.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

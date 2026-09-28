@@ -1,6 +1,5 @@
 # A `return` from inside the loop leaves the function, not just the loop, so the
 # iterator's destruction rides the function-exit path instead of the loop's.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

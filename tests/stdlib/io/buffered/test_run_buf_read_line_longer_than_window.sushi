@@ -1,6 +1,5 @@
 # A line longer than the window spans as many refills as it needs, and the bulk copy has
 # to stitch them into one answer.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

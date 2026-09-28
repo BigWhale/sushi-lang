@@ -1,6 +1,5 @@
 # An untyped generic enum constructor as the argument of a generic function (#1005). The
 # payload fixes the instance, so `T` is `Maybe@(i32)`. It was CE2060.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "1\n"
 

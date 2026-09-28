@@ -1,5 +1,4 @@
 # A TYPED-param lambda argument infers the method-level parameter from its body.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\n4\n"

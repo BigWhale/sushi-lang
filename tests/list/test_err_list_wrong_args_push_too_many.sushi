@@ -1,4 +1,3 @@
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2009
 # Test error: push() with too many arguments
 fn main() i32:

@@ -1,6 +1,5 @@
 # The enum twin of #392: the generic call's argument is `self` itself, so the
 # type argument is the monomorphized enum -- known only per instantiation.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n7\n"

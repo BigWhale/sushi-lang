@@ -1,6 +1,5 @@
 # A socket MOVES now. Handing one to a `nom` parameter transfers it, and reading the
 # old binding afterwards is CE2405 -- the copy that held a live descriptor is gone.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2405
 use <net/tcp>
 

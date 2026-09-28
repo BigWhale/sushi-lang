@@ -5,8 +5,8 @@
 # ownership may not have it. CE2411, and `.clone()` is the escape -- see the positive twin
 # `test_consume_hashmapinsert_cloned_field.sushi`.
 #
-# This file asserted the OPPOSITE until #242. The provenance was THROUGH_OWNER, whose cell
-# COPIED, so the compiler inserted the clone the user now writes. The two owning rows are one
+# This file asserted the OPPOSITE until #242. The provenance was THROUGH_OWNER, whose
+# cell COPIED, so the compiler inserted the clone the user now writes. The two owning rows are one
 # row again, and the compiler inserts no deep copy at a read.
 # EXPECT_ERROR_CODE: CE2411
 

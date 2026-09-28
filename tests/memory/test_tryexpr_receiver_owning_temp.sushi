@@ -7,8 +7,8 @@
 # The shape did not compile at all until a `??` receiver could resolve its type, so this
 # is the cost of that and it is paid at the same place. The rule is the one the language
 # already uses for a discarded owning temporary: register it as a scope temp and let
-# scope-exit RAII free it. Rust and C++ drop such a temporary at the end of the enclosing
-# STATEMENT, which is tighter; scope exit is later, never earlier, so it is safe.
+# scope-exit RAII free it. Rust and C++ drop such a temporary at the end of the
+# enclosing STATEMENT, which is tighter; scope exit is later, never earlier, so it is safe.
 #
 # The struct owns a dynamic array because that is the cheapest field whose leak the
 # interposer can count. `.clone()` is what makes the leak observable: it takes a deep copy

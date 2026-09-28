@@ -1,7 +1,6 @@
 # A bloom argument `arr...` is only allowed as the last argument of a variadic '...T'
 # call. An enum variant's payload is not a variadic slot, so the one argument check
 # refuses it with CE0120.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE0120
 enum Shape:
     Circle(i32)

@@ -1,7 +1,6 @@
 # A take dismantles the receiver, so `drop()` does NOT run: a destructor written for a
 # value that goes away WHOLE would be told it still owns the field the caller is taking.
 # The method doing the take does the finishing work itself.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

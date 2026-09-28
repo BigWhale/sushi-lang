@@ -1,6 +1,5 @@
 # Ruling R11: a bare payload binding still BORROWS. It reads, it is not registered for
 # its own free, and the temporary the match owns drops once, at the end of the match.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "got 7\ndrop 7\nafter\n"

@@ -1,7 +1,6 @@
 # The statement walk has the same hole: a `foreach` item ANNOTATION is a source-written
 # type, and it was copied unchanged, so the monomorphized loop declared an item of type
 # `T` and answered CE2001 plus CE2034 (#602).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n2\n3\n"

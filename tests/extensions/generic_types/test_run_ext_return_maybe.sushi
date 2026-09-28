@@ -2,7 +2,6 @@
 # The extension arm of `validate_return_statement` propagated nothing into the returned
 # value, so the enum constructor reached the backend with no `resolved_enum_type` stamp
 # and every shape below was a CE0113 internal error.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "4\n-1\n4\n-1\ntrue\nfalse\n7\n"
 extend i32 halved() Maybe@(i32):

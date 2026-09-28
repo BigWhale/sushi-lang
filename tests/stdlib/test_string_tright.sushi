@@ -1,6 +1,5 @@
 # EXPECT_STDOUT_EXACT: "hello\n  world\n  test\n\n\nhello\n👋\n"
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_CONTAINS: hello
 # EXPECT_STDOUT_CONTAINS:   world

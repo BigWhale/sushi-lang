@@ -1,6 +1,5 @@
 # A struct that HOLDS a resource type has no derived clone either: cloning it would
 # copy the descriptor one level down.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2431
 struct Handle:
     i32 id

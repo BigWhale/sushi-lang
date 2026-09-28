@@ -3,7 +3,7 @@
 # the consumer reports none of them and exits 0 (#1007).
 # BUILD_LIB: lint_tpl_lib.sushi
 # EXPECT_STDOUT_EXACT: "2\n"
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 use <lib/lint_tpl_lib>
 
 fn main() i32:

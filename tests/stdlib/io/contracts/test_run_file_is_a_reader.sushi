@@ -1,6 +1,5 @@
 # A File satisfies Reader, so a generic that asks for the contract takes one. This is the
 # whole point of the phase: the caller names a capability, not a type.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

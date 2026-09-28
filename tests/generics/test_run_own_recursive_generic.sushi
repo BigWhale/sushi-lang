@@ -1,7 +1,7 @@
 # A recursive generic enum whose recursion passes through an
 # opaque Own@(T) pointer (enum Tree@(T): Node(Own@(Tree@(T)))) used to blow the Python
-# stack in the monomorphizer, because monomorphize_enum wrote its cache entry only
-# AFTER substituting every field, so the self-referential field re-entered forever.
+# stack in the monomorphizer, because monomorphize_enum wrote its cache entry
+# only AFTER substituting every field, so the self-referential field re-entered forever.
 #
 # The monomorphizer now ties the knot: it publishes an empty shell into the cache
 # before substituting, so the self-reference resolves to that shell by identity and

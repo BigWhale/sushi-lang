@@ -1,6 +1,5 @@
 # into_inner() ends the buffer and hands the handle back still working. The writer's own
 # buffer is destroyed by the take, and the handle it gives up is the one the caller opened.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

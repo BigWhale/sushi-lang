@@ -3,7 +3,6 @@
 # instead of falling through to its layout heuristic (#387). Before, that heuristic
 # answered `Maybe<i32>` for a `Maybe@(string)`: `.realise()` was a CE0017 and `.expect()`
 # printed an integer where the string was -- silent wrong data.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "marvin\nmarvin\ntrue\nfalse\nford\n4\ntrue\n21\n"

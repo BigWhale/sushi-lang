@@ -1,4 +1,4 @@
-# PROMOTED, not merely tolerated: a reference PARAMETER inside a function type
+# Promoted, not merely tolerated: a reference PARAMETER inside a function type
 # (`fn(peek i32) -> i32`) is the one supported reference position, wherever the function
 # type itself appears. It worked by accident of the general machinery and had no test; the
 # position rejections (CE2415-CE2420) deliberately carve it out, so it needs one.

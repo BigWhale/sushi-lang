@@ -1,6 +1,5 @@
 # The whole stdin path at once: read to EOF, count as you go, and prove that a blank line
 # in the middle is a line rather than the end (a Some("") and not a None, ruling R22).
-# TEST_TYPE: runtime
 # STDIN_INPUT: "One\nTwo\n\nFour\n"
 # EXPECT_STDOUT_EXACT: "=== stdin lines ===\nReading lines from stdin until EOF...\n\nLine 1: One\nLine 2: Two\nLine 3: \nLine 4: Four\n\nTotal lines read: 4\n"
 # EXPECT_RUNTIME_EXIT: 0

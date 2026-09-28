@@ -1,7 +1,6 @@
 # The hole ruling R11 closes was never about handles: `List@(T)` and `T[]` have it too.
 # The same three modes, over both -- read through a bare binding, write through `poke`,
 # take with `nom`.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "read 3\npoked 4\narray 3\nlist 2\n"

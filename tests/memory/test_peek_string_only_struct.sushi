@@ -3,8 +3,8 @@
 # the caller keeps the struct and can still read its field afterward, and the returned
 # field is an explicit clone because the caller still owns the original.
 #
-# This shape is correct before and after Phase 9. The by-value shape it replaces is the
-# COPY tier itself, and stays pinned in the file named above until Phase 9 deletes it.
+# This shape is correct before and after Phase 9. The by-value shape it replaces is
+# the COPY tier itself, and stays pinned in the file named above until Phase 9 deletes it.
 # EXPECT_STDOUT_EXACT: "in=hi src=hi\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

@@ -1,5 +1,3 @@
-# TEST_TYPE: compilation
-
 struct Box@(T):
     T value
 

@@ -1,6 +1,5 @@
 # What feature B is for: a generic wrapper around an owning handle. `drop()` runs FIRST,
 # then the owning fields, so the wrapper gets its say before the descriptor closes.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

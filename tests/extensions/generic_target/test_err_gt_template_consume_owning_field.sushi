@@ -3,7 +3,6 @@
 # classified PLAIN and no ownership decision was stamped. `return self.value` at
 # `Box@(string)` compiled clean and the binary exited 133: a compile-clean DOUBLE FREE,
 # where the plain-target twin is correctly CE2411 (#391).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2411
 struct Box@(T):
     T value

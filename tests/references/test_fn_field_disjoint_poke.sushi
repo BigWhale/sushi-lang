@@ -1,5 +1,5 @@
-# The disjoint control for #365: the same callee, the same reallocating pushes, two
-# DIFFERENT arrays. This must keep compiling and keep reading the right values.
+# The disjoint control for #365: the same callee, the same reallocating pushes,
+# two DIFFERENT arrays. This must keep compiling and keep reading the right values.
 #
 # It is here because a test that only pins CE2407 on both call spellings would still pass
 # if the rule came back somewhere that does not cover the aliasing read. The four pushes

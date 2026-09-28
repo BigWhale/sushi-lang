@@ -1,7 +1,6 @@
 # A TcpStream satisfies Reader and Writer, so the same generic serves a socket and a file.
 # Connect before accept: a listening socket completes the connection itself, so accept()
 # answers at once and this needs no second process.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_OPEN_FDS: true
 # EXPECT_STDOUT_EXACT: "sent through the contract\nserver read: Mostly Harmless\n"

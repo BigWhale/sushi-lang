@@ -1,6 +1,5 @@
 # A temporary scrutinee is owned by the match, and a `nom` binding nested inside an
 # `Own(...)` pattern is still refused: the heap cell would have no owner (CE2434).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2434
 enum Inner:
     Word(string)

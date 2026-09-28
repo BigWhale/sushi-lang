@@ -1,7 +1,6 @@
 # `contains(v)` asks membership and `index_of(v)` asks WHERE, as Maybe@(i32).
 # Both walk left to right, so `index_of` answers the FIRST match. An empty array
 # contains nothing. Both array kinds answer.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\nfalse\n1\nnone\ntrue\n0\n2\nfalse\nnone\ntrue\n"

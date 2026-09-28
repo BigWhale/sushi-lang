@@ -4,8 +4,8 @@
 # classify the same way.
 #
 # `Shape.Empty` parses as a MemberAccess -- receiver `Shape`, member `Empty` --
-# structurally indistinguishable from a field read, so it classified as a BORROW. But it
-# CONSTRUCTS a payload-free variant and owns what it makes. The answer therefore comes
+# structurally indistinguishable from a field read, so it classified as a BORROW. But
+# it CONSTRUCTS a payload-free variant and owns what it makes. The answer therefore comes
 # from the tables, not the shape: the receiver names an enum and the member is one of its
 # variants.
 #

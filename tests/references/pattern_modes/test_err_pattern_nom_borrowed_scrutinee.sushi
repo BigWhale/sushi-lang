@@ -1,6 +1,5 @@
 # Ruling R11: a plain `match r:` BORROWS its scrutinee, so no arm may take the payload
 # out of it -- the local still owns it and still frees it. The escape is `match nom r:`.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2432
 # EXPECT_STDERR_CONTAINS: "match nom r:"
 fn make() i32[]:

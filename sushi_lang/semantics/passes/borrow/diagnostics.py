@@ -232,6 +232,17 @@ def write_escape(checker: 'BorrowChecker', text: str, ty) -> str:
     return escape_help(checker, text, ty, handover=False)
 
 
+def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
+    """The tail a refused write through a parameter offers after its `poke` escape.
+
+    The copy escape for a type that can be cloned, and only the escapes that compile for
+    a type that owns a resource (CE2431, #1039).
+    """
+    if not refuses_clone(checker, ty):
+        return f", or take an independent value with `{text}.clone()`"
+    return " -- otherwise " + escape_help(checker, text, ty, handover=False)
+
+
 def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
     text = expr_to_string(expr)

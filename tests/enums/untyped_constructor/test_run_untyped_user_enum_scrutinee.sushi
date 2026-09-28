@@ -1,6 +1,5 @@
 # A user generic enum follows the same rule as `Maybe` (#1005): `Slot.Full(7)` with no
 # declared type is `Slot@(i32)`.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "7\n"
 

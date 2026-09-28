@@ -1,6 +1,5 @@
 # An empty array has no first and no last element, so both answer `Maybe.None()`
 # for every element type. Nothing is invented and nothing leaks.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\n-1\nnone\n"

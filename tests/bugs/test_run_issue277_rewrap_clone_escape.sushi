@@ -1,7 +1,7 @@
 # Issue #277 companion: the escape CE2411 names. Re-wrapping a match binding through
 # `.clone()` hands the constructor an independent value, so the arm's borrow and the
 # new owner each free their own buffer -- no double free, no leak.
-# NOTE: `t` is initialized with the explicit constructor `Shape.Empty()`. The bare
+# Note: `t` is initialized with the explicit constructor `Shape.Empty()`. The bare
 # member spelling `Shape.Empty` leaves the binding UNREGISTERED for cleanup, so a
 # later rebind's owning payload leaks -- a separate pre-existing defect, filed with
 # the Phase 12 batch.

@@ -1,7 +1,6 @@
 # A USER generic enum and a generic struct named in the signature of a generic-target
 # extension, and an OWNING signature type. One collection step covers every kind -- the
 # gap was the list that was never walked, not the type that was named (#389).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "42\nempty\nmarvin\n0\n9\n"

@@ -15,14 +15,16 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
+import threading
 import time
 import os
 from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
-                          TestMetadata, fixture_binary_name,
+                          TestMetadata, fixture_binary_name, fixture_id,
                           select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
+                       helpers_for_selection,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
@@ -330,7 +332,7 @@ class TestResult:
 class TestRunner:
     """Enhanced test runner with compilation and runtime testing."""
 
-    def __init__(self, tests_dir: Path, mode: str = "full", verbose: bool = False,
+    def __init__(self, tests_dir: Path, verbose: bool = False,
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
                  compile_only: bool = False, project_root: Optional[Path] = None):
@@ -339,7 +341,6 @@ class TestRunner:
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
-        self.mode = mode
         self.verbose = verbose
         self.parallel_jobs = default_jobs() if parallel_jobs is None else parallel_jobs
         self.json_output = json_output
@@ -357,8 +358,10 @@ class TestRunner:
         self.leaks_checked: List[str] = []
         self.leaks_skipped: List[Tuple[str, str]] = []
         self.temp_dir = None
-        # The copy each directory fixture compiles and runs in, by test name, while it runs.
+        # The copy each directory fixture compiles and runs in, by `_key`, while it runs.
         self._workspaces: Dict[str, Workspace] = {}
+        # The fixture each worker thread runs. The leak re-run reads its directory here.
+        self._running = threading.local()
         # The stdlib doc-block gate's verdict (#953), set by main before the run.
         self.doc_gate: Optional[DocGateResult] = None
         # The live tqdm bar, or None. Set only while the bar is on screen, so _emit
@@ -451,8 +454,7 @@ class TestRunner:
 
         if not self.json_output:
             print(f"Running {len(test_files)} tests with {self.parallel_jobs} parallel jobs...")
-            if self.mode != "compile":
-                print(f"Using temporary directory: {self.temp_dir}")
+            print(f"Using temporary directory: {self.temp_dir}")
             print()
 
         start_time = time.time()
@@ -462,7 +464,7 @@ class TestRunner:
         show_progress = not self.json_output and not self.verbose
         with ThreadPoolExecutor(max_workers=self.parallel_jobs) as executor:
             # Submit all test jobs
-            future_to_test = {executor.submit(self.run_single_test, test_file): test_file.name
+            future_to_test = {executor.submit(self.run_single_test, test_file): test_file
                              for test_file in test_files}
 
             # Sticky bar on an interactive terminal, tqdm everywhere else. Both expose
@@ -479,16 +481,17 @@ class TestRunner:
             try:
                 # Collect results as they complete
                 for future in as_completed(future_to_test):
-                    test_name = future_to_test[future]
+                    test_file = future_to_test[future]
+                    test_name, key = test_file.name, self._key(test_file)
                     try:
                         result = future.result()
-                        results[test_name] = result
+                        results[key] = result
                         if not self.json_output and (self.verbose or not result.total_success):
                             self._print_test_result(result)
                     except Exception as e:
                         if not self.json_output:
                             self._emit(f"ERROR: Test {test_name} crashed: {e}")
-                        results[test_name] = TestResult(
+                        results[key] = TestResult(
                             name=test_name,
                             category="error",
                             compilation_success=False,
@@ -533,13 +536,16 @@ class TestRunner:
         if refusal is not None:
             return TestResult(name=test_name, category=category, compilation_success=False,
                               compilation_message=refusal, skipped_runtime=True)
+        key = self._key(test_file)
         if workspace is not None:
-            self._workspaces[test_name] = workspace
+            self._workspaces[key] = workspace
+        self._running.test_file = test_file
         try:
             return self._compile_and_run(test_file, test_name, category, metadata)
         finally:
+            self._running.test_file = None
             if workspace is not None:
-                self._workspaces.pop(test_name, None)
+                self._workspaces.pop(key, None)
                 shutil.rmtree(workspace.home, ignore_errors=True)
 
     def _compile_and_run(self, test_file: Path, test_name: str, category: str,
@@ -553,9 +559,8 @@ class TestRunner:
             compilation_message=compilation_message
         )
 
-        # Step 2: runtime (if applicable and requested)
-        if (self.mode in ("runtime", "full") and
-            compilation_success and
+        # Step 2: runtime, for every fixture that runs a binary
+        if (compilation_success and
             test_name not in RUNTIME_QUARANTINE and
             should_run_runtime_test(test_file, metadata)):
 
@@ -569,6 +574,14 @@ class TestRunner:
             result.total_success = result.compilation_success
 
         return result
+
+    def _key(self, test_file: Path) -> str:
+        """A fixture's key in `results` and `_workspaces`: its path under `tests/`."""
+        return fixture_id(test_file, self.tests_dir) + test_file.suffix
+
+    def _workspace(self, test_file: Path) -> Optional["Workspace"]:
+        key = self._key(test_file)
+        return self._workspaces.get(key)
 
     # --- directory fixtures (#988) -------------------------------------------
 
@@ -685,7 +698,7 @@ class TestRunner:
         process id was not unique: a run is threads in ONE process, so the id is constant
         and a shared stem was a shared binary (#604).
         """
-        workspace = self._workspaces.get(test_file.name)
+        workspace = self._workspace(test_file)
         if metadata.output_path is not None and workspace is not None:
             return workspace.root / metadata.output_path
         return Path(self.temp_dir) / fixture_binary_name(test_file, self.tests_dir)
@@ -701,13 +714,16 @@ class TestRunner:
         Force NO_COLOR so diagnostic codes/messages land in stderr without ANSI escapes,
         keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
         """
-        workspace = self._workspaces.get(test_file.name)
+        workspace = self._workspace(test_file)
         env = {**os.environ, "NO_COLOR": "1"}
         cwd = self.project_root
         source = str(test_file)
-        cache_flags: List[str] = []
+        # A fixture with no copy of its own shares the run's cache: the compiler's
+        # default puts it beside the source, in the tree.
+        cache_flags: List[str] = ["--cache-dir", str(Path(self.temp_dir) / "cache")]
         output = str(binary_path)
         if workspace is not None:
+            cache_flags = []
             source = str(workspace.source)
             if metadata.run_in_fixture_dir:
                 cwd, source = workspace.root, workspace.source.name
@@ -745,7 +761,7 @@ class TestRunner:
         It must build, into a cache nobody filled, and its binary must print what
         EXPECT_STDOUT_EXACT_BEFORE_REBUILD says. Returns the failure, or None.
         """
-        workspace = self._workspaces[test_file.name]
+        workspace = self._workspaces[self._key(test_file)]
         first = binary_path.with_name(binary_path.name + "__before_rebuild")
         done = self._invoke_compiler(test_file, metadata, first)
         if done.returncode not in (0, 1) or spelling_gate_tripped(done.stderr):
@@ -759,7 +775,7 @@ class TestRunner:
         if metadata.expect_stdout_exact_before_rebuild is not None:
             ran = subprocess.run([str(first)], capture_output=True, text=True,
                                  timeout=metadata.timeout_seconds,
-                                 cwd=self._runtime_cwd(test_file.name, metadata))
+                                 cwd=self._runtime_cwd(test_file, metadata))
             if (ran.returncode != 0
                     or ran.stdout != metadata.expect_stdout_exact_before_rebuild):
                 return ("✗ Runtime: the binary before the rebuild\n"
@@ -790,11 +806,11 @@ class TestRunner:
                            + "\n  ".join(problems))
         return True, "✓ Compilation: the rebuild report matched"
 
-    def _runtime_cwd(self, test_name: str, metadata: TestMetadata) -> Optional[str]:
+    def _runtime_cwd(self, test_file: Optional[Path], metadata: TestMetadata) -> Optional[str]:
         """TEST_CWD, else the fixture's copy for RUN_IN_FIXTURE_DIR, else the runner's."""
         if metadata.test_cwd:
             return metadata.test_cwd
-        workspace = self._workspaces.get(test_name)
+        workspace = None if test_file is None else self._workspace(test_file)
         if workspace is not None and metadata.run_in_fixture_dir:
             return str(workspace.root)
         return None
@@ -809,7 +825,7 @@ class TestRunner:
             'runtime': 0,    # Should succeed without warnings
         }
         expected_exit_code = expected_exit_codes.get(category, 0)
-        workspace = self._workspaces.get(test_file.name)
+        workspace = self._workspace(test_file)
 
         try:
             binary_path = self._binary_path(test_file, metadata)
@@ -882,7 +898,7 @@ class TestRunner:
         cache: the runner fails the fixture when that cache was there before and is gone.
         """
         form = metadata.then_clean_cache
-        workspace = self._workspaces[test_file.name]
+        workspace = self._workspaces[self._key(test_file)]
         missing = [path for path in metadata.expect_paths_exist_before_clean
                    if not (workspace.root / path).exists()]
         if missing:
@@ -976,7 +992,7 @@ class TestRunner:
                 text=True,
                 timeout=metadata.timeout_seconds,
                 env=run_env,
-                cwd=self._runtime_cwd(test_name, metadata),
+                cwd=self._runtime_cwd(test_file, metadata),
             )
 
             # Validate runtime behavior
@@ -1040,7 +1056,7 @@ class TestRunner:
             stderr=subprocess.PIPE,
             text=True,
             env=run_env,
-            cwd=self._runtime_cwd(test_name, metadata),
+            cwd=self._runtime_cwd(getattr(self._running, "test_file", None), metadata),
             start_new_session=True,
         )
         try:
@@ -1291,21 +1307,12 @@ class TestRunner:
                         print(f"  {name}: {tint(reason, RED)}")
 
 
-def main():
-    """Main entry point for the enhanced test runner."""
-    arm_spelling_gate()
-
+def build_parser() -> argparse.ArgumentParser:
+    """The runner's options. Each one SELECTS fixtures or shapes the report; none weakens a check."""
     # allow_abbrev=False for the same reason as in run_tests.py: --leaks is gone and
     # must not resolve as a prefix of --leaks-only.
     parser = argparse.ArgumentParser(description="Enhanced Sushi language test runner",
                                      allow_abbrev=False)
-
-    parser.add_argument(
-        "--mode",
-        choices=["compile", "runtime", "full"],
-        default="full",
-        help="Testing mode: compile-only, runtime-only, or full (default: full)"
-    )
 
     parser.add_argument(
         "--verbose", "-v",
@@ -1362,7 +1369,13 @@ def main():
              "asserted in full"
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    """Main entry point for the enhanced test runner."""
+    arm_spelling_gate()
+    args = build_parser().parse_args()
 
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
@@ -1375,7 +1388,12 @@ def main():
             if not args.json:
                 print("Failed to build stdlib, aborting tests")
             return 1
-        if not build_test_helpers(project_root, args.verbose):
+        # A whole run builds every helper; a narrowed one, the helpers it can import.
+        narrowed = args.filter or args.leaks_only or args.compile_only
+        needed = (helpers_for_selection(tests_dir, select_fixtures(
+            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
+            compile_only=args.compile_only)) if narrowed else None)
+        if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
             return 1
@@ -1398,7 +1416,7 @@ def main():
     libs_bin_dir = tests_dir / "libs" / "bin"
     os.environ["SUSHI_LIB_PATH"] = str(libs_bin_dir)
 
-    with TestRunner(tests_dir, args.mode, args.verbose, args.jobs, args.json,
+    with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only) as runner:
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,

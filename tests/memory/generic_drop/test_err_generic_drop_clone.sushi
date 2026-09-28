@@ -1,6 +1,5 @@
 # A declared resource refuses `.clone()` whatever declared it. The instantiation carries
 # the implementation, so `Guard@(i32)` answers CE2431 exactly as a plain `Handle` does.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2431
 struct Guard@(T):
     T value

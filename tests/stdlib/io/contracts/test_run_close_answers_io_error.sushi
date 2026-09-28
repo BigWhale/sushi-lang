@@ -1,6 +1,5 @@
 # close() moved onto IoError with the rest of the data path, so a function that reads and
 # then closes explicitly needs no conversion on its last line.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

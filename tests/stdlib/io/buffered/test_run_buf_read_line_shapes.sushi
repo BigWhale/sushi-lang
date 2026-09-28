@@ -1,7 +1,6 @@
 # The three answers read_line() has to keep apart: a blank line is Some(""), a last line
 # with no newline after it is still a line, and only the end of input is None. The window
 # is 8 bytes here, so every line but the first spans a refill.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

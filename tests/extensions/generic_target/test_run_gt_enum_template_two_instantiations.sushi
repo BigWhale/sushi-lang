@@ -1,7 +1,6 @@
 # An extension on a generic ENUM target (#394): the template monomorphizes per
 # instantiation, exactly like the struct twin. The monomorphization loop used to
 # walk struct instantiations only, so no copy was made and every call was CE2008.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\n3\nfalse\n9\nmarvin\n"

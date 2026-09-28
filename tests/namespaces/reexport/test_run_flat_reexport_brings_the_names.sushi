@@ -2,7 +2,6 @@
 # `Sign` bare, constructs a Vec, matches on geometry's variants and calls geometry's
 # `origin()` beside shapes' own `area()`. One flat import, two units' names
 # (unit-namespaces.md section 8.1, Ruling 7, rule 1).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "2 9 3 minus\n"
 use "helpers/shapes"

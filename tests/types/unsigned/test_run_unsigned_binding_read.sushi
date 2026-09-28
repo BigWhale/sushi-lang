@@ -1,7 +1,6 @@
 # The read shapes that already printed unsigned before issue #379 was fixed --
 # a `foreach` binding, a `match` binding, and a `const`. They are the control
 # column: the bug was in the shapes with no the typecheck pass stamp, not in the formatter.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "255\n4294967295\n18446744073709551615\n65535\n4294967295\n40000\n"

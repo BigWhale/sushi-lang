@@ -1,6 +1,5 @@
 # `free()` on an array of owning elements destroys each element, frees the buffer and
 # leaves an empty array that is still usable. A plain element array frees the buffer only.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "0\n1\nagain\n0\n"

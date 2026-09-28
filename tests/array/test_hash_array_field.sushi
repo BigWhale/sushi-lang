@@ -1,5 +1,4 @@
 # EXPECT_STDOUT_EXACT: "Hash: 11406684929655442258\n"
-# TEST_TYPE: error
 # Test that structs with array fields show clear error messages
 
 struct Container:

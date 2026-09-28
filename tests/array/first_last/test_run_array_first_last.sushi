@@ -1,6 +1,5 @@
 # `first()` and `last()` are `get()` with the index built in: 0, and len - 1.
 # Both answer Maybe@(T) the way `get` does, on a fixed and on a dynamic array.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "10\n30\n7\n7\n10\n30\n3\n"

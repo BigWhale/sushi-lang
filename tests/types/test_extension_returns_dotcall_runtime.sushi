@@ -2,7 +2,6 @@
 # NOT Result.Ok/Result.Err (here a method-call on self) must still compile and
 # run. CE2091 must only fire for Result.Ok(...)/Result.Err(...) wrappers, never
 # for a legitimate method-call DotCall return.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "42\n"
 extend i32 next() i32:

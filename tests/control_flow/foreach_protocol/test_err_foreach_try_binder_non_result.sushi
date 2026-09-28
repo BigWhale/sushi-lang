@@ -1,7 +1,6 @@
 # The `??` binder unwraps a Result, so an item that is not one has nothing to unwrap.
 # CE2515 is a different question (a chained call whose channel is unhandled) and CE2516
 # is the condition sibling, so the refusal is its own code.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2517
 
 struct Countdown:

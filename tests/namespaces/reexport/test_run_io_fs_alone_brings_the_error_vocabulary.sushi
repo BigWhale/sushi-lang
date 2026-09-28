@@ -2,7 +2,6 @@
 # `SeekFrom.Start` and `FileError.NotFound`: `<io/fs>` re-exports `<io/contracts>`, which
 # re-exports `<io/error>`, the home of both error enums (#586, the stdlib application).
 # Until #586 every one of those names needed its own `use <io/contracts>` line.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "not found\nstart\nfile not found\n"

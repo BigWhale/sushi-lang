@@ -1,6 +1,5 @@
 # A lambda carries its own parameter and return annotations. They were copied unchanged,
 # so a monomorphized body held a `fn(T) -> T` the declared type could not accept (#602).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3\n"

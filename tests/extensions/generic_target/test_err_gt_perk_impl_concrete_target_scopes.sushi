@@ -2,10 +2,9 @@
 # a concrete generic target has always scoped correctly: `extend Box@(i32) with Tagger`
 # answers a `Box@(i32)` receiver and reports "no such method" for a `Box@(string)` one.
 #
-# The extension path and the perk-impl path disagreed about what a concrete target argument
-# MEANS -- one question, two answer sites, which is the #239 class of defect. This test is
+# The extension path and the perk-impl path disagreed about what a concrete target
+# argument MEANS -- one question, two answer sites, which is the #239 class of defect. This test is
 # the side that was already right, so it must stay right.
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2008
 # EXPECT_STDERR_CONTAINS: "Box@(string).tag"
 perk Tagger:

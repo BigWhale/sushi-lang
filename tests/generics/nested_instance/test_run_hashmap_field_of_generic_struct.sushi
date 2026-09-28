@@ -1,6 +1,5 @@
 # A `HashMap@(i32, B)` field of a generic struct, the same root as the List field
 # (#577, face b).
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1 towel\n"

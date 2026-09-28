@@ -1,7 +1,6 @@
 # The marker means one thing in every consuming position, so a `nom` ARGUMENT takes the
 # field too. `w` is spent by the call, exactly as it is by a `let` take or a `return`
 # one, and the handle is freed once -- by the callee.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

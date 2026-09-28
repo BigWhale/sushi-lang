@@ -1,7 +1,6 @@
 # read_at() takes the offset as an ARGUMENT, so the descriptor's own position does not
 # move: a read at 7 and then a read at 0 answer the bytes at 7 and at 0, and a sequential
 # read afterwards still starts at the beginning.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

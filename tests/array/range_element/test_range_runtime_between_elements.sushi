@@ -1,5 +1,5 @@
-# A run-time element may sit anywhere in a `from()` literal, because the fill threads a
-# CURSOR rather than a compile-time start (#478, Phase 3).
+# A run-time element may sit anywhere in a `from()` literal, because the fill threads
+# a CURSOR rather than a compile-time start (#478, Phase 3).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "6 -1 0 1 2 3 99\n"

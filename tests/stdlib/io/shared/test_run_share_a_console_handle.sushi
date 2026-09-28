@@ -1,7 +1,6 @@
 # The console constants are Files the program does not own. share() on one answers a
 # descriptor the program DOES own: it writes through to the same terminal, and it closes
 # on drop without touching descriptor 1.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true

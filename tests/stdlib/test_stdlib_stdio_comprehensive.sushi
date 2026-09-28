@@ -1,4 +1,3 @@
-# TEST_TYPE: runtime
 # STDIN_INPUT: "Testing!\n"
 # EXPECT_STDOUT_EXACT: "Test 1: Basic write\nTest 2: Write bytes: Hello\nTest 3: Enter a line (or skip with empty): You entered: Testing!\n"
 # EXPECT_STDERR_CONTAINS: "stderr: This is an error message"

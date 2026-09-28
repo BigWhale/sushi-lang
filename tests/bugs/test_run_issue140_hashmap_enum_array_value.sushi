@@ -1,6 +1,6 @@
 
-# Issue #140: a HashMap can hold an enum value with a `T[]` payload -- the enum constructor
-# MOVES the named array in, and `free` destroys the entry exactly once.
+# Issue #140: a HashMap can hold an enum value with a `T[]` payload -- the enum
+# constructor MOVES the named array in, and `free` destroys the entry exactly once.
 # https://github.com/BigWhale/sushi-lang/issues/140
 #
 # The read is a BORROW since #242, so the get-out is bound and read in place rather than

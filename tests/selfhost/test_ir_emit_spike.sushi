@@ -1,9 +1,8 @@
 # EXPECT_RUNTIME_EXIT: 0
-# TEST_TYPE: runtime
 # EXPECT_STDOUT_EXACT: "emit=OK\ncompile=OK\nran exit=42\n"
 # TIMEOUT_SECONDS: 60
 #
-# ROADMAP R2.1 - object-emission spike. Proves the self-host "emit text LLVM IR,
+# Roadmap item R2.1 - object-emission spike. Proves the self-host "emit text LLVM IR,
 # then shell out to clang" path end-to-end FROM SUSHI: a Sushi program builds a
 # trivial .ll module as text, writes it with io/files, compiles it via
 # run("clang", ...), then runs the produced native binary and observes its exit
@@ -11,7 +10,7 @@
 #
 # Requires clang on PATH (the same toolchain the Sushi compiler links with).
 #
-# TIMEOUT_SECONDS is raised off the 10s default because this is the only test that
+# The `TIMEOUT_SECONDS` value is raised off the 10s default because this is the only test that
 # spawns a full clang compile AND executes its output. That default is calibrated
 # for running an already-built binary; a cold clang on a loaded CI runner competing
 # with the other parallel jobs has blown through it (a macOS job timed out here at

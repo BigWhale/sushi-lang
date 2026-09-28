@@ -3,7 +3,7 @@
 # consumer no warning and do not change the exit status (#1007).
 # STDLIB_MODULE: fixture/lint_mod=lint_mod.sushi
 # EXPECT_STDOUT_EXACT: "3\n"
-# EXPECT_STDERR_EMPTY
+# EXPECT_STDERR_EMPTY: true
 use <fixture/lint_mod>
 
 fn main() i32:

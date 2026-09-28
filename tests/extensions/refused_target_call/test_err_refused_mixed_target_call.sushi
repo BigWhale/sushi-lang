@@ -1,7 +1,6 @@
 # A target that mixes a concrete argument with a type parameter is refused (CE2098),
 # and the method is not filed. A call of the refused method is not an undefined name:
 # the declaration already carries the one diagnostic, so no call adds a CE2008 (#808).
-# TEST_TYPE: error
 # EXPECT_ERROR_CODE: CE2098
 struct Box@(T, U):
     T a

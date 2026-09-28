@@ -1,6 +1,5 @@
 # The DECLARED half of `owns_resource`: `Guard@(i32)` holds nothing structural, so it is
 # the perk implementation alone that makes it move. It drops once, at the new owner.
-# TEST_TYPE: runtime
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "eating 1\nreleasing 1\ndone\n"
