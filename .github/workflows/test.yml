@@ -250,7 +250,10 @@ jobs:
           # pipefail so a failing runner is not masked by tee's exit status. This job is
           # the gate AND the source of the sushi badge, so both have to stay honest.
           set -o pipefail
-          uv run python tests/run_tests.py --enhanced --json | tee corpus-results.json
+          # Guard 1 of the fork-server (#1059): this one corpus job starts a fresh
+          # `sushic` process for each compile, as a user does. Every other job compiles
+          # in children of the fork-server.
+          uv run python tests/run_tests.py --enhanced --fresh-processes --json | tee corpus-results.json
 
       # if-no-files-found: error is load-bearing. A runner that died before emitting
       # anything must fail this job, not hand the badge step an empty file to guess at.
