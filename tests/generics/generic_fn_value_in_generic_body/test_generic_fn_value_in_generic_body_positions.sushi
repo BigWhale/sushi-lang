@@ -1,0 +1,39 @@
+# A generic function value is solved by a `let`, a `return`, a struct field
+# and a rebind inside the body of a generic function, and a position that
+# names the type parameter solves it for each instance (#1036).
+# EXPECT_STDOUT_EXACT: "5\n1\n6\nx\n3\ny\n9\n"
+fn gen@(T)(T x) T:
+    return Result.Ok(x)
+
+fn id_i(i32 x) i32:
+    return Result.Ok(x)
+
+struct H:
+    fn(i32) -> i32 f
+
+fn use_let@(U)(U u) U:
+    let fn(U) -> U f = gen
+    return Result.Ok(f(u).realise(u))
+
+fn use_ret@(U)(U u) fn(U) -> U:
+    println(u)
+    return Result.Ok(gen)
+
+fn use_field@(U)(U u) i32:
+    println(u)
+    let H h = H(gen)
+    return Result.Ok(h.f(3).realise(0))
+
+fn use_rebind@(U)(U u) i32:
+    println(u)
+    let fn(i32) -> i32 f = id_i
+    f := gen
+    return Result.Ok(f(9).realise(0))
+
+fn main() i32:
+    println(use_let(5).realise(0))
+    let fn(i32) -> i32 g = use_ret(1).realise(id_i)
+    println(g(6).realise(0))
+    println(use_field("x").realise(0))
+    println(use_rebind("y").realise(0))
+    return Result.Ok(0)

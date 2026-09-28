@@ -253,6 +253,10 @@ class FunctionMonomorphizer:
         concrete_func.body = concrete_body
         concrete_func.type_params = None  # No longer generic
 
+        self._collect_fn_value_instantiations(
+            concrete_func.body, getattr(generic, "unit_name", None),
+            functions=[concrete_func])
+
         self.monomorphizer.func_cache[cache_key] = concrete_func
 
         return concrete_func
@@ -376,6 +380,68 @@ class FunctionMonomorphizer:
         self._collect_block_instantiations(body, var_types)
         self._asking_unit = saved_unit
 
+    def _collect_fn_value_instantiations(self, body: 'Block', unit_name: Optional[str],
+                                         **declarations) -> None:
+        """Every generic function VALUE in one copy, queued for monomorphization (#1036).
+
+        A value is solved by the declared type of its position, and in a template that
+        type can name a type parameter. So the copy is walked, by the instantiate pass's
+        own collector: one rule for every position, in a concrete body and in a copy.
+        `declarations` is the copy as a `Program` field (`functions=`, `extensions=` or
+        `perk_impls=`). An extension or perk copy carries no unit, so it reads the flat view.
+        """
+        tables = self.monomorphizer.tables
+        if tables is None:
+            return
+        namespaces = tables.namespaces.get(unit_name) if unit_name is not None else None
+        if not self._holds_fn_value_candidate(body, unit_name, namespaces):
+            return
+        from sushi_lang.semantics.ast import Program
+        from sushi_lang.semantics.generics.instantiate import InstantiationCollector
+        collector = InstantiationCollector(
+            struct_table=tables.structs.by_name,
+            enum_table=tables.enums.by_name,
+            generic_structs=tables.generic_structs.by_name,
+            generic_funcs=tables.generic_funcs.view_for(
+                unit_name, getattr(namespaces, "scope", None)),
+            func_table=tables.funcs.by_name,
+            tables=tables,
+            namespaces=namespaces,
+        )
+        program = Program(uses=[], constants=[], structs=[], enums=[], perks=[],
+                          functions=[], extensions=[], generic_extensions=[],
+                          perk_impls=[], loc=getattr(body, "loc", None))
+        for kind, decls in declarations.items():
+            setattr(program, kind, decls)
+        _, found = collector.run(program)
+        for key in found:
+            if key not in self.monomorphizer.func_cache:
+                self.monomorphizer.pending_instantiations.add(key)
+
+    def _holds_fn_value_candidate(self, body: 'Block', unit_name: Optional[str],
+                                  namespaces) -> bool:
+        """The copy names a generic function, or a name behind an alias, as a VALUE."""
+        from sushi_lang.semantics.ast import Call, MemberAccess, Name
+        from sushi_lang.semantics.ast_walk import walk_nodes
+        callees: Set[int] = set()
+        found = False
+
+        def visit(node) -> bool:
+            nonlocal found
+            if found:
+                return False
+            if isinstance(node, Call) and isinstance(node.callee, Name):
+                callees.add(id(node.callee))
+            elif isinstance(node, Name) and id(node) not in callees:
+                found = self._generic_def(unit_name, node.id) is not None
+            elif (isinstance(node, MemberAccess) and isinstance(node.receiver, Name)
+                    and namespaces is not None):
+                found = namespaces.is_namespace(node.receiver.id)
+            return not found
+
+        walk_nodes(body, visit)
+        return found
+
     def collect_from_extension_body(self, extend_def: 'ExtendDef') -> Set[Tuple[str, Tuple[Type, ...]]]:
         """Function instantiations in one MONOMORPHIZED extension body (#392).
 
@@ -395,6 +461,7 @@ class FunctionMonomorphizer:
         self._asking_unit = None
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit = saved_unit
+        self._collect_fn_value_instantiations(extend_def.body, None, extensions=[extend_def])
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
@@ -417,6 +484,11 @@ class FunctionMonomorphizer:
         self._asking_unit = None
         self._collect_block_instantiations(method.body, var_types)
         self._asking_unit = saved_unit
+        from sushi_lang.semantics.ast import ExtendWithDef
+        self._collect_fn_value_instantiations(
+            method.body, None, perk_impls=[ExtendWithDef(
+                target_type=target_type, perk_name="", methods=[method],
+                loc=getattr(method, "loc", None))])
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
