@@ -220,4 +220,4 @@ fn main() i32:
   collision-free way distinct from regular-generic symbols.
 
 Phase-0 unit tests (`test_p0t*`) cover the monomorphizer infrastructure; Phase-1 integration tests
-(`tests/variadic/test_variadic_pack_*.sushi`) exercise the full compiler pipeline.
+(`tests/variadic/type_packs/test_variadic_pack_*.sushi`) exercise the full compiler pipeline.

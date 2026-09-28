@@ -75,7 +75,8 @@ def test_every_directive_name_is_one_the_parser_knows():
         f"nothing. Known names: {sorted(PARSER_NAMES)}\n  " + "\n  ".join(unknown))
 
 
-@pytest.mark.parametrize("name", ["test_own_get_copy_at_call", "test_chained_clone_on_getout"])
+@pytest.mark.parametrize("name", ["borrowed_read_at_sink/test_own_get_copy_at_call",
+                                  "clone/test_chained_clone_on_getout"])
 def test_the_leak_gated_memory_tests_really_are_gated(name):
     """Spot-check the parser end to end on files that exist to prove an absence of leaks."""
     from test_metadata import parse_test_metadata

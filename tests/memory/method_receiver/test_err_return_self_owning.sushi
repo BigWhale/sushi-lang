@@ -6,7 +6,7 @@
 # and report `double_frees=1` under the malloc interposer.
 #
 # The escape is the one CE2411 always names: `self.clone()`, pinned by
-# `tests/memory/test_self_read_only_ok.sushi`.
+# `tests/memory/method_receiver/test_self_read_only_ok.sushi`.
 # EXPECT_ERROR_CODE: CE2411
 struct Holder:
     string label

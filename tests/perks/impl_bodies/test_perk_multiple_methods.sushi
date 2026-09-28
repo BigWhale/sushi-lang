@@ -1,4 +1,4 @@
-# tests/test_perk_multiple_methods.sushi
+# tests/perks/impl_bodies/test_perk_multiple_methods.sushi
 # Perk with multiple methods
 # A compile-only claim: the perk has no implementation, so there is no value to check. The run asserts exit 0 and nothing more.
 

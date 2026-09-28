@@ -1,4 +1,4 @@
-# tests/test_perk_basic_parse.sushi
+# tests/perks/perk_declaration/test_perk_basic_parse.sushi
 # Basic perk definition parsing test
 
 perk Display:

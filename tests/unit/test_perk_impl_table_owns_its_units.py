@@ -2,7 +2,7 @@
 
 Decision 11 of `docs/design/visibility.md` keeps the perk-implementation override: a
 consumer's `extend X with P` wins over a library's, which
-`tests/libs/test_lib_perk_impl_local_override.sushi` asserts with an observable result.
+`tests/libs/shipped_perks/test_lib_perk_impl_local_override.sushi` asserts with an observable result.
 The record that answers "which unit declared this implementation" used to live in a
 collector-private dict, so the only thing that could read it was the collector itself.
 It sits beside `implementations` / `by_type` / `by_perk` now, so the collect pass files

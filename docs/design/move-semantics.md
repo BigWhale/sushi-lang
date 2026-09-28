@@ -288,7 +288,7 @@ Ordered so each step is independently verifiable. One PR, red-first tests per pr
 The backend's move/cleanup registries are **slot-identity keyed** since T2.2 (`789e11c`) — not the
 flat name-keyed sets the old code comments describe — so name shadowing and sibling-scope name
 reuse cannot poison a moved struct's sibling. The T2.2 guard tests
-(`tests/memory/test_run_move_then_reuse_name.sushi`, `test_warn_shadow_owning_*.sushi`) must stay
+(`tests/memory/move_semantics/test_run_move_then_reuse_name.sushi`, `test_warn_shadow_owning_*.sushi`) must stay
 green and leak-clean; they are the regression net for this claim.
 
 ---
@@ -300,14 +300,14 @@ first; leak-sensitive tests carry `# EXPECT_NO_LEAKS`; error tests pin the code 
 locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 
 **New tests (red-first):**
-- `tests/memory/test_move_struct_param.sushi` + `test_err_move_struct_param_use_after.sushi`
+- `tests/memory/move_semantics/test_move_struct_param.sushi` + `test_err_move_struct_param_use_after.sushi`
   (CE2405 with "moved here" note) — mirror the existing `test_move_{array,list,own}_param` set.
 - Same pair for an owning **enum** param.
 - `test_move_struct_rebind.sushi` + err twin (rebind moves).
 - `test_move_struct_into_constructor.sushi` + err twin (construction field moves).
 - `test_move_struct_into_array_literal.sushi` + err twin.
 - `test_move_struct_clone_keeps_source.sushi` — `take(buf.clone())`; source usable; zero leaks
-  (mirrors `tests/memory/test_move_clone_keeps_source.sushi`).
+  (mirrors `tests/memory/move_semantics/test_move_clone_keeps_source.sushi`).
 - `test_clone_plain_struct.sushi` — `.clone()` on a plain-data struct works and is a no-op copy.
 - `test_copy_string_only_struct.sushi` — **the string-distinction pin**: a `struct {string}`
   passed by value still copies; source usable; zero leaks. This is the test that fails if the
@@ -326,14 +326,14 @@ locations** of the relational diagnostic; value tests use `EXPECT_STDOUT_EXACT`.
 **Tests that flip (copy → move):**
 - `test_struct_raii.py::test_byvalue_struct_param_freed_by_callee` and
   `::test_byvalue_struct_arg_deep_copied_at_call_site` — rewritten to assert move semantics.
-- `tests/types/test_struct_nested_deep_copy.sushi` (+ `_stress`) — constructor field values
+- `tests/types/structs/test_struct_nested_deep_copy.sushi` (+ `_stress`) — constructor field values
   become moves; rewrite to use `.clone()` where the test genuinely wants two copies (which also
   exercises the new `.clone()`).
 - Any test that reuses a struct after passing it by value (find them by running the suite —
   the failures ARE the inventory; per the F2 lesson, do not trust a grep to find them all).
 
 **Guards that must NOT flip (stay green as-is):**
-- Container get-out copies: `tests/memory/test_array_clone_owning_elements.sushi` *for its
+- Container get-out copies: `tests/memory/clone/test_array_clone_owning_elements.sushi` *for its
   `MemberAccess`/get-out cases*, the #203 `List.get` tests, #200 field-array tests.
 - `test_run_string_array_element_binding.sushi` (N1), HashMap owning-value tests (#140/#154/#219).
 - The T2.2 shadow/move-reuse set (§5.3).

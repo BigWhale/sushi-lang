@@ -132,7 +132,7 @@ def test_a_helper_build_failure_fails_the_build_and_names_the_helper(tmp_path, c
 
 def test_the_real_corpus_reads_a_need_for_every_selection():
     tests_dir = TESTS_DIR
-    io_fixtures = select_fixtures(tests_dir, filter_pattern="io/test_file")
+    io_fixtures = select_fixtures(tests_dir, filter_pattern="io/file_read_write/test_file")
     assert io_fixtures, "control: the io selection is not empty"
     assert run_tests.helpers_for_selection(tests_dir, io_fixtures) == set()
 

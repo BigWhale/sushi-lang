@@ -9,7 +9,7 @@
 # The original defect this file was written for: `_clone_owning_struct_alias`
 # (`statements/variables.py`) returned early for anything that was not a StructType or
 # EnumType, so an `ArrayType` RHS never reached `emit_value_clone` -- which had no arm for it
-# anyway. `tests/memory/test_clone_fixed_array.sushi` pins `string[N].clone()` on its own.
+# anyway. `tests/memory/clone/test_clone_fixed_array.sushi` pins `string[N].clone()` on its own.
 #
 # Interpolated (owned) strings are load-bearing: a literal has owned=0 and never frees.
 # EXPECT_STDOUT_EXACT: "b=a1 src=a1\n"

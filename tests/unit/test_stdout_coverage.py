@@ -40,9 +40,9 @@ from test_metadata import collect_fixtures, corpus_text, parse_test_metadata  # 
 # that is not "no-stdout" carries an issue URL.
 QUARANTINE: dict[str, dict] = {
     # (error path taken before print, uncalled printing helper, or empty-collection iteration)
-    "array/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},
-    "basic/test_function_calls.sushi": {"reason": "no-stdout", "issue": None},
-    "list/test_list_match_get.sushi": {"reason": "no-stdout", "issue": None},
+    "array/bounds/test_dynamic_arrays_bounds_runtime.sushi": {"reason": "no-stdout", "issue": None},
+    "basic/function_calls/test_function_calls.sushi": {"reason": "no-stdout", "issue": None},
+    "list/match_on_get_pop/test_list_match_get.sushi": {"reason": "no-stdout", "issue": None},
     "stdlib/generics/hashmap/test_hashmap_entries_empty.sushi": {"reason": "no-stdout", "issue": None},
     "stdlib/generics/hashmap/test_hashmap_keys_empty.sushi": {"reason": "no-stdout", "issue": None},
 }

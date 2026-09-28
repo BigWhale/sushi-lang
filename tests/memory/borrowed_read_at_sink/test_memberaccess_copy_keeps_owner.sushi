@@ -2,7 +2,7 @@
 #
 # The read BORROWS (#242): the owner keeps the value and still frees it, so the sink may not
 # take it and `.clone()` is the escape. Written WITHOUT the clone this file is CE2411, and
-# `tests/memory/test_err_consume_read_*.sushi` pins that half.
+# `tests/memory/consume_matrix/test_err_consume_read_*.sushi` pins that half.
 #
 # This used to compile with no clone, because the compiler inserted one for you: the
 # provenance was THROUGH_OWNER, which COPIED. Deleting that cell is the point of #242 -- every

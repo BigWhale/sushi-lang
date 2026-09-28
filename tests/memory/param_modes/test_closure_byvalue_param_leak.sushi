@@ -4,7 +4,7 @@
 # marked moved at the call site, a temporary (`make(2)??` here) adopts in, and an inline
 # lambda is no longer caller-registered (the callee frees it). A container get-out or
 # field-read argument stays CE2411; write `.clone()` to hand over an independent value.
-# tests/memory/test_fn_byvalue_param_free.sushi pins the neighbouring shapes.
+# tests/memory/param_modes/test_fn_byvalue_param_free.sushi pins the neighbouring shapes.
 # EXPECT_STDOUT_EXACT: "12\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true

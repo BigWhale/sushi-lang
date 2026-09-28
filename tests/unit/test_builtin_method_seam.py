@@ -213,7 +213,7 @@ def test_recognised(receiver, method):
     (BuiltinType.I32, "squared"),
     (BuiltinType.I32, "to_bits"),          # float-only
     (BuiltinType.BOOL, "to_bits"),
-    (_list(), "sum_all"),                  # the real extension in tests/bugs
+    (_list(), "sum_all"),                  # the real extension in tests/extensions/list_extension_receiver
     (StructType(name="Point", fields=()), "describe"),
     # EVERY File method is an ordinary extension or perk implementation in <io/fs> now,
     # so the seam must claim none of them -- claiming one would make CE2097 reject the

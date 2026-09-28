@@ -6,7 +6,7 @@
 # The leak assertion below also pins the 2026-08-14 fix: an owned `string`
 # temporary that no binding names (`println(go().realise("err"))`) is registered into the
 # print-arg frame and freed after output through the owned-bit-guarded destructor.
-# tests/memory/test_string_temp_print_free.sushi pins the reduced shapes.
+# tests/memory/unbound_temporaries/test_string_temp_print_free.sushi pins the reduced shapes.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "5\nhi-there\n"
 # EXPECT_NO_LEAKS: true

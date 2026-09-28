@@ -573,7 +573,7 @@ class FunctionCollector:
 
         Three answers, and who owns the previous declaration decides which. A library's
         PUBLIC name may be replaced -- symbol priority puts the program's own
-        declaration first, and `tests/libs/test_warn_lib_override.sushi` is that
+        declaration first, and `tests/libs/shadowed_export/test_warn_lib_override.sushi` is that
         contract -- so this warns with CW3002 and the caller completes the replacement.
         Any other unit's declaration COEXISTS, a library's own private one included:
         each takes its own `<unit>$<name>` symbol and each unit's scope reads its own

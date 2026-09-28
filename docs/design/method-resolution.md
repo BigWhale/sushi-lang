@@ -136,7 +136,7 @@ do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs extens
 A perk implementation is Sushi's equivalent of writing a manual trait impl, and it deliberately
 takes precedence at all three layers -- `calls/methods.py` resolves perks before the built-in
 families, `visitor.py` prefers a perk method during inference, and the codegen dispatcher runs
-its perk step before the auto-derived ones. `tests/perks/test_perk_override_hash.sushi` pins it.
+its perk step before the auto-derived ones. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
 
 ```sushi
 struct Point:

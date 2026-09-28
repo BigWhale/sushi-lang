@@ -9,7 +9,7 @@
 # The original defect this file was written for: `emit_value_clone` had no `ArrayType` arm
 # while `emit_value_destructor` did, so the struct clone's gate PASSED for a `string[2]` field
 # and then handed it to a no-op passthrough -- "clone fewer buffers -> double-free".
-# `tests/memory/test_clone_fixed_array.sushi` pins `string[N].clone()` on its own.
+# `tests/memory/clone/test_clone_fixed_array.sushi` pins `string[N].clone()` on its own.
 #
 # Interpolated (owned) strings are load-bearing: a literal has owned=0 and never frees, so it
 # would pass this file whether or not the elements were really duplicated.

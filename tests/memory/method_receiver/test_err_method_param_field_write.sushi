@@ -9,7 +9,7 @@
 # owns its by-value parameter.
 #
 # Escape, and it works today: declare the parameter `poke Holder h`. Pinned by
-# `tests/memory/test_method_param_borrows_ok.sushi`.
+# `tests/memory/method_receiver/test_method_param_borrows_ok.sushi`.
 # EXPECT_ERROR_CODE: CE2422
 struct Holder:
     string label
