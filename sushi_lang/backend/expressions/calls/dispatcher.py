@@ -9,6 +9,7 @@ from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
+from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -26,6 +27,9 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         if not isinstance(fn_type, FunctionType):
             raise_internal_error("CE0027", type=type(expr.callee).__name__)
         fat_value = codegen.expressions.emit_expr(expr.callee)
+        # The callee is a BORROW position: a closure built right here (`(|q| k + q)(2)`)
+        # has no other owner, and its environment is freed at scope exit (#1067).
+        own_temporary(codegen, expr.callee, fat_value, fn_type)
         return _emit_indirect_call(codegen, expr, fat_value, fn_type, to_i1)
 
     callee = expr.callee.id
@@ -159,7 +163,6 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
 
 def _park_argument_temp(codegen: 'LLVMCodegen', arg_expr, value: ir.Value, resolved) -> None:
     """Give a caller-kept argument temporary an owner, so scope exit frees it once."""
-    from sushi_lang.backend.expressions.memory import own_temporary
     ll_type = codegen.types.ll_type(resolved)
     if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
         value = codegen.builder.load(value, name="arg_temp_val")

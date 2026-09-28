@@ -1,0 +1,13 @@
+# The copy of a perk implementation on a generic target is checked in the unit of
+# its template, and that unit cannot name the type argument. The copy names nothing:
+# the argument was written here. This was CE2001 at the `let` of the template.
+# EXPECT_STDOUT_EXACT: "2\n"
+use "helpers/ecopy_holder"
+
+struct Mine:
+    i32 a
+
+fn main() i32:
+    let Holder@(Mine) h = Holder(Mine(1))
+    println(h.put(1))
+    return Result.Ok(0)

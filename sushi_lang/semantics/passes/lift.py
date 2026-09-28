@@ -63,7 +63,7 @@ class LambdaLifter:
         # as a plain fn, so their lambdas lift the same way (#399).
         # program.generic_extensions stays unwalked: templates, like generic
         # fn templates -- their instantiation copies carry the lambdas and are
-        # lifted in _check_monomorphized_extensions.
+        # lifted into the copy's home unit in _check_monomorphized_extensions.
         for ext in list(self.program.extensions):
             self._walk(ext.body)
         for impl in list(self.program.perk_impls):

@@ -45,7 +45,7 @@ def extension_symbol(receiver_display: str, method: str,
     """The ONE symbol of an extension-method instance.
 
     Three consumers agree through this helper: the declaration, the call site, and the
-    weak_odr dedup. The `__{margs}` suffix appears only when method-level type
+    dedup of the copies. The `__{margs}` suffix appears only when method-level type
     arguments exist, so every pre-existing extension symbol is unchanged -- and two
     different solved U's on one receiver are two symbols, never one colliding body.
     """

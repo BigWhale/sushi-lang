@@ -1,0 +1,15 @@
+# An extension on an array target whose body calls a private function (#1064).
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+use "helpers/ecopy_cst"
+
+fn plain(i32 x) i32:
+    return Result.Ok(x)
+
+extend T[] firstish() i32:
+    return plain(self.len()).realise(0)
+
+fn main() i32:
+    let i32[] a = from([5, 6, 7])
+    println(a.firstish())
+    println(tick(1).realise(0))
+    return Result.Ok(0)

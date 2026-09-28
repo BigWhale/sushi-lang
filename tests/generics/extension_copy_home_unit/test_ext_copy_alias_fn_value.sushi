@@ -1,0 +1,16 @@
+# A function behind a `use ... as` alias, used as a value in the copy of an
+# extension method on a generic target (#1065).
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/ecopy_cst" as c
+
+struct Box@(T):
+    T v
+
+extend Box@(T) run() i32:
+    let fn(i32) -> i32 f = c.tick
+    return f(4).realise(0)
+
+fn main() i32:
+    let Box@(bool) b = Box(true)
+    println(b.run())
+    return Result.Ok(0)

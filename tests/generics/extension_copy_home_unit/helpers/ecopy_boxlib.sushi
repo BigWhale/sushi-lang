@@ -1,0 +1,8 @@
+fn plain(i32 x) i32:
+    return Result.Ok(x)
+
+public struct LibBox@(T):
+    T v
+
+extend LibBox@(T) run() i32:
+    return plain(4).realise(0)

@@ -1,0 +1,16 @@
+public struct HeldBox@(T):
+    T v
+    i32 n
+
+public perk Counted:
+    fn counted() i32
+
+extend HeldBox@(T) held() i32:
+    return self.n
+
+extend HeldBox@(T) with Counted:
+    fn counted() i32:
+        return self.n
+
+public fn held_n@(T)(HeldBox@(T) b) i32:
+    return Result.Ok(b.n)

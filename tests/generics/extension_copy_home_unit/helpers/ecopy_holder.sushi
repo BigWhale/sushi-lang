@@ -1,0 +1,14 @@
+public perk Puts:
+    fn put(i32 k) i32
+
+public struct Holder@(T):
+    T v
+
+extend Holder@(T) count(i32 k) i32:
+    let T[] held = from([self.v])
+    return held.len() + k
+
+extend Holder@(T) with Puts:
+    fn put(i32 k) i32:
+        let T[] held = from([self.v])
+        return held.len() + k

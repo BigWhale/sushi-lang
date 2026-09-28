@@ -446,6 +446,12 @@ evaluates to a function value now works, reusing the fat-pointer indirect-call p
 
 - **A `List` get-out or a parenthesized expression**, called immediately: `arr[0]()`, `(e)()`,
   `fns.get(0)??(x)`, `(fns.get(0)??)(x)`.
+- **A lambda literal**, called where it is written: `(|i32 q| k + q)(2)`. The lambda is the same
+  value in the callee position as in a `let`, an argument or a return. The `scope` pass walks
+  every callee that is not a plain `Name`, so the lambda records its captures and each name in a
+  callee expression is resolved and used (#1067). The callee is a BORROW position: a closure
+  built there has no other owner, so the backend gives it one (`own_temporary`) and its
+  environment is freed at scope exit.
 
 Mechanically: the AST builder now emits a general `Call` for a non-`Name`, non-`MemberAccess` call
 base; the type checker infers the non-`Name` callee and, when it resolves to a `FunctionType`,
