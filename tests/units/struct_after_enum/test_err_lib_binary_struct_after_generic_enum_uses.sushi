@@ -3,7 +3,7 @@
 # constructions and the field reads that follow read the lost name and are silent:
 # CE0006 is the one diagnostic.
 # EXPECT_ERROR_CODE: CE0006
-# EXPECT_STDERR_CONTAINS: "struct 'Opt' already defined as enum"
+# EXPECT_STDERR_CONTAINS: "struct 'Opt' already defined as generic enum"
 use <lib/binary_api_lib>
 
 struct Opt:

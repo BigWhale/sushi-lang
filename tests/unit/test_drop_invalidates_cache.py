@@ -15,10 +15,11 @@ from sushi_lang.compiler.fingerprint import compute_unit_fingerprint
 
 
 class _Unit:
-    """The two fields the fingerprint reads, for a unit with no file and no AST."""
+    """The fields the fingerprint reads, for a unit with no file and no AST."""
 
     def __init__(self, name: str) -> None:
         self.name = name
+        self.source = ""
         self.file_path = _MissingPath()
         self.public_symbols: dict = {}
         self.dependencies: set = set()

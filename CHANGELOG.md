@@ -5,6 +5,26 @@ All notable changes to Sushi Lang will be documented in this file.
 ## [Unreleased]
 
 ### Language
+- **One name has one declaration in a unit, whatever its kind** (#1076). Two declarations of
+  one name and different kinds (`fn`, `const`, `var`, `struct`, `enum`, `perk`) had no rule:
+  `const box` beside `fn box` was the internal error CE0000, `struct box` beside `fn box` gave
+  the name to the struct in silence, and a perk beside a type or a function compiled. The
+  second declaration in source order is **CE1005** now, with a note at the first; the first
+  keeps the name, so there is no cascade. Across units a name may repeat: the unit's own
+  function wins over an imported struct of the same name, flat or behind an alias.
+- **CE0006 follows the source order** (#1069). An enum and a struct of one name in one unit
+  always blamed the enum, and the struct kept the name. The second declaration is refused
+  now, and the header names a generic kind (`already defined as generic enum`).
+- **A copy of a generic-target extension method has one home unit** (#1064, #1065). The copy
+  was defined in every module (`weak_odr`) and checked with no unit, so a call to a private
+  function of its unit was CE0000 in a multi-unit build, and a name behind a `use ... as`
+  alias in its body was CE0056 / CE0055. The copy is checked and defined in the unit of its
+  template, as a perk-implementation copy is. The home unit's cache key covers every copy it
+  holds: a copy, a perk copy or a generic instance over a type of a unit that its home does
+  not import read a stale layout after that type changed.
+- **A lambda called where it is written keeps its captures** (#1067). The scope pass walked a
+  callee only when it was a plain name, so `(|i32 q| k + q)(2)` gave a false CW1001 and
+  CE0055 with no location. A temporary callee is now owned and destroyed.
 - **An index, a count and a range bound are `i32`** (#870). The positions did not agree:
   `arr[i]` was strict, `arr.get(i)` took any integer, a range bound took any number, and the
   backend widened a narrow value by ZERO-extension, so `from([7; -1 as i8])` had 255
@@ -277,6 +297,17 @@ All notable changes to Sushi Lang will be documented in this file.
   item is **CE2517**; an unwalkable iterable is CE2033, re-texted. A protocol iterator
   is destroyed on every exit path.
 
+### Fixed
+- **The cache key hashes the text that was compiled** (#1062). It read the unit's file again
+  after the analysis, so a file that changed during a build stored the old object under the
+  new key, and later builds linked stale code. A cache entry and a source-library unit are
+  written atomically. A unit with no source text is the internal error CE0142.
+- **`nori.toml` is read from the working directory only** (#1066). `sushic --lib`, a program
+  compile and `nori` looked in the source directory and every parent. A present manifest must
+  be valid: a bad value is CE3517 now (it was skipped), and a manifest that cannot be read is
+  the new **CE3518**, with the reason from the system. A `[files]` entry that leaves the
+  project is NE2008.
+
 ### Standard Library
 - **The constructor vocabulary: a static is `new`, a free function is a bare verb**
   (#571). A function that builds a value of a type from its arguments and allocates for
@@ -407,6 +438,12 @@ All notable changes to Sushi Lang will be documented in this file.
   and every `NetError` a read can answer has its `IoError` twin. `send` stays: a
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
+
+### Testing
+- **The runner tests run one instance at a time, and only when the runner changes** (#1071).
+  `pytest` excludes them by default (`-m runner` selects them); CI runs them serially, only
+  when a runner file changes or on a push to main. The checkout lock and the
+  `writes_the_checkout` marker are gone, and a runner test on an xdist worker fails at once.
 
 ### Testing
 - **One home per pytest property** (#1051): three duplicate checks deleted, five split properties

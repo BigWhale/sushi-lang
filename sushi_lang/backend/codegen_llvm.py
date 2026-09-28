@@ -400,9 +400,10 @@ class LLVMCodegen:
 
         ONE walk for both build paths: every function, extension and perk-impl method
         is declared before any body is emitted, so a body may call a function that a
-        later unit defines. A monomorphized extension belongs to no unit: it is declared
-        and defined in every module, weak_odr, so the linker keeps one, like a perk-impl
-        method; external linkage was a duplicate symbol (#404). A unit named in
+        later unit defines. A monomorphized extension is declared in every module and
+        defined in the module of its HOME unit alone, the unit that declared its
+        template, like a perk-impl copy (#1064): its body names that unit's private
+        functions and aliases, and one definition is one symbol (#404). A unit named in
         `weak_units` has each of its bodies weakened (`backend/library_linkage.py`).
         """
         from sushi_lang.backend.library_linkage import weaken_all
@@ -453,12 +454,13 @@ class LLVMCodegen:
                     emitted.append(
                         self.functions.emit_extension_method_def(synthetic_ext))
 
+            for ext in self.monomorphized_extensions:
+                if ext.home_unit == unit.name:
+                    emitted.append(self.functions.emit_extension_method_def(ext))
+
             if unit.name in weak_units:
                 weaken_all(emitted)
         self.emitting_unit = None
-
-        for ext in self.monomorphized_extensions:
-            self.functions.emit_extension_method_def(ext).linkage = "weak_odr"
 
     def _declare_library_perk_impl_methods(self) -> None:
         """Declare (never define) library-shipped perk-impl methods (C4a)."""

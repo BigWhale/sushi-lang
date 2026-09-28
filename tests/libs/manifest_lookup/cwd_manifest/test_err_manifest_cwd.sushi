@@ -1,0 +1,9 @@
+# --lib reads the nori.toml in the working directory, and a --lib-version that contradicts
+# it is refused (#1066).
+# RUN_IN_FIXTURE_DIR
+# OUTPUT_PATH: towel.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0
+# EXPECT_ERROR_CODES_EXACT: CE3505
+# EXPECT_STDERR_CONTAINS: "nori.toml says 3.0.0"
+public fn towel() i32:
+    return Result.Ok(42)

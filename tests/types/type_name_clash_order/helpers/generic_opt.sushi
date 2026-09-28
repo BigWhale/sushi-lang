@@ -1,0 +1,3 @@
+public enum Opt@(T):
+    Some(T)
+    Nothing

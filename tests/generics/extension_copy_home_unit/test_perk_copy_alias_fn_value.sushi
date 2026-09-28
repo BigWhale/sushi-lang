@@ -1,0 +1,20 @@
+# A function behind a `use ... as` alias, used as a value in a perk implementation
+# on a generic target. This passes already; it keeps the perk path so.
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/ecopy_cst" as c
+
+perk Runs:
+    fn run() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Runs:
+    fn run() i32:
+        let fn(i32) -> i32 f = c.tick
+        return f(4).realise(0)
+
+fn main() i32:
+    let Box@(bool) b = Box(true)
+    println(b.run())
+    return Result.Ok(0)

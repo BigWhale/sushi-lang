@@ -16,9 +16,6 @@ import pytest
 from _harness import PROJECT_ROOT, FIXTURES_DIR
 from run_tests import build_leakcheck, leakcheck_lib_path
 
-# This module builds the leak interposer that every leak check preloads.
-pytestmark = pytest.mark.writes_the_checkout
-
 FIXTURES = FIXTURES_DIR / "leakcheck"
 IS_DARWIN = sys.platform == "darwin"
 DOUBLE_FREE_LINE = "SUSHI_LEAKCHECK: DOUBLE_FREE"

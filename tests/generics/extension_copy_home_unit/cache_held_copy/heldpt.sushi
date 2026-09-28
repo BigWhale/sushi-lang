@@ -1,0 +1,4 @@
+public struct HeldPt:
+    i32 a
+
+public const HeldPt PT = HeldPt(1)

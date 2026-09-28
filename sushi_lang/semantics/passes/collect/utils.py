@@ -23,10 +23,28 @@ class TypeNameTable(Protocol):
 
 @dataclass(frozen=True)
 class TakenName:
-    """One table a name may already be taken in, and the diagnostic that says so."""
+    """One table a name may already be taken in, and the diagnostic that says so.
+
+    `other` is the holder's kind as the header names it, for the CE0006 rows.
+    """
     table: 'TypeNameTable'
     code: Any
     what: str = "first defined here"
+    other: str = ""
+
+
+def article(word: str) -> str:
+    return "an" if word[:1] in "aeiou" else "a"
+
+
+def type_kind_word(kind: str, generic: bool) -> str:
+    """The word a diagnostic calls a struct or an enum by: `struct`, `generic enum`."""
+    return f"generic {kind}" if generic else kind
+
+
+def type_clash_note(other: str) -> str:
+    """The CE0006 note at the declaration that holds the type name."""
+    return f"already defined as {article(other)} {other} here"
 
 
 def type_name_rules(kind: str, *, structs: 'TypeNameTable',
@@ -45,13 +63,13 @@ def type_name_rules(kind: str, *, structs: 'TypeNameTable',
                         else (enums, generic_enums))
     theirs, theirs_generic = ((enums, generic_enums) if kind == "struct"
                               else (structs, generic_structs))
-    article = "an" if other == "enum" else "a"
+    generic_other = type_kind_word(other, True)
     return (
         TakenName(own, duplicate),
         TakenName(own_generic, duplicate, f"first defined here, as a generic {same}"),
-        TakenName(theirs, ERR.CE0006, f"already defined as {article} {other} here"),
-        TakenName(theirs_generic, ERR.CE0006,
-                  f"already defined as a generic {other} here"),
+        TakenName(theirs, ERR.CE0006, type_clash_note(other), other),
+        TakenName(theirs_generic, ERR.CE0006, type_clash_note(generic_other),
+                  generic_other),
     )
 
 
@@ -134,14 +152,12 @@ def shipped_type_origin(table: Optional['VisibilityTable'],
     return None
 
 
-_OTHER_TYPE_KIND = {"struct": "enum", "enum": "struct"}
-
-
 def reject_duplicate_type_name(
     reporter, kind: str, name: str, name_span: Optional[Span],
     rules: Sequence[TakenName],
     library_clash: Optional[Callable[[str, Optional[Span]], bool]] = None,
     visibility: Optional['VisibilityTable'] = None,
+    generic: bool = False,
 ) -> bool:
     """A TYPE name is one per program: refuse the second declaration of it.
 
@@ -150,7 +166,9 @@ def reject_duplicate_type_name(
     its own note. `library_clash` is the CE3011 arm: a source library's PRIVATE type
     took the name, which is a different fault from the plain duplicate, and it is asked
     once, before the arms, exactly when some table holds the name. `visibility`
-    names the binary library that holds a name the tables carry with no span.
+    names the binary library that holds a name the tables carry with no span. In one
+    unit, source order decides first (`unit_names.py`), so a clash that reaches here
+    between a struct and an enum is one between two units.
     """
     from sushi_lang.internals import errors as er
 
@@ -163,8 +181,9 @@ def reject_duplicate_type_name(
     for rule in rules:
         if name in rule.table.by_name:
             note_first_declaration(
-                er.emit_with(reporter, rule.code, name_span, name=name, kind=kind,
-                             other=_OTHER_TYPE_KIND[kind]),
+                er.emit_with(reporter, rule.code, name_span, name=name,
+                             kind=type_kind_word(kind, generic),
+                             other=rule.other),
                 rule.table.spans, name, what=rule.what, files=rule.table.files,
                 library=shipped_type_origin(visibility, name),
             ).emit()

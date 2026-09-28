@@ -329,6 +329,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def _call_return_type(self, node: Call) -> Optional[Type]:
         """What a call to this callee yields, before the stamp is parked on the node."""
         from sushi_lang.semantics.typesys import FunctionType
+        from sushi_lang.semantics.passes.types.calls.user_defined import (
+            struct_takes_the_call)
         # Call-through any expression yielding a function value (`env.f(x)`,
         # `obj.handler()`, `arr[0]()`). Yields Result<ok, err> like a direct call.
         if not isinstance(node.callee, Name):
@@ -343,7 +345,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if isinstance(callee_var_ty, FunctionType):
             return self._intern_result(callee_var_ty.ok_type, callee_var_ty.err_type)
 
-        if function_name in self.type_validator.struct_table.by_name:
+        if struct_takes_the_call(self.type_validator, function_name):
             return self.type_validator.struct_table.by_name[function_name]
 
         # A declaration answers before a name a flat `use` brought in, exactly as the

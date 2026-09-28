@@ -1,0 +1,13 @@
+# Across units the order is the unit order: the imported generic enum `Opt@(T)`
+# holds the name, and the struct is refused (#1069). The header names the
+# generic kind of the other declaration, as the note does.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+# EXPECT_STDERR_CONTAINS: :9:8: error [CE0006]: struct 'Opt' already defined as generic enum
+# EXPECT_STDERR_CONTAINS: already defined as a generic enum here
+use "helpers/generic_opt"
+
+struct Opt:
+    i32 m
+
+fn main() i32:
+    return Result.Ok(0)

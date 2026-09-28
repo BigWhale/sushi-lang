@@ -1,0 +1,7 @@
+# A lambda that captures nothing, called where it is written.
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_STDERR_EMPTY: true
+fn main() i32:
+    let i32 r = (|i32 q| q + 1)(2).realise(0)
+    println(r)
+    return Result.Ok(0)

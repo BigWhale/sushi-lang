@@ -1,0 +1,17 @@
+# A struct and an enum share one type name, and source order decides (#1069).
+# The struct is first, so it holds the name; the enum is the error, with a
+# note at the struct.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+# EXPECT_STDERR_CONTAINS: :12:6: error [CE0006]: enum 'Box' already defined as struct
+# EXPECT_STDERR_CONTAINS: already defined as a struct here
+# EXPECT_STDERR_CONTAINS: :9:8
+
+struct Box:
+    i32 w
+
+enum Box:
+    Big
+    Huge
+
+fn main() i32:
+    return Result.Ok(0)

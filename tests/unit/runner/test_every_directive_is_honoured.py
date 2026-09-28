@@ -162,7 +162,6 @@ def interposer():
     assert build_leakcheck(PROJECT_ROOT), "the interposer must build"
 
 
-@pytest.mark.writes_the_checkout  # the `interposer` fixture builds the interposer
 def test_a_clean_program_passes_the_leak_check(tmp_path, interposer):
     result = _run(tmp_path, "test_no_leak.sushi",
                   '# EXPECT_NO_LEAKS\n# EXPECT_STDOUT_CONTAINS: "Mostly"\n', PRINTS)
@@ -170,7 +169,6 @@ def test_a_clean_program_passes_the_leak_check(tmp_path, interposer):
     assert "no leaks" in result.runtime_message, result.runtime_message
 
 
-@pytest.mark.writes_the_checkout  # the `interposer` fixture builds the interposer
 def test_a_program_that_closes_its_descriptors_passes_the_fd_check(tmp_path, interposer):
     result = _run(tmp_path, "test_no_open_fd.sushi",
                   '# EXPECT_NO_OPEN_FDS\n# EXPECT_STDOUT_CONTAINS: "Mostly"\n', PRINTS)

@@ -1,0 +1,13 @@
+# The copy of an extension method on a generic target is checked in the unit of its
+# template, and that unit cannot name the type argument. The copy names nothing: the
+# argument was written here (#1064).
+# EXPECT_STDOUT_EXACT: "2\n"
+use "helpers/ecopy_holder"
+
+struct Mine:
+    i32 a
+
+fn main() i32:
+    let Holder@(Mine) h = Holder(Mine(1))
+    println(h.count(1))
+    return Result.Ok(0)

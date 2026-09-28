@@ -1,0 +1,8 @@
+# A capturing lambda called where it is written captures like a `let` (#1067).
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_STDERR_EMPTY: true
+fn main() i32:
+    let i32 k = 3
+    let i32 r = (|i32 q| k + q)(2).realise(0)
+    println(r)
+    return Result.Ok(0)

@@ -1,0 +1,9 @@
+# The template is in an imported unit and calls a private function of THAT unit.
+# This unit only instantiates it (#1064).
+# EXPECT_STDOUT_EXACT: "4\n"
+use "helpers/ecopy_boxlib"
+
+fn main() i32:
+    let LibBox@(bool) b = LibBox(true)
+    println(b.run())
+    return Result.Ok(0)

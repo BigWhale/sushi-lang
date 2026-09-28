@@ -144,7 +144,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     library.add_argument(
         "--lib-version",
         metavar="X.Y.Z",
-        help="Version of the library being built (a nori.toml beside the sources wins)",
+        help="Version of the library being built (must agree with the nori.toml "
+             "in the current directory, when one exists)",
     )
     library.add_argument(
         "--lib-info",

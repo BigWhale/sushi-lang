@@ -11,7 +11,7 @@ from sushi_lang.compiler.loader import (
     load_unit_recursively,
 )
 from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
-from sushi_lang.compiler.cache import CacheManager
+from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Program
@@ -252,10 +252,11 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
                            lib_path: str, cache: CacheManager) -> None:
     """Write a source library's units to disk and add them to the unit table.
 
-    The units are materialized rather than kept in memory because two things read a
-    unit's source off its path: the per-unit Reporter, which needs the text to draw a
-    caret, and `compute_unit_fingerprint`, which hashes it to decide what to rebuild.
-    A real file also gives the consumer somewhere to look when the error is ours.
+    The units are materialized rather than kept in memory because the per-unit
+    Reporter reads a unit's source off its path to draw a caret. A real file also gives
+    the consumer somewhere to look when the error is ours. The cache key does not read
+    the file: it hashes `Unit.source`, the text that was parsed. Two libraries of one
+    name share the directory, so the file is published atomically.
 
     Names are prefixed `lib/<library>/<unit>`, so a library unit can never collide with
     a consumer unit of the same name, and every intra-library dependency is rewritten
@@ -280,9 +281,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     for unit_name, text in sources.items():
         file_path = out_dir / f"{unit_name}.sushi"
         if not file_path.exists() or file_path.read_text(encoding="utf-8") != text:
-            with writing_output(file_path):
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                file_path.write_text(text, encoding="utf-8")
+            publish_atomically(file_path, text.encode("utf-8"))
 
         try:
             module_ast, _tree = parse_to_ast(text, dump_parse=False)
@@ -495,7 +494,7 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
             compilation_order, analyzer, out_path, reporter, options,
             stdlib_units, library_imports, library_linker, unit_manager, cache,
         )
-    return _compile_monolithic(compilation_order, analyzer, src_path, out_path, reporter,
+    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
                                options, library_linker)
 
 
@@ -547,7 +546,7 @@ def _write_ll(cg: 'LLVMCodegen', out_path: Path, reporter: Reporter) -> None:
     print(f"wrote LLVM IR: {ll_path}")
 
 
-def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path: Path,
+def _emit_library(driver, analyzer, compilation_order, out_path: Path,
                   reporter: Reporter, options: BuildOptions) -> bool:
     """Write the `.slib`. False when a gate refused it; the reporter holds why."""
     from sushi_lang.backend.library_manifest import (
@@ -556,8 +555,7 @@ def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path:
     # Resolve the library's own version FIRST: a missing or contradicted version is
     # CE3505, and there is no point compiling bitcode for a library that cannot be
     # stamped (the same reasoning as the export closure below).
-    library_version = resolve_library_version(
-        src_path.resolve().parent, options.lib_version, out_path.stem)
+    library_version = resolve_library_version(options.lib_version, out_path.stem)
     manifest_gen = LibraryManifestGenerator(analyzer)
     # Extract the templates section FIRST: the export closure decides which private
     # functions must carry external (not internal) linkage in the bitcode (their
@@ -598,7 +596,7 @@ def _emit_library(driver, analyzer, compilation_order, src_path: Path, out_path:
     return not reporter.has_errors
 
 
-def _compile_monolithic(compilation_order, analyzer, src_path: Path, out_path: Path,
+def _compile_monolithic(compilation_order, analyzer, out_path: Path,
                         reporter: Reporter, options: BuildOptions, library_linker) -> int:
     """One module for the whole program: a native binary, or a `.slib`."""
     from sushi_lang.backend.driver import LLVMDriver
@@ -606,7 +604,7 @@ def _compile_monolithic(compilation_order, analyzer, src_path: Path, out_path: P
     driver = LLVMDriver(cg)
 
     if options.lib:
-        if not _emit_library(driver, analyzer, compilation_order, src_path, out_path,
+        if not _emit_library(driver, analyzer, compilation_order, out_path,
                              reporter, options):
             return 2
         written = "library"

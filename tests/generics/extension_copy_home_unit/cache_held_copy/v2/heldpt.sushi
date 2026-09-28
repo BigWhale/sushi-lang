@@ -1,0 +1,6 @@
+public struct HeldPt:
+    i32 a
+    i64 b
+    i64 c
+
+public const HeldPt PT = HeldPt(1, 2, 3)

@@ -90,6 +90,7 @@ def monomorphize_extension_method(
     concrete = substitute_signature(generic_method.decl, substitution, substitutor)
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
+    concrete.home_unit = generic_method.unit_name
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span

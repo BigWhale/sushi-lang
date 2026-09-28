@@ -1,0 +1,16 @@
+# A call result in the callee position: the names in it are uses (#1067).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_STDERR_EMPTY: true
+fn inc(i32 x) i32:
+    return Result.Ok(x + 1)
+
+fn pick(i32 n) fn(i32) -> i32:
+    if (n > 100):
+        return Result.Ok(inc)
+    return Result.Ok(inc)
+
+fn main() i32:
+    let i32 k = 3
+    let i32 r = pick(k).realise(inc)(2).realise(0)
+    println(r)
+    return Result.Ok(0)

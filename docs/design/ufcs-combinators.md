@@ -109,7 +109,7 @@ parts: the receiver, the method name, and the method-level type arguments. ONE h
 `semantics/generics/name_mangling.py` — answers for all three consumers: the
 declaration (`backend/functions/helpers.py`), the call site
 (`backend/expressions/calls/dispatcher.py`, which reads the typecheck pass's
-`callee_method_type_args` stamp instead of re-deriving), and the weak_odr dedup. The
+`callee_method_type_args` stamp instead of re-deriving), and the dedup of the copies. The
 `__{margs}` suffix appears only when method-level arguments exist, so every
 pre-existing extension symbol is unchanged. An array receiver folds to
 `arr__<element>`, because `[]` is not a symbol character.
@@ -117,6 +117,31 @@ pre-existing extension symbol is unchanged. An array receiver folds to
 There is NO third dimension in the ExtensionTable: resolution answers from the
 template plus unification, and concrete per-margs copies exist only as ExtendDef nodes
 in `monomorphized_extensions`, deduped by a worklist keyed `(receiver, method, margs)`.
+
+## The home unit of a copy
+
+Every copy of a generic-target or method-generic extension has ONE home: the unit that
+declared its template (`ExtendDef.home_unit`, set from `GenericExtensionMethod.unit_name`
+when the copy is cut, #1064). A copy of a perk implementation on a generic target follows
+the same rule, and so does a generic function instance (`synthesis.py`). A template whose
+unit is not in the build goes to the entry unit. The rule has three consequences:
+
+- **The check.** The copy is checked with the passes of its home unit: the unit name and
+  the namespace table of that unit. A private function of that unit and a name behind a
+  `use ... as` alias mean in the copy what they mean in the template (#1065). The type
+  ARGUMENTS were written at the call site and checked there, so the copy names nothing:
+  a home unit that cannot write `Crate` still holds the copy for `List@(Crate)`
+  (`in_synthesized_body`, for the extension and the perk copy alike).
+- **The emission.** Every module declares the copy; the module of its home unit alone
+  defines it, with that unit as the emitting unit. One definition is one symbol, so the
+  duplicate-symbol link failure of #404 does not come back. The earlier design defined
+  every copy `weak_odr` in every module, where a private name of the template's unit
+  had no declaration.
+- **The cache.** The home unit's object holds copies that other units ask for, for types
+  that other units declare. Its key covers the signature and the body of each copy it
+  holds, and the interface of every unit of the program (`compiler/fingerprint.py`), so
+  a layout change of a type argument in a unit the home does not import rebuilds it.
+  A body-only edit elsewhere changes no interface and rebuilds nothing.
 
 ## Call-site-driven monomorphization
 

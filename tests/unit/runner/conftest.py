@@ -1,28 +1,26 @@
-"""Hooks of the runner tests: the `runner` marker, and the checkout lock for `pytest -n`.
+"""Hooks of the runner tests: the `runner` marker, and the refusal of a parallel run.
 
-Every test in this directory gets the `runner` marker, so `pytest -m "not runner"` is the
-fast Python layer and `pytest -m runner` is this one.
+Every test in this directory gets the `runner` marker. `pytest.ini` leaves the marker out
+of a plain run, so `pytest` is the fast Python layer and `pytest -m runner` is this one.
 
-Under `pytest-xdist` the workers share one checkout. A test marked `writes_the_checkout`
-changes a thing that every other runner test reads: it puts a fixture into `tests/`, it
-builds the leak interposer, or it starts the front end without `--skip-build` (which
-builds the stdlib and the helper libraries again). Such a test holds an exclusive lock;
-every other runner test holds a shared lock. A waiting writer stops new readers, so a
-writer does not wait for the end of the run.
+A runner test writes the checkout: it stages a fixture in `tests/`, builds the leak
+interposer, or builds the stdlib and the helper libraries again. So the runner tests run
+ONE instance at a time (#1071), and a runner test on a `pytest -n` worker fails at once.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterator, Optional
 
 import pytest
 
-# The import also puts tests/ on sys.path before any module here is read.
-from _harness import checkout_lock
+# The import puts tests/ on sys.path before any module here is read.
+import _harness  # noqa: F401
 
 RUNNER_DIR = Path(__file__).resolve().parent
 RUNNER_MARKER = "runner"
-WRITER_MARKER = "writes_the_checkout"
+PARALLEL_REFUSAL = (
+    "the runner tests run one instance at a time: they write the checkout. Run "
+    "`uv run pytest -q -m runner` without `-n`, in a worktree that nothing else uses.")
 
 
 def _in_runner_dir(item: pytest.Item) -> bool:
@@ -39,25 +37,6 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(RUNNER_MARKER)
 
 
-def _lock_dir(config: pytest.Config) -> Optional[Path]:
-    """The base temporary directory of the whole run, on a `pytest -n` worker; else None.
-
-    xdist gives each worker the directory `<the run's base>/<worker id>`, so the parent is
-    one directory for all the workers, and pytest removes it with its old runs.
-    """
-    if not hasattr(config, "workerinput") or not config.option.basetemp:
-        return None
-    return Path(config.option.basetemp).parent
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
-    """Hold the lock over setup, call and teardown, so a module fixture is inside it."""
-    lock_dir = _lock_dir(item.config)
-    if lock_dir is None or not _in_runner_dir(item):
-        yield
-        return
-    exclusive = item.get_closest_marker(WRITER_MARKER) is not None
-    with checkout_lock(lock_dir, exclusive):
-        yield
-
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    if hasattr(item.config, "workerinput") and _in_runner_dir(item):
+        pytest.fail(PARALLEL_REFUSAL, pytrace=False)

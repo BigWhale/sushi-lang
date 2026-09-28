@@ -1,0 +1,10 @@
+# A lambda in the callee position that captures an owning local (#1067).
+# EXPECT_STDOUT_EXACT: "15\n"
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 r = (|i32 q| s.len() + q)(0).realise(0)
+    println(r)
+    return Result.Ok(0)

@@ -57,8 +57,8 @@ This writes one `.slib` file containing:
 - the complete source text of every unit in the library
 - a MessagePack index of everything it declares, which `--lib-info` and the consumer read
 
-Every library states its own version. The value comes from a `nori.toml` beside the sources
-when there is one, and from `--lib-version` otherwise; neither is **CE3505**. See
+Every library states its own version. The value comes from the `nori.toml` in the current
+directory when there is one, and from `--lib-version` otherwise; neither is **CE3505**. See
 [Versions and Compatibility](#versions-and-compatibility).
 
 ### Library Kinds
@@ -388,13 +388,15 @@ A `.slib` records two versions, with two different jobs.
 
 `major.minor.patch`, taken from the first of these that exists:
 
-1. `[package] version` in a `nori.toml` beside the sources
+1. `[package] version` in the `nori.toml` in the current directory (never one in a parent
+   directory, and never one beside the sources)
 2. the `--lib-version X.Y.Z` flag
 
 Neither present is **CE3505**, and so is a `--lib-version` that contradicts the
 `nori.toml` — silently preferring one would let a package ship under a version it does not
-claim. The packager stays the source of truth for a real package, without forcing a manifest
-on a bare `./sushic --lib` build.
+claim. A `nori.toml` that exists must be valid: a file that cannot be read is **CE3518**,
+and any fault that nori refuses is **CE3517**. The packager stays the source of truth for a
+real package, without forcing a manifest on a bare `./sushic --lib` build.
 
 ### `requires_compiler` — which compilers can build it
 

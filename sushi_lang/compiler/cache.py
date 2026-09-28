@@ -17,15 +17,30 @@ if TYPE_CHECKING:
 
 
 CACHE_DIR_NAME = "__sushi_cache__"
-# Where a source library's units are written out. They need to be REAL files:
-# diagnostics read a unit's source off disk to render a caret, and the unit
-# fingerprint hashes those same bytes to decide what to rebuild.
+# Where a source library's units are written out, so that a diagnostic can read a
+# unit's source off disk to render a caret.
 LIBSRC_DIR = "libsrc"
 UNITS_DIR = "units"
 STDLIB_DIR = "stdlib"
 LIBS_DIR = "libs"
 
 _KEY_LEN = 12
+
+
+def publish_atomically(path: Path, data: bytes) -> Path:
+    """Write `data` to `path` so that a concurrent reader sees the old file or the new
+    one, never a torn one."""
+    from sushi_lang.backend.driver import writing_output
+
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with writing_output(path):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path.write_bytes(data)
+            os.replace(tmp_path, path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return path
 
 
 class CacheManager:
@@ -113,17 +128,4 @@ class CacheManager:
         return section / f"{name}.{self.global_key}.{fingerprint[:_KEY_LEN]}.o"
 
     def _store(self, obj_path: Path, obj_bytes: bytes) -> Path:
-        """Publish an object atomically."""
-        from sushi_lang.backend.driver import writing_output
-
-        tmp_path = obj_path.with_name(
-            f"{obj_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-        )
-        try:
-            with writing_output(obj_path):
-                obj_path.parent.mkdir(parents=True, exist_ok=True)
-                tmp_path.write_bytes(obj_bytes)
-                os.replace(tmp_path, obj_path)
-        finally:
-            tmp_path.unlink(missing_ok=True)
-        return obj_path
+        return publish_atomically(obj_path, obj_bytes)

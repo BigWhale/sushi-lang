@@ -102,7 +102,9 @@ The `[dependencies]` section tracks project-local package versions. Nori populat
 | `executables` | Paths to compiled binaries (permissions preserved) |
 | `data`        | Paths to data files or directories             |
 
-All paths are relative to the directory containing `nori.toml`.
+All paths are relative to the directory containing `nori.toml`, and each one stays at
+or below that directory. `nori build` refuses an absolute path or a path with a `..` step
+(**NE2008**), so an archive never packs a file from outside the package.
 
 ### Naming Rules
 
@@ -217,12 +219,29 @@ When you install a package inside a project:
 
 ### Project Detection
 
-Nori detects project context by walking up from the current directory looking for a `nori.toml`. If found, you are in a project context and installs are project-local by default.
+A project is the directory that you run the tool in. When the current directory holds a
+`nori.toml`, you are in a project context and installs are project-local by default. Nori
+does not look in a parent directory: in a subdirectory of a project, you are not in that
+project.
+
+The same rule applies to every tool:
+
+- `nori install`, `nori list` and `nori remove` use the `nori.toml` and the `.sushi_bento/`
+  of the current directory. `nori build`, `nori publish` and `nori init` also read
+  `./nori.toml` only.
+- A program compile finds the project's `.sushi_bento/` packages only when `sushic` runs in
+  the project root.
+- `sushic --lib` reads `[package] version` from the `nori.toml` in the current directory,
+  not from one beside the sources. Thus `sushic --lib src/mathlib.sushi -o
+  build/mathlib.slib`, run in the package root, reads the root's `nori.toml`. A
+  `nori.toml` that exists must be valid: a file that cannot be read is **CE3518**, and any
+  fault that nori refuses (for example a bad package name, NE1005) is **CE3517**. With no
+  `nori.toml` in the current directory, the build needs `--lib-version` (**CE3505**).
 
 ### Installing Packages in a Project
 
 ```bash
-# Inside a project (nori.toml exists here or in a parent directory)
+# In the project root (the current directory holds nori.toml)
 nori install math-utils-1.0.0.nori      # installs to store + symlinks .sushi_bento/
 nori install math-utils from ./dist/    # same behavior from a directory source
 ```

@@ -58,7 +58,7 @@ class SymbolTables:
     # element and a method-generic's solved margs both live only at the call, so these
     # queue during the per-unit loop and the analyzer monomorphizes and checks them to
     # a fixpoint after. `queued_extension_keys` dedupes: one copy per
-    # (receiver, method, margs), which is also what keeps the weak_odr symbol unique.
+    # (receiver, method, margs), which is also what keeps the copy's symbol unique.
     pending_extension_instantiations: list = field(default_factory=list)
     queued_extension_keys: set = field(default_factory=set)
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose

@@ -1,0 +1,4 @@
+public const i32 SEVEN = 7
+
+public fn tick(i32 x) i32:
+    return Result.Ok(x + 1)

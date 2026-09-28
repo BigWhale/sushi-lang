@@ -8,6 +8,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 from sushi_lang.semantics.ast import ConstDef, Program, VarDef
+from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
@@ -73,6 +74,7 @@ class ConstantCollector:
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
         self.current_unit_name: Optional[str] = None
+        self.refused = RefusedDeclarations()
         # Which units came from a source library, and who declared what: a consumer's
         # constant of a name a library EXPORTS is the duplicate CE0105 answers.
         self.library_units: Set[str] = set()
@@ -84,7 +86,7 @@ class ConstantCollector:
         constants = root.constants
         if isinstance(constants, list):
             for const in constants:
-                if isinstance(const, ConstDef):
+                if isinstance(const, ConstDef) and self.refused.admits(const):
                     self._collect_constant_def(const)
 
     def _shadows_a_library_export(self, name: str) -> bool:

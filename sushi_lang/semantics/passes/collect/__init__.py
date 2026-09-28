@@ -33,6 +33,7 @@ from .perks import (
     PerkTable)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
+from .unit_names import claim_unit_names
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.visibility import (
     VisibilityTable, reject_private_perk_constraints)
@@ -222,9 +223,11 @@ class CollectorPass:
     def _collect(self, root: Program, unit_name: Optional[str],
                  unit_file: Optional[str]) -> 'SymbolTables':
         # One way in for all six: the fields, not a parameter on one collector's method.
+        refused = claim_unit_names(self.r, root, unit_file)
         for collector in self._collectors:
             collector.current_unit_file = unit_file
             collector.current_unit_name = unit_name
+            collector.refused = refused
 
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)
