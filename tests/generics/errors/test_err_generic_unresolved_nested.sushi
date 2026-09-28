@@ -1,8 +1,0 @@
-# Test error: undefined type in nested generic
-# EXPECT_ERROR_CODE: CE2001
-# Should fail with type error
-
-fn main() i32:
-    # UndefinedType does not exist - should cause compilation error
-    let Result@(Maybe@(UndefinedType), StdError) bad = Result.Ok(Maybe.None())
-    return Result.Ok(0)

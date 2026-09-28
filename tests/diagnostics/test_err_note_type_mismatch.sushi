@@ -1,5 +1,8 @@
 # Diagnostic test: CE2002 with note pointing to declaration
 # EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: test_err_note_type_mismatch.sushi:9:17: error [CE2002]
+# EXPECT_STDERR_CONTAINS: = note: declared here
+# EXPECT_STDERR_CONTAINS: test_err_note_type_mismatch.sushi:9:9
 # Exercises: note with secondary span
 
 fn main() i32:
