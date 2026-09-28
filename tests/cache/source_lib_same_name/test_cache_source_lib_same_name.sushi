@@ -1,0 +1,15 @@
+# Two source libraries with one name share one cache. The second library has the same
+# declarations and another function body, so the source text is the only part of the
+# cache key that tells the two apart. The key must hash the text that was compiled.
+# BUILD_LIB: shelf.sushi
+# RUN_IN_FIXTURE_DIR
+# FIXTURE_CACHE_DIR: cache
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "1\n"
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_REBUILT: lib/shelf/shelf
+# EXPECT_CACHED: test_cache_source_lib_same_name
+use <lib/shelf>
+
+fn main() i32:
+    println(answer().realise(0))
+    return Result.Ok(0)
