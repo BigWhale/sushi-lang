@@ -1,0 +1,16 @@
+# A generic function value in a concrete parameter position is solved inside
+# the body of a generic function, as it is in a concrete body (#1036).
+# EXPECT_STDOUT_EXACT: "one\n4\n"
+fn gen@(T)(T x) T:
+    return Result.Ok(x)
+
+fn apply_c(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(4).realise(0))
+
+fn inner@(U)(U u) i32:
+    println(u)
+    return Result.Ok(apply_c(gen).realise(0))
+
+fn main() i32:
+    println(inner("one").realise(0))
+    return Result.Ok(0)

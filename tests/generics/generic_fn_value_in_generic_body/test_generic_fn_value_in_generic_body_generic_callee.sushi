@@ -1,0 +1,16 @@
+# A generic function value passed to a generic callee inside a generic body
+# is solved against the type argument of the enclosing instance (#1036).
+# EXPECT_STDOUT_EXACT: "5\n2.5\n"
+fn gen@(T)(T x) T:
+    return Result.Ok(x)
+
+fn apply@(T)(fn(T) -> T f, T x) T:
+    return Result.Ok(f(x).realise(x))
+
+fn outer@(U)(U u) U:
+    return Result.Ok(apply(gen, u).realise(u))
+
+fn main() i32:
+    println(outer(5).realise(0))
+    println(outer(2.5).realise(0.0))
+    return Result.Ok(0)
