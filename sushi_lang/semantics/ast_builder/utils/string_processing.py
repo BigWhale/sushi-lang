@@ -1,8 +1,7 @@
 """String processing utilities for handling escape sequences and interpolation."""
 from __future__ import annotations
 from typing import List, Optional, Tuple, Union, TYPE_CHECKING
-from pathlib import Path
-from lark import Lark, Token
+from lark import Token
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
@@ -112,27 +111,6 @@ def parse_interpolated_string(raw_string: str, span: 'Span') -> Tuple[List[Union
     return parts, expr_spans
 
 
-_interpolation_parser: Optional[Lark] = None
-
-
-def get_interpolation_parser() -> Lark:
-    """Get or create a Lark parser for parsing interpolation expressions."""
-    global _interpolation_parser
-    if _interpolation_parser is None:
-        grammar_path = Path(__file__).parent.parent.parent.parent / "grammar.lark"
-        from sushi_lang.internals.indenter import LangIndenter
-        _interpolation_parser = Lark.open(
-            str(grammar_path),
-            start='expr',
-            parser='lalr',
-            propagate_positions=True,
-            maybe_placeholders=False,
-            postlex=LangIndenter(),
-            lexer='basic'
-        )
-    return _interpolation_parser
-
-
 def apply_location_offset(node: object, base_span: 'Span') -> None:
     """Move every span under `node` by where the interpolation hole starts.
 
@@ -180,9 +158,10 @@ def parse_interpolation_expr(expr_text: str, ast_builder: 'ASTBuilder', fallback
     from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
     from sushi_lang.internals.parse_errors import lark_to_diagnostic
 
-    parser = get_interpolation_parser()
+    from sushi_lang.internals.parser import parse_hole
+
     try:
-        tree = parser.parse(expr_text)
+        tree = parse_hole(expr_text)
         expr_ast = ast_builder._expr(tree)
         apply_location_offset(expr_ast, fallback_span)
         return expr_ast
