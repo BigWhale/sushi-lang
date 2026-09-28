@@ -1,0 +1,6 @@
+# An undeclared name in a lambda in the callee position is CE1001 (#1067).
+# EXPECT_ERROR_CODES_EXACT: CE1001
+fn main() i32:
+    let i32 r = (|i32 q| zz + q)(2).realise(0)
+    println(r)
+    return Result.Ok(0)

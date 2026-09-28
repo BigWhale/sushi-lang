@@ -724,9 +724,17 @@ class ScopeAnalyzer:
         self._check_expression(expr.right)
 
     def _check_call(self, expr: Call) -> None:
-        """A callee that is a bound local is a function VALUE, so it is a use."""
-        if isinstance(expr.callee, Name) and self._is_bound_local(expr.callee.id):
-            self._use_variable(expr.callee.id, expr.callee.loc)
+        """A callee that is a bound local is a function VALUE, so it is a use.
+
+        A NAME that is not a bound local names a function, which is no variable use. Every
+        other callee is an expression like any other (#1067): a lambda there records its
+        captures, and each name in a call result is resolved and used.
+        """
+        if isinstance(expr.callee, Name):
+            if self._is_bound_local(expr.callee.id):
+                self._use_variable(expr.callee.id, expr.callee.loc)
+        else:
+            self._check_expression(expr.callee)
         for arg in expr.args:
             self._check_expression(arg)
 
