@@ -20,9 +20,6 @@ from _harness import TESTS_DIR
 import enhanced_test_runner
 import run_tests
 
-# This module stages a fixture in tests/, where every corpus scan reads it.
-pytestmark = pytest.mark.writes_the_checkout
-
 LEAK_ASSERTED = (
     "# EXPECT_NO_LEAKS: true\n"
     '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'

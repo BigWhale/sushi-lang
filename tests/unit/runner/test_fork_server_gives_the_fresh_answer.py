@@ -30,9 +30,6 @@ import enhanced_test_runner
 import fork_server
 import run_tests
 
-# The interposer is built into the checkout when it is missing.
-pytestmark = pytest.mark.writes_the_checkout
-
 SAMPLE = [
     "generics/builtin_methods/test_err_result_is_ok_arity.sushi",
     "docs/blocks/test_warn_missing_docs.sushi",

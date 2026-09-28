@@ -22,10 +22,6 @@ from _harness import TESTS_DIR, PROJECT_ROOT, FIXTURES_DIR, run_tests
 import enhanced_test_runner
 from test_metadata import parse_test_metadata, should_run_runtime_test
 
-# This module stages a fixture in tests/, builds the interposer, and starts the front end
-# without --skip-build, which builds the stdlib and the helper libraries again.
-pytestmark = pytest.mark.writes_the_checkout
-
 FD_FIXTURE = FIXTURES_DIR / "fd_leaking_program.sushi"
 
 
