@@ -1,0 +1,18 @@
+# A unit that declares a template holds the copies that another unit asks for. The
+# copies read the layout of a type argument from a third unit, so the cache key of
+# the holding unit covers that type: a layout change there rebuilds it. The key
+# covered only the copy's written names, and the cached object read the old offset.
+# The rule is the same for an extension copy, a perk-implementation copy and a
+# generic function instance.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "42\n42\n42\n"
+# EXPECT_STDOUT_EXACT: "42\n42\n42\n"
+# EXPECT_REBUILT: heldbox, heldpt, test_cache_held_copy_layout
+use "heldbox"
+use "heldpt"
+
+fn main() i32:
+    let HeldBox@(HeldPt) b = HeldBox(PT, 42)
+    println(b.held())
+    println(b.counted())
+    println(held_n(b).realise(0))
+    return Result.Ok(0)

@@ -484,8 +484,8 @@ def externals_only(external_table: Any) -> NamespaceTable:
     """The FFI namespaces alone, for a reader with no unit of its own.
 
     `ExternalTable` is flat and has always answered a `libc.printf` from any unit, so
-    every unit's table carries every FFI namespace. A scratch validator -- the one that
-    walks a monomorphized extension body -- has no unit and gets this.
+    every unit's table carries every FFI namespace. A scratch validator with no unit
+    gets this.
     """
     table = NamespaceTable()
     for ns in getattr(external_table, "by_namespace", {}):

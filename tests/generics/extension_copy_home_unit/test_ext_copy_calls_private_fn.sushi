@@ -1,0 +1,19 @@
+# The copy of an extension method on a generic target calls a private function of
+# the unit that declares the template. The copy goes home to that unit (#1064).
+# EXPECT_STDOUT_EXACT: "4\n2\n"
+use "helpers/ecopy_cst"
+
+fn plain(i32 x) i32:
+    return Result.Ok(x)
+
+struct Box@(T):
+    T v
+
+extend Box@(T) run() i32:
+    return plain(4).realise(0)
+
+fn main() i32:
+    let Box@(bool) b = Box(true)
+    println(b.run())
+    println(tick(1).realise(0))
+    return Result.Ok(0)

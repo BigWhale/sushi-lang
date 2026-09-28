@@ -326,6 +326,9 @@ class ExtendDef(Node):
     # written on the type name. The span is what CE0134 points at.
     is_static: bool = False
     static_span: Optional[Span] = None
+    # The unit that declared the template of a monomorphized copy (#1064). The copy is
+    # checked in that unit's scope and defined in that unit's module. None on a written one.
+    home_unit: Optional[str] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:

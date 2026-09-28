@@ -160,15 +160,18 @@ def _self_registration_type(target_type, self_mode):
     return ReferenceType(target_type, mode.borrow_mode)
 
 
-def _validate_target_type(self, target_type, span) -> None:
+def _validate_target_type(self, target_type, span, synthesized: bool) -> None:
     """The target type of an extension or a perk implementation, checked ONCE.
 
     It belongs to the header, not to a method, so a perk implementation with three
-    methods and one bad target says so once.
+    methods and one bad target says so once. `synthesized` is True for a template's
+    copy: it is checked in its home unit, but its type arguments were written at the
+    call site and that site's own unit validated them (#1064), so the copy names nothing.
     """
     # An extension body is never a transplanted library body, so what a previously
     # validated function set must not colour this diagnostic (#471).
     self.reporter.leave_body()
+    self.in_synthesized_body = synthesized
     validate_type_name(self, target_type, span)
     if target_type == BuiltinType.BLANK:
         self.err.emit(er.ERR.CE2032, span)
@@ -193,7 +196,7 @@ def _register_self(self, target_type, self_mode) -> None:
         self.variable_types["self"] = _self_registration_type(self_type, self_mode)
 
 
-def _validate_method_body(self, target_type, method) -> None:
+def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
     """One method body, in the state a BARE-return body validates under.
 
     An extension method and a perk-implementation method differ in one thing only: where
@@ -202,7 +205,7 @@ def _validate_method_body(self, target_type, method) -> None:
     self.current_function = None  # A method is not a function, but the logic is shared.
     self.in_extension_context = True  # Dedicated flag: this body returns a bare value.
     self.in_library_body = self.in_library_unit
-    self.in_synthesized_body = False
+    self.in_synthesized_body = synthesized
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.
     self.reporter.enter_body(method)
@@ -244,14 +247,16 @@ def _validate_method_body(self, target_type, method) -> None:
                       callable=f"method '{method.name}'")
 
     self.in_extension_context = False
+    self.in_synthesized_body = False
     self.extension_method_name = None
     self.extension_channel_result = None
 
 
 def validate_extension_method(self, ext: ExtendDef) -> None:
     """Validate types within an extension method. The declaration IS the method."""
-    _validate_target_type(self, ext.target_type, ext.target_type_span)
-    _validate_method_body(self, ext.target_type, ext)
+    synthesized = ext.home_unit is not None
+    _validate_target_type(self, ext.target_type, ext.target_type_span, synthesized)
+    _validate_method_body(self, ext.target_type, ext, synthesized)
 
 
 def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
@@ -281,7 +286,8 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
         check_no_conflicts_with_regular_methods(
             resolved_type, impl, self.extension_table, self.reporter)
 
-    _validate_target_type(self, resolved_type, impl.target_type_span)
+    synthesized = not is_written(impl)
+    _validate_target_type(self, resolved_type, impl.target_type_span, synthesized)
 
     for method in impl.methods:
-        _validate_method_body(self, resolved_type, method)
+        _validate_method_body(self, resolved_type, method, synthesized)

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.borrow import BorrowChecker
+from sushi_lang.semantics.passes.lift import LambdaLifter
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
@@ -69,6 +70,16 @@ class Lints:
     """
     missing_docs: bool = False
     unused: bool = False
+
+
+@dataclass(frozen=True)
+class _UnitPasses:
+    """The four per-unit passes of one unit, built in that unit's scope."""
+    scope: ScopeAnalyzer
+    typecheck: TypeValidator
+    lifter: LambdaLifter
+    borrow: BorrowChecker
+
 
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
@@ -208,7 +219,7 @@ class SemanticAnalyzer:
         if self._check_finite_types():
             return
         self._derive()
-        self._register_monomorphized_extensions(concrete_extension_defs)
+        self._register_monomorphized_extensions(concrete_extension_defs, compilation_order)
         self._check_extension_shadows_builtin()
 
         destroy_effects = self._compute_effects(compilation_order)
@@ -219,7 +230,7 @@ class SemanticAnalyzer:
 
         self._check_units(compilation_order, monomorphizer, libraries,
                           destroy_effects, enum_names)
-        self._check_array_extensions(compilation_order, monomorphizer,
+        self._check_array_extensions(compilation_order, monomorphizer, libraries,
                                      destroy_effects, enum_names)
 
     def _collect(self, compilation_order: list[Unit]) -> LibraryRegistration:
@@ -608,10 +619,11 @@ class SemanticAnalyzer:
         register_all_clones(self.tables.structs, self.tables.enums, self.tables.derived_methods)
 
     def _register_monomorphized_extensions(
-            self, concrete_extension_defs: ExtensionCopies) -> None:
+            self, concrete_extension_defs: ExtensionCopies,
+            compilation_order: list[Unit]) -> None:
         """Hand every generic-target extension copy to the extension table and to codegen."""
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
-            self.monomorphized_extensions.append(extend_def)
+            self._adopt_extension_copy(extend_def, compilation_order)
             # Add to extension table for method lookup during type validation.
             # The spans come along so a diagnostic about a monomorphized generic extension
             # (CE2097) can still point at the source `extend Box@(T) ...` that produced it.
@@ -658,45 +670,55 @@ class SemanticAnalyzer:
                 continue
 
             unit_reporter = self._unit_reporter(unit)
-
-            namespaces = self.tables.namespaces.get(unit.name)
-
-            scope_analyzer = ScopeAnalyzer(unit_reporter, self.tables.constants, self.tables.structs, self.tables.enums, self.tables.generic_enums, self.tables.generic_structs, external_table=self.tables.externals,
-                                           kept_constants=libraries.kept_constant_names(),
-                                           namespaces=namespaces,
-                                           visibility=self.tables.visibility,
-                                           function_tables=(self.tables.funcs, self.tables.generic_funcs))
-            scope_analyzer.run(unit.ast)
-
-            type_validator = TypeValidator(
-                unit_reporter, self.tables, current_unit_name=unit.name,
-                monomorphized_functions=monomorphizer.monomorphized_functions,
-                in_library_unit=unit.provenance is not None,
-                namespaces=namespaces)
-            type_validator.run(unit.ast)
-
-            from sushi_lang.semantics.passes.lift import LambdaLifter
-            LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
-                         annotate=type_validator).run()
-
-            # borrow. The enum names let the checker tell `Box.Full(a)` from a method call
-            # -- both are DotCall here. BASE names only: the receiver is written bare.
-            borrow_checker = BorrowChecker(unit_reporter, destroy_effects=destroy_effects,
-                                           enum_names=enum_names, tables=self.tables,
-                                           unit_name=unit.name,
-                                           scope=namespaces.scope if namespaces else None)
-            borrow_checker.run(unit.ast)
+            passes = self._unit_passes(unit, unit_reporter, unit_reporter, monomorphizer,
+                                       libraries, destroy_effects, enum_names)
+            passes.scope.run(unit.ast)
+            passes.typecheck.run(unit.ast)
+            passes.lifter.run()
+            passes.borrow.run(unit.ast)
 
             self._merge_unit(unit_reporter)
+
+    def _unit_passes(self, unit: Unit, reporter: Reporter, scope_reporter: Reporter,
+                     monomorphizer, libraries: LibraryRegistration, destroy_effects,
+                     enum_names: set[str]) -> _UnitPasses:
+        """The scope, typecheck, lift and borrow passes of ONE unit, in its own scope.
+
+        Two callers: the per-unit loop, and the check of the generic-target extension
+        copies, which each go home to the unit of their template (#1064). A copy is
+        checked with the unit name and the namespace table of that unit, so a private
+        name and a name behind an alias mean in the copy what they mean in the template.
+        """
+        namespaces = self.tables.namespaces.get(unit.name)
+        scope = ScopeAnalyzer(scope_reporter, self.tables.constants, self.tables.structs,
+                              self.tables.enums, self.tables.generic_enums,
+                              self.tables.generic_structs, external_table=self.tables.externals,
+                              kept_constants=libraries.kept_constant_names(),
+                              namespaces=namespaces,
+                              visibility=self.tables.visibility,
+                              function_tables=(self.tables.funcs, self.tables.generic_funcs))
+        typecheck = TypeValidator(
+            reporter, self.tables, current_unit_name=unit.name,
+            monomorphized_functions=monomorphizer.monomorphized_functions,
+            in_library_unit=unit.provenance is not None,
+            namespaces=namespaces)
+        lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
+                              annotate=typecheck)
+        # The enum names let the checker tell `Box.Full(a)` from a method call -- both
+        # are DotCall here. BASE names only: the receiver is written bare.
+        borrow = BorrowChecker(reporter, destroy_effects=destroy_effects,
+                               enum_names=enum_names, tables=self.tables,
+                               unit_name=unit.name,
+                               scope=namespaces.scope if namespaces else None)
+        return _UnitPasses(scope, typecheck, lifter, borrow)
 
     @staticmethod
     def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:
         """The unit the compiler was pointed at, and the home of every body it makes.
 
-        A monomorphized extension's lifted lambdas go into its AST, and a generic-target
-        perk implementation whose template names no unit goes to the unit itself. Both
-        read this for the same reason `generics/synthesis.py` names the entry unit: a
-        body the compiler makes belongs to the unit the compiler was pointed at, and not
+        A generic-target extension copy or perk implementation whose template names no
+        unit of the build goes to this unit (`_home_unit`), for the same reason
+        `generics/synthesis.py` names the entry unit: a body the compiler makes belongs to the unit the compiler was pointed at, and not
         to whichever unit the compilation order happens to put first (#736).
 
         A unit with no AST is never the answer, because every caller reads `.ast` off it.
@@ -707,7 +729,26 @@ class SemanticAnalyzer:
             return entry
         return next((u for u in compilation_order if u.ast is not None), None)
 
+    def _home_unit(self, unit_name: Optional[str],
+                   compilation_order: list[Unit]) -> Optional[Unit]:
+        """The unit a template's copy goes home to: the unit that declared the template.
+
+        ONE answer for an extension copy and a perk-implementation copy (#1064). A
+        template whose unit is not in the build goes to the entry unit.
+        """
+        home = next((u for u in compilation_order
+                     if u.ast is not None and u.name == unit_name), None)
+        return home or self._entry_unit(compilation_order)
+
+    def _adopt_extension_copy(self, extend_def: ExtendDef,
+                              compilation_order: list[Unit]) -> None:
+        """Give an extension copy its home unit and queue it for the check and codegen."""
+        home = self._home_unit(extend_def.home_unit, compilation_order)
+        extend_def.home_unit = home.name if home is not None else None
+        self.monomorphized_extensions.append(extend_def)
+
     def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
+                                libraries: LibraryRegistration,
                                 destroy_effects, enum_names: set[str]) -> None:
         """Check each call-site-driven extension copy, to a fixpoint."""
         # An array-target template instantiates at the CALL SITE (the typecheck pass
@@ -715,8 +756,6 @@ class SemanticAnalyzer:
         # another. The bound mirrors MAX_EXPANSION_ROUNDS in the instantiate pass:
         # reaching it drops an instantiation, which surfaces as the ordinary CE2008,
         # never as a hang.
-        entry = self._entry_unit(compilation_order)
-        lift_target = entry.ast if entry is not None else None
         checked = 0
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
@@ -724,8 +763,9 @@ class SemanticAnalyzer:
             if not batch:
                 break
             checked = len(self.monomorphized_extensions)
-            self._check_monomorphized_extensions(destroy_effects, enum_names,
-                                                 lift_target, only=batch)
+            self._check_monomorphized_extensions(compilation_order, monomorphizer,
+                                                 libraries, destroy_effects, enum_names,
+                                                 batch)
 
     # Rounds an expansion fixpoint may take before it drops the rest. The same shape
     # and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS. TWO readers, and
@@ -743,8 +783,7 @@ class SemanticAnalyzer:
         The typecheck pass queued (template, target, receiver args, method args) while
         it resolved calls -- an array template's element (ruling 3) or a
         method-generic's solved margs (Phase 4). Each becomes a concrete ExtendDef with
-        its own body, joins `monomorphized_extensions` for the backend's weak_odr
-        emission, and has its body's function instantiations collected exactly as the
+        its own body, goes home to the unit of its template, and has its body's function instantiations collected exactly as the
         struct-target round above does (#392).
         """
         pending = self.tables.pending_extension_instantiations
@@ -761,7 +800,7 @@ class SemanticAnalyzer:
                 substitutor=monomorphizer.substitutor,
                 method_type_args=method_type_args)
             new_defs.append(extend_def)
-            self.monomorphized_extensions.append(extend_def)
+            self._adopt_extension_copy(extend_def, compilation_order)
         self._intern_late_type_instantiations(monomorphizer, new_defs)
         for extend_def in new_defs:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
@@ -827,14 +866,11 @@ class SemanticAnalyzer:
         if not copies:
             return
 
-        units_by_name = {u.name: u for u in compilation_order if u.ast is not None}
-        entry = self._entry_unit(compilation_order)
-
         for (type_name, _perk_name), (template, impl) in copies.items():
             if not self.tables.perk_impls.register(impl, type_name,
                                             unit_name=template.unit_name):
                 continue
-            home = units_by_name.get(template.unit_name) or entry
+            home = self._home_unit(template.unit_name, compilation_order)
             if home is not None:
                 home.ast.perk_impls.append(impl)
             for method in impl.methods:
@@ -992,8 +1028,9 @@ class SemanticAnalyzer:
         register_all_clones(self.tables.structs, self.tables.enums,
                             self.tables.derived_methods, only=interned)
 
-    def _check_monomorphized_extensions(self, destroy_effects, enum_names,
-                                        lift_target=None, only=None) -> None:
+    def _check_monomorphized_extensions(self, compilation_order: list[Unit], monomorphizer,
+                                        libraries: LibraryRegistration, destroy_effects,
+                                        enum_names: set[str], batch: list[ExtendDef]) -> None:
         """Type- and borrow-check every instantiation of a generic-target extension.
 
         This is where a generic extension's per-instantiation truth is decided: `self` is
@@ -1001,51 +1038,42 @@ class SemanticAnalyzer:
         the same body over a plain type argument stays legal (#391). The template itself is
         walked by scope and borrow for what does not depend on the type argument.
 
+        Each copy is checked with the passes of its HOME unit, the unit that declared the
+        template (#1064): its private functions and its aliases are the copy's too. The
+        copies mirror the per-unit order scope -> typecheck -> lift -> borrow (#399). They
+        were deep-copied BEFORE scope ran, so no walk ever stamped their lambda captures;
+        the scope run here exists only for that stamp and reports into a throwaway -- the
+        template's own scope run already reported its findings once. The lifted functions
+        land in the home unit's AST, the one module that defines the copy.
+
         One body error would otherwise be reported once per instantiation, plus once from
         the template -- so the run collects into its own reporter and merges what is new.
-
-        The copies mirror the per-unit order scope -> typecheck -> lift -> borrow (#399).
-        They were deep-copied BEFORE scope ran, so no walk ever stamped their lambda
-        captures; the scope run here exists only for that stamp and reports into a throwaway
-        -- the template's own scope run already reported its findings once. The lifted functions
-        land in `lift_target` (the first unit's AST) marked public, because every unit
-        module DEFINES the monomorphized extension bodies and only public functions of
-        another unit are declared there.
         """
-        scratch = Reporter(source=self.reporter.source, filename=self.reporter.filename)
-        type_validator = TypeValidator(scratch, self.tables)
-        borrow_checker = BorrowChecker(scratch, destroy_effects=destroy_effects,
-                                       enum_names=enum_names, tables=self.tables)
-
-        throwaway = Reporter(source=self.reporter.source, filename=self.reporter.filename)
-        capture_scope = ScopeAnalyzer(throwaway, self.tables.constants, self.tables.structs, self.tables.enums,
-                                      self.tables.generic_enums, self.tables.generic_structs,
-                                      external_table=self.tables.externals,
-                                      function_tables=(self.tables.funcs,))
-
-        lifter = None
-        if lift_target is not None:
-            from sushi_lang.semantics.passes.lift import LambdaLifter
-            lifter = LambdaLifter(self.tables.structs, self.tables.funcs, lift_target,
-                                  annotate=type_validator)
-
-        for extend_def in (only if only is not None else self.monomorphized_extensions):
-            capture_scope._check_extension_method(extend_def)
-            type_validator._validate_extension_method(extend_def)
-            lifted = lifter.lift_body(extend_def.body) if lifter is not None else []
-            for fn in lifted:
-                fn.is_public = True
-            borrow_checker._check_extension(extend_def)
-            for fn in lifted:
-                borrow_checker._check_function(fn)
+        units = {u.name: u for u in compilation_order if u.ast is not None}
+        by_home: dict[str, list[ExtendDef]] = {}
+        for extend_def in batch:
+            by_home.setdefault(extend_def.home_unit or "", []).append(extend_def)
 
         seen = {diagnostic_identity(d) for d in self.reporter.items}
-        for diagnostic in scratch.items:
-            identity = diagnostic_identity(diagnostic)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            self.reporter.items.append(diagnostic)
+        for home_name, copies in by_home.items():
+            home = units[home_name]
+            scratch = self._unit_reporter(home)
+            passes = self._unit_passes(home, scratch, self._unit_reporter(home),
+                                       monomorphizer, libraries, destroy_effects, enum_names)
+            for extend_def in copies:
+                passes.scope._check_extension_method(extend_def)
+                passes.typecheck._validate_extension_method(extend_def)
+                lifted = passes.lifter.lift_body(extend_def.body)
+                passes.borrow._check_extension(extend_def)
+                for fn in lifted:
+                    passes.borrow._check_function(fn)
+
+            for diagnostic in in_source_order(scratch.items):
+                identity = diagnostic_identity(diagnostic)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                self.reporter.items.append(diagnostic)
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""

@@ -50,25 +50,23 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
     if unit.ast is not None:
         _hash_ast_structure(hasher, unit.ast)
 
-    # 5. Monomorphized extension methods that this unit might use. The key must
-    # cover the full signature AND the body: these are concrete instances whose
-    # generic source may live in another unit or a library, so this unit's own
-    # source hash does not cover an edit to them. Hashing only target::name (the
-    # old key) reused a stale .o across a body or signature change.
-    if monomorphized_extensions:
-        hasher.update(b"MONO_EXT:")
-        ext_sigs = sorted(
-            "{}::{}({})->{}|{}".format(
-                ext.target_type,
-                ext.name,
-                ",".join(f"{p.ty}:{p.name}" for p in ext.params),
-                str(ext.ret) if ext.ret else "~",
-                _node_digest(ext.body),
-            )
-            for ext in monomorphized_extensions
-        )
-        for sig in ext_sigs:
+    # 5. The template COPIES this unit holds (#1064): its generic function instances,
+    # its generic-target extension copies and its perk-implementation copies. A copy is
+    # defined in the module of the unit that declared its template, but the program
+    # asks for it from anywhere, for a type declared anywhere. So the key covers each
+    # copy's signature and body, and the INTERFACE of every unit of the program: a
+    # layout change of a type argument in a unit this one does not import changes the
+    # code of the copy. A body-only edit elsewhere changes no interface.
+    held = _held_extension_copies(unit, monomorphized_extensions)
+    if held:
+        hasher.update(b"HELD_EXTENSIONS:")
+        for sig in sorted(_extension_copy_signature(ext) for ext in held):
             hasher.update(sig.encode())
+    if unit_manager is not None and (held or _holds_template_copies(unit)):
+        hasher.update(b"PROGRAM_INTERFACES:")
+        for name in sorted(unit_manager.units):
+            hasher.update(f"UNIT:{name}:".encode())
+            hasher.update(_interface_digest(unit_manager.units[name]).encode())
 
     # 6. Imported library fingerprints (cross-library generic templates).
     # Folding the whole-`.slib` digest in covers any library template a
@@ -91,6 +89,26 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         hasher.update(name.encode())
 
     return hasher.hexdigest()
+
+
+def _held_extension_copies(unit: Unit, monomorphized_extensions: list | None) -> list:
+    """The generic-target extension copies whose home is `unit`."""
+    return [ext for ext in monomorphized_extensions or ()
+            if getattr(ext, "home_unit", None) == unit.name]
+
+
+def _holds_template_copies(unit: Unit) -> bool:
+    """Whether the unit's AST holds a generic function instance or a perk-impl copy."""
+    if unit.ast is None:
+        return False
+    return (any(getattr(fn, "home_unit", None) == unit.name for fn in unit.ast.functions)
+            or any(getattr(impl, "is_synthesized", False) for impl in unit.ast.perk_impls))
+
+
+def _extension_copy_signature(ext) -> str:
+    """One extension copy: its signature and a digest of its body."""
+    margs = ",".join(str(t) for t in getattr(ext, "method_type_args", None) or ())
+    return "{}@({})|{}".format(_extension_signature(ext), margs, _node_digest(ext.body))
 
 
 def compute_stdlib_fingerprint(bc_paths: list) -> str:
@@ -412,9 +430,9 @@ def _hash_declaration_shapes(hasher: hashlib._Hash, ast: Program) -> None:
 
     # The monomorphized copies of a GENERIC-target implementation are appended to the
     # declaring unit's list before this runs, so a new instantiation anywhere in the
-    # program changes that unit's signature list and flips its key. The BODY needs no
-    # digest here for the same reason: it comes from the template, whose source is in
-    # the declaring unit's own source hash.
+    # program changes that unit's signature list and flips its key. The body comes from
+    # the template, whose source is in the declaring unit's own source hash; the types
+    # the body reads are covered by the held-copies rule (`_holds_template_copies`).
     hasher.update(b"PERK_IMPLS:")
     all_impls = list(ast.perk_impls) + list(ast.generic_perk_impls or ())
     impl_sigs = [s for impl in all_impls for s in _perk_impl_signatures(impl)]

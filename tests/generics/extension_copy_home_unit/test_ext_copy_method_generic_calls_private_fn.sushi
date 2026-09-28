@@ -1,0 +1,20 @@
+# A method-level generic on a concrete target whose body calls a private function
+# (#1064).
+# EXPECT_STDOUT_EXACT: "true\n4\n2\n"
+use "helpers/ecopy_cst"
+
+fn plain(i32 x) i32:
+    return Result.Ok(x)
+
+struct Crate:
+    i32 w
+
+extend Crate pick@(U)(U u) i32:
+    println(u)
+    return plain(4).realise(0)
+
+fn main() i32:
+    let Crate c = Crate(1)
+    println(c.pick(true))
+    println(tick(1).realise(0))
+    return Result.Ok(0)

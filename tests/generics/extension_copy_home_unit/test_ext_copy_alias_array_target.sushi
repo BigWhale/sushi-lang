@@ -1,0 +1,12 @@
+# A call behind a `use ... as` alias in the copy of an extension on an array
+# target (#1065).
+# EXPECT_STDOUT_EXACT: "4\n"
+use "helpers/ecopy_cst" as c
+
+extend T[] firstish() i32:
+    return c.tick(self.len()).realise(0)
+
+fn main() i32:
+    let i32[] a = from([5, 6, 7])
+    println(a.firstish())
+    return Result.Ok(0)
