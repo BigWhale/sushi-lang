@@ -1,0 +1,12 @@
+fn second_reading(i32[] readings) i32:
+    let i32 value = readings.get(1)??
+    return Result.Ok(value * 2)
+
+fn main() i32:
+    let i32[] full = from([7, 21, 3])
+    let i32[] short = from([7])
+
+    println("second of three, doubled: {second_reading(full).realise(-1)}")
+    println("second of one, doubled:   {second_reading(short).realise(-1)}")
+
+    return Result.Ok(0)
