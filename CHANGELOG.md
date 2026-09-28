@@ -409,6 +409,32 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A diagnostic in an argument of a generic call is printed once** (#1037). The argument-count
+  check walked every argument and the check of the solved instance walked it again, so
+  `id(5 / 0)` printed CE0112 two times (a misplaced spread printed CE0120 two times). The count
+  check now reads the count only; a call with no solved instance walks its arguments once.
+- **The CE2408 and CE2422 helps read the type** (#1039): a write through a `peek` reference or a
+  by-value method parameter of a resource type is no longer offered `.clone()` (CE2431); it is
+  offered `.share()` when the type has one.
+
+### Testing
+- **A header line that looks like a directive is one the runner knows** (#1041). An unknown name
+  (`EXPECTED_OUTPUT`) or a valued name with no `:` (a bare `EXPECT_STDERR_EMPTY`) was dropped with
+  no message; it now fails its fixture. The eight bare `EXPECT_STDERR_EMPTY` lines assert now, the
+  125 dead `EXPECTED_*` lines are gone, and prose in a header no longer starts with a capital
+  directive-shaped word.
+- **`TEST_TYPE` is gone** (#1043): nothing read it; 632 header lines are deleted.
+- **The output gate sees a write through a console handle** (#1042) and has a stderr row: a
+  success fixture that writes stdout or stderr on its normal path asserts that stream. Four
+  fixtures that asserted nothing about their output now do.
+- **The runner has no weaker mode** (#1045): `--mode` is deleted, and results are keyed by the
+  fixture's path under `tests/`.
+- **A test run writes no cache into the source tree** (#1044): every compile of a run shares one
+  cache directory in the run's temporary directory, and the pre-run purge is deleted.
+- **The helper libraries build in parallel, and a narrowed run builds only the ones it needs**
+  (#1047); a filtered run of 22 fixtures fell from about 24 s to 7 s.
+
+### Fixed
 - **A store through a `poke` reference after its owner changed is CE2412** (#1026). `r := v`
   through a `let poke` or a `poke` pattern binding, after the owner was rebound or its payload
   replaced, compiled and wrote into freed storage. The field, index and method writes were
