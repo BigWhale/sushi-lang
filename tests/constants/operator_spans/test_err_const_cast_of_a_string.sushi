@@ -1,4 +1,5 @@
 # EXPECT_ERROR_CODE: CE0111
+# EXPECT_STDERR_CONTAINS: test_err_const_cast_of_a_string.sushi:5:15: error [CE0111]
 # A string has no cast to an integer, in a constant.
 
 const i32 X = "a" as i32

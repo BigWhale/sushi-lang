@@ -1,6 +1,8 @@
 # A constant of an owning type behind an alias in a return is a move out of
-# storage the program keeps, as the flat name is (#1016).
+# storage the program keeps, as the flat name is (#1016). The caret marks the whole
+# member access, from the receiver's first column (#1030).
 # EXPECT_ERROR_CODES_EXACT: CE2436
+# EXPECT_STDERR_CONTAINS: test_err_aliased_constant_return.sushi:9:22: error [CE2436]
 use "helpers/libc5" as c
 
 fn back() string:

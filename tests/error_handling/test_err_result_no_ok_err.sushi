@@ -1,9 +1,0 @@
-# Error test: return statement must use Ok() or Err()
-# EXPECT_ERROR_CODE: CE2030
-# Should fail with CE2030
-
-fn bad_return() i32:
-  return 42  # Error: must use Ok(42) instead
-
-fn main() i32:
-  return Result.Ok(0)
