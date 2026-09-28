@@ -35,7 +35,8 @@ dev = [
   "mypy>=2.3",
   "vulture>=2.16",
   "pre-commit>=4.6",
-  "tqdm>=4.67,<5"
+  "tqdm>=4.67,<5",
+  "pytest-xdist>=3.8"
 ]
 docs = [
   "mkdocs>=1.6",

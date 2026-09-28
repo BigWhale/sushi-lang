@@ -409,6 +409,34 @@ All notable changes to Sushi Lang will be documented in this file.
   writes everything, cannot.
 
 ### Fixed
+- **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
+  `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of
+  a generic body is now walked for the function values it holds, for a function, an extension and
+  a perk implementation alike.
+- **Every span in an interpolation hole is a file position** (#1038). Only `loc` and two member
+  spans were moved, so CE2062, CE2427, CE6102 and CE5009 in a hole pointed at the hole's own
+  column (often line 1). Every `Span` field is now moved through one walk, and the offset reads
+  the stripped hole text and the line of a literal that runs across lines.
+- **A malformed `nori.toml` under `sushic --lib` is the new CE3517** (#1040). A file that is not
+  TOML or UTF-8, or that has a table or a field of the wrong TOML type, was skipped with no report;
+  the build now stops and names nori's code (NE1002, NE1003, NE1010, NE1011). A missing file stays
+  silent.
+
+### Changed
+- **The compiler caches its grammar tables** (#1046) in the user cache directory
+  (`SUSHI_GRAMMAR_CACHE_DIR` overrides it; `off` turns it off), and one parser serves the program
+  and an interpolation hole, so the second grammar build is gone. A stale, truncated or foreign file
+  is rebuilt, never trusted. About 165 ms less per compile; a 33-fixture sample fell about 40%.
+
+### Testing
+- **The runner tests share one harness** (#1053): `tests/unit/runner/_harness.py`, a `runner`
+  marker on every module (`pytest -m "not runner"` is the fast loop), and a `-n 4` run in CI with a
+  lock for the tests that write the checkout. The two green halves that repeated a corpus step are
+  deleted. The runner layer fell from about 193 s to about 80 s.
+- **`tests/perf/` is deleted** (#1048): it was never collected, and its regression half started the
+  compiler inside pytest.
+
+### Fixed
 - **A diagnostic in an argument of a generic call is printed once** (#1037). The argument-count
   check walked every argument and the check of the solved instance walked it again, so
   `id(5 / 0)` printed CE0112 two times (a misplaced spread printed CE0120 two times). The count

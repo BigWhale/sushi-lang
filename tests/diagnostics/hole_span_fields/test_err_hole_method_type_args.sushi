@@ -1,0 +1,14 @@
+# Written type arguments on a method call in an interpolation hole are reported at
+# the type arguments in the file, not inside the text of the hole (#1038).
+# EXPECT_ERROR_CODES_EXACT: CE6102
+# EXPECT_STDERR_CONTAINS: test_err_hole_method_type_args.sushi:10:30: error [CE6102]
+extend i32 twice() i32:
+    return self * 2
+
+
+fn show(i32 n) ~:
+    println("value {n.twice@(i32)()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

@@ -13,15 +13,13 @@ from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "leakcheck"
+from _harness import PROJECT_ROOT, FIXTURES_DIR
+from run_tests import build_leakcheck, leakcheck_lib_path
 
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
+# This module builds the leak interposer that every leak check preloads.
+pytestmark = pytest.mark.writes_the_checkout
 
-from run_tests import build_leakcheck, leakcheck_lib_path  # noqa: E402
-
+FIXTURES = FIXTURES_DIR / "leakcheck"
 IS_DARWIN = sys.platform == "darwin"
 DOUBLE_FREE_LINE = "SUSHI_LEAKCHECK: DOUBLE_FREE"
 

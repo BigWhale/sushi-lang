@@ -1,0 +1,15 @@
+# A generic function value behind an alias is solved inside the body of a
+# generic function, as the bare name is (#1036).
+# EXPECT_STDOUT_EXACT: "one\n4\n"
+use "helpers/libinner" as l
+
+fn apply_c(fn(i32) -> i32 f) i32:
+    return Result.Ok(f(4).realise(0))
+
+fn inner@(U)(U u) i32:
+    println(u)
+    return Result.Ok(apply_c(l.gen).realise(0))
+
+fn main() i32:
+    println(inner("one").realise(0))
+    return Result.Ok(0)

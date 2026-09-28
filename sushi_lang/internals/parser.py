@@ -1,11 +1,19 @@
 """Lark parser setup and AST construction."""
 from __future__ import annotations
 
+import contextvars
+import hashlib
+import os
+import pickle
+import stat
+import sys
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
+import lark
 from lark import Lark, Token, UnexpectedInput
 from lark.exceptions import LarkError
 
@@ -22,6 +30,17 @@ GRAMMAR_PATH = Path(__file__).parent.parent / "grammar.lark"
 # postlexer to chain in front of it.
 
 DOC_OPEN = "##:"
+
+
+# True while the parser reads the text of an interpolation hole. That text comes from
+# inside a string literal, so a `##:` or a `:##` in it is not a doc-block delimiter.
+_IN_HOLE: contextvars.ContextVar[bool] = contextvars.ContextVar("in_hole", default=False)
+
+
+def _outside_holes(callback: Callable[[Token], Token]) -> Callable[[Token], Token]:
+    def guarded(token: Token) -> Token:
+        return token if _IN_HOLE.get() else callback(token)
+    return guarded
 
 
 def _delimiter_span(token: Token) -> Optional[Span]:
@@ -61,29 +80,154 @@ def _reject_nested_doc_open(token: Token) -> Token:
     return token
 
 
+# The options that hold Python objects. Lark does not store them in a cache file, and
+# they are given again on each load.
+_RUNTIME_OPTIONS = frozenset({"postlex", "lexer_callbacks"})
+
+GRAMMAR_CACHE_ENV = "SUSHI_GRAMMAR_CACHE_DIR"
+
+
+def grammar_cache_dir() -> Optional[Path]:
+    """The directory for the grammar-table cache, or None for no cache.
+
+    `SUSHI_GRAMMAR_CACHE_DIR` overrides it, and `off` turns the cache off. Otherwise it
+    is the user cache directory: `~/Library/Caches/sushi` on macOS, else
+    `$XDG_CACHE_HOME/sushi` or `~/.cache/sushi`.
+    """
+    override = os.environ.get(GRAMMAR_CACHE_ENV)
+    if override:
+        return None if override == "off" else Path(override)
+    try:
+        home = Path.home()
+    except (RuntimeError, KeyError, OSError):
+        return None
+    if sys.platform == "darwin":
+        return home / "Library" / "Caches" / "sushi"
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg) if xdg and os.path.isabs(xdg) else home / ".cache"
+    return base / "sushi"
+
+
+def _build_lark(grammar_text: str, grammar_path: Path, options: dict[str, Any]) -> Lark:
+    return Lark(grammar_text, source_path=str(grammar_path), **options)
+
+
+def _owned_by_me(st: os.stat_result) -> bool:
+    """The entry is mine, and no other user can write it."""
+    return st.st_uid == os.geteuid() and not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+
+
+def _trusted_dir(cache_dir: Path) -> bool:
+    """Make the directory if it is missing; True only if it is mine alone."""
+    try:
+        cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        st = os.lstat(cache_dir)
+    except OSError:
+        return False
+    return stat.S_ISDIR(st.st_mode) and _owned_by_me(st)
+
+
+def _load_cached(cache_file: Path, runtime: dict[str, Any]) -> Optional[Lark]:
+    """The parser in `cache_file`, or None if the file is missing, foreign or broken.
+
+    The file is a pickle, so it is read only when it is a regular file that the user
+    owns and that no other user can write.
+    """
+    try:
+        with open(cache_file, "rb") as f:
+            st = os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode) or not _owned_by_me(st):
+                return None
+            data = pickle.load(f)
+        return Lark.__new__(Lark)._load(data, **runtime)
+    except Exception:
+        return None
+
+
+def _store(parser: Lark, cache_dir: Path, cache_file: Path) -> None:
+    """Write the tables to a temporary file, then rename it over `cache_file`.
+
+    The rename is atomic, so a parallel compile reads the old file or the new one and
+    never a part of one. A failure leaves the cache as it was.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=cache_dir, prefix=".grammar-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            parser.save(f, exclude_options=_RUNTIME_OPTIONS)
+        os.replace(tmp_name, cache_file)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+
+
+def cached_lark(grammar_path: Path, cache_dir: Optional[Path], **options: Any) -> Lark:
+    """A LALR `Lark` for `grammar_path`, with its tables kept in `cache_dir`.
+
+    The file name is a hash of the grammar text, the options, and the Lark and Python
+    versions, so a changed grammar never reads an old file. A file that is missing,
+    broken or foreign is rebuilt, and a directory that cannot be used gives a plain
+    build. No case prints a message, and no case changes the parser that comes back.
+    """
+    grammar_text = grammar_path.read_text(encoding="utf-8")
+    runtime = {k: v for k, v in options.items() if k in _RUNTIME_OPTIONS}
+    stored = {k: v for k, v in options.items() if k not in _RUNTIME_OPTIONS}
+    if cache_dir is None or not hasattr(os, "geteuid") or not _trusted_dir(cache_dir):
+        return _build_lark(grammar_text, grammar_path, options)
+
+    key = hashlib.sha256("\0".join((
+        grammar_text,
+        repr(sorted(stored.items())),
+        lark.__version__,
+        "%d.%d" % sys.version_info[:2],
+    )).encode("utf-8")).hexdigest()[:32]
+    cache_file = cache_dir / f"{grammar_path.stem}-{key}.lark"
+
+    loaded = _load_cached(cache_file, runtime)
+    if loaded is not None:
+        return loaded
+    parser = _build_lark(grammar_text, grammar_path, options)
+    _store(parser, cache_dir, cache_file)
+    return parser
+
+
 @lru_cache(maxsize=1)
 def build_parser() -> Lark:
     """The Lark parser for `grammar.lark`. One instance parses any number of sources.
+
+    It has two start symbols: `start` for a unit, and `expr` for the text of an
+    interpolation hole (`parse_hole`). The tables come from `cached_lark`.
 
     The three doc-block diagnostics come from `lexer_callbacks`, which fire for an
     `%ignore`d terminal exactly as they do for a kept one. That is one mechanism for
     every delimiter mistake, in every position, with the caret on the delimiter --
     see docs/design/documentation.md section 4.
     """
-    kwargs: dict[str, Any] = dict(
+    options: dict[str, Any] = dict(
         parser="lalr",
+        start=["start", "expr"],
         propagate_positions=True,
         maybe_placeholders=False,
         postlex=LangIndenter(),
         lexer="basic",
         lexer_callbacks={
-            "DOC_OPEN": _reject_unclosed_doc_block,
-            "DOC_CLOSE": _reject_stray_doc_close,
-            "DOC_BLOCK": _reject_nested_doc_open,
+            "DOC_OPEN": _outside_holes(_reject_unclosed_doc_block),
+            "DOC_CLOSE": _outside_holes(_reject_stray_doc_close),
+            "DOC_BLOCK": _outside_holes(_reject_nested_doc_open),
         },
     )
-    # Lark.open raises GrammarError if grammar.lark itself is broken -- an ICE.
-    return Lark.open(str(GRAMMAR_PATH), **kwargs)
+    # A broken grammar.lark raises GrammarError here -- an ICE.
+    return cached_lark(GRAMMAR_PATH, grammar_cache_dir(), **options)
+
+
+def parse_hole(text: str):
+    """Parse the text of an interpolation hole as one expression."""
+    reset = _IN_HOLE.set(True)
+    try:
+        return build_parser().parse(text, start="expr")
+    finally:
+        _IN_HOLE.reset(reset)
 
 
 def _string_opens_a_hole_before(line_text: str, col: int) -> bool:
@@ -148,7 +292,7 @@ def parse_to_ast(src: str, dump_parse: bool = False,
     bundled stdlib module -- passes none and reads one exception.
     """
     try:
-        tree = build_parser().parse(src)
+        tree = build_parser().parse(src, start="start")
     except SushiError:
         raise
     except LarkError as e:

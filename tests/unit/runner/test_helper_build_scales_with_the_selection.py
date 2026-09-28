@@ -12,13 +12,9 @@ import sys
 import textwrap
 from pathlib import Path
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import run_tests  # noqa: E402
-from test_metadata import select_fixtures  # noqa: E402
+from _harness import TESTS_DIR
+import run_tests
+from test_metadata import select_fixtures
 
 # The fake compiler writes `<name>.start` in the log directory, then waits until every
 # name in RENDEZVOUS has started. A serial build cannot meet that rendezvous: the first

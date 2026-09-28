@@ -10,14 +10,11 @@ cache, and a fixture that changed one of those would break the run rather than t
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from test_metadata import parse_test_metadata  # noqa: E402
+from test_metadata import parse_test_metadata
 
 
 def _fixture(tmp_path: Path, header: str, name: str = "test_flags.sushi") -> Path:

@@ -43,11 +43,15 @@ SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchai
 #                                        block into a red gate.
 #   toolchain/src/                    -- the repository's Sushi tools; each declaration
 #                                        carries a doc block like a stdlib one.
+#   tests/diagnostics/doc_delimiter_in_hole/ -- the fixture that holds `##:` and `:##`
+#                                        inside an interpolation hole, where they are
+#                                        not delimiters.
 DOC_SOURCES = (
     "tests/docs",
     "tests/libs/helpers/doc_lib.sushi",
     "sushi_lang/sushi_stdlib/src_sushi/",
     "toolchain/src/",
+    "tests/diagnostics/doc_delimiter_in_hole/",
 )
 
 # `.sushi` files that do not parse, and did not before doc blocks existed. Each entry

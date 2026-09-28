@@ -148,7 +148,24 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           # Absolute path: --junit-xml has resolved relative to cwd vs rootdir differently
           # across pytest majors, and the badges job has to find the file afterwards.
-          uv run pytest -q --junit-xml="$GITHUB_WORKSPACE/pytest-report.xml"
+          # Two runs: the Python layer serially, and the runner tests (`-m runner`, they
+          # start the runner and the compiler) on 4 workers. A runner test that writes the
+          # checkout holds a lock alone (tests/unit/runner/conftest.py). Both runs always
+          # go, and one report holds the two, because the badge reads one file.
+          status=0
+          uv run pytest -q -m "not runner" --junit-xml="$RUNNER_TEMP/pytest-python.xml" || status=1
+          uv run pytest -q -m runner -n 4 --junit-xml="$RUNNER_TEMP/pytest-runner.xml" || status=1
+          uv run python - "$RUNNER_TEMP/pytest-python.xml" "$RUNNER_TEMP/pytest-runner.xml" \
+            "$GITHUB_WORKSPACE/pytest-report.xml" <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          merged = ET.Element("testsuites")
+          for path in sys.argv[1:-1]:
+              root = ET.parse(path).getroot()
+              merged.extend([root] if root.tag == "testsuite" else list(root.iter("testsuite")))
+          ET.ElementTree(merged).write(sys.argv[-1], encoding="utf-8", xml_declaration=True)
+          EOF
+          exit $status
 
       # !cancelled(), not success(): a FAILING pytest run is precisely the run whose
       # numbers the badge must publish. Only a cancellation leaves nothing worth reading.

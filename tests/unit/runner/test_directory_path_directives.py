@@ -9,20 +9,14 @@ the fixture's last compiler invocation. `THEN_CLEAN_CACHE` is that last invocati
 from __future__ import annotations
 
 import os
-import sys
 import uuid
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = TESTS_DIR.parent
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import TESTS_DIR, run_single, detail
+import enhanced_test_runner
+from test_metadata import parse_test_metadata
 
 MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
 USES_LIB = 'use <lib/dep>\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
@@ -41,15 +35,6 @@ def _fixture(tmp_path: Path, header: str, body: str = MAIN,
     path = home / "test_paths.sushi"
     path.write_text(header + "\n" + body, encoding="utf-8")
     return path
-
-
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
-
-
-def _detail(result) -> str:
-    return f"{result.compilation_message}\n{result.runtime_message}"
 
 
 def _spy_sushic(monkeypatch) -> list[tuple[list[str], dict]]:
@@ -110,17 +95,17 @@ def test_build_lib_at_builds_where_the_fixture_says(tmp_path, monkeypatch, heade
     target = header.split("-> ")[1].strip()
     path = _fixture(tmp_path, header + OUT_1 + f"# EXPECT_PATH_EXISTS: {target}\n",
                     USES_LIB, extra)
-    result = _run(path)
-    assert result.total_success, _detail(result)
+    result = run_single(path)
+    assert result.total_success, detail(result)
     compile_env = [env for cmd, env in seen if "--lib" not in cmd][-1]
     assert compile_env.get("SUSHI_LIB_PATH") == os.environ.get("SUSHI_LIB_PATH"), \
         "BUILD_LIB_AT adds nothing to SUSHI_LIB_PATH"
 
 
 def test_without_build_lib_at_the_library_is_missing(tmp_path):
-    result = _run(_fixture(tmp_path, IN_DIR + OUT_1, USES_LIB))
+    result = run_single(_fixture(tmp_path, IN_DIR + OUT_1, USES_LIB))
     assert not result.total_success
-    assert "CE3502" in _detail(result), _detail(result)
+    assert "CE3502" in detail(result), detail(result)
 
 
 @pytest.mark.parametrize("value, says", [
@@ -129,7 +114,7 @@ def test_without_build_lib_at_the_library_is_missing(tmp_path):
     ("dep.sushi -> /tmp/dep.slib", "inside the fixture"),
 ], ids=["no target", "a target outside the copy", "an absolute target"])
 def test_a_bad_build_lib_at_fails_the_fixture(tmp_path, value, says):
-    result = _run(_fixture(tmp_path, IN_DIR + f"# BUILD_LIB_AT: {value}\n" + OUT_1, USES_LIB))
+    result = run_single(_fixture(tmp_path, IN_DIR + f"# BUILD_LIB_AT: {value}\n" + OUT_1, USES_LIB))
     assert not result.total_success
     assert says in result.compilation_message, result.compilation_message
 
@@ -138,7 +123,7 @@ def test_a_build_lib_at_that_does_not_build_fails_the_fixture(tmp_path):
     path = _fixture(tmp_path, IN_DIR + "# BUILD_LIB_AT: dep.sushi -> dep.slib\n" + OUT_1,
                     USES_LIB)
     (path.parent / "dep.sushi").write_text("public const i32 N = \n", encoding="utf-8")
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
     assert "BUILD_LIB_AT dep.sushi failed" in result.compilation_message, \
         result.compilation_message
@@ -150,15 +135,15 @@ def test_fixture_cache_dir_passes_the_relative_spelling(tmp_path, monkeypatch):
     seen = _spy_sushic(monkeypatch)
     header = (IN_DIR + "# FIXTURE_CACHE_DIR: rel\n" + OUT_1
               + "# EXPECT_PATH_EXISTS: rel/units\n# EXPECT_PATH_ABSENT: __sushi_cache__\n")
-    result = _run(_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
     (cmd, _), = seen
     assert cmd[cmd.index("--cache-dir") + 1] == "rel", cmd
 
 
 def test_fixture_cache_dir_moves_the_cache(tmp_path):
     header = IN_DIR + "# FIXTURE_CACHE_DIR: rel\n" + OUT_1 + "# EXPECT_PATH_EXISTS: __sushi_cache__\n"
-    result = _run(_fixture(tmp_path, header))
+    result = run_single(_fixture(tmp_path, header))
     assert not result.total_success
     assert "__sushi_cache__" in result.compilation_message, result.compilation_message
 
@@ -169,7 +154,7 @@ def test_fixture_cache_dir_moves_the_cache(tmp_path):
     (IN_DIR + "# FIXTURE_CACHE_DIR: ../rel\n", "inside the fixture"),
 ], ids=["not in the fixture's directory", "an absolute path", "a path outside the copy"])
 def test_a_bad_fixture_cache_dir_fails_the_fixture(tmp_path, header, says):
-    result = _run(_fixture(tmp_path, header + OUT_1))
+    result = run_single(_fixture(tmp_path, header + OUT_1))
     assert not result.total_success
     assert says in result.compilation_message, result.compilation_message
 
@@ -179,14 +164,14 @@ def test_a_bad_fixture_cache_dir_fails_the_fixture(tmp_path, header, says):
 def test_path_expectations_that_hold_pass(tmp_path):
     header = (IN_DIR + OUT_1 + "# EXPECT_PATH_EXISTS: __sushi_cache__/units, dep.sushi\n"
               "# EXPECT_PATH_ABSENT: nothing_here\n")
-    result = _run(_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
 
 
 def test_path_expectations_read_the_copy_without_run_in_fixture_dir(tmp_path):
-    result = _run(_fixture(tmp_path, OUT_1 + "# EXPECT_PATH_EXISTS: dep.sushi\n"
+    result = run_single(_fixture(tmp_path, OUT_1 + "# EXPECT_PATH_EXISTS: dep.sushi\n"
                                              "# EXPECT_PATH_ABSENT: __sushi_cache__\n"))
-    assert result.total_success, _detail(result)
+    assert result.total_success, detail(result)
 
 
 @pytest.mark.parametrize("line, says", [
@@ -195,7 +180,7 @@ def test_path_expectations_read_the_copy_without_run_in_fixture_dir(tmp_path):
     ("# EXPECT_PATH_EXISTS: ../fixture\n", "inside the fixture"),
 ], ids=["a missing path", "a present path", "a path outside the copy"])
 def test_path_expectations_that_do_not_hold_fail(tmp_path, line, says):
-    result = _run(_fixture(tmp_path, IN_DIR + OUT_1 + line))
+    result = run_single(_fixture(tmp_path, IN_DIR + OUT_1 + line))
     assert not result.total_success
     assert says in result.compilation_message, result.compilation_message
 
@@ -205,14 +190,14 @@ def test_path_expectations_that_do_not_hold_fail(tmp_path, line, says):
 def test_then_clean_cache_bare_removes_the_cache(tmp_path, monkeypatch):
     seen = _spy_sushic(monkeypatch)
     header = IN_DIR + OUT_1 + "# THEN_CLEAN_CACHE: bare\n# EXPECT_PATH_ABSENT: __sushi_cache__\n"
-    result = _run(_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
     assert seen[-1][0][1:] == ["--clean-cache"], seen[-1][0]
 
 
 def test_without_then_clean_cache_the_cache_stays(tmp_path):
     header = IN_DIR + OUT_1 + "# EXPECT_PATH_ABSENT: __sushi_cache__\n"
-    result = _run(_fixture(tmp_path, header))
+    result = run_single(_fixture(tmp_path, header))
     assert not result.total_success
     assert "__sushi_cache__" in result.compilation_message, result.compilation_message
 
@@ -221,8 +206,8 @@ def test_then_clean_cache_bare_passes_the_fixture_cache_dir(tmp_path, monkeypatc
     seen = _spy_sushic(monkeypatch)
     header = (IN_DIR + "# FIXTURE_CACHE_DIR: rel\n" + OUT_1 + "# THEN_CLEAN_CACHE: bare\n"
               "# EXPECT_PATH_ABSENT: rel, __sushi_cache__\n")
-    result = _run(_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
     assert seen[-1][0][1:] == ["--clean-cache", "--cache-dir", "rel"], seen[-1][0]
 
 
@@ -230,8 +215,8 @@ def test_then_clean_cache_source_cleans_and_builds_again(tmp_path, monkeypatch):
     seen = _spy_sushic(monkeypatch)
     header = (IN_DIR + OUT_1 + "# THEN_CLEAN_CACHE: source\n"
               "# EXPECT_REBUILT: dep, test_paths\n# EXPECT_PATH_EXISTS: __sushi_cache__\n")
-    result = _run(_fixture(tmp_path, header))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, header))
+    assert result.total_success, detail(result)
     last = seen[-1][0]
     assert last[1:3] == ["--clean-cache", "test_paths.sushi"] and "-o" in last, last
 
@@ -240,7 +225,7 @@ def test_then_clean_cache_source_reads_the_report_of_the_clean_build(tmp_path):
     """Without the clean the second build would serve both units from the cache."""
     header = (IN_DIR + OUT_1 + "# THEN_CLEAN_CACHE: source\n"
               "# EXPECT_CACHED: dep, test_paths\n")
-    result = _run(_fixture(tmp_path, header))
+    result = run_single(_fixture(tmp_path, header))
     assert not result.total_success
     assert "expected [cached]" in result.compilation_message, result.compilation_message
 
@@ -250,7 +235,7 @@ def test_then_clean_cache_source_reads_the_report_of_the_clean_build(tmp_path):
     ("# THEN_CLEAN_CACHE: bare\n", "RUN_IN_FIXTURE_DIR"),
 ], ids=["an unknown form", "not in the fixture's directory"])
 def test_a_bad_then_clean_cache_fails_the_fixture(tmp_path, header, says):
-    result = _run(_fixture(tmp_path, header + OUT_1))
+    result = run_single(_fixture(tmp_path, header + OUT_1))
     assert not result.total_success
     assert says in result.compilation_message, result.compilation_message
 
@@ -261,8 +246,8 @@ def test_a_bad_then_clean_cache_fails_the_fixture(tmp_path, header, says):
 ], ids=["a path the compilation wrote", "a path nothing wrote"])
 def test_path_before_the_clean_is_read_before_it(tmp_path, line, passes):
     header = IN_DIR + OUT_1 + "# THEN_CLEAN_CACHE: bare\n# EXPECT_PATH_ABSENT: __sushi_cache__\n"
-    result = _run(_fixture(tmp_path, header + line))
-    assert result.total_success is passes, _detail(result)
+    result = run_single(_fixture(tmp_path, header + line))
+    assert result.total_success is passes, detail(result)
     if not passes:
         assert "before THEN_CLEAN_CACHE" in result.compilation_message, \
             result.compilation_message
@@ -270,11 +255,12 @@ def test_path_before_the_clean_is_read_before_it(tmp_path, line, passes):
 
 def test_a_path_before_the_clean_needs_the_clean(tmp_path):
     header = IN_DIR + OUT_1 + "# EXPECT_PATH_EXISTS_BEFORE_CLEAN: __sushi_cache__\n"
-    result = _run(_fixture(tmp_path, header))
+    result = run_single(_fixture(tmp_path, header))
     assert not result.total_success
     assert "needs THEN_CLEAN_CACHE" in result.compilation_message, result.compilation_message
 
 
+@pytest.mark.writes_the_checkout  # it writes into the checkout's `__sushi_cache__/`
 def test_a_bare_clean_never_removes_the_checkouts_cache(tmp_path):
     """The runner fails a bare clean after which the checkout's own cache is gone.
 
@@ -290,7 +276,7 @@ def test_a_bare_clean_never_removes_the_checkouts_cache(tmp_path):
             header = IN_DIR + OUT_1 + "# THEN_CLEAN_CACHE: bare\n"
             result = runner.run_single_test(_fixture(tmp_path, header))
             assert marker.is_dir(), "the bare --clean-cache removed the checkout's own cache"
-            assert result.total_success, _detail(result)
+            assert result.total_success, detail(result)
         finally:
             if marker.is_dir():
                 marker.rmdir()

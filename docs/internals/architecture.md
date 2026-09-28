@@ -294,6 +294,20 @@ sushi/
         └── linux/             # Linux (similar structure)
 ```
 
+## Parser
+
+`sushi_lang/internals/parser.py:build_parser` makes ONE LALR parser per process, with
+two start symbols: `start` for a unit, and `expr` for the text of an interpolation hole
+(`parse_hole`). The doc-block lexer callbacks (CE6011, CE6012, CE6013) do not fire while
+a hole is parsed, because the hole text comes from inside a string literal.
+
+`cached_lark` keeps the tables in the user cache directory (see the Grammar Cache
+section of `docs/compiler-reference.md`). It writes a temporary file in the same
+directory and renames it over the cache file, so parallel compiles read a whole file or
+no file. A missing, broken or foreign file gives a plain build, and a plain build gives
+the same parser. The options that hold Python objects (`postlex`, `lexer_callbacks`)
+are not in the file; each load gives them again.
+
 ## Semantic Passes
 
 Fifteen passes, in this order. The passes have NAMES, not numbers -- a number goes out of

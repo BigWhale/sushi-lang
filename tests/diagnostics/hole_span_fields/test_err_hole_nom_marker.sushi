@@ -1,0 +1,15 @@
+# A `nom` marker in an interpolation hole against a parameter that only borrows is
+# reported at the marker in the file, not inside the text of the hole (#1038).
+# EXPECT_ERROR_CODES_EXACT: CE2427
+# EXPECT_STDERR_CONTAINS: test_err_hole_nom_marker.sushi:11:26: error [CE2427]
+use <collections/strings>
+
+fn look(string s) i32:
+    return Result.Ok(s.len())
+
+fn show(string t) ~:
+    println("value {look(nom t)??}")
+    return Result.Ok(~)
+
+fn main() i32:
+    return Result.Ok(0)

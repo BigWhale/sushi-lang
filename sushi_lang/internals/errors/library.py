@@ -104,6 +104,18 @@ _add(ErrorMessage("CE3516", Severity.ERROR,
     "file that happens to hold a library under another name is refused as well. It used "
     "to be an uncoded line on stderr from each half, worded differently (#977)."))
 
+_add(ErrorMessage("CE3517", Severity.ERROR,
+    "cannot build library '{lib}': {reason} [{nori_code}]",
+    Category.LIBRARY,
+    "A --lib build reads the nori.toml of the package that holds the sources for the "
+    "library version. When that file is not TOML, or a table or a field in it has the wrong "
+    "TOML type, the build stops here: the user wrote a manifest and it is wrong. The reason "
+    "is the text of the nori code in brackets -- the one manifest reader makes the check for "
+    "the compiler and for nori, so both name the file and the field in the same words. It "
+    "used to be a silent skip, and before that CE0000 (#1040). A missing nori.toml is not "
+    "this error. A field that is well typed but has a bad value (a package name, a "
+    "dependency) is not this error either: the compiler does not read it."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,

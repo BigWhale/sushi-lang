@@ -41,5 +41,4 @@ def index_access_from_parts(array_expr: Expr, index_node: Tree, ast_builder: 'AS
         array=array_expr,
         index=ast_builder._expr(index_expr_node),
         loc=loc,
-        index_span=span_of(index_node),
     )

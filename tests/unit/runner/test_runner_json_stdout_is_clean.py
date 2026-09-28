@@ -8,15 +8,11 @@ warnings are diagnostics, so they belong on stderr in every mode.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(TESTS_ROOT))
-
-from test_metadata import parse_test_metadata  # noqa: E402
+from test_metadata import parse_test_metadata
 
 
 # One case per warning `parse_test_metadata` can print. Each body is a valid test file

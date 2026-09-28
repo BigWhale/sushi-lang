@@ -1,0 +1,8 @@
+# The text of an interpolation hole comes from inside a string literal, so a `##:`
+# or a `:##` in it is not a doc-block delimiter, and CE6011/CE6012 do not fire.
+# The hole and the unit share one parser since #1046; this holds the old answer.
+# EXPECT_STDOUT_EXACT: "5 8\n"
+fn main() i32:
+    let i32 x = 4
+    println("{x ##: + 1} {x :## * 2}")
+    return Result.Ok(0)

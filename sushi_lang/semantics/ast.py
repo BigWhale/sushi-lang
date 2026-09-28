@@ -635,7 +635,6 @@ class IndexAccess(Node):
                                             # as CE0019 (#286). Siblings:
                                             # `inferred_return_type`,
                                             # `inferred_unwrapped_type`.
-    index_span: Optional[Span] = None  # the `[index]` postfix; `loc` is the whole read
 
 UnOp = Literal["neg", "not", "~"]
 @dataclass(slots=True)

@@ -6,18 +6,13 @@ The runner never creates the path's parent: that directory is the subject of the
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import run_single, detail
+import enhanced_test_runner
+from test_metadata import parse_test_metadata
 
 EXITS_0 = "fn main() i32:\n    return Result.Ok(0)\n"
 PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
@@ -42,15 +37,6 @@ def _fixture(tmp_path: Path, name: str, header: str, body: str = EXITS_0,
     path = home / name
     path.write_text(header + "\n" + body, encoding="utf-8")
     return path
-
-
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
-
-
-def _detail(result) -> str:
-    return f"{result.compilation_message}\n{result.runtime_message}"
 
 
 def _spy_output(monkeypatch) -> list[tuple[str, bool, str]]:
@@ -113,8 +99,8 @@ def test_output_path_never_lets_o_through(tmp_path, capsys):
         "in the fixture's directory"])
 def test_a_missing_directory_is_ce3019(tmp_path, monkeypatch, header, body, extra):
     seen = _spy_output(monkeypatch)
-    result = _run(_fixture(tmp_path, "test_err_o.sushi", header + REFUSED, body, extra))
-    assert result.total_success, _detail(result)
+    result = run_single(_fixture(tmp_path, "test_err_o.sushi", header + REFUSED, body, extra))
+    assert result.total_success, detail(result)
     (out, parent_existed, _), = seen
     assert out.endswith("/out") or out.endswith("/x.slib"), out
     if "afile" in header:
@@ -127,21 +113,21 @@ def test_the_expectation_fails_where_the_directory_exists(tmp_path):
     """The directive reaches the compiler: an existing `nodir/` builds, and CE3019 is absent."""
     path = _fixture(tmp_path, "test_err_o.sushi", "# OUTPUT_PATH: nodir/out\n" + REFUSED,
                     dirs=("nodir",))
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
     assert "Expected 2, got 0" in result.compilation_message, result.compilation_message
 
 
 def test_the_spelling_is_absolute_outside_the_fixtures_directory(tmp_path, monkeypatch):
     seen = _spy_output(monkeypatch)
-    _run(_fixture(tmp_path, "test_err_o.sushi", "# OUTPUT_PATH: nodir/out\n" + REFUSED))
+    run_single(_fixture(tmp_path, "test_err_o.sushi", "# OUTPUT_PATH: nodir/out\n" + REFUSED))
     (out, _, _), = seen
     assert Path(out).is_absolute() and out.endswith("/fixture/nodir/out"), out
 
 
 def test_the_spelling_is_relative_in_the_fixtures_directory(tmp_path, monkeypatch):
     seen = _spy_output(monkeypatch)
-    _run(_fixture(tmp_path, "test_err_o.sushi",
+    run_single(_fixture(tmp_path, "test_err_o.sushi",
                   IN_DIR + "# OUTPUT_PATH: nodir/out\n" + REFUSED))
     (out, _, cwd), = seen
     assert out == "nodir/out", out
@@ -155,9 +141,9 @@ def test_a_success_fixture_runs_the_binary_at_the_output_path(tmp_path, monkeypa
     path = _fixture(tmp_path, "test_o.sushi",
                     '# OUTPUT_PATH: out/x\n# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n',
                     PRINTS, dirs=("out",))
-    result = _run(path)
-    assert result.total_success, _detail(result)
-    assert result.runtime_success is True, _detail(result)
+    result = run_single(path)
+    assert result.total_success, detail(result)
+    assert result.runtime_success is True, detail(result)
     (out, parent_existed, _), = seen
     assert out.endswith("/fixture/out/x") and parent_existed, out
 
@@ -165,12 +151,12 @@ def test_a_success_fixture_runs_the_binary_at_the_output_path(tmp_path, monkeypa
 def test_a_success_fixture_reads_its_output_through_expect_path_exists(tmp_path):
     path = _fixture(tmp_path, "test_o.sushi",
                     "# OUTPUT_PATH: out/x\n# EXPECT_PATH_EXISTS: out/x\n", dirs=("out",))
-    result = _run(path)
-    assert result.total_success, _detail(result)
+    result = run_single(path)
+    assert result.total_success, detail(result)
 
 
 def test_a_success_fixture_whose_directory_is_missing_fails(tmp_path):
-    result = _run(_fixture(tmp_path, "test_o.sushi", "# OUTPUT_PATH: nodir/out\n"))
+    result = run_single(_fixture(tmp_path, "test_o.sushi", "# OUTPUT_PATH: nodir/out\n"))
     assert not result.total_success
     assert "CE3019" in result.compilation_message, result.compilation_message
 
@@ -179,7 +165,7 @@ def test_a_library_with_a_run_is_refused(tmp_path):
     """A library has no binary: a fixture that would run one says so before it compiles."""
     path = _fixture(tmp_path, "test_o.sushi", "# OUTPUT_PATH: out/x.slib\n" + LIB, LIBRARY,
                     dirs=("out",))
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
     assert "a library has no binary to run" in result.compilation_message, \
         result.compilation_message
@@ -190,7 +176,7 @@ def test_a_library_with_a_run_is_refused(tmp_path):
 @pytest.mark.parametrize("value", ["/tmp/out", "../out", "nodir/../../out", ""],
                          ids=["absolute", "above the copy", "climbs out", "empty"])
 def test_a_path_outside_the_copy_fails_the_fixture(tmp_path, value):
-    result = _run(_fixture(tmp_path, "test_err_o.sushi",
+    result = run_single(_fixture(tmp_path, "test_err_o.sushi",
                            f"# OUTPUT_PATH: {value}\n" + REFUSED))
     assert not result.total_success
     assert "OUTPUT_PATH" in result.compilation_message, result.compilation_message

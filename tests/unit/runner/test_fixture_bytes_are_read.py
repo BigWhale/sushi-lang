@@ -7,18 +7,12 @@ selection do; it never passes with its assertions unread.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-TESTS_DIR = Path(__file__).resolve().parents[2]
-
-if str(TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(TESTS_DIR))
-
-import enhanced_test_runner  # noqa: E402
-from test_metadata import parse_test_metadata  # noqa: E402
+from _harness import run_single
+from test_metadata import parse_test_metadata
 
 BODY_WITH_A_BAD_BYTE = b'fn main() i32:\n    let string s = "\xff"\n    return Result.Ok(0)\n'
 
@@ -29,11 +23,6 @@ def _fixture(tmp_path: Path, name: str, data: bytes) -> Path:
     path = home / name
     path.write_bytes(data)
     return path
-
-
-def _run(path: Path):
-    with enhanced_test_runner.TestRunner(TESTS_DIR) as runner:
-        return runner.run_single_test(path)
 
 
 def test_the_directives_above_a_bad_byte_are_read(tmp_path):
@@ -47,7 +36,7 @@ def test_the_directives_above_a_bad_byte_are_read(tmp_path):
 def test_a_wrong_code_above_a_bad_byte_fails_the_fixture(tmp_path):
     path = _fixture(tmp_path, "test_err_bytes.sushi",
                     b"# EXPECT_ERROR_CODE: CE2001\n" + BODY_WITH_A_BAD_BYTE)
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success, (
         f"the fixture passed with its EXPECT_ERROR_CODE unchecked: {result.compilation_message}")
     assert "CE2001" in result.compilation_message
@@ -56,7 +45,7 @@ def test_a_wrong_code_above_a_bad_byte_fails_the_fixture(tmp_path):
 def test_the_right_code_above_a_bad_byte_passes(tmp_path):
     path = _fixture(tmp_path, "test_err_bytes.sushi",
                     b"# EXPECT_ERROR_CODE: CE3017\n" + BODY_WITH_A_BAD_BYTE)
-    result = _run(path)
+    result = run_single(path)
     assert result.total_success, result.compilation_message
 
 
@@ -64,7 +53,7 @@ def test_a_bad_byte_in_the_directive_block_fails_the_fixture(tmp_path):
     path = _fixture(tmp_path, "test_err_bytes.sushi",
                     b"# EXPECT_ERROR_CODE: CE3017\n# \xff\n" + BODY_WITH_A_BAD_BYTE)
     assert parse_test_metadata(path).directive_errors
-    result = _run(path)
+    result = run_single(path)
     assert not result.total_success
     assert "not valid UTF-8" in result.compilation_message
     assert "line 2" in result.compilation_message
