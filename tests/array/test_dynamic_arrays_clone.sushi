@@ -1,5 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 3
-# EXPECT_STDOUT_CONTAINS: 42
+# EXPECT_STDOUT_EXACT: "3\n3\n1\n1\n4\n3\n4\n4\n0\n0\n0\n1\n42\n3\n3\n4\n4\n40\n50\n2\n2\n3\n2\n"
 # Test clone() method for dynamic arrays
 # This test verifies that clone creates independent deep copies
 

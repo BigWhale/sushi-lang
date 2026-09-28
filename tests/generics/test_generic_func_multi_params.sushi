@@ -1,10 +1,21 @@
 # Test: Multiple type parameters work
 
-fn triple@(T, U, V)(T a, U b, V c) ~:
-    return Result.Ok(~)
+struct Triple@(T, U, V):
+    T a
+    U b
+    V c
 
-fn pair@(A, B)(A first, B second) ~:
-    return Result.Ok(~)
+fn triple@(T, U, V)(T a, U b, V c) Triple@(T, U, V):
+    return Result.Ok(Triple(a, b, c))
+
+fn pair@(A, B)(A first, B second) Triple@(A, B, A):
+    return Result.Ok(Triple(first, second, first))
 
 fn main() i32:
+    let Triple@(i32, bool, f64) t = triple(1, true, 2.5).realise(Triple(0, false, 0.0))
+    if (t.a != 1 or t.b != true or t.c != 2.5):
+        return Result.Ok(1)
+    let Triple@(f64, i32, f64) q = pair(2.5, 7).realise(Triple(0.0, 0, 0.0))
+    if (q.a != 2.5 or q.b != 7 or q.c != 2.5):
+        return Result.Ok(2)
     return Result.Ok(0)

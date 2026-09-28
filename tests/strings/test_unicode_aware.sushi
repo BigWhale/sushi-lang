@@ -1,4 +1,4 @@
-# EXPECT_STDOUT_CONTAINS: 5
+# EXPECT_STDOUT_EXACT: "5\n5\n4\n5\n13\n16\n3\n9\n11\n16\n1\n3\n3\n12\n0\n0\n1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Test UTF-8 Unicode support: len() vs size()
 use <collections/strings>
@@ -17,7 +17,7 @@ fn main() i32:
     # Emoji (4-byte UTF-8 character)
     let string wave = "Hello 👋 World"
     println(wave.len())     # 13 characters
-    println(wave.size())    # 17 bytes (👋 is 4 bytes)
+    println(wave.size())    # 16 bytes (👋 is 4 bytes)
 
     # Japanese characters (3-byte UTF-8 each)
     let string japanese = "日本語"
@@ -27,7 +27,7 @@ fn main() i32:
     # Mixed ASCII and Unicode
     let string mixed = "Test: é ❤ 日"
     println(mixed.len())     # 11 characters
-    println(mixed.size())    # 17 bytes
+    println(mixed.size())    # 16 bytes
 
     # Heart emoji
     let string heart = "❤"

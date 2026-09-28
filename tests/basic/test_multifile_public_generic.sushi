@@ -1,6 +1,6 @@
 # The public half: a marked generic of another unit is callable and runs (#467).
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "7"
+# EXPECT_STDOUT_EXACT: "7\n"
 
 use "helpers/generic_private_helper"
 

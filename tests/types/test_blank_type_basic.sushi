@@ -3,4 +3,6 @@ fn do_nothing() ~:
 
 fn main() i32:
   do_nothing()
+  if (not do_nothing().is_ok()):
+    return Result.Ok(1)
   return Result.Ok(0)

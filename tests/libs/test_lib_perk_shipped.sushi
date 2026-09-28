@@ -4,7 +4,7 @@
 # to provide the implementation for its own instantiation type. Proves perk
 # definitions cross the library boundary.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "5"
+# EXPECT_STDOUT_EXACT: "5\n"
 
 use <lib/generics_lib>
 

@@ -5,7 +5,7 @@
 # `hash()` is the only one there is. It must still compile, dispatch to the extension,
 # and run. A name-based CE2097 would break this program.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_CONTAINS: "7"
+# EXPECT_STDOUT_EXACT: "7\n"
 
 unsafe external "C" as libc because "the test needs a struct field the compiler cannot hash":
     fn malloc(i64 size) ptr = "malloc"
