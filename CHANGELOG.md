@@ -308,6 +308,59 @@ All notable changes to Sushi Lang will be documented in this file.
   the new **CE3518**, with the reason from the system. A `[files]` entry that leaves the
   project is NE2008.
 
+- **A generic instance reached only through substitution is interned** (#577). A `Box@(B)` field
+  that became `Box<string>` at monomorphization was never interned, and the `derive` pass gave
+  CE0128, a false CE2052, CE2008 or a backend KeyError. A `from([...])` literal given to
+  `.extend()` takes the element type of the receiver (#576).
+- **A predefined enum has a home module** (#574). `fs.FileMode` behind `use <io/fs> as fs` was
+  CE2001. The import now gates the bare name of each of the nine predefined enums but
+  `StdError`. A built-in static with no stamp is CE2060 and not an internal error (#570).
+- **A constraint violation is one located diagnostic** (#579). CE4006 has a file and a line, and
+  the analysis stops after it, so the extension copies give no second CE2008. The four
+  load-if-pointer sites are re-instrumented and the dead ones are gone (#553).
+- **`HashMap.insert` over an existing key destroys what it replaces** (#591). The old value and
+  the consumed key leaked on the update path.
+- **The cache key reads a dependency's full interface** (#593). A struct's fields, an enum's
+  variant order and the VALUE of a public constant were outside the digest, so a dependent kept
+  a stale object. A type reached through a `public use` is in it.
+- **A constant folds once** (#597). A chain of 22 constants that each name the previous one twice
+  took 59 seconds. The table holds the folded value, keyed by unit and name.
+- **One hashability walk per type** (#598). `can_struct_be_hashed` copied its visited set for
+  each field and the `derive` pass asked twice. 13 structs of fan-out 4 went from 28.5 s to 0.45 s.
+- **An FFI diagnostic names the unit that holds the fault** (#599). CE5009, CE5003 and CW5001
+  from a second unit printed the entry file. A Unit holds its own source text.
+- **The derived hash and clone belong to one compilation** (#601). The table was module-global,
+  so two programs in one process with a `Point` each shared an emitter.
+- **The substitution walk is total** (#602). A cast, explicit call-site type arguments and a
+  lambda annotation inside a generic body kept their type parameter (CE2014, CE2035, CE2061,
+  CE2002 on a legal program).
+- **One walk finds every instantiation a type names** (#603). A generic instance reached only
+  through a `peek` or `poke` parameter or a function type was CE2001.
+- **Four dispatch holes closed** (#625, #624, #610, #618). A lambda expression body reads the
+  declared return type; the typecheck stamp names the struct of a receiver; a field read's
+  receiver owns what nothing else names; a type kind with no hashability answer is refused.
+- **A container's hash reads what it holds, and the map is refused** (#628). `Own@(T)` and
+  `List@(T)` hash their contents; four programs that ended in an internal error are diagnostics.
+- **A lambda body is walked once** (#629). Every fault in it was reported twice. Lift owns the
+  body; the typecheck pass keeps the function type and the capture rules (CE2094).
+- **An unknown field is answered where it is written** (#630). It was CE0029 with no location;
+  it is CE2106 with a caret.
+- **One report per generic function** (#648). Each instance carried the template's spans, so a
+  fault in the body printed once for every instance. The io/error example is fixed (#649).
+- **One error-type rule for both spellings of a Result** (#668). `T | E` and `Result@(T, E)`
+  both require an enum. A user's generic enum is legal in the short form.
+- **The AST builder and its walks, S1 frontend batch** (#631-#643, #654, #655, #658, #664).
+  A generic perk implementation is in the declaration walk; top-level declarations dispatch
+  from one table; the parameter, loop-tail, import-path and member-name rules each have one
+  reader; the AST walk is total and a miss is a located CE0136; the builder reports eight of
+  its rules through a `Reporter` and goes on (CE6006, CE2071, CE2099, CE2418, CE2424, CE2434,
+  CE2425, CE6103); nine dead branches and two stale doc references are deleted.
+- **Containment of the AST and of llvmlite.** Every dataclass in `semantics/ast.py` is
+  `slots=True`, so a write to an undeclared attribute raises. llvmlite appears only in
+  `backend/` and `sushi_stdlib/`.
+- **The `<io/files>` generators share their frames.** The four syscall wrappers are one
+  function and the Result Ok-payload build is written once. No symbol or layout moves.
+
 ### Standard Library
 - **The constructor vocabulary: a static is `new`, a free function is a bare verb**
   (#571). A function that builds a value of a type from its arguments and allocates for
@@ -444,6 +497,13 @@ All notable changes to Sushi Lang will be documented in this file.
   `pytest` excludes them by default (`-m runner` selects them); CI runs them serially, only
   when a runner file changes or on a push to main. The checkout lock and the
   `writes_the_checkout` marker are gone, and a runner test on an xdist worker fails at once.
+- **The mypy ratchet and the fresh-tree gates agree with the primary checkout** (#529, #530).
+  `follow_imports = "silent"` stops a fresh environment from reporting 2954 errors outside the
+  named packages.
+- **The test harness cannot report a pass it did not earn** (#604, #605). A fixture is identified
+  by its path, and a skipped leak assertion fails the run.
+- **An interpolated string in argument position has one owner** (#521).
+- **Agent skills configuration** is added under `docs/agents/`.
 
 ### Testing
 - **One home per pytest property** (#1051): three duplicate checks deleted, five split properties
