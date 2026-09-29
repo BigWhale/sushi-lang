@@ -1,4 +1,4 @@
-# List&lt;T&gt;
+# List@(T)
 
 [← Back to Standard Library](../../standard-library.md)
 
@@ -75,8 +75,16 @@ if (list.is_empty()):
 ### `.get(i32 index) -> Maybe@(T)`
 
 Get element at index (bounds-checked). The list keeps the element — `.get()` does not remove
-it. If `T` is an owning type (e.g. `string`, a struct/enum holding heap data), the returned
-value is a deep copy, so the list and the returned `Maybe` each own independent memory.
+it. The value in the `Some` is a BORROW of the element, not a copy. If `T` is an owning
+type (e.g. `string`, a struct/enum holding heap data), you can read the value, but you
+cannot consume it (CE2411), and `match nom` on it is refused (CE2432). Take an independent
+value with `.clone()`:
+
+```sushi
+match names.get(0):
+    Maybe.Some(s) -> keep(nom s.clone())   # the list still owns its element
+    Maybe.None() -> println("empty")
+```
 
 ```sushi
 match list.get(0):
@@ -110,11 +118,14 @@ list.push(42)
 list.push(100)
 ```
 
-### `.insert(i32 index, T element) -> Result@(~)`
+### `.insert(i32 index, T element) -> Result@(~, StdError)`
 
-Insert element at index (shifts elements right). Returns `Result.Err` if `index` is out of
-bounds — unlike `.push()`/`.get()`/`.pop()`/`.remove()`, this is the one `List@(T)` method that
-can fail, so it returns a `Result` instead of `~` or `Maybe@(T)`.
+Insert element at index (shifts elements right). Returns `Result.Err(StdError.Error)` if
+`index` is out of bounds — unlike `.push()`/`.get()`/`.pop()`/`.remove()`, this is the one
+`List@(T)` method that can fail, so it returns a `Result` instead of `~` or `Maybe@(T)`.
+
+The element is evaluated and consumed before the bounds check. On the `Err` path the list
+destroys the element, so an owning element does not leak, and it is gone after the call.
 
 ```sushi
 let List@(i32) nums = List.new()
@@ -215,6 +226,16 @@ length is part of the hash, so a list of one zero and a list of two zeros do not
 
 A list is not a `HashMap@(K, V)` key: a key also needs an equality test, and a list has
 none.
+
+## Copying
+
+### `.clone() -> List@(T)`
+
+A deep copy: the new list owns its own copy of each element.
+
+```sushi
+let List@(string) copy = names.clone()
+```
 
 ## Memory Management
 

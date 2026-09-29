@@ -56,17 +56,38 @@ let i32 value = opt.expect("Expected a value!")
 
 ## Error Propagation
 
-Use `??` to unwrap or propagate None:
+Use `??` to unwrap a `Some`. On a `None`, `??` returns early from the enclosing function
+with an `Err`:
 
 ```sushi
-fn get_first(i32[] arr) Maybe@(i32):
+fn double_first(i32[] arr) i32:
     let i32 first = arr.get(0)??
-    return Result.Ok(Maybe.Some(first * 2))
+    return Result.Ok(first * 2)
+```
+
+For an empty `arr`, `double_first` returns `Result.Err(StdError.Error)`.
+
+Use `??` on a `Maybe` in a function whose error type is `StdError`. The compiler also
+accepts it in a function with a different error enum, but then the value inside the
+`Err` is not defined. In that function, match the `Maybe` and return the error variant
+that you want:
+
+```sushi
+enum LookupError:
+    Missing
+
+fn first_or_missing(i32[] arr) i32 | LookupError:
+    match arr.get(0):
+        Maybe.Some(v) -> return Result.Ok(v)
+        Maybe.None() -> return Result.Err(LookupError.Missing)
 ```
 
 ## Pattern Matching
 
 ```sushi
+use <collections/strings>
+
+let string text = "a needle in a haystack"
 match text.find("needle"):
     Maybe.Some(pos) ->
         println("Found at {pos}")
@@ -76,7 +97,6 @@ match text.find("needle"):
 
 ## Use Cases
 
-- Optional function parameters (future feature)
 - Search operations (find, get)
 - Parsing operations that may fail
 - Database lookups

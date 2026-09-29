@@ -2,7 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-Comprehensive string manipulation methods. Sushi strings are UTF-8 encoded fat pointers `{i8* data, i32 size}`.
+Comprehensive string manipulation methods. Sushi strings are UTF-8 encoded fat pointers
+with three fields: `{i8* data, i32 size, i8 owned}`.
 
 ## String Literals
 
@@ -25,9 +26,23 @@ println("{s1.pad_left(20, '*')}")    # Single quotes for args
 use <collections/strings>
 ```
 
+The import is checked PER UNIT. The unit that holds a string method call must import
+`<collections/strings>` itself, or get it through its own `public use` chain. An import
+in another unit of the program does not count. A missing import is **CE3015**. The
+examples on this page leave out the `use` line; a complete program needs it.
+
+Some string methods need no import:
+
+- `is_empty()` and `clone()`
+- `hash() -> u64` and `to_str() -> string`, which every primitive type has
+- The comparisons `==`, `!=`, `<`, `<=`, `>`, `>=`. A string order compares the BYTES
+  (`memcmp` over the common prefix, then the length), so a prefix is less than the
+  longer string. It is not a collation.
+
 ## Overview
 
-All string methods are immutable and return new strings. The stdlib provides 33 string methods covering:
+String methods do not change their receiver; each one returns a new value. The module
+provides these methods (with `is_empty` and `clone`, which need no import):
 - **Inspection**: len, size, is_empty, contains, starts_with, ends_with, find, find_last, count
 - **Slicing**: s, ss, sleft, sright, char_at
 - **Transformation**: upper, lower, cap, reverse, repeat, replace, trim, tleft, tright
@@ -175,7 +190,8 @@ println(text.s(6, 11))  # "world"
 
 ### `.ss(i32 start, i32 length) -> string`
 
-Substring by byte offset and length.
+Substring by character offset and character count (UTF-8 aware, like `.s()`).
+`"héllo".ss(1, 3)` is `"éll"`.
 
 ```sushi
 let string text = "hello"
@@ -223,6 +239,11 @@ println(s.reverse())  # "olleh"
 let string utf8 = "café"
 println(utf8.reverse())  # "éfac"
 ```
+
+`.reverse()` does not change the string, but today the compiler checks it like the
+in-place array `.reverse()`. So the receiver must be a name that you could write: a local
+works, but a parameter is refused (CE2422) and a temporary is refused (CE2429). Bind the
+value to a local first (`let string local = p.clone()`, then `local.reverse()`).
 
 ### `.repeat(i32 n) -> string`
 
@@ -347,9 +368,10 @@ Split into array.
 let string[] parts = "a,b,c".split(',')
 # parts = ["a", "b", "c"]
 
-# In interpolation:
-println("Parts: {text.split(',')}")
 ```
+
+A `string[]` cannot go into an interpolation hole (CE2035). Join it first:
+`println("Parts: {','.join(parts)}")`.
 
 ### `.join(string[] parts) -> string`
 
@@ -416,9 +438,9 @@ match "3.14".to_f64():
 
 ## Best Practices
 
-- All methods are immutable (return new strings)
+- The methods do not change their receiver (they return new strings)
 - Use `.len()` for character count, `.size()` for byte count
-- UTF-8 aware methods: len, sleft, sright, char_at, s, find, find_last
-- Byte-based methods: ss, size, contains, starts_with, ends_with
+- UTF-8 aware methods: len, sleft, sright, char_at, s, ss, find, find_last
+- Byte-based methods: size, contains, starts_with, ends_with
 - Case conversion is ASCII-only (upper, lower, cap)
 - Use `.realise()` or pattern matching to handle Maybe results from find/parse

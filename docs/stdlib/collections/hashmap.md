@@ -1,4 +1,4 @@
-# HashMap&lt;K, V&gt;
+# HashMap@(K, V)
 
 [← Back to Standard Library](../../standard-library.md)
 
@@ -83,6 +83,34 @@ Get number of entries.
 println("Entries: {ages.len()}")
 ```
 
+### `.is_empty() -> bool`
+
+`true` when the map holds no entries.
+
+```sushi
+if (ages.is_empty()):
+    println("no entries")
+```
+
+### `.tombstone_count() -> i32`
+
+The number of slots that a `.remove()` marked as deleted. `.rehash()` clears them.
+
+```sushi
+ages.remove("Ford")
+println(ages.tombstone_count())   # 1
+ages.rehash()
+println(ages.tombstone_count())   # 0
+```
+
+### `.clone() -> HashMap@(K, V)`
+
+A deep copy: the new map owns its own entries.
+
+```sushi
+let HashMap@(string, i32) copy = ages.clone()
+```
+
 ## Iteration
 
 A `HashMap` can be iterated three ways. Each returns an iterator suitable for a `foreach`
@@ -118,11 +146,15 @@ foreach(entry in ages.entries()):
 !!! note
     `.keys()`, `.values()`, and `.entries()` accept any receiver whose type resolves,
     including a fallible getter: `foreach(k in get_map()??.keys())` works, and the map
-    it produces is freed at scope exit. This used to require a plain variable name.
+    it produces is freed at scope exit.
 
 ### `.free() -> ~`
 
 Clear all entries and reset to capacity 16 (still usable).
+
+### `.destroy() -> ~`
+
+Free the map and its entries. A later use of the map is a compile error.
 
 ```sushi
 ages.free()
@@ -162,9 +194,15 @@ Supported types:
 - **`List@(T)` and `Own@(T)`** have a hash of what they hold, but no equality test, so
   neither is a key today
 
-**Not supported:** Nested arrays (cannot be hashed), and a `HashMap@(K, V)` itself. A map
-has no hash of its own: its buckets carry a state for each slot and the slot order is not
-the entry order, so a hash over them would answer two values for one set of entries.
+**Not supported:**
+
+- A dynamic array (`i32[]`, `string[]`): **CE2058**. A dynamic array has no equality test.
+- `List@(T)`, `Own@(T)` and any other type with no equality test: **CE2055**.
+- A `HashMap@(K, V)` itself. A map has no hash of its own: its buckets carry a state for
+  each slot and the slot order is not the entry order, so a hash over them would answer
+  two values for one set of entries.
+
+The compiler checks the key type at every written `HashMap@(K, V)` type.
 
 ### A `Hashable` override gives a hash, not equality
 
@@ -220,7 +258,7 @@ The hash function is auto-derived for all types:
 
 - **Primitives**: FxHash for integers, FNV-1a for strings, normalized floats
 - **Composites**: FNV-1a combining field/element hashes
-- **Limitation**: Nested arrays cannot be hashed
+- **Limitation**: An element type with no hash (today, `ptr`) has no derived hash
 
 ## Performance
 
@@ -239,11 +277,9 @@ The hash function is auto-derived for all types:
 
 ## Known Limitations
 
-- Storing an owning value (a struct/enum with a dynamic-array field, `List@(T)`, or `Own@(T)`) as a
-  map value currently crashes at runtime on `get`/`free` (issue #140)
-- Keys must be hashable (implement `.hash() -> u64`)
+- Keys must have a hash and an equality test (see Key Requirements)
 - `.rehash()` takes no arguments; it rebuilds at the current capacity (cannot resize to a chosen capacity)
-- `.keys()`/`.values()`/`.entries()` require the receiver to be a plain variable (no chaining)
+- The iteration order is not specified
 
 ## Best Practices
 
