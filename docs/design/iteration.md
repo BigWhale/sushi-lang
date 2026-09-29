@@ -139,10 +139,10 @@ not CE2515, which is a resolution fallback for a chained call whose channel is u
 and not CE2516, which is a wrapper standing where a bool belongs. Here the item is the
 right shape for the loop and the wrong shape for the marker.
 
-### 4. A stop must be reachable, so three `next()` shapes are refused
+### 4. A stop must be reachable, so four `next()` shapes are refused
 
 Each refusal has the same reason: the loop must be able to call the method repeatedly and
-read a stop out of its answer. All three answer **CE2033**.
+read a stop out of its answer. All four answer **CE2033**.
 
 | the shape | why it cannot work |
 |---|---|

@@ -128,9 +128,9 @@ frees. The damage appears later, and somewhere else.
 | callee kind | default for an unmarked parameter | may declare `nom` |
 |---|---|---|
 | user function | borrow | yes |
-| extension or perk method | borrow | yes, except the receiver |
+| extension or perk method | borrow | yes, the receiver too (`nom self`) |
 | lambda / closure | borrow | yes |
-| stdlib function | borrow | it does not today |
+| stdlib function | borrow | yes, in a Sushi-source module (`compose` in `<collections/iter>`) |
 | `.slib` concrete function | borrow | yes; the manifest carries the mode |
 | struct or enum constructor | **consume** — a field takes ownership | not written |
 | container insert (`List.push`, `HashMap.insert`, `Own.alloc`) | **consume** | not written |
@@ -201,8 +201,7 @@ deriving it in several.
 - **Generic parameters are uniform.** `fn f@(T)(T x)` borrows for every instantiation. A
   pass-through such as `fn identity@(T)(T x) T` needs `nom T x`. There is no per-
   instantiation mode, because the mode is declared and not inferred.
-- **A receiver carries a mode too, and `nom self` is one of them** (HANDLES.md ruling
-  R25). `peek self` and `poke self` cross by pointer; an unmarked receiver borrows;
+- **A receiver carries a mode too, and `nom self` is one of them.** `peek self` and `poke self` cross by pointer; an unmarked receiver borrows;
   `nom self` CONSUMES, so the method owns what it was called on and the caller's binding
   is spent. `semantics/param_modes.py:receiver_mode` is the one reading of the marker,
   and every consumer -- the typecheck pass, the borrow pass and the backend -- asks it
@@ -283,7 +282,7 @@ Two more follow:
 
 ## 10b. The other boundary: a pattern binding
 
-**Added 2026-08-30, HANDLES.md ruling R11.** A call is not the only place a value crosses
+**Added 2026-08-30.** A call is not the only place a value crosses
 into a new name. A `match` arm binds a payload, and until this ruling that binding could
 only ever borrow -- there was no route by which a `match` arm took ownership of what it
 bound, for `List@(T)` and `T[]` as much as for a handle.
@@ -340,7 +339,7 @@ is allowed, never whether the place has an address.
 
 ## 10c. The third boundary: a field take
 
-**Added 2026-09-02, P7 ruling R28.** A field read is a borrow, which left one shape with
+**Added 2026-09-02.** A field read is a borrow, which left one shape with
 no spelling at all: handing a handle back OUT of the value that holds it. A struct that
 owns a `File` could never give it away, so `close()` on a field-held handle was CE2411
 with no escape -- and R26 promised `into_inner()` as that escape.
@@ -419,13 +418,8 @@ item under a binder, a special case that hid the general defect.
 
 ## 11. Not designed
 
-- **`nom self`.** A consuming RECEIVER. It did NOT fall out of ruling R11's machinery: a
-  pattern binding is a value the arm names, while a receiver mode is part of a method's
-  declaration and belongs to `semantics/param_modes.py`. HANDLES.md Phase 7 decides it,
-  with `BufWriter.into_inner()` and a consuming `close()` as the two consumers.
 - **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
   heap cell with nothing to free it.
-
 - **A consuming variadic** (`nom ...T`). Rejected today.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
   be returned or stored (CE2415, CE2416, CE2417, CE2419).

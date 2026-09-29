@@ -5,10 +5,10 @@ Tier 1's residuals — `List@(T)`/`Own@(T)` move-capture and closure-aliasing so
 PR #122 as well. Generic higher-order functions (Gaps A/C) and `List@(T)` extensibility (Gap D)
 landed in #125/#126, and this release ships their payoff: the `collections/iter` combinator
 module (`map`/`filter`/`fold`/`compose`), `Call.callee` widened to any expression (T2.4), and
-generic-function references under an explicit expected type (T2.3). What remains is documented in
-Part II: the UFCS method form `xs.map(f)` (Gap B), owned-element combinators, and the rest of
-Tier 2 (`peek`/`poke` capture, bound-method values, indirect-path parity for owning/variadic
-params, C callbacks).
+generic-function references under an explicit expected type (T2.3). The UFCS method form
+`xs.map(f)` (Gap B) is also shipped (`docs/design/ufcs-combinators.md`). What remains is
+documented in Part II: owned-element combinators and the rest of Tier 2 (`peek`/`poke`
+capture, bound-method values, indirect-path parity for owning/variadic params, C callbacks).
 
 This document is organized in two parts: **Part I** describes what is implemented and shippable
 today; **Part II** describes what is deferred, why, and the options for closing each gap.
@@ -26,17 +26,19 @@ or a lambda that reads nothing from its enclosing scope) carries null `env_ptr`/
 environment record that the value owns, frees via `drop_ptr`, and duplicates via `clone_ptr` when
 `.clone()`d.
 
-<!-- docs-sweep: skip (design vision: the UFCS .map form is Gap B, and closure-type inference on a bare let is future work) -->
 ```sushi
+use <collections/iter>
+
 fn make_adder(i32 n) fn(i32) -> i32:
     return Result.Ok(|i32 x| x + n)      # captures n by value; escapes upward (returned)
 
 fn main() i32:
-    let add5 = make_adder(5)??
+    let fn(i32) -> i32 add5 = make_adder(5)??
     println(add5(10)??)                  # 15
 
     let i32 scale = 3
-    let i32[] out = from([1, 2, 3]).map(|x| x * scale)??   # captures scale
+    let List@(i32) out = from([1, 2, 3]).map(|i32 x| x * scale)??   # captures scale
+    println(out.len())                   # 3
     return Result.Ok(0)
 ```
 
@@ -73,8 +75,9 @@ Collections of functions use the generic form: `List@(fn(i32) -> i32)` (a raw ar
 pointers is not expressible — the `[]` in `fn() -> T[]` binds to the return type).
 
 **Result-transparent call.** A Sushi `fn` lowers to `Result@(T, E)(params)`. Calling through a
-function value therefore yields the same `Result@(T, E)` a direct call would, so `??`, `if
-(result)`, and pattern matching all work unchanged.
+function value therefore yields the same `Result@(T, E)` a direct call would, so `??`,
+`.realise(default)`, `.is_ok()` and pattern matching all work unchanged. A `Result` is not a
+condition: `if (f(x))` is CE2516, as for a direct call.
 
 **Only plain top-level `fn`s are referenceable in v1.** Extension methods, perk methods, and FFI
 externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and live in separate tables, so
@@ -95,32 +98,34 @@ Two body forms, both alternatives in the `atom` grammar production:
 
 ```sushi
 # expression body: |params| expr   (desugars to a fn returning Result.Ok(expr))
-let f = |i32 x| x + n
+let fn(i32) -> i32 f = |i32 x| x + n
 
 # block body: |params|: <indented block>  (a full fn body; uses return Result.Ok(...))
-let g = |i32 x|:
+let fn(i32) -> i32 g = |i32 x|:
     let i32 y = x * 2
     return Result.Ok(y + n)
 
 # optional return / error annotation after the closing pipe
-let h = |i32 x| -> i32 | MathError: ...
+let fn(i32) -> i32 | MathError h = |i32 x| -> i32 | MathError: ...
 
-# param types inferred from an expected function type (call arg, annotated binding)
-map(list, |x| x * 2)                     # x : i32 inferred from an expected fn(i32) -> ... type
+# param types inferred from an expected function type (an annotated binding, or an
+# argument to a parameter of a CONCRETE function type)
+let fn(i32) -> i32 k = |x| x * 2         # x : i32 from the annotation
 
 # zero-param form: |~| ..., NOT || (the lexer reads || as `or`)
-let inc = |~| n + 1
+let fn() -> i32 inc = |~| n + 1
 ```
 
 - Params use Sushi's `type name` form (`|i32 x, string s|`). Bare-name params (`|x|`) are allowed
-  **only** where an expected `FunctionType` supplies the types (a call argument to a fn-typed
-  parameter, or a binding with a `fn(...)` annotation); otherwise it is a "lambda parameter needs a
-  type" diagnostic. Return/error types are inferred from the body / expected type, or annotated
+  **only** where an expected `FunctionType` supplies the types (a call argument to a parameter of a
+  concrete function type, or a binding with a `fn(...)` annotation); otherwise it is a "lambda
+  parameter needs a type" diagnostic. A parameter of a GENERIC function type supplies nothing:
+  `map(xs, |x| x * 2)` is CE2060, and `map(xs, |i32 x| x * 2)` compiles. Return/error types are inferred from the body / expected type, or annotated
   with `-> T [| E]` after the closing pipe.
 - **Result semantics are identical to `fn`.** An expression-body lambda `|x| e` desugars to a fn
   whose body is `return Result.Ok(e)`; a block-body lambda is a literal fn body. Calling through a
-  closure yields `Result@(T, E)` exactly like any call, so `f(x)??`, `if (f(x))`, and matching are
-  unchanged.
+  closure yields `Result@(T, E)` exactly like any call, so `f(x)??`, `.realise(default)` and
+  matching are unchanged (and `if (f(x))` is CE2516, as for any call).
   - *Corollary:* because the expression body is auto-wrapped in `Ok`, a fallible call in the body
     must be unwrapped with `??` **at its point of use** — a bare `Result` left in body position is
     wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. This is why `compose`'s body
@@ -137,7 +142,7 @@ let inc = |~| n + 1
 position — start of an expression, call argument, RHS of `=`) opens a lambda parameter list; a `|`
 in *infix* position (between two operands) is bitwise-or. Inside a lambda's expression body, a
 subsequent `|` is infix bitwise-or as usual (`|x| x | 2` = lambda with body `x | 2`). Sushi's
-parser is LALR (`sushi_lang/internals/parser.py:54`), so this disambiguation is resolved by the
+parser is LALR (the parser options in `sushi_lang/internals/parser.py`), so this disambiguation is resolved by the
 grammar's shift/reduce tables alone — validated through the parser generator with no new conflicts
 (the T1.1 acceptance gate).
 
@@ -145,6 +150,13 @@ grammar's shift/reduce tables alone — validated through the parser generator w
 
 `fn(P...) -> T [| E]`; capture is **not** part of the type (see §3), so `fn(i32) -> i32` names
 both a plain fn and any closure of that arity/ok/err.
+
+The parameter MODES are part of the type (`docs/design/borrow-model.md` §7):
+`fn(nom string) -> i32` and `fn(string) -> i32` are two types, and assigning a value of one to
+the other is CE2002. A lambda parameter carries a mode too (`|nom string s| ...`; the grammar
+rule is `lambda_param: NOM? type NAME`), and a value built from a function declared with
+`nom string s` has the type `fn(nom string) -> i32`. `FunctionType.modes` holds the modes, and
+`types_compatible` compares them in one place.
 
 ## 3. Semantics: ABI, calling convention, capture, RAII
 
@@ -223,9 +235,10 @@ for the captured variable's provenance and type class, not a closures-specific r
   + RAII). A value of erased provenance (arriving through a `fn` parameter, or read out of a
   container) is conservatively treated as owning-with-runtime-drop; the drop is runtime-guarded, so
   conservative frees are always sound.
-- **Closure aliasing is sound.** A plain rebind `let g = f` **moves** the env (source consumed,
-  CE2405 on later use); a container get-out (`let g = fns.get(0)??`) and a struct-field read
-  (`let g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
+- **Closure aliasing is sound.** A plain rebind `let fn(i32) -> i32 g = f` **moves** the env
+  (source consumed, CE2405 on later use); a container get-out
+  (`let fn(i32) -> i32 g = fns.get(0)??`) and a struct-field read
+  (`let fn(i32) -> i32 g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
   mirroring `Own@(T).get()`); a closure stored in a struct field is freed by the struct's cleanup.
   No leak, no double-free (validated with `leaks --atExit`).
 - **Compatibility stays invariant and capture-agnostic.** `fn(i32)->i32` matches a plain fn and a
@@ -388,23 +401,26 @@ fn main() i32:
 
 - **Copy/primitive element types only.** `filter` re-pushes each kept element and `map` reads each
   one; owned-element combinators are deferred (Part II §2).
-- **Free-function call syntax only:** `map(xs, f)`, not `xs.map(f)` — the UFCS method form needs
-  method-level type parameters (Gap B, Part II §1).
+- **Two call forms:** the free function `map(xs, f)` and the method form `xs.map(f)` (Gap B, Part
+  II §1). The method form is an extension with a method-level type parameter
+  (`extend List@(T) map@(U)`, `extend T[] map@(U)`), it declares `| StdError`, and it answers a
+  `List@(U)` for a `List@(T)` and for a `T[]` receiver alike.
 - **Function argument must be a typed-param lambda or a function reference** — a bare-param lambda
   (`|x| ...`) cannot be inferred against a generic parameter (§5's Gap-C limitation).
 
 ### `compose` — the capture-and-call payoff
 
 ```sushi
-fn compose@(T, U, V)(fn(T) -> U g, fn(U) -> V f) fn(T) -> V:
+fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
     return Result.Ok(|x| f(g(x)??)??)
 ```
 
 `compose`'s returned lambda **captures** `f` and `g` (both function values, one of them possibly a
 closure) and **calls** them in its body — the capture-and-call case that was CE2094-blocked before
-T2.4 (§7). `compose`'s lambda parameter is a **bare** `|x|`, not a type-param-annotated `|T x|` —
-see Part II §5 for why a `|T x|` lambda parameter is not yet substituted during monomorphization,
-which is why the bare form is used here.
+T2.4 (§7). Both parameters are `nom`: a capture CONSUMES what it captures, and a borrow parameter
+cannot be consumed (CE2411 for each of `f` and `g`). The caller hands the values over, so the call
+is `compose(nom inc, nom dbl)`. The lambda parameter is a bare `|x|`, and the expected return type
+`fn(T) -> V` supplies its type; `|T x|` works too (Part II §5).
 
 ```sushi
 use <collections/iter>
@@ -434,7 +450,7 @@ evaluates to a function value now works, reusing the fat-pointer indirect-call p
   `compose` and any capture-and-call closure body compile (§6, §3).
 - **A fn-typed struct field**, called directly: `obj.handler()`. A `DotCall` routes to an *indirect
   field-call* when the receiver struct has a fn-typed field of that name **and no method of that
-  name** — a same-named method always wins. No `let f = obj.handler` workaround needed:
+  name** — a same-named method always wins. No workaround binding of the field to a typed `let` is needed:
 
   ```sushi
   struct Handler:
@@ -549,15 +565,17 @@ Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
   "capturing and calling a closure value" clause is **lifted** by T2.4 (§7) — that call now compiles
   instead of erroring.
 
-## 10. Implementation map (verified anchors)
+## 10. Implementation map
 
-| Concern | File:line |
+The map names files and symbols, not line numbers: a line number goes stale with the next edit.
+
+| Concern | File |
 |---|---|
-| `FunctionType` + capture descriptor | `semantics/typesys.py:254-291` |
-| Fat-pointer LLVM lowering | `backend/types/core/mapping.py:172-178` |
-| Sizing 8->24 | `backend/types/core/sizing.py:105-107, 231-232` |
-| Lambda grammar / `atom` | `grammar.lark:98, 156-173, 236` |
-| `Lambda` node / `FuncDef` shape | `semantics/ast.py:82, 346` |
+| `FunctionType` + capture descriptor + parameter modes | `semantics/typesys.py` (`class FunctionType`) |
+| Fat-pointer LLVM lowering | `backend/types/core/mapping.py` |
+| Sizing (32 bytes, four words) | `backend/types/core/sizing.py` |
+| Lambda grammar / `atom` | `grammar.lark` (`lambda_param`, the lambda alternatives of `atom`, `lambda_block`) |
+| `Lambda` node / `FuncDef` shape | `semantics/ast.py` |
 | `Call.callee` widened to `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
 | Capture analysis | `semantics/passes/scope.py` |
 | Lambda type-check, CE2094, bare-param inference | `semantics/passes/types/visitor.py` |
@@ -570,9 +588,9 @@ Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
 | Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
 | Backend expr dispatch -> `emit_lambda` | `backend/expressions/__init__.py` (`case Lambda()`) |
 | Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
-| Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/passes/types/calls/generics.py:_unify_types_for_inference`; `semantics/generics/instantiate/types.py:unify_types` |
+| Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/generics/unify.py:unify_types`; the leading type-argument solver `semantics/generics/pack_inference.py:solve_leading_type_args` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
-| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/__init__.py:373` (List as generic struct); `backend/expressions/calls/dispatcher.py:268,308,355` (provider-first dispatch + receiver reconcile) |
+| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); `backend/expressions/calls/dispatcher.py` (provider-first dispatch + receiver reconcile) |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |
@@ -582,8 +600,8 @@ Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
 pipeline is `semantics/semantic_analyzer.py`. (The old `semantics/pipeline.py` scaffold and the
 `_check_single_file` path were both deleted in Tier 3 — a single-file compile is a one-unit
-multi-file compile.) The `lift` pass (`passes/lift.py`) is inserted in
-`_check_multi_file`, per unit, after type validation and before the borrow checker.
+multi-file compile.) The `lift` pass (`passes/lift.py`) runs in `_check_units`, per unit,
+after the `typecheck` pass and before the `borrow` pass.
 
 ---
 
@@ -718,22 +736,20 @@ CE2093 entirely -- they are not in the function table at all, so a bare referenc
 (undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
 deferred capability).
 
-## 5. The `|T x|` lambda-parameter monomorphization gap
+## 5. The `|T x|` lambda parameter — CLOSED
 
-A lambda parameter annotated with a type parameter from the enclosing generic (`|T x| ...` inside a
-`fn foo@(T)(...)`) is not substituted during monomorphization — the lambda-lifting machinery lifts
-the lambda before the enclosing function's type-param substitution reaches its params. The
-workaround is a **bare** parameter (`|x| ...`), letting expected-type propagation supply the
-concrete type at each call site instead of relying on substitution. This is why `compose` (§6) is
-written as `|x| f(g(x)??)??` rather than `|T x| ...`, even though `compose` is itself generic over
-`T`. No diagnostic currently flags a `|T x|` misuse distinctly from any other unresolved-type case;
-treat this as a known authoring gotcha rather than a validated error path.
+A lambda parameter annotated with a type parameter of the enclosing generic (`|T x| ...` inside a
+`fn foo@(T)(...)`) is substituted in each instance. Measured shapes that compile and give the
+correct value: a returned lambda (`compose` written with `|T x|`, at `i32` and at `string`), a
+lambda bound to a `let fn(T) -> T` inside the body, and a lambda that captures a `nom` function
+parameter. The bare `|x|` form that `compose` uses (Part I §6) is a choice, not a workaround.
 
 ## 6. Risks / open problems
 
 1. **Capture erasure at the type boundary.** `fn(i32)->i32` erases capture-ness. Resolved by the
    runtime `drop_ptr`: ownership/free is data-driven (`if drop_ptr: drop_ptr(env)`), not
-   type-driven. This is why the 3-word layout was mandatory from T1 and could not be retrofitted.
+   type-driven. This is why the fat layout (three words at T1, four words since `clone_ptr`) was
+   mandatory from T1 and could not be retrofitted.
 2. **Direct-vs-indirect ABI reconciliation.** "null env keeps v1 valid" and "indirect calls pass a
    leading env" are only jointly consistent via the adapter-thunk split — direct calls bare,
    indirect uniform, bare fns bridged by a thunk. A uniform "every fn gets a leading env param" ABI
@@ -761,14 +777,11 @@ treat this as a known authoring gotcha rather than a validated error path.
    `tests/closures/capture/test_closure_capture_closure.sushi` (16), `tests/stdlib/iter/combinators/test_iter_compose.sushi`
    (22), `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi` (42).
 4. Pick the remaining item by leverage:
-   - **Gap B (§1)** — the method form `xs.map(f)`; start with the grammar acceptance-gate, reuse
-     the higher-order unifier for method-call inference, then bridge the extension monomorphizer to
-     a call-site-driven path.
    - **Owned-element combinators (§2)** — needs move-aware `map`/`filter` bodies; scope it against a
      concrete consumer (e.g. a `List@(List@(T))` transform) before generalizing.
    - **T2.1-T2.6 (§3)** — pick by consumer need; T2.2/T2.5/T2.6 are mechanically straightforward,
      T2.1 is the hard one and should stay last.
-5. Keep the enhanced suite green after each step (`python tests/run_tests.py --enhanced`);
+5. Keep the suite green after each step (`python tests/run_tests.py`);
    leak-check runtime cases with macOS `leaks --atExit` (baseline noise: ~16 bytes in `user_main`,
    present even in a trivial no-closure program).
 

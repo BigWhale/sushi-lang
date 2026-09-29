@@ -18,36 +18,36 @@ Read `docs/language-reference.md` for the constant rules that hold today.
 through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binary and a
 unary operator, an array literal, a name, a cast, an index, an interpolated string, a
 struct construction, a member access and a dot call each have a handler, and the ten
-kinds named in `NOT_CONSTANT` -- a method call, a range, a lambda, a `??`, a borrow, a
-spread, a dynamic array, a blank -- answer CE0108 through the one backstop.
+kinds named in `NOT_CONSTANT` -- a method call, an enum constructor, `new()`, `from()`, a
+borrow, a `??`, a range, a spread, a lambda and a blank -- answer CE0108 through the one
+backstop.
 `tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
 union, so a kind added to the language cannot fall through in silence (#683).
 
 The evaluator has no environment. `_evaluate_name` reads a global constant and nothing
 else. There is no statement, and there is no control flow.
 
-The evaluator is a helper and not a pass (`semantics/semantic_analyzer.py:112-113`). Four
-places call it:
+The evaluator is a helper and not a pass (the `SemanticAnalyzer.check()` docstring says
+so). Three callers reach it:
 
 | Caller | Purpose | Reporter |
 |---|---|---|
-| `passes/types/constants.py:27` | validate a `const` declaration | the real one |
-| `backend/codegen_llvm.py:957` | make the LLVM initializer | silent |
-| `passes/types/expressions.py:367` | read a shift count for CE2512 | silent |
+| the `typecheck` pass, through `constant_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for CE2512, a divisor for CE0112 and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
+| the backend, through `LLVMCodegen.constant_evaluator` (`backend/codegen_llvm.py`) | make the LLVM initializer | silent |
 | `ASTBuilder.integer_constant` (`ast_builder/builder.py`) | read a fixed array size | silent |
 
-The fourth caller runs while the compiler builds the AST, which is before any pass. This
-matters to every later decision in this document.
+The `typecheck` pass and the backend share the collect pass's constant table and its fold
+memo. The AST builder keeps a table of its own, because it runs while the compiler builds
+the AST, which is before any pass. This matters to every later decision in this document.
 
-**The back end is not the blocker.** `_materialize_constant` (`codegen_llvm.py:967-986`)
-already builds an `ir.ArrayType` initializer of any length, and
-`_register_global_constant` (`codegen_llvm.py:921-931`) puts it in `.rodata` with internal
-linkage. A table of 256 or 32768 entries needs no new back-end work. Only the front end has
+**The back end is not the blocker.** `_materialize_constant` (`backend/codegen_llvm.py`)
+builds an `ir.ArrayType` initializer of any length, and `_register_global_constant` (same
+file) puts it in `.rodata` with internal linkage. A table of 256 or 32768 entries needs no new back-end work. Only the front end has
 no way to write one.
 
 **One compile-time loop exists, and it is not usable here.** `unroll_expands`
-(`generics/monomorphize/unroll.py:42`) unrolls an `expand` statement over a variadic pack.
-`_unroll_expand` (`unroll.py:63-101`) makes one deep copy of the body for each pack element
+(`generics/monomorphize/unroll.py`) unrolls an `expand` statement over a variadic pack.
+`_unroll_expand` (same file) makes one deep copy of the body for each pack element
 and renames the loop variable. It runs only inside `monomorphize_function`, it needs a pack
 parameter, and it gives the body no index. Nothing anywhere puts a **value** into a body: the
 type substitutor moves types only.
@@ -65,7 +65,7 @@ result with the type of the left operand. Nothing compares that result against t
 
 So this constant holds 300:
 
-<!-- docs-sweep: skip (records today's behaviour, which this ruling changes) -->
+<!-- docs-sweep: skip (fragment with no main; under Ruling 1 the declaration is CE2077) -->
 ```sushi
 const u8 A = 200 + 100
 ```
@@ -80,7 +80,7 @@ same answer for `+`, `-`, `*`, `<<` and `~`. It gives a different answer for `/`
 a comparison, a widening cast, an array index and an array size. Each of these reads the
 held value, so each of them can disagree with a body:
 
-<!-- docs-sweep: skip (records today's behaviour, which this ruling changes) -->
+<!-- docs-sweep: skip (fragment with no main; under Ruling 1 the declaration is CE2077) -->
 ```sushi
 const u8  A = 200 + 100
 const u32 W = A as u32          # the evaluator gives 300, a body gives 44
@@ -178,14 +178,14 @@ evaluator answered 0 for the smallest signed value `% -1`, and it reports CE2077
   value stops being a lie.
 - **The check belongs to the typecheck pass.** The back end does not report a language error,
   so `_fold_arithmetic_constants` is the wrong place. The typecheck pass already calls the
-  evaluator (`passes/types/constants.py:27`), so this is one more call and not a new
+  evaluator (`passes/types/constants.py`), so this is one more call and not a new
   mechanism. A body is the second caller: `reject_overflowing_operation`
   (`passes/types/expressions.py`) reads every `+ - * / %` node and every unary minus with a
   silent reporter, and raises only an overflow recorded AT that node. That one rule keeps
   the count right -- the innermost operation of `(200 + 100) / 2` reports, the division
   around it does not, and a use of a constant that overflows adds nothing to the report at
   its declaration.
-- **A new code.** Use CE2077. It is free, and `internals/errors/types.py:236` reserves
+- **A new code.** Use CE2077. It was free, and `internals/errors/types.py` reserves
   CE2070 to CE2079 for radix and literal range errors, beside CE2070 and CE2073. The code
   says that an operation gives a value the type cannot hold, and it names the operator, the
   value and the type. `tests/unit/test_error_registry.py` gates the registration, so the
@@ -208,7 +208,7 @@ this section did not answer came up while it went in, and section 3.1 rules on t
 A repeated element is `value; count`. It stands anywhere an element stands, and it mixes with
 plain elements in one literal:
 
-<!-- docs-sweep: skip (proposed syntax, Ruling 2) -->
+<!-- docs-sweep: skip (fragment with no main; a top-level `let` is not a program) -->
 ```sushi
 const i32[288] ZFIXED_LIT = [8; 144, 9; 112, 7; 24, 8; 8]
 const i32[30]  ZFIXED_DST = [5; 30]
@@ -216,22 +216,26 @@ const i32[19]  ZCLEN_ZERO = [0; 19]
 let   i32[]    head = from([-1; 32768])
 ```
 
-The grammar takes one new level. `sushi_lang/grammar.lark:209-210` becomes an element rule
-with an optional count:
+The grammar has one level for it: an element rule with an optional count
+(`sushi_lang/grammar.lark`, the `array_element` rule):
 
 ```
 array_elements: array_element ("," array_element)*
-array_element: expr [";" expr]
+array_element: expr (";" expr)?
 ```
 
-`;` appears nowhere in `grammar.lark` today, so the terminal is free.
+`;` appears nowhere else in `grammar.lark`.
 
 ### The rules
 
-- The **count** is an integer that the compiler reads: a literal in any base, the name of an
-  integer constant, or an expression of them. This is the reader a fixed array size already
-  uses.
-- The count must be **1 or more**. A count of zero spells nothing, and no case needs one.
+- In a `const` initializer and a fixed local, the **count** is an integer that the compiler
+  reads: a literal in any base, the name of an integer constant, or an expression of them.
+  An unreadable count there is CE2017.
+- In the literal inside `from(...)`, the count is any `i32` expression, because a `T[]`
+  carries its length. A run-time count of zero is data, and a negative run-time count
+  clamps to zero.
+- A readable count must be **1 or more**. A readable count of zero spells nothing, and it is
+  CE2017.
 - A repeated element is legal in **every array literal**: a `const` initializer, a fixed
   local, and the literal inside `from(...)`.
 - The **expanded count** must match the declared size. A mismatch stays CE2011.
@@ -288,17 +292,18 @@ rendering, because a list of 287 one-element runs helps nobody.
 
 **A note on where the count is read.** Unlike a fixed array size, a repeat count is read at
 the typecheck pass, not while the AST is built. So it may name a constant of ANOTHER unit --
-the limit that Known Limitation 14 records for a size does not apply to a count.
+the same-unit limit on a fixed array size (CE2099) does not apply to a count.
 
 ### What this closes
 
 **Adopted.** `compression/zlib` was rewritten onto this ruling, and the measurement below is
-what the rewrite acted on.
+what the rewrite acted on. The measurement is a record: its line numbers are from the zlib
+source BEFORE the rewrite, and the "Before" column is what the rewrite replaced.
 
-`compression/zlib` is the only real client of a long table in the repository, and every table
-it builds at run time is a run of one value:
+`compression/zlib` was the only real client of a long table in the repository, and every table
+it built at run time was a run of one value:
 
-| Site | Today | How often |
+| Site | Before | How often |
 |---|---|---|
 | `zlib.sushi:164-179` `zfixed_lit` | 288 entries by `push`, in four runs | each fixed block |
 | `zlib.sushi:183-189` `zfixed_dist` | 30 entries of `5` by `push` | each fixed block |
@@ -340,13 +345,12 @@ index before concluding that it needs a loop to build.
 Sushi does not get a constant function or a compile-time loop yet. The reason is not that the
 feature is wrong. The reason is that the repository has no case for it: the tables it needs
 are runs, and Ruling 2 writes those. A CRC-32 table does not exist in the repository, and
-`zlib.sushi:12` records that gzip is out of scope, so there is nothing to make one for.
+the unit block of `zlib.sushi` records that gzip is out of scope, so there is nothing to make one for.
 
 **The condition that opens it again: the first real need for a table that is not a run.** Two
 candidates are visible now:
 
-- A 256-entry character-class table for the self-hosted lexer, which `ROADMAP.md:109` names
-  as the next phase. Sushi gives user code no character classification at all today.
+- A 256-entry character-class table for a self-hosted lexer, which is planned work. Sushi gives user code no character classification at all today.
 - A CRC-32 table, if gzip goes in.
 
 When one of these arrives, the cost is already known. Record it here so the decision is cheap:
@@ -358,9 +362,10 @@ When one of these arrives, the cost is already known. Record it here so the deci
   compile-time value carries no run-time error. It needs the rule an extension already
   follows: a bare `return`, and no `??` in the body. CE2091 and CE0131 are the codes that
   hold that rule for an extension.
-- **A constant cannot be a struct or an enum.** So a constant function returns a number, a
-  bool, a string, or a fixed array of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`) hold
-  exactly those shapes.
+- **A constant has a closed set of shapes.** A number, a bool, a string, a fixed array, a
+  struct construction and an enum variant, each built from constant parts. So a constant
+  function returns one of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`)
+  hold exactly those shapes.
 - **The pass order fights it.** The evaluator runs from the typecheck pass and from the back
   end, and the typecheck pass runs per unit and late. A constant function body must be
   typechecked before it runs, so it needs a whole-program pass ahead of every caller of the
@@ -371,8 +376,8 @@ When one of these arrives, the cost is already known. Record it here so the deci
 - **It needs a budget and a cache.** The evaluator runs once per use and again in the back
   end, so a table would be computed several times. Recursion needs a limit. The precedents
   are `MONOMORPHIZE_MAX_DEPTH = 128` with CE0122
-  (`generics/monomorphize/__init__.py:99`) and `MAX_EXPANSION_ROUNDS = 8`
-  (`generics/instantiate/__init__.py:131`).
+  (`generics/monomorphize/__init__.py`) and `MAX_EXPANSION_ROUNDS = 8`
+  (`generics/instantiate/__init__.py`).
 - **An interpreter is a second implementation of the language.** Every difference between it
   and the back end is a bug. #441 and #451 each fixed one of that kind: floor division
   against truncating division, and a string constant matched by its shape.
@@ -422,16 +427,18 @@ it.
 
 **Generation at build time.** The stdlib already has this escape. The Python generators in
 `sushi_lang/sushi_stdlib/src/` emit a global directly with `ir.ArrayType` and
-`ir.GlobalVariable`, and `src/string_helpers.py:19-26` is the pattern. A CRC-32 table for the
+`ir.GlobalVariable`, and the string-literal helper in `src/string_helpers.py` is the pattern. A CRC-32 table for the
 stdlib needs no language change at all. User code is different: it would need a build-script
 story, and that belongs to Nori and not to the language.
 
-**Construction at run time is not a workaround.** `grammar.lark:4` lists every top-level
-form, and none of them declares a variable. Sushi has no module-level state, so a table built
-at run time cannot be kept. This is why `zfixed_lit` runs again for every block, and why
-`ZHuff` (`zlib.sushi:70`) is threaded through call after call as a `peek` parameter
-(`zlib.sushi:215-216`). Any answer that says "build it at run time" also asks for a global,
-and that is a larger language change than the one this document rules on.
+**Construction at run time is a different tool.** A `var` at the top of a unit is storage
+(`docs/design/unit-storage.md`): one per program, initialized before `main`. Its initializer
+is a constant expression or an empty container, so a table built at run time is kept in a
+`var` that starts empty and is filled on first use (`var Maybe@(T) cache = Maybe.None`).
+That keeps a table, but it does not compute one at compile time: the table is not
+`.rodata`, and each program pays for the build when it runs. `compression/zlib` does not use
+it: `zfixed_lit` builds its `ZHuff` for each block, and the value goes from call to call as a
+`peek` parameter.
 
 ## 6. Order
 
