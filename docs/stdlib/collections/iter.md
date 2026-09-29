@@ -31,9 +31,9 @@ The **free functions** stay, and are called as `map(xs, f)`. One unit's
 `use <collections/iter>` makes the methods callable in every unit — extensions are
 program-wide (see `docs/design/ufcs-combinators.md`).
 
-**Element types**: the method-form `filter` is fully general — it clones each kept
-element, so an owning element type works. `map` and `fold` (both forms) stay
-copy/primitive-element.
+**Element types**: every combinator, in both forms, takes an owning element type
+(`List@(string)`). `filter` clones each kept element, and `fold` clones `init` once, so
+the accumulator can also be an owning type (`string`).
 
 **Function arguments**: pass a **typed-param lambda** (`|i32 x| ...`) or a plain
 **function reference**. A bare-param lambda (`|x| ...`) cannot be inferred against a
@@ -103,7 +103,7 @@ fn main() i32:
 
 ### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T) | StdError`
 
-Keep the elements for which `pred` returns `true`.
+Keep the elements for which `pred` returns `true`. Each kept element is a clone.
 
 ```sushi
 use <collections/iter>

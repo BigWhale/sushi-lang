@@ -3,9 +3,8 @@ Higher-order combinators over `List@(T)` and `T[]`, opt in with `use <collection
 
 The module ships as Sushi source. Each combinator is a generic function or a generic
 extension method, so the compiler emits code only for an instance that a program uses.
-The free functions take a list with a plain element type. The extension methods declare
-the `| StdError` channel, so a call gives a `Result` and chains with `??`:
-`xs.map(f)??.filter(p)??.fold(0, g)??`.
+The extension methods declare the `| StdError` channel, so a call gives a `Result` and
+chains with `??`: `xs.map(f)??.filter(p)??.fold(0, g)??`.
 
 A bare-parameter lambda (`|x| ...`) cannot be inferred against a generic parameter
 (CE2063 on a method). Give a typed-parameter lambda (`|i32 x| ...`) or a named function.
@@ -29,13 +28,13 @@ Keeps the elements for which `pred` answers true.
 
 - Parameter xs: The list to read.
 - Parameter pred: The predicate.
-- Returns: A new list of the kept elements, in order.
+- Returns: A new list of clones of the kept elements, in order.
 :##
 public fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
     let List@(T) out = List.new()
     foreach(x in xs.iter()):
         if (pred(x)??):
-            out.push(x)
+            out.push(x.clone())
     return Result.Ok(out)
 
 ##:
@@ -47,7 +46,7 @@ Reduces the list from left to right, and gives the accumulator to `f` at each st
 - Returns: The last value of the accumulator.
 :##
 public fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
-    let U acc = init
+    let U acc = init.clone()
     foreach(x in xs.iter()):
         acc := f(acc, x)??
     return Result.Ok(acc)
@@ -100,7 +99,7 @@ Reduces the list left to right, threading the accumulator through `f`.
 - Errors: Whatever `f` returns as Err, unchanged.
 :##
 extend List@(T) fold@(U)(U init, fn(U, T) -> U f) U | StdError:
-    let U acc = init
+    let U acc = init.clone()
     foreach(x in self.iter()):
         acc := f(acc, x)??
     return Result.Ok(acc)
@@ -141,7 +140,7 @@ Reduces the array left to right, threading the accumulator through `f`.
 - Errors: Whatever `f` returns as Err, unchanged.
 :##
 extend T[] fold@(U)(U init, fn(U, T) -> U f) U | StdError:
-    let U acc = init
+    let U acc = init.clone()
     foreach(x in self.iter()):
         acc := f(acc, x)??
     return Result.Ok(acc)

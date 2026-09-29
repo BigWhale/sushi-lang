@@ -4,6 +4,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`<collections/iter>` takes an owning element and an owning accumulator.** The free
+  `filter` over a `List@(string)` was CE2411, and every `fold` with a `string` accumulator
+  was CE2426 and CE2411. Both diagnostics pointed into the stdlib source. `filter` now
+  clones each kept element, and `fold` clones `init` once.
+
 ## [0.13.0] - 2026-09-29
 
 A program can now talk to the world around it. `File` is an ordinary type in `<io/fs>`,
