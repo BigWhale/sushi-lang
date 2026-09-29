@@ -109,7 +109,6 @@ public fn normalize(string path) string:
                 kept.push(part.clone())
 
     let string body = rebuild(kept)??
-    kept.free()
     if (rooted):
         return Result.Ok(root.concat(body))
     if (body.is_empty()):
