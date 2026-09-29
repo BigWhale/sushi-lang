@@ -313,8 +313,8 @@ as a generic free function solves its own. Then from the PROPAGATION STAMP at th
 binding site, for every type parameter still unsolved -- there is no receiver to read
 it from. `Cage.holding(9)` with a plain `T item` is solved by the first step and needs
 no annotation; `Cage.empty()` is solved by the second, and `BufReader.new(nom f, 8192)`
-is the stdlib's example of the first: `R` comes from the handle, in every position,
-which is what lets a `| E` static be written at all: a Result-valued call is never
+is the stdlib's example of the first: `R` comes from the handle, in every position.
+The first step is also what lets a `| E` static be written at all: a Result-valued call is never
 stamped, so the stamp alone could not solve `match`, `.realise` or `??` over it.
 
 An ARRAY target is **CE2104**. An array type has no spelling in an expression position

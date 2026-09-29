@@ -21,6 +21,16 @@ All notable changes to Sushi Lang will be documented in this file.
   names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file
   larger than 1 GiB (`TooLarge`), as `read_library` did. A match on `SlibError.Truncated()`
   becomes `SlibError.Truncated(_, _, _)`.
+- **`BufReader.new` and `BufWriter.new` have no error channel.** Neither could fail, so
+  every call wrote `??`. Each now answers the buffered type: drop the `??`, and a `match`
+  over the call becomes a plain binding.
+- **The four well-known IP addresses are constants.** `v4_loopback()`, `v4_any()`,
+  `v6_loopback()` and `v6_any()` are now `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK` and
+  `V6_ANY`, with no `??`.
+- **`Url.port_or_default()` answers `Maybe@(i32)`.** An unknown scheme with no written
+  port answered `-1`; it now answers `Maybe.None()`.
+- **`close_socket` moved to `<net/handle>`.** `<net/tcp>` and `<net/udp>` re-export it, so
+  a program that imports either one reaches it as before; `<net/error>` no longer has it.
 
 ## [0.13.0] - 2026-09-29
 

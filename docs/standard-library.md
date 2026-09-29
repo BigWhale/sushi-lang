@@ -196,7 +196,7 @@ use <io/fs>
 use <io/buf>
 
 fn greet() ~ | IoError:
-    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
+    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)
     out.write_line("Mostly Harmless")??
     out.finish()??
     return Result.Ok(~)

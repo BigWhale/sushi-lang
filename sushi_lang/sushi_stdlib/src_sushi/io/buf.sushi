@@ -19,9 +19,7 @@ offer -- read_line(), read_all(), lines(), fill() -- stay concrete methods; a co
 that direction (Rust's BufRead) is a separate, later question.
 
 Limitations: fill() is part of the surface because an extension method carries no
-visibility marker -- it is as visible as the type it extends. BufReader.new() and
-BufWriter.new() answer IoError and never fail today; the channel is there so the call
-composes with the handle it wraps. write() copies the string's bytes twice, once into
+visibility marker -- it is as visible as the type it extends. write() copies the string's bytes twice, once into
 to_bytes() and once into the buffer.
 :##
 
@@ -55,15 +53,13 @@ into_inner() is how a caller gets it back.
 - Parameter src: The handle to read. The reader takes ownership of it.
 - Parameter cap: The refill size in bytes. Anything below 1 becomes 8192.
 - Returns: The buffered reader.
-- Errors: IoError, never today. The channel is here so the call composes with the
-  handle it wraps.
 :##
-extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R) | IoError:
+extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R):
     let i32 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return Result.Ok(BufReader(src, empty, 0, size, false))
+    return BufReader(src, empty, 0, size, false)
 
 ##:
 Reads the next window from the handle, replacing the one held.
@@ -236,7 +232,7 @@ closes the descriptor. A later mention of the reader is refused while compiling.
 
   fn show(string path) ~ | IoError:
       let File f = open(path, FileMode.Read())??
-      let BufReader@(File) r = BufReader.new(nom f, 8192)??
+      let BufReader@(File) r = BufReader.new(nom f, 8192)
       foreach(line?? in r.lines()):
           println(line)
       return Result.Ok(~)
@@ -297,15 +293,13 @@ into_inner() is how a caller gets it back.
 - Parameter cap: The size at which the buffer drains, in bytes. Anything below 1
   becomes 8192.
 - Returns: The buffered writer.
-- Errors: IoError, never today. The channel is here so the call composes with the
-  handle it wraps.
 :##
-extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W) | IoError:
+extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W):
     let i32 size = cap
     if (size < 1):
         size := 8192
     let u8[] empty = from([])
-    return Result.Ok(BufWriter(dst, empty, size))
+    return BufWriter(dst, empty, size)
 
 ##:
 A BufWriter is a Writer: the three contract methods fill and drain the buffer.

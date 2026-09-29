@@ -97,7 +97,7 @@ use <io/buf>
 
 fn first_line(string path) string | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = BufReader.new(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)
     return Result.Ok(r.read_line()??.realise(""))
 
 fn main() i32:

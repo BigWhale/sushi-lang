@@ -5,6 +5,6 @@
 use <io/buf>
 
 fn main() i32:
-    let BufReader@(i32) r = BufReader.new(nom 5, 8).realise(BufReader(5, from([]), 0, 8, false))
+    let BufReader@(i32) r = BufReader.new(nom 5, 8)
     println("{r.cap}")
     return Result.Ok(0)
