@@ -294,150 +294,145 @@ public fn bitcode_size(string path) u64 | SlibError:
     let SlibSizes both = sizes(path)??
     return Result.Ok(both.bitcode)
 
+##: Whether a record must hold a field. :##
+enum Presence:
+    ##: The record must hold the field. :##
+    Required()
+    ##: The record can leave the field out. :##
+    Optional()
+    ##: The record must hold the field when its bool field of this name is true. :##
+    RequiredWhen(string)
+
+##: One row of the manifest shape: a field of one record kind. :##
+struct SchemaRow:
+    ##: The record kind that the row applies to. :##
+    string kind
+    ##: The key of the field. :##
+    string key
+    ##: The schema type of the value. :##
+    string spec
+    ##: Whether the record must hold the field. :##
+    Presence presence
+
 ##:
 The shape of a manifest, one row per field that a reader uses.
 
-A row is four words: the record kind, the key, the type, and whether the field is
-required. The Python reader has the same rows in `MANIFEST_SCHEMA`
+The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const string[111] SLIB_MANIFEST_SCHEMA = [
-    'manifest library_name str yes',
-    'manifest library_version str yes',
-    'manifest platform str yes',
-    'manifest compiler_version str yes',
-    'manifest compiled_at str yes',
-    'manifest sushi_lib_version str yes',
-    'manifest kind str no',
-    'manifest requires_compiler str no',
-    'manifest units strs no',
-    'manifest unit_docs {}doc no',
-    'manifest reexports []reexport no',
-    'manifest public_functions []function no',
-    'manifest public_constants []constant no',
-    'manifest public_variables []constant no',
-    'manifest structs []struct no',
-    'manifest enums []enum no',
-    'manifest templates @templates no',
-    'manifest not_exported []not_exported no',
-    'manifest foreign_extensions []foreign_extension no',
-    'manifest dependencies strs no',
-    'templates generic_functions []function no',
-    'templates generic_structs []generic_type no',
-    'templates generic_enums []generic_type no',
-    'templates perks []perk no',
-    'templates perk_impls []perk_impl no',
-    'templates generic_perk_impls []perk_impl no',
-    'templates private_functions []helper no',
-    'templates constants []closure_constant no',
-    'templates private_types []private_type no',
-    'function name str yes',
-    'function return_type str yes',
-    'function params []param no',
-    'function type_params []type_param no',
-    'function error_type str no',
-    'function source str no',
-    'function unit str no',
-    'function doc @doc no',
-    'helper name str yes',
-    'helper params []param no',
-    'helper return_type str no',
-    'helper error_type str no',
-    'helper unit str no',
-    'helper link_symbol str no',
-    'param name str yes',
-    'param type str yes',
-    'param mode str no',
-    'type_param name str yes',
-    'type_param constraints strs no',
-    'type_param is_pack bool no',
-    'constant name str yes',
-    'constant type str yes',
-    'constant source str no',
-    'constant link_symbol str no',
-    'constant doc @doc no',
-    'closure_constant name str no',
-    'closure_constant source str no',
-    'closure_constant link_symbol str no',
-    'private_type name str no',
-    'private_type source str no',
-    'struct name str yes',
-    'struct fields []field yes',
-    'struct is_generic bool no',
-    'struct type_params strs no',
-    'struct doc @doc no',
-    'field name str yes',
-    'field type str yes',
-    'field doc @doc no',
-    'enum name str yes',
-    'enum variants []variant yes',
-    'enum is_generic bool no',
-    'enum type_params strs no',
-    'enum doc @doc no',
-    'variant name str yes',
-    'variant has_data bool no',
-    'variant data_types strs has_data',
-    'variant doc @doc no',
-    'generic_type name str yes',
-    'generic_type source str no',
-    'generic_type type_params []type_param no',
-    'generic_type doc @doc no',
-    'perk name str yes',
-    'perk source str no',
-    'perk methods []method no',
-    'perk doc @doc no',
-    'perk_impl type str yes',
-    'perk_impl perk str yes',
-    'perk_impl type_args strs no',
-    'perk_impl source str no',
-    'perk_impl methods []method no',
-    'perk_impl doc @doc no',
-    'method name str yes',
-    'method return_type str yes',
-    'method params []param no',
-    'method self_mode str no',
-    'method error_type str no',
-    'method doc @doc no',
-    'doc summary str no',
-    'doc body str no',
-    'doc params map no',
-    'doc examples []example no',
-    'doc returns str no',
-    'doc errors str no',
-    'example code str yes',
-    'example caption str no',
-    'reexport unit str yes',
-    'reexport path str yes',
-    'reexport kind str no',
-    'not_exported name str yes',
-    'not_exported kind str no',
-    'foreign_extension type str yes',
-    'foreign_extension method str yes'
+const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
+    SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
+    SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'platform', 'str', Presence.Required()),
+    SchemaRow('manifest', 'compiler_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'compiled_at', 'str', Presence.Required()),
+    SchemaRow('manifest', 'sushi_lib_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'kind', 'str', Presence.Optional()),
+    SchemaRow('manifest', 'requires_compiler', 'str', Presence.Optional()),
+    SchemaRow('manifest', 'units', 'strs', Presence.Optional()),
+    SchemaRow('manifest', 'unit_docs', '{}doc', Presence.Optional()),
+    SchemaRow('manifest', 'reexports', '[]reexport', Presence.Optional()),
+    SchemaRow('manifest', 'public_functions', '[]function', Presence.Optional()),
+    SchemaRow('manifest', 'public_constants', '[]constant', Presence.Optional()),
+    SchemaRow('manifest', 'public_variables', '[]constant', Presence.Optional()),
+    SchemaRow('manifest', 'structs', '[]struct', Presence.Optional()),
+    SchemaRow('manifest', 'enums', '[]enum', Presence.Optional()),
+    SchemaRow('manifest', 'templates', '@templates', Presence.Optional()),
+    SchemaRow('manifest', 'not_exported', '[]not_exported', Presence.Optional()),
+    SchemaRow('manifest', 'foreign_extensions', '[]foreign_extension', Presence.Optional()),
+    SchemaRow('manifest', 'dependencies', 'strs', Presence.Optional()),
+    SchemaRow('templates', 'generic_functions', '[]function', Presence.Optional()),
+    SchemaRow('templates', 'generic_structs', '[]generic_type', Presence.Optional()),
+    SchemaRow('templates', 'generic_enums', '[]generic_type', Presence.Optional()),
+    SchemaRow('templates', 'perks', '[]perk', Presence.Optional()),
+    SchemaRow('templates', 'perk_impls', '[]perk_impl', Presence.Optional()),
+    SchemaRow('templates', 'generic_perk_impls', '[]perk_impl', Presence.Optional()),
+    SchemaRow('templates', 'private_functions', '[]helper', Presence.Optional()),
+    SchemaRow('templates', 'constants', '[]closure_constant', Presence.Optional()),
+    SchemaRow('templates', 'private_types', '[]private_type', Presence.Optional()),
+    SchemaRow('function', 'name', 'str', Presence.Required()),
+    SchemaRow('function', 'return_type', 'str', Presence.Required()),
+    SchemaRow('function', 'params', '[]param', Presence.Optional()),
+    SchemaRow('function', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('function', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('function', 'source', 'str', Presence.Optional()),
+    SchemaRow('function', 'unit', 'str', Presence.Optional()),
+    SchemaRow('function', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('helper', 'name', 'str', Presence.Required()),
+    SchemaRow('helper', 'params', '[]param', Presence.Optional()),
+    SchemaRow('helper', 'return_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'unit', 'str', Presence.Optional()),
+    SchemaRow('helper', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('param', 'name', 'str', Presence.Required()),
+    SchemaRow('param', 'type', 'str', Presence.Required()),
+    SchemaRow('param', 'mode', 'str', Presence.Optional()),
+    SchemaRow('type_param', 'name', 'str', Presence.Required()),
+    SchemaRow('type_param', 'constraints', 'strs', Presence.Optional()),
+    SchemaRow('type_param', 'is_pack', 'bool', Presence.Optional()),
+    SchemaRow('constant', 'name', 'str', Presence.Required()),
+    SchemaRow('constant', 'type', 'str', Presence.Required()),
+    SchemaRow('constant', 'source', 'str', Presence.Optional()),
+    SchemaRow('constant', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('constant', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('closure_constant', 'name', 'str', Presence.Optional()),
+    SchemaRow('closure_constant', 'source', 'str', Presence.Optional()),
+    SchemaRow('closure_constant', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('private_type', 'name', 'str', Presence.Optional()),
+    SchemaRow('private_type', 'source', 'str', Presence.Optional()),
+    SchemaRow('struct', 'name', 'str', Presence.Required()),
+    SchemaRow('struct', 'fields', '[]field', Presence.Required()),
+    SchemaRow('struct', 'is_generic', 'bool', Presence.Optional()),
+    SchemaRow('struct', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('struct', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('field', 'name', 'str', Presence.Required()),
+    SchemaRow('field', 'type', 'str', Presence.Required()),
+    SchemaRow('field', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('enum', 'name', 'str', Presence.Required()),
+    SchemaRow('enum', 'variants', '[]variant', Presence.Required()),
+    SchemaRow('enum', 'is_generic', 'bool', Presence.Optional()),
+    SchemaRow('enum', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('enum', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('variant', 'name', 'str', Presence.Required()),
+    SchemaRow('variant', 'has_data', 'bool', Presence.Optional()),
+    SchemaRow('variant', 'data_types', 'strs', Presence.RequiredWhen('has_data')),
+    SchemaRow('variant', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('generic_type', 'name', 'str', Presence.Required()),
+    SchemaRow('generic_type', 'source', 'str', Presence.Optional()),
+    SchemaRow('generic_type', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('generic_type', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('perk', 'name', 'str', Presence.Required()),
+    SchemaRow('perk', 'source', 'str', Presence.Optional()),
+    SchemaRow('perk', 'methods', '[]method', Presence.Optional()),
+    SchemaRow('perk', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('perk_impl', 'type', 'str', Presence.Required()),
+    SchemaRow('perk_impl', 'perk', 'str', Presence.Required()),
+    SchemaRow('perk_impl', 'type_args', 'strs', Presence.Optional()),
+    SchemaRow('perk_impl', 'source', 'str', Presence.Optional()),
+    SchemaRow('perk_impl', 'methods', '[]method', Presence.Optional()),
+    SchemaRow('perk_impl', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('method', 'name', 'str', Presence.Required()),
+    SchemaRow('method', 'return_type', 'str', Presence.Required()),
+    SchemaRow('method', 'params', '[]param', Presence.Optional()),
+    SchemaRow('method', 'self_mode', 'str', Presence.Optional()),
+    SchemaRow('method', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('method', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('doc', 'summary', 'str', Presence.Optional()),
+    SchemaRow('doc', 'body', 'str', Presence.Optional()),
+    SchemaRow('doc', 'params', 'map', Presence.Optional()),
+    SchemaRow('doc', 'examples', '[]example', Presence.Optional()),
+    SchemaRow('doc', 'returns', 'str', Presence.Optional()),
+    SchemaRow('doc', 'errors', 'str', Presence.Optional()),
+    SchemaRow('example', 'code', 'str', Presence.Required()),
+    SchemaRow('example', 'caption', 'str', Presence.Optional()),
+    SchemaRow('reexport', 'unit', 'str', Presence.Required()),
+    SchemaRow('reexport', 'path', 'str', Presence.Required()),
+    SchemaRow('reexport', 'kind', 'str', Presence.Optional()),
+    SchemaRow('not_exported', 'name', 'str', Presence.Required()),
+    SchemaRow('not_exported', 'kind', 'str', Presence.Optional()),
+    SchemaRow('foreign_extension', 'type', 'str', Presence.Required()),
+    SchemaRow('foreign_extension', 'method', 'str', Presence.Required())
 ]
-
-##:
-Gives the word at a position in a row of words that one space divides.
-
-- Parameter row: The row.
-- Parameter n: The position of the word, from 0.
-- Returns: The word, or `""` when the row has fewer words.
-- Errors: This function does not fail.
-:##
-fn schema_word(string row, i32 n) string | SlibError:
-    let string rest = row.clone()
-    let i32 i = 0
-    while (i < n):
-        match rest.find(" "):
-            Maybe.Some(at) ->
-                rest := rest.s(at + 1, rest.len())
-            Maybe.None() ->
-                return Result.Ok("")
-        i := i + 1
-    match rest.find(" "):
-        Maybe.Some(at) ->
-            return Result.Ok(rest.s(0, at))
-        Maybe.None() ->
-            return Result.Ok(rest)
 
 ##:
 Gives the schema word for the kind of a value.
@@ -482,29 +477,41 @@ Finds the first field of a record that does not agree with the rows of its kind.
 :##
 fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibError:
     foreach(r in 0..SLIB_MANIFEST_SCHEMA.len()):
-        let string row_kind = schema_word(SLIB_MANIFEST_SCHEMA[r], 0)??
-        if (row_kind == kind):
-            let string key = schema_word(SLIB_MANIFEST_SCHEMA[r], 1)??
-            let string spec = schema_word(SLIB_MANIFEST_SCHEMA[r], 2)??
-            let string req = schema_word(SLIB_MANIFEST_SCHEMA[r], 3)??
-            let string name = key.clone()
+        let SchemaRow row = SLIB_MANIFEST_SCHEMA[r]
+        if (row.kind == kind):
+            let string name = row.key.clone()
             if (where != ""):
-                name := "{where}.{key}"
-            match map_index(rec, key).realise(Maybe.None()):
+                name := "{where}.{row.key}"
+            match map_index(rec, row.key).realise(Maybe.None()):
                 Maybe.Some(at) ->
                     match rec:
                         MsgValue.Map(_, vals) ->
-                            let Maybe@(string) fault = value_fault(vals[at], spec, name)??
+                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)??
                             if (fault.is_some()):
                                 return Result.Ok(fault)
                         _ ->
                             return Result.Ok(Maybe.Some("field '{name}' is not a map"))
                 Maybe.None() ->
-                    if (req == "yes"):
-                        return Result.Ok(Maybe.Some("missing required field '{name}'"))
-                    if (req != "no" and map_get_bool(rec, req).realise(Maybe.None()).realise(false)):
+                    if (is_required(rec, row.presence)??):
                         return Result.Ok(Maybe.Some("missing required field '{name}'"))
     return Result.Ok(Maybe.None())
+
+##:
+Tells if a record must hold a field that it does not hold.
+
+- Parameter rec: The record. It is a map.
+- Parameter presence: The presence of the field in its row.
+- Returns: True when the record must hold the field.
+- Errors: This function does not fail.
+:##
+fn is_required(MsgValue rec, Presence presence) bool | SlibError:
+    match presence:
+        Presence.Required() ->
+            return Result.Ok(true)
+        Presence.Optional() ->
+            return Result.Ok(false)
+        Presence.RequiredWhen(flag) ->
+            return Result.Ok(map_get_bool(rec, flag).realise(Maybe.None()).realise(false))
 
 ##:
 Finds why a value does not have a schema type.
