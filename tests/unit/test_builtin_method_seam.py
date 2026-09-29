@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
+from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHOD_ARITY
 from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
 from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
 from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
@@ -21,6 +22,7 @@ from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
 from sushi_lang.semantics.passes.types.arrays import _ARRAY_METHODS
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import (
+    ForeignPtrType,
     ArrayType,
     BuiltinType,
     DynamicArrayType,
@@ -103,6 +105,7 @@ RECEIVERS = (
     ReferenceType(referenced_type=DynamicArrayType(BuiltinType.I32)),
     ReferenceType(referenced_type=_POINT),
     ReferenceType(referenced_type=_LIST),
+    ForeignPtrType(),
 )
 
 #: Each family's own names, read from the family's own table, plus a miss.
@@ -110,7 +113,7 @@ NAMES = tuple(sorted(
     set(_ARRAY_METHODS) | set(METHOD_SPECS) | {"is_empty", "clone", "hash"}
     | set(RESULT_METHOD_ARITY) | set(MAYBE_METHOD_ARITY) | set(OWN_METHOD_ARITY)
     | set(HASHMAP_METHOD_ARITY) | set(LIST_METHOD_ARITY) | set(PRIMITIVE_METHOD_RETURNS)
-    | {"no_such_method"}))
+    | set(FOREIGN_PTR_METHOD_ARITY) | {"no_such_method"}))
 
 
 def _deref(receiver):

@@ -1,0 +1,17 @@
+# `to_string` copies the NUL-terminated C string at a byte offset into an owned
+# Sushi string (#1086).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nHarmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a C copy of a string":
+    fn strdup(string s) ptr = "strdup"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr c = libc.strdup("Mostly Harmless")
+    let string whole = c.to_string(0)
+    let string tail = c.to_string(7)
+    libc.free(c)
+    println(whole)
+    println(tail)
+    return Result.Ok(0)

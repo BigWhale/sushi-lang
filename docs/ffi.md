@@ -91,7 +91,9 @@ C traffics in raw pointers (`char*`, `FILE*`). FFI introduces an opaque,
 - The **borrow checker ignores it** - aliasing through a `ptr` is not tracked.
 - **RAII never frees it** - a `ptr` has no destructor; you call the matching C
   free yourself.
-- **No bounds guarantees** - the memory behind a `ptr` is not checked.
+- **No bounds guarantees** - the memory behind a `ptr` is not checked; the
+  [foreign-memory methods](#reading-and-writing-foreign-memory) read and write it
+  at a byte offset, as C does.
 - **Never null** - a plain `ptr` return asserts non-null (below).
 
 Sushi is and stays a **null-free** language. There is no `null` literal, and a null
@@ -337,6 +339,50 @@ found every file that can traffic in raw foreign handles.
 Other units never hold a raw handle. They call the public functions of the FFI
 unit, which take and return Sushi values.
 
+## Reading and writing foreign memory
+
+C answers through memory: `clock_gettime` fills a `struct timespec`, `stat` fills a
+`struct stat`, `getaddrinfo` builds a list of `addrinfo` records. Inside the unit that
+declares the `unsafe external` block, a `ptr` has a closed set of methods that read and
+write the memory behind it. The offset is a byte offset, an `i32` like every index.
+
+| Method | Answers | Meaning |
+|---|---|---|
+| `p.load_i8(off)` ... `p.load_i64(off)`, `p.load_u8(off)` ... `p.load_u64(off)`, `p.load_f32(off)`, `p.load_f64(off)` | the value | a load of that width at byte offset `off` |
+| `p.store_i8(off, v)` ... `p.store_f64(off, v)` | `~` | a store of that width; `v` has exactly that type |
+| `p.load_ptr(off)` | `Maybe@(ptr)` | a pointer read; a NULL is `Maybe.None` |
+| `p.store_ptr(off, q)` | `~` | a pointer store |
+| `p.offset(n)` | `ptr` | the address `p + n`, for a walk over an array of records |
+| `p.to_string(off)` | `string` | an owned copy of the NUL-terminated C string at `off` |
+
+```sushi
+unsafe external "C" as libc because "reading the wall clock":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn clock_gettime(i32 id, ptr ts) i32 = "clock_gettime"
+
+fn main() i32:
+    let ptr ts = libc.malloc(16)
+    let i32 rc = libc.clock_gettime(0, ts)
+    let i64 seconds = ts.load_i64(0)
+    let i64 nanos = ts.load_i64(8)
+    println("{seconds}.{nanos}")
+    libc.free(ts)
+    return Result.Ok(rc)
+```
+
+Every access is unaligned-safe (`align 1`): a byte offset says nothing about
+alignment. Nothing is bounds-checked. An offset past the end of the C buffer reads or
+writes memory the program does not own, exactly as in C; this is guarantee 4 of
+[the safety contract](#the-safety-contract-four-suspended-guarantees). The offsets of
+a C struct differ per platform and per architecture, so a wrapper reads them from
+`<sys/platform>` and never writes them as numbers.
+
+The methods need a `ptr`, and only a unit that declares an `unsafe external` block can
+name one (`CE5009`), so no other unit can read foreign memory. `CE5008` keeps every
+`ptr` out of a public signature. A C-layout struct (a named type with C offsets and
+alignment) is a later feature on top of these loads and stores.
+
 ## What `ptr` cannot do
 
 A `ptr` is an **opaque token**, not a value with behavior. The compiler
@@ -345,7 +391,7 @@ rejects every operation that would pretend otherwise:
 | Attempt | Diagnostic |
 |---|---|
 | `a == b`, `a < b`, arithmetic, `not`/`~`/`-` on a `ptr` | `CE5010` - no comparable identity, no arithmetic, no truthiness |
-| `p.hash()` or any method call on a `ptr` | `CE5011` - an opaque handle has no methods |
+| `p.hash()` or any method outside [the foreign-memory set](#reading-and-writing-foreign-memory) | `CE5011` - a `ptr` has those methods and no others |
 | `HashMap@(i32, ptr)`, `List@(ptr)`, `Tagged@(ptr)` (any generic argument) | `CE5012` - only `Result@(ptr, E)` and `Maybe@(ptr)` carry a `ptr` |
 | `"{p}"` interpolation | `CE2035` - no string form |
 | `0 as ptr`, `p as i64` | `CE2014` - cannot be forged from or laundered into an integer |
@@ -372,7 +418,7 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | `CE5008` | error | A public declaration exposes a foreign `ptr` in its signature (parameter, return, error arm, inside `Result`/`Maybe`, or inside a struct field). Keep the declaration private. |
 | `CE5009` | error | `ptr` is named in a unit that declares no `unsafe external` block. No danger zone, no ptr. |
 | `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
-| `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
+| `CE5011` | error | A method outside the foreign-memory set is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
 | `RE2025` | runtime | A foreign return declared `string` or `ptr` was NULL. Declare it `Maybe@(string)` / `Maybe@(ptr)`. |
 | `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |

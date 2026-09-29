@@ -1,0 +1,17 @@
+# `clock_gettime` fills a `struct timespec` through a pointer, and `load_i64` reads the
+# seconds back out of the buffer (#1086).
+# EXPECT_STDOUT_EXACT: "seconds after the epoch: true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "reading the wall clock":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn clock_gettime(i32 id, ptr ts) i32 = "clock_gettime"
+
+fn main() i32:
+    let ptr ts = libc.malloc(16)
+    let i32 rc = libc.clock_gettime(0, ts)
+    let i64 sec = ts.load_i64(0)
+    println("seconds after the epoch: {sec > 1000000000}")
+    libc.free(ts)
+    return Result.Ok(rc)

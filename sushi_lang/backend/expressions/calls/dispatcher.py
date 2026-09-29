@@ -9,7 +9,8 @@ from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
-from sushi_lang.backend.expressions.calls.foreign import marshal_argument, unmarshal_return
+from sushi_lang.backend.expressions.calls.foreign import (
+    marshal_argument, try_emit_foreign_ptr_method, unmarshal_return)
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
@@ -395,6 +396,7 @@ PRE_RECEIVER_HANDLERS = (
 )
 
 RECEIVER_HANDLERS = (
+    try_emit_foreign_ptr_method,
     intrinsics.try_emit_array_method,
     intrinsics.try_emit_string_method,
     intrinsics.try_emit_perk_method,

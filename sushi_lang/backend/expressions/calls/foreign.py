@@ -13,7 +13,8 @@ from llvmlite import ir
 from sushi_lang.backend.expressions.calls.utils import marshal_cstr
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.semantics.ffi_boundary import is_pointer_value, nullable_payload
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHODS, FOREIGN_PTR_WIDTHS
+from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -75,7 +76,7 @@ def unmarshal_return(codegen: 'LLVMCodegen', raw: ir.Value, ret_ty) -> ir.Value:
     """The Sushi value of a foreign return."""
     payload = nullable_payload(ret_ty)
     if payload is not None:
-        return _unmarshal_nullable(codegen, raw, payload)
+        return nullable_to_maybe(codegen, raw, payload)
     if is_pointer_value(ret_ty):
         _trap_on_null(codegen, raw)
         return _pointer_to_sushi(codegen, raw, ret_ty)
@@ -103,7 +104,7 @@ def _trap_on_null(codegen: 'LLVMCodegen', raw: ir.Value) -> None:
     builder.position_at_end(ok_block)
 
 
-def _unmarshal_nullable(codegen: 'LLVMCodegen', raw: ir.Value, payload) -> ir.Value:
+def nullable_to_maybe(codegen: 'LLVMCodegen', raw: ir.Value, payload) -> ir.Value:
     """NULL is `Maybe.None`; anything else is `Maybe.Some` of the marshalled value."""
     from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
 
@@ -129,3 +130,41 @@ def _unmarshal_nullable(codegen: 'LLVMCodegen', raw: ir.Value, payload) -> ir.Va
     result.add_incoming(none_value, none_end)
     result.add_incoming(some_value, some_end)
     return result
+
+
+def try_emit_foreign_ptr_method(codegen: 'LLVMCodegen', expr, receiver_value: ir.Value,
+                                receiver_type: ir.Type, semantic_type,
+                                to_i1: bool) -> ir.Value | None:
+    """A foreign-memory method on a `ptr` (#1086): a `gep` on the `i8*`, then the access.
+
+    Every access is `align 1`: a byte offset says nothing about alignment, and a C
+    struct field at a packed offset is still a legal read.
+    """
+    if not isinstance(deref_type(semantic_type), ForeignPtrType):
+        return None
+    method = expr.method
+    if method not in FOREIGN_PTR_METHODS:
+        return None
+    builder = codegen.builder
+    args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    address = builder.gep(receiver_value, [args[0]], name=f"ptr_{method}_at")
+
+    if method == "offset":
+        return address
+    if method == "to_string":
+        return codegen.runtime.strings.emit_cstr_to_owned_fat_pointer(address)
+
+    kind, _, suffix = method.partition("_")
+    if suffix == "ptr":
+        ll_type: ir.Type = ir.PointerType(codegen.i8)
+    else:
+        ll_type = codegen.types.ll_type(FOREIGN_PTR_WIDTHS[suffix])
+    slot = builder.bitcast(address, ir.PointerType(ll_type))
+
+    if kind == "store":
+        builder.store(codegen.utils.cast_for_param(args[1], ll_type), slot, align=1)
+        return ir.Constant(codegen.i32, 0)
+    loaded = builder.load(slot, name=f"ptr_{method}", align=1)
+    if suffix == "ptr":
+        return nullable_to_maybe(codegen, loaded, ForeignPtrType())
+    return loaded

@@ -31,6 +31,7 @@ import pytest
 
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import (
+    ForeignPtrType,
     ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, StructType,
 )
 
@@ -104,6 +105,7 @@ _RECEIVERS = (
     _enum("Colour"),
     FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,
                  err_type=BuiltinType.I32),
+    ForeignPtrType(),
 )
 
 #: Every name any family answers to, plus names no family does.
@@ -116,6 +118,7 @@ _NAMES = (
     "contains_key", "is_empty", "tombstone_count", "rehash", "free", "debug",
     "keys", "values", "entries", "iter", "capacity", "reserve", "shrink_to_fit",
     "hash", "clone", "to_str", "to_bits",
+    "load_i32", "store_u8", "load_ptr", "store_ptr", "offset", "to_string",
     "no_such_method", "bump",
 )
 

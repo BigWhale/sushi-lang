@@ -50,8 +50,8 @@ _add(ErrorMessage("CE5010", Severity.ERROR,
     Category.FFI, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. There is nothing to test for null either: a null is never a Sushi value. A C function that may answer NULL is declared `Maybe@(ptr)` and its NULL arrives as `Maybe.None`, while a plain `ptr` return asserts non-null and a NULL there is RE2025 at the call (#1085). The `is_null(ptr)` intrinsic this text promised before is replaced by that rule."))
 
 _add(ErrorMessage("CE5011", Severity.ERROR,
-    "foreign `ptr` has no methods (attempted '.{method}()')",
-    Category.FFI, "A `ptr` is an opaque handle with no hash, no string form, and no methods. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct."))
+    "foreign `ptr` has no method '.{method}()'",
+    Category.FFI, "A `ptr` has one closed set of methods, the foreign-memory methods (#1086): `load_<width>(off)` and `store_<width>(off, v)` for each integer and float width, `load_ptr(off)` (a `Maybe@(ptr)`), `store_ptr(off, q)`, `offset(n)` and `to_string(off)`, each at a byte offset. It has nothing else: no hash, no string form, no extension method. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct. Before #1086 a `ptr` had no method at all, and this text said so."))
 
 _add(ErrorMessage("CE5013", Severity.ERROR,
     "external link-name '{symbol}' names a symbol this program defines",

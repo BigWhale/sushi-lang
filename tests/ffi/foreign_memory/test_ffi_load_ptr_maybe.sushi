@@ -1,0 +1,26 @@
+# `load_ptr` reads a pointer out of foreign memory, and a null slot is `Maybe.None`,
+# because a null is never a Sushi value (#1086).
+# EXPECT_STDOUT_EXACT: "zeroed: none\nstored: 42\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a pointer table on the C heap":
+    fn calloc(i64 count, i64 size) ptr = "calloc"
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn show(string label, ptr slot) i32:
+    match slot.load_ptr(0):
+        Maybe.Some(q) -> println("{label}: {q.load_i32(0)}")
+        Maybe.None -> println("{label}: none")
+    return Result.Ok(0)
+
+fn main() i32:
+    let ptr table = libc.calloc(1, 8)
+    let i32 a = show("zeroed", table).realise(1)
+    let ptr cell = libc.malloc(4)
+    cell.store_i32(0, 42)
+    table.store_ptr(0, cell)
+    let i32 b = show("stored", table).realise(1)
+    libc.free(cell)
+    libc.free(table)
+    return Result.Ok(a + b)

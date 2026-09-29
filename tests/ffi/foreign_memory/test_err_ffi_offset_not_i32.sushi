@@ -1,0 +1,10 @@
+# A byte offset is an `i32` position, like every index and count (#1086).
+# EXPECT_ERROR_CODE: CE2006
+unsafe external "C" as libc because "probe":
+    fn malloc(i64 n) ptr = "malloc"
+
+fn main() i32:
+    let ptr p = libc.malloc(8)
+    let i64 off = 4
+    let i32 v = p.load_i32(off)
+    return Result.Ok(v)
