@@ -1,0 +1,8 @@
+# A `char*` global is a `ptr` (#1090): a `string` external variable is refused, and the
+# program copies the text out with `to_string` when it wants one.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    var string s = "environ"
+
+fn main() i32:
+    return Result.Ok(0)

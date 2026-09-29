@@ -32,6 +32,7 @@ unsafe external "C" as libc because "bootstrap: call libc for the backend":
 | `as libc` | The **namespace binding**, chosen by you. It binds only in the unit that declares the block. Foreign names never enter Sushi's global scope. |
 | `because "<reason>"` | **Optional.** The acknowledgment that silences the `CW5001` warning (see below). |
 | `fn name(params) ret = "symbol"` | One foreign declaration. No body. The Sushi-visible `name` and the C link `symbol` are separated. |
+| `var type name = "symbol"` | One C global variable, read-only from Sushi ([External variables](#external-variables)). |
 
 ### Call sites are always namespaced
 
@@ -474,6 +475,38 @@ name one (`CE5009`), so no other unit can read foreign memory. `CE5008` keeps ev
 `ptr` out of a public signature. A C-layout struct (a named type with C offsets and
 alignment) is a later feature on top of these loads and stores.
 
+## External variables
+
+A C global variable is declared with `var` inside the block:
+
+```sushi
+unsafe external "C" as libc because "reading getopt state and the environment":
+    var i32 optind = "optind"
+    var Maybe@(ptr) environ = "environ"
+
+fn main() i32:
+    println(libc.optind)
+    match libc.environ:
+        Maybe.Some(_) -> println("the process has an environment")
+        Maybe.None -> println("no environment")
+    return Result.Ok(0)
+```
+
+- **The type** is a number, `bool`, `ptr` or `Maybe@(ptr)`, and anything else is
+  `CE5003`. A `char*` global is a `ptr` (or a `Maybe@(ptr)`), not a `string`: copy it out
+  with `to_string(0)` when you want the text.
+- **A read is namespaced** like a call, `libc.environ`, and it loads the global at the
+  moment of the read. A `Maybe@(ptr)` read tests the pointer, and NULL is
+  `Maybe.None`; a plain `ptr` read asserts non-null (`RE2025`), as a return does.
+- **It is read-only.** A write (`libc.optind := 1`) is `CE5016`. A write to a C global
+  can come later with `poke` semantics.
+- **The symbol** follows the rules of a function's link name: it may be a string
+  constant, and one this build defines is `CE5013`. The namespace binds only in the unit
+  that declares the block, so another unit that names the variable gets `CE1001`.
+
+On Linux the environment of the process is the global `environ`, which `posix_spawnp`
+takes as a `char**`. On macOS a main executable reaches `environ` too.
+
 ## What `ptr` cannot do
 
 A `ptr` is an **opaque token**, not a value with behavior. The compiler
@@ -513,6 +546,7 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
 | `RE2025` | runtime | A foreign return declared `string` or `ptr` was NULL. Declare it `Maybe@(string)` / `Maybe@(ptr)`. |
 | `CE5015` | error | A link name written as a constant is not a string constant. |
+| `CE5016` | error | A write to an external variable. It is read-only from Sushi. |
 | `CE5014` | error | `errno()` is called in a unit that declares no `unsafe external` block. |
 | `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |
 

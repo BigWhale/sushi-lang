@@ -65,6 +65,10 @@ _add(ErrorMessage("CE5015", Severity.ERROR,
     "the link name of external '{name}' is a constant of type {type}, not a string",
     Category.FFI, "The link name after `=` in an `unsafe external` declaration is a string literal or a string constant (#1089): `= \"stat\"`, `= STAT_SYMBOL`, or `= platform.STAT_SYMBOL`. A constant is the form for a symbol that differs per platform, such as `stat$INODE64` on macOS x86_64, and `<sys/platform>` holds those names. The constant is folded in the unit that declares the block, and CE5013 and CE5001 read the folded name. A constant of another type names no symbol."))
 
+_add(ErrorMessage("CE5016", Severity.ERROR,
+    "external variable '{name}' is read-only",
+    Category.FFI, "A `var` in an `unsafe external` block declares a C global variable (#1090), and Sushi reads it: each read loads the global at that moment. A write to a C global (`libc.optind := 1`) is refused, because nothing yet says who else reads the global or when. A write can come later with `poke` semantics. Call a C function that sets the global, or keep the value in a Sushi variable."))
+
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",
     Category.FFI, "Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))

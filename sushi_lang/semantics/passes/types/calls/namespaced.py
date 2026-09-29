@@ -151,6 +151,9 @@ def infer_namespaced_member(validator: 'TypeValidator',
                             node: 'MemberAccess') -> Optional[Type]:
     """The type of `<namespace>.<name>` read as a value -- a constant or a function."""
     binding = validator.resolve_namespaced(node.receiver, node.member)
+    if binding is not None and binding.kind == "extern variable":
+        node.external_var_ref = (binding.provider.origin, node.member)
+        return binding.record.ty
     if binding is not None and binding.provider.namespace_kind == "unit":
         if binding.kind == "function":
             return _infer_namespaced_function_value(validator, node, binding)

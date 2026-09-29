@@ -344,10 +344,9 @@ class ScopeAnalyzer:
         name that reaches nothing here can still be a namespace next door -- and saying
         so is the difference between "undeclared" and "declared, elsewhere".
         """
-        declared = getattr(self.external_table, "by_namespace", {}).get(name)
-        if not declared:
+        if not self.external_table.is_namespace(name):
             return None
-        return next((sig.unit_name for sig in declared.values()
+        return next((sig.unit_name for sig in self.external_table.records(name)
                      if sig.unit_name is not None), None)
 
     def _borrow_variable(self, name: str, mode: str,

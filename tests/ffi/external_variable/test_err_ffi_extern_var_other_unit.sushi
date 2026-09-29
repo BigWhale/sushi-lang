@@ -1,0 +1,8 @@
+# The namespace of an `unsafe external` block binds only in the unit that declares it
+# (#1090), so an external variable is not readable from another unit.
+# EXPECT_ERROR_CODE: CE1001
+use "helpers/getopt_state"
+
+fn main() i32:
+    println(libc.optind)
+    return Result.Ok(0)

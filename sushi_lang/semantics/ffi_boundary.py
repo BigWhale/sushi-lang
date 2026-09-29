@@ -74,6 +74,14 @@ def is_c_abi_param(ty: Optional[Type]) -> bool:
     return is_c_abi_type(ty) or is_byte_buffer(ty)
 
 
+def is_c_abi_variable(ty: Optional[Type]) -> bool:
+    """The allowlist of an external variable (#1090): a number, `bool`, `ptr` or
+    `Maybe@(ptr)`. A `char*` global is a `ptr`: a `string` would copy at every read."""
+    if ty == BuiltinType.STRING or ty == BuiltinType.BLANK:
+        return False
+    return is_c_abi_scalar(ty) or isinstance(nullable_payload(ty), ForeignPtrType)
+
+
 def intern_boundary_type(ty: Optional[Type], enums: Any) -> Optional[Type]:
     """The type a collected signature holds: a nullable pointer is the interned Maybe."""
     payload = nullable_payload(ty)
@@ -92,6 +100,4 @@ def unit_declares_external_block(external_table: Any, unit_name: Optional[str]) 
     """Does this unit declare an `unsafe external` block? The confinement of CE5009."""
     if external_table is None:
         return False
-    return any(sig.unit_name == unit_name
-               for decls in external_table.by_namespace.values()
-               for sig in decls.values())
+    return any(sig.unit_name == unit_name for sig in external_table.records())

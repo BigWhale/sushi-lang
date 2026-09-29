@@ -1,0 +1,7 @@
+# Only a pointer can be null (#1090): `Maybe@(i32)` is no C type.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    var Maybe@(i32) x = "optind"
+
+fn main() i32:
+    return Result.Ok(0)

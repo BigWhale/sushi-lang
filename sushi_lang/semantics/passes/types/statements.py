@@ -324,6 +324,13 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     elif isinstance(stmt.target, MemberAccess):
         validator.validate_expression(stmt.target)
 
+        # An external variable is read-only from Sushi (#1090).
+        if stmt.target.external_var_ref is not None:
+            er.emit(validator.reporter, er.ERR.CE5016, stmt.target.loc,
+                    name=".".join(stmt.target.external_var_ref))
+            validator.validate_expression(stmt.value)
+            return
+
         # A field of a constant is .rodata like any other part of it (CE2096).
         from .arrays import reject_write_to_constant
         if reject_write_to_constant(stmt.target, "assign to a field of",

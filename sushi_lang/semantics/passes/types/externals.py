@@ -7,7 +7,8 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
 from sushi_lang.semantics.ffi_boundary import (
-    is_c_abi_param, is_c_abi_scalar, is_c_abi_type as _is_c_abi_type, nullable_payload,
+    is_c_abi_param, is_c_abi_scalar, is_c_abi_type as _is_c_abi_type, is_c_abi_variable,
+    nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -87,7 +88,7 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                                   tables.namespaces.get, tables.structs,
                                   tables.enums).silent()
     for block in getattr(program, "externals", None) or ():
-        for decl in block.decls:
+        for decl in [*block.decls, *block.variables]:
             link = decl.link_expr
             if link is None:
                 continue
@@ -102,6 +103,9 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
                         type=display_type(value.semantic_type))
                 continue
             decl.link_name = str(value.value)
+            var = tables.externals.lookup_variable(block.namespace, decl.name)
+            if var is not None:
+                var.link_name = decl.link_name
             sig = tables.externals.lookup(block.namespace, decl.name)
             if sig is not None:
                 sig.link_name = decl.link_name
@@ -130,7 +134,7 @@ def reject_external_naming_a_defined_symbol(
         return
 
     for block in externals:
-        for decl in block.decls:
+        for decl in [*block.decls, *block.variables]:
             found = _defining_site(decl.link_name, tables, registry, generated_symbols)
             if found is None:
                 continue
@@ -222,6 +226,10 @@ def _validate_block_signatures(reporter: Reporter, block: 'ExternalBlock') -> No
         if decl.ret is not None and not _is_c_abi_type(decl.ret):
             er.emit(reporter, er.ERR.CE5003, decl.ret_span or decl.loc,
                     type=display_type(decl.ret))
+    for var in block.variables:
+        if var.ty is not None and not is_c_abi_variable(var.ty):
+            er.emit(reporter, er.ERR.CE5003, var.type_span or var.loc,
+                    type=display_type(var.ty))
 
 
 def _signature_notes(decl: 'ExternalDecl') -> List[str]:
@@ -268,5 +276,7 @@ def _emit_block_warning(reporter: Reporter, block: 'ExternalBlock') -> None:
     for decl in block.decls:
         for note in _signature_notes(decl):
             builder.note(note)
+    for var in block.variables:
+        builder.note(f"'{var.name}' is a C global: loaded at each read, read-only here")
     builder.help("see docs/ffi.md - acknowledge with `because \"<reason>\"` and use a safe wrapper")
     builder.emit()

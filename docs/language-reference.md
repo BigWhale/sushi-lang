@@ -1717,7 +1717,15 @@ A foreign function returns the raw C value, not a `Result`. `ptr` is an opaque f
 pointer, and the compiler keeps it inside the foreign boundary (the `CE5xxx` codes). A
 block with no `because "..."` is the warning `CW5001`. `nom` on a foreign parameter is
 `CE2428`. A variadic C function is declared with `...`, and a fixed declaration of it
-reads garbage on some platforms. The guide is [FFI](ffi.md).
+reads garbage on some platforms.
+
+The block also declares what the foreign boundary needs and nothing more: a nullable
+pointer is a `Maybe@(string)` or `Maybe@(ptr)` (a NULL is `Maybe.None`), a `u8[]`
+parameter crosses as its data pointer, a `ptr` has foreign-memory methods
+(`p.load_i64(off)`, `p.store_i32(off, v)`, `p.load_ptr(off)`, `p.offset(n)`,
+`p.to_string(off)`), `errno()` reads the calling thread's `errno`, `var T name =
+"symbol"` declares a read-only C global, and a link name may be a string constant (the
+per-platform names are in `<sys/platform>`). The guide is [FFI](ffi.md).
 
 ## Module System
 

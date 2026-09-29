@@ -31,20 +31,47 @@ class ExternalSig:
 
 
 @dataclass
+class ExternalVarSig:
+    """A collected C global variable (#1090). Read-only from Sushi."""
+    name: str                      # Sushi-visible name
+    link_name: str                 # C link symbol
+    ty: Optional[Type]             # A number, bool, ptr or the interned Maybe@(ptr)
+    namespace: str
+    name_span: Optional[Span] = None
+    filename: Optional[str] = None
+    unit_name: Optional[str] = None
+
+
+@dataclass
 class ExternalTable:
-    """Namespace-keyed table of foreign function signatures."""
+    """Namespace-keyed table of foreign function signatures and C global variables."""
     by_namespace: Dict[str, Dict[str, ExternalSig]] = field(default_factory=dict)
+    variables: Dict[str, Dict[str, ExternalVarSig]] = field(default_factory=dict)
 
     def is_namespace(self, ns: str) -> bool:
         """True if `ns` is a registered external namespace."""
-        return ns in self.by_namespace
+        return ns in self.by_namespace or ns in self.variables
 
     def lookup(self, ns: str, name: str) -> Optional[ExternalSig]:
         """Look up a foreign function by namespace and Sushi-visible name."""
         return self.by_namespace.get(ns, {}).get(name)
 
+    def lookup_variable(self, ns: str, name: str) -> Optional[ExternalVarSig]:
+        """Look up a C global variable by namespace and Sushi-visible name."""
+        return self.variables.get(ns, {}).get(name)
+
     def add(self, sig: ExternalSig) -> None:
         self.by_namespace.setdefault(sig.namespace, {})[sig.name] = sig
+
+    def add_variable(self, sig: ExternalVarSig) -> None:
+        self.variables.setdefault(sig.namespace, {})[sig.name] = sig
+
+    def records(self, ns: Optional[str] = None):
+        """Every function and variable record, of one namespace or of all of them."""
+        for table in (self.by_namespace, self.variables):
+            for name_space, decls in table.items():
+                if ns is None or name_space == ns:
+                    yield from decls.values()
 
 
 class ExternalCollector:
@@ -78,6 +105,20 @@ class ExternalCollector:
         # still registers the externals so call sites resolve.
         for decl in block.decls:
             self._collect_decl(block, decl)
+        for var in block.variables:
+            self._collect_var(block, var)
+
+    def _collect_var(self, block: 'ExternalBlock', var) -> None:
+        if (self.externals.lookup(block.namespace, var.name) is not None
+                or self.externals.lookup_variable(block.namespace, var.name) is not None):
+            er.emit(self.r, er.ERR.CE0101, var.name_span,
+                    name=f"{block.namespace}.{var.name}")
+            return
+        self.externals.add_variable(ExternalVarSig(
+            name=var.name, link_name=var.link_name,
+            ty=intern_boundary_type(var.ty, self.enums), namespace=block.namespace,
+            name_span=var.name_span, filename=self.current_unit_file,
+            unit_name=self.current_unit_name))
 
     def _collect_decl(self, block: 'ExternalBlock', decl: 'ExternalDecl') -> None:
         sig = ExternalSig(

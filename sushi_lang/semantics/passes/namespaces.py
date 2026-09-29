@@ -56,7 +56,8 @@ _MEMBER_ONLY_KINDS = frozenset({"struct", "enum", "perk"})
 # What the declaration walk yields that lives INSIDE another declaration. A struct
 # field, an enum variant, a perk method and an FFI declaration are each reached through
 # the thing that holds them, so none of them contests an alias (CE3013).
-_INNER_KINDS = frozenset({"field", "variant", "perk method", "external declaration"})
+_INNER_KINDS = frozenset({"field", "variant", "perk method", "external declaration",
+                          "external variable"})
 
 
 def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,

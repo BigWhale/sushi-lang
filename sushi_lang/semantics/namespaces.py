@@ -153,8 +153,9 @@ class Binding:
 
     `kind` is a word `semantics/ast_walk.declarations()` yields -- "function",
     "constant", "struct", "enum", "perk" -- or "extern" for a foreign function, or
-    "type" for a built-in generic an import activates. `record` is whatever the
-    producer collected: a `FuncSig`, a `ConstSig`, an `ExternalSig`, a `StdlibFunction`,
+    "extern variable" for a C global (#1090), or "type" for a built-in generic an
+    import activates. `record` is whatever the producer collected: a `FuncSig`, a
+    `ConstSig`, an `ExternalSig`, an `ExternalVarSig`, a `StdlibFunction`,
     or None where the kind is known and the resolver for it is not built yet.
     """
 
@@ -257,10 +258,13 @@ class ExternalNamespace(Provider):
 
     def _lookup_own(self, name: str) -> Optional[Binding]:
         sig = self._table.lookup(self.origin, name)
-        return None if sig is None else Binding("extern", name, self, sig)
+        if sig is not None:
+            return Binding("extern", name, self, sig)
+        var = self._table.lookup_variable(self.origin, name)
+        return None if var is None else Binding("extern variable", name, self, var)
 
     def _own_members(self) -> Iterable[str]:
-        return tuple(self._table.by_namespace.get(self.origin, {}))
+        return tuple(sig.name for sig in self._table.records(self.origin))
 
 
 class UnitNamespace(Provider):
@@ -488,6 +492,7 @@ def externals_only(external_table: Any) -> NamespaceTable:
     gets this.
     """
     table = NamespaceTable()
-    for ns in getattr(external_table, "by_namespace", {}):
+    for ns in {*getattr(external_table, "by_namespace", {}),
+               *getattr(external_table, "variables", {})}:
         table.bind(ns, ExternalNamespace(external_table, ns))
     return table

@@ -97,6 +97,7 @@ class LLVMCodegen:
         self.external_table = ExternalTable()
         self.external_funcs = {}
         self.external_sigs = {}
+        self.external_vars = {}
 
         self.types = LLVMTypeSystem(struct_table=self.struct_table, enum_table=self.enum_table,
                                     context=self.llvm_context)

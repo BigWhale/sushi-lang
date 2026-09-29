@@ -188,6 +188,22 @@ def try_emit_foreign_ptr_method(codegen: 'LLVMCodegen', expr, receiver_value: ir
     return loaded
 
 
+def emit_external_variable(codegen: 'LLVMCodegen', expr) -> ir.Value:
+    """A read of a C global (#1090): the load happens at the read, so C may change it.
+
+    The value crosses as a return does: a `Maybe@(ptr)` tests for NULL, and a plain
+    `ptr` asserts non-null.
+    """
+    from sushi_lang.internals.errors import raise_internal_error
+
+    declared = codegen.external_vars.get(expr.external_var_ref)
+    if declared is None:
+        raise_internal_error("CE0055", name=".".join(expr.external_var_ref))
+    global_var, var = declared
+    raw = codegen.builder.load(global_var, name=f"extern_{var.name}")
+    return unmarshal_return(codegen, raw, var.ty)
+
+
 def emit_errno(codegen: 'LLVMCodegen') -> ir.Value:
     """`errno()` (#1087): call the platform's location function and load the `int`.
 

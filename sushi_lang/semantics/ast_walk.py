@@ -159,6 +159,8 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
         yield "external block", block
         for decl in block.decls:
             yield "external declaration", decl
+        for var in block.variables:
+            yield "external variable", var
     yield from _bodied_kinds(program)
 
 

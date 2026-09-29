@@ -47,6 +47,20 @@ def declare_user_externs(codegen: 'LLVMCodegen', external_table: 'ExternalTable'
             codegen.external_funcs[(namespace, name)] = llvm_fn
             codegen.external_sigs[(namespace, name)] = sig
 
+    codegen.external_vars = {}
+    for namespace, variables in external_table.variables.items():
+        for name, var in variables.items():
+            codegen.external_vars[(namespace, name)] = (_declare_variable(codegen, var), var)
+
+
+def _declare_variable(codegen: 'LLVMCodegen', var) -> ir.GlobalVariable:
+    """Declare (or reuse) a C global variable (#1090): no initializer, so `external`."""
+    existing = codegen.module.globals.get(var.link_name)
+    if isinstance(existing, ir.GlobalVariable):
+        return existing
+    return ir.GlobalVariable(codegen.module, _abi_return_type(codegen, var.ty),
+                             name=var.link_name)
+
 
 def _declare_one(codegen: 'LLVMCodegen', sig: 'ExternalSig') -> ir.Function:
     """Declare (or reuse) the LLVM function for a single foreign signature."""
