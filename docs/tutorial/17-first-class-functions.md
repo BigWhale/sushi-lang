@@ -167,4 +167,4 @@ identifier.
 That's functions-as-data. Next, [Chapter 18 (Closures)](18-closures.md) adds the capturing lambda
 literal. For the complete reference on this chapter's material, see the
 [First-Class Functions guide](../first-class-functions.md) and the
-[design note](../design/closures.md#1-the-v1-floor-function-types-and-values-non-capturing).
+[design note](../design/closures.md#1-function-types-and-values-non-capturing).

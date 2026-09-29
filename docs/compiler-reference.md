@@ -603,10 +603,10 @@ checker.
 **Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead. After
 `.free()` the array is empty (its length is 0) and you can use it again.
 
-#### CE2009: .realise() Wrong Argument Count
+#### CE2009: Wrong Argument Count
 
 A built-in method takes a fixed number of arguments, and a miscount is CE2009, as on
-every other callee. CE2502, CE2016 and CE2053 are retired.
+every other callee. `.realise()` is one example.
 
 <!-- docs-sweep: error CE2009 -->
 ```sushi

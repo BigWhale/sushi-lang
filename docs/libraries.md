@@ -633,7 +633,7 @@ Current limitations of the library system:
    `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
 
    **Private helpers ship automatically (the export closure)**: a public generic whose body
-   references library-private symbols no longer fails to export - the producer walks the
+   references library-private symbols exports: the producer walks the
    transitive closure of everything the generic depends on and ships it: private *generic*
    helpers as source templates (flagged `private`), private *concrete* helpers as signature
    records (their definitions carry external linkage in the library bitcode and link at the
@@ -650,7 +650,7 @@ Current limitations of the library system:
    public *generic* needs, so a private a concrete function calls -- or one nothing public
    calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
    kind, and nothing else: no signature, no body, no source. It is what lets the consumer
-   hear `CE3005` for them rather than `CE2008`. A name in that list is not shipped,
+   hear `CE3005` for them. A name in that list is not shipped,
    so it clashes with nothing: a consumer may declare a function of the same name and it is
    the consumer's own.
 

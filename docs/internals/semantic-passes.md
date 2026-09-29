@@ -76,7 +76,7 @@ The collectors run kind by kind, so the collection order is not the source order
 they run, `claim_unit_names` (`collect/unit_names.py`) sorts the unit's top-level
 declarations by position and refuses each later declaration of a name that an earlier one
 of another kind holds: `CE0006` for a struct beside an enum, `CE1005` for every other
-pair (#1069, #1076). A refused declaration enters no table. Two declarations of one kind
+pair. A refused declaration enters no table. Two declarations of one kind
 stay with that kind's collector and its own code.
 
 ### A unit is collected after the units it depends on
@@ -84,7 +84,7 @@ stay with that kind's collector and its own code.
 The compilation order (`UnitManager.topological_sort`) yields every unit AFTER the units
 it depends on. The walk itself counts in-degree as "how many units depend on me" and so
 produces the opposite; the result is reversed once, and the direction is a ruling
-(`docs/design/unit-namespaces.md` section 13.2): a unit's scope is built from what its own
+(`docs/design/unit-namespaces.md` section 6.2): a unit's scope is built from what its own
 imports declare, so the declaring unit has to be collected already.
 
 A source library's units and a bundled Sushi-source stdlib module are injected as ordinary
@@ -92,15 +92,13 @@ compilation units, and `build_dependency_graph` records the edge that an import 
 creates. That is why a library unit comes first without being told to. A binary `.slib`
 matches no unit and adds no edge, because it has no unit to compile.
 
-Two hand-patches retired with the order. Library units were pulled to the front of the
-collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop so that an
-implementation could meet the two rules that read the perk table -- the perk exists
-(`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
-door is in the table when the implementing unit is reached, so neither patch is needed.
+The order also serves the two rules that read the perk table when an implementation is
+collected -- the perk exists (`CE4003`), and its marker lets this unit implement it
+(`CE4011`). A perk declared next door is in the table when the implementing unit is reached.
 Two perks are in the table before any unit is collected: `Drop` and `Hashable`, the
 compiler's own (`register_predefined_perks`). The constraint check reads `Hashable`
 through the derive pass's predicate, `hashability_of`, so no implementation table
-entry stands for a derived hash (#696).
+entry stands for a derived hash.
 
 ### Example
 
@@ -152,9 +150,8 @@ This pass is the only whole-program pass that walks every unit's AST while shari
 reporter -- the per-unit passes each build their own through `_unit_reporter(unit)`. A span
 is meaningless without the file it came from, so `CollectorPass.run` names the unit it is
 reading (`Reporter.origin`), and `Reporter._record` stamps it onto every diagnostic the pass
-raises. Without it, a declaration in a non-entry unit was reported against the ENTRY file:
-the head line named a line the user did not write, and the caret landed on whatever text sat
-at that column (#473).
+raises. So a diagnostic about a declaration in a non-entry unit names the file of that unit,
+not the entry file.
 
 A `first defined here` note needs one thing more. It points at a table entry, and the entry
 may have been made while a DIFFERENT unit was being collected, so each record remembers its
@@ -257,7 +254,7 @@ Library units are skipped, both ways. A consumer must not be told about the libr
 author's doc typos, and must not be warned once per undocumented symbol in every library
 it imports.
 
-The test runner's stdlib doc-block gate (#953) sets the hidden environment variable
+The test runner's stdlib doc-block gate sets the hidden environment variable
 `SUSHI_STDLIB_DOC_GATE=1`. It has no CLI flag, in the style of `SUSHI_SPELLING_GATE`. When
 it is set, the pass also checks each BUNDLED stdlib unit, the units whose name is in
 `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`), and `--warn-missing-docs` adds the
@@ -297,7 +294,7 @@ The pass runs immediately after `docs`, for the same reason: it must read the wr
 declarations. The `libraries` step adds the constants of a binary library to a host unit,
 and `monomorphize` adds the instances.
 
-Library units are skipped. The test runner's dead-code gate (#959) sets the hidden
+Library units are skipped. The test runner's dead-code gate sets the hidden
 environment variable `SUSHI_STDLIB_DEAD_GATE=1`. When it is set, the pass also checks each
 bundled stdlib unit, in the same way that `SUSHI_STDLIB_DOC_GATE=1` works for the `docs`
 pass. The runner compiles the program that imports every bundled module, and each program
@@ -361,7 +358,7 @@ A binding holds the PROVIDER and never the written path: `_inject_library_source
 renames a library's units and leaves `UseStatement.path` alone, so an alias built from
 the path would break the moment a library unit imported its sibling.
 
-A stdlib provider also lists the PREDEFINED enums homed at its module (#574, Ruling 3).
+A stdlib provider also lists the PREDEFINED enums homed at its module.
 No unit declares `FileMode`, so no declaration record can say who may write it; the
 `collect` pass stamps each of the nine with its home (`EnumType.home_module`, the table
 is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`), `homed_enums` reads the stamp for
@@ -411,8 +408,7 @@ and a private one is refused at the use site with `CE3005` -- filtering privates
 would turn "not yours" into "no such name".
 
 The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, and the
-`scope` pass through `_is_namespace`. Both used to carry their own copy of the
-local-wins rule.
+`scope` pass through `_is_namespace`. Neither carries its own copy of the local-wins rule.
 
 ## The `entrypoint` pass: main's rule
 
@@ -454,20 +450,20 @@ may name that instantiation nowhere else: a `match` arm binds the payload, or th
 passed straight on. The generic-target extension and perk-implementation copies are cut from
 the set this pass collects, so the pass records the SUBSTITUTED signature of every generic
 call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
--- through the same type walk a concrete declaration gets (#549, #555).
+-- through the same type walk a concrete declaration gets.
 
 The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
 not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
 types its arm bindings from that substituted signature, and a generic called with such a
-binding is collected like any other (#549).
+binding is collected like any other.
 
 ### Where a type names an instantiation
 
 A type names an instantiation in every position that HOLDS a type, and the reader of those
 positions is `type_walk.walk_named_types` -- the one walk over a type. `peek Box@(string)`,
-`fn(i32) -> Box@(string)` and a struct field of that function type each name `Box@(string)`,
-and the recursion written here saw an array, a struct and an enum alone: the declaration
-answered CE2001 for a type the program declares (#603).
+`fn(i32) -> Box@(string)` and a struct field of that function type each name `Box@(string)`.
+A hand-written recursion that sees only an array, a struct and an enum misses those
+positions, so this pass does not write one.
 
 There are two node handlers over that one walk, because the two readers see two spellings of
 one instantiation. `instantiate/type_collection.py` reads a WRITTEN type -- a
@@ -519,7 +515,7 @@ exactly as it interns its signature's.
 
 A substituted type that is itself an instance -- the `Box<string>` a `Box@(B)` field
 becomes under `B := string`, a `Maybe<string>` payload, a `Pair<i32, string>` return --
-is published to its table when it is BUILT (`TypeMonomorphizer._publish`, #577). The
+is published to its table when it is BUILT (`TypeMonomorphizer._publish`). The
 collector sees what the program spells; the substitutor is the one place every producer
 passes, so publishing there is the worklist, and the analyzer reads the reached
 instances back as instantiations for the copies below. An abstract instance, a
@@ -531,13 +527,12 @@ not published.
 Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
 passes as an ordinary function -- correctly, because a per-instance truth is only visible
 there: a consume that is a plain copy for one type argument is CE2411 for an owning one.
-What must not follow is the COUNT. A fault in the shared body used to be told once per
-instantiation, at one caret, so the number of reports tracked how many times the caller
-happened to instantiate the function (#648).
+What must not follow is the COUNT. A fault in the shared body is reported once, at one
+caret, and not once per instantiation.
 
 The copy is stamped `instance_of` with the template's name. `Reporter.enter_body(func)`
 reads it -- the one seam every per-unit pass calls to say whose body it is about to read,
-and the same seam that answers whose FILE the spans belong to (#471) -- and sets
+and the same seam that answers whose FILE the spans belong to -- and sets
 `collapse_repeats`, so a diagnostic whose `diagnostic_identity` has already been recorded
 is dropped. The identity is the kind, the code, the MESSAGE, the file and the span, so a
 finding that genuinely differs by type argument keeps its own message and is still told:
@@ -548,7 +543,7 @@ made, and stays visible.
 
 A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
 `instance_of` onto what it lifts. The `borrow` pass is the one that walks the template as
-well as the copies, so a borrow fault was N + 1 rather than N.
+well as the copies, and `collapse_repeats` reduces those walks to one report per fault.
 
 ### The substitution walk is total
 
@@ -556,9 +551,7 @@ well as the copies, so a borrow fault was N + 1 rather than N.
 wherever an instantiated body names one. Both walks are TOTAL over their node union, and
 the fall-through is a hard CE0135. A copy is not an acceptable answer: a node with no arm
 keeps the type parameter, and the compiler's own bookkeeping name -- `T`, `U` -- reaches
-the user (#602). The walk handled a cast and a `??` only, so a cast one level deep
-answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation
-answered CE2002 and a `foreach` item annotation answered CE2001.
+the user.
 
 The walk substitutes every type the SOURCE writes: a cast target, the type arguments of a
 call, a lambda's parameters, return and `| E` channel, a `let` annotation and a `foreach`
@@ -575,14 +568,14 @@ An instantiation that violates a perk constraint is CE4006 ONCE, at the first si
 named it -- the collector records `(span, file)` per instantiation for this -- with a note
 at the constraint, which may stand in another file (a stdlib template's). It is built
 nowhere: not cached, not published, so no template copy is ever cut for it, and the
-whole-program analysis STOPS after the monomorphize step, the CE2095 precedent (#579,
-Ruling 4). The per-unit passes would only have read the same fault back as a CE2008 from
+whole-program analysis STOPS after the monomorphize step, as it does after
+CE2095. The per-unit passes would only have read the same fault back as a CE2008 from
 inside a copy's body.
 
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after
 that -- the tables are the authority on what exists -- gets its copies afterwards, and a
-copy's body can instantiate more functions, so this runs to a fixpoint (#555). A perk
+copy's body can instantiate more functions, so this runs to a fixpoint. A perk
 constraint on such a type reads the templates as well as the registered copies, so its
 answer does not depend on the order the copies were cut in.
 
@@ -650,7 +643,7 @@ already in the tables.
    its record.
 4. **Spelled Result returns** — `resolve_function_returns()` interns each
    `fn f() Result@(T, E)` return through `intern_wrapper_enum` and stamps the enum on
-   `FuncDef.resolved_result` (#857). `ret` keeps the type as written, because the
+   `FuncDef.resolved_result`. `ret` keeps the type as written, because the
    typecheck pass rules on a qualified name in it. The backend reads the stamp through
    `declared_result_of`, its one reader of a function's Result.
 
@@ -693,7 +686,7 @@ resolved field types, and BEFORE `derive`, because a derived hash walks a type b
 It is also the one pass that STOPS the analysis on failure: every later pass assumes a
 finitely-sized type.
 
-The pass owns EVERY inline cycle (#677): a struct field, a fixed-size array element and an
+The pass owns EVERY inline cycle: a struct field, a fixed-size array element and an
 enum payload are all stored inline. A pure enum cycle reads the same `CE2095` as the struct
 twin -- once per cycle, at the first member's declaration, with the chain:
 
@@ -707,10 +700,8 @@ enum B:
 ```
 
 The walk visits every struct before any enum, so a mixed cycle is reported at its struct
-whatever the declaration order. An enum cycle used to be `CE2052` from the `derive` pass: a
-file name with no caret, once per member, and once more for every instance a call site
-solved late. `CE2052` and `CE0128` (the sort's internal guard) are retired, and the
-`derive` pass has no sort left: the table it writes holds a lazy emitter per type, and no
+whatever the declaration order. The
+`derive` pass has no sort: the table it writes holds a lazy emitter per type, and no
 reader depends on an order.
 
 A late-interned instance -- a `Tree@(bool)` a call site solves from an argument and no
@@ -764,9 +755,9 @@ return hash
 ### Where a derived method lives
 
 The pass writes each method into `SymbolTables.derived_methods`, which belongs to ONE
-compilation (#601). It has to: the method closes over the type it was derived for, type
+compilation. It has to: the method closes over the type it was derived for, type
 identity is nominal, and two programs compiled in one process that each declare a `Point`
-name one key -- so a module-level table handed the second program the first one's emitter,
+name one key -- so a module-level table would hand the second program the first one's emitter,
 closed over the first one's fields, and the first one's answer to "can this be hashed".
 Any host that compiles twice in a process reaches that, the pytest layer and a future
 language server included.
@@ -820,7 +811,7 @@ escape is `.share()`.
 
 All three resolution layers pick a built-in method before an extension method, so an
 extension whose name collides with one could never be called. That is `CE2097` rather than
-silent dead code (#239).
+silent dead code.
 
 Placement is load-bearing at BOTH ends: after `derive`, which registers the struct and enum
 `hash`/`clone`, and after the generic-extension table merge, which is where a monomorphized
@@ -834,7 +825,7 @@ extension table. It is the sanctioned way to replace a built-in. See
 
 **File:** `semantics/passes/borrow/destroy_effects.py`
 
-Which functions destroy a `poke` parameter, transitively (#168). The `borrow` pass reads
+Which functions destroy a `poke` parameter, transitively. The `borrow` pass reads
 the summary to decide whether a call invalidates the caller's value.
 
 Computed ONCE over EVERY unit, because `borrow` runs per unit: a per-unit summary would
@@ -861,9 +852,7 @@ and destroyed values are the work of the `borrow` pass.
 `docs/design/unit-namespaces.md` section 8 gives an unqualified name one ordered ladder
 over the KINDS it can reach: a local, a constant, a registry constant, a function, a
 namespace, a type, nothing. This pass and the typecheck pass both walk it, and the ORDER
-lives in `semantics/name_ladder.py` so neither can drift from the other -- which is what
-happened at the type rung, where an enum name in a value position escaped both passes
-and died in the emitter as `CE0055` (#600). Each pass answers one question per rung with
+lives in `semantics/name_ladder.py` so neither can drift from the other. Each pass answers one question per rung with
 its own lookups (`ScopeAnalyzer.is_local` … `is_type`, and `visitor._InferenceRungs`),
 `classify` walks them, and `tests/unit/test_bare_name_ladder_is_one.py` is the gate.
 
@@ -965,39 +954,29 @@ fn main() i32:
 ### A field the type does not declare
 
 A name behind a VALUE's dot is a field of that value's type, and one the type does not
-declare is `CE2106`, at the read. The pass used to walk past it entirely: the read reached
-codegen, and the backend was the first thing to notice, answering `CE0029` -- tier 1, no
-file, no line, no caret, and the note that says the fault is a bug in the compiler, for
-what is a typo (#630). The four backend `CE0029` sites stay where they are and go back to
-being the internal backstop they read as.
+declare is `CE2106`, at the read. The four backend `CE0029` sites are an internal
+backstop that no program reaches.
 
-A receiver that carries NO field reads the same rule (#661). An array, a primitive, a
+A receiver that carries NO field reads the same rule. An array, a primitive, a
 string, a closure and a `ptr` declare nothing, so every name behind their dot is a miss.
-They used to reach the backend too, and there the SHAPE of the read picked the internal
-code: `CE0031` off a name or an assignment target, `CE0044` through a field, `CE0043`
-through an array element. `_field_names_of` (`passes/types/expressions.py`) is the one
+`_field_names_of` (`passes/types/expressions.py`) is the one
 answer to "which fields does this receiver declare": a struct answers its own list, a
 fieldless kind answers the empty list, and everything else answers None.
 
-None means the position is not this rule's. A namespace member, a bare enum variant
-(#545), an unresolved name, a generic reference and a receiver the pass could not type all
+None means the position is not this rule's. A namespace member, a bare enum variant,
+an unresolved name, a generic reference and a receiver the pass could not type all
 belong elsewhere, and a false `CE2106` there would be worse than the internal error it
 replaces.
 
-An ENUM receiver answers the empty list too (#666). #661 had left it out, and that one was
-worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend
-unwrapped the receiver to its payload struct and read field 0, which is the TAG.
-`pts.get(0).x` compiled clean and printed 0 where the element held 11, with no diagnostic
-of any kind, and a test fixture had frozen the wrong number. An enum carries variants, and
+An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
+`CE2106`. An enum carries variants, and
 a variant is reached by a pattern and not by a dot, so the note says that and the help says
 how to get at the value: `??`, `.realise(default)` or `match` for a built-in wrapper
-(`is_builtin_wrapper_enum`), `match` for a user enum. The refusal closes the three tier-1
-codes the read used to reach -- `CE0031` off a name, `CE0029` through a wrapper the backend
-had already unwrapped, `CE0067` off a call. A `Maybe@(T)` gets no implicit unwrap: nothing
-else in the language has one, it reads against the rule that a condition is a bool and
-nothing else (#522/#532), and the `None` arm has no answer.
+(`is_builtin_wrapper_enum`), `match` for a user enum. A `Maybe@(T)` gets no implicit
+unwrap: nothing else in the language has one, it reads against the rule that a condition
+is a bool and nothing else, and the `None` arm has no answer.
 
-A METHOD is not a field, and a bound-method value is deferred to Tier 2, so `v.probe` with
+A METHOD is not a field, and a bound-method value is not supported yet, so `v.probe` with
 no parentheses is the same refusal with a note that says so. `_is_a_method` asks the
 extension table for what the program declares and `builtin_method_exists` for what the
 compiler declares, so `s.len` reads the same note. Otherwise the help quotes
@@ -1045,12 +1024,11 @@ through `_validate_function` -- the `annotate` hook -- like every other function
 the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
 only what no lifted function carries: the function TYPE the enclosing expression needs,
 and the capture rules (CE2094), because lift consumes the capture list into the
-environment struct. Walking the body in both places checked it twice and reported every
-fault in it twice (#629).
+environment struct. So the body is checked once, and a fault in it is reported once.
 
 The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
-hook is what types a `Lambda` node, so a nested lambda lifted first carried no parameter
-types, no captures and no channel, and its own body was never checked.
+hook is what types a `Lambda` node, so a nested lambda lifted first would carry no parameter
+types, no captures and no channel, and its own body would not be checked.
 
 The environment parameter is a `poke` borrow, never a `peek` one. See
 `docs/design/closures.md`.
@@ -1235,7 +1213,7 @@ Each turn of that loop reports into a reporter of its own, and `_merge_unit` dra
 into the program reporter through `in_source_order` (`internals/report.py`). The four
 passes each walk the unit whole, so what they emit is in PASS order and a reader wants
 the FILE: a fault the `lift` pass found in a lambda body would otherwise stand behind
-every fault the `typecheck` pass found (#629). A file keeps the place its first
+every fault the `typecheck` pass found. A file keeps the place its first
 diagnostic gave it -- the order the passes reached the files in is information, and
 alphabetical is not -- and the sort is stable, so two findings on one caret keep pass
 order.

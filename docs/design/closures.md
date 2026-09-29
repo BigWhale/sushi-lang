@@ -1,14 +1,14 @@
 # Design: Closures & First-Class Functions
 
-**Status:** Function values (v1, PR #91) and Tier 1 closures (T1.0-T1.5, PR #122) are complete.
-Tier 1's residuals — `List@(T)`/`Own@(T)` move-capture and closure-aliasing soundness — landed in
-PR #122 as well. Generic higher-order functions (Gaps A/C) and `List@(T)` extensibility (Gap D)
-landed in #125/#126, and this release ships their payoff: the `collections/iter` combinator
-module (`map`/`filter`/`fold`/`compose`), `Call.callee` widened to any expression (T2.4), and
-generic-function references under an explicit expected type (T2.3). The UFCS method form
-`xs.map(f)` (Gap B) is also shipped (`docs/design/ufcs-combinators.md`). What remains is
-documented in Part II: owned-element combinators and the rest of Tier 2 (`peek`/`poke`
-capture, bound-method values, indirect-path parity for owning/variadic params, C callbacks).
+**Status:** implemented: function values, capturing closures with move-capture (including
+`List@(T)`/`Own@(T)` and closure-aliasing soundness), generic higher-order functions (Gaps A/C),
+`List@(T)` extensibility (Gap D), the `collections/iter` combinator module
+(`map`/`filter`/`fold`/`compose`), `Call.callee` over any expression (T2.4), generic-function
+references under an expected function type (T2.3), and the UFCS method form `xs.map(f)` (Gap B,
+`docs/design/ufcs-combinators.md`). Deferred, in Part II: owned-element combinators for the free
+functions and the method-form `map`/`fold`, `peek`/`poke` capture, bound-method values,
+indirect-path parity for owning/variadic params, and C callbacks. The labels T1.x, T2.x and
+Gap A-D name the work items of this record.
 
 This document is organized in two parts: **Part I** describes what is implemented and shippable
 today; **Part II** describes what is deferred, why, and the options for closing each gap.
@@ -19,8 +19,8 @@ Sushi has function **types** (`fn(i32) -> i32`), function **values**, and captur
 A function type names an arity/parameter/return/error-type signature; a function *value* is
 callable data of that type — a top-level function reference, or a lambda literal, optionally
 capturing state from its defining scope. Both forms share one representation: a four-word fat
-pointer `{fn_ptr, env_ptr, drop_ptr, clone_ptr}` (widened from three words, 2026-08-14, when
-`.clone()` became total over every type — see below). A non-capturing value (a bare `fn` reference,
+pointer `{fn_ptr, env_ptr, drop_ptr, clone_ptr}` (the `clone_ptr` word exists because `.clone()`
+is total over every type — see below). A non-capturing value (a bare `fn` reference,
 or a lambda that reads nothing from its enclosing scope) carries null `env_ptr`/`drop_ptr`/
 `clone_ptr` and costs nothing beyond the wider pointer; a capturing lambda heap-allocates an
 environment record that the value owns, frees via `drop_ptr`, and duplicates via `clone_ptr` when
@@ -46,7 +46,7 @@ fn main() i32:
 
 # Part I — Implemented
 
-## 1. The v1 floor: function types and values (non-capturing)
+## 1. Function types and values (non-capturing)
 
 A top-level function can be referenced by name, stored in a variable / struct field / `List`,
 passed as an argument, and called through:
@@ -79,18 +79,18 @@ function value therefore yields the same `Result@(T, E)` a direct call would, so
 `.realise(default)`, `.is_ok()` and pattern matching all work unchanged. A `Result` is not a
 condition: `if (f(x))` is CE2516, as for a direct call.
 
-**Only plain top-level `fn`s are referenceable in v1.** Extension methods, perk methods, and FFI
+**Only plain top-level `fn`s are referenceable.** Extension methods, perk methods, and FFI
 externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and live in separate tables, so
 a bare reference to one is never recognized as a function value — it fails as an undeclared
 identifier (**CE1001**), not CE2093. A *generic* function reference is recognized-but-deferred
-territory; see §8 for the T2.3 exception now allowed, and Part II §4 for what still stays CE2093.
+territory; see §8 for the T2.3 exception that is allowed, and Part II §4 for what still stays CE2093.
 
-A plain `fn` of another unit is referenceable wherever the unit may name it (#1013): through a
+A plain `fn` of another unit is referenceable wherever the unit may name it: through a
 flat `use`, a `public use` re-export, or behind an alias (`l.plain`). The scope pass and the
 typecheck pass read one unit-scoped lookup for this rung, the unit's own concrete `fn` wins over
-an imported one (#1003), and the fences of the call apply to the value: CE3005 for a private
+an imported one, and the fences of the call apply to the value: CE3005 for a private
 `fn`, CE3012 for a name two imports bring. A generic behind an alias (`l.gen`) follows the bare
-name: legal where an expected function type solves it, CE2093 where nothing does (#1017).
+name: legal where an expected function type solves it, CE2093 where nothing does.
 
 ## 2. Lambda syntax
 
@@ -184,7 +184,7 @@ idioms.
 
 ### Calling convention — adapter-thunk split
 
-- **Direct calls stay bare.** `f(x)` where `f` names a top-level fn lowers to the exact v1
+- **Direct calls stay bare.** `f(x)` where `f` names a top-level fn lowers to a direct call
   instruction; no signature or call site changes. FFI externs and `main` are untouched.
 - **Indirect calls are uniformly env-passing.** Calling through a function *value* extracts
   `fn_ptr`/`env_ptr` and calls `fn_ptr(env_ptr, args...)` — `env_ptr` prepended as a hidden
@@ -200,20 +200,20 @@ Capture is a `ConsumingUse.CAPTURE` — an ownership sink like any other in
 `docs/design/ownership-conventions.md` — so what happens is the shared `classify()` table's answer
 for the captured variable's provenance and type class, not a closures-specific rule:
 
-- **Types that own no heap** (primitives, and — since Phase 9 — a `string` bound directly from a
+- **Types that own no heap** (primitives, and a `string` bound directly from a
   literal, which owns nothing at that binding) are captured by **value-copy** into the environment
   record; the outer binding stays usable.
-- **Types that own heap** (dynamic array, `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, and — since Phase
-  9 — **any `string` not bound from a literal**, e.g. one built by interpolation, returned from a
+- **Types that own heap** (dynamic array, `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, and
+  **any `string` not bound from a literal**, e.g. one built by interpolation, returned from a
   call, or arriving as a parameter) are captured by **move** into the environment — the outer
   binding is consumed (borrow-checker enforced; later use is CE2405), and the env's recursive
   destructor frees them. A struct or fixed array composed only of non-owning fields is captured by
-  copy, exactly like a bare primitive; one with an owning field (including, now, a plain `string`
+  copy, exactly like a bare primitive; one with an owning field (including a plain `string`
   field) is captured by move, exactly like a bare owning value.
 - **A captured closure *value*** (a `fn(...)` local that is itself a capturing closure) is also
   move-captured, same as any other owning type — this is what makes `compose` and capture-and-call
   bodies work (§7).
-- **Borrow capture (`poke`/`peek`) is rejected** with CE2094 — deferred to Tier 2 (Part II §3).
+- **Borrow capture (`poke`/`peek`) is rejected** with CE2094 — deferred (Part II §3).
 - **Reading a captured field back out of the environment is a BORROW**, exactly like reading a
   struct field (`docs/design/ownership-conventions.md` §4.2): a lambda body that reads a captured
   owning value (e.g. `|~| greeting` returning a captured `string`) sees a borrow of the environment's
@@ -231,7 +231,7 @@ for the captured variable's provenance and type class, not a closures-specific r
   cannot tell statically whether it owns an env (capture erasure), so ownership is resolved at
   runtime by the presence of a drop function.
 - **Capture-taint drives ownership analysis.** A bare fn ref / non-capturing lambda is *free*
-  (copyable, non-owning — preserves v1 ergonomics). A capturing lambda is *owning* (move semantics
+  (copyable, non-owning). A capturing lambda is *owning* (move semantics
   + RAII). A value of erased provenance (arriving through a `fn` parameter, or read out of a
   container) is conservatively treated as owning-with-runtime-drop; the drop is runtime-guarded, so
   conservative frees are always sound.
@@ -254,26 +254,24 @@ for the captured variable's provenance and type class, not a closures-specific r
    monomorphizer's "synthesize a `FuncDef`, register a `FuncSig`, append to `program.functions`"
    machinery, so the backend emits it with zero special-casing.
 
-   **The env parameter is `poke`, and the mode is load-bearing (2026-08-15).** A move-captured
+   **The env parameter is `poke`, and the mode is load-bearing.** A move-captured
    `List@(T)` / `Own@(T)` / dynamic array is MUTABLE inside the body by design (§3, T1.5), and
    after the rewrite every such write goes through this parameter: `xs.push(x)` is
    `#closure_env.xs.push(x)`. The environment is the closure's OWN storage — the closure value
    owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
    to a caller's value.
 
-   It was declared `peek` until the `peek` write rule became total: nothing
-   enforced read-only before that, so the untruthful mode had no consequence. Once it was
-   enforced, it made two legal shapes a **CE2408** — a mutating method on a capture
-   (`tests/closures/capture/test_closure_list_mutate.sushi`) and a `poke` borrow of a capture
-   (`tests/closures/capture/test_closure_env_poke_borrow.sushi`). The declaration was corrected rather
-   than the rule carved out.
+   A `peek` env parameter would make two legal shapes a **CE2408** — a mutating method on a
+   capture (`tests/closures/capture/test_closure_list_mutate.sushi`) and a `poke` borrow of a
+   capture (`tests/closures/capture/test_closure_env_poke_borrow.sushi`). The declaration is
+   `poke`; the rule has no carve-out.
 
    The mode is a SEMANTIC declaration only: no backend code reads `ReferenceType.mutability`, so
    codegen is identical either way (the env is a pointer in both cases). Four semantics sites read
    it, and for this parameter three are inert — the rebind check (captures are field accesses, the
    env is never rebound), the `poke`→`peek`
-   coercion (the env is never a checked argument), and `_poke_param_indices` for the #168
-   destroy-effect analysis (round 1 needs a bare-`Name` receiver, round 2 needs a by-name call
+   coercion (the env is never a checked argument), and `_poke_param_indices` for the destroy-effect
+   analysis of the `effects` pass (round 1 needs a bare-`Name` receiver, round 2 needs a by-name call
    site, and a lifted function is only ever dispatched indirectly).
 
    **Open structural note.** This is a COMPILER-SYNTHESIZED borrow riding on the same
@@ -285,9 +283,9 @@ for the captured variable's provenance and type class, not a closures-specific r
 3. At the lambda site, heap-allocate the env, populate captured fields (copy or move), and build
    `{@__lambda_N, env_ptr, @__closure_env_N_drop}`.
 
-## 4. Tier 1 delivery (T1.0-T1.5)
+## 4. The capture pieces (T1.0-T1.7)
 
-Landed, in dependency order:
+The capture machinery, in dependency order:
 
 - **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 24-byte lowering).
 - **T1.1** — lambda grammar/AST (`lambda_expr`, `lambda_block`, `Lambda` node).
@@ -296,11 +294,10 @@ Landed, in dependency order:
 - **T1.4** — lambda-lifting pass (env struct + lifted function synthesis).
 - **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
 - **T1.7** — indirect-call env threading; CE2094 additionally rejects owning/variadic fn-value
-  *parameter* types (dodging the indirect path's missing deep-copy — a latent double-free; closed
-  by T2.5, Part II §3).
-- **T1.5** — environment RAII + move-capture (§3), plus closure-aliasing soundness (item 2): the
-  get-out/rebind double-free and struct-field leak, both closed by treating a rebind as a move and
-  a get-out/field-read as a non-owning borrow.
+  *parameter* types (the indirect path has no deep copy, so this restriction prevents a
+  double free; T2.5, Part II §3, is the fix).
+- **T1.5** — environment RAII + move-capture (§3), plus closure-aliasing soundness: a rebind is a
+  move, and a get-out or a field read is a non-owning borrow.
 
 Test coverage: `tests/closures/` — positive (`test_closure_capture_primitive`,
 `test_closure_bare_param_and_multi_capture`, `test_closure_escaping`, `test_closure_owned_move_capture`,
@@ -314,37 +311,34 @@ Test coverage: `tests/closures/` — positive (`test_closure_capture_primitive`,
 ## 5. Generic higher-order functions
 
 Generic functions that take and call a function-typed parameter (`fn(T) -> U`) infer, monomorphize,
-and run. Two gaps were closed to make this possible:
+and run. These pieces make it possible:
 
 - **Gap C — infer type params through function-typed arguments.** Generic call-site inference walks
   each declared parameter type against the argument type to bind type params; a `FunctionType`
-  branch was added to both twin unification routines (`instantiate` collection and
+  branch in both twin unification routines (`instantiate` collection and
   `typecheck` validation) so
   a `fn(T) -> U` parameter recurses into its parameter types and return type, reaching the existing
-  binding logic for the nested `T`/`U`. The instantiate pass additionally learned to *present* a `FunctionType`
+  binding logic for the nested `T`/`U`. The instantiate pass also *presents* a `FunctionType`
   for a **typed-param lambda** (`|i32 x| x * k`, params from the annotation, `ok_type` from the `->
   T` annotation or best-effort body inference) and for a **bare function reference** (`inc`, built
   from its `FuncSig`).
   - **Limitation:** a *bare-param* lambda argument to a generic (`map(xs, |x| x * k)`) is not
-    inferable — its param types come from expected-type propagation, which is not available at Pass
-    1.5 collection, and is circular anyway (the lambda's type depends on the type params being
+    inferable — its param types come from expected-type propagation, which is not available at
+    instantiation collection, and is circular anyway (the lambda's type depends on the type params being
     inferred *from* it). Use a **typed-param** lambda (`|i32 x| ...`) or a function reference. This
     is a graceful CE2060, not a crash.
 - **Gap A — substitute `FunctionType` during monomorphization.** The three recursive
-  type-substitution routines (rewriting type params to concrete types) gained a `FunctionType`
+  type-substitution routines (rewriting type params to concrete types) have a `FunctionType`
   branch that rebuilds `param_types`/`ok_type`/`err_type` recursively, carrying `captures` through
   unchanged (excluded from type identity but drives ownership).
-- **Gap D — `List@(T)` is user-extensible.** A first-class generic struct now: both concrete
+- **Gap D — `List@(T)` is user-extensible.** A first-class generic struct: both concrete
   (`extend List@(i32) sum_all()`) and generic (`extend List@(T) first_or(T)`) extends compile and run.
   A user List method **cannot shadow a builtin** List method name (providers are checked first at
   dispatch); the by-value-`self`-vs-by-pointer receiver ABI mismatch is reconciled at the dispatch
   site.
-- **Inline capturing-closure argument leak — fixed, then superseded by the by-value-parameter ruling
-  (2026-08-14).** A capturing closure passed *inline* as a call argument (`map(xs, |x| x * k)`) used
-  to heap-allocate an environment that was never freed, because it was not bound to a local and so
-  not RAII-tracked. The first fix (T1.8) registered it in a per-scope caller-side temporary registry,
-  freed via the runtime-guarded drop on every exit path. That registry is now used for only ONE
-  shape: an inline closure passed to an **extension method** (compiled with `fn_def=None`, which
+- **An inline capturing-closure argument.** A capturing closure passed *inline* as a call argument
+  (`map(xs, |x| x * k)`) is not bound to a local. A per-scope caller-side temporary registry frees
+  it through the runtime-guarded drop on every exit path, for ONE shape only: an inline closure passed to an **extension method** (compiled with `fn_def=None`, which
   registers no parameter cleanup — the caller must still own the argument, which is what keeps
   `return self` safe there). Every other call shape — direct, indirect, variadic — instead transfers
   ownership of the by-value argument to the callee through the seam
@@ -444,7 +438,7 @@ Test coverage: `tests/stdlib/iter/combinators/test_iter_module_map.sushi`, `test
 ## 7. Call-through arbitrary expressions (T2.4)
 
 `Call.callee` is widened from `Name` to any `Expr`. Calling through an arbitrary expression that
-evaluates to a function value now works, reusing the fat-pointer indirect-call path unchanged:
+evaluates to a function value works, and it reuses the fat-pointer indirect-call path unchanged:
 
 - **A captured closure read back in a lifted lambda body** — `env.f(x)` — is exactly what makes
   `compose` and any capture-and-call closure body compile (§6, §3).
@@ -465,20 +459,18 @@ evaluates to a function value now works, reusing the fat-pointer indirect-call p
 - **A lambda literal**, called where it is written: `(|i32 q| k + q)(2)`. The lambda is the same
   value in the callee position as in a `let`, an argument or a return. The `scope` pass walks
   every callee that is not a plain `Name`, so the lambda records its captures and each name in a
-  callee expression is resolved and used (#1067). The callee is a BORROW position: a closure
+  callee expression is resolved and used. The callee is a BORROW position: a closure
   built there has no other owner, so the backend gives it one (`own_temporary`) and its
   environment is freed at scope exit.
 
-Mechanically: the AST builder now emits a general `Call` for a non-`Name`, non-`MemberAccess` call
+Mechanically: the AST builder emits a general `Call` for a non-`Name`, non-`MemberAccess` call
 base; the type checker infers the non-`Name` callee and, when it resolves to a `FunctionType`,
 dispatches to the same indirect-call validator used for a named local, annotating the node for the
-backend. `??` was also taught to unwrap a `Result` **and** a `Maybe` `Some` payload, so a
+backend. `??` unwraps a `Result` **and** a `Maybe` `Some` payload, so a
 function-value call inside a lambda body can infer its return type through a `Maybe`-returning
 chain, not just a `Result`-returning one.
 
-**This lifts the CE2094 "capturing and calling a closure value" clause.** Capturing another closure
-and calling it in the body — previously deferred because the call `env.f(x)` was a non-`Name`
-callee — now compiles:
+**A lambda may capture another closure and call it in the body:**
 
 ```sushi
 fn run() i32:
@@ -489,8 +481,7 @@ fn run() i32:
     return Result.Ok(h(5)??)          # g(5) = 15, h(5) = 16
 ```
 
-Two former backend cast failures on this path are now precise front-end **CE2002** diagnostics
-instead.
+A type mismatch on this path is a front-end **CE2002** diagnostic.
 
 Test coverage: `tests/closures/capture/test_closure_capture_closure.sushi`,
 `tests/functions/function_values/test_call_index_result.sushi`, `tests/functions/function_values/test_fn_value_field_call.sushi`,
@@ -498,7 +489,7 @@ Test coverage: `tests/closures/capture/test_closure_capture_closure.sushi`,
 
 ## 8. Generic-function references — the T2.3 annotated slice
 
-Referencing a generic function as a value is now allowed **when an explicit expected function type
+Referencing a generic function as a value is allowed **when an explicit expected function type
 is present**:
 
 ```sushi
@@ -512,14 +503,13 @@ fn run() i32:
 
 This is an **expected-type-driven** rule, not a general lift of CE2093: the instantiate pass collects
 the instantiation wherever an expected `FunctionType` meets a generic-fn name -- a `let`, an
-argument, a rebind, a `return`, a struct field, an enum payload, a `.realise()` default (#1021,
-ruling of 2026-09-27) -- by unifying the signature against the expected type; the type pass then solves the
+argument, a rebind, a `return`, a struct field, an enum payload, a `.realise()` default -- by unifying the signature against the expected type; the type pass then solves the
 type args, rewrites the `Name` to the mangled concrete name, and infers the concrete `FunctionType`.
 The backend is unchanged — the mangled monomorphized function materializes as an ordinary fn value.
 
 A generic-fn reference **into a higher-order function** works the same way. With a concrete
 parameter type the bare argument is enough (`take(identity)` against `fn(i32) -> i32`). A GENERIC
-callee is solved in two steps (#1029, ruling of 2026-09-28): the solver leaves the generic-fn
+callee is solved in two steps: the solver leaves the generic-fn
 value out of its first pass and solves the callee's type arguments from the other arguments; then
 it puts them into that parameter's type and solves the value against it, as against any declared
 position. `apply@(T)(fn(T) -> i32 f, T x)` called as `apply(gen, 3)` gets `T = i32` from `3` and
@@ -559,11 +549,10 @@ Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
   expected function type in context (Part II §4 has the exact remaining boundary). Extension
   methods, perk methods, and FFI externals are not bare-referenceable at all — they surface as an
   undeclared identifier (**CE1001**), not CE2093.
-- **CE2094** — illegal closure capture: a `peek`/`poke` borrow (Tier 2, Part II §3); or an owning
-  /variadic fn-value *parameter* type (before T2.5, Part II §3). **Dynamic-array**, **`List@(T)`**,
-  **`Own@(T)`**, and now **closure-value** captures are all allowed (move-capture). The former
-  "capturing and calling a closure value" clause is **lifted** by T2.4 (§7) — that call now compiles
-  instead of erroring.
+- **CE2094** — illegal closure capture: a `peek`/`poke` borrow (Part II §3); or an owning
+  /variadic fn-value *parameter* type (T2.5, Part II §3, is the fix). **Dynamic-array**,
+  **`List@(T)`**, **`Own@(T)`** and **closure-value** captures are all allowed (move-capture), and a
+  captured closure may be called in the body (§7).
 
 ## 10. Implementation map
 
@@ -582,7 +571,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
-| Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (Phase 9 merged `is_owning_type` into it — see `docs/design/ownership-conventions.md` §6) |
+| Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (see `docs/design/ownership-conventions.md` §6) |
 | Ownership seam (consume/bind/copy_out) | `semantics/ownership.py` (the `classify()` table), `backend/ownership.py` (the seam functions) |
 | Env heap alloc / recursive env destructor / cloner | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor`, `backend/runtime/closures.py` (env clone, `clone_ptr`) |
 | Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
@@ -598,9 +587,8 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Fat-pointer precedent (strings) | `backend/runtime/strings.py` |
 
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
-pipeline is `semantics/semantic_analyzer.py`. (The old `semantics/pipeline.py` scaffold and the
-`_check_single_file` path were both deleted in Tier 3 — a single-file compile is a one-unit
-multi-file compile.) The `lift` pass (`passes/lift.py`) runs in `_check_units`, per unit,
+pipeline is `semantics/semantic_analyzer.py`. A single-file compile is a one-unit multi-file
+compile. The `lift` pass (`passes/lift.py`) runs in `_check_units`, per unit,
 after the `typecheck` pass and before the `borrow` pass.
 
 ---
@@ -611,8 +599,8 @@ after the `typecheck` pass and before the `borrow` pass.
 
 Gap B SHIPPED with the UFCS epic: `extend List@(T) map@(U)(fn(T) -> U f) List@(U)` is
 expressible, inferred at the call site, and monomorphized per (receiver, method,
-margs). The decision record is [ufcs-combinators.md](ufcs-combinators.md); the
-analysis that follows is kept for history and no longer describes the tree.
+margs). The decision record is [ufcs-combinators.md](ufcs-combinators.md). The
+analysis that follows is a historical record and does not describe the tree.
 
 <details>
 <summary>The original Gap B analysis (historical)</summary>
@@ -674,22 +662,22 @@ concrete consumer wants the fluent method form.
 
 ## 2. Owned-element combinators — partly closed
 
-The METHOD-form `filter` is fully general since the UFCS epic: it clones each kept
+The METHOD-form `filter` is fully general: it clones each kept
 element, so an owning element type works. The free functions, and the method-form
 `map`/`fold`, stay copy/primitive-element: reading an element into `f`, and threading
 an owning accumulator, still need move-aware handling the bodies do not do. See
-[ufcs-combinators.md](ufcs-combinators.md) for the v1 scope.
+[ufcs-combinators.md](ufcs-combinators.md) for the scope of the combinators.
 
-## 3. Remaining Tier 2
+## 3. Remaining deferred items (T2.x)
 
 - **T2.1 — `peek`/`poke` borrow capture.** Lift CE2094 for borrows; track the borrow's lifetime
   *through* the closure value under the exclusivity rules. **Why deferred:** this is the genuinely
   hard problem the whole closures feature was scoped around — a borrow captured into an escaping,
   heap-allocated environment can outlive the stack frame that issued it, which the current
-  scope-based borrow checker has no model for. Move-capture (Tier 1) sidesteps it entirely by never
+  scope-based borrow checker has no model for. Move-capture sidesteps it entirely by never
   letting a reference cross into an environment.
 - **T2.2 — Bound method values.** `obj.method` as a callable via a self-binding adapter (env =
-  boxed `self`); reuses the Tier 1 heap-env + drop machinery. Lifts the last `obj.handler()`-shaped
+  boxed `self`); reuses the heap-env + drop machinery. Lifts the last `obj.handler()`-shaped
   papercut that isn't already covered by T2.4's field-call routing (§7) — specifically, a bound
   *method* reference, not a fn-typed *field* read. **Why deferred:** no concrete consumer yet;
   mechanically straightforward once wanted.
@@ -701,7 +689,7 @@ an owning accumulator, still need move-aware handling the bodies do not do. See
   low-risk cleanup with no capability payoff until an owning fn-value parameter is actually needed.
 - **T2.6 — First-class externals / C callbacks.** A fat value with `drop_ptr = null` and `env_ptr`
   serving the C `void* userdata` convention; reuses the adapter-thunk ABI directly. **Why
-  deferred:** no FFI callback consumer yet; independent of the rest of Tier 2.
+  deferred:** no FFI callback consumer yet; independent of the other deferred items.
 
 ## 4. What still stays CE2093
 
@@ -710,7 +698,7 @@ arguments: a position with no expected type at all (`println(identity)`, an expr
 or an expected type whose shape does not fit the generic's signature (a two-parameter function type
 for a one-parameter generic). Every position that has an expected function type -- a `let`, an
 argument, a rebind, a `return`, a field, a payload, a `.realise()` default -- solves it, and the
-answer never depends on another call in the program (#1021):
+answer never depends on another call in the program:
 
 ```sushi
 fn identity@(T)(T x) T:
@@ -726,12 +714,14 @@ fn main() i32:
 ```
 
 A generic callee is solved from its other arguments first, and the value then from the
-substituted parameter type (#1029): `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
+substituted parameter type: `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
 solves. A value that the substituted type does not solve is CE2093; a callee whose type argument
 comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is CE2060 + CE2093.
 Bind the value to a typed local first. Inside a generic body the copy is walked for each instance,
-so a position solves a generic-fn value as it does in a concrete body (#1036); a value behind an
-alias in the copy of a generic-target extension is not solved yet (#1065). Extension methods, perk methods, and FFI externals remain outside
+so a position solves a generic-fn value as it does in a concrete body. A value behind an alias
+(`l.gen`) in the copy of a generic-target extension or perk implementation is not solved: it is
+CE2093. Use the bare name there, or bind the value to a typed local in a concrete function.
+Extension methods, perk methods, and FFI externals remain outside
 CE2093 entirely -- they are not in the function table at all, so a bare reference to one is CE1001
 (undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
 deferred capability).
@@ -748,9 +738,9 @@ parameter. The bare `|x|` form that `compose` uses (Part I §6) is a choice, not
 
 1. **Capture erasure at the type boundary.** `fn(i32)->i32` erases capture-ness. Resolved by the
    runtime `drop_ptr`: ownership/free is data-driven (`if drop_ptr: drop_ptr(env)`), not
-   type-driven. This is why the fat layout (three words at T1, four words since `clone_ptr`) was
-   mandatory from T1 and could not be retrofitted.
-2. **Direct-vs-indirect ABI reconciliation.** "null env keeps v1 valid" and "indirect calls pass a
+   type-driven. This is why the fat layout (four words, with `clone_ptr`) is
+   mandatory: it cannot be retrofitted.
+2. **Direct-vs-indirect ABI reconciliation.** "null env keeps a direct call bare" and "indirect calls pass a
    leading env" are only jointly consistent via the adapter-thunk split — direct calls bare,
    indirect uniform, bare fns bridged by a thunk. A uniform "every fn gets a leading env param" ABI
    was rejected as needlessly invasive (rewrites every signature, FFI, `main`).
@@ -759,7 +749,7 @@ parameter. The bare `|x|` form that `compose` uses (Part I §6) is a choice, not
 4. **Grammar `|` collision — resolved.** Position-based disambiguation (prefix `|` = lambda, infix
    `|` = bitwise-or), validated through the parser generator with no new conflicts.
 5. **Ownership vs. the move/borrow tracker.** Only *capturing* values are owning (capture-taint);
-   non-capturing values stay copyable to preserve v1 ergonomics; the runtime-guarded drop makes
+   non-capturing values stay copyable; the runtime-guarded drop makes
    conservative (erased-provenance) frees sound. This is answered by `owns_resource`
    (`semantics/typesys.py`), the single ownership predicate every type asks — see
    `docs/design/ownership-conventions.md` §6.
@@ -770,24 +760,22 @@ parameter. The bare `|x|` form that `compose` uses (Part I §6) is a choice, not
 ## 7. Fast path to re-enter
 
 1. Read Part I (above) for current capability, then this Part II for what's left and why.
-2. `git log --oneline 430b5bd..HEAD -- sushi_lang docs/design/closures.md` — the closures + T1.8 +
-   T2.3/T2.4 feature commits are the phase history; everything is on `main`.
-3. Reproduce the working baseline: compile+run `tests/closures/escaping_values/test_closure_escaping.sushi` (prints
+2. Reproduce the working baseline: compile+run `tests/closures/escaping_values/test_closure_escaping.sushi` (prints
    15), `tests/closures/capture/test_closure_owned_move_capture.sushi` (13),
    `tests/closures/capture/test_closure_capture_closure.sushi` (16), `tests/stdlib/iter/combinators/test_iter_compose.sushi`
    (22), `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi` (42).
-4. Pick the remaining item by leverage:
+3. Pick the remaining item by leverage:
    - **Owned-element combinators (§2)** — needs move-aware `map`/`filter` bodies; scope it against a
      concrete consumer (e.g. a `List@(List@(T))` transform) before generalizing.
    - **T2.1-T2.6 (§3)** — pick by consumer need; T2.2/T2.5/T2.6 are mechanically straightforward,
      T2.1 is the hard one and should stay last.
-5. Keep the suite green after each step (`python tests/run_tests.py`);
+4. Keep the suite green after each step (`python tests/run_tests.py`);
    leak-check runtime cases with macOS `leaks --atExit` (baseline noise: ~16 bytes in `user_main`,
    present even in a trivial no-closure program).
 
 ## Test strategy (repo conventions)
 
 `tests/run_tests.py`: `test_*` -> exit 0, `test_err_*` -> exit 2, `test_warn_*` -> exit 1; runtime
-validated via `--enhanced`. Ground truth lives in `tests/closures/`, `tests/generics/higher_order/test_ho_*`,
+validated by the one runner. Ground truth lives in `tests/closures/`, `tests/generics/higher_order/test_ho_*`,
 `tests/generics/generic_fn_reference/test_generic_fn_ref*`, and `tests/stdlib/iter/combinators/test_iter_*` — see the test-coverage lines
 under each Part I section above for the full file list.

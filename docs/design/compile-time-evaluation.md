@@ -1,6 +1,6 @@
 # Compile-time evaluation
 
-Issue #446 asked one question: does Sushi get a constant function, a compile-time loop, or
+One question comes first: does Sushi get a constant function, a compile-time loop, or
 neither. This document answers it, and it rules on a second question that the research found
 under it: what happens when a constant computes a value that its type cannot hold.
 
@@ -22,7 +22,7 @@ kinds named in `NOT_CONSTANT` -- a method call, an enum constructor, `new()`, `f
 borrow, a `??`, a range, a spread, a lambda and a blank -- answer CE0108 through the one
 backstop.
 `tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
-union, so a kind added to the language cannot fall through in silence (#683).
+union, so a kind added to the language cannot fall through in silence.
 
 The evaluator has no environment. `_evaluate_name` reads a global constant and nothing
 else. There is no statement, and there is no control flow.
@@ -58,34 +58,28 @@ type substitutor moves types only.
 typecheck pass asks the same question of a fold in a body. The measured cost of the
 breaking change: no test in the suite needed a change.
 
-### The behaviour this replaces
+### The problem the rule solves
 
-The evaluator holds a Python integer of unlimited size. `_eval_arithmetic` marks the exact
-result with the type of the left operand. Nothing compares that result against the type.
-
-So this constant holds 300:
+An evaluator that holds an exact integer of unlimited size and never compares it against
+the type gives a constant a value its type cannot hold:
 
 <!-- docs-sweep: skip (fragment with no main; under Ruling 1 the declaration is CE2077) -->
 ```sushi
 const u8 A = 200 + 100
 ```
 
-The program still prints 44. llvmlite writes the text `i8 300`, and the LLVM IR parser
-truncates it to `i8 44`. A body printed 44 as well, because the backend then held a fold of
-its own, `_fold_arithmetic_constants` in `backend/expressions/operators.py`, which masked
-the result and restored the sign at the width of the type. That fold is gone (#681, below).
-
-The printed value is correct, and this is why every test passes today. Truncation gives the
-same answer for `+`, `-`, `*`, `<<` and `~`. It gives a different answer for `/`, `%`, `>>`,
-a comparison, a widening cast, an array index and an array size. Each of these reads the
-held value, so each of them can disagree with a body:
+Such an evaluator holds 300 here, and the program prints 44: llvmlite writes the text
+`i8 300`, and the LLVM IR parser truncates it to `i8 44`. Truncation gives the same answer
+for `+`, `-`, `*`, `<<` and `~`. It gives a different answer for `/`, `%`, `>>`, a
+comparison, a widening cast, an array index and an array size. Each of these reads the held
+value, so each of them can disagree with a body:
 
 <!-- docs-sweep: skip (fragment with no main; under Ruling 1 the declaration is CE2077) -->
 ```sushi
 const u8  A = 200 + 100
-const u32 W = A as u32          # the evaluator gives 300, a body gives 44
-const bool B = A > 255          # the evaluator gives true, a body gives false
-const u8  H = (200 + 100) / 2   # the evaluator gives 150, a body gives 22
+const u32 W = A as u32          # an exact evaluator gives 300, a body gives 44
+const bool B = A > 255          # an exact evaluator gives true, a body gives false
+const u8  H = (200 + 100) / 2   # an exact evaluator gives 150, a body gives 22
 ```
 
 ### What other languages do
@@ -103,8 +97,8 @@ Only C truncates in silence, and only because it computes in `int` and converts 
 store. Every language after C reports the program. No language wraps each operation and stays
 quiet.
 
-Sushi already holds this rule for a literal. `const u8 X = 300` is CE2073 today. The
-expression `200 + 100` walks past the same rule only because nothing checks a computed value.
+Sushi holds this rule for a literal: `const u8 X = 300` is CE2073. Ruling 1 applies the
+same rule to a computed value such as `200 + 100`.
 
 ### The rule
 
@@ -154,48 +148,34 @@ let u8 a = 200 + 100      # the compiler reports this
 let u8 s = x + y          # this wraps at run time, with no check
 ```
 
-**One compile-time home (#681).** The evaluator is the only place in the compiler that
-computes an integer operator. The backend held a second one until #681: a fold over two
-constant operands in `backend/expressions/operators.py` that covered `+ - *` and
-`& | ^ <<`, re-derived two's complement by hand, wrapped in silence where the evaluator
-reports CE2077, and left `/ % >>` to LLVM. It was measured before it went: it was reached
-only by a pair of literals, and every such pair has already passed
-`reject_overflowing_operation`, so it never wrapped anything and folded what LLVM folds
-itself. The backend now emits the instruction for two constants as for two locals, and
-LLVM is the run-time home by definition. The gate is
+**One compile-time home.** The evaluator is the only place in the compiler that
+computes an integer operator. The backend folds nothing: it emits the instruction for two
+constants as for two locals, and LLVM is the run-time home by definition. The gate is
 `tests/unit/test_integer_operator_semantics_agree.py`: per operator and per width, the
 evaluator's value and the value a JIT-compiled copy of the emitted instruction computes
 are one bit pattern, and a constant fold in the backend's operator emitter is refused
-by its source. Building that matrix is what found the `%` half of the row above: the
-evaluator answered 0 for the smallest signed value `% -1`, and it reports CE2077 now.
+by its source. The smallest signed value `% -1` is CE2077.
 
 ### What this costs
 
-- **The evaluator computes at the width.** `~0` on a `u32` becomes 4294967295 and no longer
-  Python `-1`. The printed answer does not move, so
+- **The evaluator computes at the width.** `~0` on a `u32` is 4294967295, the value the
+  machine holds. The printed answer is the same as at run time, and
   `tests/types/unary_literal_context/test_run_const_not_of_a_literal.sushi` and
-  `tests/constants/scalar_folding/test_constants_bitwise.sushi:17` keep the output they expect. The held
-  value stops being a lie.
-- **The check belongs to the typecheck pass.** The back end does not report a language error,
-  so `_fold_arithmetic_constants` is the wrong place. The typecheck pass already calls the
-  evaluator (`passes/types/constants.py`), so this is one more call and not a new
-  mechanism. A body is the second caller: `reject_overflowing_operation`
+  `tests/constants/scalar_folding/test_constants_bitwise.sushi` hold it.
+- **The check belongs to the typecheck pass.** The back end does not report a language
+  error. The typecheck pass calls the evaluator for a declaration
+  (`passes/types/constants.py`). A body is the second caller: `reject_overflowing_operation`
   (`passes/types/expressions.py`) reads every `+ - * / %` node and every unary minus with a
   silent reporter, and raises only an overflow recorded AT that node. That one rule keeps
   the count right -- the innermost operation of `(200 + 100) / 2` reports, the division
   around it does not, and a use of a constant that overflows adds nothing to the report at
   its declaration.
-- **A new code.** Use CE2077. It was free, and `internals/errors/types.py` reserves
-  CE2070 to CE2079 for radix and literal range errors, beside CE2070 and CE2073. The code
-  says that an operation gives a value the type cannot hold, and it names the operator, the
-  value and the type. `tests/unit/test_error_registry.py` gates the registration, so the
-  implementing branch registers the code in `types.py` and nowhere else.
-- **The change is breaking.** `let u8 x = 200 + 100` stops compiling. The measured cost
-  against the full suite of 1782 tests: nothing needed a change. Two of them read a value
-  the rule corrects and both keep their expected output.
-- **Issue #447 gets smaller.** Under this rule a constant always holds a value that its type
-  can hold. So the formatter that #447 needs has nothing left to reconcile, and the
-  "wrap first" step that #447 describes disappears.
+- **The code is CE2077.** It is in the CE2070 to CE2079 range of
+  `internals/errors/types.py`, beside CE2070 and CE2073. It says that an operation gives a
+  value the type cannot hold, and it names the operator, the value and the type.
+- **The rule is strict.** `let u8 x = 200 + 100` does not compile.
+- **A constant holds a value that its type can hold.** So the formatter that renders a
+  constant interpolation has nothing to reconcile, and it needs no "wrap first" step.
 
 ## 3. Ruling 2: an array literal takes a repeated element
 
@@ -255,18 +235,11 @@ stores, because the IR size and the compile time both grow with N.
 A note on the stack: a fixed local of 32768 `i32` values is 128 KiB. The encoder case
 therefore wants `from([-1; 32768])`, which puts the table on the heap.
 
-### 3.1 Two rules the first draft did not state
+### 3.1 Two more rules
 
-**A repeated element must not own heap memory (CE2018).** ~~`[s; 3]` for a `string` asks the
-compiler to put one owned value in three slots. That needs a deep copy per slot, and
-`.clone()` is the only deep copy in Sushi -- the compiler inserts none.~~
-
-**Superseded by #478, Ruling 7.** The premise expired when #479 gave `.fill()` a per-slot
-`copy_out` through the sanctioned deep-clone seam: the language then answered one question
-two ways, because `a.fill(towel)` was legal beside `from([towel; 2])`, which was not. A
-repeated value is now a BORROW, and every slot takes its own copy. The rule anticipated its
-own end -- "a rule that starts narrow relaxes later without breaking a program that compiles
-today" -- and that is what happened.
+**A repeated value is a borrow.** Every slot takes its own copy through `copy_out`, the
+deep-clone seam, so an owning type is legal: `from([towel; 2])` follows the same rule as
+`a.fill(towel)`.
 
 **CE2011 lists the runs.** A run is written by length, so a literal that is one element short
 gives the compiler no way to know WHICH run is short -- either of them could be. The
@@ -334,7 +307,7 @@ length code, a distance to its distance code -- read as computed tables, and the
 each is a step function whose value is constant over a run, so a repeated element writes it
 directly. `zlen_index` walked 29 base entries backwards for every match it emitted and now
 reads one slot of a 256-entry table written in 29 runs. `zdist_index` does the same through
-the range split zlib's own encoder uses, since one direct table would need 32768 slots.
+the range split zlib's own encoder uses, because one direct table would need 32768 slots.
 
 The lesson generalizes, and it is worth stating before Ruling 3 opens: **a table is a run
 table more often than it looks.** Ask whether the value is constant over intervals of the
@@ -379,8 +352,8 @@ When one of these arrives, the cost is already known. Record it here so the deci
   (`generics/monomorphize/__init__.py`) and `MAX_EXPANSION_ROUNDS = 8`
   (`generics/instantiate/__init__.py`).
 - **An interpreter is a second implementation of the language.** Every difference between it
-  and the back end is a bug. #441 and #451 each fixed one of that kind: floor division
-  against truncating division, and a string constant matched by its shape.
+  and the back end is a bug. Two such differences are known cases: floor division against
+  truncating division, and a string constant matched by its shape.
 
 The shape a constant function would take, for the record:
 
@@ -439,12 +412,6 @@ That keeps a table, but it does not compute one at compile time: the table is no
 `.rodata`, and each program pays for the build when it runs. `compression/zlib` does not use
 it: `zfixed_lit` builds its `ZHuff` for each block, and the value goes from call to call as a
 `peek` parameter.
-
-## 6. Order
-
-1. Ruling 1, the overflow rule. It is a fix, it stands alone, and it makes #447 smaller.
-2. Ruling 2, the repeated element. It closes every table in the repository.
-3. Ruling 3 stays closed until the condition in section 4 is true.
 
 ## History
 
