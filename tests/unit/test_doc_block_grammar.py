@@ -45,12 +45,15 @@ SCAN_ROOTS = ("docs", "editor-support", "site", "sushi_lang", "tests", "toolchai
 #   tests/diagnostics/doc_delimiter_in_hole/ -- the fixture that holds `##:` and `:##`
 #                                        inside an interpolation hole, where they are
 #                                        not delimiters.
+#   docs/examples/mathlib.sushi       -- the library example; a library documents its
+#                                        public functions with doc blocks.
 DOC_SOURCES = (
     "tests/docs",
     "tests/libs/helpers/doc_lib.sushi",
     "sushi_lang/sushi_stdlib/src_sushi/",
     "toolchain/src/",
     "tests/diagnostics/doc_delimiter_in_hole/",
+    "docs/examples/mathlib.sushi",
 )
 
 
