@@ -38,8 +38,8 @@ The last four run per unit, in one loop, so the whole-program passes above them 
 unit before any function body is walked.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
-**AST builder**, which reads a fixed array's size while the unit is parsed (Known
-Limitation 12) and keeps a constant table of its own for it; the `typecheck` pass; and
+**AST builder**, which reads a fixed array's size while the unit is parsed (so a
+size is a literal or a constant of the same unit) and keeps a constant table of its own for it; the `typecheck` pass; and
 the backend. The last two share the collect pass's table, and with it the fold memo.
 
 ### The word "phase"

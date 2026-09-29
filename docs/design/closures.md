@@ -32,14 +32,19 @@ use <collections/iter>
 fn make_adder(i32 n) fn(i32) -> i32:
     return Result.Ok(|i32 x| x + n)      # captures n by value; escapes upward (returned)
 
-fn main() i32:
+fn demo() ~:
     let fn(i32) -> i32 add5 = make_adder(5)??
     println(add5(10)??)                  # 15
 
     let i32 scale = 3
     let List@(i32) out = from([1, 2, 3]).map(|i32 x| x * scale)??   # captures scale
     println(out.len())                   # 3
-    return Result.Ok(0)
+    return Result.Ok(~)
+
+fn main() i32:
+    match demo():
+        Result.Ok(_) -> return Result.Ok(0)
+        Result.Err(_) -> return Result.Ok(1)
 ```
 
 ---
