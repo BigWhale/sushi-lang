@@ -1,0 +1,21 @@
+enum HalfError:
+    Odd(i32)
+
+extend i32 half() i32 | HalfError:
+    if (self % 2 == 1):
+        return Result.Err(HalfError.Odd(self))
+    return Result.Ok(self / 2)
+
+extend i32 quarter() i32 | HalfError:
+    let i32 h = self.half()??
+    return Result.Ok(h.half()??)
+
+fn main() i32:
+    println("half of 84 is {84.half().realise(-1)}")
+    println("half of 7 is {7.half().realise(-1)}")
+
+    match 42.quarter():
+        Result.Ok(q) -> println("a quarter of 42 is {q}")
+        Result.Err(HalfError.Odd(n)) -> println("stopped at the odd number {n}")
+
+    return Result.Ok(0)

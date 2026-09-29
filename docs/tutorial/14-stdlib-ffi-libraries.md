@@ -15,13 +15,16 @@ that really compiles and runs.
 ## A tour of the standard library
 
 Standard-library modules are pulled in with `use <name>` (angle brackets), distinct from
-importing your own source files (which uses quotes — more on that later). Each module is a
-precompiled unit that the compiler links into your binary.
+importing your own source files (which uses quotes — more on that later). Some modules are
+precompiled; others (for example `<io/fs>`, `<io/buf>`, `<io/contracts>` and
+`<collections/iter>`) are Sushi source that the compiler adds to your program as ordinary
+units. For you, the two kinds are the same: write `use <name>`, and the compiler links what
+you use into your binary.
 
 ### Time
 
 The `<time>` module gives you POSIX-precision sleep functions. They all return
-`Result@(i32)` (0 on success, or the remaining microseconds if a signal interrupts the
+`Result@(i32, StdError)` (0 on success, or the remaining microseconds if a signal interrupts the
 sleep), so you unwrap them like any other `Result`. We keep the duration tiny here so the
 program returns almost instantly.
 
@@ -44,9 +47,11 @@ Drive online. Anything is now infinitely probable.
 
 ### Math
 
-The `<math>` module wraps LLVM's numeric intrinsics. Alongside the type-suffixed forms
-(`abs_i32`, `min_f64`, …) there are **polymorphic** helpers — `abs`, `min`, `max`, `sqrt`,
-`hypot` — that pick the right instruction for whatever numeric type you hand them.
+The `<math>` module gives numeric functions. Three of them are **polymorphic**: `abs`,
+`min` and `max` accept any numeric type, and the result has the type of the arguments.
+There are no type-suffixed forms such as `abs_i32`. The other functions (`sqrt`, `hypot`,
+`pow`, `sin`, `log` and more) take and return `f64` only. For an `f32` or an integer, cast
+the argument with `as f64`.
 
 ```sushi
 --8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/math-tour.sushi"
@@ -94,9 +99,9 @@ remember, and no way to leak one -- and the same `IoError` carries every read, w
 seek, so one `??` chain covers a whole function.
 
 Buffering is a separate type you opt into. `<io/buf>` gives `BufReader@(R)` over
-anything that can read and `BufWriter@(W)` over anything that can write, each paying one
-system call per WINDOW rather than one per line. The constructor TAKES the handle, so the
-unbuffered `File` cannot be used behind the reader's back.
+anything that can read and `BufWriter@(W)` over anything that can write. Each makes one
+system call per window of bytes, not one per line. The constructor takes the handle
+(`BufReader.new(nom f, 4096)`), so nothing can use the unbuffered `File` behind the reader.
 
 Here we write a file under `/tmp` and read the first line back through a buffer.
 
@@ -111,10 +116,38 @@ Entry filed.
 Entry reads: Earth: Mostly Harmless
 ```
 
-`<io/files>` sits UNDER all of that: the path utilities (`exists`, `remove`, `read_dir`)
-and the `fd_*` descriptor primitives that `File` is written on top of. Other modules you
-will reach for include `<sys/env>` for environment variables, `<io/contracts>` when a
-function should name the capability it needs rather than the type, and
+To read a file line by line, use `r.lines()` on a `BufReader`. It takes the reader, and
+each item is a `Result@(string, IoError)`. `foreach(line?? in r.lines())` is the line loop:
+the `??` on the binder passes an error to the caller. A `BufWriter` ends with
+`w.finish()`, which sends the last bytes and reports an error. (A `BufWriter` that goes out
+of scope also sends its bytes, but it cannot report an error.)
+
+`<io/contracts>` holds three perks: `Reader`, `Writer` and `Seek`. `File` implements all
+three, and `BufReader` and `BufWriter` implement the contract that they wrap. A function
+that names the perk, not the type, accepts all of them. `<io/fs>` also declares the console
+handles `stdin`, `stdout` and `stderr` as `File` values, so a `Writer` function can write to
+the terminal too:
+
+```sushi
+--8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/buffered.sushi"
+```
+
+Output:
+
+```
+log written
+read: Arthur: towel packed
+read: Ford: thumb ready
+2 lines
+```
+
+A `File` can do more: `f.read_at(offset, count)` and `f.write_at(offset, data)` read and
+write at a position and do not move the file offset, and `f.share()` gives a second `File`
+for the same open file.
+
+`<io/files>` is the layer under `<io/fs>`: the path utilities (`exists`, `remove`,
+`read_dir`) and the `fd_*` descriptor primitives that `File` uses. It has no `open()`.
+Other modules you will use include `<sys/env>` for environment variables and
 `<collections/strings>` for UTF-8-aware string utilities. The
 [Standard Library reference](../standard-library.md)
 lists them all.
@@ -251,6 +284,34 @@ add(40, 2) = 42
 answer() = 42
 ```
 
+### Imports behind a name, and re-exports
+
+`use "guidelib" as guide` puts the public names of `guidelib` behind the name `guide`. You
+write `guide.add(40, 2)`, and your own `add` stays free:
+
+```sushi
+--8<-- "docs/tutorial/examples/14-stdlib-ffi-libraries/use-namespace.sushi"
+```
+
+Output:
+
+```
+guide.add(40, 2) = 42
+add(40, 2) = 4002
+```
+
+The dot works in every place where you write a name: a type (`let geo.Vec v`), a
+constructor, a match arm, a perk constraint, a value and a call. The same form works for a
+standard module: `use <collections/hashmap> as hm`.
+
+The scope of a unit contains only its own declarations and the names that its own `use`
+lines bring. An import is **not** transitive: if `relay.sushi` has `use "guidelib"`, a
+program that imports `relay` does not see `add`. To pass the public names on, `relay`
+writes `public use "guidelib"`. Then the importers of `relay` get the public names of
+`guidelib` as if `relay` declared them.
+
+### Compiled libraries
+
 For genuine reuse you compile the library once into a `.slib` — a single file holding the
 library's source text plus the index the compiler needs for type information — and link it
 by name. Build the library with `--lib`, then point `SUSHI_LIB_PATH` at it and import it
@@ -278,18 +339,22 @@ answer() = 42
 
 !!! note "Sharing further afield"
     For distributing libraries beyond your own machine there is the **`nori`** packager and
-    the central **Omakase** repository at `omakase.lubica.net`. Be aware of the current
-    limits: libraries have no transitive dependencies, are not portable across platforms,
-    and do not share generic instantiations across the boundary. See the
+    the central **Omakase** repository at `omakase.lubica.net`. The default `.slib` holds
+    source text, so it is portable, and its generic functions and types work in the
+    program that imports it. A `--lib-kind binary` library is not portable across
+    platforms (`CE3504`) and exports no extension methods. A library has no transitive
+    dependencies. See the
     [libraries guide](../libraries.md)
     for the details.
 
 ## What you learned
 
 - Standard-library modules are imported with `use <name>`: `<time>` for sleeping,
-  `<math>` for numeric intrinsics (with polymorphic `abs`/`min`/`max`/`sqrt`/`hypot`),
-  `<random>` for seedable pseudo-randomness, and `<io/files>` for file I/O via
-  `Result@(File, IoError)`/`FileError`.
+  `<math>` for numeric functions (polymorphic `abs`/`min`/`max`; `f64` for the others),
+  `<random>` for seedable pseudo-randomness, and `<io/fs>` for files: `open()` gives a
+  `File` on the `IoError` channel.
+- `<io/buf>` adds buffering and the line loop `foreach(line?? in r.lines())`, and
+  `<io/contracts>` lets a function accept any `Reader` or `Writer`.
 - A native variadic parameter `...T name` collects trailing arguments into an owned `T[]`;
   zero arguments is valid, and it must be the last parameter.
 - FFI lets you call C from inside an `unsafe external "C" as <ns> because "<reason>"` block;
@@ -299,13 +364,17 @@ answer() = 42
   kept strictly apart from safe native `...T` variadics.
 - Reuse your own code with source `use "path"` imports, or compile a reusable `.slib` with
   `--lib` and link it via `SUSHI_LIB_PATH` and `use <lib/...>`.
+- `use "x" as ns` puts the names behind `ns.`; an import is not transitive, and
+  `public use "x"` re-exports.
 
 ## Where to go next
 
-You have travelled from "Mostly Harmless" all the way to linking C and shipping libraries —
-and two more chapters await: [variadic functions](15-variadic-functions.md) and
-[foreign pointers](16-foreign-pointers.md). From here, the reference documentation goes
-deeper than any tutorial can:
+You have travelled from "Mostly Harmless" all the way to linking C and shipping libraries.
+Five more chapters follow: [variadic functions](15-variadic-functions.md),
+[foreign pointers](16-foreign-pointers.md),
+[first-class functions](17-first-class-functions.md), [closures](18-closures.md) and
+[higher-order combinators](19-higher-order-combinators.md). The reference documentation
+goes deeper than any tutorial can:
 
 - [Language Reference](../language-reference.md)
   — the complete grammar, types, and operators.

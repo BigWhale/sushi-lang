@@ -1,0 +1,31 @@
+struct Box@(T):
+    T value
+
+extend Box@(T) get() T:
+    return self.value
+
+extend i32[] total() i32:
+    let i32 sum = 0
+    foreach(x in self.iter()):
+        sum := sum + x
+    return sum
+
+extend T[] count() i32:
+    return self.len()
+
+extend Box@(T) paired@(U)(U other) string:
+    return "{self.value} and {other}"
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.get())
+
+    let i32[] numbers = from([1, 2, 3, 36])
+    println(numbers.total())
+
+    let bool[] flags = from([true, false])
+    println(flags.count())
+
+    println(b.paired("a towel"))
+
+    return Result.Ok(0)

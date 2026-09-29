@@ -26,7 +26,7 @@ so every `ptr` in a running program traces back to a C function that returned it
 single fact is the wall everything else leans on.
 
 Here is the full life of a handle — born in `malloc`, carried through a safe wrapper's
-`Result@(ptr)`, and handed back to `free`:
+`Result@(ptr, StdError)`, and handed back to `free`:
 
 ```sushi
 --8<-- "docs/tutorial/examples/16-foreign-pointers/borrow-bytes.sushi"
@@ -38,11 +38,11 @@ Output:
 returned to the universe
 ```
 
-Note what the wrapper buys you: `borrow_bytes` is ordinary Sushi, so its callers get the
-error channel back (`Result.Ok`/`Result.Err`, `match`, all of it). `Maybe@(ptr)` works the
-same way. But be precise about what it does *not* buy: wrapping a handle in `Result` adds
-error handling, **not** RAII or null-checking. The `free` is still your job — guarantee 2
-is restored by hand, in `give_back`, or not at all.
+The wrapper gives you this: `borrow_bytes` is ordinary Sushi, so its callers get the error
+channel back (`Result.Ok`/`Result.Err`, `match`, all of it). `Maybe@(ptr)` works the same
+way. But a `Result` around a handle adds error handling only, **not** RAII and not
+null-checking. Here the `free` is still your job, in `give_back`. The next section shows
+how a wrapper struct with `Drop` gives RAII back.
 
 !!! note "Holding is the safe half"
     The insight the quarantine rests on: *holding* a raw pointer is harmless —
@@ -70,9 +70,8 @@ you find yourself wanting any of these, you actually want the next section.
 
 ## The wrapper struct: giving a handle a personality
 
-The idiomatic home for a foreign handle is a **struct**. The raw `ptr` rides inside as a
-field, and the struct — which is real Sushi and plays by all the rules — is what gets
-methods, crosses unit boundaries, and appears in your APIs:
+The idiomatic home for a foreign handle is a **struct**. The raw `ptr` is a field, and the
+struct (real Sushi, with all the rules) gets the methods:
 
 ```sushi
 --8<-- "docs/tutorial/examples/16-foreign-pointers/towel-struct.sushi"
@@ -84,20 +83,40 @@ Output:
 towel surrendered, 42 bytes returned
 ```
 
-A `Towel` knows things its raw pointer never could — its size, here — and the
-`surrender()` extension method gives the handle's cleanup a name and a place. This is the
-*newtype* idiom, and here the compiler asks for it: wrap the foreign thing once, then program
-against the wrapper forever.
+A `Towel` knows things that its raw pointer cannot know (here, its size), and the
+`surrender()` extension method gives the cleanup a name and a place. This is the *newtype*
+idiom: wrap the foreign thing once, then use the wrapper.
+
+`surrender()` is still a manual step. To make the cleanup automatic, implement the `Drop`
+perk (chapter 12) on the wrapper. The compiler then calls `drop()` when the `Towel` is
+destroyed, on every path out of the scope. This is how `File` and `TcpStream` own their
+descriptors.
+
+```sushi
+--8<-- "docs/tutorial/examples/16-foreign-pointers/towel-drop.sushi"
+```
+
+Output:
+
+```
+holding a towel of 42 bytes
+towel freed, 42 bytes returned
+end of main
+```
+
+The `Towel` is a temporary that the `match` owns, so it is destroyed at the end of the
+`match`, before `end of main`.
 
 ## Two fences: `public` and the unit gate
 
 Two compile-time rules keep `ptr` boxed into the unsafe realm:
 
-**A `public fn` may not expose `ptr`** — not as a parameter, not as a return type, not
-tucked inside `Result@(ptr, E)` (`CE5008`). What a unit exports must be Sushi-shaped:
-digested values, or wrapper structs like `Towel`. Struct fields *may* carry a `ptr` across
-units — that is the deliberate escape hatch, and it is safe because a `ptr` is inert
-outside its home unit (the `libc` namespace it came from isn't even visible there).
+**A `public fn` may not expose `ptr`** (`CE5008`): not as a parameter, not as a return
+type, not inside `Result@(ptr, E)`, and not inside a struct. A struct with a `ptr` field
+(`Towel`) also counts, so `public fn issue(i64 n) Towel` is refused. What a unit exports
+must be Sushi-shaped: digested values such as an `i64` or a `string`. Keep the wrapper
+struct and the functions that take it in the unit that declares the externals, and export
+functions that do the work.
 
 **No danger zone, no `ptr`** — the type name itself may only be spelled in a unit that
 declares an `unsafe external` block (`CE5009`). A unit without externals could never
@@ -119,12 +138,13 @@ found every file that can possibly touch a raw foreign pointer.
   one — so a program without `unsafe external` blocks cannot have one at runtime.
 - **Holding is safe**: variables, private params/returns, `Result@(ptr, E)`, `Maybe@(ptr)`,
   struct fields, and `ptr[]` arrays all work. Wrapping in `Result` restores the error
-  channel but **not** RAII — freeing is your job.
+  channel but **not** RAII.
 - **Doing is forbidden**: no comparisons or arithmetic (`CE5010`), no methods (`CE5011`),
   no generic containers beyond `Result`/`Maybe` (`CE5012`), no interpolation, no casts.
 - The **wrapper struct** is the idiom: put the handle in a field, attach extension methods
-  to the struct, export the struct.
-- Two fences keep FFI legible: `public fn` signatures may not expose `ptr` (`CE5008`), and
+  to the struct, and implement `Drop` to free the handle automatically.
+- Two fences keep FFI legible: `public fn` signatures may not expose `ptr`, also not
+  inside a struct (`CE5008`), and
   `ptr` may only be named in a unit with an `unsafe external` block (`CE5009`).
 
 The complete reference — marshalling rules, variadic externs, every diagnostic — is the

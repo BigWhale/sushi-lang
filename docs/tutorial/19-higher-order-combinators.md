@@ -10,8 +10,9 @@ Unlike `List` and `HashMap`, these are not always in scope: you bring them in wi
 use <collections/iter>
 ```
 
-`collections/iter` is the first Sushi module written **in Sushi itself** — the combinators are
-ordinary generic functions that compile alongside your program. Nothing is generated unless you
+`collections/iter` is written **in Sushi itself**, as are several other standard modules (for
+example `<io/fs>` and `<io/buf>`). The combinators are ordinary generic functions that compile
+with your program. Nothing is generated unless you
 actually call one, so an unused `use` costs nothing.
 
 ## map — transform every element
@@ -128,16 +129,23 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 ## Two things to know
 
 !!! note "Element ownership"
-    `map` and `fold` work on copyable element types — integers, floats, `bool`, strings,
-    and copyable structs. The **method-form `filter` is fully general**: it clones each
-    kept element, so an owning element type works there. The free-function `filter`
-    stays copy-only.
+    `map` and `fold` borrow each element and give it to your function, so they work on
+    every element type. The **method-form `filter`** clones each kept element, so an
+    owning element type works there (not a type that refuses `.clone()`, such as a `Drop`
+    type). Give it a function reference, because a lambda parameter cannot have an owning
+    type (`CE2094`, chapter 18). The free-function `filter` keeps the element itself, so
+    it works on plain element types only.
 
 !!! warning "Annotate bare-parameter lambdas passed to a combinator"
     A bare-parameter lambda (`|x| ...`) cannot infer its type *against a generic parameter*, since
     the combinator's own type parameters are still being solved. Give the parameter a type
-    (`|i32 x| ...`) or pass a function reference. To hand a **generic** function to a combinator,
-    bind it to a typed local first:
+    (`|i32 x| ...`) or pass a function reference.
+
+    A **generic** function can go to a combinator directly when the other arguments solve
+    every type parameter: with `fn keep@(T)(T x) bool`, both `filter(xs, keep)` and
+    `xs.filter(keep)` compile, because `xs` gives `T`. For `map`, nothing but the function
+    gives `U`, so `map(xs, identity)` is refused (`CE2060`, `CE2093`). Bind the generic
+    function to a typed local first:
 
     ```sushi
     let fn(i32) -> i32 id = identity   # fixes the instantiation
@@ -150,11 +158,12 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
   and `T[]` AND as free functions — plus `compose`.
 - The method form declares the `| StdError` channel: chain with `??`
   (`xs.map(f)??.filter(p)??.fold(0, g)??`), and CE2515 catches a link you forgot to handle.
-- `collections/iter` is the first Sushi-source standard-library module; the combinators
+- `collections/iter` is a Sushi-source standard-library module; the combinators
   monomorphize like any generic and cost nothing when unused.
 - Each combinator takes a `fn(...)` value: a lambda (capturing or not) or a plain function
   reference.
 - `compose` returns a closure that captures and calls the two functions you give it.
-- `map` and `fold` are copy-element; the method-form `filter` clones and is fully general.
-  Annotate bare-parameter lambdas, or bind a generic function to a typed local, when
-  passing them to a combinator.
+- `map` and `fold` borrow each element; the method-form `filter` clones the kept elements,
+  and the free `filter` takes plain elements only.
+- Annotate bare-parameter lambdas. A generic function goes in directly when the other
+  arguments solve its type parameters; otherwise bind it to a typed local first.

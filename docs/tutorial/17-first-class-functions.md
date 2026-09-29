@@ -7,8 +7,8 @@ call through any of those. That one idea — functions as values — is what tur
 
 This builds on [Chapter 4 (Functions)](04-functions.md), [Chapter 6 (Error Handling)](06-error-handling.md),
 and [Chapter 13 (Collections)](13-collections.md). If you know Python's "functions are objects" or
-C's function pointers, you already have the intuition — Sushi's version is typed and compiles to a
-bare pointer with zero overhead.
+C's function pointers, you already have the intuition. Sushi's version is typed, and a plain
+function reference carries no captured state.
 
 ## A function as a value
 
@@ -36,8 +36,8 @@ Three things to notice:
   the familiar `??` works on `op(v)`.
 
 !!! note "A plain reference vs. a closure"
-    A plain function reference like `add_one` above carries no captured variables — it's the bare
-    address of the compiled function, with no allocation and no cleanup. Sushi also has
+    A plain function reference like `add_one` above carries no captured variables. It points to
+    the compiled function, with no allocation and no cleanup. Sushi also has
     [closures](../closures.md): a lambda literal that *does* capture surrounding variables, covered
     in the next chapter. Both are `fn(...)`-typed values with identical call syntax.
 
@@ -79,8 +79,8 @@ square
 
 You can call the field **directly** — `op.run(7)`. When a struct has a fn-typed field and no
 method of the same name, `op.run(7)` routes to the function stored in the field. (If a method
-`run` also existed, the method would win; bind the field to a local first — `let f = op.run` — to
-call the field in that case.)
+`run` also existed, the method would win. To call the field in that case, bind it to a typed
+local first: `let fn(i32) -> i32 f = op.run`.)
 
 ## The error type travels with the function
 
@@ -116,26 +116,33 @@ let i32 b = (table.get(0)??)(41)??    # same, parenthesized
 
 ## Referencing a generic function
 
-A **generic** function can be referenced as a value when you give the binding an explicit function
-type — the annotation fixes which instantiation you mean:
+A **generic** function can be a value when the position states a function type. The function
+type chooses the instantiation:
 
 ```sushi
 fn identity@(T)(T x) T:
     return Result.Ok(x)
 
+fn apply(fn(i32) -> i32 op, i32 v) i32:
+    return Result.Ok(op(v)??)
+
 let fn(i32) -> i32 g = identity      # identity@(i32), chosen by the annotation
 let i32 n = g(41)??                  # 41
+let i32 m = apply(identity, 42)??    # the parameter type chooses identity@(i32)
 ```
 
-Without an expected function type — for instance passing `identity` straight into a call argument
-with no typed binding — the reference is still **CE2093**; bind it to a typed local first.
+This works in every position that states the function type: a typed `let`, a rebind, an
+argument to a `fn(...)` parameter, a `return` from a function that returns a function type, a
+struct field and an enum payload. A position with no function type (for example, an argument
+to a generic parameter `T`) cannot choose the instantiation, and the reference is
+**CE2093**.
 
 ## What else the compiler checks
 
 - A wrong-shaped call through a function value (wrong arity or argument type) → **CE2092**.
 - Assigning a function value to an incompatible function-typed variable → **CE2002**. Function
-  types are *invariant*: arity, every parameter, the return type, and the error type must match
-  exactly.
+  types are *invariant*: arity, every parameter and its mode, the return type, and the error type
+  must match exactly. `fn(nom string) -> i32` and `fn(string) -> i32` are different types.
 
 Extension methods, perk methods, and C externals aren't bare-referenceable at all — they have
 different calling conventions, so a bare name that isn't a plain function is just an undeclared
@@ -147,12 +154,13 @@ identifier.
   `fn(params) -> return [| Error]`.
 - You can **store** function values (variables, struct fields, `List@(fn(...))`), **pass** them as
   arguments, and **call through** them; an indirect call returns a `Result` just like a direct one.
-- A plain function reference is a **bare pointer** — zero-cost, no captured state. Sushi also has
-  **closures** (capturing lambda literals) — see the next chapter.
+- A plain function reference has **no captured state**: no allocation and no cleanup. Sushi
+  also has **closures** (capturing lambda literals) — see the next chapter.
 - Call a function-valued **struct field** directly (`obj.field(x)`); a same-named method would win.
   You can also call through any expression that yields a function value (`table.get(0)??(x)`).
-- Reference a **generic function** as a value when an explicit function type is present
-  (`let fn(i32) -> i32 g = identity`); a bare reference with no expected type is **CE2093**.
+- Reference a **generic function** as a value in any position that states the function type
+  (`let fn(i32) -> i32 g = identity`, `apply(identity, 42)`); a position with no function
+  type is **CE2093**.
 - The **error type is part of the function type** and propagates through `??`.
 - A call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
 

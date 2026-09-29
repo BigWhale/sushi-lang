@@ -1,0 +1,24 @@
+# Drop gives the wrapper struct RAII: the handle is freed when the Towel
+# is destroyed, on every path out of the scope.
+unsafe external "C" as libc because "a raw buffer behind a tidy struct":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Towel:
+    ptr raw
+    i64 size
+
+extend Towel with Drop:
+    fn drop(poke self) ~:
+        libc.free(self.raw)
+        println("towel freed, {self.size} bytes returned")
+
+fn issue_towel(i64 n) Towel:
+    return Result.Ok(Towel(libc.malloc(n), n))
+
+fn main() i32:
+    match issue_towel(42 as i64):
+        Result.Ok(t) -> println("holding a towel of {t.size} bytes")
+        Result.Err(_) -> println("no towel today")
+    println("end of main")
+    return Result.Ok(0)
