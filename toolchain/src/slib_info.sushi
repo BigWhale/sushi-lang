@@ -210,14 +210,12 @@ Finds the Markdown mark that opens at `i`. The longest mark is tried first.
 - Returns: The mark, or `""`.
 :##
 fn mark_at(string line, i32 i) string:
-    let i32 n = line.len()
-    if (i + 2 <= n):
-        if (line.s(i, i + 2) == "**"):
-            return Result.Ok("**")
     let string one = line.char_at(i)
     if (one == "`"):
         return Result.Ok("`")
     if (one == "*"):
+        if (i + 1 < line.len() and line.char_at(i + 1) == "*"):
+            return Result.Ok("**")
         return Result.Ok("*")
     return Result.Ok("")
 
@@ -241,17 +239,12 @@ Finds the next position of `mark`, at `start` or after it.
 - Parameter line: The line of prose.
 - Parameter start: The index where the search starts.
 - Parameter mark: The mark.
-- Returns: The position, or -1.
+- Returns: The position, or `Maybe.None()` when the rest of the line has no such mark.
 :##
-fn close_at(string line, i32 start, string mark) i32:
-    let i32 n = line.len()
-    let i32 mlen = mark.len()
-    let i32 probe = start
-    while (probe + mlen <= n):
-        if (line.s(probe, probe + mlen) == mark):
-            return Result.Ok(probe)
-        probe := probe + 1
-    return Result.Ok(-1)
+fn close_at(string line, i32 start, string mark) Maybe@(i32):
+    match line.s(start, line.len()).find(mark):
+        Maybe.Some(at) -> return Result.Ok(Maybe.Some(start + at))
+        Maybe.None() -> return Result.Ok(Maybe.None())
 
 ##:
 Tells if a mark and its text are a span, or punctuation.
@@ -260,12 +253,9 @@ The rules are in `docs/design/slib-info.md` section 6.
 
 - Parameter mark: The mark.
 - Parameter inner: The text between the two marks.
-- Parameter close: The index of the closing mark, or -1.
 - Returns: True for a span.
 :##
-fn is_span(string mark, string inner, i32 close) bool:
-    if (close < 0):
-        return Result.Ok(false)
+fn is_span(string mark, string inner) bool:
     if (inner == ""):
         return Result.Ok(false)
     if (mark == "`"):
@@ -285,29 +275,31 @@ Changes the Markdown marks of one line of prose into styles.
 fn render_inline(string line, Opts o) string:
     if (o.reset == ""):
         return Result.Ok(line.clone())
-    let string out = ""
+    let string[] pieces = from([])
     let i32 n = line.len()
     let i32 i = 0
     while (i < n):
         let string mark = mark_at(line, i)??
         if (mark == ""):
-            let string one = line.char_at(i)
-            out := "{out}{one}"
+            pieces.push(line.char_at(i))
             i := i + 1
-        else:
-            let i32 mlen = mark.len()
-            let i32 close = close_at(line, i + mlen, mark)??
-            let string inner = ""
-            if (close >= 0):
-                inner := line.s(i + mlen, close)
-            if (is_span(mark, inner, close)??):
-                let string style = style_of(mark, o)??
-                out := "{out}{style}{inner}{o.reset}"
-                i := close + mlen
-            else:
-                out := "{out}{mark}"
-                i := i + mlen
-    return Result.Ok(out)
+            continue
+        let i32 mlen = mark.len()
+        let i32 next = i + mlen
+        match close_at(line, next, mark)??:
+            Maybe.Some(close) ->
+                let string inner = line.s(next, close)
+                if (is_span(mark, inner)??):
+                    pieces.push(style_of(mark, o)??)
+                    pieces.push(inner)
+                    pieces.push("{o.reset}")
+                    next := close + mlen
+                else:
+                    pieces.push(mark)
+            Maybe.None() ->
+                pieces.push(mark)
+        i := next
+    return Result.Ok("".join(pieces))
 
 ##:
 Prints each line of a text with its indent, and an opener before the first line.
