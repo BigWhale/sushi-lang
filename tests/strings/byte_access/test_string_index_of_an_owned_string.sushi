@@ -1,0 +1,11 @@
+# A byte read on an owned string and on a temporary (#1091); neither leaks.
+# EXPECT_STDOUT_EXACT: "52 50\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32 n = 42
+    let string s = "{n}"
+    let u8 a = s[0]
+    let u8 b = "{n}"[1]
+    println("{a} {b}")
+    return Result.Ok(0)

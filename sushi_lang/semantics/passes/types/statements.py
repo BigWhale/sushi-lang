@@ -349,6 +349,12 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
         # inference stamps `inferred_element_type` for the backend to read.
         validator.validate_expression(stmt.target)
 
+        # A string is immutable: `s[i]` reads a byte and never writes one (#1091).
+        if validator.infer_expression_type(stmt.target.array) == BuiltinType.STRING:
+            er.emit(validator.reporter, er.ERR.CE2113, stmt.target.loc)
+            validator.validate_expression(stmt.value)
+            return
+
         # A constant lives in .rodata: the store is undefined behaviour, not a
         # diagnostic, so it must never be emitted (CE2096).
         from .arrays import reject_write_to_constant

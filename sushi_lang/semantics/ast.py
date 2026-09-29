@@ -648,6 +648,7 @@ class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
     inferred_element_type: Optional["Type"] = None  # Element type inferred by the typecheck pass.
+    reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
                                             # The backend reads the typecheck pass's stamp rather than
                                             # re-deriving; with none, `rows[0].hash()` died
                                             # as CE0019 (#286). Siblings:

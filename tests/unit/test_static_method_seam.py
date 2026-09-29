@@ -42,7 +42,8 @@ def test_the_builtin_statics_are_named_in_one_table():
     assert is_builtin_static("HashMap", "new")
     assert is_builtin_static("Own", "alloc")
     assert is_builtin_static("f64", "from_bits")
+    assert is_builtin_static("string", "from_bytes")
     assert not is_builtin_static("List", "push")
     assert not is_builtin_static("Box", "new")
     assert not is_builtin_static(None, "new")
-    assert set(BUILTIN_STATICS) == {"List", "HashMap", "Own", "f64", "f32"}
+    assert set(BUILTIN_STATICS) == {"List", "HashMap", "Own", "f64", "f32", "string"}

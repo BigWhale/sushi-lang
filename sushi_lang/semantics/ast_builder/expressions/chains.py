@@ -39,6 +39,10 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
     if isinstance(atom, Tree) and atom.data == "f32_name":
         return Name(id="f32", loc=span_of(atom))
 
+    # `string.from_bytes(nom b)` (#1091): the same device for the string type name.
+    if isinstance(atom, Tree) and atom.data == "string_name":
+        return Name(id="string", loc=span_of(atom))
+
     # Expression-body lambda literal (closure). Block-body lambdas are not atoms;
     # they are built from the `let` statement (see statements/variables.py).
     if isinstance(atom, Tree) and atom.data == "lambda_expr":

@@ -13,10 +13,30 @@ if TYPE_CHECKING:
 
 def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = False) -> ir.Value:
     """Emit array indexing operation using GEP instruction."""
+    if expr.reads_a_string_byte:
+        return _finish_index_access(codegen, expr, _emit_string_byte(codegen, expr), to_i1)
     element_ptr = emit_element_pointer(codegen, expr)
 
     result = codegen.builder.load(element_ptr)
     return _finish_index_access(codegen, expr, result, to_i1)
+
+
+def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
+    """`s[i]` (#1091): the byte at offset i of the string's data, bounds-checked.
+
+    A read in place. A temporary string gets an owner, so `"{n}"[0]` frees it.
+    """
+    from sushi_lang.backend.expressions.memory import own_temporary
+    from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    builder = require_builder(codegen)
+    string = codegen.expressions.emit_expr(expr.array)
+    own_temporary(codegen, expr.array, string, BuiltinType.STRING)
+    index = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.index))
+    emit_bounds_check(codegen, index, builder.extract_value(string, 1), prefix="string")
+    data = builder.extract_value(string, 0)
+    return builder.load(builder.gep(data, [index], name="string_byte_at"), name="string_byte")
 
 
 def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:

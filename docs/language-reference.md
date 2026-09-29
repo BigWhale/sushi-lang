@@ -729,6 +729,29 @@ let string b = "bar"
 let string combined = "{a}{b}"   # "foobar"
 ```
 
+Two primitives give a string's bytes in place, with no copy (#1091):
+
+- **`s[i]`** answers the `u8` at byte offset `i`. The index is an `i32`, and it is
+  bounds-checked like `arr[i]`: an offset past `size` is `RE2020`. It is a read and never
+  a write: `s[i] := v` is `CE2113`, because a string is immutable.
+- **`string.from_bytes(nom b)`** is a static that TAKES a `u8[]`: the array's buffer
+  becomes the string's data, its `len` becomes the string's size, and no byte is copied.
+  The array is spent, so a later use of `b` is `CE2405`. The bytes are not checked for
+  UTF-8.
+
+```sushi
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let u8 first = s[0]                       # 77
+    let u8[] b = from([77, 111, 115, 116, 108, 121])
+    let string word = string.from_bytes(nom b)
+    println("{first} {word}")                 # 77 Mostly
+    return Result.Ok(0)
+```
+
+An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` and
+`u8[].to_string()` stay for the cases that want a copy.
+
 ### Other
 
 - `as` - Type casting

@@ -143,3 +143,16 @@ What this order is NOT: a collation. It puts every capital before every lowercas
 it does not normalize, so the two spellings of `é` are neither equal nor adjacent. Equality
 (`==`, `!=`) keeps its own faster path, which answers from the two sizes alone when the lengths
 differ and never reaches `memcmp`.
+
+## Update (2026-09-30): the bytes in place, and a string that takes a buffer
+
+Two primitives of the representation are in the language now (#1091). `s[i]` reads the
+byte `data[i]` after a bounds check against `size`, and `string.from_bytes(nom b)` moves
+a `u8[]` descriptor's `data` into the string with `size = len` and `owned = 1`. The
+array's capacity is dropped: a string frees `data` and nothing reads past `size`.
+
+A string made this way has no NUL after its last byte, and that is correct for the
+representation: every string operation reads `size`, and a C boundary copies through
+`emit_to_cstr`, which writes its own NUL. `u8[].to_string()` still copies and still
+writes a NUL, which nothing needs. `s[i] := v` is refused (`CE2113`): a literal's `data`
+is in `.rodata`, and a string is immutable in every other position too.

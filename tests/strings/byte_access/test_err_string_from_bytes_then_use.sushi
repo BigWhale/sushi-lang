@@ -1,0 +1,8 @@
+# `from_bytes` consumes its argument (#1091): a later use of the array is CE2405.
+# EXPECT_ERROR_CODE: CE2405
+fn main() i32:
+    let u8[] b = from([77, 111])
+    let string s = string.from_bytes(nom b)
+    println(s)
+    println(b.len())
+    return Result.Ok(0)

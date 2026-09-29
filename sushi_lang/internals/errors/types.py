@@ -435,6 +435,14 @@ _add(ErrorMessage("CE2111", Severity.ERROR,
     "cannot infer the element type of an empty {form}",
     Category.TYPE, "An empty `from([])` or a `new()` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return (#544). A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. It reached the backend with no stamp, and the backend answered the internal error CE0042 with the note that says the fault is in the compiler (#868); `new()` did the same until #889. Declare the array first: `let i32[] xs = from([])`, then use `xs`."))
 
+_add(ErrorMessage("CE2113", Severity.ERROR,
+    "a string is immutable: `s[i]` reads a byte and cannot be written",
+    Category.TYPE, "A string gives its bytes in place for a read (#1091): `s[i]` answers the `u8` at byte offset `i`, bounds-checked like an array index. A write through it is refused. A string bound from a literal lives in `.rodata`, so a store there is undefined behaviour, and a string is immutable by design in every other position too. Build a new string instead: copy the bytes with `s.to_bytes()`, change the `u8[]`, and hand it over with `string.from_bytes(nom b)`, which takes the buffer with no second copy."))
+
+_add(ErrorMessage("CE2114", Severity.ERROR,
+    "a value of type {type} is not indexable: only an array or a string takes `[i]`",
+    Category.TYPE, "An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string (#1091), and nothing else. A `List@(T)` answers `.get(i)` (a `Maybe@(T)`), a `HashMap@(K, V)` answers `.get(key)`. Before #1091 this was CE2002 with the text of an assignment, `cannot assign string to array type`, which described a mismatch that the program did not write."))
+
 _add(ErrorMessage("CE2112", Severity.ERROR,
     "cannot infer the type of '{constructor}': nothing gives {params}",
     Category.TYPE, "A generic enum constructor takes its instance from the position that holds it: a `let`, a `return`, a parameter, a field, a payload. A position with no declared type -- a match scrutinee, a method receiver, a `??` operand, a foreach iterable, an interpolation hole, an expression statement, a generic argument -- gives it nothing, so the arguments give the type: `Maybe.Some(1)` is `Maybe@(i32)` and `Slot.Full(7)` is `Slot@(i32)`. A type parameter that no argument gives has no source: the error type of `Result.Ok(1)`, the Ok type of `Result.Err(e)`, the type of `Maybe.None()`. There is no default, and a missing error type is not `StdError` (the rule of Rust E0282 and of Swift). Declare the type first, `let Maybe@(i32) m = Maybe.None()`, then use `m`. Until #1005 the typecheck pass accepted such a constructor with no stamp, and the backend stopped with an internal error (CE0113, CE0055, CE0124 or CE0015)."))

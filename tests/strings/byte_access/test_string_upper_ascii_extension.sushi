@@ -1,0 +1,23 @@
+# A string method written in Sushi over the two primitives (#1091): `s[i]` reads each
+# byte in place, and `from_bytes` takes the new buffer with no second copy.
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS\ntrue\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+extend string upper_ascii() string:
+    let u8[] out = from([0; self.size()])
+    foreach(i in 0..self.size()):
+        let u8 b = self[i]
+        if (b >= 97 and b <= 122):
+            out[i] := b - 32
+        else:
+            out[i] := b
+    return string.from_bytes(nom out)
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string upper = s.upper_ascii()
+    println(upper)
+    println(upper == s.upper())
+    return Result.Ok(0)

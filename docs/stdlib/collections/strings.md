@@ -400,9 +400,40 @@ let u8[] bytes = text.to_bytes()
 ```
 
 The inverse conversions are `u8[]` methods (core, no import):
-`bytes.to_string()` (zero-cost, assumes valid UTF-8) and
+`bytes.to_string()` (a copy, no UTF-8 check) and
 `bytes.to_string_checked() -> Result@(string, StdError)` (validates UTF-8, `Result.Err` on
 malformed input).
+
+## Byte access in place (core, no import)
+
+Two primitives of the string itself need no import and copy nothing (#1091). With them a
+string method can be an ordinary `extend string` method written in Sushi.
+
+- **`s[i] -> u8`**: the byte at offset `i`, bounds-checked (`RE2020` past `size`). A read
+  only: `s[i] := v` is `CE2113`.
+- **`string.from_bytes(nom u8[] b) -> string`**: the string takes the array's buffer.
+  No byte is copied and none is checked for UTF-8.
+
+```sushi
+use <collections/strings>
+
+extend string upper_ascii() string:
+    let u8[] out = from([0; self.size()])
+    foreach(i in 0..self.size()):
+        let u8 b = self[i]
+        if (b >= 97 and b <= 122):
+            out[i] := b - 32
+        else:
+            out[i] := b
+    return string.from_bytes(nom out)
+
+fn main() i32:
+    println("Mostly Harmless".upper_ascii())   # MOSTLY HARMLESS
+    return Result.Ok(0)
+```
+
+`upper_ascii` allocates once and copies once, as the built-in `upper()` does; written
+over `to_bytes()` and `to_string()` it would copy twice.
 
 ### `.to_i32() -> Maybe@(i32)`
 

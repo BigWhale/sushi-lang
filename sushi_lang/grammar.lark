@@ -212,6 +212,7 @@ method_name: NAME | NEW | EXTEND
      | "~" -> blank_literal
      | "f64" -> f64_name
      | "f32" -> f32_name
+     | "string" -> string_name
      | array_literal
      | dynamic_array_new
      | dynamic_array_from

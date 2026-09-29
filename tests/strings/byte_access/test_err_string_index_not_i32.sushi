@@ -1,0 +1,7 @@
+# A byte offset is an `i32` position like every index (#1091).
+# EXPECT_ERROR_CODE: CE2002
+fn main() i32:
+    let string s = "Mostly"
+    let i64 at = 0
+    let u8 b = s[at]
+    return Result.Ok(b as i32)
