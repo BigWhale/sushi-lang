@@ -10,13 +10,13 @@ varargs, and how packs cross `.slib` library boundaries.
 
 - [Overview](#overview)
 - [Native homogeneous variadics (`...T`)](#native-homogeneous-variadics-t)
-- [Spread / forwarding (bloom)](#spread-forwarding-bloom)
-- [Parameter packs (`...Ts` + `expand`)](#parameter-packs-ts-expand)
+- [Spread forwarding (bloom)](#spread-forwarding-bloom)
+- [Parameter packs (`...Ts` and `expand`)](#parameter-packs-ts-and-expand)
 - [Perk constraints on packs](#perk-constraints-on-packs)
 - [`expand` semantics](#expand-semantics)
 - [How packs compile (monomorphization)](#how-packs-compile-monomorphization)
 - [Packs across `.slib` libraries](#packs-across-slib-libraries)
-- [Extern variadics (`...`)](#extern-variadics)
+- [Extern variadics](#extern-variadics)
 - [Choosing a form](#choosing-a-form)
 - [Error codes](#error-codes)
 - [Limitations and deferred features](#limitations-and-deferred-features)
@@ -72,7 +72,7 @@ methods (**CE0115**) — and are **not** exportable through a `.slib` public API
 a single concrete runtime function carrying an array ABI has no template to monomorphize at a
 consumer.
 
-## Spread / forwarding (bloom)
+## Spread forwarding (bloom)
 
 An existing array can be forwarded into a `...T` slot with postfix `...`, written directly after
 the array expression: `arr...`. This is called a **bloom** — the array "opens" and its elements
@@ -98,8 +98,8 @@ Key properties:
   (A STDLIB variadic is the exception: `run` frees nothing, so the caller keeps the collected
   array and the bloomed source stays readable. See `docs/design/borrow-model.md` S7.)
   Do not use the source array after a bloom call.
-- **Source must be a bare variable** (a `Name`) of array type. Blooming an arbitrary expression
-  (a call result, a field access, an inline array literal) is not supported in v1.
+- **Source must be a bare variable** (a `Name`) of array type. You cannot bloom any other
+  expression (a call result, a field access, an inline array literal).
 - **Sole, last trailing argument.** A bloom must be the only trailing argument at the call site —
   it cannot be mixed with individual trailing arguments, and blooming into a non-variadic
   parameter or anywhere but the variadic slot is **CE0120**.
@@ -115,7 +115,7 @@ let string[] argv = from(["-c", "seq 1 100000"])
 let ProcessOutput out = run("sh", argv...).realise(ProcessOutput(1, "", ""))
 ```
 
-## Parameter packs (`...Ts` + `expand`)
+## Parameter packs (`...Ts` and `expand`)
 
 A **parameter pack** is the heterogeneous, generic cousin of `...T`. Instead of collecting one type
 into a runtime array, a pack binds a **variable-length tuple of concrete types** per call site and
@@ -149,9 +149,10 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-`show_all(42, "Mostly Harmless")` monomorphizes a concrete `show_all__i32_string.pack2`; a different
-mix of types produces a different instance. There is no runtime type tag, no boxing, and no
-heterogeneous container — the same zero-cost static-dispatch story as ordinary generics.
+`show_all(42, "Mostly Harmless")` monomorphizes a concrete `<unit>$show_all__i32_string.pack2`,
+where `<unit>` is the declaring unit. A different mix of types produces a different instance.
+There is no runtime type tag, no boxing, and no heterogeneous container — the same zero-cost
+static dispatch as ordinary generics.
 
 A pack can follow fixed parameters, just like `...T`:
 
@@ -211,7 +212,8 @@ Packs reuse Sushi's generics pipeline — **compile-time monomorphization with s
 2. **`monomorphize`** monomorphizes one concrete function per `(arity, type-tuple)`, expanding the value
    pack into N ordinary parameters and **unrolling** the `expand` body — each expansion typed to its
    concrete element. After this step there is no pack node left for later passes to see.
-3. The mangled name encodes the arity and ordered types (e.g. `show_all__i32_string.pack2`), so
+3. The mangled name holds the declaring unit, the arity and the ordered types (e.g.
+   `<unit>$show_all__i32_string.pack2`), so
    distinct instances never collide and identical ones dedupe.
 
 The result is straight-line, per-element-typed code with **zero loops, type tags, or boxing** for
@@ -226,7 +228,7 @@ at **its own** call sites:
 
 ```sushi
 # in the library (built with `sushic --lib`)
-perk Display:
+public perk Display:
     fn display() string
 
 public fn show_all@(...Ts: Display)(...Ts args) ~:
@@ -253,14 +255,15 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The library ships the `perk Display` **definition** so the consumer need not redeclare it; the
+The library ships the `public perk Display` **definition** so the consumer need not redeclare it.
+The perk must be `public`: a private perk in the constraint of a public function is **CE3010**. The
 consumer still supplies its own `extend <type> with Display` implementation for each type it
 instantiates the pack with. See the [Libraries guide](libraries.md) for the full template mechanism.
 
 > Native `...T` cannot cross a library boundary (it is a single concrete runtime function with an
 > array ABI, not a template) — that is the `...T` vs `...Ts` distinction, enforced by **CE0116**.
 
-## Extern variadics (`...`)
+## Extern variadics
 
 Inside an `unsafe external "C"` block, a bare trailing `...` after at least one fixed parameter binds
 the `printf` family. This is the *only* place untyped C varargs exist; it lowers to a true LLVM
@@ -300,10 +303,10 @@ unsafe external "C" as libc because "formatted output":
   cannot operate on elements yet.
 - **Plain functions only** — packs (and `...T`) are not allowed in perk or extension methods
   (CE0115).
-- **Bloom source must be a bare variable** — `arr...` requires `arr` to be a `Name`; blooming an
-  arbitrary expression (a call result, a field access, an inline literal) is not supported in v1.
-- **No pack forwarding** (`g(pack...)`) and **no pack indexing** (`args.0`) — bloom spreads a single
-  `...T` array, not a `...Ts` pack — deferred.
+- **Bloom source must be a bare variable** — `arr...` requires `arr` to be a `Name`. You cannot
+  bloom any other expression (a call result, a field access, an inline literal).
+- **No pack forwarding** (`g(pack...)`) and **no pack indexing** (`args.0`). A bloom spreads one
+  `...T` array, not a `...Ts` pack.
 - **Native `...T` is not exportable** via `.slib` (CE0116); `...Ts` packs are.
 
 The deeper design rationale lives in the [Variadics design note](design/variadics.md).

@@ -2,11 +2,11 @@
 
 [← Back to Documentation](index.md)
 
-Guide to closures and lambda literals in Sushi: anonymous function values that **capture** their
-enclosing scope. Tier 1 is complete, and two Tier 2 items (generic-function references with an
-explicit expected type, and widened call-through) have landed on top of it, built on the
-[First-Class Functions](first-class-functions.md) floor. See the
-[design note](design/closures.md) for the full tiered plan and what remains.
+This guide is about closures and lambda literals in Sushi. A lambda is an anonymous function
+value that can **capture** values from the scope that encloses it. A closure has the same type
+and the same call syntax as a bare function value (see
+[First-Class Functions](first-class-functions.md)). The [design note](design/closures.md) gives
+the representation and the work that is not done.
 
 ## Table of Contents
 
@@ -20,8 +20,8 @@ explicit expected type, and widened call-through) have landed on top of it, buil
 
 ## Overview
 
-A **lambda literal** is an anonymous function value written inline, with access to the locals of
-the function it's written in:
+A **lambda literal** is an anonymous function value that you write inline. It can read the
+locals of the function that holds it:
 
 ```sushi
 fn make_adder(i32 n) fn(i32) -> i32:
@@ -36,14 +36,14 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-A closure is a `fn(...)`-typed value exactly like a bare function reference (see
-[First-Class Functions](first-class-functions.md)) — same type, same call syntax, same `Result`
-semantics. The difference is that a lambda can read (by captured copy) the variables around it,
-and the resulting value can be returned or stored, outliving the scope it was written in.
+A closure is a `fn(...)`-typed value, the same as a bare function reference. It has the same
+type, the same call syntax and the same `Result` semantics. The difference: a lambda can capture
+the variables around it, and you can return or store the value, so it can live longer than the
+scope that made it.
 
 ## Lambda syntax
 
-Two body forms:
+There are two body forms:
 
 ```sushi
 # expression body: a general expression, usable as a let RHS or a call argument
@@ -58,13 +58,13 @@ let fn(i32) -> i32 g = |i32 x|:
 let fn() -> i32 h = |~| n + 1
 ```
 
-The block form ends in a dedent with no trailing token, so the grammar admits it only where that's
-unambiguous — the RHS of a `let`. Passing a block-body lambda as a call argument is a parse error;
-use the expression form, or bind it to a `let` first.
+The block form ends with a dedent and no token after it. Thus the grammar accepts it only where
+this is not ambiguous: the right side of a `let`. A block-body lambda as a call argument is a
+parse error (CE6001). Use the expression form, or bind the lambda to a `let` first.
 
-Parameters use Sushi's `type name` form (`|i32 x, string s|`). A **bare-name** parameter (`|x|`,
-no type) is legal only where an expected `fn(...)` type supplies it — an annotated `let` binding,
-or a call argument to a `fn(...)`-typed parameter:
+Parameters use the Sushi `type name` form (`|i32 x, string s|`). A **bare-name** parameter
+(`|x|`, with no type) is legal only where an expected `fn(...)` type gives the type: an annotated
+`let`, or a call argument to a `fn(...)`-typed parameter:
 
 ```sushi
 fn apply(fn(i32) -> i32 f, i32 v) i32:
@@ -76,20 +76,25 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Result semantics are identical to `fn`: an expression body `|x| e` desugars to `return
-Result.Ok(e)`, so calling through a closure yields `Result@(T, E)` and `??`/`.realise()`/`if
-(result)`/matching all work unchanged. The block form optionally takes a `-> T [| E]` annotation
-after the closing pipe, exactly like a `fn` declaration.
+A call through a closure gives a `Result@(T, E)`, the same as a `fn`. Use `??`, `.realise()` or a
+`match` on it. A `Result` is not a condition: `if (f(1))` is CE2516. Use `.is_ok()` to test it.
 
-Because the body is auto-wrapped in `Ok`, a fallible call inside a lambda body needs its own `??`
-at the point of use — you can't let an inner `Result` flow straight out, since the desugar would
-wrap it again (`Result@(Result@(T, E), E)`) and the types won't match. That is why `compose` is
-written `|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
+- **Expression body.** `|x| e` becomes `return Result.Ok(e)`. The compiler adds the `Ok`.
+- **Block body.** It is a full function body. Every path must end with a `return`: a block body
+  that can reach its end is CE0107. A body that returns `~` ends with `return Result.Ok(~)`.
+  After the closing pipe, the block form can have a `-> T [| E]` annotation, the same as a `fn`
+  declaration.
+
+The expression body wraps its value in `Ok`. Thus a fallible call in an expression body needs its
+own `??`. If the inner `Result` goes out as it is, the wrap makes a
+`Result@(Result@(T, E), E)`, and the types do not agree. For this reason, `compose` is written
+`|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
 
 ## Capture
 
-Primitives, strings, and copyable structs/fixed arrays are captured **by copy** into a
-heap-allocated environment:
+A value that does not own a resource is captured **by copy** into an environment on the heap.
+This includes the primitives, a string bound directly from a literal, and a struct or a fixed
+array that holds no owning field:
 
 ```sushi
 fn main() i32:
@@ -100,9 +105,10 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-An owned dynamic array, `List@(T)`, or `Own@(T)` is captured **by move**: the outer binding is
-consumed (a later use of it is CE2405, use-after-move) and the heap environment becomes the sole
-owner, freeing the value when the closure's environment is freed:
+A value that owns a resource is captured **by move**. This includes a `string` that owns heap
+memory (for example, an interpolated string), a dynamic array, a `List@(T)`, an `Own@(T)` and
+every other owning type. The outer binding is consumed: a later use of it is CE2405. The
+environment becomes the only owner, and it frees the value when the closure is freed:
 
 ```sushi
 fn main() i32:
@@ -112,74 +118,75 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-Two capture shapes are still rejected, both as **CE2094**:
+The compiler refuses two shapes with **CE2094**:
 
-- **Capturing a `peek`/`poke` borrow.** Threading a borrow's exclusivity through an escaping
-  closure is deferred to Tier 2.
-- **A lambda parameter whose type is owning** (the indirect-call path has no deep-copy for an
-  owning parameter yet) — see [Limitations](#limitations).
+- **The capture of a `peek`/`poke` borrow.**
+- **A lambda parameter of an owning container type**: a dynamic array, a `List@(T)` or an
+  `Own@(T)`. See [Limitations](#limitations). A `string` parameter is legal
+  (`|string s| s.len()`).
 
 ## Escaping closures
 
-Because the captured environment is heap-allocated (not stack-allocated), a closure can be
-returned from the function that created it, or stored in a struct/`List`, and called later — the
-`make_adder` example above is exactly this. This is the core new capability over v1's bare
-function pointers, which had nothing to capture and therefore nothing to escape.
+The captured environment is on the heap, not on the stack. Thus you can return a closure from
+the function that made it, or store it in a struct or a `List`, and call it later. The
+`make_adder` example above shows this.
 
 ## How it compiles
 
-A function value is now a **three-word fat pointer** `{fn_ptr, env_ptr, drop_ptr}` (24 bytes),
-replacing v1's bare pointer:
+A function value is a **four-word fat pointer** `{fn_ptr, env_ptr, drop_ptr, clone_ptr}`
+(32 bytes):
 
-- A non-capturing value (a plain `fn` reference, or a lambda that captures nothing) carries null
-  `env_ptr`/`drop_ptr` — it behaves like v1, just wrapped in the wider struct.
-- A capturing lambda heap-allocates an environment struct holding the captured copies; `fn_ptr`
-  points at the compiler-synthesized lifted function, and calling through the value passes
-  `env_ptr` as a hidden leading argument.
+- A value that captures nothing (a plain `fn` reference, or a lambda that reads nothing from its
+  scope) has a null `env_ptr`, `drop_ptr` and `clone_ptr`.
+- A capturing lambda allocates an environment struct on the heap that holds the captured values.
+  `fn_ptr` points to the lifted function that the compiler makes. A call through the value passes
+  `env_ptr` as a hidden first argument. `drop_ptr` frees the environment, and `clone_ptr` copies
+  it for `.clone()`.
 
-Function types stay **invariant and capture-agnostic**: `fn(i32) -> i32` names both a plain `fn`
-and any closure of that shape — capture is not part of the type. A mismatch is still **CE2002**
-(assignment) or **CE2092** (call-through), exactly as in v1.
+Function types are **invariant**, and the capture is not part of the type: `fn(i32) -> i32` names
+a plain `fn` and every closure of that shape. A mismatch is **CE2002** (assignment) or **CE2092**
+(call-through).
 
-A function type DOES carry each parameter's **mode**, and is invariant on it:
-`fn(nom string) -> i32` and `fn(string) -> i32` are different types in both directions, and so
-are `fn(peek T)` and `fn(poke T)`. Without that, one indirection would defeat the mode rule —
-which is exactly what issue #335 showed for the borrow modes. See
+A function type DOES carry the **mode** of each parameter, and it is invariant on the mode:
+`fn(nom string) -> i32` and `fn(string) -> i32` are different types in the two directions, and so
+are `fn(peek T)` and `fn(poke T)`. Otherwise one indirection could go around the mode rule. See
 [docs/design/borrow-model.md](design/borrow-model.md).
 
-**A closure VALUE is an owning value like any other.** Passing one to an unmarked parameter
-borrows it, so the caller keeps and frees the environment; passing it to a `nom` parameter hands
-the environment over. `compose(nom g, nom f)` in `<collections/iter>` is the shape that needs
-`nom`: the closure it returns captures both arguments, so it becomes their owner.
+**A closure VALUE is an owning value.** When you pass one to an unmarked parameter, the callee
+borrows it, and the caller keeps and frees the environment. When you pass it to a `nom`
+parameter, the callee gets the environment. `compose(nom g, nom f)` in `<collections/iter>` needs
+`nom`: the closure that it returns captures the two arguments, so it becomes their owner.
 
 ## Error codes
 
 | Code | Meaning |
 | --- | --- |
-| **CE2094** | illegal closure capture — a `peek`/`poke` borrow, or an owning lambda-parameter type |
-| **CE2427** | a `nom` marker on a function-value argument that disagrees with the callee's declared mode |
-| **CE2092** | function value type mismatch at call-through (reused, unchanged from v1) |
-| **CE2002** | function value assigned to an incompatible function-typed variable (reused, unchanged from v1) |
+| **CE2094** | illegal closure capture: a `peek`/`poke` borrow, or an owning container or variadic lambda-parameter type |
+| **CE2093** | a generic function value that no position type solves |
+| **CE0107** | a block-body lambda that can reach its end with no `return` |
+| **CE2427** | a `nom` marker on a function-value argument that does not agree with the declared mode of the callee |
+| **CE2092** | function value type mismatch at call-through |
+| **CE2002** | function value assigned to an incompatible function-typed variable |
 
 ## Limitations
 
-Tier 1 is complete, plus two Tier 2 items (T2.3/T2.4) have landed. Known gaps that remain:
+- **A lambda parameter of type `List@(T)`, `Own@(T)` or a dynamic array** is refused (CE2094).
+  The indirect-call path has no deep copy for it. This is not the same as a *capture*, which
+  moves owned values (see [Capture](#capture)).
+- **Nested lambdas** (a lambda in the body of another lambda) are lifted, but a deep chain of
+  nested captures is not guaranteed to work.
+- **Not available**: the capture of a `peek`/`poke` borrow, bound method values (`obj.method` as
+  a bare callable), and C callbacks.
 
-- **`List@(T)`/`Own@(T)`/dynamic-array-typed lambda *parameters* have no deep-copy** in the
-  indirect-call path, so they're rejected (CE2094) — this is distinct from *capture*, which does
-  move owned values (see [Capture](#capture)).
-- **The UFCS method form exists** (the UFCS epic): `use <collections/iter>` ships
-  `.map`/`.filter`/`.fold` as extension methods on `List@(T)` and `T[]` beside the free
-  functions, chained with `??` (`xs.map(f)??.filter(p)??`). The method-form `filter` is
-  fully general (it clones each kept element); `map`/`fold` stay copy/primitive-element.
-- **Nested lambdas** (a lambda written inside another lambda's body) are lifted best-effort; deep
-  nested capture chains are not guaranteed to work.
-- **Deferred to Tier 2**: `peek`/`poke` borrow capture, bound method values (`obj.method` as a
-  bare callable), and first-class C callbacks. Generic-function references now work when an
-  explicit expected `fn` type is present (`let fn(i32) -> i32 g = identity`); a bare reference with
-  no expected type is still **CE2093**. Calling through a fn-typed struct field, a container
-  get-out, a parenthesized expression, or a captured closure *value* all work now (`Call.callee`
-  widening, T2.4).
+These work:
 
-The full tiered plan, the fat-pointer ABI rationale, and file:line implementation anchors live in
-the [design note](design/closures.md).
+- A generic function as a value, in every position where the type is solved: an annotated `let`,
+  an argument, a rebind, a `return`, a field, a payload, a `.realise()` default, behind an alias
+  and to a generic callee. Only a value that no position type solves is **CE2093**.
+- A call through a fn-typed struct field, a container get-out, a call result, a parenthesized
+  expression and a captured closure value.
+- The method form of the combinators: `use <collections/iter>` gives `.map`, `.filter` and
+  `.fold` as extension methods on `List@(T)` and `T[]`, beside the free functions. You chain them
+  with `??` (`xs.map(f)??.filter(p)??`).
+
+The [design note](design/closures.md) gives the fat-pointer ABI and the implementation anchors.
