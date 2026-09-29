@@ -1,0 +1,23 @@
+use <math>
+
+struct Point:
+    f64 x
+    f64 y
+
+fn main() i32:
+    let i32 n = 1500
+    let Point[] pts = from([Point(0.0, 0.0); n])
+    foreach(i in 0..n):
+        pts[i] := Point(((i * 37) % 1000) as f64, ((i * 91) % 1000) as f64)
+    let f64 total = 0.0
+    foreach(i in 0..n):
+        let f64 xi = pts[i].x
+        let f64 yi = pts[i].y
+        let i32 j = i + 1
+        while (j < n):
+            let f64 dx = xi - pts[j].x
+            let f64 dy = yi - pts[j].y
+            total := total + sqrt(dx * dx + dy * dy)
+            j := j + 1
+    println(total as i64)
+    return Result.Ok(0)

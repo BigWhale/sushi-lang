@@ -1,0 +1,8 @@
+fn main() i32:
+    let f64 s = 0.0
+    let f64 sign = 1.0
+    foreach(k in 0..20000000):
+        s := s + sign / (2.0 * (k as f64) + 1.0)
+        sign := 0.0 - sign
+    println((s * 4.0 * 1000000000.0) as i64)
+    return Result.Ok(0)

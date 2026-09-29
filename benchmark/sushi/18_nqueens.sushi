@@ -1,0 +1,22 @@
+fn solve(poke i32[] cols, i32 row, i32 n) i32:
+    if (row == n):
+        return Result.Ok(1)
+    let i32 count = 0
+    foreach(c in 0..n):
+        let bool ok = true
+        let i32 r = 0
+        while (ok and r < row):
+            let i32 d = cols[r] - c
+            if (d == 0 or d == row - r or d == r - row):
+                ok := false
+            r := r + 1
+        if (ok):
+            cols[row] := c
+            count := count + solve(poke cols, row + 1, n)??
+    return Result.Ok(count)
+
+fn main() i32:
+    let i32 n = 9
+    let i32[] cols = from([0; n])
+    println(solve(poke cols, 0, n).realise(0))
+    return Result.Ok(0)

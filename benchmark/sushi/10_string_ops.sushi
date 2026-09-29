@@ -1,0 +1,17 @@
+use <collections/strings>
+
+fn main() i32:
+    let i32 words = 0
+    let i32 hits = 0
+    let i32 chars = 0
+    foreach(i in 0..200000):
+        let string line = "the quick brown fox {i} jumps over the lazy dog"
+        let string[] parts = line.split(" ")
+        words := words + parts.len()
+        let string up = line.upper()
+        if (up.contains("FOX")):
+            hits := hits + 1
+        let string r = line.replace("o", "0")
+        chars := chars + r.size()
+    println("{words} {hits} {chars}")
+    return Result.Ok(0)

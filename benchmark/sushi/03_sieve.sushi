@@ -1,0 +1,16 @@
+fn main() i32:
+    let i32 n = 5000000
+    let bool[] comp = from([false; n])
+    let i32 count = 0
+    let i32 i = 2
+    while (i < n):
+        if (not comp[i]):
+            count := count + 1
+            if (i <= n / i):
+                let i32 j = i * i
+                while (j < n):
+                    comp[j] := true
+                    j := j + i
+        i := i + 1
+    println(count)
+    return Result.Ok(0)

@@ -1,0 +1,19 @@
+fn main() i32:
+    let i32 n = 160
+    let f64[] a = from([0.0; n * n])
+    let f64[] b = from([0.0; n * n])
+    let f64[] c = from([0.0; n * n])
+    foreach(i in 0..n):
+        foreach(j in 0..n):
+            a[i * n + j] := ((i * j) % 7) as f64
+            b[i * n + j] := ((i + j) % 5) as f64
+    foreach(i in 0..n):
+        foreach(k in 0..n):
+            let f64 aik = a[i * n + k]
+            foreach(j in 0..n):
+                c[i * n + j] := c[i * n + j] + aik * b[k * n + j]
+    let f64 total = 0.0
+    foreach(i in 0..n * n):
+        total := total + c[i]
+    println(total as i64)
+    return Result.Ok(0)

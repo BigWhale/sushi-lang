@@ -1,0 +1,17 @@
+fn main() i32:
+    let i32 best = 0
+    let i32 best_n = 0
+    foreach(start in 1..300000):
+        let i64 x = start as i64
+        let i32 steps = 0
+        while (x != 1):
+            if (x % 2 == 0):
+                x := x / 2
+            else:
+                x := 3 * x + 1
+            steps := steps + 1
+        if (steps > best):
+            best := steps
+            best_n := start
+    println("{best_n} {best}")
+    return Result.Ok(0)

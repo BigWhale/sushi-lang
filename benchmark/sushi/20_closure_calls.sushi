@@ -1,0 +1,11 @@
+fn apply_all(fn(i32) -> i32 f, i32 n) i64:
+    let i64 total = 0
+    foreach(i in 0..n):
+        total := total + (f(i)?? as i64)
+    return Result.Ok(total)
+
+fn main() i32:
+    let i32 k = 3
+    let fn(i32) -> i32 f = |i32 x| (x % 100) * k + 1
+    println(apply_all(f, 10000000).realise(0))
+    return Result.Ok(0)
