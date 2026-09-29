@@ -1,0 +1,11 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: 5.5\n
+#
+# A float accumulator rebound in a loop.
+fn main() i32:
+    let f64 sum = 0.0
+    foreach(i in 1..=4):
+        sum := sum + 0.5 * (i as f64)
+    sum := sum + 0.5
+    println(sum)
+    return Result.Ok(0)

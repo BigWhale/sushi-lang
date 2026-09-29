@@ -1,0 +1,10 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: 2.5\n
+#
+# A rebind of a unit-level f64 var.
+var f64 total = 0.0
+
+fn main() i32:
+    total := 2.5
+    println(total)
+    return Result.Ok(0)
