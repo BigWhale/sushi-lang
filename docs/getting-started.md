@@ -42,13 +42,13 @@ source .venv/bin/activate
 [latest release](https://github.com/BigWhale/sushi-lang/releases/latest) and install it:
 
 ```bash
-pip install sushi_lang-0.12.0-py3-none-any.whl
+pip install sushi_lang-0.13.0-py3-none-any.whl
 ```
 
 Or install straight from the release URL without downloading first:
 
 ```bash
-pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.12.0/sushi_lang-0.12.0-py3-none-any.whl
+pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.13.0/sushi_lang-0.13.0-py3-none-any.whl
 ```
 
 Or, using the GitHub CLI together with `uv`:
@@ -164,7 +164,7 @@ uv run python sushi_lang/sushi_stdlib/build.py
 ./sushic --version
 
 # You should see:
-# 🍣 Sushi (すし) Lang Compiler • 0.12.0
+# 🍣 Sushi (すし) Lang Compiler • 0.13.0
 # Python 3.x.x • llvmlite 0.45.1 • LLVM 20.x.x
 ```
 
