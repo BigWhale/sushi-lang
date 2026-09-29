@@ -18,7 +18,8 @@ Turns a socket error into the one channel the io contracts answer.
 
 Every NetError variant with no twin in IoError belongs to a connect, a bind or a resolve,
 so nothing a contract method can answer is lost here. A stream that is already connected
-cannot report AddressInUse.
+cannot report AddressInUse. The match names every variant, so a new variant does not
+compile until it has its own row.
 
 - Returns: The IoError that says the same thing.
 :##
@@ -31,4 +32,11 @@ extend NetError to_io() IoError:
         NetError.TooManyOpen -> return IoError.TooManyOpen
         NetError.InvalidAddress -> return IoError.InvalidInput
         NetError.Interrupted -> return IoError.Interrupted
-        _ -> return IoError.Other
+        NetError.ConnectionRefused -> return IoError.Other
+        NetError.AddressInUse -> return IoError.Other
+        NetError.AddressNotAvailable -> return IoError.Other
+        NetError.NetworkUnreachable -> return IoError.Other
+        NetError.HostUnreachable -> return IoError.Other
+        NetError.ResolveFailed -> return IoError.Other
+        NetError.MessageTooLarge -> return IoError.Other
+        NetError.Other -> return IoError.Other
