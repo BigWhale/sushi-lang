@@ -1,11 +1,11 @@
 # The Sushi IR: SHIR and SLIR
 
-**Status: PROPOSED.** Extracted from the working doc `IR.md` on 2026-08-29, after two
-verification passes against the tree. Every design question is answered; the plan is not
-yet approved. This document is the DESIGN: what the two IRs are, why they have the shape
-they have, and what any migration must preserve. The phases, the risks and the progress
-tracking stay in `IR.md`, and a detailed migration plan will be derived from this
-document. Nothing in the language changes: every behaviour test passes before and after,
+**Status: PROPOSED.** Written on 2026-08-29, after two verification passes against the
+tree. Every design question is answered; the plan is not yet approved, and no SHIR or
+SLIR code exists in the tree. This document is the DESIGN: what the two IRs are, why they
+have the shape they have, and what any migration must preserve. The phases, the risks and
+the progress tracking are not part of this document; a detailed migration plan will be
+derived from it. Nothing in the language changes: every behaviour test passes before and after,
 unchanged.
 
 ## The decisions, in one place
@@ -96,15 +96,16 @@ RAII is therefore entangled with `llvmlite` object lifetimes and with name strin
 
 ### 1.5 The backend makes semantic decisions by matching on syntax
 
-`emit_foreach` picks a loop protocol like this:
+`emit_foreach` (`backend/statements/loops.py`) picks a loop protocol like this:
 
 1. Test `isinstance(node.iterable, RangeExpr)`
-2. Test `isinstance(node.iterable, DotCall)` and check `method in ("keys","values","entries")`
-3. String-match the receiver type against `"HashMap<"`
-4. Emit a **run-time** `icmp` against `-1` to tell a stdin iterator from an array iterator
+2. Test the `protocol_next` stamp that the `typecheck` pass left for a `next()` iterator
+3. Test `isinstance(node.iterable, DotCall)` and check `method in ("keys","values","entries")`
+4. Ask `is_instance_of(receiver_type, "HashMap")` on the receiver of that call
 
-The `typecheck` pass already knows the answer to all four. It has nowhere to write it
-down.
+Only item 2 reads an answer that `typecheck` wrote down. Items 1, 3 and 4 match on the
+syntax of the iterable again. The `typecheck` pass already knows those answers too. It
+has nowhere to write them down.
 
 ### 1.6 Surface forms multiply backend code
 
@@ -179,7 +180,7 @@ before and after, unchanged.
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
 
-**N6. Fixing the generic inference gaps.** Ruling Q1 means Known Limitations 7 and 8
+**N6. Fixing the generic inference gaps.** Ruling Q1 means the generic inference gaps
 are NOT addressed by this work. They need definition-site checking, which is a language
 change. Recorded so that nobody expects them to fall out.
 
@@ -258,7 +259,7 @@ a string, #304 leaked an array). Drop placement carries this as rule 6 of 8.10.
 ### 4.7 A constant is read while its unit's AST is built
 
 `const_eval` is called from `ast_builder/builder.py`, because a fixed array's size is
-read while that unit's AST is built (Known Limitation 14). That path is AST-level by
+read while that unit's AST is built. That path is AST-level by
 language design and cannot move. This settles Q5: constants are a declaration-level
 concern, and no IR level ever evaluates one.
 
@@ -506,7 +507,7 @@ convention is `typecheck`'s: an unmarked argument in a consuming position (const
 container insert, array element) resolves to `Owned` with no marker, and CE2427 is
 checked by comparing `marker` against the declared parameter.
 
-Named struct construction is all-or-nothing (Known Limitation 4), so lowering reorders
+Named struct construction is all-or-nothing, so lowering reorders
 named fields into declaration order and `StructInit` is always positional. Reordering
 must not reorder EVALUATION: lowering evaluates each field expression into a temp in
 the WRITTEN order, then aggregates in declaration order.
@@ -564,21 +565,20 @@ LoopKind = While(cond: Expr)
          | ArrayIter(binding: LocalId, array: Expr, by: Value | Ref(BorrowMode))
          | StringChars(binding: LocalId, s: Expr)
          | HashMapIter(binding: LocalId, map: Expr, view: Keys | Values | Entries)
-         | StdinLines(binding: LocalId)
+         | NextProtocol(binding: LocalId, iterator: Place, next: Callee)
          | Infinite
 ```
 
 `typecheck` picks the variant, once, with the types it already has, and records it in
-`TypeckResults` (S5). Nothing downstream matches on syntax, string-matches
-`"HashMap<"`, or emits a run-time `icmp` against `-1` to find out which protocol
-applies.
+`TypeckResults` (S5). Nothing downstream matches on syntax or asks the receiver type
+again to find out which protocol applies.
 
 The static pick is SAFE because an iterator is not a value (4.4): `Iterator` is not a
 nameable type, so the iterable of every `foreach` is a source expression `typecheck`
-can see whole. Line iteration needs no variant of its own any more: Phase 7d deleted the
-`lines()` builtin and its `length = -1` sentinel, and `foreach` learned a `next()`
-PROTOCOL instead — so a `Lines@(R)` is an ordinary owning value and the variant that
-covers it is a `NextProtocol` one, holding the iterator's place and the stamped call.
+can see whole. Line iteration has no variant of its own: `foreach` walks any type that
+carries `next()` answering `Maybe@(T)`, so a `Lines@(R)` is an ordinary owning value and
+`NextProtocol` covers it. The variant holds the iterator's place and the stamped
+`next()` call.
 
 `foreach(poke r in ...)` is `ArrayIter` with `by: Ref(Poke)`.
 
@@ -597,8 +597,7 @@ Arm = (pattern: Pattern, body: ShirBlock)
 
 A payload binding is required and `_` discards (it lowers to `Wildcard`). An INTEGER
 scrutinee uses `Literal` arms; the kinds never mix (CE2076), and that is checked on
-SHIR. `Own` mirrors the AST's `OwnPattern`; it is nested-only today (Known Limitation
-13) and the binding carries its own `by` mode.
+SHIR. `Own` mirrors the AST's `OwnPattern`; it is nested-only today, and the binding carries its own `by` mode.
 
 ### 7.9 What each pass reads and writes
 
@@ -996,7 +995,7 @@ That makes a polymorphic SHIR a **language change**, not a refactor, and it does
 belong inside this work.
 
 Consequences: `monomorphize` keeps its position and keeps working on the AST. SHIR is
-built per instantiation. The 2,452 lines stay. Known Limitations 7 and 8 are untouched
+built per instantiation. The 2,452 lines stay. The generic inference gaps are untouched
 (N6).
 
 **Q2. Do generic-target extensions keep their repeat loop? — YES.**

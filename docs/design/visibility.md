@@ -1,9 +1,10 @@
 # Visibility
 
 **Status: IMPLEMENTED.** `public` reached one declaration out of six when this was
-written. It reaches all five that carry a marker now, private is the default for every
-one of them, and the leak fence is in place. Section 1 records what the compiler did
-before, because every ruling below is measured against it.
+written. Today every declaration kind that can carry a marker takes one -- `fn`, `const`,
+`var`, `struct`, `enum` and `perk`, and a `public use` re-exports -- private is the default
+for every one of them, and the leak fence is in place. Section 1 records what the
+compiler did BEFORE the epic, because every ruling below is measured against it.
 
 The question is narrow to state and wide in effect: which declarations carry visibility,
 what the default is, and how a method attached to a type gets its answer.
@@ -24,20 +25,21 @@ section 9 records what that changed.
 Read `docs/libraries.md` for what a `.slib` exports today, and
 `docs/design/method-resolution.md` for the order a method is found in.
 
-## 1. What the compiler does today
+## 1. What the compiler did before this epic (the record)
 
 ### One keyword, one declaration
 
-`grammar.lark:42` is the only rule that mentions `PUBLIC`:
+Before the epic, one grammar rule mentioned `PUBLIC`:
 
 ```
 function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] ":" block
 ```
 
-`const_def` (`:6`), `struct_def` (`:12`), `enum_def` (`:15`), `perk_def` (`:25`) and
-`extend_stmt` (`:35`) carry no such token. So:
+`const_def`, `struct_def`, `enum_def`, `perk_def` and `extend_stmt` carried no such token.
+So (today every one of these rules except `extend_stmt` carries `PUBLIC?`, and the
+default is private):
 
-| Declaration | Default today | Marker |
+| Declaration | Default then | Marker then |
 |---|---|---|
 | `fn` | private to the unit | `public fn` |
 | `const` | **public, always** | none — `public const` is a parse error |
@@ -46,7 +48,7 @@ function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type
 | `perk` | **public, always** | none |
 | `extend` | **public, always** | none |
 
-`ast_builder/declarations/constants.py:44` hard-codes `is_public=True` on every constant,
+`ast_builder/declarations/constants.py` hard-coded `is_public=True` on every constant,
 with the comment "Constants are always global". A struct or an enum needs no flag at all:
 the collect pass builds one table for the whole program, and any unit may name any entry.
 
@@ -54,19 +56,19 @@ the collect pass builds one table for the whole program, and any unit may name a
 
 | Seam | Then | Now |
 |---|---|---|
-| The use-site fence | `reject_private_cross_unit_call` — generic in shape, but the CE3005 text said "function" | `semantics/visibility.py:195` — one record, one predicate, one CE3005 with a `{kind}` word and a note at the declaration |
-| The leak fence | `_check_public_fn_ptr_fence` read `ret` and `params` of a `public fn` and nothing else | `passes/types/public_signatures.py:165` — one runner over one walk, and each rule brings its own pair of sets |
-| The type funnel | `passes/types/utils.py:22` — `validate_type_name`, which fell through a borrow and a function type | the same funnel, with every arm, over `semantics/type_walk.py:55` — `walk_named_types` |
+| The use-site fence | `reject_private_cross_unit_call` — generic in shape, but the CE3005 text said "function" | `semantics/visibility.py:reject_private_cross_unit_use` — one record, one predicate, one CE3005 with a `{kind}` word and a note at the declaration |
+| The leak fence | `_check_public_fn_ptr_fence` read `ret` and `params` of a `public fn` and nothing else | `passes/types/public_signatures.py:check_public_signatures` — one runner over one walk, and each rule brings its own pair of sets |
+| The type funnel | `passes/types/utils.py:validate_type_name`, which fell through a borrow and a function type | the same funnel, with every arm, over `semantics/type_walk.py:walk_named_types` |
 
 The funnel is reached from every declaration position that names a type: a function's
 return and error type, an extension target and return, a perk-implementation target, a
 perk method's return, a constant's type, a `let` and a `foreach` item. What it did NOT
 reach was a struct field, an enum payload or an extern signature, and
-`semantics/ast_walk.py:156` — `signature_types` — is the walk that does.
+`semantics/ast_walk.py:signature_types` is the walk that does.
 
 Two total walks and their gates hold the whole thing up:
-`semantics/ast_walk.py:74` — `declarations` — yields every declaration of a unit, and
-`semantics/type_walk.py:55` yields every type inside a type. The visibility seam is filled
+`semantics/ast_walk.py:declarations` yields every declaration of a unit, and
+`semantics/type_walk.py:walk_named_types` yields every type inside a type. The visibility seam is filled
 by the collectors as each meets a declaration (`semantics/visibility.py` --
 `record_declaration`, one record whether the declaration is kept or refused), and every
 predicate over types is one line over the second.
@@ -84,7 +86,7 @@ the implementations themselves.
 
 ### The back end does not care
 
-`backend/functions/declarations.py:78` picks `internal` or `external` linkage from
+`backend/functions/declarations.py` picks `internal` or `external` linkage from
 `fn.is_public`. Nothing else needs it, and that one line is load-bearing for section 9. A struct type has no LLVM linkage, a constant is
 inlined by `const_eval`, and an extension is a mangled function that already follows the
 function rule. **Visibility for a type is a pure front-end rule and costs the back end
@@ -154,8 +156,8 @@ enum Cursor:                        # this unit only
     Mid(i32)
 ```
 
-The default is private for two reasons. It matches `fn`, which is the only declaration
-that carries visibility today. And a default of public makes the keyword decoration: a
+The default is private for two reasons. It matches `fn`, which was the only declaration
+that carried visibility when this was ruled. And a default of public makes the keyword decoration: a
 marker that grants what the reader already has says nothing.
 
 `public const` was a parse error, which is issue #466. That issue asked for the grammar to
@@ -180,7 +182,7 @@ its enum, and Sushi has a harder reason to agree: a private variant would make a
 An extension and a perk implementation carry no marker. Each is as visible as the type it
 is attached to.
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (declarations only; the sweep compiles a block with a main) -->
 ```sushi
 public struct Box:
     i32 n
@@ -252,7 +254,7 @@ Ruling 2 answers it.
 
 A public struct, a private perk, and an implementation joining them:
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; this block is unit.sushi, and it has no main) -->
 ```sushi
 # unit.sushi
 perk Loud:                          # private -- the default
@@ -266,7 +268,7 @@ extend Box with Loud:               # public, because Box is public
         return 0
 ```
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; needs unit.sushi above, and it shows CE4011 on purpose) -->
 ```sushi
 # main.sushi
 use "unit"
@@ -293,7 +295,7 @@ publish.
 
 Mark the perk `public` and the contract itself becomes part of the API:
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; this block is unit.sushi, and it has no main) -->
 ```sushi
 # unit.sushi
 public perk Loud:                   # public -- the contract is API now
@@ -307,7 +309,7 @@ extend Box with Loud:               # public, because Box is public
         return 0
 ```
 
-<!-- docs-sweep: skip (proposed syntax, not implemented) -->
+<!-- docs-sweep: skip (two units; needs unit.sushi above) -->
 ```sushi
 # main.sushi
 use "unit"
@@ -448,12 +450,12 @@ public fn loudest@(T: Loud)(T x) ~:  # ERROR: names a private perk in a constrai
     return Result.Ok(~)
 ```
 
-One predicate, `first_private_name` (`semantics/type_predicates.py:126`), is the twin of
+One predicate, `first_private_name` (`semantics/type_predicates.py`), is the twin of
 `contains_foreign_ptr` and walks the same way. It names the offender rather than answering
 yes or no, because a leak diagnostic has to say which type it is.
 
 One runner applies it, `check_public_signatures`
-(`passes/types/public_signatures.py:165`), over one walk of every position a signature
+(`passes/types/public_signatures.py:check_public_signatures`), over one walk of every position a signature
 names. Each position carries two facts -- what declares it, and which slot it is -- and a
 rule reads a set of each, so a rule with a different answer brings its own sets instead of
 widening somebody else's:
@@ -548,7 +550,7 @@ unreachable for free.
 
 `src_sushi/compression/zlib.sushi` is the case the whole ruling is for:
 
-| Kind | Declared | Belongs in the API | Controllable today |
+| Kind | Declared | Belongs in the API | Controllable before the epic |
 |---|---|---|---|
 | `fn` | 38 | 6 | **yes** |
 | `struct` / `enum` | 5 | 1 (`ZError`) | no |
@@ -557,7 +559,7 @@ unreachable for free.
 The module gets function privacy exactly right: 6 public out of 38. It has no control over
 the other 13. `ZBits`, `ZHuff`, `ZOut` and `ZCode` are decoder state. `ZLIB_LEN_BASE`,
 `ZLIB_DIST_SMALL` and six more are DEFLATE lookup tables. Every one is in every consumer's
-namespace, and — because `library_manifest.py:263` and `:293` ship structs and enums with
+namespace, and — because the manifest extractors of that time shipped structs and enums with
 no `is_public` gate — every one is frozen API that cannot change without breaking a
 consumer.
 
@@ -565,8 +567,8 @@ zlib goes from 13 exported names to 1.
 
 ### The doc lints do not move
 
-`check_missing_docs` (`passes/docs.py:174`) walks `declarations(program)`
-(`semantics/ast_walk.py:74`) with no visibility gate. CW7002-CW7006 already cover every declaration whatever its visibility, so
+`check_missing_docs` (`passes/docs.py`) walks `declarations(program)`
+(`semantics/ast_walk.py`) with no visibility gate. CW7002-CW7006 already cover every declaration whatever its visibility, so
 nothing needs reconciling in either direction.
 
 ## 7. Migration — done
@@ -585,7 +587,7 @@ Only four Sushi sources cross a unit boundary with a type, and all four are mark
 both read the marker now, matching
 `_extract_public_functions`; the constant extractor also stopped iterating every unit,
 which had been putting a bundled stdlib module's constants in the manifest. The
-`not_exported` list (`:215`) grew a `struct`, an `enum` and a `constant` kind, so a
+`not_exported` list (`_extract_not_exported`) grew a `struct`, an `enum` and a `constant` kind, so a
 consumer naming a library-private type hears CE3005 rather than "unknown type".
 
 One thing the plan did not foresee. Gating the public index left a private type that a
@@ -595,7 +597,7 @@ it as source now, beside the closure's private constants, and the consumer regis
 with a PRIVATE record -- so only the transplanted body may name it. Each private is still
 named in exactly one place: the closure, or the kept list.
 
-The manifest protocol is **2.2** -- 2.1 for the public gate above, and 2.2 for the two
+The manifest protocol is **2.3** today. 2.1 was the public gate above, and 2.2 the two
 keys the unit-namespaces epic added: `unit` on every record, and `link_symbol` on every
 record with a symbol in the shipped bitcode (`docs/library-format.md`,
 `docs/design/unit-namespaces.md` section 9). An older `.slib` is refused through the
@@ -649,7 +651,7 @@ Four combinations. One of them was a link-level clash, and none of them is one n
 | `public fn f` | `fn f` (private) | legal, nothing said | CE3011 |
 
 Row 1 stays legal, and the measurement is why. A private function is emitted with INTERNAL
-linkage (`backend/functions/declarations.py:78`), so the consumer's `f` is invisible
+linkage (`backend/functions/declarations.py`), so the consumer's `f` is invisible
 outside its own object file: the consumer's call binds to the consumer's definition, and
 the library's own body keeps calling its own. A library with `public fn use_value()`
 returning `get_value() * 2` still returns 200 when the consumer's `get_value` returns 7.
@@ -679,8 +681,10 @@ nothing has to be booked as a loser. What CW3002 could not do when it was writte
 do now -- `use <lib/flib> as fl` puts the export behind a dot and the shadow away, which
 is what its own text promised.
 
-For a TYPE, even a public library name stays the plain duplicate (CE0004 / CE2046), and a
-library's PRIVATE type is **CE3011**: type identity is nominal, so one name is one shape
+For a TYPE, a public name of a SOURCE library stays the plain duplicate (CE0004 / CE2046);
+a public concrete type of a BINARY library is **CE3011**, because the consumer cannot see
+the declaration to point a note at; and a library's PRIVATE type is **CE3011** for both
+kinds: type identity is nominal, so one name is one shape
 and the consumer cannot have its own. A library's private CONSTANT is not refused: it is
 the function rule's shape and it takes the function rule's answer, so the two coexist and
 each unit reads its own (#507). A library's PUBLIC constant stays a duplicate, because

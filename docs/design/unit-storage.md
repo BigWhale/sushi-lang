@@ -85,8 +85,8 @@ already exist apply to it with one addition:
   `var` the caller is reading; that is what storage means, and it is the caller's to
   order.
 
-The scope pass owns "what kind of name is this", and it asks one gate:
-`reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
+The scope pass owns "what kind of name is this". It and the typecheck pass ask one gate
+for every borrow position: `reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
 position a constant fails there -- a `poke`/`peek` of it, a `poke` foreach over it, a
 `let poke`/`let peek` bound from it, a `poke self` call on it, a `poke` pattern binding
 into it, and the same through an alias -- and it passes the CE1002 gate on a rebind
