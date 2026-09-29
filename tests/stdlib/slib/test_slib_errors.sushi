@@ -44,8 +44,12 @@ fn show_err(SlibError e) string:
             return Result.Ok("BadMagic")
         SlibError.BadVersion(v) ->
             return Result.Ok("BadVersion({v})")
-        SlibError.Truncated() ->
+        SlibError.Truncated(_, _, _) ->
             return Result.Ok("Truncated")
+        SlibError.TooLarge(_) ->
+            return Result.Ok("TooLarge")
+        SlibError.Invalid(_) ->
+            return Result.Ok("Invalid")
         SlibError.Decode(me) ->
             match me:
                 MpError.Truncated(off) ->

@@ -1,18 +1,19 @@
 ##:
-A reader for the metadata of a `.slib` library, written in Sushi.
+A reader for a `.slib` library, written in Sushi.
 
-The module reads the fixed 52-byte little-endian header and the MessagePack metadata
-map of a version-4 `.slib` file. It agrees with the Python reader
-`LibraryFormat.read_metadata_only`. It reads the length of a payload section, and never
-the payload itself.
+The module reads the fixed 52-byte little-endian header, the MessagePack metadata map
+and the section lengths of a version-4 `.slib` file. It reads the length of a payload
+section, and never the payload itself. The three readers walk one header with one
+error enum, so each gives the same fault for a damaged file:
 
-`read_library` is the reader of `slib-info`. It also makes sure that the metadata map
-has the shape of a manifest (`check_manifest`), and its `SlibFault` names each fault as
-precisely as the Python reader of `--lib-info` does.
+- `read_metadata` reads the metadata map. It agrees with the Python reader
+  `LibraryFormat.read_metadata_only`.
+- `sizes` and `bitcode_size` read the section lengths. They do not compare the bitcode
+  length with the file.
+- `read_library` is the reader of `slib-info`. It compares every length with the file,
+  and makes sure that the metadata map has the shape of a manifest (`check_manifest`).
 
-The four spare header fields are read and not validated. Metadata must be less than
-2 GiB: a larger length casts to a negative count, the read gives no bytes, and the
-decode of the empty blob fails.
+The four spare header fields are read and not validated.
 :##
 
 use <io/fs>
@@ -20,8 +21,41 @@ public use <io/error>
 use <encoding/msgpack>
 use <collections/strings>
 
+##: The 16 bytes at the start of every `.slib` file. :##
+const u8[16] SLIB_MAGIC = [0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3]
+
+##: The length of the fixed header, in bytes. :##
+const u64 HEADER_SIZE = 52
+
+##: The length of the magic at the start of the header, in bytes. :##
+const u64 MAGIC_SIZE = 16
+
+##: The offset of the container version (a u32) in the header. :##
+const i32 VERSION_AT = 16
+
+##: The offset of the metadata length (a u64) in the header. :##
+const i32 METADATA_LENGTH_AT = 44
+
+##: The container version that this reader reads. :##
+const u64 CONTAINER_VERSION = 4
+
+##: The length of the field before each payload section that gives its length, in bytes. :##
+const u64 LENGTH_FIELD_SIZE = 8
+
+##: The largest `.slib` file that a reader reads: 1 GiB, as in the Python reader. :##
+public const u64 SLIB_MAX_FILE_SIZE = 1_073_741_824
+
+##: A section of a `.slib` file. :##
+public enum SlibSection:
+    ##: The header and the metadata blob. :##
+    Metadata()
+    ##: The source section and its length field. :##
+    Source()
+    ##: The bitcode section and its length field. :##
+    Bitcode()
+
 ##:
-Why a .slib file could not be read.
+Why a `.slib` file could not be read.
 
 `Io` carries the error of the open or of a read, so a directory, a file with no read
 permission and a missing file each keep their own cause. `Truncated` is a file that
@@ -34,127 +68,14 @@ public enum SlibError:
     BadMagic()
     ##: The header gives a container version that is not 4. :##
     BadVersion(u32)
-    ##: The file ends inside the header or inside a section. :##
-    Truncated()
+    ##: A section ends too early: the section, the bytes it needs, and the bytes that the file has. :##
+    Truncated(SlibSection, u64, u64)
+    ##: The file is larger than the 1 GiB limit. The number is its size. :##
+    TooLarge(u64)
     ##: The metadata blob is not valid MessagePack. :##
     Decode(MpError)
-
-##:
-Reads an unsigned little-endian integer from a byte buffer.
-
-The caller makes sure that the buffer holds the bytes. The `SlibError` channel lets a
-caller use `??`.
-
-- Parameter h: The buffer to read.
-- Parameter off: The index of the first byte.
-- Parameter nbytes: The number of bytes to read, 8 or fewer.
-- Returns: The integer.
-- Errors: This function does not fail.
-:##
-fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
-    let u64 acc = 0
-    foreach(i in 0..nbytes):
-        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
-    return Result.Ok(acc)
-
-##:
-Opens a file to read bytes, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter path: The path of the file.
-- Returns: The open file.
-- Errors: `SlibError.Io` when the open fails.
-:##
-fn slib_open(string path) File | SlibError:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) -> return Result.Ok(f)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Reads bytes from a file, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter f: The file to read.
-- Parameter count: The number of bytes to read.
-- Returns: The bytes. At the end of the file there are fewer than `count`.
-- Errors: `SlibError.Io` when the read fails.
-:##
-fn slib_read(poke File f, i32 count) u8[] | SlibError:
-    match f.read_bytes(count):
-        Result.Ok(nom bytes) -> return Result.Ok(bytes)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Gives the size of an open file, and puts the file back at its start.
-
-- Parameter f: The file.
-- Returns: The size, in bytes.
-- Errors: `SlibError.Io` when a seek fails.
-:##
-fn slib_size(poke File f) u64 | SlibError:
-    match f.seek(0, SeekFrom.End):
-        Result.Ok(end) ->
-            match f.seek(0, SeekFrom.Start):
-                Result.Ok(_) -> return Result.Ok(end as u64)
-                Result.Err(e) -> return Result.Err(SlibError.Io(e))
-        Result.Err(e) ->
-            return Result.Err(SlibError.Io(e))
-
-##:
-Moves forward in a file, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter f: The file.
-- Parameter count: The number of bytes to step over.
-- Errors: `SlibError.Io` when the seek fails.
-:##
-fn slib_skip(poke File f, u64 count) ~ | SlibError:
-    match f.seek(count as i64, SeekFrom.Current):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Makes sure that the header has the correct magic, a full length, and the version.
-
-The magic comes first in the file, so it is checked first: a file whose first bytes
-are not the magic is `BadMagic` whatever its length.
-
-- Parameter header: The header bytes. There can be fewer than 52.
-- Errors: `SlibError.BadMagic`, `SlibError.Truncated` or `SlibError.BadVersion`.
-:##
-fn slib_header_check(peek u8[] header) ~ | SlibError:
-    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    foreach(i in 0..header.len()):
-        if (i < 16 and header[i] != magic[i]):
-            return Result.Err(SlibError.BadMagic())
-    if (header.len() < 52):
-        return Result.Err(SlibError.Truncated())
-    let u64 version = slib_le_uint(peek header, 16, 4)??
-    if (version != 4):
-        return Result.Err(SlibError.BadVersion(version as u32))
-    return Result.Ok(~)
-
-##:
-Reads and decodes the metadata map of a `.slib` file.
-
-The metadata length that the header gives is compared with the size of the file
-before the blob is read.
-
-- Parameter path: The path of the library.
-- Returns: The metadata map, as a `MsgValue` tree.
-- Errors: A `SlibError` that names the fault.
-:##
-public fn read_metadata(string path) MsgValue | SlibError:
-    let File f = slib_open(path)??
-    let u64 total = slib_size(poke f)??
-    let u8[] header = slib_read(poke f, 52)??
-    slib_header_check(peek header)??
-    let u64 mlen = slib_le_uint(peek header, 44, 8)??
-    if (mlen > total - 52):
-        return Result.Err(SlibError.Truncated())
-    let u8[] blob = slib_read(poke f, mlen as i32)??
-    match decode(blob):
-        Result.Ok(nom v) ->
-            return Result.Ok(v)
-        Result.Err(e) ->
-            return Result.Err(SlibError.Decode(e))
+    ##: The metadata map does not have the shape of a manifest. The string gives the reason. :##
+    Invalid(string)
 
 ##:
 The byte lengths of the two payload sections after the metadata blob.
@@ -167,43 +88,200 @@ public struct SlibSizes:
     ##: The length of the bitcode section, in bytes. :##
     u64 bitcode
 
+##: A library that `read_library` read: its manifest and the lengths of its payload sections. :##
+public struct SlibLibrary:
+    ##: The metadata map. It has the shape of a manifest. :##
+    MsgValue metadata
+    ##: The lengths of the two payload sections. :##
+    SlibSizes sizes
+
 ##:
-Reads the length of the two payload sections, in one pass over the file.
+Reads an unsigned little-endian integer from a byte buffer.
+
+The caller makes sure that the buffer holds the bytes.
+
+- Parameter h: The buffer to read.
+- Parameter off: The index of the first byte.
+- Parameter nbytes: The number of bytes to read, 8 or fewer.
+- Returns: The integer.
+- Errors: This function does not fail.
+:##
+fn le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
+    let u64 acc = 0
+    foreach(i in 0..nbytes):
+        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
+    return Result.Ok(acc)
+
+##:
+Opens a file to read bytes.
+
+- Parameter path: The path of the file.
+- Returns: The open file.
+- Errors: `SlibError.Io` when the open fails.
+:##
+fn open_library(string path) File | SlibError:
+    match open(path, FileMode.ReadB()):
+        Result.Ok(nom f) -> return Result.Ok(f)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
+
+##:
+Gives the size of an open file, and puts the file back at its start.
+
+- Parameter f: The file.
+- Returns: The size, in bytes.
+- Errors: `SlibError.Io` when a seek fails.
+:##
+fn file_size(poke File f) u64 | SlibError:
+    match f.seek(0, SeekFrom.End):
+        Result.Ok(end) ->
+            match f.seek(0, SeekFrom.Start):
+                Result.Ok(_) -> return Result.Ok(end as u64)
+                Result.Err(e) -> return Result.Err(SlibError.Io(e))
+        Result.Err(e) ->
+            return Result.Err(SlibError.Io(e))
+
+##:
+Reads the bytes of one part of a section, after it makes sure that the file has them.
+
+- Parameter f: The file to read.
+- Parameter count: The number of bytes that the section needs.
+- Parameter left: The number of bytes that are left in the file.
+- Parameter section: The section that the bytes are in.
+- Returns: The bytes.
+- Errors: `SlibError.Truncated` when `count` is more than `left` or the read gives
+  fewer bytes, `SlibError.Io` when the read fails.
+:##
+fn read_part(poke File f, u64 count, u64 left, SlibSection section) u8[] | SlibError:
+    if (count > left):
+        return Result.Err(SlibError.Truncated(section, count, left))
+    match f.read_bytes(count as i32):
+        Result.Ok(nom bytes) ->
+            if ((bytes.len() as u64) < count):
+                return Result.Err(SlibError.Truncated(section, count, bytes.len() as u64))
+            return Result.Ok(bytes)
+        Result.Err(e) ->
+            return Result.Err(SlibError.Io(e))
+
+##:
+Steps over one part of a section, after it makes sure that the file has it.
+
+- Parameter f: The file.
+- Parameter count: The number of bytes that the section needs.
+- Parameter left: The number of bytes that are left in the file.
+- Parameter section: The section that the bytes are in.
+- Errors: `SlibError.Truncated` when `count` is more than `left`, `SlibError.Io` when
+  the seek fails.
+:##
+fn skip_part(poke File f, u64 count, u64 left, SlibSection section) ~ | SlibError:
+    if (count > left):
+        return Result.Err(SlibError.Truncated(section, count, left))
+    match f.seek(count as i64, SeekFrom.Current):
+        Result.Ok(_) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
+
+##:
+Reads and checks the fixed header, and gives the metadata length.
+
+The checks are in the order of the Python reader of `--lib-info`: the magic first, so
+a file whose first bytes are not the magic is `BadMagic` whatever its length, then the
+size limit, then the header length, then the version.
+
+- Parameter f: The file, at its start.
+- Parameter total: The size of the file.
+- Returns: The length of the metadata blob. It is not yet compared with the file.
+- Errors: `SlibError.BadMagic`, `SlibError.TooLarge`, `SlibError.Truncated`,
+  `SlibError.BadVersion` or `SlibError.Io`.
+:##
+fn read_header(poke File f, u64 total) u64 | SlibError:
+    let u64 first = MAGIC_SIZE
+    if (total < MAGIC_SIZE):
+        first := total
+    let u8[] header = read_part(poke f, first, total, SlibSection.Metadata())??
+    foreach(i in 0..header.len()):
+        if (header[i] != SLIB_MAGIC[i]):
+            return Result.Err(SlibError.BadMagic())
+    if (total > SLIB_MAX_FILE_SIZE):
+        return Result.Err(SlibError.TooLarge(total))
+    if (total < HEADER_SIZE):
+        return Result.Err(SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, total))
+    let u8[] rest = read_part(poke f, HEADER_SIZE - first, total - first, SlibSection.Metadata())??
+    header.extend(rest)
+    let u64 version = le_uint(peek header, VERSION_AT, 4)??
+    if (version != CONTAINER_VERSION):
+        return Result.Err(SlibError.BadVersion(version as u32))
+    return Result.Ok(le_uint(peek header, METADATA_LENGTH_AT, 8)??)
+
+##:
+Reads and decodes the metadata blob.
+
+- Parameter f: The file, after the header.
+- Parameter mlen: The length of the blob.
+- Parameter left: The number of bytes that are left in the file.
+- Returns: The metadata map, as a `MsgValue` tree.
+- Errors: `SlibError.Truncated`, `SlibError.Decode` or `SlibError.Io`.
+:##
+fn read_blob(poke File f, u64 mlen, u64 left) MsgValue | SlibError:
+    let u8[] blob = read_part(poke f, mlen, left, SlibSection.Metadata())??
+    match decode(blob):
+        Result.Ok(nom meta) -> return Result.Ok(meta)
+        Result.Err(e) -> return Result.Err(SlibError.Decode(e))
+
+##:
+Reads the lengths of the two payload sections, and steps over the source section.
 
 A version-4 container has a length-prefixed source section between the metadata and
 the bitcode. Thus the reader steps over the source section to get to the bitcode
-length. The metadata and source lengths are compared with what is left of the file.
-The bitcode length is read and not compared: `read_library` compares it.
+length. The source length is compared with what is left of the file, and the bitcode
+length is not.
+
+- Parameter f: The file, after the metadata blob.
+- Parameter left: The number of bytes that are left in the file. The read takes the
+  two length fields and the source section off it.
+- Returns: The two lengths.
+- Errors: `SlibError.Truncated` or `SlibError.Io`.
+:##
+fn read_sections(poke File f, poke u64 left) SlibSizes | SlibError:
+    let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Source())??
+    left := left - LENGTH_FIELD_SIZE
+    let u64 slen = le_uint(peek src_field, 0, 8)??
+    skip_part(poke f, slen, left, SlibSection.Source())??
+    left := left - slen
+    let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Bitcode())??
+    left := left - LENGTH_FIELD_SIZE
+    let u64 bclen = le_uint(peek bc_field, 0, 8)??
+    return Result.Ok(SlibSizes(slen, bclen))
+
+##:
+Reads and decodes the metadata map of a `.slib` file.
+
+- Parameter path: The path of the library.
+- Returns: The metadata map, as a `MsgValue` tree.
+- Errors: A `SlibError` that names the fault.
+:##
+public fn read_metadata(string path) MsgValue | SlibError:
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    return Result.Ok(read_blob(poke f, mlen, total - HEADER_SIZE)??)
+
+##:
+Reads the length of the two payload sections, in one pass over the file.
+
+The metadata blob is stepped over and not decoded. The bitcode length is read and not
+compared with the file: `read_library` compares it.
 
 - Parameter path: The path of the library.
 - Returns: The two lengths.
 - Errors: A `SlibError` that names the fault.
 :##
 public fn sizes(string path) SlibSizes | SlibError:
-    let File f = slib_open(path)??
-    let u64 total = slib_size(poke f)??
-    let u8[] header = slib_read(poke f, 52)??
-    slib_header_check(peek header)??
-    let u64 mlen = slib_le_uint(peek header, 44, 8)??
-    let u64 left = total - 52
-    if (mlen > left):
-        return Result.Err(SlibError.Truncated())
-    slib_skip(poke f, mlen)??
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    let u64 left = total - HEADER_SIZE
+    skip_part(poke f, mlen, left, SlibSection.Metadata())??
     left := left - mlen
-    let u8[] src_field = slib_read(poke f, 8)??
-    if (src_field.len() < 8):
-        return Result.Err(SlibError.Truncated())
-    left := left - 8
-    let u64 slen = slib_le_uint(peek src_field, 0, 8)??
-    if (slen > left):
-        return Result.Err(SlibError.Truncated())
-    slib_skip(poke f, slen)??
-    left := left - slen
-    let u8[] size_field = slib_read(poke f, 8)??
-    if (size_field.len() < 8):
-        return Result.Err(SlibError.Truncated())
-    let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
-    return Result.Ok(SlibSizes(slen, bclen))
+    return Result.Ok(read_sections(poke f, poke left)??)
 
 ##:
 Reads the length of the bitcode section alone.
@@ -337,47 +415,6 @@ const string[111] SLIB_MANIFEST_SCHEMA = [
     'foreign_extension method str yes'
 ]
 
-##: The largest `.slib` file that `read_library` reads: 1 GiB, as in the Python reader. :##
-const u64 SLIB_MAX_FILE_SIZE = 1073741824
-
-##:
-Why `read_library` could not read a library.
-
-It gives the cause in more detail than `SlibError`: a truncation names the section
-and the byte counts, and a manifest with the wrong shape names the field.
-:##
-public enum SlibFault:
-    ##: The open or a read failed. The `IoError` names the cause. :##
-    Io(IoError)
-    ##: The 16 magic bytes at the start of the file do not match. :##
-    BadMagic()
-    ##: The header gives a container version that is not 4. :##
-    BadVersion(u32)
-    ##: A section ends too early: the section, the bytes it needs, and the bytes that the file has. :##
-    Truncated(SlibSection, u64, u64)
-    ##: The file is larger than the 1 GiB limit. The number is its size. :##
-    TooLarge(u64)
-    ##: The metadata blob is not valid MessagePack. :##
-    Decode(MpError)
-    ##: The metadata map does not have the shape of a manifest. The string gives the reason. :##
-    Invalid(string)
-
-##: A section of a `.slib` file. :##
-public enum SlibSection:
-    ##: The header and the metadata blob. :##
-    Metadata()
-    ##: The source section and its length field. :##
-    Source()
-    ##: The bitcode section and its length field. :##
-    Bitcode()
-
-##: A library that `read_library` read: its manifest and the lengths of its payload sections. :##
-public struct SlibLibrary:
-    ##: The metadata map. It has the shape of a manifest. :##
-    MsgValue metadata
-    ##: The lengths of the two payload sections. :##
-    SlibSizes sizes
-
 ##:
 Gives the word at a position in a row of words that one space divides.
 
@@ -386,7 +423,7 @@ Gives the word at a position in a row of words that one space divides.
 - Returns: The word, or `""` when the row has fewer words.
 - Errors: This function does not fail.
 :##
-fn schema_word(string row, i32 n) string | SlibFault:
+fn schema_word(string row, i32 n) string | SlibError:
     let string rest = row.clone()
     let i32 i = 0
     while (i < n):
@@ -409,7 +446,7 @@ Gives the schema word for the kind of a value.
 - Returns: `str`, `bool`, `map`, `list`, `nil`, or `other`.
 - Errors: This function does not fail.
 :##
-fn value_kind(MsgValue v) string | SlibFault:
+fn value_kind(MsgValue v) string | SlibError:
     match v:
         MsgValue.Str(_) -> return Result.Ok("str")
         MsgValue.Bool(_) -> return Result.Ok("bool")
@@ -425,7 +462,7 @@ Gives the words for a scalar schema type, as a reason says them.
 - Returns: The words.
 - Errors: This function does not fail.
 :##
-fn type_words(string spec) string | SlibFault:
+fn type_words(string spec) string | SlibError:
     if (spec == "str"):
         return Result.Ok("a string")
     if (spec == "bool"):
@@ -443,7 +480,7 @@ Finds the first field of a record that does not agree with the rows of its kind.
 - Returns: The reason, or `Maybe.None` when the record agrees.
 - Errors: This function does not fail.
 :##
-fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibFault:
+fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibError:
     foreach(r in 0..SLIB_MANIFEST_SCHEMA.len()):
         let string row_kind = schema_word(SLIB_MANIFEST_SCHEMA[r], 0)??
         if (row_kind == kind):
@@ -478,7 +515,7 @@ Finds why a value does not have a schema type.
 - Returns: The reason, or `Maybe.None` when the value has the type.
 - Errors: This function does not fail.
 :##
-fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibFault:
+fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibError:
     let string kind = value_kind(v)??
     if (spec == "nstr"):
         if (kind == "nil" or kind == "str"):
@@ -526,146 +563,39 @@ Makes sure that a metadata map has the shape of a manifest.
 The Python reader makes the same check with the same rows, and gives the same reason.
 
 - Parameter meta: The metadata map.
-- Errors: `SlibFault.Invalid` with the reason for the first field that is wrong.
+- Errors: `SlibError.Invalid` with the reason for the first field that is wrong.
 :##
-public fn check_manifest(MsgValue meta) ~ | SlibFault:
+public fn check_manifest(MsgValue meta) ~ | SlibError:
     let string kind = value_kind(meta)??
     if (kind != "map"):
-        return Result.Err(SlibFault.Invalid("the metadata is not a map"))
+        return Result.Err(SlibError.Invalid("the metadata is not a map"))
     match record_fault(meta, "manifest", "")??:
         Maybe.Some(reason) ->
-            return Result.Err(SlibFault.Invalid(reason.clone()))
+            return Result.Err(SlibError.Invalid(reason.clone()))
         Maybe.None() ->
             return Result.Ok(~)
-
-##:
-Opens a file to read bytes, and puts an `IoError` in the `SlibFault` channel.
-
-- Parameter path: The path of the file.
-- Returns: The open file.
-- Errors: `SlibFault.Io` when the open fails.
-:##
-fn fault_open(string path) File | SlibFault:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) -> return Result.Ok(f)
-        Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-
-##:
-Reads the bytes of one part of a section, after it makes sure that the file has them.
-
-- Parameter f: The file to read.
-- Parameter count: The number of bytes that the section needs.
-- Parameter left: The number of bytes that are left in the file.
-- Parameter section: The section that the bytes are in.
-- Returns: The bytes.
-- Errors: `SlibFault.Truncated` when `count` is more than `left`, `SlibFault.Io` when
-  the read fails.
-:##
-fn read_part(poke File f, u64 count, u64 left, SlibSection section) u8[] | SlibFault:
-    if (count > left):
-        return Result.Err(SlibFault.Truncated(section, count, left))
-    match f.read_bytes(count as i32):
-        Result.Ok(nom bytes) ->
-            if ((bytes.len() as u64) < count):
-                return Result.Err(SlibFault.Truncated(section, count, bytes.len() as u64))
-            return Result.Ok(bytes)
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Io(e))
-
-##:
-Steps over one part of a section, after it makes sure that the file has it.
-
-- Parameter f: The file.
-- Parameter count: The number of bytes that the section needs.
-- Parameter left: The number of bytes that are left in the file.
-- Parameter section: The section that the bytes are in.
-- Errors: `SlibFault.Truncated` when `count` is more than `left`, `SlibFault.Io` when
-  the seek fails.
-:##
-fn skip_part(poke File f, u64 count, u64 left, SlibSection section) ~ | SlibFault:
-    if (count > left):
-        return Result.Err(SlibFault.Truncated(section, count, left))
-    match f.seek(count as i64, SeekFrom.Current):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-
-##:
-Gives the size of an open file, and puts the file back at its start.
-
-- Parameter f: The file.
-- Returns: The size, in bytes.
-- Errors: `SlibFault.Io` when a seek fails.
-:##
-fn fault_size(poke File f) u64 | SlibFault:
-    match f.seek(0, SeekFrom.End):
-        Result.Ok(end) ->
-            match f.seek(0, SeekFrom.Start):
-                Result.Ok(_) -> return Result.Ok(end as u64)
-                Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Io(e))
-
-##:
-Tells if the bytes agree with the start of the magic.
-
-- Parameter bytes: The first bytes of the file. There can be fewer than 16.
-- Returns: True when each byte agrees with the magic at the same position.
-- Errors: This function does not fail.
-:##
-fn magic_matches(peek u8[] bytes) bool | SlibFault:
-    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    foreach(i in 0..bytes.len()):
-        if (i < 16 and bytes[i] != magic[i]):
-            return Result.Ok(false)
-    return Result.Ok(true)
 
 ##:
 Reads a whole library: its manifest, and the lengths of its payload sections.
 
 The reader makes the same checks as the Python reader of `--lib-info`, in the same
 order, so both halves of the command report the same fault for a damaged file: the
-magic first, then the size limit, then each length against what is left of the file,
-before the bytes are read. The
-manifest must have the shape of `SLIB_MANIFEST_SCHEMA`.
+header first, then each length against what is left of the file, before the bytes are
+read. The manifest must have the shape of `SLIB_MANIFEST_SCHEMA`.
 
 - Parameter path: The path of the library.
 - Returns: The manifest and the section lengths.
-- Errors: A `SlibFault` that names the fault.
+- Errors: A `SlibError` that names the fault.
 :##
-public fn read_library(string path) SlibLibrary | SlibFault:
-    let File f = fault_open(path)??
-    let u64 total = fault_size(poke f)??
-    let u64 first = 16
-    if (total < 16):
-        first := total
-    let u8[] magic = read_part(poke f, first, total, SlibSection.Metadata())??
-    if (not magic_matches(peek magic)??):
-        return Result.Err(SlibFault.BadMagic())
-    if (total > SLIB_MAX_FILE_SIZE):
-        return Result.Err(SlibFault.TooLarge(total))
-    if (total < 52):
-        return Result.Err(SlibFault.Truncated(SlibSection.Metadata(), 52, total))
-    let u8[] rest = read_part(poke f, 36, total - first, SlibSection.Metadata())??
-    let u64 version = slib_le_uint(peek rest, 0, 4).realise(0)
-    if (version != 4):
-        return Result.Err(SlibFault.BadVersion(version as u32))
-    let u64 mlen = slib_le_uint(peek rest, 28, 8).realise(0)
-    let u64 left = total - 52
-    let u8[] blob = read_part(poke f, mlen, left, SlibSection.Metadata())??
+public fn read_library(string path) SlibLibrary | SlibError:
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    let u64 left = total - HEADER_SIZE
+    let MsgValue meta = read_blob(poke f, mlen, left)??
     left := left - mlen
-    match decode(blob):
-        Result.Ok(nom meta) ->
-            let u8[] src_field = read_part(poke f, 8, left, SlibSection.Source())??
-            left := left - 8
-            let u64 slen = slib_le_uint(peek src_field, 0, 8).realise(0)
-            skip_part(poke f, slen, left, SlibSection.Source())??
-            left := left - slen
-            let u8[] bc_field = read_part(poke f, 8, left, SlibSection.Bitcode())??
-            left := left - 8
-            let u64 bclen = slib_le_uint(peek bc_field, 0, 8).realise(0)
-            if (bclen > left):
-                return Result.Err(SlibFault.Truncated(SlibSection.Bitcode(), bclen, left))
-            check_manifest(meta)??
-            return Result.Ok(SlibLibrary(meta, SlibSizes(slen, bclen)))
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Decode(e))
+    let SlibSizes both = read_sections(poke f, poke left)??
+    if (both.bitcode > left):
+        return Result.Err(SlibError.Truncated(SlibSection.Bitcode(), both.bitcode, left))
+    check_manifest(meta)??
+    return Result.Ok(SlibLibrary(meta, both))

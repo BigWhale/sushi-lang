@@ -1430,15 +1430,15 @@ gives the same code for the same fault.
 - Parameter path: The path of the library.
 - Parameter e: The fault.
 :##
-fn print_fault(string path, SlibFault e) ~:
+fn print_fault(string path, SlibError e) ~:
     match e:
-        SlibFault.Io(io) ->
+        SlibError.Io(io) ->
             print_diagnostic("CE3515", "cannot read library file '{path}': {io_cause(io)??}")??
-        SlibFault.BadMagic() ->
+        SlibError.BadMagic() ->
             print_diagnostic("CE3508", "invalid library file '{path}': not a valid .slib file (bad magic)")??
-        SlibFault.BadVersion(v) ->
+        SlibError.BadVersion(v) ->
             print_diagnostic("CE3509", "unsupported library format version '{v}' in '{path}' (compiler supports version 4)")??
-        SlibFault.Truncated(section, expected, actual) ->
+        SlibError.Truncated(section, expected, actual) ->
             let string counts = "(expected {expected} bytes, got {actual})"
             match section:
                 SlibSection.Metadata() ->
@@ -1447,11 +1447,11 @@ fn print_fault(string path, SlibFault e) ~:
                     print_diagnostic("CE3506", "corrupted library file '{path}': source section truncated {counts}")??
                 SlibSection.Bitcode() ->
                     print_diagnostic("CE3511", "corrupted library file '{path}': bitcode section truncated {counts}")??
-        SlibFault.TooLarge(size) ->
-            print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum 1073741824 bytes")??
-        SlibFault.Decode(_) ->
+        SlibError.TooLarge(size) ->
+            print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum {SLIB_MAX_FILE_SIZE} bytes")??
+        SlibError.Decode(_) ->
             print_diagnostic("CE3512", "invalid library metadata in '{path}': the metadata does not decode as MessagePack")??
-        SlibFault.Invalid(reason) ->
+        SlibError.Invalid(reason) ->
             print_diagnostic("CE3512", "invalid library metadata in '{path}': {reason}")??
     return Result.Ok(~)
 

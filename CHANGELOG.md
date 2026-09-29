@@ -14,6 +14,14 @@ All notable changes to Sushi Lang will be documented in this file.
   count gave the end of the buffer, and a length prefix gave the read position. Every path
   now gives the offset of the read that could not complete.
 
+### Changed
+
+- **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
+  `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`
+  names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file
+  larger than 1 GiB (`TooLarge`), as `read_library` did. A match on `SlibError.Truncated()`
+  becomes `SlibError.Truncated(_, _, _)`.
+
 ## [0.13.0] - 2026-09-29
 
 A program can now talk to the world around it. `File` is an ordinary type in `<io/fs>`,

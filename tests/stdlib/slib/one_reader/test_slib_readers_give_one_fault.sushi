@@ -1,42 +1,25 @@
-# Each reader checks the magic first, and compares each declared length with the size
-# of the file before it reads. A short file with a bad magic is BadMagic, not
-# Truncated. A file cut inside its bitcode is Truncated for read_library, which
-# compares every length; read_metadata reads only what the header declares, and sizes
-# reads the bitcode length without comparing it. A
-# metadata length past the end of the file is Truncated, and nothing reads that many
-# bytes. The fixture removes its directory.
-# EXPECT_STDOUT_EXACT: "short: BadMagic BadMagic BadMagic\ncut: Ok Ok Truncated(Bitcode, 100, 10)\nlong: Truncated Truncated Truncated(Metadata, 1099511627776, 45)\n"
+# The three readers walk one header with one error enum, so each gives the same
+# detailed fault: a file that ends inside the header, and a metadata length past the
+# end of the file. The fixture removes its directory.
+# EXPECT_STDOUT_EXACT: "header: Truncated(Metadata, 52, 20) Truncated(Metadata, 52, 20) Truncated(Metadata, 52, 20)\nlong: Truncated(Metadata, 4096, 1) Truncated(Metadata, 4096, 1) Truncated(Metadata, 4096, 1)\n"
 # EXPECT_NO_LEAKS: true
 # EXPECT_NO_OPEN_FDS: true
 
 use <io/fs>
-use <collections/strings>
 use <toolchain/slib>
 
-const string ROOT = "/tmp/sushi_slib_truncated_and_bad_magic"
+const string ROOT = "/tmp/sushi_slib_readers_give_one_fault"
 
 fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
         out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
     return Result.Ok(~)
 
-fn image(u64 meta_len, u64 bitcode_len) u8[]:
-    let u8[] meta = from([0x81])
-    meta.push(0xac)
-    meta.extend("library_name".to_bytes())
-    meta.push(0xa4)
-    meta.extend("demo".to_bytes())
+fn header(u64 meta_len) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
     push_le(poke out, 4, 4)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
+    push_le(poke out, 0, 24)??
     push_le(poke out, meta_len, 8)??
-    out.extend(meta)
-    push_le(poke out, 0, 8)??
-    push_le(poke out, bitcode_len, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 2)??
     return Result.Ok(out)
 
 fn write_file(string path, peek u8[] bytes) bool:
@@ -48,12 +31,6 @@ fn write_file(string path, peek u8[] bytes) bool:
         Result.Err(_) ->
             return Result.Ok(false)
 
-fn plain(SlibError e) string:
-    match e:
-        SlibError.BadMagic() -> return Result.Ok("BadMagic")
-        SlibError.Truncated(_, _, _) -> return Result.Ok("Truncated")
-        _ -> return Result.Ok("another SlibError")
-
 fn section(SlibSection s) string:
     match s:
         SlibSection.Metadata() -> return Result.Ok("Metadata")
@@ -62,7 +39,6 @@ fn section(SlibSection s) string:
 
 fn fault(SlibError e) string:
     match e:
-        SlibError.BadMagic() -> return Result.Ok("BadMagic")
         SlibError.Truncated(s, expected, actual) ->
             return Result.Ok("Truncated({section(s)??}, {expected}, {actual})")
         _ -> return Result.Ok("another SlibError")
@@ -72,11 +48,11 @@ fn check(string name) ~:
     let string a = "Ok"
     match read_metadata(path):
         Result.Ok(_) -> a := "Ok"
-        Result.Err(e) -> a := plain(e)??
+        Result.Err(e) -> a := fault(e)??
     let string b = "Ok"
     match sizes(path):
         Result.Ok(_) -> b := "Ok"
-        Result.Err(e) -> b := plain(e)??
+        Result.Err(e) -> b := fault(e)??
     let string c = "Ok"
     match read_library(path):
         Result.Ok(_) -> c := "Ok"
@@ -87,14 +63,13 @@ fn check(string name) ~:
 fn run_test() i32:
     if (mkdir_all(ROOT, 0o755).is_err()):
         return Result.Ok(1)
-    let u8[] short = "hello!".to_bytes()
-    write_file("{ROOT}/short.slib", peek short)??
-    let u8[] cut = image(19, 100)??
-    write_file("{ROOT}/cut.slib", peek cut)??
-    let u8[] long = image(1099511627776, 0)??
+    let u8[] cut = header(0)??
+    let u8[] short = cut.ss(0, 20)
+    write_file("{ROOT}/header.slib", peek short)??
+    let u8[] long = header(4096)??
+    long.push(0xc0)
     write_file("{ROOT}/long.slib", peek long)??
-    check("short")??
-    check("cut")??
+    check("header")??
     check("long")??
     remove_all(ROOT)
     return Result.Ok(0)

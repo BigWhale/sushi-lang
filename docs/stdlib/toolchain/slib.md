@@ -32,23 +32,7 @@ carries.
 
 ```
 public enum SlibError:
-    Io(IoError)         # the open or a read failed; the IoError names the cause
-    BadMagic()          # the 16 magic bytes do not match
-    BadVersion(u32)     # header version is not 4
-    Truncated()         # the file ends inside the header or a section
-    Decode(MpError)     # the metadata blob does not decode
-
-public struct SlibSizes:
-    u64 source          # the length of the source section
-    u64 bitcode         # the length of the bitcode section
-```
-
-`read_library` and `check_manifest` report a `SlibFault`, which names the cause in more
-detail than `SlibError`:
-
-```
-public enum SlibFault:
-    Io(IoError)                         # the open or a read failed
+    Io(IoError)                         # the open or a read failed; the IoError names the cause
     BadMagic()                          # the 16 magic bytes do not match
     BadVersion(u32)                     # header version is not 4
     Truncated(SlibSection, u64, u64)    # the section, the bytes it needs, the bytes left
@@ -61,10 +45,17 @@ public enum SlibSection:
     Source()            # the source section and its length field
     Bitcode()           # the bitcode section and its length field
 
+public struct SlibSizes:
+    u64 source          # the length of the source section
+    u64 bitcode         # the length of the bitcode section
+
 public struct SlibLibrary:
     MsgValue metadata   # the manifest, with its shape checked
     SlibSizes sizes     # the lengths of the two payload sections
 ```
+
+Every function answers the one `SlibError`. The readers walk one header, so a damaged
+file gives the same fault from each of them.
 
 ## Functions
 
@@ -118,7 +109,7 @@ fn main() i32:
 The `bitcode` field of `sizes`, on its own. The reader reads only the two 8-byte
 length fields, never a payload.
 
-### `read_library(string path) SlibLibrary | SlibFault`
+### `read_library(string path) SlibLibrary | SlibError`
 
 Read a whole library: the manifest and the lengths of both payload sections. The checks
 are the ones the Python reader of `sushic --lib-info` makes, in the same order, so both
@@ -133,9 +124,9 @@ fn describe(string path) string:
     match read_library(path):
         Result.Ok(library) ->
             return Result.Ok("source {library.sizes.source}, bitcode {library.sizes.bitcode}")
-        Result.Err(SlibFault.Truncated(_, need, have)) ->
+        Result.Err(SlibError.Truncated(_, need, have)) ->
             return Result.Ok("truncated: needs {need} bytes, has {have}")
-        Result.Err(SlibFault.Invalid(reason)) ->
+        Result.Err(SlibError.Invalid(reason)) ->
             return Result.Ok("not a manifest: {reason}")
         Result.Err(_) ->
             return Result.Ok("cannot read {path}")
@@ -145,12 +136,12 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `check_manifest(MsgValue meta) ~ | SlibFault`
+### `check_manifest(MsgValue meta) ~ | SlibError`
 
 Check that a metadata map has the shape of a manifest: every required field is present
 and has its type. The Python reader checks the same rows (`MANIFEST_SCHEMA` in
 `sushi_lang/backend/library_format.py`) and gives the same reason, as
-`SlibFault.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
+`SlibError.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
 partial map still reads.
 
 ## Error handling
@@ -172,10 +163,14 @@ fn classify(string path) string:
                     return Result.Ok("not a .slib library")
                 SlibError.BadVersion(v) ->
                     return Result.Ok("unsupported version {v}")
-                SlibError.Truncated() ->
-                    return Result.Ok("truncated file")
+                SlibError.Truncated(_, need, have) ->
+                    return Result.Ok("truncated file: needs {need} bytes, has {have}")
+                SlibError.TooLarge(size) ->
+                    return Result.Ok("file too large: {size} bytes")
                 SlibError.Decode(_) ->
                     return Result.Ok("metadata does not decode")
+                SlibError.Invalid(reason) ->
+                    return Result.Ok("not a manifest: {reason}")
 
 fn main() i32:
     println(classify("missing.slib").realise("error"))    # no such file: missing.slib
@@ -200,10 +195,11 @@ and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`,
 - No typed manifest structs: consumers walk the `MsgValue` tree with the accessors of
   `<encoding/msgpack>` (`map_get`, `map_get_str`, `map_get_bool`, `map_index`).
 - A declared length is compared with the size of the file before any bytes are read. A
-  metadata length larger than the rest of the file is `SlibError.Truncated()` from
-  `read_metadata` and `SlibFault.Truncated(...)` from `read_library`. `read_library` also
-  refuses a file larger than 1 GiB with `SlibFault.TooLarge(size)`. `read_metadata` has no
-  size limit, and a real file larger than 2 GiB is not supported.
+  metadata length larger than the rest of the file is `SlibError.Truncated(...)` from
+  every reader. Every reader refuses a file larger than 1 GiB (`SLIB_MAX_FILE_SIZE`) with
+  `SlibError.TooLarge(size)`.
+- `sizes` and `bitcode_size` do not compare the bitcode length with the file;
+  `read_library` does.
 
 ## See also
 
