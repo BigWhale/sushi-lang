@@ -54,7 +54,7 @@ alongside other trailing args) is a compile error (**CE0120**).
 ## Parameter packs: arguments of different types
 
 A **parameter pack** binds a variable-length list of *concrete, possibly-different* types. It
-has two pieces that share a name: a **type pack** `...Ts` in the angle brackets, and a
+has two pieces that share a name: a **type pack** `...Ts` in the type-parameter list `@(...)`, and a
 **value pack** `...Ts args` in the parameter list. You walk the values with `expand`:
 
 ```sushi
@@ -142,9 +142,13 @@ inside the expanded body.
 ## Packs travel across libraries
 
 Because a pack function is generic, it ships across a `.slib` boundary just like any generic.
-A library can export a `printf`-style helper:
+A library can export a `printf`-style helper. The library declares the perk too, so that the
+program can implement it:
 
 ```sushi
+public perk Display:
+    fn display() string
+
 public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
@@ -152,7 +156,10 @@ public fn show_all@(...Ts: Display)(...Ts args) ~:
 ```
 
 and a program that `use`s the library monomorphizes it at *its own* call sites, supplying
-`Display` implementations for whatever types it passes. The [Libraries guide](../libraries.md)
+`Display` implementations for whatever types it passes.
+
+A variadic parameter, native or pack, is not permitted in a perk method or an extension
+method (`CE0115`). Use a free function. The [Libraries guide](../libraries.md)
 covers how templates cross the boundary; the [Variadics guide](../variadics.md) has the full
 reference.
 

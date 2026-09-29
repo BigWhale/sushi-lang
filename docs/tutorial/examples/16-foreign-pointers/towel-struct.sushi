@@ -1,5 +1,5 @@
 # The wrapper-struct pattern: the raw handle rides inside a named struct,
-# and the struct - real Sushi - is what gets methods and crosses units.
+# and the struct - real Sushi - is what gets methods.
 unsafe external "C" as libc because "a raw buffer behind a tidy struct":
     fn malloc(i64 n) ptr = "malloc"
     fn free(ptr p) ~ = "free"

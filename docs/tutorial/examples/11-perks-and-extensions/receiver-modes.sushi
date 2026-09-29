@@ -1,0 +1,22 @@
+struct Counter:
+    string label
+    i32 n
+
+extend Counter show() string:
+    return "{self.label}: {self.n}"
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+extend Counter into_label(nom self) string:
+    return nom self.label
+
+fn main() i32:
+    let Counter c = Counter("towels", 41)
+    c.bump()
+    println(c.show())
+
+    let string label = c.into_label()
+    println("the label was {label}")
+
+    return Result.Ok(0)

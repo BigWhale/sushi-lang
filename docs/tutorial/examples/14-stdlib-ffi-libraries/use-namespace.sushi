@@ -1,0 +1,10 @@
+# Import a source file behind a name: its public names are reached with a dot.
+use "guidelib" as guide
+
+fn add(i32 a, i32 b) i32:
+    return Result.Ok(a * 100 + b)
+
+fn main() i32:
+    println("guide.add(40, 2) = {guide.add(40, 2).realise(0)}")
+    println("add(40, 2) = {add(40, 2).realise(0)}")
+    return Result.Ok(0)
