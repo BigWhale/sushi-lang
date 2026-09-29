@@ -2,55 +2,43 @@
 
 [← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
-Detailed documentation of Sushi's LLVM backend and code generation.
+The backend translates the type-checked AST into LLVM IR, optimizes the IR, emits object
+code and links a native executable. All paths on this page are relative to
+`sushi_lang/`. The code sketches show the shape of the emitted IR; the module that each
+section names holds the real code.
 
-## Overview
+## Main components
 
-The backend translates type-checked AST into LLVM IR, applies optimizations, and links to produce native executables.
+### `LLVMCodegen` and `LLVMDriver`
 
-## Main Components
+`LLVMCodegen` (`backend/codegen_llvm.py`) GENERATES a module. It composes the manager
+classes (see "The backend rule" in [Architecture](architecture.md)) and holds the tables
+that the analysis handed over. `build_module_single_unit` generates the module of one
+unit.
 
-### LLVMCodeGenerator
+`LLVMDriver` (`backend/driver.py`) wraps a codegen. It verifies, optimizes, emits objects
+and links:
 
-**File:** `backend/codegen_llvm.py`
+| Method | What it does |
+|---|---|
+| `compile_multi_unit` | the monolithic path: one module for the whole program, then the link |
+| `compile_single_unit_to_object` | the incremental path: one unit to one object |
+| `compile_stdlib_to_object`, `compile_library_to_object` | a bitcode stdlib module or a binary library to an object, for the cache |
+| `compile_to_bitcode` | the bitcode of a `.slib` library |
+| `link_object_files` | the link of the objects with `cc` |
 
-Main orchestrator for code generation.
+The emit order in a module is: the declarations of the runtime and the libc externs, the
+user externs (`declare_user_externs`, `backend/runtime/externs/user_externs.py`), the
+constants and unit variables, the function declarations, and then the function bodies.
+`backend/functions/` holds the function manager: `declarations.py`, `definitions.py`, and
+`main_wrapper.py`, whose `emit_main` emits the C `main`. The C `main` calls the Sushi
+`main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
+`string[]` when `main` takes `args`, and turns the Result into the exit code.
 
-**Key responsibilities:**
-- Create LLVM module
-- Generate function declarations
-- Emit function bodies
-- Apply optimization passes
-- Link with clang
+## Type system
 
-**Workflow:**
-```python
-def compile(ast, opt_level):
-    # 1. Initialize LLVM module
-    module = ir.Module(name="sushi_program")
-
-    # 2. Declare all functions
-    for func in ast.functions:
-        declare_function(func)
-
-    # 3. Generate function bodies
-    for func in ast.functions:
-        emit_function(func)
-
-    # 4. Apply optimizations
-    apply_optimizations(module, opt_level)
-
-    # 5. Link with clang
-    link_executable(module, output_name)
-```
-
-## Type System
-
-### TypeManager
-
-**File:** `backend/types/`
-
-Manages LLVM type creation and mapping.
+**File:** `backend/types/core/__init__.py` (`LLVMTypeSystem`, reached as `codegen.types`;
+`TypeMapper`, `TypeSizing`, `TypeCache` and `TypeInference` are in `backend/types/core/`)
 
 **Primitive types:**
 ```python
@@ -58,7 +46,7 @@ Manages LLVM type creation and mapping.
 'i16': ir.IntType(16)
 'i32': ir.IntType(32)
 'i64': ir.IntType(64)
-'u8': ir.IntType(8)   # Same as i8 in LLVM
+'u8': ir.IntType(8)   # LLVM has no sign on an integer type; the operation carries it
 'u16': ir.IntType(16)
 'u32': ir.IntType(32)
 'u64': ir.IntType(64)
@@ -72,19 +60,28 @@ Manages LLVM type creation and mapping.
 ])
 ```
 
+A string size is `i32`. A `mem*` call takes an `i64` length, so the backend zero-extends
+the size first (`docs/design/string-representation.md`).
+
 **Array types:**
 ```python
 # Fixed array: [5 x i32]
 ir.ArrayType(ir.IntType(32), 5)
 
-# Dynamic array struct: { i32, i32, T* }
-#                        ^len ^cap ^data
+# Dynamic array descriptor: { i32, i32, T* }
+#                             ^len ^cap ^data
 ir.LiteralStructType([
     ir.IntType(32),                # length (index 0)
     ir.IntType(32),                # capacity (index 1)
-    ir.IntType(32).as_pointer(),  # data (index 2)
+    ir.IntType(32).as_pointer(),   # data (index 2)
 ])
 ```
+
+A `T[]` is its descriptor BY VALUE everywhere: `emit_expr` yields the descriptor, and
+`as_array_address` (`backend/types/arrays/addressing.py`) is the one place that makes an
+address of it. The field addresses come from `gep_dynamic_array_len`,
+`gep_dynamic_array_cap` and `gep_dynamic_array_data` (`backend/gep_utils.py`); each takes
+`codegen` first and an optional `builder=`. See `docs/design/array-representation.md`.
 
 **Struct types:**
 ```sushi
@@ -94,23 +91,22 @@ struct Point:
 ```
 
 ```python
-# LLVM: { i32, i32 }
-ir.LiteralStructType([
-    ir.IntType(32),  # x
-    ir.IntType(32)   # y
-])
+# LLVM: an identified struct named after the type
+# %"Point" = type { i32, i32 }
 ```
+
+A generic instance carries its interned name, for example `%"Pair<i32, string>"`.
 
 **Enum types:**
 ```sushi
 enum Status:
-    Idle()
-    Running(i32 task_id)
-    Error(string message)
+    Idle
+    Running(i32)
+    Failed(string)
 ```
 
 ```python
-# LLVM: { i32, [K x i64] }   (#300 phase 2)
+# LLVM: { i32, [K x i64] }
 #        ^tag  ^variant data (union-style), K = ceil(widest aligned payload / 8), min 1
 ir.LiteralStructType([
     ir.IntType(32),                     # discriminant tag (4 bytes pad follow it)
@@ -119,120 +115,102 @@ ir.LiteralStructType([
 ```
 
 The data member is an **i64 array on purpose**: it gives the struct 8-alignment, so the
-payload starts at offset 8 and every payload field sits at a naturally aligned offset
-(computed by the one authority, `TypeSizing.payload_field_offsets` — C struct layout
-rules). Payload accesses bitcast the data pointer to `i8*` and GEP by byte offset, with
-**natural alignment** — the old byte-array layout forced `align=1` on every access
-(#145), which is retired.
+payload starts at offset 8 and every payload field sits at a naturally aligned offset.
+`TypeSizing.payload_field_offsets` (`backend/types/core/sizing.py`) is the one authority
+on the offsets (C struct layout rules), and the `unpack_*` helpers of
+`backend/enum_utils.py` read it. A payload access bitcasts the data pointer to `i8*` and
+GEPs by byte offset, with natural alignment. `extract_enum_tag` and `extract_enum_data`
+(`backend/enum_utils.py`) take `(codegen, enum_value)` and use `extract_value` on the
+value; `check_enum_variant` compares the tag.
 
-## Expression Emission
+A `Result@(T, E)` and a `Maybe@(T)` are ordinary interned enums. The semantic type of a
+Result or Maybe receiver comes from `infer_generic_enum_type`
+(`backend/expressions/calls/utils.py`), never from a match on the LLVM layout; an
+unknown type is CE0019.
+
+**Function values:** a 4-word fat pointer `{fn_ptr, env_ptr, drop_ptr, clone_ptr}`, all
+`i8*` (`backend/runtime/closures.py`). A value with no captures has a null `env_ptr`,
+`drop_ptr` and `clone_ptr`. See `docs/design/closures.md`.
+
+## Expression emission
 
 ### Literals
 
 **File:** `backend/expressions/literals.py`
 
 ```python
-# Integer
+# Integer: at the type of its context (i32 when there is no context)
 ir.Constant(ir.IntType(32), 42)
 
-# Float
+# Float: at the type of its context (f64 when there is no context)
 ir.Constant(ir.DoubleType(), 3.14)
 
-# Boolean
-ir.Constant(ir.IntType(1), 1)  # true
-ir.Constant(ir.IntType(1), 0)  # false
+# Boolean: i8 in storage, i1 only when a condition asks for it (to_i1)
+ir.Constant(ir.IntType(8), 1)  # true
+ir.Constant(ir.IntType(1), 1)  # true, as a condition
 
-# String
-string_const = ir.GlobalVariable(module, ir.ArrayType(ir.IntType(8), len + 1), name)
-string_const.initializer = ir.Constant(ir.ArrayType(ir.IntType(8), len + 1), bytearray(text, 'utf-8'))
-string_ptr = builder.bitcast(string_const, ir.IntType(8).as_pointer())
+# String: a private constant global, and a fat pointer with owned = 0
 ```
 
-### Binary Operators
+`StringConstantManager` (`backend/string_constants.py`) keeps one private global for
+each distinct string text.
+
+### Binary operators
 
 **File:** `backend/expressions/operators.py`
 
 **Arithmetic:**
 ```python
-# Addition (int)
-builder.add(left, right)
-
-# Addition (float)
-builder.fadd(left, right)
-
-# Subtraction (int)
+builder.add(left, right)    # int;   builder.fadd for a float
 builder.sub(left, right)
-
-# Multiplication (int)
 builder.mul(left, right)
-
-# Division (signed int)
-builder.sdiv(left, right)
-
-# Division (unsigned int)
-builder.udiv(left, right)
-
-# Division (float)
-builder.fdiv(left, right)
-
-# Modulo (signed)
-builder.srem(left, right)
-
-# Modulo (unsigned)
-builder.urem(left, right)
+builder.sdiv(left, right)   # signed; builder.udiv for unsigned, builder.fdiv for a float
+builder.srem(left, right)   # signed; builder.urem for unsigned
 ```
+
+Mixed widths are refused before the backend (CE2510). The backend folds nothing: every
+compile-time integer operation is `semantics/const_eval.py`.
 
 **Comparison:**
 ```python
-# Integer comparison
-builder.icmp_signed('==', left, right)  # ==
-builder.icmp_signed('!=', left, right)  # !=
-builder.icmp_signed('<', left, right)   # <
-builder.icmp_signed('<=', left, right)  # <=
-builder.icmp_signed('>', left, right)   # >
-builder.icmp_signed('>=', left, right)  # >=
-
-# Float comparison (ordered)
-builder.fcmp_ordered('==', left, right)
+builder.icmp_signed('<', left, right)     # a signed integer operand
+builder.icmp_unsigned('<', left, right)   # an unsigned integer operand
+builder.fcmp_ordered('<', left, right)    # a float operand
 ```
 
-**Logical:**
+The result is `i1` for a condition and `i8` in any other position. A string comparison
+reads bytes: equality compares the sizes and then `memcmp` over the data; an order
+compares with `memcmp` over the common prefix and then the lengths
+(`backend/runtime/strings.py`).
+
+**Logical:** `emit_logic` (`backend/expressions/operators.py`)
 ```python
-# AND
-builder.and_(left, right)
-
-# OR
-builder.or_(left, right)
-
-# NOT
-builder.not_(operand)
+# a and b: short circuit
+#   evaluate a; cbranch(a, rhs_block, end_block)
+#   rhs_block: evaluate b in a scope of its own; branch(end_block)
+#   end_block: phi(false from the a block, b from rhs_block)
+# a or b: the same, with cbranch(a, end_block, rhs_block)
+# a xor b: both sides are evaluated, then builder.xor
+# not a: builder.not_ on the i1 value
 ```
 
 **Bitwise:**
 ```python
-# Bitwise AND
 builder.and_(left, right)
-
-# Bitwise OR
 builder.or_(left, right)
-
-# Bitwise XOR
 builder.xor(left, right)
-
-# Bitwise NOT (complement)
-builder.not_(operand)
-
-# Left shift (zero-fill right side)
-builder.shl(left, right)
-
-# Right shift (type-dependent, matches Go/Rust behavior)
-builder.ashr(left, right)  # Arithmetic shift for signed types (i8, i16, i32, i64) - sign-extends
-builder.lshr(left, right)  # Logical shift for unsigned types (u8, u16, u32, u64) - zero-fills
+builder.not_(operand)       # ~
+builder.shl(value, count)   # <<
+builder.ashr(value, count)  # >> on a signed type: fills with the sign bit
+builder.lshr(value, count)  # >> on an unsigned type: fills with zeros
 ```
 
-**Note:** The `>>` operator in Sushi automatically selects between `ashr` and `lshr` based on the operand's semantic type, ensuring type-safe shift behavior without requiring separate operator syntax.
+A shift count the compiler can read must be in the range 0 to width-1 (CE2512). A
+computed count at or past the width has a defined result: 0, or the sign fill for a
+signed `>>`. The emitter tests the count and selects that result; it does not mask the
+count.
 
-### Type Casting
+### Type casting
 
 **File:** `backend/expressions/casts.py`
 
@@ -246,106 +224,95 @@ builder.fptosi(value, target_type)  # Float to signed int (truncate)
 builder.fptoui(value, target_type)  # Float to unsigned int
 
 # Integer extension/truncation
-builder.zext(value, target_type)    # Zero-extend (unsigned)
-builder.sext(value, target_type)    # Sign-extend (signed)
+builder.zext(value, target_type)    # Zero-extend (unsigned source)
+builder.sext(value, target_type)    # Sign-extend (signed source)
 builder.trunc(value, target_type)   # Truncate
 
-# Integer to integer (same size, different signedness)
-# No operation needed - just reinterpret
+# Integer to integer (same size, different signedness): no instruction
 ```
 
-### Array Operations
+### Arrays
 
-**File:** `backend/types/arrays/literals.py` (the `backend/types/arrays/` package)
+**Files:** `backend/types/arrays/` (literals, indexing, bounds, `methods/`)
 
-**Array literal:**
-```python
-# Fixed array: [1, 2, 3]
-array_type = ir.ArrayType(ir.IntType(32), 3)
-array_alloca = builder.alloca(array_type)
-for i, elem in enumerate([1, 2, 3]):
-    ptr = builder.gep(array_alloca, [ir.Constant(ir.IntType(32), 0),
-                                      ir.Constant(ir.IntType(32), i)])
-    builder.store(ir.Constant(ir.IntType(32), elem), ptr)
-```
-
-**Dynamic array:**
 ```python
 # from([1, 2, 3])
-# 1. Allocate struct { i32*, i32, i32 }
-arr_struct = builder.alloca(dynarray_type)
-
-# 2. Malloc buffer
-size = 3
-malloc_size = builder.mul(ir.Constant(ir.IntType(32), 4), size)  # 4 bytes per i32
-buffer = builder.call(malloc_fn, [malloc_size])
-buffer_typed = builder.bitcast(buffer, ir.IntType(32).as_pointer())
-
-# 3. Store elements
-for i, elem in enumerate([1, 2, 3]):
-    ptr = builder.gep(buffer_typed, [ir.Constant(ir.IntType(32), i)])
-    builder.store(ir.Constant(ir.IntType(32), elem), ptr)
-
-# 4. Initialize struct
-builder.store(buffer_typed, builder.gep(arr_struct, [zero, zero]))  # data ptr
-builder.store(size, builder.gep(arr_struct, [zero, one]))            # length
-builder.store(size, builder.gep(arr_struct, [zero, two]))            # capacity
+# 1. malloc a buffer of 3 * sizeof(i32) bytes (the allocation is checked)
+# 2. store each element into the buffer
+# 3. build the descriptor by value: { len = 3, cap = 3, data = buffer }
 ```
 
-### Function Calls
+`arr[i]` is bounds-checked by `emit_bounds_check(codegen, index, size, ...)`
+(`backend/types/arrays/bounds.py`). It tests `index >= 0` and `index < size`. A failure
+prints `Runtime Error RE2020: array index 5 out of bounds for array of size 2` and exits
+with status 1. `.get(i)` answers a `Maybe@(T)` through the same check
+(`emit_checked_maybe`). An index, a count and a range bound are `i32`; `require_i32`
+(`backend/llvm_utils.py`) is an internal error, never a widening.
 
-**File:** `backend/expressions/calls/` (a package; the entry point is `dispatcher.py`)
+### Function calls
 
-```python
-# Load function from registry
-func = module.get_global(func_name)
+**Files:** `backend/expressions/calls/` (the entry is `dispatcher.py`)
 
-# Evaluate arguments
-args = [emit_expression(arg) for arg in call_args]
+A named callee is resolved through the same per-unit ladder that the `typecheck` pass
+walked, so two units that declare one name do not share a callee. The parameter mode of
+each argument comes from `semantics/param_modes.py`, the same resolver that the `borrow`
+pass reads. A `peek` or `poke` argument goes by pointer.
 
-# Call function
-result = builder.call(func, args)
-```
+A stdlib call goes to its emitter through `STDLIB_EMITTERS`
+(`backend/expressions/calls/stdlib/__init__.py`). A C-string argument of a stdlib or FFI
+callee is marshalled by `emit_cstr_arg` (`backend/expressions/calls/utils.py`), which
+also registers the copy for a free at scope exit.
 
-### Method Calls (Extension Methods)
+### Method calls
 
-After AST transformation, method calls become function calls:
+`emit_method_call` (`backend/expressions/calls/dispatcher.py`) is a table dispatch. The
+AST is not rewritten into a function call.
 
-```sushi
-# Source:
-arr.len()
+1. `PRE_RECEIVER_HANDLERS` run before the receiver is emitted: an FFI call, a namespace
+   call, a static, an enum or struct constructor, and the Result, Maybe, Own, HashMap and
+   List methods.
+2. The receiver is emitted once.
+3. `RECEIVER_HANDLERS` run in order: the array and string methods, a perk method, the
+   derived `hash` and `clone`, and the primitive methods.
+4. An extension method call goes to `emit_checked_call`: the arity guard, the casts, the
+   call and the `i1` conversion.
 
-# After transformation:
-array_len(arr)
+A built-in array method such as `arr.len()` is emitted inline (`backend/types/arrays/`);
+there is no `array_len` function. A container method goes through its row in
+`LIST_EMITTERS` or `HASHMAP_EMITTERS` (`emit_from_table`,
+`backend/generics/container_table.py`). An extension method symbol comes from
+`extension_symbol` (`semantics/generics/name_mangling.py`), for example
+`Pair__i32_string_swapped`.
 
-# LLVM:
-call @array_len(%arr_type* %arr)
-```
+## Statement emission
 
-## Statement Emission
-
-### Variable Declaration
+### Variable declaration
 
 **File:** `backend/statements/variables.py`
 
 ```python
 # let i32 x = 42
-x_alloca = builder.alloca(ir.IntType(32), name='x')
-value = ir.Constant(ir.IntType(32), 42)
-builder.store(value, x_alloca)
-variables['x'] = x_alloca
+x_slot = codegen.memory.entry_alloca(ir.IntType(32), 'x')   # in the ENTRY block
+builder.store(ir.Constant(ir.IntType(32), 42), x_slot)
 ```
 
-### Variable Rebinding
+Every stack slot goes in the function's entry block through `entry_alloca`
+(`backend/memory/allocas.py`), so a `let` inside a loop does not grow the frame. A `let`
+of an owning value registers it for scope exit through `register_owning_value`
+(`backend/memory/scopes.py`). An owning value that no name holds is registered as a scope
+temporary by `own_temporary` (`backend/expressions/memory.py`).
+
+### Variable rebinding
 
 ```python
 # x := 50
-x_ptr = variables['x']
-value = ir.Constant(ir.IntType(32), 50)
-builder.store(value, x_ptr)
+builder.store(ir.Constant(ir.IntType(32), 50), x_slot)
 ```
 
-### If-Elif-Else
+A rebind of an owning value first destroys the old value (`destroy_old_value`,
+`backend/destructors.py`), and then stores the new one.
+
+### If-elif-else
 
 **File:** `backend/statements/control_flow.py`
 
@@ -363,21 +330,20 @@ merge_block = func.append_basic_block('if.merge')
 
 builder.cbranch(cond, then_block, else_block)
 
-# Then block
 builder.position_at_end(then_block)
 emit_println("big")
 builder.branch(merge_block)
 
-# Else block
 builder.position_at_end(else_block)
 emit_println("small")
 builder.branch(merge_block)
 
-# Merge
 builder.position_at_end(merge_block)
 ```
 
-### While Loop
+When every arm returns, `close_merge_block` leaves no merge block.
+
+### Loops
 
 **File:** `backend/statements/loops.py`
 
@@ -391,138 +357,77 @@ loop_end = func.append_basic_block('while.end')
 
 builder.branch(loop_cond)
 
-# Condition
 builder.position_at_end(loop_cond)
-x_val = builder.load(x_ptr)
-cond = builder.icmp_signed('>', x_val, zero)
+cond = builder.icmp_signed('>', builder.load(x_slot), zero)
 builder.cbranch(cond, loop_body, loop_end)
 
-# Body
 builder.position_at_end(loop_body)
-x_val = builder.load(x_ptr)
-new_val = builder.sub(x_val, one)
-builder.store(new_val, x_ptr)
+builder.store(builder.sub(builder.load(x_slot), one), x_slot)
 builder.branch(loop_cond)
 
-# End
 builder.position_at_end(loop_end)
 ```
 
-### Pattern Matching
+`loop_frame` is the one frame of a loop: it pushes the loop entry and the scope, runs the
+exit actions, pops them, and emits the back edge. A `foreach` over a protocol iterator
+destroys the iterator on every exit path.
+
+### Pattern matching
 
 **File:** `backend/statements/matching.py`
 
 ```python
 # match status:
-#     Status.Idle() -> ...
+#     Status.Idle -> ...
 #     Status.Running(task_id) -> ...
 
-# 1. Load discriminant tag
-tag_ptr = builder.gep(status_ptr, [zero, zero])
-tag = builder.load(tag_ptr)
-
-# 2. Switch on tag
+tag = extract_enum_tag(codegen, status_value)       # field 0
 switch = builder.switch(tag, default_block)
-
-# 3. Case for Idle (tag = 0)
-idle_block = func.append_basic_block('match.idle')
 switch.add_case(ir.Constant(ir.IntType(32), 0), idle_block)
-
-builder.position_at_end(idle_block)
-# Emit idle case body
-builder.branch(merge_block)
-
-# 4. Case for Running (tag = 1)
-running_block = func.append_basic_block('match.running')
 switch.add_case(ir.Constant(ir.IntType(32), 1), running_block)
 
 builder.position_at_end(running_block)
-# Extract task_id from variant data
-data_ptr = builder.gep(status_ptr, [zero, one])
-task_id = builder.load(builder.bitcast(data_ptr, ir.IntType(32).as_pointer()))
-# Emit running case body
+# read task_id at its offset in the data buffer (payload_field_offsets), bind it, emit the arm
 builder.branch(merge_block)
-
-builder.position_at_end(merge_block)
 ```
 
-## Memory Management
+`emit_match` reads the scrutinee type from the stamp of the `typecheck` pass alone
+(CE0121 when the stamp is missing). An integer match switches on the value itself.
 
-### MemoryManager
+## Memory management
 
-**File:** `backend/expressions/memory.py`
+### Ownership transfers
 
-Handles RAII (automatic cleanup) for dynamic resources.
+`backend/ownership.py` is the one way to give a value to a new owner: `consume`, `bind`
+and `relinquish`. `copy_out` is the one deep-clone entry. A consuming use with no
+decision is a fatal CE0129; there is no fallback. `drops_of(codegen)` gives the set of
+types that implement `Drop`.
 
-**Key method:** `emit_value_destructor(value, type_)`
+### Destruction
 
-**Dispatch by type:**
+**Files:** `backend/destructors.py`, `backend/lifecycle.py`
 
-```python
-def emit_value_destructor(self, value, type_):
-    if is_primitive(type_):
-        return  # No-op
-    elif type_ == 'string':
-        return  # No-op (immutable)
-    elif is_dynamic_array(type_):
-        self.destroy_array(value, type_)
-    elif is_struct(type_):
-        self.destroy_struct(value, type_)
-    elif is_enum(type_):
-        self.destroy_enum(value, type_)
-    elif is_own(type_):
-        self.destroy_own(value, type_)
-```
+`emit_value_destructor(codegen, value_ptr, value_type)` destroys a value of any type. It
+reads the ambient `codegen.builder`.
 
-**Array destruction:**
-```python
-def destroy_array(self, arr_ptr, elem_type):
-    # 1. Load data pointer, length
-    data_ptr = builder.load(builder.gep(arr_ptr, [zero, zero]))
-    length = builder.load(builder.gep(arr_ptr, [zero, one]))
+| Type | What the destructor does |
+|---|---|
+| primitive | nothing |
+| `string` | `if owned: free(data)`, from the owned byte of the fat pointer (a literal has owned = 0) |
+| dynamic array | destroys each element that needs it, then frees the buffer |
+| fixed array | destroys each element that needs it |
+| struct | calls the type's own `drop()` FIRST when the type implements `Drop` (`emit_declared_drop`), then destroys each owning field; the struct itself is not freed |
+| enum | switches on the tag and destroys the payload of the live variant |
+| `List@(T)`, `HashMap@(K, V)`, `Own@(T)` | destroys the elements, the entries or the payload, then frees the storage |
+| function value | calls `drop_ptr(env_ptr)` when `drop_ptr` is not null |
 
-    # 2. Destroy each element (if needed)
-    if needs_destruction(elem_type):
-        loop_destroy_elements(data_ptr, length, elem_type)
+`needs_cleanup(codegen, type)` is the ONE backend predicate for "does this value own
+something to release". `backend/lifecycle.py` holds the clone and destroy handler of each
+type kind as a pair, because a deep clone must copy exactly the heap that the destructor
+frees. A self-referential type gets an out-of-line destroy body (`linkonce_odr`), so the
+cleanup ends by recursion at run time.
 
-    # 3. Free buffer
-    builder.call(free_fn, [data_ptr])
-```
-
-**Struct destruction:**
-```python
-def destroy_struct(self, struct_ptr, struct_type):
-    # Destroy each field recursively
-    for i, field_type in enumerate(struct_fields):
-        field_ptr = builder.gep(struct_ptr, [zero, ir.Constant(ir.IntType(32), i)])
-        field_val = builder.load(field_ptr)
-        emit_value_destructor(field_val, field_type)
-```
-
-**Enum destruction:**
-```python
-def destroy_enum(self, enum_ptr, enum_type):
-    # 1. Load discriminant
-    tag_ptr = builder.gep(enum_ptr, [zero, zero])
-    tag = builder.load(tag_ptr)
-
-    # 2. Switch on tag
-    switch = builder.switch(tag, default_block)
-
-    # 3. For each variant, destroy variant-specific data
-    for variant_tag, variant_fields in enumerate(variants):
-        variant_block = func.append_basic_block(f'destroy.variant{variant_tag}')
-        switch.add_case(ir.Constant(ir.IntType(32), variant_tag), variant_block)
-
-        builder.position_at_end(variant_block)
-        # Extract and destroy variant data
-        data_ptr = builder.gep(enum_ptr, [zero, one])
-        for field_type in variant_fields:
-            emit_value_destructor(field_value, field_type)
-        builder.branch(merge_block)
-```
-
-### Scope-Based Cleanup
+### Scope-based cleanup
 
 `ScopeManager` (`backend/memory/scopes.py`) does all scope-exit cleanup in one walk.
 The walk goes through the names of a scope in reverse declaration order, and it sends
@@ -544,376 +449,123 @@ def _emit_scope_exit(self, depth):
   (through `statements/utils.py:emit_scope_cleanup`), the first scope of the loop for a
   `break` or a `continue`.
 
-## Runtime Support
+### Unit variables
 
-### String Operations
+A unit variable (`var`) is a global. The module of the declaring unit defines it with its
+initializer, and every other module declares it `external` with no initializer. A
+constant is an `internal`, read-only global in each module that reads it. See
+`docs/design/unit-storage.md`.
 
-**File:** `backend/runtime/strings.py`
+### Buffers and containers
 
-Implements string methods by emitting LLVM calls to libc or custom runtime functions.
+`emit_memcpy_bytes`, `emit_memmove_bytes` and `emit_grow_to_fit`
+(`backend/expressions/memory.py`) are the one route to an `llvm.mem*` intrinsic and to a
+buffer growth. `emit_container_walk` (`backend/generics/container_walk.py`) is the one
+counted walk over `data[0..count)`, and `emit_probe_loop`
+(`backend/generics/hashmap/probe.py`) is the one HashMap probe loop. A `Maybe` value is
+built only by `emit_maybe_some` and `emit_maybe_none` (`backend/generics/maybe.py`). The
+hash of one held value is `emit_value_hash` (`backend/types/value_hash.py`).
 
-```python
-# strlen
-len_fn = declare_libc_strlen(module)
-result = builder.call(len_fn, [string_ptr])
+## Runtime support
 
-# strcmp
-strcmp_fn = declare_libc_strcmp(module)
-cmp_result = builder.call(strcmp_fn, [str1, str2])
-is_equal = builder.icmp_signed('==', cmp_result, zero)
-```
-
-### String Interpolation
+### Printing
 
 **File:** `backend/runtime/formatting.py`
 
 ```sushi
-let i32 x = 42
-println("Answer: {x}")
+fn main() i32:
+    let i32 x = 42
+    println("Answer: {x}")
+    return Result.Ok(0)
 ```
 
-**Generated LLVM:**
-```python
-# 1. Format string (without interpolations)
-format_str = "Answer: %d\n"
+A print writes to the descriptor with `write(2)` through `emit_console_write`, the ONE
+route from a print statement to a descriptor; nothing goes through stdio buffers. A
+string value is written in place from its fat pointer. A scalar is formatted with
+`sprintf` into a buffer in the entry block, and the buffer is written. A `bool` prints as
+`true` or `false`.
 
-# 2. Call printf
-printf_fn = declare_libc_printf(module)
-builder.call(printf_fn, [format_str_ptr, x_value])
-```
-
-### Error Messages
+### Runtime errors
 
 **File:** `backend/runtime/errors.py`
 
-Runtime errors emit formatted messages:
+A runtime error prints `Runtime Error RExxxx: <message>` to stderr and exits. The
+registry text of each RExxxx code (`internals/errors/runtime.py`) is the format string.
 
-```python
-def emit_bounds_check(builder, index, length):
-    # if (index >= length) { error }
-    cond = builder.icmp_unsigned('>=', index, length)
-
-    error_block = func.append_basic_block('bounds.error')
-    continue_block = func.append_basic_block('bounds.ok')
-
-    builder.cbranch(cond, error_block, continue_block)
-
-    builder.position_at_end(error_block)
-    # fprintf(stderr, "Runtime error RE2020: Array bounds check failed (index %d, length %d)\n", index, length)
-    builder.call(fprintf, [stderr, error_msg, index, length])
-    builder.call(exit_fn, [ir.Constant(ir.IntType(32), 1)])
-    builder.unreachable()
-
-    builder.position_at_end(continue_block)
-```
-
-### Foreign Function Interface (FFI)
+### Foreign function interface (FFI)
 
 **Files:** `backend/runtime/externs/user_externs.py`,
-`backend/expressions/calls/dispatcher.py`, `backend/memory/scopes.py`.
+`backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py`,
+`backend/memory/scopes.py`.
 
-User-declared externals (`unsafe external "C"` blocks) are lowered after the
-built-in externs and before function bodies:
+- `declare_user_externs(codegen, external_table)` emits one `ir.Function` for each
+  foreign declaration, with `string` parameters as `i8*`, a `~` return as `void`, and
+  `ptr` as `i8*`. The results are on `codegen.external_funcs` and
+  `codegen.external_sigs`, keyed by `(namespace, name)`.
+- `_try_emit_external_call` is the first entry of `PRE_RECEIVER_HANDLERS`. It reads the
+  `external_ref` stamp of the `typecheck` pass and emits a direct call that gives back the
+  raw C value. A `string` argument is marshalled by `marshal_cstr`, through the seam
+  `emit_cstr_arg`. A `string` return is copied into an owned fat pointer by
+  `emit_cstr_to_owned_fat_pointer` (`backend/runtime/strings.py`).
+- Each marshalled `char*` goes on a list of its scope in `ScopeManager`. Scope exit frees
+  each pointer exactly once.
 
-- `declare_user_externs(codegen, external_table)` emits one `ir.Function` per
-  foreign declaration (dedup via `module.globals.get`), lowering `string` params
-  to `i8*`, a `~` return to `void`, and `ptr` (`ForeignPtrType`) to `i8*`. The
-  results are stored on `codegen.external_funcs` / `codegen.external_sigs` keyed
-  by `(namespace, name)`.
-- `dispatcher._try_emit_external_call` is the first branch of `emit_method_call`.
-  It keys off the `external_ref` annotation set by the type checker and emits a
-  direct `builder.call`, returning the **raw** C value. A `string` argument is
-  marshalled via `runtime.strings.emit_to_cstr` and a `string` return via
-  `emit_cstr_to_fat_pointer`.
-- **No-leak registry:** each marshalled `char*` is appended to a per-scope list
-  in `ScopeManager` (`register_cstr`). `ScopeManager.emit_exit_cleanup` frees
-  the lists of every open scope on an early-exit path (return, `??`) and removes
-  nothing; a normal `pop_scope` frees its own scope's list and removes it. Each pointer is freed exactly once via `get_free_func()`.
+`RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds the reserved built-in symbols
+and their signatures, for the `CE5001` clash check.
 
-The reserved built-in symbols and their canonical signatures live in
-`RESERVED_EXTERNS` (colocated with `runtime/core.py`), used by the collector for
-the `CE5001` clash check.
+## Optimization
 
-## Optimization Pipeline
+**File:** `backend/llvm_optimization.py`
 
-### Pass Management
+**Requirements:** llvmlite `>=0.45,<0.46` (`pyproject.toml`), with the new pass manager.
 
-**File:** `backend/codegen_llvm.py`
+`LLVMOptimizer.optimize(llmod, mode)` takes the `--opt` level as a string: `none`,
+`mem2reg` (the default), `O1`, `O2` or `O3`.
 
-**Requirements:** llvmlite 0.43.0+ (uses New Pass Manager API)
-
-The compiler uses LLVM's New Pass Manager for optimization, which provides better performance and more flexible pass composition than the legacy PassManager.
-
-```python
-def apply_optimizations(module, opt_level):
-    """
-    Apply LLVM optimization passes using New Pass Manager.
-
-    Args:
-        module: LLVM IR module
-        opt_level: Optimization level (0-3)
-    """
-    import llvmlite.binding as llvm
-
-    # Initialize LLVM
-    llvm.initialize()
-    llvm.initialize_native_target()
-    llvm.initialize_native_asmprinter()
-
-    # Create target machine for platform-specific optimizations
-    target = llvm.Target.from_default_triple()
-    target_machine = target.create_target_machine()
-
-    # Configure pipeline tuning options
-    pto = llvm.PipelineTuningOptions(
-        speed_level=opt_level,  # 0-3 for O0-O3
-        size_level=0            # 0 = no size optimization, 1 = optimize for size
-    )
-
-    # Create pass builder
-    pass_builder = llvm.PassBuilder(target_machine, pto)
-
-    # Create pass managers
-    module_pass_manager = llvm.create_module_pass_manager()
-    function_pass_manager = llvm.create_function_pass_manager()
-
-    # Populate pass managers based on optimization level
-    if opt_level == 0:
-        # No optimization
-        pass
-    elif opt_level == 1:
-        # Basic optimizations (O1)
-        pass_builder.populate_module_pass_manager(module_pass_manager)
-        pass_builder.populate_function_pass_manager(function_pass_manager)
-    elif opt_level == 2:
-        # Moderate optimizations (O2)
-        pass_builder.populate_module_pass_manager(module_pass_manager)
-        pass_builder.populate_function_pass_manager(function_pass_manager)
-    elif opt_level == 3:
-        # Aggressive optimizations (O3)
-        pass_builder.populate_module_pass_manager(module_pass_manager)
-        pass_builder.populate_function_pass_manager(function_pass_manager)
-
-    # Run optimization passes
-    llvm_module = llvm.parse_assembly(str(module))
-    function_pass_manager.run(llvm_module)
-    module_pass_manager.run(llvm_module)
-
-    return llvm_module
-```
-
-### Optimization Levels
-
-The compiler supports the following optimization levels:
-
-#### O0 (None)
-
-No optimization. Fastest compilation, largest code size, slowest execution.
-
-**Use case:** Development, debugging
-
-**Passes:** None
-
-#### O1 (Basic)
-
-Basic optimizations with minimal compilation time impact.
-
-**Use case:** Development with reasonable performance
-
-**Typical passes:**
-- Promote memory to register (mem2reg/SROA)
-- CFG simplification
-- Dead code elimination (DCE)
-- Instruction combining
-- Basic inlining (small functions only)
-
-#### O2 (Moderate)
-
-Moderate optimizations, good balance of compilation time and runtime performance.
-
-**Use case:** Production builds
-
-**Typical passes (includes all O1 passes plus):**
-- Sparse conditional constant propagation (SCCP)
-- Loop optimizations:
-  - Loop rotation
-  - Loop unswitch
-  - Loop-invariant code motion (LICM)
-- Global value numbering (GVN)
-- MemCpy optimization
-- Jump threading
-- Tail call elimination
-- Aggressive DCE
-
-**Configuration:**
-- `speed_level=2`
-- `size_level=0`
-- Loop vectorization: enabled
-- SLP vectorization: enabled
-
-#### O3 (Aggressive)
-
-Aggressive optimizations, longest compilation time, best runtime performance.
-
-**Use case:** Performance-critical production builds
-
-**Typical passes (includes all O2 passes plus):**
-- Aggressive inlining
-- Loop unrolling
-- Vectorization (both loop and SLP)
-- More aggressive constant propagation
-- Interprocedural optimizations
-
-**Configuration:**
-- `speed_level=3`
-- `size_level=0`
-- Loop vectorization: enabled
-- SLP vectorization: enabled
-- Inline threshold: increased
-
-### PipelineTuningOptions
-
-The `PipelineTuningOptions` class configures the optimization pipeline:
+- `none` runs no pass.
+- `mem2reg` runs SROA on each function, with `PipelineTuningOptions(speed_level=0)`.
+- `O1`, `O2` and `O3` read their row of the `_PIPELINES` table: a speed level, a tuple of
+  function passes and a tuple of module passes. The optimizer adds each pass explicitly
+  to a function pass manager and a module pass manager, runs the function passes on each
+  defined function, and then runs the module passes.
 
 ```python
-llvm.PipelineTuningOptions(
-    speed_level=2,      # 0-3: Higher = more aggressive optimization
-    size_level=0,       # 0-2: Higher = optimize for code size over speed
-    loop_interleaving=True,     # Enable loop interleaving
-    loop_vectorization=True,    # Enable loop vectorization
-    slp_vectorization=True,     # Enable superword-level parallelism vectorization
-    loop_unrolling=True,        # Enable loop unrolling
-    forget_scev_in_loop_unroll=True,  # Improved unroll analysis
-    licm_mssa_opt_cap=None,     # LICM optimization limit
-    licm_mssa_no_acc_for_promotion_cap=None,  # LICM promotion limit
-    call_graph_profile=False,   # Use call graph profiling (requires profile data)
-    merge_functions=False       # Merge identical functions (breaks debug info)
-)
+pto = llvm.PipelineTuningOptions(speed_level=pipeline.speed_level, size_level=0)
+pb = llvm.PassBuilder(tm, pto)
+
+fpm = llvm.create_new_function_pass_manager()
+for add_function_pass in pipeline.function_passes:
+    add_function_pass(fpm)
+mpm = llvm.create_new_module_pass_manager()
+for add_module_pass in pipeline.module_passes:
+    add_module_pass(mpm)
 ```
 
-### Pass Manager Architecture
+The passes of each level are listed in [Architecture](architecture.md#optimization-levels).
+No level adds an inliner or a vectorizer pass.
 
-The New Pass Manager uses a two-level architecture:
-
-1. **Module Pass Manager** - Operates on entire LLVM module
-   - Interprocedural optimizations
-   - Global analysis
-   - Function inlining decisions
-
-2. **Function Pass Manager** - Operates on individual functions
-   - Intraprocedural optimizations
-   - Local analysis
-   - Instruction-level transformations
-
-### Example: Custom Optimization Pipeline
-
-```python
-def apply_custom_optimizations(module):
-    """Apply custom optimization pipeline"""
-    import llvmlite.binding as llvm
-
-    llvm.initialize()
-    llvm.initialize_native_target()
-
-    target = llvm.Target.from_default_triple()
-    tm = target.create_target_machine()
-
-    # Create pass builder with custom tuning
-    pto = llvm.PipelineTuningOptions(
-        speed_level=2,
-        size_level=1,  # Balance speed and size
-        loop_vectorization=True,
-        slp_vectorization=False  # Disable SLP for smaller code
-    )
-
-    pb = llvm.PassBuilder(tm, pto)
-
-    # Create pass managers
-    mpm = llvm.create_module_pass_manager()
-    fpm = llvm.create_function_pass_manager()
-
-    # Populate with O2-level passes
-    pb.populate_module_pass_manager(mpm)
-    pb.populate_function_pass_manager(fpm)
-
-    # Parse and optimize
-    llvm_module = llvm.parse_assembly(str(module))
-    fpm.run(llvm_module)
-    mpm.run(llvm_module)
-
-    return llvm_module
-```
-
-### Vectorization
-
-The optimizer can automatically vectorize loops and arithmetic operations:
-
-**Loop Vectorization:**
-```sushi
-# Original code
-let i32[] arr = from([1, 2, 3, 4, 5, 6, 7, 8])
-foreach(i in range(0, 8)):
-    arr[i] = arr[i] * 2
-
-# Vectorized (4-wide SIMD on x86-64)
-# Processes 4 elements at once using SSE/AVX instructions
-```
-
-**SLP Vectorization (Superword-Level Parallelism):**
-```sushi
-# Original code
-let i32 a1 = x1 + y1
-let i32 a2 = x2 + y2
-let i32 a3 = x3 + y3
-let i32 a4 = x4 + y4
-
-# Vectorized (combined into single SIMD operation)
-# Uses packed addition instruction
-```
-
-### Debugging Optimization Issues
-
-View generated LLVM IR at different stages:
+To see the effect of a level, compare two dumps:
 
 ```bash
-# Unoptimized IR
-./sushic --dump-ll --opt=none program.sushi
-
-# Optimized IR (O2)
-./sushic --dump-ll --opt=O2 program.sushi
-
-# Compare optimization impact
-diff unoptimized.ll optimized.ll
-```
-
-View pass execution with LLVM debug output:
-
-```bash
-# Set LLVM debug environment variable
-export LLVM_DEBUG=1
-./sushic --opt=O2 program.sushi
+PYTHONHASHSEED=0 ./sushic --dump-ll --opt none program.sushi > unoptimized.ll
+PYTHONHASHSEED=0 ./sushic --dump-ll --opt O2 program.sushi > optimized.ll
 ```
 
 ## Linking
 
-### Clang Invocation
+**File:** `backend/driver.py`
 
-```python
-def link_executable(module, output_name, stdlib_modules):
-    # 1. Write LLVM IR to temp file
-    with open('temp.ll', 'w') as f:
-        f.write(str(module))
+- **Monolithic path.** `compile_multi_unit` builds one module. The stdlib bitcode is
+  parsed with `llvm.parse_bitcode` and linked in with `link_in`. The target machine emits
+  one object (`emit_object`), and `link_object_files` links it.
+- **Incremental path.** Each unit, each bitcode stdlib module and each binary library is
+  compiled to its own cached object (`compiler/cache.py`), and `link_object_files` links
+  all of them.
 
-    # 2. Collect stdlib .bc files
-    stdlib_files = [f'stdlib/dist/{mod}.bc' for mod in stdlib_modules]
-
-    # 3. Link with clang
-    cmd = ['clang', 'temp.ll'] + stdlib_files + ['-o', output_name]
-    subprocess.run(cmd, check=True)
-
-    # 4. Cleanup
-    os.remove('temp.ll')
-```
+The linker is `cc`. The command is `cc <objects> -o <output>`, with `-lm` on Linux. The stdlib linker is `StdlibLinker` (`backend/stdlib_linker.py`);
+`TwoPhaseLinker` (`backend/module_linker.py`) resolves a duplicate symbol by its source on
+the monolithic path. A library definition that a consumer can also hold is `weak_odr`
+(`backend/library_linkage.py`).
 
 ---
 
