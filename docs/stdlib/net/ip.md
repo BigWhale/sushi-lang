@@ -67,9 +67,10 @@ The questions an address answers about itself. Each answers a plain `bool`.
 
 `is_private` covers 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for IPv6.
 
-### `v4_loopback()`, `v4_any()`, `v6_loopback()`, `v6_any()`
+### `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK`, `V6_ANY`
 
-The four addresses worth having by name: `127.0.0.1`, `0.0.0.0`, `::1` and `::`.
+The four addresses worth having by name: `127.0.0.1`, `0.0.0.0`, `::1` and `::`. Each is
+a constant `IpAddr`, so it needs no `??`: `let IpAddr home = V4_LOOPBACK`.
 
 ## Limitations
 

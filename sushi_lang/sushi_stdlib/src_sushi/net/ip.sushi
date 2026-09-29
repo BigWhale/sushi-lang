@@ -29,37 +29,17 @@ public enum IpAddr:
     ##: An IPv6 address, as the high 64 bits and then the low 64 bits. :##
     V6(u64, u64)
 
-##:
-The IPv4 loopback, 127.0.0.1.
+##: The IPv4 loopback, 127.0.0.1. :##
+public const IpAddr V4_LOOPBACK = IpAddr.V4(0x7f00_0001)
 
-- Returns: The address 127.0.0.1.
-:##
-public fn v4_loopback() IpAddr:
-    return Result.Ok(IpAddr.V4(2_130_706_433))
+##: The IPv4 unspecified address, 0.0.0.0. :##
+public const IpAddr V4_ANY = IpAddr.V4(0)
 
-##:
-The IPv4 unspecified address, 0.0.0.0.
+##: The IPv6 loopback, ::1. :##
+public const IpAddr V6_LOOPBACK = IpAddr.V6(0, 1)
 
-- Returns: The address 0.0.0.0.
-:##
-public fn v4_any() IpAddr:
-    return Result.Ok(IpAddr.V4(0))
-
-##:
-The IPv6 loopback, ::1.
-
-- Returns: The address ::1.
-:##
-public fn v6_loopback() IpAddr:
-    return Result.Ok(IpAddr.V6(0, 1))
-
-##:
-The IPv6 unspecified address, ::.
-
-- Returns: The address ::.
-:##
-public fn v6_any() IpAddr:
-    return Result.Ok(IpAddr.V6(0, 0))
+##: The IPv6 unspecified address, ::. :##
+public const IpAddr V6_ANY = IpAddr.V6(0, 0)
 
 ##:
 Parses an address from its text, in either family.
