@@ -12,6 +12,7 @@ from llvmlite import ir
 
 from sushi_lang.backend.expressions.calls.utils import marshal_cstr
 from sushi_lang.backend.expressions.memory import own_temporary
+from sushi_lang.semantics.externs_manifest import ERRNO_LOCATION_SYMBOLS
 from sushi_lang.semantics.ffi_boundary import is_pointer_value, nullable_payload
 from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHODS, FOREIGN_PTR_WIDTHS
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, deref_type
@@ -168,3 +169,22 @@ def try_emit_foreign_ptr_method(codegen: 'LLVMCodegen', expr, receiver_value: ir
     if suffix == "ptr":
         return nullable_to_maybe(codegen, loaded, ForeignPtrType())
     return loaded
+
+
+def emit_errno(codegen: 'LLVMCodegen') -> ir.Value:
+    """`errno()` (#1087): call the platform's location function and load the `int`.
+
+    The location function is declared `i8* ()`, the lowering of the reserved extern
+    signature, so a user block that declares the same symbol shares the declaration.
+    """
+    from sushi_lang.backend.platform_detect import current_platform_name
+
+    name = ERRNO_LOCATION_SYMBOLS[current_platform_name()]
+    location = codegen.module.globals.get(name)
+    if not isinstance(location, ir.Function):
+        location = ir.Function(codegen.module,
+                               ir.FunctionType(ir.PointerType(codegen.i8), []), name=name)
+    builder = codegen.builder
+    raw = builder.call(location, [], name="errno_location")
+    slot = builder.bitcast(raw, ir.PointerType(codegen.i32))
+    return builder.load(slot, name="errno")

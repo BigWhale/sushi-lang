@@ -64,3 +64,17 @@ def intern_boundary_type(ty: Optional[Type], enums: Any) -> Optional[Type]:
         return ty
     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
     return ensure_maybe_type_in_table(enums, payload) or ty
+
+
+#: The built-in that reads the calling thread's `errno` (#1087). A declaration of the
+#: same name wins over it, as a declaration wins over every stdlib row.
+ERRNO_FUNCTION = "errno"
+
+
+def unit_declares_external_block(external_table: Any, unit_name: Optional[str]) -> bool:
+    """Does this unit declare an `unsafe external` block? The confinement of CE5009."""
+    if external_table is None:
+        return False
+    return any(sig.unit_name == unit_name
+               for decls in external_table.by_namespace.values()
+               for sig in decls.values())

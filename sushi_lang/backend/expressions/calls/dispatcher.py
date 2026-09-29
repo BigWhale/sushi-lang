@@ -10,7 +10,8 @@ from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
 from sushi_lang.backend.expressions.calls.foreign import (
-    marshal_argument, try_emit_foreign_ptr_method, unmarshal_return)
+    emit_errno, marshal_argument, try_emit_foreign_ptr_method, unmarshal_return)
+from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
@@ -61,6 +62,9 @@ def emit_function_call(codegen: 'LLVMCodegen', expr: Call, to_i1: bool) -> ir.Va
         stdlib_func = _check_stdlib_function_codegen(codegen, callee)
         if stdlib_func is not None:
             return _emit_stdlib_function(codegen, expr, callee, stdlib_func, to_i1)
+
+    if func_sig is None and callee == ERRNO_FUNCTION:
+        return emit_errno(codegen)
 
     llvm_fn = codegen.funcs.lookup(callee, codegen.emitting_unit, codegen.scope)
     if llvm_fn is None:

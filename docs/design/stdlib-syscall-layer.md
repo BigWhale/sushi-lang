@@ -92,6 +92,11 @@ generators turn that cause into the tag of a unit-variant error enum -- `FileErr
 single cause of a wrong variant. So every failure edge reads the tag FIRST, directly after
 the failed call, and keeps it; then it cleans up; then it builds the `Err`.
 
+The rule is the same for a wrapper written in Sushi over `errno()` (`docs/ffi.md`,
+"Reading `errno`"): `let i32 code = errno()` is the first statement on the failure edge.
+The built-in reads `errno` through the same two platform symbols as
+`declare_errno_location`.
+
 ### EINTR
 
 A `read` or a `write` that a signal interrupts before a byte moves answers -1 with `EINTR`,

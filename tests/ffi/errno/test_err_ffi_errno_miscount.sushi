@@ -1,0 +1,8 @@
+# `errno()` takes no argument (#1087).
+# EXPECT_ERROR_CODE: CE2009
+unsafe external "C" as libc because "probe":
+    fn getpid() i32 = "getpid"
+
+fn main() i32:
+    let i32 code = errno(1)
+    return Result.Ok(code)

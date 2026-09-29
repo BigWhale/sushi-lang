@@ -251,6 +251,48 @@ The boundary is sharp: **raw, exempt, namespaced foreign calls inside
 `unsafe external`; Result-clean, guarantee-upholding Sushi everywhere else.**
 That convention is load-bearing, not cosmetic.
 
+### Reading `errno`
+
+A failed libc call answers a sentinel (usually -1 or NULL) and leaves the cause in
+`errno`. The built-in `errno()` answers the calling thread's `errno` as an `i32`. The
+two platform symbols (`__error` on macOS, `__errno_location` on Linux) live in the
+compiler and never in Sushi source. A wrapper maps the number to an error variant:
+
+```sushi
+unsafe external "C" as libc because "removing a file":
+    fn unlink(string path) i32 = "unlink"
+
+enum RemoveError:
+    Missing
+    Other(i32)
+
+fn remove(string path) ~ | RemoveError:
+    if (libc.unlink(path) == -1):
+        let i32 code = errno()
+        if (code == 2):
+            return Result.Err(RemoveError.Missing)
+        return Result.Err(RemoveError.Other(code))
+    return Result.Ok(~)
+
+fn main() i32:
+    match remove("/no/such/file"):
+        Result.Ok(_) -> println("removed")
+        Result.Err(RemoveError.Missing) -> println("missing")
+        Result.Err(RemoveError.Other(code)) -> println("errno {code}")
+    return Result.Ok(0)
+```
+
+Three rules apply:
+
+- **Read it first.** Read `errno()` directly after the failed call and before any
+  `close`, `free` or other C call, because those can overwrite it
+  (`docs/design/stdlib-syscall-layer.md`, "The order of the calls").
+- **Only in the danger zone.** `errno()` is callable only in a unit that declares an
+  `unsafe external` block (`CE5014`), the confinement of `ptr` (`CE5009`). A unit's own
+  `fn errno` is an ordinary declaration and wins over the built-in.
+- **The numbers are per platform.** `ENOENT` is 2 on both platforms, but most errno
+  numbers differ between macOS and Linux. A wrapper reads them from `<sys/platform>`.
+
 A wrapper that restores RAII for a foreign handle looks like:
 
 ```sushi
@@ -421,6 +463,7 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | `CE5011` | error | A method outside the foreign-memory set is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
 | `RE2025` | runtime | A foreign return declared `string` or `ptr` was NULL. Declare it `Maybe@(string)` / `Maybe@(ptr)`. |
+| `CE5014` | error | `errno()` is called in a unit that declares no `unsafe external` block. |
 | `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |
 
 ## Linking: what can actually be resolved
@@ -466,8 +509,9 @@ default-linked C runtime surface.
 - Sushi stays **null-free**: no `null` literal. A pointer that C may answer NULL
   for is a `Maybe@(string)` or a `Maybe@(ptr)` at the boundary.
 - String marshalling is a per-call copy, freed at scope exit.
-- No errno/sentinel auto-mapping into `Result` (raw only). The `= "symbol"`
-  suffix reserves room for an optional future error-convention annotation.
+- No errno/sentinel auto-mapping into `Result`: an extern answers the raw value, and
+  a wrapper reads `errno()` and builds the error by hand. The `= "symbol"` suffix
+  reserves room for an optional future error-convention annotation.
 - No reverse FFI (exporting Sushi functions to C) and no callbacks into C.
 - Externals and foreign `ptr` cannot appear in a library public API (`CE5002`).
 - The namespace of an `unsafe external` block binds only in the unit that
