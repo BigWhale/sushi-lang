@@ -81,8 +81,8 @@ const i32[19] ZLIB_CLEN_ORDER = [
 ##:
 Why a compress or a decompress failed.
 
-Each payload holds the detail that a caller can report. `zlib_error_text` gives one
-stable line for each variant.
+Each payload holds the detail that a caller can report. `text()` gives one stable line
+for each variant.
 :##
 public enum ZError:
     ##: The input ended. The payload is the byte offset where it ended. :##
@@ -853,28 +853,17 @@ Gives one stable line of text for an error.
 
 The text does not include the payloads, so a caller can compare it.
 
-- Parameter e: The error.
 - Returns: The text.
 :##
-public fn zlib_error_text(ZError e) string:
-    match e:
-        ZError.Truncated(_) ->
-            return Result.Ok("truncated input")
-        ZError.BadBlockType(_) ->
-            return Result.Ok("reserved block type")
-        ZError.BadStoredLength(_, _) ->
-            return Result.Ok("stored block length does not match its complement")
-        ZError.BadCode() ->
-            return Result.Ok("incomplete or over-subscribed Huffman code")
-        ZError.BadDistance(_, _) ->
-            return Result.Ok("distance reaches before the start of the output")
-        ZError.BadSymbol(_) ->
-            return Result.Ok("bad length or distance symbol")
-        ZError.BadHeader(_) ->
-            return Result.Ok("bad zlib header")
-        ZError.BadChecksum(_, _) ->
-            return Result.Ok("checksum mismatch")
-        ZError.BadLevel(_) ->
-            return Result.Ok("compression level out of range")
-        ZError.DictNeeded() ->
-            return Result.Ok("preset dictionary is not supported")
+extend ZError text() string:
+    match self:
+        ZError.Truncated(_) -> return "truncated input"
+        ZError.BadBlockType(_) -> return "reserved block type"
+        ZError.BadStoredLength(_, _) -> return "stored block length does not match its complement"
+        ZError.BadCode() -> return "incomplete or over-subscribed Huffman code"
+        ZError.BadDistance(_, _) -> return "distance reaches before the start of the output"
+        ZError.BadSymbol(_) -> return "bad length or distance symbol"
+        ZError.BadHeader(_) -> return "bad zlib header"
+        ZError.BadChecksum(_, _) -> return "checksum mismatch"
+        ZError.BadLevel(_) -> return "compression level out of range"
+        ZError.DictNeeded() -> return "preset dictionary is not supported"

@@ -31,6 +31,9 @@ All notable changes to Sushi Lang will be documented in this file.
   port answered `-1`; it now answers `Maybe.None()`.
 - **`close_socket` moved to `<net/handle>`.** `<net/tcp>` and `<net/udp>` re-export it, so
   a program that imports either one reaches it as before; `<net/error>` no longer has it.
+- **Every public error enum of the Sushi-source stdlib has `text()`.** `ZError`,
+  `MpError` and `SlibError` now give one stable line through `e.text()`, as `UrlError`
+  did. `zlib_error_text(e)` is gone: write `e.text()`, with no `??`.
 
 ## [0.13.0] - 2026-09-29
 

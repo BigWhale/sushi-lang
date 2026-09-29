@@ -1,0 +1,19 @@
+# Every public error enum of the Sushi-source stdlib gives one stable line through a
+# text() method, as UrlError does. The line holds no payload, so a caller can compare it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "truncated input\nchecksum mismatch\ntruncated input\nstring is not UTF-8\nnot a .slib file (bad magic)\na section is truncated\nno scheme\n"
+use <compression/zlib>
+use <encoding/msgpack>
+use <toolchain/slib>
+use <net/url>
+
+fn main() i32:
+    println(ZError.Truncated(3).text())
+    println(ZError.BadChecksum(1, 2).text())
+    println(MpError.Truncated(0).text())
+    println(MpError.BadUtf8(4).text())
+    println(SlibError.BadMagic().text())
+    println(SlibError.Truncated(SlibSection.Source(), 8, 2).text())
+    println(UrlError.NoScheme.text())
+    return Result.Ok(0)

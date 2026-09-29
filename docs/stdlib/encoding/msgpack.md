@@ -47,6 +47,9 @@ public enum MpError:
     Trailing(i32)       # bytes remain after the root value
 ```
 
+`e.text()` gives one stable line for an `MpError`, with no payload, so a caller can
+compare it.
+
 A map is two parallel arrays, not a hash table: MessagePack keys are not limited to
 strings, and the wire order stays visible and deterministic.
 

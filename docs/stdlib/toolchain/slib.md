@@ -55,7 +55,8 @@ public struct SlibLibrary:
 ```
 
 Every function answers the one `SlibError`. The readers walk one header, so a damaged
-file gives the same fault from each of them.
+file gives the same fault from each of them. `e.text()` gives one stable line for a
+`SlibError`, with no payload, so a caller can compare it.
 
 ## Functions
 

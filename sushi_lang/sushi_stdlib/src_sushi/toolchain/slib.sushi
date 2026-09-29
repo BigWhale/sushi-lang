@@ -78,6 +78,23 @@ public enum SlibError:
     Invalid(string)
 
 ##:
+Gives one stable line of text for an error.
+
+The text does not include the payloads, so a caller can compare it.
+
+- Returns: The text.
+:##
+extend SlibError text() string:
+    match self:
+        SlibError.Io(_) -> return "the file cannot be read"
+        SlibError.BadMagic() -> return "not a .slib file (bad magic)"
+        SlibError.BadVersion(_) -> return "unsupported container version"
+        SlibError.Truncated(_, _, _) -> return "a section is truncated"
+        SlibError.TooLarge(_) -> return "the file is larger than 1 GiB"
+        SlibError.Decode(_) -> return "the metadata does not decode as MessagePack"
+        SlibError.Invalid(_) -> return "the metadata does not have the shape of a manifest"
+
+##:
 The byte lengths of the two payload sections after the metadata blob.
 
 A source library has no bitcode, and a binary library has no source.

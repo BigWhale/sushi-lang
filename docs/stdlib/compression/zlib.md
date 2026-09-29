@@ -3,7 +3,7 @@
 [← Back to Standard Library](../../standard-library.md)
 
 DEFLATE and the zlib container, written in Sushi: `zlib_compress`,
-`zlib_uncompress`, `deflate_raw`, `inflate_raw`, `adler32` and `zlib_error_text`.
+`zlib_uncompress`, `deflate_raw`, `inflate_raw`, `adler32`, and `ZError.text()`.
 Data this module writes is readable by any zlib, and data any zlib writes is
 readable here.
 
@@ -56,7 +56,7 @@ public enum ZError:
     DictNeeded()                # FDICT is set; a preset dictionary is not supported
 ```
 
-Every payload carries the detail a caller might want to report. `zlib_error_text` turns
+Every payload carries the detail a caller might want to report. `e.text()` turns
 any of them into one stable line, so a tool does not have to match every variant.
 
 ## Functions
@@ -148,7 +148,7 @@ fn main() i32:
 # 777324008
 ```
 
-### `zlib_error_text(ZError e) -> string | StdError`
+### `e.text() -> string` (on `ZError`)
 
 One stable line for any error. The text does not include the payload values, so it is safe
 to compare against.
@@ -164,7 +164,7 @@ fn decode(u8[] blob) i32:
             println("ok, {out.len()} bytes")
             return Result.Ok(0)
         Result.Err(e) ->
-            println("failed: {zlib_error_text(e)??}")
+            println("failed: {e.text()}")
             return Result.Ok(1)
 
 fn main() i32:
@@ -188,7 +188,7 @@ fn report(ZError e) ~:
         ZError.Truncated(at) ->
             println("input ended at byte {at}")
         _ ->
-            println("{zlib_error_text(e)??}")
+            println("{e.text()}")
     return Result.Ok(~)
 
 fn main() i32:

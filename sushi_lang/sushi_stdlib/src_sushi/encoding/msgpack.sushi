@@ -47,6 +47,20 @@ public enum MpError:
     ##: Bytes stay after the root value. The payload is the offset of the first one. :##
     Trailing(i32)
 
+##:
+Gives one stable line of text for an error.
+
+The text does not include the payloads, so a caller can compare it.
+
+- Returns: The text.
+:##
+extend MpError text() string:
+    match self:
+        MpError.Truncated(_) -> return "truncated input"
+        MpError.Unsupported(_) -> return "unsupported tag"
+        MpError.BadUtf8(_) -> return "string is not UTF-8"
+        MpError.Trailing(_) -> return "bytes after the root value"
+
 ##: The read position of the decoder in its buffer. :##
 struct MpCursor:
     ##: The index of the next byte to read. :##

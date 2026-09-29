@@ -11,7 +11,7 @@ fn show(u8[] blob) ~:
         Result.Ok(out) ->
             println("len={out.len()} adler={adler32(out)??}")
         Result.Err(e) ->
-            println("err={zlib_error_text(e)??}")
+            println("err={e.text()}")
     return Result.Ok(~)
 
 fn run_test() i32:

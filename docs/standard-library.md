@@ -260,7 +260,7 @@ fn greet() ~ | IoError:
 **zlib** - DEFLATE and the RFC 1950 container, written in Sushi (no C library, no FFI):
 - `zlib_compress(src, level)`, `zlib_uncompress(src)` - the container, with an Adler-32 trailer
 - `deflate_raw(src, level)`, `inflate_raw(src)` - a bare RFC 1951 stream
-- `adler32(data)`, `zlib_error_text(e)` - the checksum, and one stable line per error
+- `adler32(data)`, `e.text()` on a `ZError` - the checksum, and one stable line per error
 - The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
   only, so its ratio is short of a full encoder's
 
