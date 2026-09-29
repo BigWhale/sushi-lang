@@ -43,18 +43,13 @@ public enum FileMode:
     ReadB     WriteB     AppendB
 ```
 
-The mode `open()` takes. The `B` forms are the binary modes.
+The mode `open()` takes. POSIX does not separate text from binary, so each `B` form
+opens the file exactly as its plain twin does.
 
 ### `FileError`
 
-```sushi
-public enum FileError:
-    NotFound          PermissionDenied    AlreadyExists
-    IsDirectory       DiskFull            TooManyOpen
-    InvalidPath       IOError             Other
-```
-
-What the path utilities (`stat`, `walk`, `mkdir_all`, `remove_all`) and the `fd_*`
+The variants and the errno values each one covers are listed on [I/O errors](error.md).
+`FileError` is what the path utilities (`stat`, `walk`, `mkdir_all`, `remove_all`) and the `fd_*`
 primitives answer. A handle method answers `IoError` instead; `to_io()` converts inside
 the stdlib.
 
@@ -105,7 +100,7 @@ public struct FileStat:
 
 ## Functions
 
-### `stat(string path) -> Result@(FileStat, FileError)`
+### `stat(string path) FileStat | FileError`
 
 Read the metadata of a path into one `FileStat`. Each field is one `<io/files>` read, so the call costs one system call per field.
 
@@ -121,7 +116,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `walk(string path) -> Result@(string[], FileError)`
+### `walk(string path) string[] | FileError`
 
 Walk a directory tree and collect the regular files, as full joined paths. A directory symlink is not followed, so a loop cannot form. The order follows `read_dir` and is unspecified.
 
@@ -138,7 +133,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `mkdir_all(string path, i32 dir_mode) -> Result@(~, FileError)`
+### `mkdir_all(string path, i32 dir_mode) ~ | FileError`
 
 Create a directory and every missing parent. An existing directory on the way is kept; losing the creation race to another process counts as success.
 
@@ -153,7 +148,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `remove_all(string path) -> Result@(~, FileError)`
+### `remove_all(string path) ~ | FileError`
 
 Remove a path and, for a directory, everything under it. A missing path (ENOENT) is
 success: the goal state already holds. Any other failure to read the path is an error,
@@ -170,6 +165,32 @@ fn main() i32:
         Result.Ok(_) -> println("cache cleared")
         Result.Err(_) -> println("something is still in use")
 
+    return Result.Ok(0)
+```
+
+## Extension methods
+
+Two extension methods on the predefined enums are public, because an extension is as
+visible as its target type. The stdlib uses them to talk to the descriptor layer; a
+program needs them only when it calls an `fd_*` primitive itself.
+
+### `FileMode.intent() i32`
+
+The intent that [`fd_open`](files.md#the-descriptor-layer)
+takes: `0` read, `1` write, `2` append. A `B` form answers the same number as its plain
+twin.
+
+### `SeekFrom.whence() i32`
+
+The `whence` that `fd_seek` takes: `0` from the start, `1` from the current position, `2`
+from the end.
+
+```sushi
+use <io/fs>
+
+fn main() i32:
+    println("append is intent {FileMode.Append().intent()}")
+    println("the end is whence {SeekFrom.End().whence()}")
     return Result.Ok(0)
 ```
 

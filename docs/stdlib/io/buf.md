@@ -1,5 +1,7 @@
 # io/buf
 
+[← Back to Standard Library](../../standard-library.md)
+
 `BufReader@(R)` and `BufWriter@(W)`: one system call per WINDOW instead of one per line.
 Line ITERATION lives here too, and only here -- a `File` keeps no line loop, because an
 unbuffered handle yielding lines is one system call per line.
@@ -11,8 +13,8 @@ use <io/buf>
 ```
 
 The module is bundled Sushi source, merged as a compilation unit when imported. It
-re-exports [`<io/contracts>`](contracts.md), so `IoError` and the three perks come with
-it; a program that buffers a `File` imports `<io/fs>` too, for the `File` name.
+re-exports [`<io/contracts>`](contracts.md), so `IoError`, `SeekFrom`, the three perks and
+the generic function `read_all` come with it; a program that buffers a `File` imports `<io/fs>` too, for the `File` name.
 
 ## Overview
 
@@ -25,7 +27,7 @@ buffered handle and the plain one alike.
 | type | constructor | reads / writes | ends with |
 |---|---|---|---|
 | `BufReader@(R)` | `BufReader.new(nom src, i32 cap)` | `read_line`, `read`, `read_bytes`, `read_all`, `fill` | `lines`, `into_inner` |
-| `BufWriter@(W)` | `BufWriter.new(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush` | `finish`, `into_inner` |
+| `BufWriter@(W)` | `BufWriter.new(nom dst, i32 cap)` | `write`, `write_bytes`, `write_line`, `flush`, `drain_if_full` | `finish`, `into_inner` |
 | `Lines@(R)` | `r.lines()` | `next` | -- |
 
 Both constructors are statics named `new`, and both TAKE the handle: the buffer owns
@@ -57,7 +59,7 @@ fn main() i32:
 
 ## Reading
 
-### `read_line() -> Maybe@(string) | IoError`
+### `read_line() Maybe@(string) | IoError`
 
 One line, without its newline.
 
@@ -66,7 +68,7 @@ answer. A last line with no newline after it is still a line, and the `None` arr
 call after it. The line is copied out of the window in bulk, never a byte at a time, and a
 line longer than the window spans as many refills as it needs.
 
-### `read(i32 max) -> string | IoError` and `read_bytes(i32 max) -> u8[] | IoError`
+### `read(i32 max) string | IoError` and `read_bytes(i32 max) u8[] | IoError`
 
 What the window still has, up to `max`, refilling it if it is spent.
 
@@ -74,13 +76,13 @@ The answer never crosses a refill, so a short answer is not an end of input. An 
 is -- that is what lets a caller loop until the answer is empty. `read`'s bound counts
 BYTES, so a multi-byte character can be split across two calls.
 
-### `read_all() -> string | IoError`
+### `read_all() string | IoError`
 
 Everything left, held in memory at once. A large input wants `read_line()` in a loop. The
 method forwards to the generic [`read_all`](contracts.md#read_all) of `<io/contracts>`, so
 `r.read_all()` and `read_all(poke r)` give the same answer.
 
-### `fill() -> bool | IoError`
+### `fill() bool | IoError`
 
 Reads the next window, replacing the one held; answers whether any byte arrived. Every read
 above goes through it, so end of input is decided in one place and stays decided: once a
@@ -94,7 +96,7 @@ window takes it whole. Measured over a 512 MB file at an 8 KB window, that alloc
 about six percent of a refill from the page cache, and less from a disk or a socket. Why
 `read_bytes` returns an array rather than filling one is in [io/contracts](contracts.md).
 
-### `into_inner() -> R`
+### `into_inner() R`
 
 Hands the handle back and ends the reader. A later mention of the reader is refused while
 compiling.
@@ -102,7 +104,7 @@ compiling.
 Whatever was buffered and not read is DISCARDED, so the handle comes back positioned where
 the last refill left the kernel and not where the cursor was.
 
-### `lines() -> Lines@(R)`
+### `lines() Lines@(R)`
 
 Turns the reader into a line iterator, TAKING the reader. The iterator owns the reader and
 the reader owns the handle, so one drop closes the descriptor. A later mention of the
@@ -130,7 +132,7 @@ fn main() i32:
         Result.Err(_) -> return Result.Ok(1)
 ```
 
-### `Lines@(R).next() -> Maybe@(Result@(string, IoError))`
+### `Lines@(R).next() Maybe@(Result@(string, IoError))`
 
 The outer `Maybe` says whether the input has more; the inner `Result` says whether reading
 it worked. They are never the same answer: a blank line is `Some(Ok(""))` and the end is
@@ -165,19 +167,25 @@ fn main() i32:
 
 ## Writing
 
-### `write(string data)`, `write_bytes(u8[] data)`, `write_line(string data)`
+### `write(string data) ~ | IoError`, `write_bytes(u8[] data) ~ | IoError`, `write_line(string data) ~ | IoError`
 
 Bytes go into the buffer. Nothing is promised to have reached the handle when these return.
 
 `write_line` appends the newline into the same buffer, so a line costs no system call of its
-own. The buffer drains itself when it reaches `cap`.
+own. The buffer drains itself when it reaches `cap`, so a write can answer the `IoError` of
+that drain.
 
-### `flush() -> ~ | IoError`
+### `drain_if_full() ~ | IoError`
+
+Drains the buffer if it holds `cap` bytes or more, and does nothing otherwise. Every write
+goes through it. A caller rarely needs it; it is callable for the same reason as `fill()`.
+
+### `flush() ~ | IoError`
 
 Sends everything waiting, then flushes the handle under it. The repeatable checked drain:
 call it as often as you like, and it answers Ok when the buffer is already empty.
 
-### `finish() -> ~ | IoError`
+### `finish() ~ | IoError`
 
 Ends the writer, sending everything waiting first -- and it **consumes**. Nothing can forget
 to flush after `finish()`, because there is nothing left to forget with. The handle closes
@@ -203,7 +211,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `into_inner() -> W | IoError`
+### `into_inner() W | IoError`
 
 Sends everything waiting, then hands the handle back and ends the writer.
 
@@ -217,18 +225,12 @@ Forgetting `finish()` does not lose the bytes. It loses the answer to "did they 
 
 ## Both types implement their contract
 
-`BufReader@(R)` implements `Reader` and `BufWriter@(W)` implements `Writer`. This used to
-be refused: a buffered read MOVES the cursor, so its receiver had to be `poke self`, and
-a perk implementation must match its contract's receiver exactly (**CE4004**), while the
-contracts declared a read-only receiver -- which they could not widen, because the
-console handles were `File` CONSTANTS and a `poke self` method on a constant is
-**CE2400**.
-
-The ruling on #546 took both moves the mainstream answers agree on: every contract
-method takes `poke self` (Rust's `&mut self`, Go's pointer receiver), and the console
-handles became unit variables (`public var File stdout`, Go's `os.Stdout`), so
-`stdout.write(...)` kept its spelling. A generic over a contract now takes its handle
-`poke`:
+`BufReader@(R)` implements `Reader` and `BufWriter@(W)` implements `Writer`. A buffered
+read MOVES the cursor, so its receiver is `poke self`, and a perk implementation must match
+its contract's receiver exactly (**CE4004**). That works because every contract method
+takes `poke self`, and the console handles are unit variables (`public var File stdout`),
+so `stdout.write(...)` has an address to write through. A generic over a contract takes
+its handle `poke`:
 
 ```sushi
 use <io/fs>
@@ -255,7 +257,7 @@ fn main() i32:
 
 The extra verbs only a buffer can offer -- `read_line`, `read_all`, `lines`, `fill`,
 `write_line` -- stay concrete methods of the buffered type. A contract for that direction
-(Rust's `BufRead`) is a separate, later question.
+(Rust's `BufRead`) does not exist.
 
 ## Cost
 
