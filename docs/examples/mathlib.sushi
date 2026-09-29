@@ -1,34 +1,66 @@
-# mathlib.sushi - Example Library
-#
-# This is a sample library demonstrating how to create reusable code.
-# Compile with: ./sushic --lib mathlib.sushi -o mathlib.slib
-#
-# This generates a single .slib file containing bitcode and metadata.
+##:
+mathlib.sushi - an example library.
 
-# Public functions are accessible from other compilation units.
-# Only mark functions as public if they are part of your API.
+A sample library that shows how to make reusable code. Build it with:
 
-# Adds two integers.
+    ./sushic --lib --lib-version 1.0.0 mathlib.sushi -o mathlib.slib
+
+The default kind is a source library: the .slib carries the source text and the
+metadata, and the program that uses it compiles it. `--lib-info mathlib.slib --docs`
+prints these documentation blocks.
+:##
+
+# A public function is part of the API. Other units can call it.
+# A function without `public` is visible only in this library.
+
+##:
+Adds two integers.
+
+- Parameter a: The first addend.
+- Parameter b: The second addend.
+- Returns: The sum.
+:##
 public fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
-# Subtracts b from a.
+##:
+Subtracts b from a.
+
+- Parameter a: The value to subtract from.
+- Parameter b: The value to subtract.
+- Returns: The difference.
+:##
 public fn subtract(i32 a, i32 b) i32:
     return Result.Ok(a - b)
 
-# Multiplies two integers.
+##:
+Multiplies two integers.
+
+- Parameter a: The first factor.
+- Parameter b: The second factor.
+- Returns: The product.
+:##
 public fn multiply(i32 a, i32 b) i32:
     return Result.Ok(a * b)
 
-# Computes the factorial of n.
-# Returns 1 for n <= 1.
+##:
+Computes the factorial of n.
+
+- Parameter n: The number. A value of 1 or less gives 1.
+- Returns: The factorial of n.
+:##
 public fn factorial(i32 n) i32:
     if (n <= 1):
         return Result.Ok(1)
     let i32 prev = factorial(n - 1)??
     return Result.Ok(n * prev)
 
-# Computes the nth Fibonacci number.
+##:
+Computes the nth Fibonacci number.
+
+- Parameter n: The index in the sequence. A value of 0 or less gives 0.
+- Returns: The nth Fibonacci number.
+:##
 public fn fibonacci(i32 n) i32:
     if (n <= 0):
         return Result.Ok(0)
@@ -38,11 +70,20 @@ public fn fibonacci(i32 n) i32:
     let i32 b = fibonacci(n - 2)??
     return Result.Ok(a + b)
 
-# Internal helper - not accessible from outside.
-# Functions without 'public' are only visible within this library.
+##:
+An internal helper. It is not public, so only this library can call it.
+
+- Parameter x: The value to double.
+- Returns: Two times x.
+:##
 fn internal_helper(i32 x) i32:
     return Result.Ok(x * 2)
 
-# Public function that uses internal helper.
+##:
+Doubles a value with the internal helper.
+
+- Parameter x: The value to double.
+- Returns: Two times x.
+:##
 public fn double(i32 x) i32:
     return Result.Ok(internal_helper(x)??)

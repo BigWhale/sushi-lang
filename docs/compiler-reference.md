@@ -40,8 +40,13 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 
 | Option              | Description                                        |
 |---------------------|----------------------------------------------------|
+| `-h`, `--help`      | Print the usage text and exit                      |
+| `--version`         | Print the version banner and exit                  |
 | `-o NAME`           | Specify output executable name                     |
 | `--opt LEVEL`       | Set optimization level (none, mem2reg, O1, O2, O3) |
+| `--no-verify`       | Do not verify the LLVM IR before and after optimization |
+| `--keep-object`     | Keep the `.o` file after the link (add `--no-incremental` for a program of more than one unit) |
+| `--build-stdlib`    | Build the standard library bitcode again, from its generators |
 | `--lib`             | Compile to a library (`.slib`) instead of an executable |
 | `--lib-kind KIND`   | What the library ships: `source` (default), `binary`, `hybrid` |
 | `--lib-version X.Y.Z` | Version of the library being built                |
@@ -52,6 +57,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
 | `--warn-unused`     | Warn about a dead private declaration (CW1004) and an unused import (CW3006) |
 | `--traceback`       | Show full Python traceback on errors               |
+| `--dump-parse`      | Print the raw Lark parse tree                      |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
 | `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
@@ -280,7 +286,7 @@ Sushi provides a complete LLVM optimization pipeline with multiple levels.
 
 | Level         | Description              | Use Case                        | Compile Time |
 |---------------|--------------------------|---------------------------------|--------------|
-| `none` / `O0` | No optimization          | Debugging, development          | Fastest      |
+| `none`        | No optimization          | Debugging, development          | Fastest      |
 | `mem2reg`     | SROA only (default)      | Quick builds with SSA           | Very fast    |
 | `O1`          | Basic optimizations      | Fast compilation + improvements | Fast         |
 | `O2`          | Moderate optimizations   | **Recommended** for production  | Moderate     |
@@ -373,29 +379,16 @@ If no `--opt` flag is specified, `mem2reg` is used (basic SROA for SSA form).
 
 **Performance impact:** 100-300% faster than `none`, longest compile time.
 
-### Optimization Examples
+### Optimization Example
 
-**Example program impact:**
+At `O2` and `O3`, LLVM folds an expression whose operands are known at compile time:
 
 ```
-Level       IR Lines    Binary Size    Relative Speed
-none (O0)   278         34,016 bytes   1.0x (baseline)
-mem2reg     245         34,000 bytes   1.1x
-O1          220         33,980 bytes   1.3x
-O2          195         33,968 bytes   1.8x
-O3          181         33,960 bytes   2.2x
-```
-
-**Real optimizations observed:**
-
-```sushi
-# Source code
 let i32 x = 10
-let i32 y = (x + 5) * 2
-
-# After O2/O3 constant folding
-let i32 y = 30  # Computed at compile time
+let i32 y = (x + 5) * 2    # the optimized IR stores the constant 30
 ```
+
+Use `--write-ll` or `--dump-ll` (below) to compare the IR of your own program at each level.
 
 ### Viewing Optimized Code
 
@@ -456,6 +449,14 @@ Show complete Python stack trace on compiler errors:
 - Understanding internal errors
 - Debugging compiler itself
 
+### Dump the Parse Tree
+
+Print the raw Lark parse tree, before the AST is built:
+
+```bash
+./sushic --dump-parse program.sushi
+```
+
 ### Dump AST
 
 Print the abstract syntax tree:
@@ -465,9 +466,8 @@ Print the abstract syntax tree:
 ```
 
 **Output includes:**
-- Parsed AST structure
-- Type annotations
-- Scope information
+- The AST as the builder makes it, before the semantic analysis
+- The written types of declarations. A resolved type is not filled in yet (`resolved_type=None`)
 
 **When to use:**
 - Understanding parsing
@@ -522,12 +522,20 @@ Sushi uses structured error codes for diagnosing issues.
 
 ### Error Code Format
 
-- **CE0xxx**: Internal/function errors
+- **CE0xxx**: Internal errors, function and variadic errors
 - **CE1xxx**: Scope/variable errors
-- **CE2xxx**: Type/array/struct errors
-- **CE3xxx**: Unit management errors
+- **CE2xxx**: Type/array/struct errors, Result validation
+- **CE24xx**: Borrow and reference errors
+- **CE3xxx**: Units, libraries and `.slib` files
+- **CE4xxx**: Perks
+- **CE5xxx**: FFI and the `ptr` quarantine
+- **CE6xxx**: Syntax (the parser's own diagnostics)
+- **CE7xxx**: Documentation blocks
 - **CWxxxx**: Warnings
 - **RExxxx**: Runtime errors
+
+The text, the reason and the escape of each code are in `sushi_lang/internals/errors/`, one
+module for each family.
 
 ### Driver Diagnostics
 
@@ -566,7 +574,7 @@ fn main() i32:
 <!-- docs-sweep: error CE1002 -->
 ```sushi
 fn main() i32:
-    # ERROR CE1002: rebind to undeclared variable 'count'
+    # ERROR CE1002: assignment to undeclared variable 'count'
     count := 5
 
     return Result.Ok(0)
@@ -583,12 +591,17 @@ fn main() i32:
     arr.destroy()
 
     # ERROR CE2024: use of destroyed dynamic array 'arr'
+    # ERROR CE2406: use of destroyed variable 'arr'
     println(arr.len())
 
     return Result.Ok(0)
 ```
 
-**Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead.
+The one use gives two diagnostics: CE2024 from the array rule and CE2406 from the borrow
+checker.
+
+**Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead. After
+`.free()` the array is empty (its length is 0) and you can use it again.
 
 #### CE2009: .realise() Wrong Argument Count
 
@@ -640,7 +653,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # ERROR CE2505: cannot assign Result@(T) to non-Result variable without handling
+    # ERROR CE2505: cannot assign Result@(T, E) to non-Result variable without handling
     let i32 x = get_value()
 
     return Result.Ok(0)
@@ -655,26 +668,50 @@ fn main() i32:
 fn main() i32:
     let i32 x = 5
 
-    # ERROR CE2507: ?? can only be used with Result@(T) or Maybe@(T)
+    # ERROR CE2507: ?? operator requires Result@(T, E), Maybe@(T), or result-like enum
     let i32 y = x??
 
     return Result.Ok(0)
 ```
 
-**Fix:** Only use `??` with `Result@(T)` or `Maybe@(T)`.
+**Fix:** Only use `??` with `Result@(T, E)` or `Maybe@(T)`.
 
-#### CE2508: Using ?? Outside Result Function
+#### CE0131: Using ?? in a Bare Extension Method
 
+A bare extension method (one with no `| E` channel) returns its value directly. It has no
+error channel, so `??` cannot propagate an error out of it:
+
+<!-- docs-sweep: error CE0131 -->
 ```sushi
-extend i32 squared() i32:
-    # ERROR CE2508: ?? only works in Result-returning functions
-    let i32 x = might_fail()??
+fn might_fail() i32:
+    return Result.Ok(4)
 
-    return self * self
+extend i32 scaled() i32:
+    # ERROR CE0131: '??' operator not allowed in an extension method
+    let i32 x = might_fail()??
+    return self * x
+
+fn main() i32:
+    println(3.scaled())
+    return Result.Ok(0)
 ```
 
-**Fix:** Don't use `??` in extension methods (limitation). Extension methods return
-their value directly (bare `return`, no `Result.Ok(...)` wrapper).
+**Fix:** Give the method an error channel with `| E`. Then `??` is legal in the body, the
+call yields `Result@(T, E)`, and the body spells its success with `return Result.Ok(...)`
+(a bare `return value` in a channel method is CE2030):
+
+```sushi
+fn might_fail() i32:
+    return Result.Ok(4)
+
+extend i32 scaled() i32 | StdError:
+    let i32 x = might_fail()??
+    return Result.Ok(self * x)
+
+fn main() i32:
+    println(3.scaled().realise(0))
+    return Result.Ok(0)
+```
 
 #### CE3007: No main() Function
 
@@ -704,7 +741,7 @@ library it lives in was not linked.
 fn get_value() i32:
     return Result.Ok(42)
 
-# ERROR CE0108: Expression is not a compile-time constant
+# ERROR CE0108: expression is not a compile-time constant
 const i32 X = get_value()
 ```
 
@@ -713,7 +750,7 @@ const i32 X = get_value()
 #### CE0109: Circular Constant Dependency
 
 ```sushi
-# ERROR CE0109: Circular constant dependency detected: A -> B -> A
+# ERROR CE0109: circular constant dependency detected: B -> A -> B
 const i32 A = B + 1
 const i32 B = A + 1
 ```
@@ -723,7 +760,7 @@ const i32 B = A + 1
 #### CE0110: Unsupported Operation in Constant
 
 ```sushi
-# ERROR CE0110: Unsupported operation '&' in constant expression
+# ERROR CE0110: unsupported operation 'bitwise & on non-integer type' in constant expression
 const f64 INVALID = 3.14 & 2.0  # Bitwise AND on float
 ```
 
@@ -732,7 +769,7 @@ const f64 INVALID = 3.14 & 2.0  # Bitwise AND on float
 #### CE0111: Invalid Type Cast in Constant
 
 ```sushi
-# ERROR CE0111: Invalid type cast in constant expression from string to i32
+# ERROR CE0111: invalid type cast in constant expression from string to i32
 const i32 INVALID = "hello" as i32
 ```
 
@@ -745,12 +782,12 @@ constant and a body alike, so both spellings below are refused. A divisor the co
 cannot read is ordinary code and is left alone.
 
 ```sushi
-# ERROR CE0112: Division by zero
+# ERROR CE0112: division by zero
 const i32 INVALID = 100 / 0
 ```
 
 ```sushi
-# ERROR CE0112: Division by zero
+# ERROR CE0112: division by zero
 let i32 x = 100 / 0
 ```
 
@@ -765,7 +802,7 @@ fn get_value() i32:
     return Result.Ok(42)
 
 fn main() i32:
-    # WARNING CW2001: Unused Result@(i32) value
+    # WARNING CW2001: unused Result@(T) value
     get_value()
 
     return Result.Ok(0)
@@ -773,7 +810,7 @@ fn main() i32:
 
 **Fix:** Handle result or explicitly discard:
 ```sushi
-let Result@(i32) r = get_value()  # Store for later
+let Result@(i32, StdError) r = get_value()  # Store for later
 let i32 x = get_value().realise(0)  # Use immediately
 ```
 
@@ -803,7 +840,7 @@ Runtime Error RE2020: array index 10 out of bounds for array of size 3
 #### RE2021: Memory Allocation Failed
 
 ```
-Runtime error RE2021: Memory allocation failed (malloc returned null)
+Runtime Error RE2021: memory allocation failed
 ```
 
 Occurs when system runs out of memory during dynamic allocation.
@@ -831,7 +868,8 @@ fails, because a run that covered nothing must not report a pass.
 
 **Positive tests** (`test_*.sushi`):
 - Must compile successfully (exit code 0)
-- Executable may or may not run
+- The runner runs the executable when the fixture needs it, and checks every `EXPECT_*`
+  directive
 
 **Warning tests** (`test_warn_*.sushi`):
 - Must compile with warnings (exit code 1)
@@ -842,26 +880,33 @@ fails, because a run that covered nothing must not report a pass.
 
 ### Writing Tests
 
+A fixture lives in a feature directory, `tests/<area>/<feature>/`. Its directives are in
+the leading comment block. A positive test that prints must state its output with an
+`EXPECT_STDOUT_*` directive:
+
 ```sushi
-# tests/test_my_feature.sushi
+# tests/basic/my_feature/test_my_feature.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Test passed: 42\n"
 fn main() i32:
     let i32 x = 42
-    println("Test passed")
+    println("Test passed: {x}")
     return Result.Ok(0)
 ```
 
 ```bash
 # Run your test
-./sushic tests/test_my_feature.sushi
-./test_my_feature
+python tests/run_tests.py --filter basic/my_feature/
 ```
 
 ### Test Naming Conventions
 
-- `test_@(feature).sushi` - Positive test
-- `test_warn_@(feature).sushi` - Expected warning
-- `test_err_@(feature).sushi` - Expected error
-- `test_@(category)_@(specific).sushi` - Organized by category
+- `test_<feature>.sushi` - Positive test
+- `test_warn_<feature>.sushi` - Expected warning
+- `test_err_<feature>.sushi` - Expected error
+
+A file name must be unique across `tests/`, because the runner reports a fixture by its
+name.
 
 ---
 

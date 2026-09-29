@@ -14,11 +14,13 @@ Nori is the package manager for Sushi Lang. It handles packaging, installing, an
 - [Project Environments](#project-environments)
 - [Searching for Packages](#searching-for-packages)
 - [Managing Packages](#managing-packages)
+- [Publishing Packages](#publishing-packages)
 - [Compiler Integration](#compiler-integration)
 - [Package Directory Structure](#package-directory-structure)
 - [Archive Format](#archive-format)
 - [Workflow Example](#workflow-example)
 - [Command Reference](#command-reference)
+- [Errors and Exit Codes](#errors-and-exit-codes)
 - [Limitations](#limitations)
 
 ## Overview
@@ -31,6 +33,7 @@ Nori provides:
 - **Installation**: Extract and install packages to `~/.sushi/bento/`
 - **Discovery**: The compiler automatically finds libraries installed by Nori
 - **Management**: List, inspect, and remove installed packages
+- **Publishing**: Upload a package to the [Omakase](https://omakase.lubica.net) repository
 
 **Important**: Nori does not compile Sushi source code. Compile with `sushic` first, then use Nori to package and distribute the outputs.
 
@@ -198,7 +201,9 @@ Re-installing a package replaces the existing installation.
 
 ### Remote Sources
 
-Remote package installation (HTTP URLs, Omakase repository) is planned for a future release.
+Nori cannot install a package from a remote repository yet. `nori install <name>` with no
+`from <path>` stops with **NE3009** (`remote install from <repository> is not implemented
+yet`). Install from a local archive or directory instead.
 
 ## Project Environments
 
@@ -295,12 +300,26 @@ fast-math                      0.3.0        SIMD-accelerated math routines
 2 result(s) found.
 ```
 
-The search queries the Omakase API and returns matching packages by name and description. Results are sorted by relevance. Use pagination flags for large result sets:
+The search queries the Omakase API and returns matching packages by name and description.
+These options change the search:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--repository URL` | `omakase.lubica.net` | The repository to search |
+| `--namespace {stable,testing}` | `stable` | The namespace to search |
+| `--platform {darwin,linux,windows,any}` | none | Show only the packages for this platform |
+| `--sort {relevance,name,downloads,updated}` | `relevance` | The sort order |
+| `--page N` | `1` | The page of results |
+| `--per-page N` | `20` | The number of results on a page |
 
 ```bash
 nori search math --page 2
-nori search math --per-page 20
+nori search math --sort downloads --namespace testing
 ```
+
+The repository comes from `--repository`, then from the environment variable
+`SUSHI_REPOSITORY`, then from the default `omakase.lubica.net`. The same rule applies to
+`install`, `publish`, `login` and `status`.
 
 ## Managing Packages
 
@@ -358,6 +377,53 @@ Global removal removes:
 - The package directory from `~/.sushi/bento/`
 - Executable symlinks from `~/.sushi/bin/`
 - Cached archives from `~/.sushi/cache/`
+
+## Publishing Packages
+
+To publish a package to an Omakase repository, log in once, build the archive, and publish
+it from the package root.
+
+### Logging In
+
+```bash
+nori login
+```
+
+Nori reads the API key from the terminal (or from standard input), never from the command
+line, so the key does not go into the shell history. A key starts with `nori_`; another
+key is **NE5005**. Nori verifies the key with the repository and keeps it in
+`~/.sushi/credentials.toml` (mode `0600`), one key for each repository.
+
+### Checking the Login
+
+```bash
+nori status
+```
+
+This prints the repository, your user name and the packages that you published. When you
+are not logged in, it says so and tells you to run `nori login`.
+
+### Publishing
+
+```bash
+nori build
+nori publish
+```
+
+`nori publish` reads `./nori.toml` and uploads `dist/<name>-<version>.nori` with its
+manifest. The archive must exist (run `nori build` first, else **NE2007**), and you must be
+logged in (else **NE5003**).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--repository URL` | `omakase.lubica.net` | The repository to publish to |
+| `--namespace {stable,testing}` | `stable` | The namespace of the package |
+| `--platform {darwin,linux,windows,any}` | the current operating system (`darwin`, `linux`, else `any`) | The platform of the package |
+
+The repository can refuse a publish: a key that the repository refuses (invalid, expired or revoked) is **NE5004**, a package that another
+user owns is **NE5006**, a version that is already published is **NE5007**, an archive that
+is too large is **NE5008**, and a package that the repository does not accept is
+**NE5009**.
 
 ## Compiler Integration
 
@@ -455,9 +521,14 @@ tar tzf my-package-1.0.0.nori
 
 ## Workflow Example
 
-A complete workflow for creating and distributing a Sushi library:
+A complete workflow for creating and distributing a Sushi library, in a directory named
+`math-lib`:
 
 ```bash
+# 0. Make the package directory
+mkdir math-lib && cd math-lib
+mkdir build                  # sushic does not create the -o directory (CE3019)
+
 # 1. Write your library
 cat > mathlib.sushi << 'EOF'
 public fn add(i32 a, i32 b) i32:
@@ -470,9 +541,10 @@ EOF
 # 2. Compile to .slib (--lib-version, because there is no nori.toml yet)
 ./sushic --lib --lib-version 1.0.0 mathlib.sushi -o build/mathlib.slib
 
-# 3. Create manifest
+# 3. Create manifest (the package name comes from the directory name, here math-lib)
 nori init
-# Edit nori.toml to add: libraries = ["build/mathlib.slib"]
+# Edit nori.toml: set version = "1.0.0" (nori init writes 0.1.0),
+# and add libraries = ["build/mathlib.slib"]
 
 # 4. Build the package
 nori build
@@ -493,6 +565,7 @@ nori info math-lib
 | Command | Description |
 |---------|-------------|
 | `nori --version` | Show version information |
+| `nori help` | Show the usage text |
 | `nori init` | Create a template `nori.toml` in the current directory |
 | `nori build` | Build a `.nori` archive from the current directory's manifest |
 | `nori install` | Restore all dependencies listed in `nori.toml` (project context) |
@@ -507,18 +580,42 @@ nori info math-lib
 | `nori info <name>` | Show details about an installed package |
 | `nori remove <name>` | Remove package from project and update `nori.toml` |
 | `nori remove --global <name>` | Remove globally installed package |
+| `nori publish` | Publish `dist/<name>-<version>.nori` to a repository |
+| `nori login` | Store an API key for a repository |
+| `nori status` | Show the login and the published packages |
+
+`install`, `search`, `publish`, `login` and `status` take `--repository URL`. `search` and
+`publish` also take `--namespace` and `--platform`; see [Searching for
+Packages](#searching-for-packages) and [Publishing Packages](#publishing-packages).
+
+These global options come before the command:
+
+| Option | Description |
+|--------|-------------|
+| `--color {auto,always,never}` | When to use ANSI colour. `auto` (the default) reads `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and whether the stream is a terminal, with the same rules as `sushic` |
+| `--traceback` | Append the Python traceback to an error (for debugging) |
+
+## Errors and Exit Codes
+
+A nori error has a code in the **NExxxx** family and names the file that it is about. The
+ranges are: NE00xx internal, NE10xx the manifest, NE20xx the archive, NE30xx the installed
+packages, NE40xx the operating system, NE50xx the package repository. The text of each code
+is in `sushi_lang/internals/errors/nori.py`.
+
+nori exits 0 on success, 1 for a user fault (an NExxxx error), and 2 for an internal error
+(**NE0000**).
 
 ## Limitations
 
 1. **No build step**: Nori does not compile Sushi source. Use `sushic` to compile first.
-2. **Local sources only**: Remote installation via `nori install` (HTTP, Omakase) is not yet available. Use `nori search` to find packages, then install from local archives.
+2. **Local sources only**: `nori install` cannot install from a remote repository (NE3009). Use `nori search` to find packages, then install from local archives.
 3. **No version constraint syntax**: `[dependencies]` records exact versions only; range specifiers (`^1.0`, `>=0.2`) are not supported.
-4. **Platform-specific**: `.slib` files are not portable across platforms (same as the compiler).
+4. **Platform-specific binary libraries**: a `binary` or `hybrid` `.slib` is bound to the platform that built it. The default `source` kind is portable.
 5. **No transitive dependency resolution**: If package A depends on package B, you must install both explicitly.
 
 ## See Also
 
 - [Libraries](libraries.md) - Creating and linking Sushi libraries
-- [Library Format](library-format.md) - `.slib` binary format specification
+- [Library Format](library-format.md) - `.slib` file format specification
 - [Compiler Reference](compiler-reference.md) - All compiler CLI options
 - [Getting Started](getting-started.md) - Introduction to Sushi

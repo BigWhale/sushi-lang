@@ -9,7 +9,11 @@
 # - Defining extension methods with the extend keyword
 # - Adding methods to primitive types (i32, string)
 # - Using self to refer to the instance
-# - Extension methods return bare types (not Result@(T))
+# - A bare extension method returns its value directly (not a Result@(T, E))
+# - An optional error channel `| E` makes the call yield Result@(T, E); then the
+#   body returns Result.Ok(...) / Result.Err(...) and may use ??
+# - A static method (`extend T static name(...)`) has no receiver and is called
+#   on the type name: `T.name(...)`
 # - Zero-cost transformation: x.method(args) becomes method(x, args)
 # - Combining extension methods with pattern matching
 #
@@ -18,8 +22,9 @@
 #     <body>
 #     return <value>
 #
-# Note: Extension methods can be defined for primitives (i32, bool, string) and
-# user-defined types (structs, enums), but not for array types.
+# Note: Extension methods can be defined for primitives (i32, bool, string),
+# user-defined types (structs, enums), built-in generics (List@(T)), generic
+# targets, and array types (`extend T[]`, `extend i32[]`).
 
 use <collections/strings>
 

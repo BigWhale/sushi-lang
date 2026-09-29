@@ -12,7 +12,8 @@
 # - Exhaustive matching (all variants must be handled)
 # - Wildcard pattern (_) to ignore variant data
 #
-# Note: Enum variants use types only (no field names), similar to structs.
+# Note: An enum variant payload is a list of types only. Unlike a struct field,
+# a payload has no name.
 
 enum CrewStatus:
     Idle()
