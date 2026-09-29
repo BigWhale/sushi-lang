@@ -281,29 +281,27 @@ output. The copy can overlap the bytes that it writes.
 :##
 fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
                   peek ZHuff lencode, peek ZHuff distcode) ~ | ZError:
-    let i32 done = 0
-    while (done == 0):
+    while (true):
         let i32 sym = zhuff_decode(peek src, poke s, peek lencode)??
         if (sym < 256):
             out.push(sym as u8)
+        elif (sym == 256):
+            break
         else:
-            if (sym == 256):
-                done := 1
-            else:
-                let i32 li = sym - 257
-                if (li >= 29):
-                    return Result.Err(ZError.BadSymbol(sym))
-                let i32 lx = zbits_get(peek src, poke s, ZLIB_LEN_EXTRA[li])?? as i32
-                let i32 length = ZLIB_LEN_BASE[li] + lx
-                let i32 dsym = zhuff_decode(peek src, poke s, peek distcode)??
-                if (dsym >= 30):
-                    return Result.Err(ZError.BadSymbol(dsym))
-                let i32 dx = zbits_get(peek src, poke s, ZLIB_DIST_EXTRA[dsym])?? as i32
-                let i32 dist = ZLIB_DIST_BASE[dsym] + dx
-                if (dist > out.len()):
-                    return Result.Err(ZError.BadDistance(dist, out.len()))
-                foreach(_ in 0..length):
-                    out.push(out[out.len() - dist])
+            let i32 li = sym - 257
+            if (li >= 29):
+                return Result.Err(ZError.BadSymbol(sym))
+            let i32 lx = zbits_get(peek src, poke s, ZLIB_LEN_EXTRA[li])?? as i32
+            let i32 length = ZLIB_LEN_BASE[li] + lx
+            let i32 dsym = zhuff_decode(peek src, poke s, peek distcode)??
+            if (dsym >= 30):
+                return Result.Err(ZError.BadSymbol(dsym))
+            let i32 dx = zbits_get(peek src, poke s, ZLIB_DIST_EXTRA[dsym])?? as i32
+            let i32 dist = ZLIB_DIST_BASE[dsym] + dx
+            if (dist > out.len()):
+                return Result.Err(ZError.BadDistance(dist, out.len()))
+            foreach(_ in 0..length):
+                out.push(out[out.len() - dist])
     return Result.Ok(~)
 
 ##:
@@ -604,15 +602,13 @@ empty final block.
 fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
     let i32 n = src.len()
     let i32 pos = 0
-    let i32 done = 0
-    while (done == 0):
+    while (true):
         let i32 chunk = n - pos
         if (chunk > 65535):
             chunk := 65535
         let i32 last = 0
         if ((pos + chunk) >= n):
             last := 1
-            done := 1
         # BFINAL in bit 0, BTYPE 00 in bits 1 and 2, the rest padding
         out.push(last as u8)
         out.push((chunk & 255) as u8)
@@ -622,6 +618,8 @@ fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
         out.push(((nlen >> 8) & 255) as u8)
         out.extend_range(src, pos, chunk)
         pos := pos + chunk
+        if (last == 1):
+            break
     return Result.Ok(~)
 
 ##:
@@ -797,9 +795,8 @@ The function reads stored, fixed and dynamic blocks, up to the final block.
 public fn inflate_raw(u8[] src) u8[] | ZError:
     let u8[] out = from([])
     let ZBits s = ZBits(0, 0, 0)
-    let i32 last = 0
-    while (last == 0):
-        last := zbits_get(peek src, poke s, 1)?? as i32
+    while (true):
+        let i32 last = zbits_get(peek src, poke s, 1)?? as i32
         let i32 btype = zbits_get(peek src, poke s, 2)?? as i32
         match btype:
             0 ->
@@ -810,6 +807,8 @@ public fn inflate_raw(u8[] src) u8[] | ZError:
                 zinflate_dynamic(peek src, poke s, poke out)??
             _ ->
                 return Result.Err(ZError.BadBlockType(btype))
+        if (last == 1):
+            break
     return Result.Ok(out)
 
 ##:

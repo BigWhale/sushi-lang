@@ -150,26 +150,24 @@ and a line longer than the window spans as many refills as it needs.
 extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
     let u8[] line = from([])
     let bool saw_any = false
-    let bool done = false
-    while (not done):
+    while (true):
         if (self.pos >= self.window.len()):
             if (not self.fill()??):
-                done := true
-        if (not done):
-            let i32 stop = self.window.len()
-            let i32 at = -1
-            foreach(i in self.pos..stop):
-                if (self.window[i] == 10):
-                    at := i
-                    break
-            saw_any := true
-            if (at < 0):
-                line.extend_range(self.window, self.pos, stop - self.pos)
-                self.pos := stop
-            else:
-                line.extend_range(self.window, self.pos, at - self.pos)
-                self.pos := at + 1
-                done := true
+                break
+        let i32 stop = self.window.len()
+        let i32 at = -1
+        foreach(i in self.pos..stop):
+            if (self.window[i] == 10):
+                at := i
+                break
+        saw_any := true
+        if (at < 0):
+            line.extend_range(self.window, self.pos, stop - self.pos)
+            self.pos := stop
+        else:
+            line.extend_range(self.window, self.pos, at - self.pos)
+            self.pos := at + 1
+            break
     if (not saw_any):
         let Maybe@(string) ended = Maybe.None()
         return Result.Ok(ended)

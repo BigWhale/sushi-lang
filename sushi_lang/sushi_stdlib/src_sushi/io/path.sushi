@@ -102,11 +102,10 @@ public fn normalize(string path) string:
     foreach(part in parts.iter()):
         if (part.is_empty() or part == "."):
             ~
+        elif (part == ".."):
+            pop_or_keep_dotdot(poke kept, rooted)
         else:
-            if (part == ".."):
-                pop_or_keep_dotdot(poke kept, rooted)
-            else:
-                kept.push(part.clone())
+            kept.push(part.clone())
 
     let string body = rebuild(kept)??
     if (rooted):

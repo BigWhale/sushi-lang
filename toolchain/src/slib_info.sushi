@@ -1567,20 +1567,19 @@ fn run_tool(peek string[] args) i32:
             return Result.Ok(0)
         if (a == "--docs"):
             show_docs := true
+        elif (a.starts_with("--color=")):
+            colour := a.s(8, a.len())
+            if (colour != "always" and colour != "never" and colour != "auto"):
+                print_usage_error("--color takes always, never or auto: {a}")??
+                return Result.Ok(2)
+        elif (a.starts_with("-")):
+            print_usage_error("unknown option: {a}")??
+            return Result.Ok(2)
         else:
-            if (a.starts_with("--color=")):
-                colour := a.s(8, a.len())
-                if (colour != "always" and colour != "never" and colour != "auto"):
-                    print_usage_error("--color takes always, never or auto: {a}")??
-                    return Result.Ok(2)
-            else:
-                if (a.starts_with("-")):
-                    print_usage_error("unknown option: {a}")??
-                    return Result.Ok(2)
-                if (path != ""):
-                    print_usage_error("more than one file named: {a}")??
-                    return Result.Ok(2)
-                path := a.clone()
+            if (path != ""):
+                print_usage_error("more than one file named: {a}")??
+                return Result.Ok(2)
+            path := a.clone()
         i := i + 1
 
     if (path == ""):
