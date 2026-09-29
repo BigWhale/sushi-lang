@@ -2,7 +2,7 @@
 
 [← Back to Standard Library](../standard-library.md)
 
-High-precision sleep functions using POSIX `nanosleep()`.
+Sleep functions that use POSIX `nanosleep()`, and two clock reads.
 
 ## Import
 
@@ -22,11 +22,14 @@ The time module provides sleep functions with various granularities and two cloc
 - `now()` - Read the unix clock, in seconds
 - `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-The sleep functions return `Result@(i32)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64)`.
+The sleep functions return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64, StdError)`.
+
+A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
+examples use `match` or `.realise(...)` in `main`, because `??` in `main` is CW2511.
 
 ## Functions
 
-### `sleep(i64 seconds) -> Result@(i32)`
+### `sleep(i64 seconds) -> Result@(i32, StdError)`
 
 Sleep for N seconds.
 
@@ -35,8 +38,9 @@ use <time>
 
 fn main() i32:
     println("Waiting 1 second...")
-    let i32 result = sleep(1 as i64)??
-    println("Done!")
+    match sleep(1):
+        Result.Ok(_) -> println("Done!")
+        Result.Err(_) -> println("Sleep failed")
 
     return Result.Ok(0)
 ```
@@ -44,12 +48,12 @@ fn main() i32:
 **Parameters:**
 - `seconds` - Number of seconds to sleep
 
-**Returns:** `Result@(i32)`
+**Returns:** `Result@(i32, StdError)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 - `Result.Err(StdError.Error)` if the duration is not valid
 
-### `msleep(i64 milliseconds) -> Result@(i32)`
+### `msleep(i64 milliseconds) -> Result@(i32, StdError)`
 
 Sleep for N milliseconds.
 
@@ -58,8 +62,9 @@ use <time>
 
 fn main() i32:
     println("Waiting 500ms...")
-    let i32 result = msleep(500 as i64)??
-    println("Done!")
+    match msleep(500):
+        Result.Ok(_) -> println("Done!")
+        Result.Err(_) -> println("Sleep failed")
 
     return Result.Ok(0)
 ```
@@ -67,12 +72,12 @@ fn main() i32:
 **Parameters:**
 - `milliseconds` - Number of milliseconds to sleep
 
-**Returns:** `Result@(i32)`
+**Returns:** `Result@(i32, StdError)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 - `Result.Err(StdError.Error)` if the duration is not valid
 
-### `usleep(i64 microseconds) -> Result@(i32)`
+### `usleep(i64 microseconds) -> Result@(i32, StdError)`
 
 Sleep for N microseconds.
 
@@ -80,9 +85,10 @@ Sleep for N microseconds.
 use <time>
 
 fn main() i32:
-    println("Waiting 1000μs...")
-    let i32 result = usleep(1000 as i64)??
-    println("Done!")
+    println("Waiting 1000 microseconds...")
+    match usleep(1000):
+        Result.Ok(_) -> println("Done!")
+        Result.Err(_) -> println("Sleep failed")
 
     return Result.Ok(0)
 ```
@@ -90,12 +96,12 @@ fn main() i32:
 **Parameters:**
 - `microseconds` - Number of microseconds to sleep
 
-**Returns:** `Result@(i32)`
+**Returns:** `Result@(i32, StdError)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 - `Result.Err(StdError.Error)` if the duration is not valid
 
-### `nanosleep(i64 seconds, i64 nanoseconds) -> Result@(i32)`
+### `nanosleep(i64 seconds, i64 nanoseconds) -> Result@(i32, StdError)`
 
 Sleep with nanosecond precision.
 
@@ -104,8 +110,9 @@ use <time>
 
 fn main() i32:
     # Sleep for 1.5 seconds
-    let i32 result = nanosleep(1 as i64, 500000000 as i64)??
-    println("Done!")
+    match nanosleep(1, 500000000):
+        Result.Ok(_) -> println("Done!")
+        Result.Err(_) -> println("Sleep failed")
 
     return Result.Ok(0)
 ```
@@ -114,12 +121,12 @@ fn main() i32:
 - `seconds` - Number of seconds to sleep
 - `nanoseconds` - Additional nanoseconds (0-999,999,999)
 
-**Returns:** `Result@(i32)`
+**Returns:** `Result@(i32, StdError)`
 - `0` on success
 - Remaining microseconds if interrupted by signal
 - `Result.Err(StdError.Error)` if the duration is not valid
 
-### `now() -> Result@(i64)`
+### `now() -> Result@(i64, StdError)`
 
 Read the wall clock as unix time: whole seconds since 1970-01-01 00:00:00 UTC.
 
@@ -136,7 +143,7 @@ fn main() i32:
 - The wall clock can jump (NTP adjustment, manual change). Do not measure durations with it; use `monotonic_ns()`.
 - The value is UTC. Civil date conversion is a separate concern.
 
-### `monotonic_ns() -> Result@(i64)`
+### `monotonic_ns() -> Result@(i64, StdError)`
 
 Read the monotonic clock, in nanoseconds. The clock never goes backward and is independent of the wall clock. Only the difference between two reads has meaning; the zero point is unspecified (boot time on most systems).
 
@@ -145,7 +152,7 @@ use <time>
 
 fn main() i32:
     let i64 start = monotonic_ns().realise(0)
-    msleep(50 as i64).realise(0)
+    msleep(50).realise(0)
     let i64 elapsed_ms = (monotonic_ns().realise(0) - start) / 1_000_000
     println("slept for about {elapsed_ms} ms")
     return Result.Ok(0)
@@ -173,12 +180,14 @@ All sleep functions can be interrupted by signals (e.g., SIGINT from Ctrl+C). Wh
 - Use pattern matching or `??` operator to handle interruption
 
 ```sushi
-match msleep(1000 as i64):
+use <time>
+
+match msleep(1000):
     Result.Ok(remaining) ->
         if (remaining == 0):
             println("Completed full sleep")
         else:
-            println("Interrupted with {remaining}μs remaining")
+            println("Interrupted with {remaining} microseconds remaining")
     Result.Err(_) ->
         println("Sleep failed")
 ```
@@ -189,7 +198,6 @@ Uses POSIX `nanosleep()` system call:
 - Portable across Unix-like systems (macOS, Linux, BSD)
 - More precise than `sleep()` or `usleep()` from libc
 - Handles signal interruption correctly
-- 48-bit precision (sufficient for most use cases)
 
 ## Best Practices
 
@@ -203,11 +211,15 @@ Uses POSIX `nanosleep()` system call:
 
 ## Common Use Cases
 
+These fragments are the body of a function with the `StdError` channel, so `??` can
+propagate a failed sleep. `process_item`, `try_operation` and `render_frame` stand for
+your own functions.
+
 **Rate limiting:**
 ```sushi
 foreach(i in 0..100):
     process_item(i)
-    msleep(10 as i64)??  # 10ms delay between items
+    msleep(10)??  # 10ms delay between items
 ```
 
 **Retry with backoff:**
@@ -219,7 +231,7 @@ fn retry_operation() Result@(i32, StdError):
                 return Result.Ok(value)
             Result.Err(_) ->
                 println("Attempt {attempt} failed, retrying...")
-                msleep(1000 as i64)??  # 1 second backoff
+                msleep(1000)??  # 1 second backoff
     return Result.Err(StdError.Error)
 ```
 
@@ -227,7 +239,7 @@ fn retry_operation() Result@(i32, StdError):
 ```sushi
 foreach(frame in 0..60):
     render_frame(frame)
-    msleep(16 as i64)??  # ~60 FPS
+    msleep(16)??  # ~60 FPS
 ```
 
 ## See Also

@@ -133,7 +133,7 @@ fn main() i32:
 # 3 bytes: abc
 ```
 
-### `adler32(u8[] data) -> u32`
+### `adler32(u8[] data) -> u32 | StdError`
 
 The RFC 1950 checksum: two running sums modulo 65521, packed with the high sum first. An
 empty input gives 1. It cannot fail, so `.realise(0)` is the natural way to take the value.
@@ -148,7 +148,7 @@ fn main() i32:
 # 777324008
 ```
 
-### `zlib_error_text(ZError e) -> string`
+### `zlib_error_text(ZError e) -> string | StdError`
 
 One stable line for any error. The text does not include the payload values, so it is safe
 to compare against.

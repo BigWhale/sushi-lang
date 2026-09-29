@@ -73,7 +73,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `map_get(MsgValue m, string key) -> Maybe@(MsgValue)`
+### `map_get(MsgValue m, string key) -> Maybe@(MsgValue) | StdError`
 
 Scan a `Map` in wire order for a string key. The found value comes back as a clone, so
 the tree stays intact. To read a string or a bool, use a typed leaf reader; to walk a
@@ -101,7 +101,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `map_index(MsgValue m, string key) -> Maybe@(i32)`
+### `map_index(MsgValue m, string key) -> Maybe@(i32) | StdError`
 
 The position of a string key in a `Map`, in wire order; the first key that matches wins.
 A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the
@@ -132,9 +132,9 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `map_get_str(MsgValue m, string key) -> Maybe@(string)`
+### `map_get_str(MsgValue m, string key) -> Maybe@(string) | StdError`
 
-### `map_get_bool(MsgValue m, string key) -> Maybe@(bool)`
+### `map_get_bool(MsgValue m, string key) -> Maybe@(bool) | StdError`
 
 The typed leaf readers. Each one copies only the leaf, never the map. A missing key, a
 value of a different kind, or a non-map argument gives `Maybe.None`.
@@ -158,7 +158,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `show(MsgValue v) -> string`
+### `show(MsgValue v) -> string | StdError`
 
 Render a value on one line, deterministically:
 
@@ -214,5 +214,5 @@ fn main() i32:
 
 ## See also
 
-- [Files](../io/files.md) — `read_bytes` for reading a MessagePack file
+- [Files](../io/files.md) — `read_bytes(max)`, one read of at most `max` bytes; call it in a loop to read a whole MessagePack file
 - [Arrays](../collections/arrays.md) — the `u8[]` input type

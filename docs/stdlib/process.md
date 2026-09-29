@@ -19,17 +19,21 @@ The process module provides functions for controlling and querying process state
 
 ## Functions
 
+The signature lines give the parameter and return types. They are not Sushi
+declarations: `exit`, `getpid` and `getuid` return a bare value, not a `Result`.
+
 ### getcwd
 
 Get the current working directory.
 
-```sushi
-fn getcwd() -> Result@(string)
+```text
+getcwd() Result@(string, ProcessError)
 ```
 
 **Returns:**
 - `Result.Ok(path)` containing the absolute path to the current working directory
-- `Result.Err()` if the directory cannot be determined (e.g., directory was deleted)
+- `Result.Err(_)` if the directory cannot be determined (e.g., directory was deleted).
+  The `ProcessError` variant in this `Err` is not defined, so match it with `_`
 
 **Example:**
 
@@ -64,8 +68,8 @@ fn main() i32:
 
 Change the current working directory.
 
-```sushi
-fn chdir(string path) -> Result@(i32)
+```text
+chdir(string path) Result@(i32, ProcessError)
 ```
 
 **Parameters:**
@@ -124,8 +128,8 @@ fn main() i32:
 
 Terminate the current process with an exit code.
 
-```sushi
-fn exit(i32 code) -> ~
+```text
+exit(i32 code) ~
 ```
 
 **Parameters:**
@@ -175,8 +179,8 @@ fn main() i32:
 
 Get the process ID of the current process.
 
-```sushi
-fn getpid() -> i32
+```text
+getpid() i32
 ```
 
 **Returns:**
@@ -214,8 +218,8 @@ fn main() i32:
 
 Get the user ID of the current process.
 
-```sushi
-fn getuid() -> i32
+```text
+getuid() i32
 ```
 
 **Returns:**
@@ -266,8 +270,8 @@ fn main() i32:
 Spawn an external program by argv vector (PATH-searched, **no shell**), capturing its
 standard output and standard error and returning its exit code.
 
-```sushi
-fn run(string cmd, ...string args) -> Result@(ProcessOutput, ProcessError)
+```text
+run(string cmd, ...string args) Result@(ProcessOutput, ProcessError)
 ```
 
 `args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
@@ -292,7 +296,7 @@ call, so don't reuse it afterward.
 
 Because arguments are passed as a real argv vector rather than through a shell, there is no
 shell-quoting or injection surface. Field names are `stdout_text` / `stderr_text` (not
-`stdout` / `stderr`, which are reserved stream keywords).
+`stdout` / `stderr`, which are the console handles of `<io/fs>`).
 
 **Example:**
 
@@ -320,7 +324,8 @@ use <sys/process>
 use <io/fs>
 
 fn compile_ir(string path) i32 | ProcessError:
-    let string[] argv = from([path, "-o", "out"])
+    # An array element consumes its value, and `path` is a borrow: clone it (CE2411)
+    let string[] argv = from([path.clone(), "-o", "out"])
     let ProcessOutput out = run("clang", argv...)??   # bloom: argv is moved into the call
     if (out.exit_code != 0):
         println("{out.stderr_text}")

@@ -5,15 +5,17 @@ Complete reference for Sushi's standard library modules and types.
 ## Table of Contents
 
 ### Core Types
-- [Result@(T)](stdlib/result.md) - Error handling for fallible operations
+- [Result@(T, E)](stdlib/result.md) - Error handling for fallible operations
 - [Maybe@(T)](stdlib/maybe.md) - Optional values
+- `Own@(T)` - One value on the heap, with one owner (`Own.alloc`, `get`, `destroy`,
+  `clone`). No import is necessary. See [Memory Management](memory-management.md).
 
 ### Collections
 - [List@(T)](stdlib/collections/list.md) - Dynamic growable array
 - [HashMap@(K, V)](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
-- [Strings](stdlib/collections/strings.md) - 33 string manipulation methods
-- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold`/`compose` over `List@(T)`
+- [Strings](stdlib/collections/strings.md) - String manipulation methods
+- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, and `compose`
 
 ### Encoding and Compression
 - [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
@@ -42,7 +44,7 @@ Complete reference for Sushi's standard library modules and types.
 ### System Modules
 - [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
 - [Random](stdlib/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
-- [Time](stdlib/time.md) - High-precision sleep functions
+- [Time](stdlib/time.md) - Sleep functions, the wall clock and the monotonic clock
 - [Environment](stdlib/env.md) - Environment variables and system information
 - [Process Control](stdlib/process.md) - Process management (getcwd, chdir, exit, getpid, getuid)
 - [Platform](stdlib/platform.md) - Platform detection and OS-specific utilities
@@ -53,6 +55,7 @@ Complete reference for Sushi's standard library modules and types.
 
 ```sushi
 use <collections/strings>  # String methods
+use <collections/hashmap>  # HashMap@(K, V)
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
@@ -62,12 +65,14 @@ use <io/error>             # IoError, FileError -- brought by <io/fs>, <io/buf>,
 use <io/files>             # the path utilities and the fd_* primitives
 use <io/path>              # Lexical path manipulation
 use <io/fs>                # File, open, stdin/stdout/stderr, stat, walk, mkdir_all
-use <net/socket>           # the raw socket calls, and NetError
+use <net/socket>           # the raw socket calls
+use <net/error>            # NetError -- brought by <net/tcp>, <net/udp>, <net/dns>, <net/ip>
 use <net/tcp>              # TcpStream, TcpListener
 use <net/udp>              # UdpSocket
 use <net/dns>              # resolve a host name
 use <net/ip>               # IpAddr, parse and format
 use <net/url>              # split a URL
+use <toolchain/slib>       # read the header and metadata of a .slib
 use <math>                 # Math functions
 use <random>               # Random number generation
 use <time>                 # Sleep and clock functions
@@ -91,15 +96,17 @@ fn read_config() string | IoError:
 # Using pattern matching
 match parse_number("42"):
     Result.Ok(n) -> println("Got: {n}")
-    Result.Err() -> println("Parse failed")
+    Result.Err(_) -> println("Parse failed")
 
 # Using .realise() for defaults
-let i32 port = config.get("port").realise(8080)
+let i32 port = parse_number(text).realise(8080)
 ```
 
 #### Optional Values
 
 ```sushi
+use <collections/strings>
+
 # Safe array access
 match arr.get(0):
     Maybe.Some(first) -> println("First: {first}")
@@ -156,30 +163,42 @@ let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 use <io/fs>
 
 # Reading files. A handle closes itself at the end of the arm, so nothing
-# calls close() -- and every read answers IoError.
+# calls close(), and every read answers IoError. A read changes the handle,
+# so the binding is `poke f`: a bare binding is a read-only view (CE2414).
 match open("data.txt", FileMode.Read()):
-    Result.Ok(f) ->
+    Result.Ok(poke f) ->
         match f.read_all():
             Result.Ok(content) -> println(content)
             Result.Err(_) -> println("Read failed")
-    Result.Err(IoError.NotFound()) ->
+    Result.Err(IoError.NotFound) ->
         println("File not found")
     Result.Err(_) ->
         println("Other error")
 
 # Writing files
 match open("output.txt", FileMode.Write()):
-    Result.Ok(f) ->
+    Result.Ok(poke f) ->
         match f.writeln("Mostly Harmless"):
             Result.Ok(_) -> println("written")
             Result.Err(_) -> println("Failed to write")
     Result.Err(_) ->
         println("Failed to open")
 
-# Buffered, when the loop is long: one system call per window, not per line
-let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
-out.write_line("Mostly Harmless")??
-out.finish()??
+```
+
+A buffered writer is better when the loop is long: one system call per window, not one
+per line. `BufWriter` comes from `<io/buf>`. Each call answers `IoError`, so `??` goes in
+a function that has the `| IoError` channel, not in `main` (CW2511):
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn greet() ~ | IoError:
+    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
+    out.write_line("Mostly Harmless")??
+    out.finish()??
+    return Result.Ok(~)
 ```
 
 ## Module Overview
@@ -187,36 +206,53 @@ out.finish()??
 ### Collections
 
 **List@(T)** - Generic dynamic array (built-in, no import required):
-- Construction: `new()`, `with_capacity()`
-- Access: `get()`, `len()`, `is_empty()`
+- Construction: `List.new()`, `List.with_capacity()`
+- Access: `get()`, `len()`, `is_empty()`, `capacity()`
 - Modification: `push()`, `pop()`, `insert()`, `remove()`, `clear()`
+- Capacity: `reserve()`, `shrink_to_fit()`
 - Iteration: `iter()` for foreach loops
+- Copy and inspection: `clone()`, `debug()`
 - Memory: `free()`, `destroy()`
 
 **HashMap@(K, V)** - Generic hash table (`use <collections/hashmap>`):
-- Construction: `new()`
+- Construction: `HashMap.new()`
 - Operations: `insert()`, `get()`, `remove()`, `contains_key()`
+- Size: `len()`, `is_empty()`, `tombstone_count()`, `rehash()`
 - Iteration: `keys()`, `values()`, `entries()`
 - Automatic resizing at 0.75 load factor
+- Copy and inspection: `clone()`, `debug()`
 - Memory: `free()`, `destroy()`
 
 **Arrays** - Built-in array support:
 - Fixed arrays: `i32[10]`
 - Dynamic arrays: `i32[]` with `from([...])`
-- Methods: `len()`, `get()`, `push()`, `pop()`, `iter()`, `clone()`
+- Literals: `from([1, 2, 3])`, a repeated element `[0; 8]`, a range element `[0..=4]`
+- Reading: `len()`, `get()`, `first()`, `last()`, `contains()`, `index_of()`, `iter()`
+- Growing and shrinking (dynamic only): `push()`, `pop()`, `clear()`, `truncate()`,
+  `capacity()`, `extend()`, `extend_range()`
+- In place: `fill()`, `reverse()`
+- Copies: `clone()`, `s(start, end)`, `ss(start, count)`; the hash: `hash()`
+- Byte arrays (`u8[]`): `to_string()`, `to_string_checked()`
+- Memory (dynamic only): `free()`, `destroy()`
 - Safe access with `get()` returns `Maybe@(T)`
 - Unsafe direct indexing: `arr[i]`
 - Indexed assignment: `arr[i] := v` (bounds-checked; the element it replaces is freed)
 
-**Strings** - 33 methods (`use <collections/strings>`):
+**Strings** - methods from `use <collections/strings>`:
 - Inspection, slicing, transformation, padding, stripping
 - Splitting/joining, case conversion, parsing
 - UTF-8 aware where needed
+- Each unit that calls a string method must import the module itself (CE3015).
+  `is_empty()` and `clone()` need no import
 
-**Iter combinators** - higher-order functions over `List@(T)` (`use <collections/iter>`):
-- `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`, `compose(nom g, nom f)`
-- Ordinary generic free functions (the first Sushi-source stdlib module, no bitcode)
-- Copy/primitive element types; pass a typed-param lambda (`|i32 x| ...`) or a function reference
+**Iter combinators** - higher-order functions (`use <collections/iter>`):
+- Methods on `List@(T)` and on `T[]`: `xs.map(f)`, `xs.filter(pred)`, `xs.fold(init, f)`.
+  Each answers `Result@(..., StdError)`. `filter` accepts an owning element type: it
+  clones each element that it keeps
+- Free functions over `List@(T)`: `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`,
+  and `compose(nom g, nom f)`
+- Written in Sushi (a source stdlib module, no bitcode)
+- Pass a lambda with typed parameters (`|i32 x| ...`) or a function reference
 
 ### Compression (`use <compression/zlib>`)
 
@@ -231,7 +267,8 @@ out.finish()??
 
 **Console I/O:**
 - `println()`, `print()` - Output with/without newline
-- `stdin.readln()` - One line, or `Maybe.None` at end of input
+- `stdin.readln()` - `Result@(Maybe@(string), IoError)`: one line, `Maybe.None` at the
+  end of input, or an `Err` when the read fails
 - `stdin`, `stdout`, `stderr` - `File` unit variables (`public var`) over descriptors 0, 1 and 2
 
 **File I/O:**
@@ -242,9 +279,9 @@ out.finish()??
   a `File` closes itself when its owner leaves scope
 - Every read, write, seek, `open()` and `close()` answers `IoError`; the path utilities
   and the `fd_*` primitives keep `FileError`
-- `FileMode`, `FileError`, `IoError` and `SeekFrom` all come with `use <io/fs>`: a
-  predefined enum's import brings its name (#574), and `<io/fs>` re-exports the
-  modules that home the other three (#586)
+- `FileMode`, `FileError`, `IoError` and `SeekFrom` all come with `use <io/fs>`. The
+  import of the home module of a predefined enum brings its name, and `<io/fs>`
+  re-exports (`public use`) the home modules of the other three
 
 **Buffered I/O** (`use <io/buf>`):
 - `BufReader.new(nom src, cap)` / `BufWriter.new(nom dst, cap)` - one system call per WINDOW
@@ -254,7 +291,8 @@ out.finish()??
 ### Math (`use <math>`)
 
 All functions use a single polymorphic name (no type-suffixed variants):
-- Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type)
+- Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type; a
+  literal argument of `min`/`max` takes the type of the other argument)
 - Floating-point (f64): `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`, `trunc()`
 - Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`
 - Hyperbolic: `sinh()`, `cosh()`, `tanh()`
@@ -264,16 +302,52 @@ All functions use a single polymorphic name (no type-suffixed variants):
 
 ### Time (`use <time>`)
 
-High-precision sleep functions:
+Sleep functions:
 - `sleep(i64)` - Sleep for N seconds
 - `msleep(i64)` - Sleep for N milliseconds
 - `usleep(i64)` - Sleep for N microseconds
 - `nanosleep(i64, i64)` - Nanosecond precision
 
+Clocks:
+- `now()` - Wall-clock time, in seconds since the Unix epoch (`i64`)
+- `monotonic_ns()` - A monotonic clock in nanoseconds (`i64`), for intervals
+
+Each `<time>` function answers `Result@(..., StdError)`.
+
+### Random (`use <random>`)
+
+- `rand()` - A pseudo-random `u64`
+- `rand_range(i32 min, i32 max)` - A pseudo-random `i32` in `[min, max)`
+- `rand_f64()` - A pseudo-random `f64`
+- `srand(u64 seed)` - Seed the generator
+- Each function answers a bare value, not a `Result`. See [Random](stdlib/random.md)
+  for the ranges that the functions give today
+
 ### Environment (`use <sys/env>`)
 
 - `getenv()` - Get environment variable
 - `setenv()` - Set environment variable
+
+### Encoding (`use <encoding/msgpack>`)
+
+- `decode(u8[] buf)` - Decode MessagePack bytes into a `MsgValue` tree
+- `map_get()`, `map_index()`, `map_get_str()`, `map_get_bool()` - Read a map entry
+- `show()` - Render a `MsgValue` as text
+
+### I/O paths and contracts
+
+- `<io/path>` - Lexical path functions: `join`, `basename`, `dirname`, `extension`,
+  `normalize`. See [Path algebra](stdlib/io/path.md)
+- `<io/contracts>` - The perks `Reader`, `Writer` and `Seek`. See
+  [I/O contracts](stdlib/io/contracts.md)
+
+### Networking (`use <net/tcp>`, `<net/udp>`, `<net/dns>`, `<net/ip>`, `<net/url>`)
+
+- `connect(host, port)`, `listen(host, port, backlog)` - TCP streams and listeners
+- UDP sockets, DNS resolution, IP addresses and URL splitting
+- `<net/tcp>`, `<net/udp>`, `<net/dns>` and `<net/ip>` re-export `<net/error>`, so
+  `NetError` comes with each of them
+- See the pages in the [Networking](#networking) list above
 
 ### Process (`use <sys/process>`)
 
@@ -286,7 +360,7 @@ High-precision sleep functions:
 
 ## Design Principles
 
-1. **Explicit error handling** - All fallible operations return `Result@(T)` or `Maybe@(T)`
+1. **Explicit error handling** - All fallible operations return `Result@(T, E)` or `Maybe@(T)`
 2. **Memory safety** - RAII cleanup, no manual memory management
 3. **Zero-cost abstractions** - Generics compile to concrete types
 4. **UTF-8 by default** - Strings are UTF-8, methods are aware where needed

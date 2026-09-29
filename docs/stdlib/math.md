@@ -23,7 +23,9 @@ referred to by a single, **polymorphic** name — there are no type-suffixed var
 - All other functions (`sqrt`, `pow`, the trigonometric, hyperbolic, logarithmic, and
   exponential functions, and `hypot`) operate on `f64` and return `f64`.
 
-All functions are implemented with LLVM intrinsics for optimal performance.
+`sqrt`, `pow`, `floor`, `ceil`, `round`, `trunc`, `sin`, `cos`, the logarithms and the
+exponentials compile to LLVM intrinsics. `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`,
+`cosh`, `tanh` and `hypot` call the C library function of the same name.
 
 ## Constants
 
@@ -55,8 +57,10 @@ fn main() i32:
 **Functions:**
 - `abs(T value) -> T` — absolute value. `T` must be a **signed integer** (`i8`, `i16`,
   `i32`, `i64`) or a **float** (`f32`, `f64`).
-- `min(T a, T b) -> T` — smaller of two values. `T` may be any numeric type; both arguments
-  must have the same type.
+- `min(T a, T b) -> T` — smaller of two values. `T` may be any numeric type. Two typed
+  arguments must have the same type (CE2006). A literal argument takes the type of the
+  other argument, so `max(b, 1)` with `b: u32` compares two `u32` values. A literal that
+  does not fit that type is CE2073.
 - `max(T a, T b) -> T` — larger of two values. Same typing rules as `min`.
 
 ## Floating-Point Functions
@@ -218,7 +222,9 @@ fn main() i32:
 Floating-point operations follow the IEEE 754 standard:
 
 - **NaN propagation:** operations with NaN inputs produce NaN
-- **Infinity:** `1.0 / 0.0` produces infinity, `sqrt(-1.0)` produces NaN
+- **Infinity:** a division by a computed zero produces infinity (`let f64 z = 0.0` then
+  `1.0 / z`), and `sqrt(-1.0)` produces NaN. A divisor that the compiler can read and
+  that holds zero, such as `1.0 / 0.0`, is CE0112
 - **Rounding:** round to nearest, ties to even (except `round()`, which rounds away from zero)
 
 ## Example: Computing Distance
