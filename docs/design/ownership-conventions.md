@@ -77,7 +77,7 @@ use, because the position requires ownership and copying is how it is satisfied.
 what SILGen does when an `@owned` operand is fed from a `@guaranteed` value.
 
 **"Sink" is deliberately retired.** It is a genuine term of art — a Hylo keyword and a C++ idiom —
-but `backend/llvm_optimization.py:241` already uses `add_sinking_pass()` in LLVM's unrelated sense
+but `backend/llvm_optimization.py` already uses `add_sinking_pass()` in LLVM's unrelated sense
 (moving instructions down the CFG), in the same package. Ten of the thirty-two existing uses already
 write "ownership sink" rather than "sink", which is the codebase compensating for a word that does
 not carry its own meaning.
@@ -149,8 +149,10 @@ Two classes, not three:
 **Two ways to own, one predicate.** Most types own HEAP, and the answer is STRUCTURAL —
 the predicate walks the fields. A file or a socket holds one `i32` descriptor, so no field
 walk can find what it owns; such a type must be able to SAY that it owns a resource. It says
-so by implementing the compiler-known `Drop` perk (`HANDLES.md` ruling R2):
+so by implementing the predefined `Drop` perk. The compiler declares it; a program does
+not (a user declaration is CE4001). Its contract is:
 
+<!-- docs-sweep: skip (the predefined contract; a program that declares it is CE4001) -->
 ```sushi
 perk Drop:
     fn drop(poke self) ~
@@ -200,7 +202,7 @@ and is invisible to `owns_resource`/`type_class_of`, which always answer MOVE fo
 It is a binding-level fact because `BuiltinType.STRING` is a bare enum member with nowhere to carry
 a per-value flag, unlike `FunctionType`, which is a dataclass and carries `captures` the same way.
 One consequence worth stating plainly: **a struct with a string field is a MOVE type**, full stop —
-`Named(name: "hi", id: 1)` passed by value moves, even though the string it was built from is a
+`Named(name: "hi", id: 1)` handed to a consuming position (`eat(nom n)`) moves, even though the string it was built from is a
 literal, because the option-B flag is a fact about a *bare `string` binding*, not about a value
 nested inside a struct field. See `docs/memory-management.md` for the worked example.
 
@@ -210,8 +212,8 @@ Three, not four:
 
 | provenance | meaning | expression shapes |
 |---|---|---|
-| **OWNED** | a registered owner in this scope | a bare `Name` bound by `let` or a by-value parameter, **and a marked field TAKE** — `nom s.field`, the one field read that is not a borrow (P7 ruling R28, `docs/design/borrow-model.md` S10c) |
-| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
+| **OWNED** | a registered owner in this scope | a bare `Name` bound by `let`, a `nom` parameter, **and a marked field TAKE** — `nom s.field`, the one field read that is not a borrow (P7 ruling R28, `docs/design/borrow-model.md` S10c) |
+| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, an unmarked parameter (a borrow by default), a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
 | **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `arr.pop()` / `List.pop()` (which REMOVE the element, so the container stops owning it) |
 
 **`THROUGH_OWNER` merged into `BORROWED`.** The design as originally written kept these as separate
@@ -397,8 +399,8 @@ Two consequences that the original audit predicted correctly:
 - The escaping-closure use-after-free is gone by construction: the env destructor's field set and
   the capture's move decision cannot disagree, because both read `owns_resource`.
 - `HashMap@(K, V)` no longer moves *by accident*. `owns_resource` names `HashMap` explicitly
-  (`GenericTypeRef.base_name in ('Own', 'List', 'HashMap')`, and the equivalent `StructType.name`
-  prefix check after monomorphization) rather than inferring it from a placeholder `buckets: i32[]`
+  (`GenericTypeRef.base_name` in the container bases, and `generic_base_of(ty)` on a
+  monomorphized `StructType`, which reads `generic_base` and never the name) rather than inferring it from a placeholder `buckets: i32[]`
   field — the placeholder is no longer load-bearing for this question.
 
 ## 7. Pairing clone with destruction
@@ -429,8 +431,8 @@ A missing clone arm is a missing method on a handler, not a silently-skipped
 `isinstance` branch.
 
 This also collapsed the 8 independent `isinstance` type-kind ladders that predated it, and most of
-the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now share
-`semantics/generics/cloning.py`'s `CONTAINER_PREFIXES`.
+the sites that used to spell `("Own<", "List<", "HashMap<")` by hand now ask
+`generic_base_of` / `is_instance_of` (`semantics/type_predicates.py`).
 
 ## 8. Decided: a binding is a read-only borrow
 
@@ -509,8 +511,9 @@ match name_opt:
 section was written, which made every `string` binding categorically exempt. Phase 9 deleted `COPY`
 (§4.1) — a `string` is `MOVE` now — so a `match`/`foreach` binding of a `string` payload is affected
 the same as any other owning binding: `println(s)` above stays fine because printing is not a
-consuming use (nothing takes ownership to print), but `take(s)` where `take` accepts `string` by
-value is now **CE2411**, escaped with `s.clone()`. Only a binding whose payload transitively owns
+consuming use (nothing takes ownership to print). `take(s)` is fine too, because an unmarked
+parameter is a borrow. Only a consuming position rejects the binding: `take(nom s)` where
+`take` declares `nom string s` is **CE2411**, escaped with `take(nom s.clone())`. Only a binding whose payload transitively owns
 heap and is handed to a genuine consuming use is rejected — and essentially every program that did
 that before this design shipped was already double-freeing.
 
@@ -529,8 +532,9 @@ live payload borrow, Rust's E0506). The match half rests on the phase-2 enum lay
 (`{i32 tag, [K x i64] data}`, naturally aligned payload offsets from one authority), which
 is what retired the `align=1` family and made an interior payload pointer safe to hand out.
 Fences: an iterable whose items have no address (a range, `.entries()`) is **CE2423**; a
-`poke` binding out of a `peek` owner is CE2408; out of a constant is CE2400; a TEMPORARY
-scrutinee is CE2404 (no storage to point into); and a reference binding in a NESTED pattern
+`poke` binding out of a `peek` owner is CE2408; out of a constant is CE2400; a scrutinee
+that is neither a place nor a temporary the match owns is CE2404 (a `poke` binding into a
+temporary scrutinee is legal: the match owns the temporary); and a reference binding in a NESTED pattern
 is **CE2424** — nested extraction walks through temporary copies, so a pointer into one is
 a silently lost write. Rust's scrutinee-side spelling (`match &mut x`) stays
 foreclosed-by-none but unimplemented.
@@ -720,7 +724,7 @@ reference (CE2408), the method receiver (CE2421) and a by-value method parameter
 are the same rule with four rationales: a write through any of them cannot reach the value
 it appears to write. Each was found as its own bug, and each time all three write shapes
 had to be re-covered by hand. The checker now holds them as a TABLE of kinds behind one
-dispatcher (`_reject_readonly_write`), called from the four write sites, so a fifth kind is
+dispatcher (`reject_readonly_write`, `passes/borrow/writes.py`), called from the four write sites, so a fifth kind is
 one row rather than a fifth walk; `tests/unit/test_readonly_receiver_matrix.py` fails if a
 kind in the table has no code; the per-cell programs went with the pytest tests that ran the
 compiler. The codes stay

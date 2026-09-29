@@ -191,7 +191,7 @@ and `fold` stay copy/primitive-element, like the free functions.
 - **(a) A bare opt-out for free functions.** The remaining asymmetry: a function
   cannot be infallible. A method chooses its channel; a function cannot decline one.
 - **(b) The perk-method channel — SHIPPED.** A perk method declares `| E` exactly as an
-  extension method does (`HANDLES.md` ruling R1). The contract and the implementation
+  extension method does. The contract and the implementation
   declare it in the same shape and must agree, and CE0133 is now the relational
   diagnostic that says so: the primary at the implementation, a note at the contract
   method. Everything else carried over unchanged — `_validate_method_body` already

@@ -26,14 +26,17 @@ Sushi, contradicting the bounds-checked / RAII / no-null safety model.
 # Native: prefix marker on the last parameter, element type T
 fn log_all(string prefix, ...i32 values) ~:
     foreach(v in values.iter()):
-        println(v)
-
-log_all("nums", 1, 2, 3)   # values = [1, 2, 3]
-log_all("empty")           # values = []  (zero variadic args allowed)
+        println("{prefix}: {v}")
+    return Result.Ok(~)
 
 # Extern: bare trailing ... after at least one fixed parameter
 unsafe external "C" as libc because "formatted output via libc":
     fn printf(string fmt, ...) i32 = "printf"
+
+fn main() i32:
+    log_all("nums", 1, 2, 3)     # values = [1, 2, 3]
+    log_all("empty")             # values = []  (zero variadic args allowed)
+    return Result.Ok(0)
 ```
 
 ## Semantics
@@ -178,8 +181,10 @@ fn main() i32:
     nested-block-scope model).
 - **Monomorphization**: each distinct (arity, type-tuple) call site produces a separate specialized
   function. The mangled symbol uses a `.pack{N}` suffix to distinguish pack specializations from
-  regular-generic symbols and to remain collision-free across arities. All specializations use
-  `linkonce_odr` linkage for linker deduplication in multi-unit builds.
+  regular-generic symbols and to remain collision-free across arities. Like every generic
+  instance, a specialization carries the prefix of its declaring unit
+  (`<unit>$print_all__i32_string_bool.pack3`) and takes the linkage of the function it comes
+  from: `internal` for a private function, `external` for a `public` one.
 - **Pack elements are passed as separate positional arguments** — they are not boxed or collected
   into an array.
 - **Arity zero** is valid: `print_all()` monomorphizes an arity-0 specialization; the `expand` body
@@ -207,9 +212,9 @@ fn main() i32:
   bloom (see "Spread / forwarding (bloom)" above) only spreads a single `...T` array, not a
   `...Ts` pack.
 - **No pack indexing**: individual pack elements cannot be addressed by index.
-- **Same-enum-type element gap**: if all pack elements resolve to the same enum type, the
-  instantiation-collection pass may raise CE2061 (a narrow limitation, separate from the
-  perk-constraint mechanism).
+
+Pack elements that all resolve to one enum type work like any other pack
+(`tests/variadic/type_packs/test_variadic_pack_enum_repeated_runtime.sushi`).
 
 ### Internal representation
 
@@ -219,5 +224,5 @@ fn main() i32:
 - Name mangling: `.pack{N}` marker (e.g. `.pack3` for a three-element pack) encodes arity in a
   collision-free way distinct from regular-generic symbols.
 
-Phase-0 unit tests (`test_p0t*`) cover the monomorphizer infrastructure; Phase-1 integration tests
-(`tests/variadic/type_packs/test_variadic_pack_*.sushi`) exercise the full compiler pipeline.
+The fixtures under `tests/variadic/type_packs/` (`test_variadic_pack_*.sushi`) exercise the
+full compiler pipeline.

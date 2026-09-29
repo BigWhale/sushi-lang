@@ -34,11 +34,10 @@ a bug of the class #239 collected:
 | **inference** | `semantics/passes/types/method_registry.py` (the family's `infer` hook) | what the call expression's type is |
 | **codegen** | `backend/expressions/calls/dispatcher.py:emit_method_call` | which body actually runs |
 
-Validation and inference are ONE table since #751. Each family row carries both hooks, and
-`calls/methods.py:validate_method_call` asks the table instead of holding an arm chain of its
-own -- it had twelve arms, in a different order from the registry's ten checkers, and nothing
-but a comment held the two in step. Codegen is still its own dispatcher, so two layers must
-agree where three did.
+Validation and inference are ONE table. Each of its eleven family rows carries both hooks,
+and `calls/methods.py:validate_method_call` asks the table and holds no arm chain of its
+own. Codegen is its own dispatcher, so two layers must agree: the table and the
+dispatcher.
 
 Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
 `if value_type is None: return`, so a family that fails to infer does not report anything --
@@ -49,15 +48,17 @@ internal error. Two separate defects hid there for weeks:
   builtin-method registry, which the *backend* populates at import time -- and the pipeline
   imports codegen lazily, after semantic analysis. `let u32 b = f64val.to_bits()` compiled and
   silently truncated the 64-bit pattern.
-- `string.to_str()` / `string.hash()` were un-inferred for a second reason:
-  `METHOD_TYPE_REGISTRY.infer_method_type` is **first-match-wins**, and the string checker
-  matched on the receiver type alone. It claimed every method name on a `string`, and a claim
-  whose inferrer then returns `None` *ends* the chain rather than falling through.
+- `string.to_str()` / `string.hash()` were un-inferred for a second reason: the registry
+  was **first-match-wins** then, and the string checker matched on the receiver type alone.
+  It claimed every method name on a `string`, and a claim whose inferrer then returns
+  `None` *ends* the chain rather than falling through.
 
 Two rules follow, and both are load-bearing:
 
-1. **A checker must claim only what it can actually type.** First-match-wins makes an
-   over-broad claim indistinguishable from a missing family.
+1. **A family must claim only what it can actually type.** The table now claims through
+   one `claim()`, and the families claim DISJOINTLY
+   (`tests/unit/test_method_family_dispatch_is_one.py`), so an over-broad claim is an
+   overlap that the gate refuses, not a missing family that nobody notices.
 2. **A semantics pass must not read the builtin-method registry** except for the struct/enum
    `hash`/`clone` pair, which the derive pass registers *from semantics*. Everything else in that
    registry is backend-populated, so from semantics it answers differently depending on what
@@ -133,10 +134,14 @@ do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs extens
 
 ## Why perks win
 
-A perk implementation is Sushi's equivalent of writing a manual trait impl, and it deliberately
-takes precedence at all three layers -- `calls/methods.py` resolves perks before the built-in
-families, `visitor.py` prefers a perk method during inference, and the codegen dispatcher runs
-its perk step before the auto-derived ones. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
+A perk implementation is Sushi's equivalent of writing a manual trait impl, and it takes
+precedence over every family that yields to a perk: the derived `hash`/`clone` pair, the
+function-value `clone` and the primitive family (`beats_perk=False`). The typecheck pass
+asks the perk implementation between the two halves of the family table
+(`passes/types/visit/inference.py` for the type, `calls/methods.py` for the check), and the
+codegen dispatcher runs its perk step before the auto-derived ones. The array, string,
+`Result`, `Maybe`, `Own`, `HashMap` and `List` families are `beats_perk=True`: a perk
+implementation does not take a name from one of them. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
 
 ```sushi
 struct Point:
@@ -339,12 +344,12 @@ sources: no argument names it, and this position declares no type. `Cage.empty()
 argument solved `A`. Binding the result answers it when the return names the target
 (`let Cage@(i32) a = Cage.empty()`); when the return does NOT name the target, a
 parameter that names the type parameter or the signature is what has to change, because
-a method carries no call-site `@(...)` slot at all (Known Limitation 7). The test is
+a method carries no call-site `@(...)` slot at all. The test is
 narrow on purpose -- it fires only when the base name declares a static of that name --
 because a generic ENUM in an unstamped position is a variant construction whose stamp
-the surrounding statement supplies, and `Result.Ok(0)` is 6,559 of those. Before the
-check, both shapes reached the backend as a CE0055 ICE; the built-in twin
-(`println("{List.new().len()}")`) still does, and is #570.
+the surrounding statement supplies, and `Result.Ok(0)` is 6,559 of those. The built-in
+twin (`println("{List.new().len()}")`) is CE2060 too, and its help line says that the
+built-in static reads its type from the binding alone.
 
 ```sushi
 struct Cage@(T):
@@ -437,7 +442,8 @@ outnumbers a static call 22 to 1 (10,469 to 479).
 
 - **No `::`.** A second path operator to disambiguate what a dot already means is a
   bigger change than the feature, and on a struct the dot is not ambiguous at all.
-- **No static in a perk.** No `Self` (HANDLES.md R7). CE4014.
+- **No static in a perk.** A perk has no `Self`, so a contract cannot hold a
+  constructor. CE4014.
 - **No overloading.** A name has one home; both collisions above are refusals.
 - **No export through a BINARY `.slib`.** A binary library ships no extension method at
   all today, instance or static, so this is a pre-existing limit and not a static one. A
@@ -454,8 +460,7 @@ property is shared, and the compiler shares the code that reads it: one body val
 parameter modes, and one backend path -- a perk method is wrapped as a synthetic
 `ExtendDef` and emitted through the extension emitter.
 
-The **error channel** was the last exception, and `HANDLES.md` ruling R1 removed it. A
-perk method declares `| E` in the same shape an extension method does, on the CONTRACT
+The **error channel** is not an exception either. A perk method declares `| E` in the same shape an extension method does, on the CONTRACT
 and on every implementation alike:
 
 ```sushi

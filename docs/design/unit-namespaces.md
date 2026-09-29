@@ -1,9 +1,8 @@
 # Unit namespaces
 
-**Status: PHASE 1 LANDED.** The draft that this replaces measured a problem and surveyed
-the answers. This document rules on them, and phase 1 of section 11 is implemented: it
-landed in seven steps on `feat/unit-namespaces`, from `54ab5c30` to the tip of that branch,
-under issue #490. **Phase 2 -- two units may each declare one TYPE -- is not implemented**
+**Status: PHASE 1 DONE, on `main`.** The draft that this replaces measured a problem and
+surveyed the answers. This document rules on them, and phase 1 of section 11 is
+implemented and merged to `main` (issue #490). **Phase 2 -- two units may each declare one TYPE -- is not implemented**
 and belongs to `docs/design/type-identity.md`.
 
 Section 1 is kept as the record of what the epic replaced. Every ruling below is measured
@@ -174,7 +173,7 @@ use <math> as std_math
 
 fn main() i32:
     let f64 a = my_math.sin(0.0)??      # the unit next door
-    let f64 b = std_math.sin(0.0)??     # the standard library
+    let f64 b = std_math.sin(0.0)       # the standard library
     return Result.Ok(0)
 ```
 
@@ -187,11 +186,11 @@ use <math> as std_math                  # behind a dot
 
 fn main() i32:
     let f64 a = sin(0.0)??              # the unit next door -- unambiguous now
-    let f64 b = std_math.sin(0.0)??     # the standard library
+    let f64 b = std_math.sin(0.0)       # the standard library
     return Result.Ok(0)
 ```
 
-That is the case section 1.3 crashes on today. The alias is what makes it expressible.
+That is the case section 1.3 crashed on. The alias is what makes it expressible.
 
 **Every program that compiles today still compiles**, because no program today carries an
 `as`. The flat form is not deprecated and gets no warning. It is the right form for a
@@ -385,20 +384,22 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is `CE3005` |
 | A static call on a type NOBODY imports — `List.new()`, `f64.from_bits(b)` | `List`, `f64` and `f32` are in scope with no import, so no namespace can ever hold them. `HashMap` is different: the import gates the name, so its static obeys the alias like the type does — `hm.HashMap.new()`, and the bare form behind an aliased import is refused exactly as the bare type is (#506, decision A-strict; the fold is `fold_namespaced_static`, section 5) |
 
-### 4.3 The standard library has four shapes, and the rule reads all four
+### 4.3 The standard library has five shapes, and the rule reads all five
 
 | Shape | Modules | Aliasable |
 |---|---|---|
 | Registry free functions, already keyed by `(module, name)` | `<time>`, `<math>`, `<sys/env>`, `<sys/process>`, `<random>`, `<io/files>` | **yes** — this is the cheap half, and it fixes section 1.3 |
-| Sushi-source modules, injected as ordinary units | `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<toolchain/slib>` | **yes** — a user unit in every respect |
-| A built-in generic that the import activates | `<collections/hashmap>` (`generics/active_generics.py:3`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
+| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, the six `<net/*>` modules and `<toolchain/slib>` | **yes** — a user unit in every respect |
+| A built-in generic that the import activates | `<collections/hashmap>` (`GenericNamespace`, `semantics/namespaces.py`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it. `active_generics` retires whole — see 4.3.1 |
 | A method interface: the import enables methods on a type and brings **no name** | `<collections/strings>` | pointless, and said so — see below |
 | A predefined enum the import brings (#574, Ruling 3) | `FileMode` → `<io/fs>`; `IoError`, `FileError` → `<io/error>`; `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. **The home is reached through the modules that re-export it** (section 8.1, #586): `<io/contracts>` says `public use <io/error>`, `<io/fs>` and `<io/buf>` say `public use <io/contracts>`, so `use <io/fs>` alone brings `IoError`, `FileError` and `SeekFrom` beside `FileMode`, and `fs.IoError` holds behind the alias. `StdError` is the implicit Result arm and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it |
 
-`use <io/fs>` does not bring `stdin` into scope: `stdin` is always a name
-(`passes/types/visitor.py:703`), and what the import enables is `read_line()` on it. An
-alias on such an import binds an empty namespace, and every `io.<name>` after it fails one
-at a time with the cause several lines away.
+`stdin`, `stdout` and `stderr` are ordinary names: each is a `public var File` that
+`<io/fs>` declares (`sushi_stdlib/src_sushi/io/fs.sushi`). `use <io/fs>` brings them into
+the flat scope, `use <io/fs> as fs` puts them behind the dot, and with no
+import `stdin` is CE1001. A METHOD INTERFACE is the shape that brings no name: an alias
+on `use <collections/strings>` binds an empty namespace, and every `st.<name>` after it
+fails one at a time with the cause several lines away.
 
 #### 4.3.1 `active_generics` retires, and it is one reader
 
@@ -418,11 +419,9 @@ only the right to write the name.
 
 So `active_generics.py` is **deleted**, not converted: `GENERIC_UNIT_TYPES` becomes the
 membership of one `GenericNamespace`, the one reader loses its `if`, and the two writers
-and the process-global set go with it. **Five test files stop calling
-`reset_active_generics`** (`tests/unit/conftest.py`, `test_lambda_names_unique_across_units.py`,
-`test_struct_string_raii.py`, `test_layering_gate.py`, `test_ffi.py`), and that is the
-argument in miniature: a process-global that five tests must reset between compilations is
-scope kept in the wrong place.
+and the process-global set go with it. **Five test files stopped calling
+`reset_active_generics`**, and that is the argument in miniature: a process-global that
+five tests must reset between compilations is scope kept in the wrong place.
 
 ### 4.4 An empty namespace is a warning, and never an error
 
@@ -432,7 +431,7 @@ reasons and only one of them is a mistake:
 
 | Empty because | Example |
 |---|---|
-| **structural** — a method interface can never bring a name | `use <io/fs> as io` |
+| **structural** — a method interface can never bring a name | `use <collections/strings> as st` |
 | **by design** — the unit exports methods, not names | a unit that is nothing but `extend` blocks |
 | **incidental** — the public surface happens to be empty today | one `public fn` away from changing |
 
@@ -490,7 +489,7 @@ resolver is the only thing that changes between them.
 The enum row is the one that reads as a three-deep chain, and it is not: `my_math.Sign.Plus`
 parses as `DotCall(receiver=MemberAccess(Name("my_math"), "Sign"), method="Plus")`, the
 alias folds into `Sign`, and what is left is the `EnumConstructor` path the compiler
-already takes. The `DotCall` ladder in `visit_dotcall` (`passes/types/visitor.py:410`)
+already takes. The `DotCall` ladder (`resolve_dotcall`, `passes/types/calls/dotcall.py`)
 gains no rung: the namespace check is the rung `_resolve_external_call` already occupies.
 
 One phase runs BEFORE the fold: propagation, which stamps a GENERIC enum's constructor
@@ -609,8 +608,8 @@ different question -- too many candidates, not none. No new code is needed eithe
 ### 5.3 One position cannot be qualified
 
 An array size may not be qualified. `i32[my_math.SIZE]` is refused. A fixed array's size is
-read while the unit's own AST is built (Known Limitation 14, and it is already why a
-constant next door is a value and not a size), and an alias is bound long after that. The
+read while the unit's own AST is built (that is also why a constant next door is a
+value and not a size), and an alias is bound long after that. The
 diagnostic is the existing `CE2099`.
 
 ### 5.4 A constant declaration is two written-name positions (#561)
@@ -699,8 +698,9 @@ public struct Vec:        use "geometry"              use "shapes"
 **The rule: to name a type, import the unit that declares it.** `main` adds
 `use "geometry"`. That is Java's rule, and it is the answer for phase 1.
 
-It is also, stated plainly, the weakest position of the five languages worth comparing,
-because Sushi is the only one with no escape from it:
+When this ruling was made it was the weakest position of the five languages worth
+comparing, because Sushi was the only one with no escape from it. Section 8.1 added the
+escape, `public use`:
 
 | Language | Names it without the import? | The escape |
 |---|---|---|
@@ -709,17 +709,17 @@ because Sushi is the only one with no escape from it:
 | Swift | no | `let v = origin()` infers; `@_exported import` re-exports |
 | Java | **yes** | a package name is global, so `java.util.List` needs no import; `var` since Java 10 |
 | C++ | **yes** | namespaces are global and includes are transitive; `auto` since C++11 |
-| **Sushi** | **no** | **none** |
+| **Sushi** | **no** | `public use` re-exports (section 8.1) |
 
 Every one of the five infers a local binding's type. Sushi does not, and the two that also
 allow a bare qualified name get there through a global, canonical package name — which a
 Sushi unit path, being relative to the importing file, cannot be.
 
 So the cost of this ruling is real: a consumer inherits the type-declaring dependencies of
-everything it imports, on every `let`. Two things would lift it, and neither is in this
-document — `let` inference, which `CE2007` already marks the exact site of, and re-export
-(section 12). The ruling is that phase 1 pays the cost rather than growing a third
-mechanism to avoid it.
+everything it imports, on every `let`, unless a unit re-exports them. Two things lift it:
+re-export, which is decided and built (`public use`, section 8.1), and `let` inference,
+which `CE2007` marks the exact site of and which does not exist. Phase 1 paid the cost
+rather than growing a third mechanism to avoid it.
 
 ## 7. Ruling 6: a namespace is a resolution path, not a type identity
 
@@ -892,7 +892,8 @@ extend geo.Vec length() f64:        extend geo.Vec length() f64:
 ```
 
 **Orphan extensions stay legal** — `extend i32 squared()` from any unit is idiomatic Sushi,
-and Known Limitation 9 pushes combinators toward exactly this shape. **A duplicate is a hard
+and the combinators of `<collections/iter>` (`.map`, `.filter`, `.fold` on `List@(T)` and
+`T[]`) have exactly this shape. **A duplicate is a hard
 error**, which is what the compiler already does: two units extending `i32` with `tag()`
 gives `CE0101: duplicate function 'extension method 'tag' for 'i32''`.
 
@@ -953,10 +954,11 @@ function for both consumers: the CW3003 emitter in the pipeline and the manifest
 
 Cost when measured: `sushi_stdlib/src_sushi` and `toolchain/src` held **zero** extensions
 between them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
-declares. The UFCS epic then put six method combinators in
-`src_sushi/collections/iter.sushi`, all on builtin generic targets (`List@(T)`, `T[]`) —
-the shape the measurement already covered, and a bundled stdlib module is not a `--lib`
-build, so CW3003's scope is untouched. It still fires nowhere in real library code, which
+declares. The source stdlib now holds many extensions and perk implementations: the
+combinators in `src_sushi/collections/iter.sushi` are on builtin generic targets
+(`List@(T)`, `T[]`), and the `io/*` and `net/*` modules extend the types that each module
+declares. A bundled stdlib module is not a `--lib` build, so CW3003's scope is
+untouched. It still fires nowhere in real library code, which
 is what a warning aimed at a future hazard should do.
 
 **The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
@@ -1085,9 +1087,10 @@ handed a resolved callee exactly as it is today.
 One thing, for coexistence. A symbol used to be its bare Sushi name. Two units each
 declaring `sine` therefore need mangling by unit — and for **private** declarations as
 well as public ones, because the monolithic build path puts every unit into one
-`ir.Module` (`backend/codegen_llvm.py:327`), where an `internal` symbol collides just as
-an `external` one does. Only the incremental path emits a module per unit
-(`backend/codegen_llvm.py:549`).
+`ir.Module` (`LLVMDriver.compile_multi_unit`, `backend/driver.py`, over
+`build_module_multi_unit`), where an `internal` symbol collides just as an `external` one
+does. Only the incremental path emits a module per unit (`backend/codegen_llvm.py`, the
+`ir.Module` named `unit_<name>`).
 
 The scheme: `<unit>$<name>`, with every `/` in the unit name replaced by `$`, so
 `collections/iter`'s `next` becomes `collections$iter$next`. One function writes it,
@@ -1132,7 +1135,7 @@ only to make a flat first-wins table behave, and it retires with them.
 
 ### 9.2 A binary `.slib` names the symbol, and every record names its unit
 
-Manifest protocol **2.2**, two keys, and they answer different questions.
+Manifest protocol **2.3** (`sushi_lib_version`), two keys, and they answer different questions.
 
 **`link_symbol`** names the symbol a record has in the SHIPPED BITCODE. Written by every
 build, and read by the **binary** path alone. A source library recompiles at the consumer,
@@ -1251,9 +1254,8 @@ Whether an alias could ever be exported is the same question as re-export.
 
 ## 13. Carried over
 
-The visibility flip left three limits behind (issue **#487**; the `LEFT.md` working doc that
-enumerated them has been consumed, so the option letters below are kept for the issue's
-history). PR **#488** closed two of them and recorded the third as waiting for this epic.
+The visibility flip left three limits behind (issue **#487**; the item numbers and option letters below are
+that issue's). PR **#488** closed two of them and recorded the third as waiting for this epic.
 What remains here is therefore one open defect and one prerequisite:
 
 | | Was | Now |
@@ -1266,7 +1268,7 @@ includes them.
 
 ### 13.1 A shadowed call reads the winner's parameter modes
 
-`LEFT.md` item 1, and the decision on it is that item's **option C**: wait.
+Issue #487 item 1, and the decision on it is that item's **option C**: wait.
 
 A source library exports `fn eat(string s)` — a borrow — and calls it from its own
 `drive()`. The consumer declares its own `fn eat(nom string s)`, which is legal and warns
@@ -1322,7 +1324,7 @@ was built; and the library body has to call the shadowed name itself. A shadow o
 the library never calls is correct today. `CW3002`'s own `doc` string already names this
 document, so the pointer is in the catalogue as well as here.
 
-**The fallback, if the epic slips.** `LEFT.md` option A — stamp `callee_param_modes` and
+**The fallback, if the epic slips.** Issue #487 option A — stamp `callee_param_modes` and
 `callee_param_types` on the `Call` node from the asking unit's signature, the way
 `passes/types/calls/methods.py` already does for a method call — is a complete answer on
 its own and stays available. It is a second answer to "which declaration does this call
@@ -1341,7 +1343,7 @@ declare one name of any callable kind and the two bodies are two symbols.
 
 ### 13.2 Collection order: dependencies before dependents
 
-`LEFT.md` item 3, **option B**, and it has LANDED. Option A — one sweep for perk
+Issue #487 item 3, **option B**, and it has LANDED. Option A — one sweep for perk
 definitions before the collect loop — landed first, in **#488**, as
 `CollectorPass.collect_perk_definitions`. Option B is the class fix, and it belongs here
 because **a per-unit scope cannot be built before its dependencies are collected**. It
@@ -1382,7 +1384,7 @@ Ruling 5 replaces `build_global_symbol_table` with a scope built from each unit'
 statements. That scope cannot be built for `main` until `helpers/traits` has been collected,
 so the reversal is a phase-1 prerequisite and not a separate improvement.
 
-**What the reversal costs, split by kind.** `LEFT.md` prices option B as "every first-wins
+**What the reversal costs, split by kind.** Issue #487 prices option B as "every first-wins
 table changes its winner". Under phase 1 that price is only partly paid:
 
 | Kind | Under phase 1 |
@@ -1469,7 +1471,7 @@ two are decided in different documents.
 The same last-commit rule applies to whatever else the phase falsifies, and the checklist is
 short because the reference map in `CLAUDE.md` names the owner of each:
 
-- `CLAUDE.md` — Known Limitation 15 is written entirely against the flat namespace and is
+- `CLAUDE.md` — the limitation that was written entirely against the flat namespace is
   what phase 1 and phase 2 close between them; the visibility paragraph gains the alias.
 - `docs/language-reference.md`, `docs/language-guide.md` — `use` gains a clause.
 - `docs/design/type-identity.md` — phase 2 is its ruling to make, not this document's.
