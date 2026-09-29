@@ -16,13 +16,14 @@ use <net/socket>
 
 **Most programs want `<net/tcp>`, `<net/udp>`, `<net/dns>` or `<net/url>` instead.** Those wrap these primitives in types and are what the examples below build on. Reach for `<net/socket>` when you want a descriptor without a wrapper.
 
-Every function answers `Result@(T, NetError)`. A descriptor is a bare `i32`, and closing it is the caller's business: there is no RAII for a socket, exactly as there is none for a `file`.
+Every function answers `Result@(T, NetError)`. A descriptor here is a bare `i32`, and closing it is the caller's business: a bare `i32` has no destructor. The handle types `TcpStream`, `TcpListener` and `UdpSocket` implement `Drop` and close their descriptor on scope exit, as a `File` does.
 
 ## Types
 
 `NetError` is a predefined enum whose HOME is [`<net/error>`](error.md): that import
-brings the bare name -- and so does every net module above this one, which re-exports
-it -- and every function here answers it:
+brings the bare name, and so do `<net/tcp>`, `<net/udp>`, `<net/dns>` and `<net/ip>`,
+which re-export it. A unit that writes `use <net/socket>` can also name `NetError` bare.
+Every function here answers it:
 
 ```sushi
 public enum NetError:
@@ -42,11 +43,11 @@ Two of the mappings are worth knowing:
 
 ## Functions
 
-### `sock_tcp_listen(string host, i32 port, i32 backlog) -> Result@(i32, NetError)`
+### `sock_tcp_listen(string host, i32 port, i32 backlog) i32 | NetError`
 
 Bind a listening socket. An empty host means the wildcard address. Port 0 asks the kernel to choose one, and `sock_local_port` reads back what it chose — which is what lets a test bind without naming a port. `SO_REUSEADDR` is always set, so a port whose last connection is still in `TIME_WAIT` binds again at once.
 
-### `sock_local_port(i32 fd) -> Result@(i32, NetError)`
+### `sock_local_port(i32 fd) i32 | NetError`
 
 The port a descriptor actually bound, through `getsockname`.
 
@@ -64,33 +65,35 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `sock_tcp_connect(string host, i32 port) -> Result@(i32, NetError)`
+### `sock_tcp_connect(string host, i32 port) i32 | NetError`
 
 Connect to a host and port. The host may be a name or a numeric address; a name is resolved and every answer is tried in turn. There is **no connect timeout** — that needs a non-blocking socket and `select` — so an address that answers nothing waits for the kernel to give up.
 
-### `sock_tcp_accept(i32 fd) -> Result@(i32, NetError)`
+### `sock_tcp_accept(i32 fd) i32 | NetError`
 
 Take the next connection waiting on a listener. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
 
-### `sock_send(i32 fd, u8[] data) -> Result@(i32, NetError)`
+### `sock_send(i32 fd, u8[] data) i32 | NetError`
 
 Write bytes, and answer how many went. **One write may take fewer bytes than it was offered**; `send_all()` in `<net/tcp>` is the loop. The buffer stays the caller's: this borrows it and never frees it.
 
-### `sock_recv(i32 fd, i32 max) -> Result@(u8[], NetError)`
+### `sock_recv(i32 fd, i32 max) u8[] | NetError`
 
 Read what one read gives, up to `max` bytes.
 
 **An empty answer means the peer closed cleanly.** `recv` sets no `errno` at the end of a stream, so reporting an error there would report a stale one. A timeout is the other case and answers `Err(TimedOut)`, which leaves the two unambiguous — so `while data.len() > 0` is a correct read loop.
 
-### `sock_close(i32 fd) -> Result@(i32, NetError)`
+### `sock_close(i32 fd) i32 | NetError`
 
-Close a descriptor.
+Close a descriptor. For a descriptor that no handle owns, `close_socket(poke i32 fd)` in
+[`<net/error>`](error.md#close_socketpoke-i32-fd-neterror) is the guarded form: it closes
+the descriptor once and writes `-1` over the slot, so a second call closes nothing.
 
-### `sock_dup(i32 fd) -> Result@(i32, NetError)`
+### `sock_dup(i32 fd) i32 | NetError`
 
 A **second descriptor over the same open socket**: `dup(2)`. It is the socket twin of `<io/files>`'s `fd_dup`, and `TcpListener.share()` is written on it. Closing one descriptor leaves the other open, and a connection waiting on the port goes to whichever one accepts first.
 
-### `sock_peer_ip(i32 fd) -> Result@(string, NetError)` and `sock_peer_port(i32 fd) -> Result@(i32, NetError)`
+### `sock_peer_ip(i32 fd) string | NetError` and `sock_peer_port(i32 fd) i32 | NetError`
 
 Who is at the other end. The address is rendered numerically and asks no resolver, so neither call makes a network request. They are separate so that a test can assert the address — which is fixed — without asserting an ephemeral port.
 
@@ -98,15 +101,15 @@ Who is at the other end. The address is rendered numerically and asks no resolve
 
 Bound how long a read or a write may wait; both answer `Result@(i32, NetError)`. A bound that expires answers `NetError.TimedOut`. **A listening socket honours the receive bound**, which is what gives `sock_tcp_accept` a bound too.
 
-### `sock_udp_bind(string host, i32 port) -> Result@(i32, NetError)`
+### `sock_udp_bind(string host, i32 port) i32 | NetError`
 
 Bind a datagram socket. `SO_REUSEADDR` is deliberately **not** set here: on a datagram socket it means several sockets sharing a port, which is a different thing to ask for.
 
-### `sock_udp_send_to(i32 fd, u8[] data, string host, i32 port) -> Result@(i32, NetError)`
+### `sock_udp_send_to(i32 fd, u8[] data, string host, i32 port) i32 | NetError`
 
 Send one datagram. The destination is resolved on every call.
 
-### `sock_udp_recv_from(i32 fd, i32 max) -> Result@(Datagram, NetError)`
+### `sock_udp_recv_from(i32 fd, i32 max) Datagram | NetError`
 
 Wait for one datagram and answer it with its sender. `Datagram` is a predefined struct:
 
@@ -119,7 +122,7 @@ public struct Datagram:
 
 The sender rides along with the bytes because an unconnected datagram socket has no `getpeername`: the sender exists only at the instant its datagram arrives.
 
-### `sock_dns_resolve(string host) -> Result@(string[], NetError)`
+### `sock_dns_resolve(string host) string[] | NetError`
 
 Resolve a name to numeric address texts. `<net/dns>` reads these into `IpAddr`, which is what most callers want.
 

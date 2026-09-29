@@ -40,7 +40,7 @@ public struct Datagram:
 
 ## Constructor
 
-### `bind(string host, i32 port) -> Result@(UdpSocket, NetError)`
+### `bind(string host, i32 port) UdpSocket | NetError`
 
 Bind a datagram socket. Port 0 asks the kernel to choose; `s.local_port()` reads it back.
 

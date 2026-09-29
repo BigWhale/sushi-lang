@@ -20,7 +20,7 @@ An answer the parser cannot read is **dropped** rather than failing the call, so
 
 ## Functions
 
-### `resolve(string host) -> Result@(IpAddr[], NetError)`
+### `resolve(string host) IpAddr[] | NetError`
 
 Resolve a name, or a numeric address, into addresses. **A text that is already an address answers with exactly that address and makes no network request.**
 
@@ -38,7 +38,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `resolve_first(string host, bool want_v4) -> Result@(IpAddr, NetError)`
+### `resolve_first(string host, bool want_v4) IpAddr | NetError`
 
 The first answer of one family. `true` asks for IPv4, `false` for IPv6. When no answer is of that family the error is `NetError.InvalidAddress` rather than an empty list.
 

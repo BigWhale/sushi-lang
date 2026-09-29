@@ -35,7 +35,7 @@ public enum UrlError:
 
 ## Functions
 
-### `parse_url(string text) -> Result@(Url, UrlError)`
+### `parse_url(string text) Url | UrlError`
 
 Split an absolute URL. The scheme and the host are lowercased; every other part is kept as written. A part the text did not carry is empty, and a port it did not carry is **0**.
 

@@ -23,8 +23,8 @@ library (see [Library Format](../../library-format.md)). The metadata comes back
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
 reads the length of a payload section, never the payload.
 
-The module imports `<encoding/msgpack>` and `<io/fs>` — the first source module that
-imports another source module. It re-exports `<io/error>` (`public use`), so
+The module imports `<io/fs>`, `<encoding/msgpack>` and `<collections/strings>`. It
+re-exports `<io/error>` (`public use`), so
 `use <toolchain/slib>` alone lets a program name the `IoError` that `SlibError.Io`
 carries.
 
@@ -68,7 +68,7 @@ public struct SlibLibrary:
 
 ## Functions
 
-### `read_metadata(string path) -> MsgValue | SlibError`
+### `read_metadata(string path) MsgValue | SlibError`
 
 Read the metadata map of a `.slib` file. The four spare header fields are read and not
 validated, the same as the Python reader.
@@ -94,7 +94,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `sizes(string path) -> SlibSizes | SlibError`
+### `sizes(string path) SlibSizes | SlibError`
 
 The length of both payload sections, in one pass over the file. A version-4 container
 puts a length-prefixed source section between the metadata and the bitcode, so a reader
@@ -113,12 +113,12 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `bitcode_size(string path) -> u64 | SlibError`
+### `bitcode_size(string path) u64 | SlibError`
 
 The `bitcode` field of `sizes`, on its own. The reader reads only the two 8-byte
 length fields, never a payload.
 
-### `read_library(string path) -> SlibLibrary | SlibFault`
+### `read_library(string path) SlibLibrary | SlibFault`
 
 Read a whole library: the manifest and the lengths of both payload sections. The checks
 are the ones the Python reader of `sushic --lib-info` makes, in the same order, so both
@@ -145,7 +145,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `check_manifest(MsgValue meta) -> ~ | SlibFault`
+### `check_manifest(MsgValue meta) ~ | SlibFault`
 
 Check that a metadata map has the shape of a manifest: every required field is present
 and has its type. The Python reader checks the same rows (`MANIFEST_SCHEMA` in
@@ -195,10 +195,15 @@ and `sushic --lib-info` then delegates to the binary. See `toolchain/README.md`,
 
 ## Limitations
 
-- Read-only, metadata-only. Writing a `.slib` stays in Python.
-- No typed manifest structs: consumers walk the `MsgValue` tree with `map_get`.
-- Metadata above 2 GiB is not supported; a hostile length reads nothing and reports a
-  decode error on the empty blob.
+- Read-only. The module reads the header, the metadata and the two section lengths, and
+  never a payload. Writing a `.slib` is done by the compiler (`sushic --lib`).
+- No typed manifest structs: consumers walk the `MsgValue` tree with the accessors of
+  `<encoding/msgpack>` (`map_get`, `map_get_str`, `map_get_bool`, `map_index`).
+- A declared length is compared with the size of the file before any bytes are read. A
+  metadata length larger than the rest of the file is `SlibError.Truncated()` from
+  `read_metadata` and `SlibFault.Truncated(...)` from `read_library`. `read_library` also
+  refuses a file larger than 1 GiB with `SlibFault.TooLarge(size)`. `read_metadata` has no
+  size limit, and a real file larger than 2 GiB is not supported.
 
 ## See also
 
