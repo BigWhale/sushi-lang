@@ -1,11 +1,10 @@
 # Design: Variadic Functions (P2-2)
 
-Status: accepted. Implemented across two PRs — `variadic-extern` (P2-2c) and
-`variadic-native` (P2-2b).
+Status: accepted and implemented: extern varargs (P2-2c) and native `...T` (P2-2b).
 
 ## Summary
 
-Sushi gains two distinct, deliberately separated variadic mechanisms, mirroring how FFI already
+Sushi has two distinct, deliberately separated variadic mechanisms, mirroring how FFI
 separates `ptr` (unmanaged, foreign) from `Own@(T)` (RAII, native):
 
 - **Foreign / unsafe world — untyped C varargs.** A bare trailing `...` is allowed **only** inside
@@ -26,14 +25,17 @@ Sushi, contradicting the bounds-checked / RAII / no-null safety model.
 # Native: prefix marker on the last parameter, element type T
 fn log_all(string prefix, ...i32 values) ~:
     foreach(v in values.iter()):
-        println(v)
-
-log_all("nums", 1, 2, 3)   # values = [1, 2, 3]
-log_all("empty")           # values = []  (zero variadic args allowed)
+        println("{prefix}: {v}")
+    return Result.Ok(~)
 
 # Extern: bare trailing ... after at least one fixed parameter
 unsafe external "C" as libc because "formatted output via libc":
     fn printf(string fmt, ...) i32 = "printf"
+
+fn main() i32:
+    log_all("nums", 1, 2, 3)     # values = [1, 2, 3]
+    log_all("empty")             # values = []  (zero variadic args allowed)
+    return Result.Ok(0)
 ```
 
 ## Semantics
@@ -51,7 +53,7 @@ unsafe external "C" as libc because "formatted output via libc":
   This is the one place the collected array's owner still depends on the callee's implementation, so
   it is stated in exactly one place (`CalleeModes.variadic_callee_owns`): a Sushi `...T` body
   registers the array, and a STDLIB variadic (`run`) is generated IR that frees nothing, so there the
-  CALLER keeps it. Relinquishing it to `run` leaked the whole argv on every call (issue #357). A
+  CALLER keeps it. A
   consuming variadic spelling (`nom ...T`) is deferred — see `docs/design/borrow-model.md` S7.
 - **Extern lowering.** The extern declaration lowers to an LLVM `var_arg=True` declaration. Trailing
   arguments undergo C default-argument promotion: `i8`/`i16`/`bool` → `i32`, `f32` → `f64`; `string`
@@ -65,13 +67,13 @@ unsafe external "C" as libc because "formatted output via libc":
 - `CE5005` — non-C-ABI type passed as a variadic argument to an external call.
 - `CE0114` — variadic parameter must be the last parameter; a function may declare at most one;
   its element type must not be a reference. A dynamic-array element (`...T[]`) is allowed. Also
-  rejected in generic functions (generic variadics are out of scope for v1).
+  rejected in generic functions (use a type pack `...Ts` for a generic variadic, below).
 - `CE0115` — variadic parameter not allowed in a perk method or extension method.
 - `CE0116` — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
   native variadic collects its trailing args into a runtime `T[]` inside one concrete function, so
   there is no template to monomorphize at the consumer; analogous to the CE5002 FFI boundary block.
-  This blocks only v1 `...T` (`is_variadic`); v2 type packs (`...Ts`) ship as templates and are
-  exportable (see "Cross-library packs" under the Phase-1 section below).
+  This blocks only native `...T` (`is_variadic`); type packs (`...Ts`) ship as templates and are
+  exportable (see "Cross-library packs" under the type-pack section below).
 - `CE0120` — a bloom argument `arr...` used somewhere illegal: into a non-variadic parameter, or
   not as the sole, last trailing argument at the call site.
 - Type mismatch when blooming (a non-array source, or an array of the wrong element type) reuses
@@ -105,7 +107,7 @@ Semantics:
   caller's instead (see "Native ownership" above), so `run("cmd", argv...)` leaves `argv` readable.
 - **Source must be a bare variable.** `arr...` requires `arr` to be a `Name` referring to an
   array-typed local/parameter; blooming an arbitrary expression (a call result, a field access, a
-  literal array) is not supported in v1.
+  literal array) is not supported.
 - **Sole, last trailing argument.** A bloom must be the only trailing argument — it cannot be
   mixed with individual trailing arguments (`sum(1, xs...)` is not a bloom call shape), and it
   cannot appear anywhere but the variadic slot. Any other placement is `CE0120`.
@@ -119,19 +121,19 @@ value cannot be constructed in surface syntax, `rows...` blooming into a `...i32
 moot in practice — that variadic form is only reachable via individual array arguments
 (`total(a, b)`), each moved in per element (see Semantics above).
 
-## Deferred (additive, not in v1)
+## Deferred (additive)
 
 - **Generic variadics** (`...T` in a generic function).
-- **Variadics in perk / extension methods** (rejected with `CE0115` for now).
-- **Public `.slib` export** of a native variadic function — blocked for v1 with `CE0116` (the
+- **Variadics in perk / extension methods** (rejected with `CE0115`).
+- **Public `.slib` export** of a native variadic function — blocked with `CE0116` (the
   `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
   boundary block.
 - **Pack forwarding** (`f(pack...)`, forwarding a parameter pack into another variadic) and **pack
   indexing** — bloom covers only a single `...T` array source, not `...Ts` packs.
 
-## Variadic generics / parameter packs (Phase 1, landed)
+## Variadic generics / parameter packs
 
-Status: implemented. Distinct from and coexisting with the v1 `...T` (homogeneous array sugar) and
+Status: implemented. Distinct from and coexisting with the native `...T` (homogeneous array sugar) and
 extern `...` (libc varargs) mechanisms.
 
 ### Syntax
@@ -178,8 +180,10 @@ fn main() i32:
     nested-block-scope model).
 - **Monomorphization**: each distinct (arity, type-tuple) call site produces a separate specialized
   function. The mangled symbol uses a `.pack{N}` suffix to distinguish pack specializations from
-  regular-generic symbols and to remain collision-free across arities. All specializations use
-  `linkonce_odr` linkage for linker deduplication in multi-unit builds.
+  regular-generic symbols and to remain collision-free across arities. Like every generic
+  instance, a specialization carries the prefix of its declaring unit
+  (`<unit>$print_all__i32_string_bool.pack3`) and takes the linkage of the function it comes
+  from: `internal` for a private function, `external` for a `public` one.
 - **Pack elements are passed as separate positional arguments** — they are not boxed or collected
   into an array.
 - **Arity zero** is valid: `print_all()` monomorphizes an arity-0 specialization; the `expand` body
@@ -188,28 +192,28 @@ fn main() i32:
 ### Diagnostics
 
 - **CE0117** — type-pack `...Ts` must be the last type parameter; at most one pack per function.
-- **CE0118** — cannot mix a type-pack `...Ts` with a v1 homogeneous `...T` in the same function.
+- **CE0118** — cannot mix a type-pack `...Ts` with a native homogeneous `...T` in the same function.
 - **CE0119** — malformed `expand` statement (wrong syntax, iterator variable, or target).
 - **CE2090** — a pack element type at the call site does not satisfy the pack's perk constraint.
 
-### Phase-1 limitations
+### Type-pack limitations
 
 - **Perk-constrained packs only**: an unconstrained `...Ts` (no `: PerkName`) can be declared and
   called, but the `expand` body cannot usefully operate on the elements without a perk (no
   methods are available). Unconstrained forwarding and pack indexing are deferred.
-- **Cross-library packs (Phase 3, landed)**: a public `...Ts` pack ships in a `.slib` as an
+- **Cross-library packs**: a public `...Ts` pack ships in a `.slib` as an
   instantiable template (`templates.generic_functions`) and is monomorphized at the consumer's call
-  sites, exactly like a regular cross-library generic. CE0116 still blocks v1 native `...T` export
+  sites, exactly like a regular cross-library generic. CE0116 still blocks native `...T` export
   (a runtime array, not a template).
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
-  pack (CE0115 applies to both v1 `...T` and Phase-1 `...Ts`).
+  pack (CE0115 applies to both native `...T` and type packs `...Ts`).
 - **No pack forwarding**: a value pack cannot be forwarded into another variadic (`g(pack...)`) —
   bloom (see "Spread / forwarding (bloom)" above) only spreads a single `...T` array, not a
   `...Ts` pack.
 - **No pack indexing**: individual pack elements cannot be addressed by index.
-- **Same-enum-type element gap**: if all pack elements resolve to the same enum type, the
-  instantiation-collection pass may raise CE2061 (a narrow limitation, separate from the
-  perk-constraint mechanism).
+
+Pack elements that all resolve to one enum type work like any other pack
+(`tests/variadic/type_packs/test_variadic_pack_enum_repeated_runtime.sushi`).
 
 ### Internal representation
 
@@ -219,5 +223,5 @@ fn main() i32:
 - Name mangling: `.pack{N}` marker (e.g. `.pack3` for a three-element pack) encodes arity in a
   collision-free way distinct from regular-generic symbols.
 
-Phase-0 unit tests (`test_p0t*`) cover the monomorphizer infrastructure; Phase-1 integration tests
-(`tests/variadic/type_packs/test_variadic_pack_*.sushi`) exercise the full compiler pipeline.
+The fixtures under `tests/variadic/type_packs/` (`test_variadic_pack_*.sushi`) exercise the
+full compiler pipeline.

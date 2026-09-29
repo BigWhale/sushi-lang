@@ -1,21 +1,20 @@
 # 12. Memory Management
 
-Most languages pick one of two strategies for memory. Python (and Java) hand the job to a
-**garbage collector**: you allocate freely and a runtime later sweeps up what you abandoned,
-at the cost of pauses and unpredictable timing. C hands the job to **you**: you `malloc` and
-you `free`, and if you get it wrong you get leaks, double-frees, and use-after-free bugs.
+Most languages use one of two strategies for memory. Python and Java give the job to a
+**garbage collector**: you allocate, and a runtime later removes what you do not use. This
+causes pauses and timing that you cannot predict. C gives the job to **you**: you `malloc`
+and you `free`. A mistake causes leaks, double frees and use-after-free bugs.
 
-Sushi takes a third road, the one Rust and modern C++ travel: the **compiler** tracks
-ownership and inserts cleanup for you, at compile time, with no runtime collector. You get
-C's predictability and Python's "I didn't have to think about it" — and the compiler refuses
-to build programs that would corrupt memory. This chapter is how that works.
+Sushi uses a third strategy, as Rust and modern C++ do: the **compiler** tracks ownership
+and adds the cleanup for you, at compile time. There is no collector at run time. The
+compiler also refuses a program that can corrupt memory. This chapter shows how.
 
-## RAII: cleanup rides on scope
+## RAII: cleanup at the end of a scope
 
-RAII stands for "Resource Acquisition Is Initialization", which is a mouthful for a simple
-idea: **when a value goes out of scope, its resources are released automatically**. A
-heap-allocated list, a string buffer, a file handle — when the variable holding it reaches
-the end of its block, the compiler has already arranged for the cleanup.
+RAII means "Resource Acquisition Is Initialization". The idea is simple: **when a value
+goes out of scope, the compiler releases its resources**. A list on the heap, a string
+buffer, a file handle: when the variable that holds it gets to the end of its block, the
+cleanup occurs.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/raii.sushi"
@@ -30,23 +29,58 @@ Crew size: 3
   - Trillian
 ```
 
-Notice what's *missing*: there is no `crew.free()`, no `delete`, no `defer`. The `List`
-allocated a buffer on the heap, and that buffer is freed the instant `main` returns. You
-write the acquisition; the compiler writes the release.
+There is no `crew.free()`, no `delete` and no `defer`. The `List` allocated a buffer on
+the heap, and the buffer is freed when `main` returns. You write the acquisition; the
+compiler writes the release.
 
-!!! note "Where the cleanup actually goes"
-    The compiler emits the destructor call at every exit from the scope — the normal
-    fall-through at the end, an early `return`, and the error path of a `??`. That last one
-    matters: even when an error propagates out mid-function, everything acquired so far is
-    cleaned up first. RAII and error handling cooperate.
+!!! note "Where the cleanup goes"
+    The compiler puts the cleanup at every exit from the scope: the end of the block, an
+    early `return`, a `break` or `continue`, and the error path of a `??`. So when an error
+    propagates out of a function, the function first cleans up all that it acquired.
+
+When a scope holds more than one value, the values are destroyed in **reverse declaration
+order**: the last value declared is the first value destroyed.
+
+## Drop: your own release step
+
+A type such as `File` holds a resource that the compiler cannot see in its fields: an
+operating-system descriptor. To give a type its own release step, implement the predefined
+perk `Drop`. It has one method, `fn drop(poke self) ~`.
+
+```sushi
+--8<-- "docs/tutorial/examples/12-memory-management/drop-order.sushi"
+```
+
+Output:
+
+```
+Arthur and Ford have towels
+Ford hands back the towel
+Arthur hands back the towel
+```
+
+The compiler calls `drop()` when the value is destroyed, then destroys the fields. `ford`
+is declared last, so it is destroyed first.
+
+Some rules for `Drop`:
+
+- Only the unit that declares the type can implement `Drop` for it (`CE4012`).
+- A type that implements `Drop` **owns a resource**, so it moves (see the next section).
+- `.clone()` on such a type is an error (`CE2431`), because the copy is a second handle
+  to one resource. A handle type that can share its resource gives a method for it: `File`
+  and `TcpListener` have `.share()`.
 
 ## Move versus copy
 
-When you assign one variable to another, what happens to the original? Sushi answers this
-differently depending on the type, and the rule is short:
+When you assign one variable to another, what occurs to the original? The answer depends
+on the type:
 
-- **Primitives and strings are copied.** The original stays valid.
-- **Dynamic arrays are moved.** The original is consumed and may not be used again.
+- **Primitives copy.** The original stays valid.
+- **A string bound directly from a literal copies.** It points into read-only program
+  data and owns nothing.
+- **Every other string moves**, as does every other owning type. The original is
+  consumed, and you cannot use it again.
+- **Dynamic arrays move.**
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/move-vs-copy.sushi"
@@ -59,27 +93,38 @@ x is still usable: 42
 y is a copy: 42
 s1: Mostly Harmless
 s2: Mostly Harmless
+taken: Mostly Harmless, edition 42
 dest length after move: 3
 ```
 
-Why the difference? A dynamic array owns a heap buffer. If assigning `dest := source` merely
-copied the pointer, you'd have two variables believing they own the same buffer — and when
-both went out of scope, RAII would free it twice. By **moving** instead (transferring
-ownership and marking the source as gone), Sushi guarantees exactly one owner, so exactly one
-free. Touch a moved-out variable and the compiler stops you cold with **CE2405: cannot borrow moved
-variable** — a use-after-free caught before the program ever runs. If you genuinely need two
-independent arrays, ask for one explicitly with `.clone()`.
+Why the difference? A dynamic array owns a heap buffer. If `dest := source` only copied
+the pointer, two variables would own one buffer, and at the end of the scope RAII would
+free it two times. A **move** transfers the ownership and marks the source as gone. So
+there is always one owner and one free. A use of a moved variable is an error:
+**CE2405: cannot borrow moved variable**. The compiler finds the use-after-free before the
+program runs. If you need two independent values, ask for a copy with `.clone()`.
 
-The same move rule covers every owning type — dynamic arrays, `List@(T)`, `Own@(T)`, and **any struct
-or enum that holds one of those** (move-ness is compositional: a value moves iff it transitively owns
-heap). A plain-data or string-only struct still copies (its string field is cloned and the source
-stays usable).
+The compiler never adds a deep copy. `.clone()` is the only deep copy.
+
+These types **own** something, and so they move:
+
+- a dynamic array `T[]`, `List@(T)`, `HashMap@(K, V)` and `Own@(T)`,
+- a string that owns heap,
+- a closure that captures an owning value (chapter 18),
+- a type that implements `Drop`,
+- a struct or enum that holds one of the above. A struct with a `string` field moves,
+  also when the field came from a literal.
+
+All other types are **plain**, and they copy.
 
 ## Passing a value to a function
 
-Assigning moves, but **calling does not**. A parameter is a *borrow* unless it says otherwise: the
-caller keeps the value and frees it, so `f(x)` leaves `x` usable. To hand a value over, write `nom`
-on the parameter and again at the call site:
+Chapter 4 used the parameter modes ([Parameter modes](04-functions.md#parameter-modes)).
+This section and the next explain them in full.
+
+Assignment moves, but **a call does not**. A parameter is a *borrow* unless it says
+otherwise: the caller keeps the value and frees it, so `f(x)` leaves `x` usable. To give a
+value to the callee, write `nom` on the parameter and again at the call site:
 
 ```sushi
 fn eat(nom i32[] items) i32:
@@ -93,25 +138,29 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The marker appears at **both** ends, or at neither. That is the whole point of it: reading `f(s)`
-you know `s` survives the call, and reading `f(nom s)` you know it does not — without opening `f`.
-Writing it at one end only is **CE2427**.
+The marker is at **both** ends, or at neither. When you read `f(s)`, you know that `s` is
+usable after the call. When you read `f(nom s)`, you know that it is not. You do not have to
+open `f`. A marker at one end only is **CE2427**.
 
-When a callee needs an independent value and the caller wants to keep its own, `.clone()` is the
-answer: `eat(nom data.clone())`.
+An unmarked parameter is a **read-only** borrow. A write through it is an error: `l.push(3)`
+on a `List@(i32) l` parameter is **CE2422**. A primitive parameter can get a new value
+(`x := 5`), but the change stays in the callee.
 
-(One special case: `main`'s `string[] args` is a borrowed view of the process argument vector, not a
-heap-owned array. It passes to an ordinary borrow parameter like anything else; handing it to a `nom`
-one is **CE2410**.)
+When a callee needs its own value and the caller must keep its value, use `.clone()`:
+`eat(nom data.clone())`.
+
+(One special case: the `string[] args` of `main` is a borrowed view of the process
+arguments, not an array on the heap. You can give it to an ordinary borrow parameter. To
+give it to a `nom` parameter is **CE2410**.)
 
 ## References: borrowing by pointer
 
-An unmarked parameter already borrows, but it passes the *value*, so the callee's writes land on its
-own copy. Two more modes pass a **pointer** instead:
+Two more modes give the callee a **pointer** to the caller's value:
 
-- `peek T` — a **read-only** borrow. You may look, not touch. Many peeks can coexist.
-- `poke T` — a **read-write** borrow. You may modify the caller's value in place. Exclusive: only
-  one at a time.
+- `peek T`: a **read-only** borrow. You can read the value, but not change it. Many `peek`
+  borrows can exist at the same time.
+- `poke T`: a **read-write** borrow. You can change the caller's value. It is exclusive:
+  only one at a time.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/references.sushi"
@@ -126,29 +175,83 @@ The answer is 42
 The answer is 42
 ```
 
-The caller never loses `answer`; it lends it out and keeps using it afterwards. A `peek`
-borrow is the zero-cost way to pass something read-only (no copy of the underlying data is
-made), and a `poke` borrow lets a function mutate the caller's variable directly, which is
-how the unit-returning `increment` bumped `answer` from 41 to 42.
+The caller keeps `answer` the full time: it lends the value and uses it again after the
+call. A `peek` borrow passes a value read-only with no copy. A `poke` borrow lets a
+function change the caller's variable: `increment` changes `answer` from 41 to 42.
 
-Note the last line: `announce` wants a `peek`, and we handed it a `poke`. That's allowed —
-a read-write borrow can safely **coerce down** to a read-only one. The reverse never happens:
-you cannot smuggle a read-only borrow into a slot that wants to write.
+Look at the last line: `announce` wants a `peek`, and we give it a `poke`. This is
+permitted: a read-write borrow can **coerce down** to a read-only borrow. The reverse is
+not permitted.
+
+## Reference bindings: `let poke` and `let peek`
+
+A `let` can also hold a pointer into a place: a variable, or a field or element of one.
+Write the mode after `let`:
+
+```sushi
+--8<-- "docs/tutorial/examples/12-memory-management/let-borrow.sushi"
+```
+
+Output:
+
+```
+p.x is now 42
+q.y is 9
+```
+
+`r` points into `p`, so `r.x := 42` changes `p`. The binding lives to the end of its
+block. While it lives, these rules apply:
+
+- The owner is frozen: `p.x := 3` while `r` lives is **CE2412**.
+- Only one `poke` binding of a value can live at a time (**CE2403**), and a `peek` and a
+  `poke` of one value cannot live together (**CE2407**).
+- A write through a `peek` binding is **CE2408**.
+- A binding needs a place: `let poke T x = make()` (a temporary) is **CE2404**.
+
+## Pattern bindings have a mode
+
+A binding in a `match` arm has a mode too:
+
+| Binding | What it does |
+|---|---|
+| `Shape.Poly(p)` | Borrows the payload. You can read it. |
+| `Shape.Poly(poke p)` | Points into the payload. You can change it. |
+| `Shape.Poly(nom p)` | Takes the payload. |
+
+To take a payload, the `match` must **own** its scrutinee. A temporary (for example, the
+result of a call) is owned. For a local variable, write `match nom x:`. This gives the
+variable to the match, and a later use of `x` is **CE2405**. A `nom` binding under a plain
+`match x:` is **CE2432**.
+
+```sushi
+--8<-- "docs/tutorial/examples/12-memory-management/pattern-modes.sushi"
+```
+
+Output:
+
+```
+2 crates on board
+shipped 3 crates
+```
+
+The first `match` borrows the list and reads its length. The second `match` changes the
+list in place. The third `match` takes `cargo`, and the `nom crates` binding gives the list
+to `ship`.
 
 ## The borrow-checking rules
 
-The exclusivity is not a guideline; it's enforced at compile time. The full ruleset:
+The compiler enforces the exclusivity at compile time. The full rules:
 
-- Any number of `peek` borrows of the same value may be active at once.
-- Only **one** `poke` borrow may be active at a time.
-- You may **not** mix `peek` and `poke` borrows of the same value simultaneously.
-- A `poke` coerces to `peek` (safe downgrade); the reverse is forbidden.
+- Many `peek` borrows of one value can be active at the same time.
+- Only **one** `poke` borrow can be active at a time.
+- You cannot mix `peek` and `poke` borrows of one value at the same time.
+- A `poke` coerces to `peek`; the reverse is not permitted.
 
-These are exactly the rules that make data races and aliasing bugs impossible: shared
-read-only access is fine, but anyone who can *write* must have exclusive access.
+These rules prevent aliasing bugs: shared read-only access is safe, and a writer must
+have exclusive access.
 
-Here's a program that breaks the second rule. It does **not compile** — it asks for two
-exclusive `poke` borrows of `num` at the same call site:
+The program below breaks the second rule. It does **not compile**: it asks for two
+exclusive `poke` borrows of `num` at one call site.
 
 <!-- docs-sweep: error CE2403 -->
 ```sushi
@@ -164,17 +267,16 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The compiler rejects it with **CE2403: 'num' already has an active poke borrow (only one
-exclusive borrow allowed)**, and helpfully points at where the first borrow started. (Mixing
-a `peek` and a `poke` of the same value instead trips the closely related **CE2407**.) The
-fix is to give each exclusive borrow its own variable — the borrow checker is telling you,
-correctly, that two mutable aliases to the same memory is a bug.
+The compiler refuses it with **CE2403: 'num' already has an active poke borrow (only one
+exclusive borrow allowed)**, and it shows where the first borrow started. A `peek` and a
+`poke` of the same value gives the related **CE2407**. To correct the program, give each
+exclusive borrow its own variable.
 
-## Own&lt;T&gt;: explicit heap allocation
+## Own@(T): explicit heap allocation
 
-Sometimes you need a value on the heap *by name* — most commonly for **recursive types**,
-where a struct must contain itself (a linked-list node pointing at the next node). A struct
-can't physically embed an infinitely-nested copy of itself, so the recursive field has to be
+Sometimes you must put a value on the heap by name. The usual case is a **recursive
+type**: a struct that contains itself, for example a node of a linked list that points to
+the next node. A struct cannot contain a full copy of itself, so the recursive field must be
 a pointer. `Own@(T)` is that owned heap pointer.
 
 ```sushi
@@ -188,38 +290,41 @@ Heap-allocated answer: 42
 Vogon #7: Prostetnic Vogon Jeltz
 ```
 
-The three methods you'll reach for:
+The three methods:
 
-- `Own.alloc(value)` — allocate `value` on the heap and hand back an `Own@(T)`.
-- `.get()` — read the value back out.
-- `.destroy()` — free it by hand, right now.
+- `Own.alloc(value)`: puts `value` on the heap and gives back an `Own@(T)`.
+- `.get()`: reads the value.
+- `.destroy()`: frees it immediately.
 
-You rarely *need* `.destroy()`: like everything else in this chapter, an `Own@(T)` is freed
-automatically by RAII when it goes out of scope (`answer` in the example never gets a manual
-`.destroy()` and leaks nothing). It's there for the cases where you want to release a large
-allocation early. For an actual recursive structure, the pattern is a struct field typed
-`Maybe@(Own@(Node))` — `Maybe.None()` marks the end of the chain, and Sushi stays entirely
-null-free.
+You seldom need `.destroy()`. RAII frees an `Own@(T)` when it goes out of scope: `answer`
+in the example has no `.destroy()` and leaks nothing. Use `.destroy()` to release a large
+allocation early. For a recursive structure, use a struct field of type
+`Maybe@(Own@(Node))`: `Maybe.None()` marks the end of the chain, and Sushi has no null.
 
-!!! note "No nulls, ever"
-    You may have noticed Sushi has no `null` literal. An absent pointer is `Maybe.None()`, a
-    present one is `Maybe.Some(...)`, and the compiler forces you to handle both. The entire
-    category of null-pointer dereferences simply doesn't exist here.
+!!! note "No nulls"
+    Sushi has no `null` literal. An absent pointer is `Maybe.None()`, a present pointer is
+    `Maybe.Some(...)`, and the compiler makes you handle both. So a null-pointer
+    dereference cannot occur.
 
 ## What you learned
 
-- **RAII** frees resources automatically at scope exit — no collector, no manual `free`.
-- A parameter **borrows** unless it says `nom`, so calling a function does not consume the
-  argument; `nom` is written at the declaration and at the call site alike (**CE2427** if not).
-- Primitives and strings are **copied** on assignment; dynamic arrays are **moved**, leaving
-  the source invalid (use-after-move is caught as **CE2405**), so each heap buffer has exactly
-  one owner and one free. Use `.clone()` for an independent copy.
-- **References** lend without owning: `peek` is read-only and shareable, `poke` is
-  read-write and exclusive, and `poke` coerces down to `peek`.
-- The **borrow checker** enforces those rules at compile time (e.g. two `poke` borrows of one
-  value is **CE2403**; mixing `peek` with `poke` is **CE2407**).
-- **Own&lt;T&gt;** is explicit heap allocation for recursive types: `.alloc()`, `.get()`,
-  `.destroy()` — though RAII usually frees it for you.
+- **RAII** frees resources at scope exit, in reverse declaration order. There is no
+  collector and no manual `free`.
+- The **`Drop`** perk gives a type its own release step. `.clone()` on such a type is
+  **CE2431**.
+- A parameter **borrows** unless it says `nom`, so a call does not consume the argument.
+  Write `nom` at the declaration and at the call site (**CE2427** if not).
+- Primitives and literal-bound strings **copy** on assignment. Every owning type (a heap
+  string, an array, a container, a `Drop` type, a struct that holds one) **moves**, and a
+  use after the move is **CE2405**. Use `.clone()` for an independent copy.
+- **References** lend without owning: `peek` is read-only and shared, `poke` is
+  read-write and exclusive, and `poke` coerces down to `peek`. `let peek` and `let poke`
+  bind a reference in a block.
+- A **pattern binding** borrows, points into (`poke`) or takes (`nom`) the payload.
+  `match nom x:` gives a local to the match.
+- The **borrow checker** enforces these rules at compile time (for example, two `poke`
+  borrows of one value is **CE2403**; `peek` with `poke` is **CE2407**).
+- **Own@(T)** is explicit heap allocation for recursive types: `.alloc()`, `.get()`,
+  `.destroy()`. RAII usually frees it for you.
 
-Next up: the standard collections that put all of this to work. On to
-[Collections](13-collections.md).
+The next chapter shows the standard collections. Go to [Collections](13-collections.md).

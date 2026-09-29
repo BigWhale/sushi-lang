@@ -139,10 +139,10 @@ not CE2515, which is a resolution fallback for a chained call whose channel is u
 and not CE2516, which is a wrapper standing where a bool belongs. Here the item is the
 right shape for the loop and the wrong shape for the marker.
 
-### 4. A stop must be reachable, so three `next()` shapes are refused
+### 4. A stop must be reachable, so four `next()` shapes are refused
 
 Each refusal has the same reason: the loop must be able to call the method repeatedly and
-read a stop out of its answer. All three answer **CE2033**.
+read a stop out of its answer. All four answer **CE2033**.
 
 | the shape | why it cannot work |
 |---|---|
@@ -167,26 +167,24 @@ and carry on" safe by construction: the loop sees at most one failure per iterat
 
 ### 6. `foreach` consumes its iterable, and the loop owns the iterator
 
-Unchanged from every other iterable, and load-bearing here for a new reason. Every iterator
-before this design was a non-owning cursor over somebody else's buffer, so no `foreach` arm
-had ever destroyed one. A `Lines@(R)` owns a `BufReader@(R)` that owns a `File`, so the loop
-holds a real resource, three levels deep.
+The same as for every other iterable, and load-bearing here: a protocol iterator can own a
+resource. A `Lines@(R)` owns a `BufReader@(R)` that owns a `File`, so the loop holds a real
+resource, three levels deep.
 
 The iterator therefore lives in a local of its own in a scope that closes after the loop's
 end block, registered through `register_owning_value` — the complete registry router, not
-`create_local`'s default, which does not know a dynamic array, a `List@(T)` or an `Own@(T)`
-(#382). Every exit path destroys it: the end of the input, a `break`, a `return` from the
+`create_local`'s default, which does not know a dynamic array, a `List@(T)` or an `Own@(T)`.
+Every exit path destroys it: the end of the input, a `break`, a `return` from the
 body, and the propagation path a `??` binder takes.
 
 The item of a protocol iterator is registered as an owner too: it is the payload of a
 fresh `Maybe@(T)` nobody else frees, so the iteration owns it, the body may hand it away,
 and the scope exit destroys what the body did not take. The `??` binder is the same rule
 and not an exception: `foreach(line?? in it)` is `let T line = <item>??`, and `??` over a
-named wrapper the writer owns SPENDS it (`borrow-model.md` §10d, #548). On the Ok path the
+named wrapper the writer owns SPENDS it (`borrow-model.md` §10d). On the Ok path the
 payload becomes the `let`'s, on the Err path it becomes the caller's, and the item is freed
-by nobody because the `??` marked it moved through the ownership seam. Until #548 the
-backend registered no owner for an item under a binder instead, a special case that hid the
-general defect: a hand-written `let string got = r??` over a named Result local double-freed.
+by nobody because the `??` marked it moved through the ownership seam. The binder has no
+special case in the backend.
 
 ### 7. A reference binding is refused over a protocol iterator
 
@@ -201,7 +199,7 @@ iterator would otherwise pass the name test and bind a pointer into a temporary.
 A loop that only repeats its body (fill `n` slots, skip `n` bytes) has no use for its
 item. A named binder that the body never reads is CW1001, and that is correct: it hides
 nothing that a reader must know. So `_` is the binder that binds nothing, the spelling a
-`match` pattern already has (#968). It is never CW1001, and the body cannot name it,
+`match` pattern has. It is never CW1001, and the body cannot name it,
 because `_` is not a name in an expression.
 
 The AST builder gives the loop a hidden name with no span, and the scope pass never
@@ -230,7 +228,7 @@ failure once the lazy arm called a stdlib function — every program iterating a
 then referenced `sushi_io_files_fd_readln`. And the iterator had no destructor, so every
 `lines()` leaked sixteen bytes.
 
-**A `File` keeps no line loop now**, and that is a decision rather than an omission: an
+**A `File` has no line loop**, and that is a decision rather than an omission: an
 unbuffered handle yielding lines is one system call per line, which is the cost the buffer
 exists to remove. `File.readln()` stays as the one-line unbuffered read.
 

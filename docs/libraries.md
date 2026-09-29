@@ -43,6 +43,10 @@ are type-checked and borrow-checked with everything else, and each one caches it
 file in `__sushi_cache__/`. The first build against a library pays for it; later builds do
 not.
 
+An error in a library unit is reported to the consumer. A warning in a library unit is not: it
+does not print, and it does not change the exit status of the consumer's build. The library's
+author sees those warnings when the library is built.
+
 ## Creating Libraries
 
 ### The `--lib` Flag
@@ -94,9 +98,9 @@ where no unit of its own wrote the import.
 
 ### Public Declarations
 
-Only declarations marked `public` are accessible from other compilation units. Five kinds
-carry the marker -- `fn`, `const`, `struct`, `enum` and `perk` -- and private is the
-default for all of them:
+Only declarations marked `public` are accessible from other compilation units. Six kinds
+carry the marker -- `fn`, `const`, `var`, `struct`, `enum` and `perk` -- and private is the
+default for all of them. A `public var` is storage that a consumer can read and write:
 
 ```sushi
 # mylib.sushi
@@ -112,6 +116,9 @@ fn helper(i32 x) i32:
 public fn double_add(i32 a, i32 b) i32:
     let i32 sum = add(a, b)??
     return Result.Ok(helper(sum)??)
+
+# Storage that a consumer can read and write
+public var i32 calls = 0
 ```
 
 A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
@@ -153,7 +160,7 @@ public fn make_point(i32 x, i32 y) Point:
     return Result.Ok(Point(x, y))
 ```
 
-Two consequences worth knowing:
+Three consequences worth knowing:
 
 - **A public signature may not name a private type** (`CE3009`), and a public constraint
   may not name a private perk (`CE3010`). Privacy is worth nothing if the signature hands
@@ -163,8 +170,8 @@ Two consequences worth knowing:
   consumer can monomorphize, and the consumer still cannot name them itself.
 - **A public constant is API, on both library kinds.** A constant has no body to link, so
   the manifest carries the declaration's own source and the consumer registers it under
-  its own name. A consumer's own constant of that name is `CE0105`, exactly as it is when
-  the two declarations are two ordinary units.
+  its own name. A consumer's own constant of that name is `CE0105`. (Between two ordinary
+  units of one program, the unit's own constant wins with no diagnostic.)
 
 A consumer that writes a library-private name hears `CE3005` -- "private struct 'Cursor',
 defined in that library" -- and not "unknown type".
@@ -188,8 +195,9 @@ fn main() i32:
 
 The compiler will:
 1. Search for `mathutils.slib` in the library search path
-2. Read metadata and register all functions, structs, and enums
-3. Link the bitcode into the final executable
+2. Read the index and register the public declarations
+3. Compile the library's source units with the program (a source library), or link the
+   shipped bitcode (a binary library)
 
 ### Multiple Libraries
 
@@ -279,10 +287,10 @@ Example output, with `--docs`:
 Library: mylib
 Version: 1.0.0
 Kind: source
-Compiler: 0.11.1
-Requires compiler: ~0.11
-Compiled: 2026-08-23T10:30:00+00:00
-Protocol: 2.0
+Compiler: 0.12.0
+Requires compiler: ~0.12
+Compiled: 2026-09-28T19:18:00+00:00
+Protocol: 2.3
 
 Units (1):
   mylib
@@ -302,7 +310,10 @@ Public Functions (3):
   fn shout(nom string s) string
     Hands the string back, and takes it over.
 
-Structs (1):
+Public Variables (1):
+  var i32 counter
+
+Public Structs (1):
   struct Point:
     A point in the plane.
 
@@ -312,16 +323,21 @@ Structs (1):
     i32 y
       The distance along y.
 
-Enums (1):
+Public Enums (1):
   enum Color:
     Red
     Green
     Blue
 
-Dependencies (1):
+Dependencies (6):
+  <collections/strings>
+  <io/contracts>
+  <io/error>
+  <io/files>
   <io/fs>
+  <io/path>
 
-Source: 1,204 bytes
+Source: 643 bytes
 ```
 
 A documented symbol prints its doc block, indented two spaces under its own line, with a
@@ -330,7 +346,8 @@ has no block, so it prints as a bare line and the run of bare lines stays dense.
 `--docs` no block prints at all and the whole report is that dense -- prose is what makes
 a report long, and a reader asking what a library exports usually does not want ten
 screens of it. A `nom` parameter shows its mode, which is the one mode a type cannot
-spell, and it prints either way. See
+spell, and it prints either way. `Dependencies` lists every stdlib module the library
+needs, the modules that its imports bring in included: one `use <io/fs>` gives six lines. See
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
 for the few things that do not travel in it.
 
@@ -459,9 +476,10 @@ one per record that has a symbol, and the binary path is the only reader. The ma
 records the declaring `unit` on every record, which is a different question and is answered
 for both kinds. `docs/library-format.md` carries the schema and the reasoning.
 
-### Dead Code Elimination
+### Unused Library Functions
 
-Only symbols reachable from `main()` are included in the final executable. Unused library functions are automatically removed, reducing binary size.
+The compiler does not remove unused library functions. A public function of a library that the
+program never calls is still in the executable, also at `--opt O3`.
 
 ## Best Practices
 
@@ -495,10 +513,12 @@ boundary and reaches nobody.
 
 An `- Example:` is worth writing on a public symbol: the code travels in the index, and
 `python tests/docs_sweep.py` compiles and runs it against the library's own source, so an
-example that drifts out of date says so. `--lib-info` does not print one -- a fenced program
-inside a plain dump would bury the signature.
+example that drifts out of date says so. `--lib-info --docs` prints the example last, under its
+caption; the plain `--lib-info` report prints no doc block.
 
 ```sushi
+use <math>
+
 ##:
 Adds two integers.
 
@@ -563,9 +583,10 @@ fn main() i32:
 Current limitations of the library system:
 
 1. **No transitive dependencies**: If library A depends on library B, you must import both
-   explicitly. A library's own `use <lib/...>` is not followed, and a library exports
-   nothing of the stdlib module or the library it imports — a consumer states each one
-   for itself.
+   explicitly. A library's own `use <lib/...>` is not followed. A plain `use` in a library
+   exports nothing of the stdlib module or the library it imports, so a consumer states each
+   one for itself. A `public use` in the library hands its public names on (see
+   [Library Kinds](#library-kinds)).
 2. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still
@@ -588,7 +609,7 @@ Current limitations of the library system:
    (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib` boundaries.
 
    The library producer ships a re-parsable source template in the `.slib` `templates`
-   section (templates version 4); the consumer re-parses it, registers it alongside its own
+   section (templates version 7); the consumer re-parses it, registers it alongside its own
    definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk
@@ -596,8 +617,8 @@ Current limitations of the library system:
    originates in the library. Constraint re-checking uses `CE4006` against the consumer's
    perk-impl table.
 
-   **Perk implementations also ship** (concrete impls only): a library's own
-   `extend <ConcreteType> with <Perk>:` block for a shipped perk crosses the boundary, so a
+   **Perk implementations also ship**: a library's own `extend <ConcreteType> with <Perk>:`
+   block for a shipped perk crosses the boundary, so a
    consumer can instantiate e.g. `pick_bigger@(T: Doubler)` at `i32` without writing
    `extend i32 with Doubler` itself. The impl's bodies are not re-compiled at the consumer - its
    signatures register for constraint checking and dispatch, the method symbols are declared, and
@@ -607,10 +628,12 @@ Current limitations of the library system:
    extension method on the target type already uses one of the impl's method names, the library
    impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
    `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
-   constraints ship; impls of library-internal perks stay internal.
+   constraints ship; impls of library-internal perks stay internal. A generic-target
+   implementation (`extend Box@(T) with Show`) ships as a template in
+   `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
 
    **Private helpers ship automatically (the export closure)**: a public generic whose body
-   references library-private symbols no longer fails to export - the producer walks the
+   references library-private symbols exports: the producer walks the
    transitive closure of everything the generic depends on and ships it: private *generic*
    helpers as source templates (flagged `private`), private *concrete* helpers as signature
    records (their definitions carry external linkage in the library bitcode and link at the
@@ -619,24 +642,17 @@ Current limitations of the library system:
    consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
    not local-wins): shadowing it would silently change what the library's monomorphized bodies
    call. A shipped private helper is callable by the library's own bodies and by nothing
-   else: consumer code that names one is `CE3005`, like any other private function. The
-   exception is a constant, which has no private form yet (#466), so a shipped one is
-   readable. None of this can arise on the source path: library units are namespaced, so
+   else: consumer code that names one is `CE3005`, like any other private function. A shipped
+   private constant is the same: a consumer that reads it hears `CE3005`. None of this can arise on the source path: library units are namespaced, so
    there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
 
    **A private the closure does not ship is named too.** The closure only walks what a
    public *generic* needs, so a private a concrete function calls -- or one nothing public
    calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
    kind, and nothing else: no signature, no body, no source. It is what lets the consumer
-   hear `CE3005` for them rather than `CE2008` (#469). A name in that list is not shipped,
+   hear `CE3005` for them. A name in that list is not shipped,
    so it clashes with nothing: a consumer may declare a function of the same name and it is
    the consumer's own.
-
-   Remaining restriction on the binary path:
-   - **Generic-target perk impls do not ship**: `extend <Generic@(T)> with <Perk>` is not supported
-     in-program, so only concrete-target impls cross the boundary.
-
-These limitations may be addressed in future versions.
 
 ## See Also
 

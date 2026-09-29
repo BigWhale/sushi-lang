@@ -16,6 +16,13 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Structs](#structs)
 - [Enums](#enums)
 - [Pattern Matching](#pattern-matching)
+- [Generics](#generics)
+- [Extension Methods](#extension-methods)
+- [Perks](#perks)
+- [Ownership Operations](#ownership-operations)
+- [Closures](#closures)
+- [Variadic Functions](#variadic-functions)
+- [Foreign Functions](#foreign-functions)
 - [Module System](#module-system)
 - [Comments](#comments)
 - [Documentation Blocks](#documentation-blocks)
@@ -87,8 +94,12 @@ fails with CE6001.
 
 **Other:**
 - `bool` - Boolean (`true` or `false`)
-- `string` - UTF-8 null-terminated string
-- `~` - Blank type (only for return types)
+- `string` - a sized UTF-8 string: a data pointer, a byte count and an ownership flag. It
+  has no terminator, so an embedded `\0` is one more byte of the length (`"a\0b".len()` is
+  3). The layout is in [String Representation](design/string-representation.md)
+- `~` - the blank type and its one value. It is a return type (`fn f() ~`), a function-type
+  return (`fn() -> ~`), and a value (`Result.Ok(~)`, a match arm `-> ~`). As a unary
+  operator, `~` is the bitwise NOT (see [Bitwise](#bitwise))
 
 ### Numeric Literals
 
@@ -202,7 +213,10 @@ let u8[] none = from([])
 An empty `from([])` and a `new()` spell no element type of their own: each takes the type
 of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, a
 `.realise()` default, an extension's bare `return`. So `make().realise(from([]))` and
-`return from([])` in an `extend S empty() u8[]` both mean `u8[]`.
+`return from([])` in an `extend S empty() u8[]` both mean `u8[]`. A position with no type
+-- a method receiver, an index base, a `println` argument -- gives no element type, and
+the empty literal there is `CE2111`. Declare the array first (`let i32[] xs = from([])`)
+and use the name.
 
 ### Function Types
 
@@ -229,6 +243,11 @@ A plain top-level function is referenceable as above; a **closure** — a captur
 (`|i32 x| x + n`) — is also a `fn(...)`-typed value and shares the same call syntax. A **generic**
 function is referenceable when the expected function type is explicit (`let fn(i32) -> i32 g =
 identity`); otherwise it is `CE2093`.
+
+A function of another unit is a function value too: bare through a flat import (`plain`),
+and behind the dot of an aliased one (`l.plain`). A private function of another unit is
+`CE3005`, and a bare name that two imports offer is `CE3012`. A bare name names the unit's
+own function before an imported function of the same name.
 
 You can also call through any expression that evaluates to a function value, not just a bare name —
 a fn-typed struct field (`obj.handler(x)`, when no method of that name exists), a container get-out
@@ -354,14 +373,45 @@ fn greet(string name) ~:
 
 ### Return Types
 
-All functions implicitly return `Result@(T, E)`:
+Every function returns a `Result@(T, E)`. The declaration has three forms:
+
+| declared return | the function returns |
+|---|---|
+| `fn f() T` | `Result@(T, StdError)` |
+| `fn f() T \| E` | `Result@(T, E)` |
+| `fn f() Result@(T, E)` | `Result@(T, E)`, not wrapped again |
+
+The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
+The error type `E` is an enum.
 
 ```sushi
-fn divide(i32 a, i32 b) i32:  # Actually returns Result@(i32, StdError)
-    if (b == 0):
+use <math>
+
+fn halve(i32 a) i32:                        # Result@(i32, StdError)
+    if (a % 2 != 0):
         return Result.Err(StdError.Error)
+    return Result.Ok(a / 2)
+
+fn divide(i32 a, i32 b) i32 | MathError:    # Result@(i32, MathError)
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)
     return Result.Ok(a / b)
+
+fn main() i32:
+    println(halve(8).realise(0))            # 4
+    println(divide(7, 0).realise(-1))       # -1
+    return Result.Ok(0)
 ```
+
+A body returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a bare value:
+a bare `return value` is `CE2030`. `MathError` has its home in `<math>`, and `StdError` is
+global.
+
+The caller takes the value out of the `Result` in one of three ways: `??` returns the error
+from the calling function at once, `.realise(default)` gives the default for an error, and
+`match` reads each arm. `??` needs the same error type in the caller. It also works on a
+`Maybe@(T)`. In `main`, `??` is `CW2511`; use `match` or `.realise()` there. The full
+guide is [Error Handling](error-handling.md).
 
 The body must return on every code path, and a `~` function is no exception: it ends with
 `return Result.Ok(~)`. A body that can reach its end is `CE0107`.
@@ -809,6 +859,12 @@ loop head, why the protocol is not a perk, and why a line iterator's stop is sti
 
 See [Standard Library](standard-library.md) for complete array API.
 
+**An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
+range bound, and the index or count argument of a built-in method (`get`, `insert`,
+`remove`, `reserve`, `truncate`, `s`, `ss`, `extend_range`, `List.with_capacity`). A bare
+literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
+method argument), and it needs `as i32`: nothing widens, and a float is refused.
+
 ### Fixed Arrays
 
 Stack-allocated, compile-time size:
@@ -1143,9 +1199,9 @@ both -- an undeclared variant is CE2045, and the value takes the type of its pos
 That holds for a generic enum too: `let Maybe@(string) m = Maybe.None` constructs a
 `Maybe@(string)`, and the binding owns it exactly as `Maybe.None()` would.
 
-### Pattern Matching
+### Reading a Variant
 
-Required to access enum data:
+A `match` is the one way to read a variant's payload (see [Pattern Matching](#pattern-matching)):
 
 ```sushi
 match s2:
@@ -1192,16 +1248,22 @@ A `let` needs the block form: a local declared on the arrow has no line to read 
 
 ### Nested Patterns
 
+A pattern may hold another pattern in a payload position. `open()` answers
+`Result@(File, IoError)`, so the inner pattern names an `IoError` variant; a pattern of
+another enum there is `CE2107`.
+
 ```sushi
 use <io/fs>
 
-match result:
-    Result.Err(FileError.NotFound()) ->
-        println("File not found")
-    Result.Err(_) ->
-        println("Other file error")
-    Result.Ok(f) ->
-        println("File opened")
+fn main() i32:
+    match open("missing.txt", FileMode.Read()):
+        Result.Err(IoError.NotFound()) ->
+            println("File not found")
+        Result.Err(_) ->
+            println("Other file error")
+        Result.Ok(_) ->
+            println("File opened")
+    return Result.Ok(0)
 ```
 
 ### Binding Modes
@@ -1232,7 +1294,11 @@ use <io/fs>
 use <io/buf>
 
 match open("out.log", FileMode.Write()):
-    Result.Ok(f) -> f.writeln("Mostly Harmless")     # a borrow: no marker, unchanged
+    Result.Ok(f) -> println("opened")                   # a borrow: read only
+    Result.Err(e) -> report(e)
+
+match open("out.log", FileMode.Write()):
+    Result.Ok(poke f) -> f.writeln("Mostly Harmless")   # writes through: `writeln` takes `poke self`
     Result.Err(e) -> report(e)
 
 match open("out.log", FileMode.Write()):
@@ -1288,18 +1354,389 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+## Generics
+
+A struct, an enum and a function take type parameters in `@(...)` after the name. The
+compiler makes one copy of the declaration for each set of type arguments that the
+program uses (monomorphization).
+
+```sushi
+struct Pair@(T, U):
+    T first
+    U second
+
+enum Slot@(T):
+    Empty
+    Full(T)
+
+fn identity@(T)(nom T x) T:
+    return Result.Ok(x)
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(42, "answer")
+    let i32 a = identity(nom 7).realise(0)          # T comes from the argument
+    let i32 b = identity@(i32)(nom 8).realise(0)    # T is written at the call site
+    println("{p.first} {a} {b}")                    # 42 7 8
+    return Result.Ok(0)
+```
+
+A function that gives its argument back takes it with `nom T`, because an unmarked
+parameter is a borrow and a borrow cannot be returned.
+
+**Type arguments.** A type is always written with its arguments (`Pair@(i32, string)`,
+`Slot@(i32)`). At a call, the compiler infers the type arguments of a generic function
+from the arguments. When no argument names a type parameter, write the type arguments
+after the name: `empty@(i32)()`. Explicit type arguments are all or nothing: a wrong
+count is `CE2062`. They are legal only on a direct call to a named free function; on a
+method call or any other callee they are `CE6102`. A call that gives the compiler no
+way to find a type argument is `CE2060`.
+
+**Constraints.** `@(T: Perk)` limits `T` to the types that implement the perk (see
+[Perks](#perks)). A type argument that does not implement it is `CE4006`. A constraint
+is legal on a function, a struct, an enum and an extension target.
+
+The full guide, with every inference rule and limit, is [Generics](generics.md).
+
+## Extension Methods
+
+An `extend` declaration adds a method to a type. The body names the receiver `self`:
+
+```sushi
+struct Counter:
+    i32 n
+
+extend i32 squared() i32:
+    return self * self
+
+extend Counter bump(poke self) ~:
+    self.n := self.n + 1
+
+fn main() i32:
+    let Counter c = Counter(0)
+    c.bump()
+    println("{c.n} {5.squared()}")                  # 1 25
+    return Result.Ok(0)
+```
+
+**The receiver mode.** The receiver is a parameter, and it takes the parameter modes. A
+bare `self` is a read-only borrow, `peek self` is a read-only pointer, `poke self` writes
+through to the caller's value, and `nom self` consumes the receiver. A write through a
+receiver that is not `poke self` is `CE2421`.
+
+**The bare return.** A method with no `| E` returns its value bare: `return value`, and a
+`~` method may end with no `return`. `return Result.Ok(...)` there is `CE2091`, and `??`
+there is `CE0131`, because the method has no error channel to return an error through.
+
+**The error channel.** A method may declare `| E` after its return type. Its call then
+gives a `Result@(T, E)`, `??` is legal in the body, and the body spells both constructors
+as a free function does: `return Result.Ok(x)` and `return Result.Err(e)`. A bare
+`return x` there is `CE2030`. A chain of calls stops at a method with an unhandled
+channel (`CE2515`); write `??` after the call.
+
+**Method type parameters.** A method may declare its own type parameters after its name:
+`extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:`. The compiler finds them from
+the arguments (`CE2063` when it cannot), and a method call has no slot for explicit type
+arguments.
+
+**The target.** The target is a struct, an enum, a primitive, a built-in generic
+(`List@(T)`) or a generic type of the program:
+
+- `extend Box@(T)` applies to every instantiation, and `extend Box@(i32)` only to
+  `Box@(i32)`. A target that mixes the two, `extend Pair@(i32, U)`, is `CE2098`.
+- An array target binds its element: `extend T[]` applies to every array, and
+  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`.
+- A function type is not a target (`CE2110`).
+
+A built-in method wins over an extension method: an extension method with the name of a
+built-in method of its target is `CE2097`. The design record is
+`docs/design/ufcs-combinators.md`, and the resolution order is
+`docs/design/method-resolution.md`.
+
+### Static Methods
+
+A `static` marker before the method name declares a method with **no receiver**. It is
+called on the TYPE name, not on a value, and it is how a type carries its own
+constructor.
+
+```sushi
+struct Vec:
+    i32 x
+    i32 y
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+extend Vec static origin() Vec:
+    return Vec(0, 0)
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.x} {v.y}")
+    return Result.Ok(0)
+```
+
+A name behind a type's dot is a **member** of that type: a variant, or a static method,
+never both. A local of the same name wins over the type.
+
+Everything but the receiver is unchanged. The parameters take the ordinary four modes
+and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
+the error channel exactly as on an instance method; and the declaration carries no
+visibility marker, because a static is as visible as its target type.
+
+`new` is a legal static name — `extend Box static new(i32 n) Box:` — which a free
+function cannot have (`CE6001`).
+
+A static has **no `self`**, and the two places that could name one are one refusal:
+a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of
+`self` in the body are both `CE0134`. A `static` inside a perk implementation is
+`CE4014`: a perk has no `Self`, so a contract cannot hold a constructor.
+
+The target may be a struct, an enum, a primitive (`extend f64 static of_int(i32 v)
+f64:`) or a generic type; an ARRAY target is `CE2104`, because an array type has no
+spelling in an expression position and the declaration could never be called. On a
+generic target there is no receiver to read the type argument from. The compiler reads
+it from an argument whose parameter names the type parameter, or else from the declared
+type of the position:
+
+```sushi
+struct Cage@(T):
+    T[] items
+
+extend Cage@(T) static holding(T item) Cage@(T):
+    return Cage(from([item]))
+
+extend Cage@(T) static empty() Cage@(T):
+    return Cage(from([]))
+
+fn main() i32:
+    println("{Cage.holding(9).items[0]}")           # 9: the argument makes T an i32
+    let Cage@(i32) none = Cage.empty()              # T comes from the declared type
+    println("{none.items.len()}")                   # 0
+    return Result.Ok(0)
+```
+
+A generic static whose parameters do not name the type parameter, in a position that
+declares no type, is `CE2060`: nothing says which instantiation the call means. Bind the
+result to an annotated name, or name the type parameter in a parameter.
+
+A name has one home, so a static beside an instance method of the same name on one type
+is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
+whose dot holds no such member is `CE2102`, and a VALUE whose type declares no such field
+is `CE2106` -- which is also what a method read without its parentheses answers, because a
+bound-method value is deferred.
+
+An ENUM value declares no field at all, so every name behind its dot is `CE2106` too. That
+covers `Result@(T, E)` and `Maybe@(T)`, which are ordinary enums: `pts.get(0).x` is
+refused, and the value is taken first with `??`, `.realise(default)` or `match`. There is
+no implicit unwrap, and a payload is read by a pattern.
+
+`List.new()`, `List.with_capacity()`, `HashMap.new()`, `Own.alloc()` and
+`f64.from_bits()` are the built-in statics — the same rule, on types the compiler
+declares. The design record is `docs/design/method-resolution.md`.
+
+## Perks
+
+A perk is a contract: a set of method signatures. `extend T with P:` implements the perk
+for a type, and `@(T: P)` asks for a type that implements it.
+
+```sushi
+perk Describe:
+    fn describe() string
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Describe:
+    fn describe() string:
+        return "({self.x}, {self.y})"
+
+fn show@(T: Describe)(T v) ~:
+    println(v.describe())
+    return Result.Ok(~)
+
+fn main() i32:
+    show(Point(1, 2))                               # (1, 2)
+    return Result.Ok(0)
+```
+
+An implementation method follows the rules of an extension method: a bare return, or an
+error channel. The rules of the contract:
+
+- The implementation gives every method of the perk (`CE4005`), with the signature of the
+  contract (`CE4004`). A second implementation of one perk for one type is `CE4002`.
+- A name has one home on a type: a perk method beside an extension method of the same name
+  is `CE4007`.
+- A type argument that does not implement a constraint is `CE4006`.
+- A perk has no type parameters, no inheritance, no default implementations and no `Self`
+  type. A perk that declares `@(...)`, and an implementation method that declares its own
+  type parameters, are both `CE4010`. A `static` in a perk implementation is `CE4014`: with
+  no `Self`, a contract cannot hold a constructor.
+
+A **perk method** takes the error channel, and the perk states it in the contract:
+`fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
+exactly. A channel that one side declares and the other does not, and two channels over
+different error types, are both `CE0133`, which points at the contract and the
+implementation together.
+
+The guide is [Perks](perks.md).
+
+### Predefined Perks: `Drop` and `Hashable`
+
+The compiler declares two perks. Every unit can name them with no import, and a
+declaration of either name is `CE4001`.
+
+**`Drop`** (`fn drop(poke self) ~`) says that a type owns a resource that no field shows,
+for example a file descriptor. A type that implements it MOVES like a `string`. When the
+value goes out of scope, `drop()` runs first, and then the owning fields are destroyed.
+At the end of a scope, the values are destroyed in the reverse order of their declaration.
+Only the unit that declares the type may implement `Drop` for it (`CE4012`), and a channel
+on `drop()` is `CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
+
+**`Hashable`** (`fn hash() u64`) is the constraint for a type that has a hash. Every type
+with a derived hash implements it with no declaration. `extend T with Hashable` replaces
+the derived hash of `T`, and the replacement applies everywhere the value is hashed: as a
+field, as a payload, as a container element and as a map key.
+
+```sushi
+struct Token:
+    i32 id
+
+extend Token with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.id}")
+
+struct Key:
+    i32 a
+    i32 b
+
+extend Key with Hashable:
+    fn hash() u64:
+        return self.a as u64
+
+fn main() i32:
+    let Token first = Token(1)
+    let Token second = Token(2)
+    println("{first.id} {second.id}")               # 1 2
+    println(Key(7, 9).hash())                       # 7
+    return Result.Ok(0)                             # drop 2, then drop 1
+```
+
+## Ownership Operations
+
+An unmarked parameter is a borrow, and only `nom` consumes (see [Parameters](#parameters)).
+A type MOVES when it owns a resource: `T[]`, `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, a
+`string` that owns heap memory, a capturing closure, a type that implements `Drop`, and a
+composite that holds one of them. A string bound directly from a literal owns no heap
+memory and copies. Every other type copies. These operations change ownership:
+
+- **`.clone()`** is the only deep copy, and the compiler inserts no copy of its own. On a
+  type that implements `Drop`, or holds one, it is `CE2431`, because the copy would be a
+  second handle. A `File` and a `TcpListener` have `.share()` for that: a second owner of
+  the same open file description.
+- **`Own@(T)`** is a heap cell: `Own.alloc(v)` makes one, and `.get()` reads the payload.
+  It lets a type hold itself (a list node, a tree).
+- **A marked field take**, `nom s.out`, in a `let` initializer or a `return`, takes one
+  owning field out of a local that the function owns. The take spends the whole receiver:
+  the other owning fields are destroyed at the take, `drop()` does not run, and a later
+  use of the local is `CE2405`. A take through a borrow, and `nom a.b.c`, are `CE2411`.
+- **`??` over a named wrapper** spends the wrapper when the `Result` or `Maybe` owns
+  something in either arm: after `let string got = r??`, a use of `r` is `CE2405`.
+
+The guides are [Memory Management](memory-management.md) and
+[the borrow model](design/borrow-model.md).
+
+## Closures
+
+A lambda is a value of a function type. `|params| expr` has one expression, `|params|:`
+starts a block body, and `|~|` takes no parameters. A block body returns with
+`return Result.Ok(...)`, as a function does.
+
+```sushi
+fn main() i32:
+    let i32 n = 10
+    let fn(i32) -> i32 add_n = |i32 x| x + n        # captures a copy of n
+    let fn() -> i32 five = |~| 5
+    println("{add_n(1).realise(0)} {five().realise(0)}")    # 11 5
+    return Result.Ok(0)
+```
+
+A lambda captures a plain value by copy and an owning value by move. A capture of a
+borrow (`peek` or `poke`) is `CE2094`. A lambda given to a generic function writes the
+types of its parameters (`|i32 x|`), because the compiler cannot infer them there. The
+guides are [Closures](closures.md) and [First-Class Functions](first-class-functions.md).
+
+## Variadic Functions
+
+Sushi has three variadic forms:
+
+| form | declaration | what the function gets |
+|---|---|---|
+| native | `fn sum(...i32 xs) i32:` | the trailing arguments in an owned `i32[]` |
+| pack | `fn show@(...Ts: Perk)(...Ts xs) ~:` | one argument of each type, walked with `expand` |
+| C | `fn printf(string fmt, ...) i32 = "printf"` | untyped C arguments, in an `unsafe external` block only |
+
+```sushi
+fn sum(...i32 xs) i32:
+    let i32 total = 0
+    foreach(x in xs.iter()):
+        total := total + x
+    return Result.Ok(total)
+
+fn show_all@(...Ts: Hashable)(...Ts xs) ~:
+    expand(x in xs):                                # unrolled once per argument
+        println(x.hash())
+    return Result.Ok(~)
+
+fn main() i32:
+    println(sum(1, 2, 3).realise(0))                # 6
+    let i32[] rest = from([4, 5])
+    println(sum(rest...).realise(0))                # 9: `rest...` moves the array in
+    show_all(1, true)
+    return Result.Ok(0)
+```
+
+The native parameter comes last. `arr...` forwards a bare array variable and moves it. A
+variadic parameter in a perk method or an extension method is `CE0115`. A pack cannot be
+forwarded or indexed. The guide is [Variadic Functions](variadics.md).
+
+## Foreign Functions
+
+An `unsafe external` block declares C functions under a namespace:
+
+```sushi
+unsafe external "C" as libc because "absolute value from libc":
+    fn abs(i32 n) i32 = "abs"
+
+fn main() i32:
+    println(libc.abs(-5))                           # 5
+    return Result.Ok(0)
+```
+
+A foreign function returns the raw C value, not a `Result`. `ptr` is an opaque foreign
+pointer, and the compiler keeps it inside the foreign boundary (the `CE5xxx` codes). A
+block with no `because "..."` is the warning `CW5001`. `nom` on a foreign parameter is
+`CE2428`. A variadic C function is declared with `...`, and a fixed declaration of it
+reads garbage on some platforms. The guide is [FFI](ffi.md).
+
 ## Module System
 
 ### Units
 
 Sushi uses a unit system where each source file is a unit:
 
+<!-- docs-sweep: skip (two units) -->
 ```sushi
-# file: math.sushi
-use "math"
-
-fn add(i32 a, i32 b) i32:
+# file: calc.sushi
+public fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
+
+# file: main.sushi
+use "calc"
+
+fn main() i32:
+    println(add(40, 2).realise(0))          # 42
+    return Result.Ok(0)
 ```
 
 ### Importing a unit
@@ -1407,7 +1844,7 @@ turns written text into a name takes one:
 | a named type | `my_math.Vec` |
 | a generic named type | `my_math.Box@(i32)` |
 | a called function, generic included | `my_math.sin(0.0)` |
-| a struct constructor | `my_math.Vec(1, 2)` |
+| a struct constructor | `my_math.Vec(1, 2)` (see the note below for a generic struct) |
 | an enum constructor | `my_math.Sign.Plus` |
 | an enum pattern | `my_math.Sign.Plus ->` |
 | a named value | `my_math.MAX_DEPTH` |
@@ -1437,13 +1874,17 @@ fn run() i32:
 AST is built and an alias is bound long after that, so `i32[my_math.SIZE]` is `CE2099`.
 
 A qualifier naming no namespace, or a name the namespace does not hold, is `CE2001` in a
-type position and `CE2008` in a call, each with a help line drawn from what the namespace
-does hold.
+type position, with a help line drawn from what the namespace holds, and `CE2008` in a
+call.
+
+**A generic struct is not constructed through an alias.** `my_math.Box@(i32)` is a legal
+type, but the construction `my_math.Box(1)` is `CE2001` (`unknown type 'Box'`). A flat
+import constructs it (`Box(1)`), and a function of the other unit can build the value.
 
 **Two units may export one name.** That is not an error by itself; it is an error only
 where the unqualified name is written and nothing says which one is meant, and then it is
 `CE3012` at the use, with a note at each candidate. The unit's OWN declaration always
-wins, so it never becomes ambiguous, and a flat `use <math>` no longer takes `sin` away
+wins, so it never becomes ambiguous, and a flat `use <math>` does not take `sin` away
 from a unit that declares its own.
 
 **In one unit, one name has one declaration, whatever its kind.** A `fn`, a `const`, a
@@ -1476,9 +1917,11 @@ that imports the aliasing unit does not see it.
 `unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
 aliases for one import are legal and both work.
 
-**An empty namespace warns.** `use <io/fs> as io` binds nothing, because the import
-enables methods on `stdin` and brings no name: that is `CW3004`, a warning, and the
-import still does its work.
+**An empty namespace warns.** An import that brings no name a qualified form can reach
+makes its `as` clause useless: `use <collections/strings> as s` adds methods on `string`
+and declares no name, so it is `CW3004`, a warning. The import still does its work. A module
+that declares names binds them as usual: behind `use <io/fs> as io`, `io.open(...)`,
+`io.FileMode.Write()` and `io.File` all work.
 
 A namespace holds a unit's declarations **whatever their visibility**, so naming a
 private one through the dot is `CE3005` -- "not yours", never "no such name".
@@ -1487,8 +1930,8 @@ The full design is `docs/design/unit-namespaces.md`.
 
 ### Visibility
 
-**Private is the default.** Five declarations carry the marker -- `fn`, `const`, `struct`,
-`enum` and `perk` -- and each is private to the unit that declares it unless it says
+**Private is the default.** Six declarations carry the marker -- `fn`, `const`, `var`,
+`struct`, `enum` and `perk` -- and each is private to the unit that declares it unless it says
 `public`. Naming another unit's private declaration is `CE3005`. A generic function is no
 exception.
 
@@ -1522,97 +1965,6 @@ visible as the type it is attached to, so `extend Point doubled()` is public bec
 `Point` is, and `extend Cursor step()` is unreachable elsewhere because `Cursor` is not.
 Writing `public` on an implementation method is `CE6103`.
 
-An extension may declare method-level type parameters and an error channel —
-`extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:` — solved and handled at
-the call site (`xs.map(f)??`). A channel body spells both constructors, as a free
-function does: `return Result.Ok(x)` and `return Result.Err(e)`; a bare `return x` there
-is CE2030. Array targets take a concrete element (`extend i32[]`) or a bare
-name that binds a type parameter (`extend T[]`). The design record is
-`docs/design/ufcs-combinators.md`.
-
-### Static methods
-
-A `static` marker before the method name declares a method with **no receiver**. It is
-called on the TYPE name, not on a value, and it is how a type carries its own
-constructor.
-
-```sushi
-struct Vec:
-    i32 x
-    i32 y
-
-extend Vec static at(i32 x, i32 y) Vec:
-    return Vec(x, y)
-
-extend Vec static origin() Vec:
-    return Vec(0, 0)
-
-fn main() i32:
-    let Vec v = Vec.at(3, 4)
-    println("{v.x} {v.y}")
-    return Result.Ok(0)
-```
-
-A name behind a type's dot is a **member** of that type: a variant, or a static method,
-never both. A local of the same name wins over the type, as it always has.
-
-Everything but the receiver is unchanged. The parameters take the ordinary four modes
-and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
-the error channel exactly as on an instance method; and the declaration carries no
-visibility marker, because a static is as visible as its target type.
-
-`new` is a legal static name — `extend Box static new(i32 n) Box:` — which a free
-function cannot have (`CE6001`).
-
-A static has **no `self`**, and the two places that could name one are one refusal:
-a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of
-`self` in the body are both `CE0134`. A `static` inside a perk implementation is
-`CE4014`: a perk has no `Self`, so a contract cannot hold a constructor.
-
-The target may be a struct, an enum, a primitive (`extend f64 static of_int(i32 v)
-f64:`) or a generic type; an ARRAY target is `CE2104`, because an array type has no
-spelling in an expression position and the declaration could never be called. On a
-generic target the type argument comes from the declared type at the call site, because
-there is no receiver to read it from:
-
-```sushi
-struct Cage@(T):
-    T item
-
-extend Cage@(T) static holding(T item) Cage@(T):
-    return Cage(item)
-
-let Cage@(i32) a = Cage.holding(9)
-```
-
-A generic static in a position that declares no type — a bare
-`println("{Cage.holding(9).item}")` — is `CE2060`: there is no receiver and no
-annotation, so nothing says which instantiation was meant. Bind the result first.
-
-A name has one home, so a static beside an instance method of the same name on one type
-is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
-whose dot holds no such member is `CE2102`, and a VALUE whose type declares no such field
-is `CE2106` -- which is also what a method read without its parentheses answers, because a
-bound-method value is deferred.
-
-An ENUM value declares no field at all, so every name behind its dot is `CE2106` too. That
-covers `Result@(T, E)` and `Maybe@(T)`, which are ordinary enums: `pts.get(0).x` is
-refused, and the value is taken first with `??`, `.realise(default)` or `match`. There is
-no implicit unwrap, and a payload is read by a pattern.
-
-`List.new()`, `List.with_capacity()`, `HashMap.new()`, `Own.alloc()` and
-`f64.from_bits()` are the built-in statics — the same rule, on types the compiler
-declares. The design record is `docs/design/method-resolution.md`.
-
-A **perk method** takes the same error channel, and the perk states it in the contract:
-`fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
-exactly; a channel one side declares and the other does not, and two channels over
-different error types, are both `CE0133`, which points at the contract and the
-implementation together. A perk method has no method-level type parameters and no `Self`
-type, so a contract cannot promise to return another one of the implementing type.
-`CE4010` covers both ends: a perk that declares `@(...)`, and an implementation method
-that declares its own. Write a plain extension method for a generic one.
-
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
 both are `CE4011` -- but a method it provides stays callable on any type you publish,
@@ -1635,7 +1987,7 @@ Import stdlib modules with `use`:
 # HashMap requires explicit import:
 use <collections/hashmap>
 use <collections/strings> # String utilities
-use <io/fs>           # stdio functions
+use <io/fs>           # File, open() and the console handles
 ```
 
 ## Comments
@@ -1681,29 +2033,21 @@ every diagnostic.
 
 ## Keywords
 
-Reserved keywords:
+These words are reserved. A variable, a function or a type cannot take one of them as
+its name (`CE6001`):
 
-- `fn` - Function declaration
-- `let` - Variable declaration (block-scoped)
-- `const` - Constant declaration (compile-time, no address)
-- `var` - Unit variable declaration (storage with an address, one per program)
-- `struct` - Struct definition
-- `enum` - Enum definition
-- `if`, `elif`, `else` - Conditionals
-- `while` - Loop
-- `foreach`, `in` - For-each loop
-- `break`, `continue` - Loop control
-- `match` - Pattern matching
-- `return` - Function return
-- `and`, `or`, `not` - Logical operators
-- `true`, `false` - Boolean literals
-- `as` - Type casting
-- `unit` - Unit declaration
-- `public` - Visibility marker (`fn`, `const`, `var`, `struct`, `enum`, `perk`)
-- `use` - Module import
-- `extend` - Extension method
-- `static` - A method with no receiver, called on the type name
-- `self` - Extension method receiver
+- Declarations: `fn`, `let`, `const`, `var`, `struct`, `enum`, `perk`, `extend`, `with`,
+  `static`, `public`, `use`
+- Control flow: `if`, `elif`, `else`, `while`, `foreach`, `in`, `break`, `continue`,
+  `match`, `return`, `expand`
+- Operators and literals: `and`, `or`, `xor`, `not`, `as`, `true`, `false`
+- Parameter and binding modes: `nom`, `peek`, `poke`
+- Foreign functions: `unsafe`, `external`, `because`
+- Built-in forms: `new`, `from`, `print`, `println`
+- Built-in type names: `bool`, `string`
+
+`self` is not reserved. It names the receiver inside an extension method, and elsewhere it
+is an ordinary name.
 
 ## String Literals
 
@@ -1755,7 +2099,10 @@ println("Next: {x + 1}")
 println("Squared: {x * x}")
 ```
 
-**Supported types:** All primitives, strings
+**Supported types:** the integers, the floats, `bool` and `string`. A `bool` prints as
+`true` or `false`. Any other type -- a struct, an enum, an array, a `Maybe@(T)` or a
+`Result@(T, E)` -- is `CE2035`; take the value out first (`.realise(default)`, `??` or
+`match`), or interpolate its fields.
 
 ### String Arguments in Interpolation
 
@@ -1765,8 +2112,9 @@ Use single-quote strings for string arguments inside interpolation expressions:
 use <collections/strings>
 
 let string text = "hello"
+let string[] parts = from(["a", "b"])
 println("{text.pad_left(10, '*')}")       # Padding character
-println("{text.find('world')}")           # Search string
+println("{text.find('world').realise(-1)}")   # Search string; find answers Maybe@(i32)
 println("{text.replace('old', 'new')}")   # Multiple string args
 println("{','.join(parts)}")              # Separator string
 ```
@@ -1774,9 +2122,11 @@ println("{','.join(parts)}")              # Separator string
 Single-quote strings work naturally in nested contexts where double quotes would require escaping.
 
 A double-quoted string cannot stand inside an interpolation hole at all: the lexer knows
-nothing about holes, so the inner quote closes the outer literal and the parse fails with
-CE6001 or CE6002. The diagnostic names this shape and the two escapes -- single quotes
-inside the hole, or bind the expression to a local first.
+nothing about holes, so the inner quote closes the outer literal and the parse fails. The
+error is CE6001 or CE6002, and its help names the two escapes -- single quotes inside the
+hole, or bind the expression to a local first. When the literal starts with the hole
+(`"{t.pad_left(3, "*")}"`), the error is CE2026 (unterminated interpolation), with no
+help line.
 
 ## Constants
 
@@ -1957,12 +2307,18 @@ const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
 A struct constant lives in read-only memory like every other constant. Writing a field
 is **CE2096** and calling a `poke self` method on one is **CE2400**, because read-only
 storage cannot take a write. A `nom self` method TAKES the receiver, and unit-level
-storage is never moved out of, so it is **CE2436** -- the same code a `var` reads. A
-`peek self` method reads it, and it is legal:
+storage is never moved out of. On a type that owns a resource, that is **CE2436** -- the
+same code a `var` reads. On a plain type such as `Handle`, the method takes a copy, and
+the call is legal. A `peek self` method reads the constant, and it is legal:
 
 ```sushi
+struct Label:
+    string text
+
+const Label TITLE = Label("towel")
+
 OUT.fd := 7          # CE2096: cannot assign to a field of constant 'OUT'
-OUT.release()        # CE2436: cannot move 'OUT': it is a constant
+TITLE.release()      # CE2436 for a `release(nom self)`: a Label owns a string
 ```
 
 ### Enum Constants
@@ -2100,7 +2456,7 @@ var i32[] table = from([])          # the descriptor {0, 0, null}
 var u8[] bytes = new()
 var List@(string) names = List.new()
 
-fn remember(string s) ~:
+fn remember(nom string s) ~:
     names.push(s)                   # a mutating method reaches the storage
     return Result.Ok(~)
 ```
@@ -2112,8 +2468,9 @@ elements (**CE0108** either way).
 
 A unit variable is borrowable like a local: `peek counter` and `poke counter` hand its
 address to a function, one `poke` at a time (**CE2403**), and `foreach(poke r in
-table.iter())` points into its elements. A `let` bound from a read out of it
-(`let string first = names[0]`) borrows and freezes it, exactly as it would a local.
+table.iter())` points into its elements. A `let` bound from a read out of it borrows and
+freezes it, exactly as it would a local: after `let string first = words[0]` on a
+`var string[] words`, a `words.push(...)` while `first` lives is **CE2412**.
 
 Unit-level storage is **never moved out of**, and a `const` reads the same rule as a
 `var`. Each is one object the program keeps for its whole run, so a `nom` argument, a
@@ -2144,6 +2501,6 @@ so `i32[N]` with `var i32 N = 3` is **CE2099**.
 
 **See also:**
 - [Standard Library](standard-library.md) - Built-in types and functions
-- [Error Handling](error-handling.md) - Result@(T) and Maybe@(T)
+- [Error Handling](error-handling.md) - Result@(T, E) and Maybe@(T)
 - [Memory Management](memory-management.md) - RAII and ownership
 - [Generics](generics.md) - Generic types and functions

@@ -21,7 +21,7 @@ gradually; for now, just know that the compiler is on your side.
 This tutorial assumes you have a working `sushic`. If you don't yet, follow the
 [Getting Started installation guide](../getting-started.md)
 in the main documentation — it covers installing LLVM, `uv`, and building the standard
-library. Once `./sushic --help` prints a version banner, you're ready.
+library. When `./sushic --version` prints a version banner, you are ready.
 
 ## Mostly Harmless
 

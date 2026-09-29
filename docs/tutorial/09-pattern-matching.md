@@ -10,7 +10,7 @@ won't let you forget a case.
 
 ## Matching and destructuring
 
-A `match` expression takes a value and lists patterns, each with an arrow `->` and a body.
+A `match` statement takes a value and lists patterns, each with an arrow `->` and a body.
 Sushi tries each pattern in turn and runs the body of the first that fits. When a variant
 carries data, the pattern can **destructure** it: name the data, and it becomes a variable
 inside that branch.
@@ -30,6 +30,10 @@ In `Shape.Circle(r) ->`, the `r` isn't a value to compare against — it's a *na
 captures whatever radius this circle carries. Inside that branch, `r` is just a `f64` you
 can use. Likewise `Rectangle(w, h)` binds both pieces at once. This is the everyday rhythm
 of working with enums: match to find the variant, destructure to get the data.
+
+A `match` is a statement, not an expression: it does not give a value. `let string w =
+match n:` is a syntax error. To get a value out of a `match`, assign it or return it in
+each arm.
 
 !!! note "`match` is the way in"
     Destructuring through `match` is the *only* way to read an enum variant's associated
@@ -92,9 +96,10 @@ on an enum, Sushi **requires you to handle every variant** (or cover the leftove
 That's not a nuisance — it's a safety net. Suppose you later add a fourth variant to an
 enum. Every `match` that doesn't account for it suddenly fails to compile, pointing you at
 exactly the code that needs updating. Whole categories of "oops, I forgot the new case"
-bugs simply can't reach a running program. It's the same instinct behind `Result` itself:
-make the compiler force you to deal with every possibility, so your users never trip over
-the one you missed.
+bugs simply can't reach a running program. A missing variant is the error `CE2040`, and
+the message names the variants that you did not handle. It's the same instinct behind
+`Result` itself: make the compiler force you to deal with every possibility, so your users
+never trip over the one you missed.
 
 !!! note "Two ways to be exhaustive"
     You can list every variant explicitly, or list the ones you care about and finish with
@@ -102,6 +107,60 @@ the one you missed.
     explicitly when you genuinely want different behaviour for each — that way, adding a new
     variant later *forces* you to revisit the match instead of silently sliding into the
     `_` branch.
+
+## Matching integers
+
+A `match` also works on an integer. Each arm is an integer literal, in any base. An integer
+has too many values to list, so a trailing `_` arm is required (`CE2074`).
+
+```sushi
+--8<-- "docs/tutorial/examples/09-pattern-matching/integer-arms.sushi"
+```
+
+Output:
+
+```
+0: nothing at all
+42: the answer
+10752: a much larger answer
+7: just a number
+```
+
+Two arms with the same value are an error (`CE2075`), also when they use different bases,
+as `42` and `0x2A` do. Every arm must fit the type of the matched value: an enum arm in a
+`match` on an integer is the error `CE2076`.
+
+## Binding modes
+
+A name in a pattern, such as `count` in `Cargo.Crates(count)`, has a **mode**, like a
+parameter does ([Chapter 4](04-functions.md#parameter-modes)):
+
+- A bare name **borrows** the data. You can read it; the matched value keeps it.
+- `poke name` points into the data. A write through the name changes the matched value.
+- `nom name` **takes** the data out of the matched value. The arm owns it and can give it
+  away with `nom`.
+
+A `nom` binding needs a value that the `match` owns. A temporary value, such as the
+result of the call `load()`, is owned by the `match`. To give a local variable to a
+`match`, write `match nom manifest:`; after this, `manifest` is not usable. A `nom`
+binding in a plain `match manifest:` is the error `CE2432`.
+
+```sushi
+--8<-- "docs/tutorial/examples/09-pattern-matching/binding-modes.sushi"
+```
+
+Output:
+
+```
+Crates: 3
+Crates now: 4
+Names kept: 2
+Names kept: 1
+```
+
+For a plain value such as an `i32`, the bare borrow is almost always what you want. `nom`
+is for data that owns memory, such as the `string[]` here.
+[Chapter 12](12-memory-management.md) explains ownership in full.
 
 ## What you learned
 
@@ -111,7 +170,11 @@ the one you missed.
   ignore data.
 - Patterns nest: `Result.Err(DriveError.NotConfigured())` matches the outer and inner
   variants together.
-- Matching on an enum is **exhaustive** — the compiler insists every variant is handled,
-  turning forgotten cases into compile errors instead of runtime bugs.
+- Matching on an enum is **exhaustive** — the compiler insists every variant is handled
+  (`CE2040`), turning forgotten cases into compile errors instead of runtime bugs.
+- A `match` on an integer uses literal arms and needs a trailing `_`.
+- A pattern binding borrows by default; `poke` writes into the data, and `nom` takes it
+  from a value that the `match` owns.
+- `match` is a statement; it does not give a value.
 
 Next we'll write our own generic types and functions. On to [Generics](10-generics.md).

@@ -8,9 +8,9 @@
 # - Using Own@(T) for heap allocation
 # - Creating recursive data structures (linked lists)
 # - Own.alloc(value) - allocate value on heap
-# - Own.null() - create null pointer
-# - .is_some() - check if pointer is valid
 # - .get() - dereference pointer to get value
+# - Maybe@(Own@(T)) for an optional link (Maybe.None() when there is none)
+# - .is_some() on the Maybe - check whether a link is present
 # - Automatic RAII cleanup (no manual .destroy() needed)
 #
 # Own@(T) features:

@@ -2,7 +2,8 @@
 
 [← Back to Documentation](index.md)
 
-Complete guide to generic programming in Sushi: generic types, functions, and compile-time monomorphization.
+Complete guide to generic programming in Sushi: generic types, generic functions, methods on
+generic types, and compile-time monomorphization.
 
 ## Table of Contents
 
@@ -10,19 +11,31 @@ Complete guide to generic programming in Sushi: generic types, functions, and co
 - [Generic Structs](#generic-structs)
 - [Generic Enums](#generic-enums)
 - [Generic Functions](#generic-functions)
-- [Extension Methods](#extension-methods)
+- [Constraints](#constraints)
+- [Methods on Generic Types](#methods-on-generic-types)
+- [Errors Through Generics](#errors-through-generics)
+- [Packs](#packs)
 - [Nested Generics](#nested-generics)
 - [Monomorphization](#monomorphization)
+- [Complete Example](#complete-example)
+- [Best Practices](#best-practices)
+- [Known Limitations](#known-limitations)
 
 ## Overview
 
-Sushi provides zero-cost generics through compile-time monomorphization:
+Sushi generics are resolved at compile time. The compiler makes one copy of the generic code
+for each set of type arguments that the program uses (monomorphization):
 
 - **Generic structs** - `Pair@(T, U)`, `Box@(T)`
-- **Generic enums** - `Result@(T)`, `Maybe@(T)`
-- **Generic functions** - Type parameters inferred from usage
-- **Extension methods** - Add methods to a type
-- **Zero runtime overhead** - All generic code specialized at compile time
+- **Generic enums** - `Result@(T, E)`, `Maybe@(T)`, and your own enums
+- **Generic functions** - the compiler infers the type arguments from the call, or you write
+  them: `identity@(i32)(nom 5)`
+- **Methods on generic types** - `extend Box@(T)`, `extend T[]`, `extend List@(T)`, statics
+  and method-level type parameters
+- **No runtime cost** - there is no runtime type information and no dynamic dispatch
+
+The source syntax is `@(...)` in every position: a declaration (`struct Box@(T):`), a type
+(`Box@(i32)`), a constraint (`@(T: Hashable)`) and a call (`identity@(i32)(nom 5)`).
 
 ## Generic Structs
 
@@ -59,21 +72,30 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### Generic Struct with Arrays
+### Generic Struct with Arrays and Containers
+
+A field can hold `T[]`, `List@(T)`, `HashMap@(K, V)`, `Maybe@(T)` or another generic type.
+The struct owns what its fields own, and the compiler destroys it at scope exit:
 
 ```sushi
 struct Container@(T):
     T[] items
     i32 capacity
 
+struct Shelf@(T):
+    List@(T) items
+
 fn main() i32:
     let Container@(string) names = Container(
         items: from(["Arthur", "Ford"]),
         capacity: 10
     )
-
     names.items.push("Trillian")
     println("Count: {names.items.len()}")
+
+    let Shelf@(i32) shelf = Shelf(items: List.new())
+    shelf.items.push(42)
+    println("Shelf: {shelf.items.len()}")
 
     return Result.Ok(0)
 ```
@@ -105,16 +127,71 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
+### Where a Constructor Gets Its Type
+
+A generic enum constructor takes its type from the position that holds it: a `let`, a
+`return`, a parameter, a field or a payload. In a position with no declared type (for example
+a `match` scrutinee), the arguments give the type. `Maybe.Some(42)` is a `Maybe@(i32)`. A
+constructor whose arguments do not give every type parameter, such as `Maybe.None()` or
+`Tree.Empty()`, needs a declared type. If no position gives one, the compiler reports
+`CE2112`:
+
+```sushi
+enum Tree@(T):
+    Leaf(T)
+    Empty
+
+fn main() i32:
+    match Maybe.Some(42):
+        Maybe.Some(v) -> println("Some {v}")
+        Maybe.None -> println("None")
+
+    let Tree@(i32) t = Tree.Empty
+    match t:
+        Tree.Leaf(v) -> println("Leaf {v}")
+        Tree.Empty -> println("Empty")
+
+    return Result.Ok(0)
+```
+
+### Recursive Generic Enums
+
+A variant cannot hold its own enum inline, because the type would have no finite size. Put
+the recursive payload in an `Own@(T)`:
+
+```sushi
+enum Tree@(T):
+    Leaf(T)
+    Node(Own@(Tree@(T)), Own@(Tree@(T)))
+
+fn count@(T)(Tree@(T) t) i32:
+    match t:
+        Tree.Leaf(_) -> return Result.Ok(1)
+        Tree.Node(l, r) ->
+            let i32 a = count(l.get())??
+            let i32 b = count(r.get())??
+            return Result.Ok(a + b)
+
+fn main() i32:
+    let Tree@(i32) left = Tree.Leaf(1)
+    let Tree@(i32) right = Tree.Leaf(2)
+    let Tree@(i32) root = Tree.Node(Own.alloc(left), Own.alloc(right))
+    println("Leaves: {count(root).realise(0)}")
+    return Result.Ok(0)
+```
+
 ### Built-in Generic Enums
 
-Sushi provides two essential generic enums:
+Sushi has two built-in generic enums.
 
-**Result@(T):**
+**Result@(T, E):** every function returns one. `fn divide(...) i32` returns
+`Result@(i32, StdError)`, and `fn divide(...) i32 | MathError` returns
+`Result@(i32, MathError)`:
+
 ```sushi
-# Implicit return type for all functions
-fn divide(i32 a, i32 b) i32:  # Returns Result@(i32)
+fn divide(i32 a, i32 b) i32:  # returns Result@(i32, StdError)
     if (b == 0):
-        return Result.Err()
+        return Result.Err(StdError.Error)
     return Result.Ok(a / b)
 ```
 
@@ -127,9 +204,9 @@ fn find_first_even(i32[] numbers) Maybe@(i32):
     return Result.Ok(Maybe.None())
 ```
 
-## Generic Functions
+See [Error Handling](error-handling.md) for both types.
 
-Sushi supports generic functions with automatic type inference from call sites. Type parameters are inferred from argument types at compile time.
+## Generic Functions
 
 ### Type Parameter Syntax
 
@@ -152,10 +229,10 @@ fn main() i32:
     functions, `let i32 x = identity(nom 42)??` is the idiomatic form.
 
 !!! note "Why `nom`"
-    `identity` HANDS ITS ARGUMENT ONWARD -- it returns it -- so the parameter declares `nom`
-    and the call site says so too. A parameter borrows by default, and a borrow cannot be
-    returned (`CE2411`). The mode is part of the signature, so it is the same for every
-    instantiation: `nom T` even where `T` is an `i32` that owns nothing. See
+    `identity` gives its argument back to the caller, so the parameter declares `nom` and the
+    call site writes `nom` too. A parameter borrows by default, and a function cannot return
+    a borrow (`CE2411`). The mode is part of the signature, so it is the same for every
+    instantiation: `nom T` also where `T` is an `i32` that owns nothing. See
     [docs/design/borrow-model.md](design/borrow-model.md).
 
 ### Multiple Type Parameters
@@ -178,33 +255,132 @@ fn main() i32:
 
 ### Type Inference
 
-Type parameters are inferred from the function's arguments. The result type is known to the
-caller, so the variable still needs an explicit type annotation:
+The compiler solves a type parameter from each argument whose parameter type names it. The
+parameter type can be a bare `T`, a named generic (`Pair@(A, B)`, `List@(T)`, `Maybe@(T)`), an
+array (`T[]`, `T[N]`), a borrow (`peek T`, `poke T`) or a function type (`fn(T) -> U`). A
+generic body can call other generics, and a nested call such as `first_of(singleton(x))`
+infers at each level:
 
 ```sushi
-struct Box@(T):
-    T value
+struct Pair@(A, B):
+    A left
+    B right
 
-fn wrap@(T)(nom T value) Box@(T):
-    return Result.Ok(Box(value: value))   # a struct field takes ownership, so `nom`
+fn first@(T)(T[] xs) T:
+    return Result.Ok(xs[0])
+
+fn left_of@(A, B)(peek Pair@(A, B) p) A:
+    return Result.Ok(p.left)
+
+fn apply@(T, U)(T x, fn(T) -> U f) U:
+    return Result.Ok(f(x)??)
+
+fn singleton@(T)(nom T x) List@(T):
+    let List@(T) l = List.new()
+    l.push(x)
+    return Result.Ok(l)
+
+fn first_of@(T)(List@(T) l) T:
+    return Result.Ok(l.get(0)??)
+
+fn round_trip@(T)(nom T x) T:
+    return Result.Ok(first_of(singleton(nom x)??)??)
 
 fn main() i32:
-    let Box@(i32) b1 = wrap(nom 42).realise(Box(value: 0))
-    let Box@(string) b2 = wrap(nom "hello").realise(Box(value: ""))
+    let i32[] xs = from([5, 6])
+    let Pair@(i32, string) p = Pair(left: 9, right: "nine")
 
-    println("Wrapped int: {b1.value}")
-    println("Wrapped string: {b2.value}")
+    let i32 a = first(xs).realise(0)                         # T from i32[]
+    let i32 b = left_of(peek p).realise(0)                   # A, B from peek Pair@(A, B)
+    let string c = apply(3, |i32 n| "n={n}").realise("")     # T from 3, U from the lambda
+    let i32 d = round_trip(nom 11).realise(0)                # nested generic calls
 
+    println("{a} {b} {c} {d}")
     return Result.Ok(0)
 ```
 
-### Perk Constraints
+A lambda argument must declare its parameter types (`|i32 n| ...`). A bare-parameter lambda
+(`|n| ...`) gets its type from the type parameter that the compiler must infer, so the
+compiler cannot solve it (`CE2060`).
 
-Generic functions can require type parameters to satisfy perk constraints. Note that perk
-methods (like `hash()` below) return a **bare** value, while the surrounding ordinary
-function still wraps its result in `Result.Ok`. `Hashable` is predefined: every type
-with a derived `hash()` satisfies it, and the implementation below REPLACES `Point`'s
-derived hash (see [Perks](perks.md#the-predefined-perks)):
+The variable that receives the result still needs its own type annotation, as every `let`
+does.
+
+### Explicit Type Arguments
+
+Write the type arguments in `@(...)` between the function name and the argument list. You
+must do this when a type parameter appears only in the return type, because no argument can
+give it:
+
+```sushi
+fn identity@(T)(nom T x) T:
+    return Result.Ok(x)
+
+fn empty_list@(T)() List@(T):
+    return Result.Ok(List.new())
+
+fn main() i32:
+    let i32 a = identity@(i32)(nom 42).realise(0)
+    let List@(string) names = empty_list@(string)().realise(List.new())
+    println("{a} {names.len()}")
+    return Result.Ok(0)
+```
+
+The rules:
+
+- Write all the type arguments or none. A wrong count is `CE2062`.
+- Only a direct call to a named free function takes a type-argument list. A method call has
+  no `@(...)` slot (`CE6102`), so a method-level type parameter must come from the arguments.
+- The `let` annotation does not give a type parameter to the call. If only the return type
+  names `T`, write the type arguments.
+
+### Generic Functions as Values
+
+A generic function can be a [first-class function value](first-class-functions.md) in each
+position where the expected function type solves its type parameters: a typed `let`, an
+argument to a function-typed parameter, a rebind, a `return`, a field or a payload. The
+expected type selects the instantiation:
+
+```sushi
+fn same@(T)(T x) T:
+    return Result.Ok(x)
+
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return Result.Ok(f(x)??)
+
+fn twice@(T)(fn(T) -> T f, T x) T:
+    return Result.Ok(f(f(x)??)??)
+
+fn main() i32:
+    let fn(i32) -> i32 g = same           # selects same@(i32)
+    let i32 a = g(41).realise(-1)
+    let i32 b = apply(same, 3).realise(-1)
+    let i32 c = twice(same, 7).realise(-1)   # T comes from 7
+    println("{a} {b} {c}")
+    return Result.Ok(0)
+```
+
+The parameter modes are part of a function type. `identity@(T)(nom T x)` has the type
+`fn(nom i32) -> i32` at `i32`, and it does not fit a `fn(i32) -> i32` parameter (`CE2006`).
+
+A generic function value is refused where nothing solves its type. For example,
+`map(xs, identity)` asks the value itself to give the `U` of `map`, so the compiler reports
+`CE2060` and `CE2093`. Bind the value to a typed local first:
+
+```sushi
+let fn(i32) -> i32 id = same
+let List@(i32) copy = map(xs, id).realise(List.new())
+```
+
+## Constraints
+
+### Constraints on Functions
+
+A constraint `@(T: Perk)` says that every type argument must implement the perk. The body can
+then call the perk methods. A perk method returns a **bare** value, and the generic function
+still wraps its own result in `Result.Ok`. `Hashable` is predefined: every type with a
+derived `hash()` satisfies it, and the implementation below REPLACES the derived hash of
+`Point` (see [Perks](perks.md#the-predefined-perks)):
 
 ```sushi
 fn compute_hash@(T: Hashable)(T value) u64:
@@ -228,7 +404,7 @@ fn main() i32:
 
 ### Multiple Constraints
 
-Functions can require multiple perk constraints with `+`:
+Use `+` to require more than one perk:
 
 ```sushi
 perk Displayable:
@@ -257,56 +433,35 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### Referencing a Generic Function as a Value
+### Constraints on Structs and Enums
 
-A generic function can be used as a [first-class function value](first-class-functions.md) when an
-**explicit expected function type** is present. The annotation fixes which instantiation you mean:
+A generic struct or enum can constrain its type parameters too. The compiler checks the
+constraint at each written type, for example at `Keyed@(HashMap@(i32, i32))` (`CE4006`):
 
 ```sushi
-fn identity@(T)(T x) T:
-    return Result.Ok(x)
+struct Keyed@(K: Hashable):
+    K key
+
+enum Slot@(T: Hashable):
+    Full(T)
+    Empty
 
 fn main() i32:
-    let fn(i32) -> i32 g = identity   # picks identity@(i32)
-    let i32 n = g(41).realise(-1)     # 41
-    println(n)
+    let Keyed@(i32) k = Keyed(key: 5)
+    let Slot@(string) s = Slot.Full("x")
+    match s:
+        Slot.Full(v) -> println("{k.key} {v}")
+        Slot.Empty -> println("empty")
     return Result.Ok(0)
 ```
 
-The same typed binding lets you hand a generic function to a higher-order function such as `map`:
+For more information on perks, see the [Perks documentation](perks.md).
 
-```sushi
-let fn(i32) -> i32 id = identity
-let List@(i32) same = map(xs, id).realise(List.new())
-```
+## Methods on Generic Types
 
-The requirement is the **expected type**: referencing a generic function with no expected function
-type — for example passing `identity` directly as a call argument without a typed binding — is
-still **CE2093**. Bind it to a typed local first.
-
-### Known Limitations
-
-1. **Type parameters must be inferrable from function parameters**
-   - Cannot use generic functions with no parameters
-   - Type arguments must appear in parameter types
-
-2. **A few inference positions are still unsupported**
-   - Named generics (`Pair@(T, U)`, `List@(T)`, `Maybe@(T)`), array elements (`T[]`, `T[N]`), and
-     function-typed parameters (`fn(T) -> U`) all infer their type parameters
-   - A **bare-parameter** lambda argument (`|x| ...`) to a generic cannot be inferred (its type
-     would come from the type parameter being inferred — circular); use a typed lambda
-     (`|i32 x| ...`) or a function reference instead
-   - A nested generic of an enclosing type parameter (e.g. `first(singleton(x))` where
-     `singleton(x): List@(T)` inside a `@(T)` function) still fails inference
-
-3. **No explicit type arguments**
-   - Cannot write `identity@(i32)(42)`
-   - Must rely on inference from arguments
-
-## Extension Methods
-
-Add methods to a type using `extend`. An extension method returns its value **directly** —
-there is no `Result.Ok(...)` wrapper, and you call it without `??` or `.realise()`:
+An extension method adds a method to a type with `extend`. A **bare** extension method (no
+`| E`) returns its value directly: there is no `Result.Ok(...)` wrapper, and you call it
+without `??` or `.realise()`.
 
 ### Basic Extension
 
@@ -332,12 +487,11 @@ fn main() i32:
 
 ### String Extensions
 
-Strings do not support the `+` operator (use interpolation instead). Build new strings with
-`"{...}"`. String methods and interpolation-based concatenation require the strings unit:
+Strings do not support the `+` operator. Build a new string with interpolation, `"{...}"`.
+Interpolation and an extension on `string` need no import. The built-in string methods
+(`.len()`, `.upper()` and the others) need `use <collections/strings>`:
 
 ```sushi
-use <collections/strings>
-
 extend string shout() string:
     return "{self}!!!"
 
@@ -356,14 +510,19 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### Generic Extension Methods
+### Generic Targets
 
-You can extend a user-defined generic struct. The method may return one of the struct's
-type parameters or a concrete type:
+The target of an extension can be a generic struct, a generic enum, or a built-in generic such
+as `List@(T)` or `Maybe@(T)`. The body can name the type parameter. One copy of the method is
+made for each instantiation that the program calls:
 
 ```sushi
 struct Box@(T):
     T value
+
+enum Opt@(T):
+    Has(T)
+    Nope
 
 extend Box@(T) unwrap() T:
     return self.value
@@ -371,27 +530,230 @@ extend Box@(T) unwrap() T:
 extend Box@(T) describe() string:
     return "Box holding {self.value}"
 
+extend Opt@(T) is_has() bool:
+    match self:
+        Opt.Has(_) -> return true
+        Opt.Nope -> return false
+
+extend List@(T) doubled_len() i32:
+    return self.len() * 2
+
 fn main() i32:
     let Box@(i32) b = Box(value: 42)
-
     println("Unwrapped: {b.unwrap()}")
     println(b.describe())
+
+    let Opt@(string) o = Opt.Has("x")
+    let List@(i32) l = List.new()
+    l.push(1)
+    println("{o.is_has()} {l.doubled_len()}")
 
     return Result.Ok(0)
 ```
 
-A **concrete** type argument in the target is a constraint rather than a parameter name, so
-`extend Box@(i32)` extends `Box@(i32)` alone and one method name can serve several
-instantiations. A template and a concrete target for the same method name overlap and are
-rejected (`CE0101`); a partially concrete target such as `extend Pair@(i32, U)` is rejected too
-(`CE2098`). See the Extension Methods section of the language guide for the full rule.
+A **concrete** type argument in the target is a constraint, not a parameter name. So
+`extend Box@(i32)` extends `Box@(i32)` alone, and one method name can serve several
+instantiations:
 
-!!! warning "Limitations of generic extension methods"
-    An **array** target is not supported: `extend i32[] ...` compiles and every call reports
-    `CE2008`. Two limitations apply to a **generic enum** target — no monomorphized copy is
-    produced, so every call is `CE2008` (issue #394) — and to a **generic call typed through
-    `self`** in such a body, which reports `CE2061` (issue #392). Prefer an ordinary generic
-    function for those cases.
+```sushi
+struct Box@(T):
+    T value
+
+extend Box@(i32) tag() string:
+    return "int"
+
+extend Box@(string) tag() string:
+    return "text"
+
+fn main() i32:
+    let Box@(i32) a = Box(value: 1)
+    let Box@(string) b = Box(value: "one")
+    println("{a.tag()} {b.tag()}")
+    return Result.Ok(0)
+```
+
+A template and a concrete target for the same method name overlap, and the compiler refuses
+them (`CE0101`). A partially concrete target such as `extend Pair@(i32, U)` is refused too
+(`CE2098`). See the Extension Methods section of the
+[language guide](language-guide.md#extension-methods) for the full rule.
+
+### Receiver Modes and Statics
+
+The receiver `self` is a borrow by default. Write `poke self` for a method that changes the
+receiver. A **static** method has no receiver and you call it on the type name. On a generic
+target, the static gets its type argument from the position that holds the result: the
+`let` annotation, the parameter type, or an argument whose type names `T`. A static in a
+position that gives no type is `CE2060`:
+
+```sushi
+struct Stack@(T):
+    List@(T) items
+
+extend Stack@(T) static new() Stack@(T):
+    return Stack(items: List.new())
+
+extend Stack@(T) push(poke self, nom T v) ~:
+    self.items.push(v)
+
+extend Stack@(T) pop(poke self) Maybe@(T):
+    return self.items.pop()
+
+extend Stack@(T) size() i32:
+    return self.items.len()
+
+fn main() i32:
+    let Stack@(i32) s = Stack.new()      # T comes from the annotation
+    s.push(nom 1)
+    s.push(nom 2)
+    println("Top: {s.pop().realise(0)}, left: {s.size()}")
+    return Result.Ok(0)
+```
+
+### Method-Level Type Parameters
+
+An extension method can declare its own type parameters after its name. The compiler infers
+them from the arguments, because a method call has no `@(...)` slot. A lambda argument must
+declare its parameter types (a bare `|x| ...` is `CE2063`). A method-level parameter cannot
+reuse a name of the target (`CE2064`):
+
+```sushi
+struct Box@(T):
+    T value
+
+extend Box@(T) map@(U)(fn(T) -> U f) Box@(U) | StdError:
+    return Result.Ok(Box(value: f(self.value)??))
+
+fn main() i32:
+    let Box@(i32) b = Box(value: 20)
+    let Box@(string) s = b.map(|i32 x| "n={x}").realise(Box(value: ""))
+    println(s.value)
+    return Result.Ok(0)
+```
+
+`<collections/iter>` ships `.map`, `.filter` and `.fold` on `List@(T)` and `T[]` in this
+form. See [iter](stdlib/collections/iter.md).
+
+### Array Targets
+
+`extend T[]` extends every dynamic array and binds the element type to `T`. `extend i32[]`
+extends one element type. A static on an array target is `CE2104`, because an array type has
+no spelling in an expression:
+
+```sushi
+extend T[] second() Maybe@(T):
+    return self.get(1).clone()
+
+extend i32[] total() i32:
+    let i32 sum = 0
+    foreach(n in self.iter()):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    let i32[] xs = from([4, 5, 6])
+    let string[] ws = from(["a", "b"])
+    let string w = ws.second().realise("")
+    println("{xs.second().realise(0)} {w} {xs.total()}")
+    return Result.Ok(0)
+```
+
+The body returns `self.get(1).clone()`, because `self.get(1)` is a borrow and a `string`
+element owns heap. A body that gives a borrowed element away is `CE2411`.
+
+### Perk Implementations on Generic Types
+
+`extend Box@(T) with Show` implements a perk for every instantiation of `Box`. Each instance
+then satisfies a constraint `@(S: Show)`:
+
+```sushi
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "Box({self.value})"
+
+fn render@(S: Show)(S thing) ~:
+    println(thing.show())
+    return Result.Ok(~)
+
+fn main() i32:
+    let Box@(i32) b = Box(value: 3)
+    let Box@(string) c = Box(value: "hi")
+    render(b)
+    render(c)
+    return Result.Ok(0)
+```
+
+The compiler checks the header of a template implementation one time, on the written
+template. `fn f(T x)` against a contract `fn f(i32 x)` is `CE4004`, also when every instance
+uses `T = i32`. To implement a perk for one instance, write the concrete target:
+`extend Box@(i32) with Show`. See [Perks](perks.md#a-generic-type-may-implement-a-perk).
+
+`Drop` works on a generic target in the same way: `extend Guard@(T) with Drop` gives one
+`drop()` body for each instantiation. See [Memory Management](memory-management.md).
+
+## Errors Through Generics
+
+A generic function can declare an error channel with `| E`, and `??` in a caller with the same
+channel propagates the error. A generic enum can be the error type:
+
+```sushi
+enum ParseError@(T):
+    Bad(T)
+
+fn check@(T)(nom T x, bool ok) T | ParseError@(i32):
+    if (not ok):
+        return Result.Err(ParseError.Bad(7))
+    return Result.Ok(x)
+
+fn both() i32 | ParseError@(i32):
+    let i32 a = check(nom 1, true)??
+    let i32 b = check(nom 2, false)??
+    return Result.Ok(a + b)
+
+fn main() i32:
+    match both():
+        Result.Ok(v) -> println("Sum {v}")
+        Result.Err(ParseError.Bad(code)) -> println("Bad {code}")
+    return Result.Ok(0)
+```
+
+An extension method on a generic target can declare `| E` too. Its body then spells both
+constructors, `return Result.Ok(...)` and `return Result.Err(...)`, as a function body does
+(see `map@(U)` above).
+
+## Packs
+
+A type pack `@(...Ts: Perk)` takes a list of types of any length, and `expand` unrolls the
+body for each element at compile time:
+
+```sushi
+perk Show:
+    fn show() string
+
+extend i32 with Show:
+    fn show() string:
+        return "int {self}"
+
+extend string with Show:
+    fn show() string:
+        return "text {self}"
+
+fn show_all@(...Ts: Show)(...Ts items) ~:
+    expand(it in items):
+        println(it.show())
+    return Result.Ok(~)
+
+fn main() i32:
+    show_all(42, "Mostly Harmless")
+    return Result.Ok(0)
+```
+
+See [Variadics](variadics.md) for the full rules.
 
 ## Nested Generics
 
@@ -399,8 +761,8 @@ Sushi supports nested generic types.
 
 ### Two Levels
 
-A function returning `Maybe@(i32)` is implicitly wrapped to `Result@(Maybe@(i32))`, so you match
-the outer `Result` and then the inner `Maybe`:
+A function that returns `Maybe@(i32)` really returns `Result@(Maybe@(i32), StdError)`, so you
+match the outer `Result` and then the inner `Maybe`:
 
 ```sushi
 fn parse_optional(string s) Maybe@(i32):
@@ -468,11 +830,12 @@ fn main() i32:
 
 ## Monomorphization
 
-Generics are resolved at compile time through monomorphization.
+The compiler resolves generics at compile time through monomorphization.
 
 ### How It Works
 
-Generic code is specialized for each concrete type used:
+The compiler makes a specialized copy of the generic code for each concrete type that the
+program uses:
 
 ```sushi
 struct Box@(T):
@@ -491,12 +854,13 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The compiler generates a distinct specialization for each instantiation — roughly
-`describe__Box_i32` and `describe__Box_string` — with no runtime dispatch.
+The compiler generates a distinct specialization for each instantiation, with no runtime
+dispatch.
 
 ### Automatic Instantiation Detection
 
-The compiler automatically detects which generic instantiations are needed from call sites:
+The compiler finds the necessary instantiations from the program: a call, a written type, a
+`let` in a generic body, and a return that reaches another generic:
 
 ```sushi
 fn largest@(T)(T a, T b) T:
@@ -514,12 +878,35 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### Multi-Pass Compilation
+### Each Instance Is Checked
 
-1. **`instantiate`**: collect generic instantiations from call sites
-2. **`monomorphize`**: monomorphize generic types to concrete types
+The compiler checks a generic body one time for each instance, not against its constraints.
+So a body can call a method that only some type arguments have. The example below compiles
+for a `string`. A call `size(4)` gives `CE2008` (`undefined function 'i32.len'`) at the
+instance:
+
+```sushi
+use <collections/strings>
+
+fn size@(T)(T x) i32:
+    return Result.Ok(x.len())
+
+fn main() i32:
+    println(size("four").realise(0))
+    return Result.Ok(0)
+```
+
+Write a constraint when a body needs a method, so that the requirement is part of the
+signature.
+
+### The Passes
+
+1. **`instantiate`**: collect generic instantiations from the program
+2. **`monomorphize`**: make the concrete copies of generic types and functions
 3. **`resolve`**: resolve field and variant types to the concrete ones
-4. **`typecheck`**: type validation on the specialized code
+4. **`typecheck`**: check the specialized code
+
+See [Semantic Passes](internals/semantic-passes.md) for all the passes.
 
 ### Code Size Implications
 
@@ -536,40 +923,9 @@ let Box@(string) b3 = Box(value: "3")  # Box@(string) code
 - Use LLVM optimizations (O2/O3) to deduplicate similar code
 - Profile code size if binary size is critical
 
-## Generic Constraints
-
-Sushi supports perk constraints on generic functions through the **perks system**. (Perk
-constraints on generic structs and enums are not yet available.)
-
-### Function Constraints
-
-```sushi
-fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
-```
-
-`Hashable` needs no declaration: it is predefined, and a type satisfies it when the
-compiler derives a `hash()` for it or when the type implements the perk.
-
-### Multiple Constraints
-
-Use `+` to require multiple perks. Perk methods return bare values, so they are called
-without `??`:
-
-```sushi
-fn process@(T: Hashable + Displayable)(T item) ~:
-    let u64 h = item.hash()
-    let string s = item.display()
-    println("Hash: {h}, Display: {s}")
-    return Result.Ok(~)
-```
-
-For more information on perks, see the [Perks documentation](perks.md).
-
 ## Complete Example
 
-Putting several pieces together — generic structs, a generic function, and a perk-constrained
-function:
+Several pieces together: generic structs, a generic function, and a perk-constrained function:
 
 ```sushi
 perk Describable:
@@ -633,16 +989,11 @@ fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
     return Result.Ok(Pair(first: first, second: second))
 ```
 
-### 3. Prefer Generic Functions Over Generic Extension Methods
+### 3. Write the Constraint That the Body Needs
 
-Generic functions are more capable than generic extension methods (which cannot extend the
-built-in collections; see the warning above). When you need behavior over `List@(T)`, write a
-function:
-
-```sushi
-fn list_is_empty@(T)(List@(T) list) bool:
-    return Result.Ok(list.len() == 0)
-```
+A body that calls `.hash()` on a `T` works for every `T` that has one, but the compiler finds
+a wrong type argument only at the instance. `@(T: Hashable)` puts the requirement in the
+signature, and the caller gets `CE4006` at the call.
 
 ### 4. Test Multiple Instantiations
 
@@ -652,9 +1003,39 @@ let Box@(string) b2 = Box(value: "test")
 let Box@(bool) b3 = Box(value: true)
 ```
 
+## Known Limitations
+
+| Limit | Diagnostic |
+|---|---|
+| A perk cannot have type parameters (`perk Conv@(T):`) | `CE4010` |
+| A perk method cannot declare its own type parameters: in the perk declaration the parser refuses `fn make@(U)`, and in an implementation the compiler refuses `fn show@(U)` | `CE6001` (perk), `CE4010` (implementation) |
+| A perk has no inheritance, no default implementation, no `Self` and no static method | `CE4014` for a static |
+| A bare-parameter lambda to a generic cannot be inferred; declare its parameter types (`\|i32 x\| ...`) | `CE2060` (function), `CE2063` (method-level parameter) |
+| A method call has no explicit `@(...)` slot | `CE6102` |
+| Explicit type arguments are all or nothing | `CE2062` |
+| A `T` that only the return type names is not inferred from the `let` annotation; write the type arguments | `CE2060` |
+| A generic static in a position that declares no type | `CE2060` |
+| A generic function value where nothing solves its type (`map(xs, identity)`) | `CE2060`, `CE2093` |
+| No pack forwarding (`g(pack...)`), no pack indexing, no tuples | `CE2060` |
+| No variadic parameter in a perk method or an extension method | `CE0115` |
+| A native `...T` function cannot be exported through a `.slib` (a pack can) | `CE0116` |
+| A partially concrete target (`extend Pair@(i32, U)`) | `CE2098` |
+| A template and a concrete target for one method name | `CE0101` |
+| A static on an array target | `CE2104` |
+| A function type as an extension or perk-implementation target | `CE2110` |
+| An array element type is never an array (`i32[][]`) | `CE6001` |
+| A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
+
+In an extension on a generic **enum** target, a call to a generic free function at the target's
+type parameter can give `CE2061` when no other code in the program uses that function at that
+type. The same call in an extension on a generic struct target works. To avoid it, use the
+function once at that type outside the extension, or write the logic as a generic free
+function.
+
 ---
 
 **See also:**
 - [Language Reference](language-reference.md) - Complete syntax
 - [Standard Library](standard-library.md) - Built-in generic types
 - [Perks](perks.md) - Trait-like constraints
+- [Variadics](variadics.md) - Packs and `expand`

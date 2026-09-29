@@ -53,18 +53,18 @@ class TargetPlatform:
 
 ```python
 def parse_triple(triple: str) -> TargetPlatform:
-    """
-    Parse an LLVM target triple into components.
+    """Parse an LLVM target triple into components."""
+```
 
-    Examples:
-        arm64-apple-darwin25.0.0 -> TargetPlatform(arm64, apple, darwin, '')
-        x86_64-pc-linux-gnu -> TargetPlatform(x86_64, pc, linux, gnu)
-        x86_64-w64-windows-msvc -> TargetPlatform(x86_64, w64, windows, msvc)
-    """
+Examples of the result:
+
+```text
+arm64-apple-darwin25.0.0 -> TargetPlatform(arm64, apple, darwin, '')
+x86_64-pc-linux-gnu      -> TargetPlatform(x86_64, pc, linux, gnu)
 ```
 
 A trailing OS version number is stripped and normalized: `darwin25.0.0` becomes `darwin`
-(any `darwin@(N)` form collapses to the bare `darwin` os string).
+(any `darwinN` form collapses to the bare `darwin` os string).
 
 #### get_current_platform
 
@@ -91,9 +91,11 @@ def current_platform_name() -> str:
     return "darwin" if platform.is_darwin else "linux" if platform.is_linux else "unknown"
 ```
 
-Used by `compiler/pipeline.py` to reject a `.slib` library built for a different
-platform at load time — a Darwin-built library will not link on a Linux host, and
-vice versa (`.slib` bitcode is platform-specific, per Known Limitations).
+Used by `compiler/pipeline.py` (`_check_library_platform`) to reject a binary or hybrid
+`.slib` built for a different platform at load time (CE3504): its bitcode is
+platform-specific, so a Darwin-built library does not link on a Linux host, and the
+reverse. A source library (`--lib-kind source`, the default) carries no machine code,
+so the check skips it and a source library loads on every platform.
 
 ## Standard Library Platform Support
 
@@ -107,30 +109,39 @@ sushi_stdlib/src/_platform/
 ├── posix/             # Shared POSIX implementations (used by BOTH darwin and linux)
 │   ├── env.py         # getenv/setenv
 │   ├── files.py       # stat/access/unlink/rename/open/read/write/close/mkdir/rmdir
+│   ├── net.py         # the socket calls
 │   ├── process.py     # getcwd/chdir/exit/getpid/getuid/tmpfile/fileno/waitpid/
 │   │                  #   posix_spawnp + file_actions helpers/environ
 │   ├── random.py      # random/srandom
 │   ├── stdio.py       # FILE* type + parameterized stdin/stdout/stderr declarations
-│   └── time.py        # nanosleep
-├── darwin/            # macOS: re-exports posix/{time,random,env,process} as-is;
-│   │                  #   only stdio.py and files.py are genuinely macOS-specific
+│   └── time.py        # nanosleep, clock_gettime
+├── darwin/            # macOS
+│   ├── env.py         # re-exports posix/env.py
+│   ├── files.py       # macOS O_CREAT/O_TRUNC bit values
+│   ├── net.py         # macOS socket constants and structure layouts
+│   ├── process.py     # re-exports posix/process.py
+│   ├── random.py      # re-exports posix/random.py
 │   ├── stdio.py       # __stdinp/__stdoutp/__stderrp handle names
-│   └── files.py       # macOS O_CREAT/O_TRUNC bit values
-└── linux/             # Linux: re-exports posix/{time,random,env,process} as-is;
-    │                  #   only stdio.py and files.py are genuinely Linux-specific
+│   └── time.py        # re-exports posix/time.py, plus the macOS clock ids
+└── linux/             # Linux: the same seven files
+    ├── env.py
+    ├── files.py       # Linux O_CREAT/O_TRUNC bit values
+    ├── net.py         # Linux socket constants and structure layouts
+    ├── process.py
+    ├── random.py
     ├── stdio.py       # stdin/stdout/stderr handle names
-    └── files.py       # Linux O_CREAT/O_TRUNC bit values
+    └── time.py        # re-exports posix/time.py, plus the Linux clock ids
 ```
 
-There is no `windows/` directory — it does not exist yet.
+There is no `windows/` directory.
 
-Most of what look like "per-platform implementations" for darwin and linux are actually
-thin re-export shims: `darwin/__init__.py` and `linux/__init__.py` both import `time`,
-`random`, `env`, and `process` straight from `posix/` unchanged, because those calls are
-identical POSIX libc functions on both operating systems. Only `stdio` (the stdin/stdout/
-stderr global symbol names) and `files` (the `open()` flag bit values for `O_CREAT`/
-`O_TRUNC`) actually differ between macOS and Linux, so those two modules have real,
-distinct darwin/linux implementations.
+Each of `darwin/` and `linux/` has one file per platform module. Most of them are thin
+re-export shims over `posix/`, because those calls are identical POSIX libc functions on
+both operating systems: `env.py`, `process.py` and `random.py` re-export `posix/`
+unchanged, and `time.py` adds only the clock ids of the platform. Four modules have real,
+distinct darwin/linux content: `stdio` (the stdin/stdout/stderr global symbol names),
+`files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`), `net` (the socket
+constants and structure layouts) and the clock ids in `time`.
 
 ### Platform Module Helper
 
@@ -162,7 +173,7 @@ def get_platform_module(module_name: str) -> ModuleType:
 The module path is built from the package's own `__name__`, so a platform module is imported under
 one name only (`sushi_lang.sushi_stdlib.src._platform.<os>.<module>`), and the loader changes no
 `sys.path`. A platform that is not macOS or Linux is one `RuntimeError`; there is no `windows`
-branch (#904).
+branch.
 
 ### Usage in Standard Library Modules
 
@@ -172,7 +183,6 @@ branch (#904).
 ```python
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
 
-# Get platform-specific env module (darwin, linux, windows, etc.)
 _platform_env = get_platform_module('env')
 
 def generate_getenv(module: ir.Module) -> None:
@@ -201,6 +211,7 @@ sushi_stdlib/dist/
 │   ├── core/primitives.bc
 │   ├── io/files.bc
 │   ├── math.bc
+│   ├── net/socket.bc
 │   ├── random.bc
 │   ├── sys/env.bc
 │   ├── sys/process.bc
@@ -246,7 +257,7 @@ def _detect_platform(self) -> str:
 `self.platform` is combined with `self.stdlib_dir` (`sushi_stdlib/dist/`) to resolve both
 individual units (`"io/files"` -> `sushi_stdlib/dist/darwin/io/files.bc`) and directory
 imports (`"io"` -> every `.bc` file under `sushi_stdlib/dist/darwin/io/`). There is no
-`windows` case here either — a Windows host resolves to `"unknown"`, and `resolve_unit_path`
+`windows` case here either — a Windows host resolves to `"unknown"`, and `_resolve_stdlib_unit`
 then fails to find the (nonexistent) `sushi_stdlib/dist/unknown/` directory with a clear
 error rather than silently picking a wrong platform's bitcode.
 
@@ -254,7 +265,7 @@ error rather than silently picking a wrong platform's bitcode.
 
 ### macOS (darwin)
 
-**Status:** Fully supported. Primary development platform (per project CLAUDE.md).
+**Status:** Fully supported. The primary development platform.
 
 **Architecture Support:**
 - `arm64` (Apple Silicon)
@@ -278,12 +289,10 @@ error rather than silently picking a wrong platform's bitcode.
 
 ### Linux
 
-**Status:** Fully supported. CI testing runs on Linux (per project CLAUDE.md).
+**Status:** Fully supported. CI testing runs on Linux.
 
 **Architecture Support:**
-- `x86_64` (64-bit)
-- `i686` (32-bit, planned)
-- `aarch64` (ARM64, planned)
+- `x86_64` (64-bit). The project tests and ships Linux on `x86_64` only.
 
 **Implementation Location:** `sushi_stdlib/src/_platform/linux/`, backed by
 `sushi_stdlib/src/_platform/posix/` for everything that is not Linux-specific.
@@ -417,9 +426,10 @@ targets the host it runs on, discovered via `llvmlite.binding.get_default_triple
 Two things would need to change before cross-compilation could work:
 - `sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
   the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
-- `.slib` libraries are platform-tagged, and a library built on one platform is rejected
-  (**CE3504**) when loaded on another (`compiler/pipeline.py`, `_check_library_platform`)
-  — so even reusing a prebuilt library across platforms is blocked, not just building one.
+- A binary or hybrid `.slib` is platform-tagged, and a library of that kind built on one
+  platform is rejected (**CE3504**) when loaded on another (`compiler/pipeline.py`,
+  `_check_library_platform`). A source `.slib` (the default kind) is not checked and
+  loads on every platform.
 
 Producing genuinely portable output would require an actual cross-compiling stdlib build
 (generating Linux-shaped IR from a macOS host, or vice versa) plus a target-triple CLI
@@ -431,7 +441,7 @@ exists yet.
 There is currently no platform-scoped test organization. `tests/run_tests.py` has no
 `--platform` flag, and there are no `tests/darwin/` or `tests/linux/` directories —
 tests simply run on whatever host invokes them. In practice that means: developed and
-run locally on macOS, and re-run in CI on Linux (per project CLAUDE.md), with the same
+run locally on macOS, and re-run in CI on Linux, with the same
 test files exercised on both. The one place the test runner itself branches on
 `sys.platform` is unrelated to test selection — it is picking the right file extension
 (`.dylib` vs `.so`) for the precompiled leak-check malloc interposer.

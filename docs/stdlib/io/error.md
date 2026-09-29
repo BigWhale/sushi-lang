@@ -26,35 +26,58 @@ the home reachable through the module whose calls answer the enum
 
 ```sushi
 public enum IoError:
-    NotFound            PermissionDenied     AlreadyExists
-    IsDirectory         DiskFull             TooManyOpen
-    InvalidInput        Interrupted          TimedOut
-    ConnectionReset     Closed               Other
-    Os(i32)
+    NotFound            # ENOENT
+    PermissionDenied    # EACCES, EPERM
+    AlreadyExists       # EEXIST
+    IsDirectory         # EISDIR
+    ConnectionReset     # ECONNRESET, ECONNABORTED
+    TimedOut            # ETIMEDOUT; EAGAIN on a socket with a timeout
+    Closed              # EPIPE, ENOTCONN, EBADF on a socket
+    Interrupted         # EINTR
+    WouldBlock          # reserved for a non-blocking handle
+    DiskFull            # ENOSPC
+    TooManyOpen         # EMFILE, ENFILE
+    InvalidInput        # EINVAL; FileError.InvalidPath
+    Os(i32)             # reserved for an errno that no other variant names
+    Other               # all other failures
 ```
 
 `IoError` is the ONE channel every io contract method answers -- a read, a write, a
 seek, `open()` and `close()`, on a `File`, a `TcpStream` or a buffered handle alike. A
 contract carries one signature and has no `Self`, so a method cannot answer `FileError`
 on a `File` and `NetError` on a `TcpStream`; the domain enums stay on construction,
-addressing and options. `Os(i32)` carries an `errno` no other variant names.
+addressing and options.
 
 ```sushi
 public enum FileError:
-    NotFound          PermissionDenied    AlreadyExists
-    IsDirectory       DiskFull            TooManyOpen
-    InvalidPath       IOError             Other
+    NotFound            # ENOENT
+    PermissionDenied    # EACCES, EPERM
+    AlreadyExists       # EEXIST
+    IsDirectory         # EISDIR
+    DiskFull            # ENOSPC
+    TooManyOpen         # EMFILE
+    InvalidPath         # ENAMETOOLONG, ENOTDIR, ELOOP
+    IOError             # EIO
+    Other               # all other errno values
 ```
 
 `FileError` is what the path utilities (`stat`, `walk`, `mkdir_all`, `remove_all`,
-`exists`, `remove`, `read_dir`) and the `fd_*` primitives answer.
+`remove`, `read_dir`, `file_size`) and the `fd_*` primitives answer. `exists`, `is_file`
+and `is_dir` answer a bare `bool` and have no error arm.
+
+A `File` method answers an error through `FileError` and `to_io()`, so on a `File` it is
+one of `NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`,
+`TooManyOpen`, `InvalidInput` or `Other`. An errno that `FileError` does not name (EBADF,
+for example) becomes `IoError.Other`, and not `IoError.Closed`. The socket variants come
+from the net modules, through `NetError.to_io()`. No stdlib call answers `WouldBlock` or
+`Os(i32)` today; a `match` that names them is legal.
 
 The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
 into a Result payload, so a variant is only ever appended.
 
 ## Functions
 
-### `to_io() -> IoError`
+### `to_io() IoError`
 
 ```sushi
 extend FileError to_io() IoError

@@ -1,0 +1,14 @@
+const string SHIP = "Heart of Gold"
+const i32 CREW_SIZE = 4
+var i32 jumps = 0
+
+fn jump() ~:
+    jumps := jumps + 1
+    return Result.Ok(~)
+
+fn main() i32:
+    println("{SHIP} carries {CREW_SIZE} crew")
+    jump()
+    jump()
+    println("Jumps so far: {jumps}")
+    return Result.Ok(0)

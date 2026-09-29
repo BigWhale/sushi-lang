@@ -1,0 +1,34 @@
+# A pattern binding has a mode, like a parameter:
+#   bare  - borrows the payload
+#   poke  - points into the payload and can change it
+#   nom   - takes the payload (the match must own its scrutinee)
+
+enum Cargo:
+    Crates(List@(string))
+    Empty
+
+fn load() Cargo:
+    let List@(string) crates = List.new()
+    crates.push("towel")
+    crates.push("peanuts")
+    return Result.Ok(Cargo.Crates(crates))
+
+fn ship(nom List@(string) crates) i32:
+    return Result.Ok(crates.len())
+
+fn main() i32:
+    let Cargo cargo = load().realise(Cargo.Empty)
+
+    match cargo:
+        Cargo.Crates(crates) -> println("{crates.len()} crates on board")
+        Cargo.Empty -> println("nothing on board")
+
+    match cargo:
+        Cargo.Crates(poke crates) -> crates.push("tea")
+        Cargo.Empty -> println("nothing to add to")
+
+    match nom cargo:
+        Cargo.Crates(nom crates) -> println("shipped {ship(nom crates).realise(0)} crates")
+        Cargo.Empty -> println("nothing to ship")
+
+    return Result.Ok(0)

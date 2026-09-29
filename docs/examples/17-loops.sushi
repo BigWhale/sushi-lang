@@ -7,14 +7,16 @@
 # Key concepts covered:
 # - while loops with condition checking
 # - foreach loops for iterating over arrays via .iter()
+# - foreach over a range (0..3 excludes the end, 1..=3 includes it)
 # - break statement to exit loops early
 # - continue statement to skip to next iteration
 # - Loop variable mutation with := operator
 # - Combining loops with conditionals
 # - Using stdlib time module for delays
 #
-# Note: Sushi doesn't have traditional for loops with initialization/increment.
-# Use while for index-based iteration and foreach for collection iteration.
+# Note: Sushi has no C-style for loop with an initializer and an increment.
+# Use foreach over a range for index-based iteration, foreach over .iter() for
+# a collection, and while for a loop on a condition.
 
 use <time>
 
@@ -27,7 +29,7 @@ fn main() i32:
     while (countdown > 0):
         println("T-minus {countdown}")
         countdown := countdown - 1
-        # Add 200ms delay between countdown steps for dramatic effect
+        # Add 300ms delay between countdown steps for dramatic effect
         msleep(300 as i64).realise(0) # Using realise() for proper error handling in main()
 
     println("Jump!")
@@ -67,5 +69,11 @@ fn main() i32:
         # Use modulo operator % to check for even numbers
         if (n % 2 == 0):
             println("  {n}")
+
+    # Foreach over a range - no counter to declare and update
+    println("Towels by index:")
+
+    foreach(k in 0..3):
+        println("  towel {k}")
 
     return Result.Ok(0)

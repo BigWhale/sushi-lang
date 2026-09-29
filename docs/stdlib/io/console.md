@@ -46,14 +46,14 @@ Three consequences worth knowing:
   puts the terminal back. `println` reaches descriptor 1 directly and never sees the
   variable.
 - **The three are not typed apart.** One `File` type means `stdin.write("x")` compiles;
-  it fails at run time with `EBADF`. The type used to forbid it. That is the price of a
+  it fails at run time with `EBADF`, which the program sees as `IoError.Other` (not
+  `IoError.Closed`, see [I/O errors](error.md)). That is the price of a
   single handle type, and it is what makes a buffered writer over the console possible
   at all.
 
 Every route to the console is the descriptor. `print`, `println` and `stdout.write()`
 all reach descriptor 1 through one `write(2)` seam, so bytes arrive in the order the
-program wrote them -- which was not true while `print` went through buffered `printf`
-and a file write went straight to the kernel.
+program wrote them.
 
 ## Console Output
 
@@ -61,12 +61,11 @@ and a file write went straight to the kernel.
 
 Print a message with a newline.
 
-```sushi
-fn println(string message) -> ~
-```
+**Form:** `println(value)`. It is a statement and answers nothing.
 
 **Parameters:**
-- `message` - String to print
+- `value` - The value to print: a string, a number or a `bool` (a `bool` prints as
+  `true` or `false`)
 
 **Example:**
 
@@ -96,12 +95,10 @@ fn main() i32:
 
 Print a message without a newline.
 
-```sushi
-fn print(string message) -> ~
-```
+**Form:** `print(value)`. It is a statement and answers nothing.
 
 **Parameters:**
-- `message` - String to print
+- `value` - The value to print, as for `println`
 
 **Example:**
 
@@ -123,16 +120,18 @@ fn main() i32:
 ```sushi
 use <time>
 
-fn main() i32:
-    let i32 total = 10
-
+fn progress(i32 total) ~:
     foreach(i in 0..total):
         print("*")
+        if (i == total - 1):
+            println("")
         msleep(100 as i64)??
+    return Result.Ok(~)
 
-    println("")
-    println("Complete!")
-
+fn main() i32:
+    match progress(10):
+        Result.Ok(_) -> println("Complete!")
+        Result.Err(_) -> println("interrupted")
     return Result.Ok(0)
 ```
 
@@ -524,11 +523,8 @@ through one `write(2)` seam, and `stderr` reaches descriptor 2 through the same 
 the bytes of a run arrive in the order the program wrote them, on each stream and between
 the two, with no `flush()` anywhere.
 
-That is a deliberate choice and it was not always true. While `print` went through C's
-buffered `printf` and a file write went straight to the kernel, a program that mixed the
-two got its output in FLUSH order: a `println` could appear after a file write that ran
-later. One route removed the class of bug, and it removed the need to reason about
-buffering at all.
+That is a deliberate choice. With one route to each descriptor, a program never has to
+think about which buffer holds which bytes.
 
 The cost is one system call per call, so a loop of a million `print`s pays a million
 times. When that matters, buffer explicitly and say where the drain happens:
@@ -580,6 +576,6 @@ fn main() i32:
 - [File Operations](files.md) - File I/O operations
 - [Buffered I/O](buf.md) - `BufReader` and `BufWriter` over any handle
 - [I/O Contracts](contracts.md) - `Reader`, `Writer` and `Seek`
-- [String Methods](../../standard-library.md) - String manipulation for input parsing
+- [String Methods](../collections/strings.md) - String manipulation for input parsing
 - [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
 - [Error Handling](../../error-handling.md) - Result and Maybe types

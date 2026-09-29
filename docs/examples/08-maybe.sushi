@@ -8,7 +8,7 @@
 # - Maybe.Some(value) and Maybe.None() variants
 # - Pattern matching on both Result and Maybe values
 # - Utility methods: .is_some(), .is_none(), .realise(default), .expect(msg)
-# - Nested Result@(Maybe@(T)) handling with explicit pattern matching
+# - Nested Result@(Maybe@(T), E) handling with explicit pattern matching
 #
 # Note: All functions return Result@(T, E), so we use match statements to
 # unwrap the Result layer before working with the Maybe@(T) value.

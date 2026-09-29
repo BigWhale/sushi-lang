@@ -11,10 +11,11 @@ one you're holding.
 By the end of this chapter you'll understand `Result@(T, E)`, the `??` propagation operator,
 the `Maybe@(T)` optional type, and the small set of patterns that keep `main` warning-free.
 
-## Result&lt;T, E&gt;, and why it exists
+## `Result@(T, E)`, and why it exists
 
 You already met `Result` in Chapter 1: `main` ends with `return Result.Ok(0)`. That wasn't
-ceremony. **Every** function in Sushi returns a `Result@(T, E)` — a value that is either:
+ceremony. **Every** function that you declare with `fn` returns a `Result@(T, E)` — a value
+that is either:
 
 - `Result.Ok(value)` — success, carrying a `T`, or
 - `Result.Err(error)` — failure, carrying an `E`.
@@ -53,7 +54,8 @@ Two details to absorb:
 
 `StdError.Error` is fine for quick programs, but real code wants to say *what* went wrong.
 Define an `enum` and name it as the error type with the `T | ErrorEnum` syntax. Now callers
-can `match` on the specific variant.
+can `match` on the specific variant. The error type must be an enum, in both spellings
+(`T | E` and `Result@(T, E)`); `fn f() i32 | i32` is the error `CE2084`.
 
 ```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/custom-errors.sushi"
@@ -125,7 +127,7 @@ let i32 failed = plan_jump(false).realise(-1)  # Err     -> -1
 This is the workhorse for turning a `Result` into a plain value without branching, and —
 as we'll see in a moment — it's one of the main-safe ways to consume results.
 
-## Maybe&lt;T&gt;: "a value, or nothing"
+## `Maybe@(T)`: a value, or nothing
 
 `Result@(T, E)` answers "did it succeed, and if not, *why*?" Sometimes you don't have a why —
 there's simply a value present or absent. A lookup that finds nothing isn't an *error*; it's
@@ -158,12 +160,35 @@ layers. We peel the `Result` with `match`, then inspect the `Maybe` inside. (`Re
 uses `_` to ignore the bound error: a `match` arm for `Err` must bind something, and `_`
 says "I don't care about it" without tripping an unused-variable warning.)
 
+`crew` is an ordinary parameter, so `find_index` only borrows it. `main` keeps the array
+and can search it again.
+
+### `??` on a `Maybe`
+
+`??` also works on a `Maybe@(T)`, in a function that returns a `Result`. `Maybe.Some(value)`
+unwraps to `value`. `Maybe.None()` makes the function return an error at once. An array's
+`.get(i)` returns a `Maybe`, so `??` is a short way to say "stop if there is no element
+here":
+
+```sushi
+--8<-- "docs/tutorial/examples/06-error-handling/maybe-propagation.sushi"
+```
+
+Output:
+
+```
+second of three, doubled: 42
+second of one, doubled:   -1
+```
+
 ## Don't use `??` in `main()`
 
 Here's the one rule that trips up newcomers. The `??` operator is wonderful in *helper*
 functions, but using it in `main` triggers a compiler warning, **CW2511**:
 
-> CW2511: `??` operator used in `main()` (consider explicit error handling)
+```
+warning [CW2511]: ?? operator used in main function (consider explicit error handling for clarity).
+```
 
 Why discourage it? `main` is the top of the call stack — there's nowhere left to propagate
 *to*. If `main` propagated an error, your program would exit with an opaque failure and no
@@ -199,11 +224,12 @@ None of those use `??`, so the program builds cleanly. Save `??` for the helpers
 
 ## What you learned
 
-- Every Sushi function returns `Result@(T, E)`: `Result.Ok(value)` or `Result.Err(error)`.
+- Every `fn` returns `Result@(T, E)`: `Result.Ok(value)` or `Result.Err(error)`.
 - Writing `fn f() T` implicitly wraps to `Result@(T, StdError)`; `fn f() T | MyError` lets
-  you supply a custom error enum.
+  you supply a custom error enum. The error type must be an enum (`CE2084`).
 - `??` unwraps `Ok` or propagates `Err` from the enclosing function — RAII-safe, zero-cost,
-  and meant for helper functions (not `main`).
+  and meant for helper functions (not `main`). On a `Maybe`, `??` unwraps `Some` and
+  returns an error for `None`.
 - `.realise(default)` unwraps with a fallback; `if (result.is_ok()):` splits Ok from Err.
 - `Maybe@(T)` (`Maybe.Some` / `Maybe.None`) models presence vs. absence — Sushi's `null`
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.

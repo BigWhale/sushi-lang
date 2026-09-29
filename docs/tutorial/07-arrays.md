@@ -38,7 +38,10 @@ A few things to notice:
   exactly five elements.
 - A dynamic array is built from a literal by wrapping it in `from(...)`: `from([1, 1, 2,
   3, 5])`. The `from` is what turns a literal into a growable, heap-allocated array.
-- `new()` makes an *empty* dynamic array, ready to have elements pushed onto it.
+- `new()` makes an *empty* dynamic array, ready to have elements pushed onto it. An empty
+  array has no element to show its element type, so `new()` takes the type from its
+  position: here, the declared type `string[]` of the `let`. A `new()` in a position with no
+  type, such as `println(new().len())`, is the error `CE2111`.
 - `.len()` reports how many elements an array currently holds, and works on both kinds.
 
 !!! note "Why `from(...)` for dynamic arrays?"
@@ -77,6 +80,9 @@ Asking for index 42 of a four-element array would crash with `crew[42]`, but `cr
 calmly hands back `Maybe.None()`, and the `match` handles it. Use direct indexing when you
 *know* the index is valid; reach for `.get(...)` when you're not sure.
 
+An index is always an `i32`, in `arr[i]` and in `arr.get(i)`. An index variable of a
+different integer type, such as a `u8`, is an error; convert it with `as i32`.
+
 ## Changing an element
 
 Reading is only half of it. To *write* one element, put the same square-bracket form on
@@ -107,7 +113,9 @@ it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **CE2411**,
 
 !!! note "Fixed arrays are mutable — only their *length* is fixed"
     `i32[5]` means "always exactly five integers". It does not mean the five integers never
-    change. You can write any element you like; you just cannot make it a sixth.
+    change. You can write any element you like; you just cannot make it a sixth. The
+    exception is an array **constant** (`const i32[3] PRIMES = [2, 3, 5]`): the compiler
+    keeps it in read-only memory, and a write to one of its elements is the error `CE2096`.
 
 ## Growing and iterating
 
@@ -145,6 +153,53 @@ model, which [Chapter 12](12-memory-management.md) explores.)
     the elements inside it. This is RAII, and it means no `free()` calls and no leaks in
     ordinary code. You'll see the machinery behind it later in the tutorial.
 
+## Repeated values, ranges and slices
+
+You do not have to write every element of a literal. Two short forms fill many slots at
+once:
+
+- `[value; count]` repeats `value` `count` times. `[0; 5]` is five zeros.
+- A range, `[1..=3]` or `[0..5]`, fills one slot for each number in the range.
+
+You can mix both forms with plain elements: `[1..=3, 42, 7; 2]` is `1 2 3 42 7 7`. In a
+fixed array or a `const`, the count must be a value that the compiler can read, such as a
+literal or a constant. In `from(...)`, the count can be any `i32` expression, because a
+dynamic array keeps its length at run time.
+
+Four methods copy many elements at once. Each one only reads its source array:
+
+- `.extend(src)` appends all of `src`.
+- `.extend_range(src, start, count)` appends `count` elements of `src`, starting at
+  `start`.
+- `.s(start, end)` returns a new array with the elements from `start` up to, but not
+  including, `end`.
+- `.ss(start, count)` returns a new array with `count` elements, starting at `start`.
+
+A range that goes past the end of the array is clamped, as the slices of a string are. These
+methods never stop the program.
+
+```sushi
+--8<-- "docs/tutorial/examples/07-arrays/repeat-range-and-slices.sushi"
+```
+
+Output:
+
+```
+zeros: 0 0 0 0
+second prime: 3
+counted: 1 2 3 42 7 7
+empty seats: 0 0 0
+extended: 1 2 3 10 20 30 40
+extend_range: 1 2 3 10 20 30 40 20 30
+s(1, 4): 2 3 10
+ss(3, 2): 10 20
+s(5, 99): 30 40 20 30
+```
+
+!!! note "No arrays of arrays"
+    An array element cannot be an array: `i32[][]` is not a type in Sushi. Use an array of
+    structs when you need rows of values.
+
 ## What you learned
 
 - Fixed-size arrays (`T[N]`) have a compile-time length and live on the stack; write them
@@ -153,11 +208,13 @@ model, which [Chapter 12](12-memory-management.md) explores.)
   `new()`.
 - `.len()` reports the current length.
 - `arr[i]` is fast but crashes (RE2020) on a bad index; `arr.get(i)` is safe and returns
-  `Maybe@(T)`.
+  `Maybe@(T)`. An index is an `i32`.
 - `arr[i] := value` writes one element, on both kinds of array. A fixed array's *length* is
   fixed; its contents are not.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,
   and `foreach(x in arr.iter()):` is how you loop.
+- `[value; count]` and a range fill many slots of a literal. `.extend`, `.extend_range`,
+  `.s` and `.ss` copy many elements at once.
 
 Next we'll group related values into named types. On to
 [Structs & Enums](08-structs-and-enums.md).

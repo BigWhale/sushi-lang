@@ -1,0 +1,19 @@
+# A reference binding: `let poke T x = <place>` points into the place,
+# and a write through it changes the owner. `let peek T x = <place>`
+# is the read-only form.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let poke Point r = p
+    r.x := 42
+    println("p.x is now {p.x}")
+
+    let Point q = Point(7, 9)
+    let peek i32 qy = q.y
+    println("q.y is {qy}")
+
+    return Result.Ok(0)

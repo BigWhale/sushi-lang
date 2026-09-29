@@ -1,0 +1,15 @@
+enum Tree@(T):
+    Leaf(T)
+    Empty()
+
+fn main() i32:
+    match Maybe.Some(42):
+        Maybe.Some(v) -> println("Maybe.Some(42) holds an i32: {v}")
+        Maybe.None() -> println("nothing")
+
+    let Tree@(string) nothing = Tree.Empty()
+    match nothing:
+        Tree.Leaf(v) -> println("A leaf holding {v}")
+        Tree.Empty() -> println("Tree.Empty() needs its declared type")
+
+    return Result.Ok(0)

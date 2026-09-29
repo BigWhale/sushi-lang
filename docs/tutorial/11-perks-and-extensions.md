@@ -1,32 +1,33 @@
 # 11. Perks & Extension Methods
 
-In the last chapter we made types *generic*. This chapter is about giving types
-**behaviour**. We'll do it two ways: extension methods, which bolt a new method onto a type
-you don't own, and perks, which are Sushi's take on interfaces (Java) or traits (Rust) —
-contracts that say "any type with these methods qualifies".
+In the last chapter we made types *generic*. This chapter gives types **behaviour**, in two
+ways. An extension method adds a new method to a type, also to a type that you do not own. A
+perk is a contract: it is Sushi's version of an interface (Java) or a trait (Rust). A type
+that has the methods of the perk can say that it satisfies the perk.
 
-Both lower to plain function calls at compile time, so once again there's no runtime price
-to pay.
+The compiler changes both into plain function calls, so they have no cost at run time.
 
 ## Extension methods
 
-An **extension method** adds a method to an existing type without touching that type's
-definition. You could already write `squared(6)` as a free function; an extension lets you
-write `6.squared()` instead. Inside the method, the receiver is called `self`.
+An **extension method** adds a method to an existing type. It does not change the
+definition of the type. You can write `squared(6)` as a free function; an extension lets you
+write `6.squared()`. In the method body, the name of the receiver is `self`.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/extensions.sushi"
 ```
 
-A few things to notice:
+Some things to know:
 
-- You can extend **primitives** (`i32`, `string`, `bool`, ...) as well as your own structs
-  and enums. Adding a method to `i32` would be unthinkable in Java; here it's one line.
-- Unlike ordinary functions, extension methods return a **bare value**, not a `Result`. So
-  `squared` ends with `return self * self`, not `return Result.Ok(...)`. That's why the call
-  site is plain `six.squared()` with no `??` or `.realise(...)` in sight.
-- Calling `something.method()` inside a string interpolation works fine — see
-  `{six.squared()}`.
+- You can extend **primitives** (`i32`, `string`, `bool`, ...) and also your own structs and
+  enums.
+- An extension method with no error channel returns a **bare value**, not a `Result`. So
+  `squared` ends with `return self * self`. The call site is plain `six.squared()`, with no
+  `??` and no `.realise(...)`.
+- In a bare method, `return Result.Ok(...)` is an error (`CE2091`), and so is `??`
+  (`CE0131`): the method has no error channel. The section
+  [An error channel](#an-error-channel) shows how to add one.
+- You can call `something.method()` in a string interpolation: see `{six.squared()}`.
 
 Output:
 
@@ -36,16 +37,108 @@ Output:
 *** Don't panic ***
 ```
 
-!!! note "UFCS: `x.method(args)` is just `method(x, args)`"
-    Sushi uses *Uniform Function Call Syntax*. At compile time `six.squared()` is rewritten
-    to `squared(six)`, and `panic.banner()` becomes `banner(panic)`. The dot notation is
-    pure sugar — there's no vtable lookup, no boxing, nothing dynamic. It reads like a method
-    call and runs like a function call.
+!!! note "UFCS: `x.method(args)` is `method(x, args)`"
+    Sushi uses *Uniform Function Call Syntax*. The compiler changes `six.squared()` to
+    `squared(six)`, and `panic.banner()` to `banner(panic)`. The dot notation is only a
+    different spelling: there is no vtable, no boxing and no dynamic lookup.
+
+## The receiver: `self`, `poke self` and `nom self`
+
+The receiver is a parameter, and it has a mode like every other parameter (chapter 12
+explains the modes in full):
+
+| Receiver | What the method can do |
+|---|---|
+| `self` (no mode written) | Read the value. This is a read-only borrow. |
+| `poke self` | Read and change the value. The caller keeps it. |
+| `nom self` | Take the value. The caller cannot use it after the call. |
+
+Write `poke self` or `nom self` in the parameter list of the method. The plain `self` is
+not written: a method with no receiver mode reads `self`.
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/receiver-modes.sushi"
+```
+
+Output:
+
+```
+towels: 42
+the label was towels
+```
+
+`bump` changes its receiver, so it declares `poke self`. If you remove `poke self`, the
+assignment `self.n := ...` is an error: `CE2421: cannot write through 'self': a method
+receiver is a read-only borrow`. The call site does not change: it is `c.bump()` in both
+cases.
+
+`into_label` takes the whole counter and gives back its label. `nom self.label` takes the
+field out of the receiver. After the call, `c` is spent, and a use of `c` is an error
+(`CE2435`). The standard library uses this form where a value must end: `File.close()` and
+`BufWriter.finish()` both take `nom self`.
+
+## An error channel
+
+An extension method can declare an **error channel**: write `| E` after the return type,
+where `E` is an enum. The method is then fallible, as a free function is:
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/channel.sushi"
+```
+
+Output:
+
+```
+half of 84 is 42
+half of 7 is -1
+stopped at the odd number 21
+```
+
+With `| E`, the rules change:
+
+- The call gives a `Result@(T, E)`. Handle it with `??`, `.realise(default)` or `match`,
+  as in chapter 6.
+- The body spells **both** constructors: `return Result.Ok(value)` and
+  `return Result.Err(error)`. A bare `return value` is an error (`CE2030`). A method that
+  returns `~` ends with `return Result.Ok(~)`.
+- `??` is legal in the body. `quarter` uses it to pass on the error of `half`.
+- A chain stops at an unhandled channel. `8.half().half()` is an error (`CE2515`), because
+  the first call gives a `Result`. In a function or method with a channel, write
+  `n.half()??.half()`; otherwise handle the first result.
+
+## Array targets and generic targets
+
+The target of an extension can also be an array type or a generic type:
+
+- `extend i32[] total()` adds a method to one array type, `i32[]`.
+- `extend T[] count()` adds a method to every dynamic array. `T` is the element type.
+- `extend Box@(T) get()` adds a method to every `Box`. A concrete argument, as in
+  `extend Box@(i32) ...`, adds the method to `Box@(i32)` only.
+
+A method can also have its **own** type parameters, after its name: `paired@(U)`. The
+compiler finds `U` from the arguments. A method call has no place for explicit type
+arguments.
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/targets.sushi"
+```
+
+Output:
+
+```
+42
+42
+2
+42 and a towel
+```
+
+Chapter 19 uses these forms: the standard library declares `extend T[] map@(U)(...)` and
+`extend List@(T) filter(...)`.
 
 ## Static methods: a constructor on the type
 
-Every extension method so far took a receiver. A **static** method takes none: write
-`static` before the name, and the method is called on the *type* instead of on a value.
+The extension methods above take a receiver. A **static** method takes no receiver: write
+`static` before the name. You call a static method on the *type*, not on a value.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/statics.sushi"
@@ -57,38 +150,38 @@ Output:
 from (0, 0) the distance squared is 25
 ```
 
-`Vec.at(3, 4)` reads exactly like `List.new()` and `HashMap.new()`, which you have been
-using since chapter 7 — those are static methods too, on types the compiler declares.
+`Vec.at(3, 4)` has the same form as `List.new()` and `HashMap.new()`, which you use in
+chapter 13. Those are static methods too, on types that the compiler declares.
 
-Two things to keep in mind:
+Some rules:
 
-- A static has **no `self`**. There is nothing it was called on, so naming a receiver in
-  the signature or reaching for `self` in the body is an error (`CE0134`). Take what the
-  method needs as an ordinary parameter.
-- A name behind a type's dot is **one** thing: a variant, or a static method. On an enum
-  that means a static may not spell one of the variants, and on any type a static may not
-  share a name with an instance method.
+- A static has **no `self`**. A receiver in the signature, or `self` in the body, is an
+  error (`CE0134`). Give the method what it needs as an ordinary parameter.
+- A name behind a type's dot is **one** thing: a variant or a static method. On an enum, a
+  static cannot have the name of a variant (`CE2103`). On all types, a static cannot have
+  the name of an instance method (`CE0101`).
+- An array target cannot have a static (`CE2104`): `i32[].empty()` has no spelling.
+- A perk implementation cannot hold a static (`CE4014`).
 
-`new` is a fine name for one — `extend Box static new(i32 n) Box:` — and it is the one
-name a *free* function cannot have.
+`new` is a good name for a static: `extend Box static new(i32 n) Box:`. A *free* function
+cannot have the name `new`.
 
 ## Perks: defining a contract
 
-A **perk** is a named set of method signatures. A type that provides those methods can
-declare that it satisfies the perk. If you know Java interfaces or Rust traits, this is the
-same idea.
+A **perk** is a named set of method signatures. A type that has those methods can declare
+that it satisfies the perk.
 
-You implement a perk for a type with `extend TypeName with PerkName:` and then supply the
+To implement a perk for a type, write `extend TypeName with PerkName:`, then give the
 method bodies.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/perk-basics.sushi"
 ```
 
-`perk Describable` declares one method: `fn describe() string`. Note there's no body and no
-`Result` — perk method signatures, like the extension methods above, deal in bare types.
-Both `Robot` and `Ship` then say `extend ... with Describable:` and fill in their own
-`describe`. Two unrelated structs, one shared vocabulary.
+`perk Describable` declares one method: `fn describe() string`. The signature has no body.
+Like an extension method, a perk method returns a bare value when it declares no channel.
+`Robot` and `Ship` each say `extend ... with Describable:` and give their own `describe`.
+Two different structs have one shared vocabulary.
 
 Output:
 
@@ -97,26 +190,29 @@ Marvin (battery: 42%)
 Heart of Gold (crew: 5)
 ```
 
+A perk method can also declare `| E`, for example `fn halve() i32 | HalfError`. Then
+every implementation declares the same channel (`CE0133` if they do not agree), and the
+body spells `Result.Ok` and `Result.Err`, as in the section above. The `Reader` and `Writer`
+perks of `<io/contracts>` (chapter 14) use this form.
+
 ## Perks as generic constraints
 
-On its own, the perk above just lets each type have a `describe` method — handy, but we
-could have done that with plain extension methods. The real power shows up when you combine
-perks with the generics from the previous chapter.
+The perk above only gives each type a `describe` method. Plain extension methods can do
+that too. The real value of perks comes with the generics of the previous chapter.
 
-A generic function can **constrain** its type parameter with `<T: PerkName>`, meaning "T can
-be any type, as long as it implements `Describable`". Inside the function you may then call
-the perk's methods on the value.
+A generic function can **constrain** its type parameter with `@(T: PerkName)`. This means:
+"T can be any type that implements `PerkName`". In the function body, you can then call
+the methods of the perk on the value.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/perk-constraint.sushi"
 ```
 
-`announce@(T: Describable)(T item)` accepts a `Robot` or a `Ship` — or anything else that
-implements `Describable` — and calls `item.describe()` on it. The compiler verifies the
-constraint at the call site (and refuses to compile if you pass a type that doesn't qualify)
-and then monomorphizes a specialised `announce` for each type, exactly as in Chapter 10. The
-constraint is checked once, at compile time; nothing about it survives into the running
-program.
+`announce@(T: Describable)(T item)` accepts a `Robot`, a `Ship`, or any other type that
+implements `Describable`, and calls `item.describe()`. The compiler checks the constraint
+at the call site, and refuses a type that does not satisfy it (`CE4006`). Then it makes a
+specialised `announce` for each type, as in chapter 10. The check occurs at compile time
+only.
 
 Output:
 
@@ -127,22 +223,22 @@ Ship Heart of Gold (crew: 5)
 
 ## `Hashable` is predefined
 
-One perk describes behaviour the compiler already derives: hashing. Nearly every type in
-Sushi gets an auto-derived `.hash() -> u64`, and the perk `Hashable` (`fn hash() u64`)
-ships with the compiler beside `Drop`. You never declare it — a `perk Hashable:` of your
-own is a duplicate (CE4001) — and every type with a derived hash **satisfies it
-automatically**: the primitives, `string`, and a plain struct or enum alike.
+One perk describes behaviour that the compiler already derives: hashing. Almost every type
+in Sushi gets an auto-derived `.hash() -> u64`. The perk `Hashable` (`fn hash() u64`) comes
+with the compiler, as does `Drop` (chapter 12). Do not declare it: a `perk Hashable:` of
+your own is a duplicate (`CE4001`). Every type with a derived hash **satisfies it
+automatically**: the primitives, `string`, and a plain struct or enum.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/synthetic-hash.sushi"
 ```
 
-`fingerprint@(T: Hashable)` needs its argument to be hashable. `Point` would satisfy the
-constraint on its own, through its derived hash; the explicit `extend Point with Hashable`
-here is the **override**, and it is what makes the fingerprint `30` rather than the
-derived value. For `42` (an `i32`) and `true` (a `bool`) we write nothing. A type the
-compiler cannot hash — a struct holding a `HashMap`, say — does not satisfy `Hashable`
-unless it implements the perk, and the constraint refuses it with CE4006.
+`fingerprint@(T: Hashable)` needs a hashable argument. `Point` satisfies the constraint
+through its derived hash. The explicit `extend Point with Hashable` is an **override**: it
+makes the fingerprint `30` and not the derived value. For `42` (an `i32`) and `true` (a
+`bool`) we write nothing. A type that the compiler cannot hash (for example, a struct that
+holds a `HashMap`) does not satisfy `Hashable` unless it implements the perk. The constraint
+refuses it with `CE4006`.
 
 Output:
 
@@ -151,39 +247,46 @@ Point fingerprint: 30
 i32 and bool hashed through the predefined Hashable: 6807129317463932018, 1
 ```
 
-(The large number is the real FxHash of the integer `42`; we are not making it up. Yours
-will match, because the hash is deterministic.)
+(The large number is the FxHash of the integer `42`. The hash is deterministic, so your
+number is the same.)
 
-## What perks can't do (yet)
+## What perks cannot do
 
-Perks are deliberately simple, and it's worth knowing the edges so you don't fight the
-compiler:
+Perks are simple on purpose. Know these limits:
 
-- **No type parameters.** You can't write `perk Iterator@(Item):`. Perks themselves are not
-  generic.
-- **No inheritance.** A perk can't require another perk (no `perk Ord: Eq`). If you need
-  several capabilities, list them with `+` at the *use* site, as in
+- **No type parameters.** `perk Iterator@(Item):` is an error (`CE4010`).
+- **No inheritance.** A perk cannot require another perk (no `perk Ord: Eq`). To ask for
+  more than one capability, use `+` at the *use* site:
   `fn f@(T: Hashable + Displayable)(T x)`.
-- **No default implementations.** Every method a perk declares must be implemented in full by
-  each type; a perk can't provide a fallback body.
+- **No default implementations.** Each type implements every method of the perk. A perk
+  cannot give a fallback body.
+- **No static methods** (`CE4014`). A perk has no `Self` type, so a contract cannot hold a
+  constructor.
+- **One home for a name.** A perk method and an extension method with the same name on the
+  same type is an error (`CE4007`). A name is a contract method or a convenience method,
+  never both.
 
-These keep the model purely static — every perk method call resolves to a known function at
-compile time, which is what makes the whole thing zero-cost.
+With these limits, every perk method call goes to a known function at compile time.
 
 ## What you learned
 
-- **Extension methods** (`extend Type method() Ret:`) add methods to any type, including
-  primitives, using `self` for the receiver, and return **bare** values (no `Result`).
-- **Static methods** (`extend Type static name() Ret:`) have no receiver and are called on
-  the type: `Vec.at(3, 4)`. That is what `List.new()` has always been.
-- **UFCS** means `x.method(args)` is compiled to `method(x, args)` — sugar with no runtime
-  cost.
-- A **perk** is a contract of method signatures; types opt in with `extend Type with Perk:`.
-- Perks shine as **generic constraints** (`<T: Perk>`), checked at compile time and
-  monomorphized away.
-- `Hashable` is **predefined**, like `Drop`: every type with a derived `hash()` satisfies it,
-  and `extend T with Hashable` replaces the derived hash.
-- Perks have no type parameters, no inheritance, and no default methods.
+- **Extension methods** (`extend Type method() Ret:`) add methods to any type, primitives
+  included. The receiver is `self`. With no channel, the method returns a **bare** value.
+- The receiver has a mode: `self` reads, `poke self` changes, `nom self` takes.
+- `| E` gives a method an **error channel**: the call gives `Result@(T, E)`, and the body
+  spells `Result.Ok` and `Result.Err`.
+- A target can be an array (`extend T[]`, `extend i32[]`) or a generic type
+  (`extend Box@(T)`), and a method can have its own type parameters (`paired@(U)`).
+- **Static methods** (`extend Type static name() Ret:`) have no receiver. You call them on
+  the type: `Vec.at(3, 4)`. `List.new()` is a static method too.
+- **UFCS**: the compiler changes `x.method(args)` to `method(x, args)`, with no cost at run
+  time.
+- A **perk** is a contract of method signatures. A type opts in with
+  `extend Type with Perk:`.
+- Perks are **generic constraints** (`@(T: Perk)`), checked at compile time.
+- `Hashable` is **predefined**, as `Drop` is. Every type with a derived `hash()` satisfies
+  it, and `extend T with Hashable` replaces the derived hash.
+- Perks have no type parameters, no inheritance, no default methods and no statics.
 
-Next we'll look at how Sushi manages memory — ownership, RAII, and borrowing — without a
-garbage collector. On to [Memory Management](12-memory-management.md).
+The next chapter is about how Sushi manages memory without a garbage collector: ownership,
+RAII and borrowing. Go to [Memory Management](12-memory-management.md).

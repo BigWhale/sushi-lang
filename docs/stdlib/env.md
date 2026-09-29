@@ -23,9 +23,12 @@ The env module provides functions for reading and modifying environment variable
 
 Get an environment variable value.
 
-```sushi
-fn getenv(string key) -> Maybe@(string)
+```text
+getenv(string key) Maybe@(string)
 ```
+
+The `Maybe` is the bare return value, not wrapped in a `Result`: a missing variable is a
+value, not a failure.
 
 **Parameters:**
 - `key` - Environment variable name
@@ -79,8 +82,8 @@ fn main() i32:
 
 Set an environment variable value.
 
-```sushi
-fn setenv(string key, string value) -> Result@(i32, EnvError)
+```text
+setenv(string key, string value) Result@(i32, EnvError)
 ```
 
 **Parameters:**
@@ -205,9 +208,10 @@ Platform-specific implementation in `sushi_stdlib/src/_platform/linux/env.py`:
 - Uses standard POSIX `getenv()` and `setenv()`
 - Follows GNU/Linux semantics
 
-### Windows (partial support)
+### Other platforms
 
-Windows support is planned but not yet fully implemented.
+The stdlib has platform code for macOS and Linux only. There is no Windows
+implementation.
 
 ## Security Considerations
 
@@ -330,4 +334,4 @@ fn main() i32:
 
 - [Standard Library Reference](../standard-library.md) - Complete stdlib reference
 - [Error Handling](../error-handling.md) - Result and Maybe types
-- [String Methods](../standard-library.md) - String operations for parsing env values
+- [String Methods](collections/strings.md) - String operations for parsing env values

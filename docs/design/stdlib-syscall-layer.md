@@ -22,9 +22,8 @@ The descriptor layer of `<io/files>` has two halves:
 
 `sushi_io_files_fd_readln(i32 fd)` answers `Result@(Maybe@(string), FileError)`: one line,
 with the newline removed. A blank line and the end of file are different answers: a blank
-line is `Some("")` and the end is `None`. The old contract answered an empty string for
-both, so a file with a blank line in it stopped there, and a caller could not tell a short
-file from a failed read. The end of file after some bytes is a last line with no newline
+line is `Some("")` and the end is `None`, so a file with a blank line in it does not stop
+there. The end of file after some bytes is a last line with no newline
 after it, and that is a line.
 
 ### Two paths, chosen by whether the descriptor can seek
@@ -40,7 +39,7 @@ The reader first asks `lseek(fd, 0, SEEK_CUR)`. A pipe, a socket and a terminal 
   position to the byte after the newline.
 
 The by-byte path is slow. Measured on 2026-08-31 at 200 000 lines: 4.49s, against 0.47s
-for the buffered `fgets` it replaced, with 3.3s of that in the kernel across 9.3 million
+for a buffered `fgets`, with 3.3s of that in the kernel across 9.3 million
 system calls. That is why a seekable descriptor takes the chunked path.
 
 ### The chunked path uses ABSOLUTE positions

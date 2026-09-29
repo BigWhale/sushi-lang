@@ -76,6 +76,7 @@ fn main() i32:
     println("Named: Config(host: 'database.local', port: 5432,")
     println("              use_ssl: true, enable_cache: false, ...)")
     println("  ^ Immediately clear what each parameter does!")
+    println("Both give the same value: use_ssl = {cfg3.use_ssl} and {cfg4.use_ssl}")
     println("")
 
     # Example 3: Works with all struct types

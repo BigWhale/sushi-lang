@@ -10,7 +10,8 @@
 # - Field access using dot notation
 # - RAII cleanup (automatic memory management for struct fields)
 #
-# Note: Struct constructors use positional arguments in field declaration order.
+# Note: This example uses positional arguments, in field declaration order. A
+# struct construction can also name its fields (see 25-named-parameters.sushi).
 
 struct Person:
     string name

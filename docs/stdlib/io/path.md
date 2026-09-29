@@ -18,7 +18,10 @@ use <io/path>
 
 ## Functions
 
-### `join(string base, string child) -> Result@(string)`
+Each function declares a `string` return, so a call answers `Result@(string, StdError)`.
+No function fails today; `.realise("?")` in the examples takes the value.
+
+### `join(string base, string child) string`
 
 Join two path segments with a single separator. An absolute child replaces the base.
 
@@ -32,7 +35,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `basename(string path) -> Result@(string)`
+### `basename(string path) string`
 
 The part after the last separator. A path with a trailing separator has an empty basename.
 
@@ -45,7 +48,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `dirname(string path) -> Result@(string)`
+### `dirname(string path) string`
 
 The part before the last separator, trailing separators stripped. A path with no separator has an empty dirname.
 
@@ -58,7 +61,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `extension(string path) -> Result@(string)`
+### `extension(string path) string`
 
 The extension of the last component, without the leading dot. The leading dot of a hidden file does not count.
 
@@ -71,7 +74,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `normalize(string path) -> Result@(string)`
+### `normalize(string path) string`
 
 Normalize a path lexically: doubled separators collapse, `.` components vanish, and a `..` removes the component before it when one exists. An empty result becomes `.`.
 

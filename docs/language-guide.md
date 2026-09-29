@@ -33,11 +33,11 @@ fn main() i32:
 Key points:
 - `fn` declares a function
 - `i32` is the return type (32-bit integer)
-- All functions actually return `Result@(T)` - this is Sushi's approach to explicit error handling (more on this later)
+- All functions actually return `Result@(T, E)` - this is Sushi's approach to explicit error handling (more on this later)
 - `println` outputs text with a newline to standard output
 - The `return Result.Ok(0)` convention indicates successful program termination (exit code 0)
 
-The main function must return an `i32` (which the operating system uses as the exit code), and like all Sushi functions, it must explicitly wrap this value in `Result.Ok()` to indicate successful execution.
+The main function must return an integer type, usually `i32` (the operating system uses it as the exit code; another return type is CE0106). Like all Sushi functions, it must explicitly wrap this value in `Result.Ok()` to indicate successful execution.
 
 To read the command line, `main` takes exactly one parameter, `string[] args`. The first element is the program name. No other parameter list is accepted: the type must be `string[]` and the name must be `args`.
 
@@ -82,8 +82,45 @@ fn main() i32:
     let f32 pi = 3.14
     let f64 precise = 3.141592653589793
 
+    # Underscores group digits, one between two digits, in every base
+    let i64 big = 1_000_000
+    let u32 mask = 0xFF_FF
+
+    println("{tiny} {normal} {huge} {byte} {unsigned} {pi} {precise} {big} {mask}")
     return Result.Ok(0)
 ```
+
+A bare literal takes its type from the context: the annotation, the parameter, the field or
+the other operand. A value out of range for that type is `CE2073`. With no context, an
+integer literal is an `i32` and a float literal is an `f64`.
+
+### Constants, Unit Variables and Visibility
+
+A `const` at the top of a unit is a value that the compiler computes at compile time. A
+`var` at the top of a unit is STORAGE: one per program, set before `main` runs, and you can
+rebind it. A declaration is private to its unit by default; write `public` to export it to
+the units that import yours:
+
+```sushi
+public const i32 MAX_DEPTH = 32         # another unit may read it
+const i32[3] PRIMES = [2, 3, 5]         # this unit only
+var i32 next_id = 0                     # unit-level storage
+
+fn fresh_id() i32:
+    next_id := next_id + 1
+    return Result.Ok(next_id)
+
+fn main() i32:
+    let i32 a = fresh_id().realise(0)
+    let i32 b = fresh_id().realise(0)
+    println("{MAX_DEPTH} {PRIMES[2]} {a} {b}")
+    return Result.Ok(0)
+```
+
+A constant cannot be written (`CE2096`). A `var` is never moved out of: `f(nom v)` or
+`let T x = v` on a `var` whose type owns a resource is `CE2436`. `public` works on `fn`,
+`const`, `var`, `struct`, `enum` and `perk`. See [Visibility](design/visibility.md) and
+[Unit Storage](design/unit-storage.md).
 
 ### Integer Overflow
 
@@ -157,8 +194,12 @@ fn main() i32:
 - `.find(string) -> Maybe@(i32)` - Find substring position
 - `.split(string) -> string[]` - Split into array by delimiter
 - `.trim() -> string` - Remove leading/trailing whitespace
-- `.to_upper() -> string` - Convert to uppercase (ASCII only)
-- `.to_lower() -> string` - Convert to lowercase (ASCII only)
+- `.upper() -> string` - Convert to uppercase (ASCII only)
+- `.lower() -> string` - Convert to lowercase (ASCII only)
+
+Every built-in string method needs `use <collections/strings>` in the unit that calls it.
+Without the import, the call is CE3015. Interpolation and your own extensions on `string`
+need no import.
 
 See [Standard Library: String Methods](standard-library.md) for detailed documentation.
 
@@ -179,7 +220,7 @@ fn main() i32:
 
 ## Functions and Returns
 
-Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result@(T)` wrapping for all returns.
+Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result.Ok(...)` or `Result.Err(...)` for all returns.
 
 ### Basic Functions
 
@@ -203,7 +244,10 @@ fn main() i32:
 - Return type: comes after the parameter list
 - `~` ("blank" or "unit" type): used for functions that don't return a meaningful value
 - Body: indented block following the colon
-- Returns: must be `Result.Ok(value)` or `Result.Err()`
+- Returns: must be `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` is CE2030
+- Every path must end with a `return`: a body that can reach its end is CE0107, also for a
+  `~` function (end it with `return Result.Ok(~)`)
+- A statement after a statement that always ends the path is dead code, and it is CE0140
 
 **The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. You must still wrap it: `return Result.Ok(~)`. This maintains consistency with Sushi's error handling model.
 
@@ -235,7 +279,9 @@ neither.
   callee's writes reach the caller's value; one at a time, exclusive.
 
 Every struct and enum gets an auto-derived `.clone()`, which is how a caller hands over a value it
-wants to keep: `f(nom s.clone())`.
+wants to keep: `f(nom s.clone())`. The one refusal is a type that declares a resource or holds one
+(a `File`, a type that implements `Drop`): `.clone()` on it is `CE2431`, and `.share()` is the
+escape where the type has it.
 
 (One special case: `main`'s `string[] args` is a borrowed view of the process argv. Passing it to an
 ordinary borrow parameter is fine; handing it to a `nom` one is `CE2410`.)
@@ -348,8 +394,15 @@ fn main() i32:
     foreach(name in names.iter()):
         println("Passenger: {name}")
 
+    foreach(i in 0..3):          # a range: 0 1 2; `0..=3` includes the end
+        println(i)
+
     return Result.Ok(0)
 ```
+
+`foreach` walks an `Iterator@(T)` (`.iter()`, a range, `.keys()`, `.values()`,
+`.entries()`) or any type that has a `next()` method that answers `Maybe@(T)`. No perk is
+necessary. See [Iteration](design/iteration.md).
 
 ### Break and Continue
 
@@ -373,9 +426,9 @@ fn main() i32:
 
 ## Error Handling
 
-### Result@(T)
+### Result@(T, E)
 
-Sushi uses `Result@(T)` as its fundamental approach to error handling. Every function in Sushi implicitly returns a `Result@(T)` type, even if you declare the return type as just `T`. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
+Sushi uses `Result@(T, E)` as its fundamental approach to error handling. Every function in Sushi returns a `Result@(T, E)`, even if you declare the return type as just `T` (then `E` is `StdError`). This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
 
 **The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi puts the failure in the type instead: if a function can fail, that failure is part of what it returns, so the compiler can tell you where you have not dealt with it. You must explicitly choose to handle errors or propagate them.
 
@@ -399,7 +452,7 @@ fn main() i32:
 ```
 
 **Key Concepts**:
-- When you declare a function returning `i32`, it actually returns `Result@(i32)`
+- When you declare a function returning `i32`, it actually returns `Result@(i32, StdError)`
 - Success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
@@ -410,7 +463,7 @@ This approach eliminates null pointer exceptions and ensures that error cases ar
 
 ### Unwrapping with .realise()
 
-The `.realise(default)` method provides a safe way to extract values from `Result@(T)`, similar to unwrapping in other languages but with a mandatory fallback value:
+The `.realise(default)` method provides a safe way to extract values from `Result@(T, E)`, similar to unwrapping in other languages but with a mandatory fallback value:
 
 ```sushi
 fn get_value() i32:
@@ -457,7 +510,7 @@ fn main() i32:
 
 **How it works**:
 1. If the `Result` is `Ok(value)`, `??` extracts and returns the value
-2. If the `Result` is `Err()`, `??` immediately returns `Result.Err()` from the current function
+2. If the `Result` is `Err(e)`, `??` immediately returns `Result.Err(e)` from the current function
 3. The error propagates up the call stack until someone handles it
 
 **RAII Safety**: The `??` operator is fully integrated with Sushi's RAII (Resource Acquisition Is Initialization) system. When an error is propagated, all resources in the current scope are properly cleaned up before the function returns. This means you never leak memory or file handles when errors occur.
@@ -469,9 +522,9 @@ use <io/fs>
 # Without ??: verbose, and there is no default handle to fall back on
 fn process() string | IoError:
     match open("data.txt", FileMode.Read()):
-        Result.Ok(f) ->
+        Result.Ok(nom f) ->
             match f.read_all():
-                Result.Ok(data) -> return Result.Ok(data)
+                Result.Ok(nom data) -> return Result.Ok(data)
                 Result.Err(e) -> return Result.Err(e)
         Result.Err(e) ->
             return Result.Err(e)
@@ -506,7 +559,7 @@ fn find_first_even(i32[] numbers) Maybe@(i32):
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8])
-    # Functions return Result@(T), so find_first_even returns Result@(Maybe@(i32))
+    # Functions return Result@(T, E), so find_first_even returns Result@(Maybe@(i32), StdError)
     let Result@(Maybe@(i32), StdError) result = find_first_even(data)
 
     match result:
@@ -534,7 +587,7 @@ fn main() i32:
 - Nullable references in data structures (use `Maybe@(T)` instead of trying to represent null)
 - HashMap lookups (`.get()` returns `Maybe@(V)` since the key might not exist)
 
-**Composing Maybe with Result**: Since functions return `Result@(T)`, you often see `Result@(Maybe@(T))` - a result that might be an error, or might be a success with an optional value. The type system helps you handle all cases correctly.
+**Composing Maybe with Result**: Since functions return `Result@(T, E)`, you often see `Result@(Maybe@(T), E)` - a result that might be an error, or might be a success with an optional value. The type system helps you handle all cases correctly.
 
 ## Collections
 
@@ -567,7 +620,14 @@ fn main() i32:
 - **Fixed arrays** (`T[N]`): Size known at compile time, allocated on the stack, cannot be resized. Fast and lightweight.
 - **Dynamic arrays** (`T[]`): Size can change at runtime, heap-allocated, supports push/pop operations. The `from([...])` function converts a fixed array literal to a dynamic array.
 
-**Array methods**: `.len()`, `.get()`, `.push()`, `.pop()`, `.clone()`, `.iter()`, `.hash()`
+**Array methods**: `.len()`, `.get()`, `.first()`, `.last()`, `.contains()`, `.index_of()`,
+`.push()`, `.pop()`, `.fill()`, `.reverse()`, `.clear()`, `.truncate()`, `.clone()`, `.iter()`,
+`.hash()`, and the bulk copies `.extend(src)`, `.extend_range(src, start, count)`,
+`.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
+
+**Indices are `i32`**: an index, a count and a range bound are `i32` positions. A bare literal
+is an `i32`; a typed value of another integer type is `CE2002` (`CE2006` as a method argument,
+for example to `.get()`), and the fix is `as i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
 index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and a
@@ -625,11 +685,11 @@ The repeated value is a **borrow**, and every slot takes its own copy, so a `str
 works and the source stays yours. A range yields `i32`. See the
 [Language Reference](language-reference.md#a-repeated-element) for the full rules.
 
-**Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or nested arrays are properly freed. Arrays use move semantics: when you pass a dynamic array to a function, ownership transfers unless you explicitly `.clone()` it.
+**Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or strings are properly freed. A dynamic array owns heap, so it MOVES: `let i32[] b = a` hands the buffer to `b`. Passing it to an unmarked parameter is a borrow, and the caller keeps it; only a `nom` parameter takes it (`f(nom a)`, and a later use of `a` is `CE2405`).
 
 ### List@(T)
 
-`List@(T)` is a generic growable collection that provides more flexibility than raw dynamic arrays. It's similar to `Vec@(T)` in Rust or `ArrayList@(T)` in Java:
+`List@(T)` is a generic growable collection that provides more flexibility than raw dynamic arrays. It is similar to a vector in Rust or an ArrayList in Java:
 
 ```sushi
 fn main() i32:
@@ -662,6 +722,10 @@ fn main() i32:
 - Memory: `.reserve(additional)`, `.shrink_to_fit()`, `.free()`, `.destroy()`
 - Iteration: `.iter()`, `.debug()`
 
+Every index and count argument (`get`, `insert`, `remove`, `reserve`, `truncate`,
+`List.with_capacity`) is an `i32`. A typed value of another integer type is `CE2006`; write
+`as i32`.
+
 **When to use List vs raw arrays**: Use `List@(T)` when you need frequent insertions/removals at arbitrary positions, capacity management, or want the additional safety of `Maybe@(T)` returns. Use raw dynamic arrays (`T[]`) for simpler use cases where you just need push/pop at the end.
 
 ### HashMap@(K, V)
@@ -690,13 +754,16 @@ fn main() i32:
 - **Open addressing**: Uses linear probing instead of chaining, giving better cache locality
 - **Automatic resizing**: Grows at 0.75 load factor to maintain performance
 - **Power-of-two capacity**: Allows fast modulo using bitwise AND operations
-- **Auto-derived hashing**: Any type with a `.hash()` method can be used as a key
+- **Auto-derived hashing**: a key needs a hash AND an equality test. A primitive, a `string`,
+  and a struct or enum built from them are keys. A `List@(T)` has a hash but no equality, so it
+  is not a key (`CE2055`)
 
 **HashMap methods**: `.new()`, `.insert(key, value)`, `.get(key)`, `.remove(key)`, `.contains_key(key)`, `.len()`, `.keys()`, `.values()`, `.entries()`, `.debug()`, `.free()`
 
 **Memory Management**: HashMaps use recursive destruction - when you call `.free()` or when the HashMap goes out of scope, it destroys all entries and their contents. This works correctly even for complex value types like structs containing arrays or nested enums.
 
-**Limitations**: Keys must implement `.hash()` (auto-derived for most types).
+**Limitations**: A key needs a hash (auto-derived for most types) and an equality test. See
+[Key Requirements](stdlib/collections/hashmap.md#key-requirements).
 
 ## Structs and Enums
 
@@ -824,19 +891,37 @@ use <io/fs>
 
 fn handle_file(Result@(File, IoError) result) ~:
     match result:
-        Result.Ok(poke f) ->
+        Result.Ok(_) ->
             println("File opened successfully")
-        Result.Err(FileError.NotFound()) ->
+        Result.Err(IoError.NotFound) ->
             println("File not found")
-        Result.Err(FileError.PermissionDenied()) ->
+        Result.Err(IoError.PermissionDenied) ->
             println("Permission denied")
         Result.Err(_) ->
             println("Other error")
 
     return Result.Ok(~)
+
+fn main() i32:
+    handle_file(open("/no/such/file", FileMode.Read()))
+    return Result.Ok(0)
 ```
 
-**Nested pattern matching**: The pattern `Result.Err(FileError.NotFound())` matches a `Result@(File, IoError)` whose `Err` variant contains a `FileError` enum with the `NotFound` variant. This lets you handle specific error combinations without nested match statements.
+**Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is `CE2107`, because `open()` answers `IoError`.
+
+**Integer patterns**: a `match` on an integer takes literal arms, and a trailing `_` arm is required (`CE2074`):
+
+```sushi
+fn describe(i32 n) string:
+    match n:
+        0 -> return Result.Ok("zero")
+        42 -> return Result.Ok("the answer")
+        _ -> return Result.Ok("a number")
+
+fn main() i32:
+    println(describe(42).realise(""))
+    return Result.Ok(0)
+```
 
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
 
@@ -1116,7 +1201,7 @@ To give one instantiation its own behaviour where a template already covers it, 
 **Benefits**:
 - **Namespace organization**: Group related functionality with the types they operate on
 - **Discoverability**: Methods appear natural on the type, making APIs easier to explore
-- **Chainability**: Method syntax enables fluent chaining: `list.first().realise(0)`
+- **Chainability**: Method syntax enables fluent chaining: `words.get(0).realise("none")`
 - **Zero cost**: Compiles to the same code as a regular function call
 
 **You cannot override a built-in method**: a method the compiler defines is always chosen before an extension method of the same name, so an extension that collides with one would be compiled and then never called. Sushi rejects it outright rather than letting it sit there looking like it works:
@@ -1185,9 +1270,14 @@ fn describe(geo.Vec v) string:
 
 fn main() i32:
     let geo.Vec here = geo.Vec(1, 2)
-    println("{describe(here).realise(\"nowhere\")}")
+    let string where = describe(here).realise("nowhere")
+    println(where)
     return Result.Ok(0)
 ```
+
+An interpolation hole cannot hold a string literal, and a `{` in a double-quoted string always
+opens a hole. Put the value in a `let` first, as above. For a literal brace, use a
+single-quoted string, which does not interpolate.
 
 One place refuses it: a fixed array's size. `i32[geo.SIZE]` is an error, because the
 size is read while your file is being parsed and an alias is bound long after that.
@@ -1202,8 +1292,8 @@ exist.
 Two units may export one name and the program still builds. It only becomes a problem
 where you write that name bare with nothing to say which one you mean, and then the
 compiler stops at that line and lists the candidates. Your own unit's declaration always
-wins, so it is never the ambiguous one -- and that is also why `use <math>` no longer
-takes `sin` away from a unit that declares a `sin` of its own.
+wins, so it is never the ambiguous one -- and that is also why `use <math>` does not
+take `sin` away from a unit that declares a `sin` of its own.
 
 ### What an import reaches
 
@@ -1318,6 +1408,24 @@ fn read_only(peek LargeData data) i32:
     return Result.Ok(data.values[0])
 ```
 
+**Reference bindings**: `let poke T x = <place>` and `let peek T x = <place>` bind a pointer into
+a place (a local, a field or index chain off one, or `Own@(T).get()`). The binding lives until the
+end of its block. While it lives, the owner is frozen (`CE2412`), and only one `poke` binding can
+exist at a time (`CE2403`). A write through a `peek` binding is `CE2408`:
+
+```sushi
+struct Ship:
+    i32 crew
+
+fn main() i32:
+    let Ship[] fleet = from([Ship(3), Ship(5)])
+    if (true):
+        let poke Ship s = fleet[1]
+        s.crew := 42
+    println(fleet[1].crew)       # 42
+    return Result.Ok(0)
+```
+
 The borrow checker runs at compile time (the `borrow` pass of the semantic analysis pipeline), so there's no runtime cost to these safety guarantees.
 
 ### RAII (Automatic Cleanup)
@@ -1345,13 +1453,39 @@ fn main() i32:
 2. For structs, the destructor recursively destroys each field
 3. For arrays, the destructor recursively destroys each element
 4. For enums, the destructor examines the discriminant and destroys the active variant's data
-5. Primitives and strings require no cleanup
+5. Primitives require no cleanup. A `string` owns heap and is freed like an array; the one
+   exception is a string bound directly from a literal, which owns no heap
+6. A type that implements `Drop` runs its `drop()` first, then its fields are destroyed
+7. At the end of a scope, the locals are destroyed in reverse declaration order
 
 **The Recursive Destructor**: Sushi's backend implements a general `emit_value_destructor()` function that handles cleanup for all types. It recursively traverses your data structures:
 - **Structs with arrays**: The array fields are freed, then the struct itself
 - **Arrays of structs**: Each struct is destroyed, then the array storage is freed
 - **Enums with complex data**: The discriminant determines which variant is active, then that variant's data is cleaned up
 - **Nested collections**: `List@(HashMap@(string, List@(i32)))` correctly frees all levels
+
+**The `Drop` perk**: a type that owns something no field walk can see (a file descriptor, a
+socket) implements the predefined perk `Drop` with `fn drop(poke self) ~`. Such a type owns a
+resource: it moves, `.clone()` on it is `CE2431`, and only the unit that declares the type may
+implement `Drop` for it (`CE4012`):
+
+```sushi
+struct Guard:
+    string name
+
+extend Guard with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn main() i32:
+    let Guard a = Guard(name: "first")
+    let Guard b = Guard(name: "second")
+    println("end of main")
+    return Result.Ok(0)
+```
+
+This prints `end of main`, then `drop second`, then `drop first`. See
+[Memory Management](memory-management.md).
 
 **Integration with error handling**: RAII is crucial for the `??` operator. When an error is propagated, all variables in the current scope are destroyed before returning, preventing resource leaks even in error paths.
 

@@ -21,12 +21,15 @@ Output:
 ```
 Arthur Dent is 30 years old.
 Arthur Dent knows where his towel is.
+A birthday later, Arthur Dent is 31.
 ```
 
 The definition lists each field with its type first, then its name (`string name`, just
 like a variable declaration). To build an instance, call the struct's name like a function
 and pass values **in field-declaration order**: `Person("Arthur Dent", 30, true)`. Once you
-have a value, you read its fields with dot notation: `arthur.name`, `arthur.age`.
+have a value, you read its fields with dot notation: `arthur.name`, `arthur.age`. To
+change a field, put the same dot notation on the left of a `:=`: `arthur.age := 31`. The
+new value must have the type of the field.
 
 !!! note "Booleans print as `true` and `false`"
     An interpolated `bool` — `{arthur.has_towel}` — prints as `true` or `false`. The same
@@ -65,7 +68,7 @@ other arguments.
     A name in an argument list names a **field**, so a struct construction is the only
     place that takes one. A function, a method and an enum variant take their arguments
     in declaration order, and a name written there is `CE6104`. Write
-    `p.shifted(5, 0)`, not `p.shifted(dx: 5, dy: 0)`.
+    `move_by(p, 5, 0)`, not `move_by(p, dx: 5, dy: 0)`.
 
 ## Enums: one of several shapes
 
@@ -89,6 +92,10 @@ floating-point number (a radius). `Rectangle(f64, f64)` carries two (width and h
 Notice the variants list *types*, not field names — when you destructure them you name the
 pieces yourself (`Circle(r)`, `Rectangle(w, h)`).
 
+A variant with no data can also be written without the parentheses: `Shape.Point` builds
+the same value as `Shape.Point()`, and `Shape.Point ->` is a legal `match` arm. Both forms
+are correct; pick one and use it consistently.
+
 You construct a value by naming the enum, the variant, and any data:
 `Shape.Circle(2.0)`. To read the data back out, you use `match`, which inspects which
 variant you have and binds its data to names. We're leaning on `match` here just enough to
@@ -109,7 +116,8 @@ toolbox extends that far.
 ## What you learned
 
 - A `struct` groups named, typed fields into one type; build it positionally
-  (`Point(10, 20)`) and read fields with dot notation (`p.x`).
+  (`Point(10, 20)`), read fields with dot notation (`p.x`), and write a field with
+  `p.x := 5`.
 - Named arguments (`Point(y: 20, x: 10)`) are order-independent and self-documenting, but
   you can't mix named and positional in one call, and only a struct construction takes
   them.
@@ -118,5 +126,5 @@ toolbox extends that far.
 - `match` is how you read an enum's data back out.
 - Structs and enums can both be generic — more on that in Chapter 10.
 
-Those `match` expressions deserve a proper introduction. On to
+Those `match` statements deserve a proper introduction. On to
 [Pattern Matching](09-pattern-matching.md).

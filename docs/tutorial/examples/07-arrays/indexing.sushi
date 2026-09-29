@@ -1,7 +1,7 @@
 fn main() i32:
     let string[] crew = from(["Arthur", "Ford", "Zaphod", "Trillian"])
 
-    # Direct indexing: fast, but throws RE2020 at runtime if out of bounds.
+    # Direct indexing: fast, but stops the program with RE2020 if out of bounds.
     println("Captain (sort of): {crew[2]}")
 
     # Safe access: .get(i) returns Maybe@(string) instead of crashing.

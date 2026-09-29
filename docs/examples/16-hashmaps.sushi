@@ -12,10 +12,12 @@
 # - Checking key existence with .contains_key()
 # - Removing entries with .remove() returning Maybe@(V)
 # - Automatic resizing when load factor exceeds 0.75
-# - Auto-derived .hash() for all types enables HashMap usage
+# - Auto-derived .hash() makes most types usable as a key
 #
 # Note: HashMap uses power-of-two capacities for fast indexing via bitwise AND.
-# Keys must implement .hash() -> u64 (auto-derived for primitives, strings, structs, enums).
+# A key needs .hash() -> u64 (auto-derived for primitives, strings, structs, enums)
+# and equality. A List@(T) or a HashMap is not a key (CE2055), and the compiler
+# refuses some other key types too (CE2054, CE2058).
 
 use <collections/hashmap>
 

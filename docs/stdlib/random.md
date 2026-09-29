@@ -10,6 +10,10 @@ Provides basic pseudo-random number generation for non-cryptographic use cases.
 use <random>
 ```
 
+Each function returns a bare value, not a `Result`. The signature lines below give the
+parameter and return types; they are not Sushi declarations (a declared `fn` returns a
+`Result`).
+
 ## Functions
 
 ### rand()
@@ -17,11 +21,12 @@ use <random>
 Returns a random unsigned 64-bit integer.
 
 **Signature:**
-```sushi
-fn rand() u64
+```text
+rand() u64
 ```
 
-**Returns:** Random value in range [0, 2^64-1]
+**Returns:** A random value in the range [0, 2^62-1]. The value comes from two 31-bit
+`random()` calls, so the two high bits are always zero.
 
 **Example:**
 ```sushi
@@ -38,8 +43,8 @@ fn main() i32:
 Returns a random integer in the range [min, max).
 
 **Signature:**
-```sushi
-fn rand_range(i32 min, i32 max) i32
+```text
+rand_range(i32 min, i32 max) i32
 ```
 
 **Parameters:**
@@ -65,28 +70,24 @@ fn main() i32:
 
 ### rand_f64()
 
-Returns a random floating-point value in the range [0.0, 1.0).
+Returns a random floating-point value.
 
 **Signature:**
-```sushi
-fn rand_f64() f64
+```text
+rand_f64() f64
 ```
 
-**Returns:** Random value where `0.0 <= result < 1.0`
+**Returns:** A value where `0.0 <= result < 0.25`. The function divides the value of
+`rand()` by 2^64, and `rand()` gives only 62 bits, so the result never reaches 0.25. Do
+not scale it to a range on the assumption that it covers `[0.0, 1.0)`.
 
 **Example:**
 ```sushi
 use <random>
 
 fn main() i32:
-    let f64 probability = rand_f64()
-    println("Probability: {probability}")
-
-    # Generate random float in range [min, max)
-    let f64 min = 10.0
-    let f64 max = 20.0
-    let f64 value = min + (rand_f64() * (max - min))
-    println("Random in [10, 20): {value}")
+    let f64 sample = rand_f64()
+    println("Sample: {sample}")
 
     return Result.Ok(0)
 ```
@@ -96,12 +97,13 @@ fn main() i32:
 Seeds the random number generator for reproducible sequences.
 
 **Signature:**
-```sushi
-fn srand(u64 seed) ~
+```text
+srand(u64 seed) ~
 ```
 
 **Parameters:**
-- `seed` - Seed value (same seed produces same sequence)
+- `seed` - Seed value (same seed produces same sequence). Only the low 32 bits of the
+  seed are used, so two seeds that differ only in the high 32 bits give the same sequence.
 
 **Returns:** Blank type (`~`)
 
@@ -111,7 +113,7 @@ use <random>
 
 fn main() i32:
     # Seed for reproducibility
-    srand(42 as u64)
+    srand(42)
 
     # These will be the same every run with seed 42
     let i32 a = rand_range(1, 100)
@@ -126,8 +128,8 @@ fn main() i32:
 ## Implementation Notes
 
 **Algorithm:**
-- Uses POSIX `random()` and `srandom()` from libc
-- Linear congruential generator (LCG)
+- Uses POSIX `random()` and `srandom()` from libc. The algorithm is the one that the C
+  library of the platform uses (on macOS and glibc, an additive feedback generator)
 - State size: 128 bytes (on most platforms)
 
 **Quality:**
@@ -141,8 +143,8 @@ fn main() i32:
 - For multi-threaded use, external synchronization required
 
 **Precision:**
-- `rand_f64()` precision limited by `random()` output (typically 31 bits)
-- Full 64-bit precision not guaranteed
+- `rand()` gives 62 random bits (two 31-bit `random()` calls)
+- `rand_f64()` gives values in `[0.0, 0.25)` (see above)
 
 **Portability:**
 - POSIX-compliant systems only (Unix, Linux, macOS, BSD)
@@ -159,7 +161,7 @@ fn coin_flip() bool:
     return Result.Ok(rand_range(0, 2) == 1)
 
 fn main() i32:
-    if (coin_flip()??):
+    if (coin_flip().realise(false)):
         println("Heads")
     else:
         println("Tails")
@@ -173,23 +175,9 @@ use <random>
 
 fn main() i32:
     let string[] choices = from(["Rock", "Paper", "Scissors"])
-    let i32 index = rand_range(0, choices.len() as i32)
+    let i32 index = rand_range(0, choices.len())
     let string choice = choices[index]
     println("Choice: {choice}")
-    return Result.Ok(0)
-```
-
-### Random Float in Range
-
-```sushi
-use <random>
-
-fn rand_f64_range(f64 min, f64 max) f64:
-    return Result.Ok(min + (rand_f64() * (max - min)))
-
-fn main() i32:
-    let f64 temp = rand_f64_range(-10.0, 35.0)??
-    println("Temperature: {temp}°C")
     return Result.Ok(0)
 ```
 
@@ -210,12 +198,14 @@ fn generate_level(u64 level_seed) i32[]:
 
 fn main() i32:
     # Level 1 will always have the same terrain
-    let i32[] level1 = generate_level(1 as u64)??
+    match generate_level(1):
+        Result.Ok(level1) -> println("{level1.len()} tiles")
+        Result.Err(_) -> println("no level")
     return Result.Ok(0)
 ```
 
 ## See Also
 
 - [Math Module](math.md) - Mathematical operations
-- [Time Module](time.md) - High-precision timing
+- [Time Module](time.md) - Sleep and clocks
 - [Arrays](collections/arrays.md) - Array operations

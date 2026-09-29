@@ -8,6 +8,9 @@ against the declaration beside it. A block in an illegal position is an error, a
 text that disappears without a signal.
 
 ```sushi
+enum JumpError:
+    NotReady
+
 ##:
 Jumps through hyperspace.
 
@@ -161,8 +164,9 @@ fn main() i32:
 ```
 
 The indent of the **opening line** is not free. A block is one token, so the compiler
-never looks inside it, but the `##:` itself lines up like any statement. A block that
-does not line up with the code around it is an indent error (`CE6004`).
+never looks inside it, but the `##:` itself lines up like any statement. A block in a body
+that is indented LESS than the body is an indent error (`CE6004`). A block indented MORE
+than the body is a parse error (`CE6001`, "unexpected token 'indent'").
 
 ## Tags
 
@@ -447,6 +451,9 @@ CW7003, CW7004 and CW7005 fire only on a declaration that ALREADY carries a bloc
 declaration with none is CW7002 and nothing else, so one omission stays one diagnostic.
 
 ```sushi
+enum DriveError:
+    DivisionByZero
+
 ##:
 Divides one number by another.
 
@@ -461,7 +468,8 @@ fn divide(i32 a, i32 b) i32 | DriveError:
 
 This block draws two warnings: CW7003, because `b` is declared and not documented, and
 CW7005, because the declaration names its own error type and no `- Errors:` says when it
-is raised. Delete the whole block and both go away, replaced by one CW7002.
+is raised. Delete the whole block and both go away, replaced by one CW7002. (The enum and its
+variant have no block, so each of them draws its own CW7002.)
 
 A callable that returns `~` is never asked for `- Returns:`, and a function on the
 implicit `StdError` arm is never asked for `- Errors:`. A `self` receiver is never asked
@@ -571,11 +579,11 @@ Parameters print in the order the signature declares them, and not in the order 
 documents them. A symbol with no block prints as it always did: no blank line, and no
 placeholder.
 
-A unit block prints under its unit name in the `Units` section. Two things are carried and
-not printed: a `- Parameter` tag on something that declares no parameters -- a unit, a
-struct, a generic struct or enum -- and an example, because a fenced program inside a plain
-dump would bury the signature the reader came for. A generic FUNCTION does declare
-parameters, and its record carries them, so its `- Parameter` tags print like any other's.
+A unit block prints under its unit name in the `Units` section. One thing is carried and not
+printed: a `- Parameter` tag on something that declares no parameters -- a unit, a struct, a
+generic struct or enum. A generic FUNCTION does declare parameters, and its record carries
+them, so its `- Parameter` tags print like any other's. An `- Example:` prints with
+`--docs`, last, under its caption (see above).
 
 ### What does not travel
 
@@ -583,11 +591,10 @@ Three things an author can write do not reach the index. Each one is a limit of 
 not of the file, and `docs/design/documentation.md` section 8 carries the reasons:
 
 - **An extension's block.** `extend i32 squared()` has no manifest record of any kind, so
-  `--lib-info` has never listed one.
+  `--lib-info` does not list one.
 - **A generic struct's field blocks.** They are in the file, inside the shipped source
-  slice, and the index cannot answer for them. A perk definition's method blocks used to
-  be in this list; since #537 each method is a record of its own, and `--lib-info --docs`
-  prints its block under its signature.
+  slice, and the index cannot answer for them. (A perk method is a record of its own, so
+  `--lib-info --docs` prints its block under its signature.)
 - **A private symbol's block.** A helper that ships only so a binary library links is not
   part of the documented API.
 

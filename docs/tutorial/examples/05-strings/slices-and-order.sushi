@@ -1,0 +1,14 @@
+use <collections/strings>
+
+fn main() i32:
+    let string ship = "Heart of Gold"
+    println("s(0, 5):   {ship.s(0, 5)}")
+    println("ss(9, 4):  {ship.ss(9, 4)}")
+    println("s(9, 99):  {ship.s(9, 99)}")
+
+    println("equal:     {'Ford' == 'Ford'}")
+    println("Arthur < Ford: {'Arthur' < 'Ford'}")
+    println("Zaphod < arthur: {'Zaphod' < 'arthur'}")
+    println("Ford < Fordo: {'Ford' < 'Fordo'}")
+
+    return Result.Ok(0)

@@ -1,0 +1,34 @@
+use <io/fs>
+use <io/buf>
+
+# A generic over a contract: any Writer can take the report.
+fn report@(W: Writer)(poke W dst, string line) ~ | IoError:
+    dst.write("{line}\n")??
+    dst.flush()??
+    return Result.Ok(~)
+
+fn write_log(string path) ~ | IoError:
+    let File f = open(path, FileMode.Write())??
+    let BufWriter@(File) w = BufWriter.new(nom f, 8192)??
+    report(poke w, "Arthur: towel packed")??
+    report(poke w, "Ford: thumb ready")??
+    w.finish()??
+    return Result.Ok(~)
+
+fn count_lines(string path) i32 | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = BufReader.new(nom f, 4096)??
+    let i32 n = 0
+    foreach(line?? in r.lines()):
+        report(poke stdout, "read: {line}")??
+        n := n + 1
+    return Result.Ok(n)
+
+fn main() i32:
+    match write_log("/tmp/guide_log.txt"):
+        Result.Ok(_) -> println("log written")
+        Result.Err(_) -> return Result.Ok(1)
+    match count_lines("/tmp/guide_log.txt"):
+        Result.Ok(n) -> println("{n} lines")
+        Result.Err(_) -> return Result.Ok(1)
+    return Result.Ok(0)

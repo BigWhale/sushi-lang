@@ -1,6 +1,6 @@
 # Type Identity
 
-**Status: DECIDED** (issue #240). A named type is identified by its name.
+**Status: DECIDED.** A named type is identified by its name.
 
 ## The rule
 
@@ -60,7 +60,7 @@ produced:
   interned as a `Maybe` type argument, one from a bare annotation
 - **CE0126** — the same shape for `Result`: a duplicate monomorphization rather
   than a reused one
-- the #240 ICE itself, because resolution deep-walked struct fields *in order to
+- an internal compiler error, because resolution deep-walked struct fields *in order to
   make structural equality agree*, and that walk cycles
 
 All three are one defect. Nominal identity removes the category.
@@ -75,14 +75,14 @@ All three are one defect. Nominal identity removes the category.
   table entry and does not descend. Name mangling uses a shallow resolver that
   enters only type arguments and array elements — positions that appear in the
   rendered name.
-- **A wrong table entry is now invisible to `==`.** That is the trade. It is the
+- **A wrong table entry is invisible to `==`.** That is the trade. It is the
   same trade Go and Rust make, and the table is built once by the collector, so
   the exposure is small — much smaller than a silent cache miss on every
   comparison.
 
 ## What this rules, and what it does not
 
-A generic FUNCTION is per unit since #495: its identity is
+A generic FUNCTION is per unit: its identity is
 `(declaring unit, name, type args)`, and its monomorphized instance takes the
 declaring unit's symbol prefix. A generic TYPE is not: a type's interned name is its
 identity program-wide, so two units still cannot each declare a `Node`. The line is
@@ -90,7 +90,7 @@ this document's to move (phase 2 qualifies the interned name), and a function's
 per-unit identity is a step toward it, not a substitute for it.
 
 A struct and an enum share one type name, so a struct and an enum of one name are
-`CE0006` in every order. The SOURCE order decides which one is the fault (#1069): in one
+`CE0006` in every order. The SOURCE order decides which one is the fault: in one
 unit the declaration written first holds the name and the later one is refused, with a
 note at the first; across units the order is the unit order, and a dependency comes
 first. The holder keeps its table entry, so its uses give no more errors. This rule is for

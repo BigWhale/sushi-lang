@@ -13,6 +13,34 @@ let i32[5] fixed = [1, 2, 3, 4, 5]  # Fixed-size array
 let i32[] dynamic = from([1, 2, 3])  # Dynamic array
 ```
 
+The array methods need no import. A string method in an example (for example
+`.upper()`) needs `use <collections/strings>` in the unit that calls it.
+
+## Array Literals
+
+An element of an array literal can be a plain value, a REPEATED value or a RANGE, and the
+three forms mix in one literal:
+
+```sushi
+let i32[4] zeros = [0; 4]            # [0, 0, 0, 0]
+let i32[5] counts = [0..=4]          # [0, 1, 2, 3, 4]
+let i32[6] mixed = [9, 0; 3, 1..3]   # [9, 0, 0, 0, 1, 2]
+```
+
+A repeat count and a range bound are `i32` positions. Where the count must be readable
+depends on the position: a fixed array and a `const` need a count that the compiler can
+read (CE2017 / CE2019), but `from()` takes any `i32` expression, because a `T[]` carries
+its length:
+
+```sushi
+let i32 n = 3
+let i32[] slots = from([0; n])       # length 3
+let i32[] index = from([0..n])       # [0, 1, 2]
+```
+
+A repeated value is a borrow, and each slot takes its own copy, so an owning element
+type (for example `string`) is allowed.
+
 ## Overview
 
 Sushi provides two array types:
@@ -131,7 +159,8 @@ Compute hash of array contents.
 let u64 h = arr.hash()
 ```
 
-**Limitation:** Nested arrays cannot be hashed.
+**Limitation:** The element type must have a hash. An array whose element has no hash
+(today, `ptr[]`) is CE0052.
 
 ### `arr[index] := value`
 
@@ -219,6 +248,10 @@ index reads as any slot, and a get-out (`a.get(0)??`) is refused the same way. T
 independent value first: `a.fill(a[0].clone())`. A plain element type is a copy and stays
 legal: `b.fill(b[2])` on an `i32[]` is fine.
 
+A `let` binding or a `match` payload binding of a slot is also a borrow of the array.
+`let string first = a[0]` then `a.fill(first)` is **CE2412**, because `fill` changes `a`
+while `first` borrows from it. Clone the value first here too.
+
 An owning element type costs one allocation per slot. Use `.fill()` on a large array of
 `string` or another owning type only when you mean that. A plain element type -- `i32`,
 `bool`, `f64`, a struct of only those -- copies nothing, because a shallow store of a
@@ -234,6 +267,17 @@ Reverse array elements (in-place).
 ```sushi
 let i32[5] arr = [1, 2, 3, 4, 5]
 arr.reverse()  # [5, 4, 3, 2, 1]
+```
+
+### `.clone() -> T[N]` or `T[]`
+
+Deep copy of the array. It works on a fixed array and on a dynamic array, and the copy has
+the type of the receiver.
+
+```sushi
+let i32[] copy = arr.clone()
+let i32[3] f = [1, 2, 3]
+let i32[3] g = f.clone()
 ```
 
 ## Dynamic Array Only
@@ -374,14 +418,6 @@ Get allocated capacity.
 println("Capacity: {arr.capacity()}")
 ```
 
-### `.clone() -> T[]`
-
-Deep copy of array.
-
-```sushi
-let i32[] copy = arr.clone()
-```
-
 ### `.free() -> ~`
 
 Clear and reset to zero capacity (still usable).
@@ -397,7 +433,7 @@ Free memory and invalidate (unusable).
 
 ```sushi
 arr.destroy()
-# arr.len()  # ERROR CE2406: use of destroyed variable
+# arr.len()  # ERROR CE2024 (use of destroyed dynamic array) and CE2406
 ```
 
 ## Byte Array Only (u8[])
@@ -409,6 +445,20 @@ Zero-cost UTF-8 conversion.
 ```sushi
 let u8[] bytes = from([72 as u8, 105 as u8])
 let string text = bytes.to_string()  # "Hi"
+```
+
+`.to_string()` does not check the bytes. The bytes must be valid UTF-8.
+
+### `.to_string_checked() -> Result@(string, StdError)`
+
+The checked conversion: it validates the bytes as UTF-8 first, and answers
+`Result.Err(StdError.Error)` when they are not valid.
+
+```sushi
+let u8[] bad = from([0xff as u8, 0x61 as u8])
+match bad.to_string_checked():
+    Result.Ok(s) -> println(s)
+    Result.Err(_) -> println("bad utf8")
 ```
 
 ## Memory Management

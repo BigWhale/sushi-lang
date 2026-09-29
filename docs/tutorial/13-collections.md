@@ -9,7 +9,7 @@ accidentally hold a string.
 
 This chapter covers both, end to end.
 
-## List&lt;T&gt;: the growable array
+## List@(T): the growable array
 
 `List@(T)` is an ordered, dynamically-sized sequence. It starts empty, grows as you push onto
 it, and is built into the language — **no import required**.
@@ -73,7 +73,7 @@ long before its scope ends. After `.free()` the list is empty but still perfectl
     and popping the end; for frequent middle-insertions, reconsider whether a list is the
     right shape.
 
-## HashMap&lt;K, V&gt;: key-value lookups
+## HashMap@(K, V): key-value lookups
 
 When you want to look things up *by name* rather than by position, you want a `HashMap@(K, V)`.
 It maps keys to values with O(1)-average lookups. Unlike `List`, it lives in the standard
@@ -82,6 +82,10 @@ library, so it needs an import:
 ```sushi
 use <collections/hashmap>
 ```
+
+If you import it with a name, `use <collections/hashmap> as hm`, the type is behind that
+name: write `hm.HashMap@(string, i32)` and `hm.HashMap.new()`. The bare `HashMap` is then
+unknown (`CE2001`).
 
 ```sushi
 --8<-- "docs/tutorial/examples/13-collections/hashmap-basics.sushi"
@@ -108,6 +112,9 @@ The essentials:
 
 The same safety theme runs through it: `.get()` hands back a `Maybe@(V)`, so "key not found"
 is a value you handle, not an exception that explodes or a sentinel you might forget to check.
+
+A key must support equality. A `List` or a `HashMap` cannot be a key (`CE2055`). The
+primitives, `string`, and a struct or enum of those can.
 
 ### Iterating over a map
 
@@ -137,11 +144,8 @@ order things come out would be a bug. Aggregate, or sort afterwards, if you need
 (`.len()` on the string keys needs `use <collections/strings>`, which is why the example
 imports it too.)
 
-!!! note "Iterators need a plain variable"
-    There's one sharp edge worth knowing: `.keys()`, `.values()`, and `.entries()` only work
-    when the receiver is a **plain variable name**. `scores.entries()` is fine; chaining the
-    call onto something else, like `get_map().entries()`, is not yet supported. Bind the map
-    to a variable first, then iterate it.
+The receiver of `.keys()`, `.values()` and `.entries()` can be any expression that gives a
+map: a variable (`scores.entries()`), a field (`h.m.values()`) or the result of a call.
 
 ## What you learned
 
@@ -152,7 +156,7 @@ imports it too.)
   `.insert()` (replaces on duplicate key), `.get()` (returns `Maybe@(V)`), `.contains_key()`,
   `.len()`, `.free()`.
 - Iterate a map with `.keys()`, `.values()`, or `.entries()` (whose `Entry` has `.key` and
-  `.value`) — but only on a plain variable, and never assume an order.
+  `.value`). Never assume an order.
 - Both collections are **generic** (type-checked at compile time) and **RAII-managed** (freed
   automatically at scope exit), and both lean on `Maybe@(T)` to make missing elements safe.
 

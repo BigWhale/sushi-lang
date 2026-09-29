@@ -12,7 +12,8 @@ verification onto a live ecosystem is how ecosystems get supply-chain incidents.
   computed over the exact bytes sent (`api_upload_multipart`). The server is
   expected to reject a mismatch, so the stored artifact's digest is known-good
   relative to what the author sent.
-- **Extraction**: `PackageInstaller` uses `tarfile` with `filter="data"` — no
+- **Extraction**: `PackageInstaller` calls `PackageArchive.extract`
+  (`packager/archive.py`), which uses `tarfile` with `filter="data"` — no
   absolute paths, no `..` traversal, no device nodes, no symlink escapes. Keep it.
 - **Credentials**: `~/.sushi/credentials.toml`, `0600`, token per repository.
 

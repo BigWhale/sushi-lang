@@ -1,0 +1,13 @@
+struct Guard@(T):
+    T value
+    string name
+
+extend Guard@(T) with Drop:
+    fn drop(poke self) ~:
+        println("releasing {self.name}")
+
+fn main() i32:
+    let Guard@(string) towel = Guard("a towel", "the towel guard")
+    let Guard@(i32) answer = Guard(42, "the answer guard")
+    println("guarding {towel.value} and {answer.value}")
+    return Result.Ok(0)

@@ -15,18 +15,16 @@ extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
     return Result.Ok(out)   # both constructors are spelled (ruling 6, as reversed)
 ```
 
-Call site: `xs.map(|i32 x| x * 2)??`. Targets now: `List@(T)` and `T[]`. The free
+Call site: `xs.map(|i32 x| x * 2)??`. Targets: `List@(T)` and `T[]`. The free
 functions stay.
 
 ## The concept
 
-Before this epic, the error discipline followed the KIND of callable: a free function
-has the Result channel, an extension method does not. The channel now follows the
-SIGNATURE: a method that declares `| E` has it, a method that does not stays bare. That
-matches the parameter-mode philosophy — marked at both ends: `| E` at the declaration,
-`??` at the call. It also removes a built-in privilege: the built-in methods already
-return `Result`/`Maybe` (`arr.get(i)`, `xs.pop()`), and users could not write one that
-does. Now they can.
+The error channel follows the SIGNATURE, not the KIND of callable: a method that
+declares `| E` has it, a method that does not stays bare. That matches the
+parameter-mode philosophy — marked at both ends: `| E` at the declaration, `??` at the
+call. It also removes a built-in privilege: the built-in methods return
+`Result`/`Maybe` (`arr.get(i)`, `xs.pop()`), and a user method can do the same.
 
 ## The rulings
 
@@ -47,10 +45,9 @@ another type coexists; a second `map` on the SAME target is the ordinary CE0101.
 A bare undeclared name in the element position of an array target binds a type
 parameter: `extend T[]` applies to every element type. A declared or built-in name is
 concrete: `extend i32[]`, `extend Crate[]`. Anything else in that position — a generic
-instantiation, a nested array — is CE2101. (This ruling also fixed a latent bug: a
-concrete `extend i32[]` was silently never registered before.)
+instantiation, a nested array — is CE2101.
 
-### 4. Scope: List and T[] now; HashMap later
+### 4. Scope: List and T[]; HashMap later
 
 The stdlib method form ships on `List@(T)` and `T[]` in `<collections/iter>`. A HashMap
 module comes later, separately.
@@ -78,7 +75,7 @@ covers result-like AND maybe-like receivers: a `Maybe@(T)` is also more than the
 
 ### 6. Return form in a channel body: both constructors are spelled
 
-REVERSED on 2026-09-25 (#848). The compiler does not wrap a value automatically. A
+REVERSED on 2026-09-25. The compiler does not wrap a value automatically. A
 channel body has the free function's rule and the free function's code:
 
 - the success is `return Result.Ok(x)`, and a `~` success is `return Result.Ok(~)`;
@@ -94,12 +91,12 @@ that the success stayed as light as a bare method's. It was reversed because a s
 wrap is a value the source did not write: a channel method and a free function that
 answer the same Result then spelled it two ways.
 
-### 7. `??` on Maybe stays, and is now recorded
+### 7. `??` on Maybe converts absence into an Err
 
 A `None` under `??` propagates as a payload-free `Result.Err` (CE2508's doc states it;
 the emission is `backend/expressions/try_expr.py`). Stated plainly: Maybe is data,
-Result is the channel, and `??` converts absence into an empty error. This was already
-true; the epic records it as design rather than accident.
+Result is the channel, and `??` converts absence into an empty error. This is design,
+not accident.
 
 ## Identity and the symbol
 
@@ -110,8 +107,8 @@ parts: the receiver, the method name, and the method-level type arguments. ONE h
 declaration (`backend/functions/helpers.py`), the call site
 (`backend/expressions/calls/dispatcher.py`, which reads the typecheck pass's
 `callee_method_type_args` stamp instead of re-deriving), and the dedup of the copies. The
-`__{margs}` suffix appears only when method-level arguments exist, so every
-pre-existing extension symbol is unchanged. An array receiver folds to
+`__{margs}` suffix appears only when method-level arguments exist, so an extension
+with no method-level type parameter keeps its plain symbol. An array receiver folds to
 `arr__<element>`, because `[]` is not a symbol character.
 
 There is NO third dimension in the ExtensionTable: resolution answers from the
@@ -122,21 +119,20 @@ in `monomorphized_extensions`, deduped by a worklist keyed `(receiver, method, m
 
 Every copy of a generic-target or method-generic extension has ONE home: the unit that
 declared its template (`ExtendDef.home_unit`, set from `GenericExtensionMethod.unit_name`
-when the copy is cut, #1064). A copy of a perk implementation on a generic target follows
+when the copy is cut). A copy of a perk implementation on a generic target follows
 the same rule, and so does a generic function instance (`synthesis.py`). A template whose
 unit is not in the build goes to the entry unit. The rule has three consequences:
 
 - **The check.** The copy is checked with the passes of its home unit: the unit name and
   the namespace table of that unit. A private function of that unit and a name behind a
-  `use ... as` alias mean in the copy what they mean in the template (#1065). The type
+  `use ... as` alias mean in the copy what they mean in the template. The type
   ARGUMENTS were written at the call site and checked there, so the copy names nothing:
   a home unit that cannot write `Crate` still holds the copy for `List@(Crate)`
   (`in_synthesized_body`, for the extension and the perk copy alike).
 - **The emission.** Every module declares the copy; the module of its home unit alone
-  defines it, with that unit as the emitting unit. One definition is one symbol, so the
-  duplicate-symbol link failure of #404 does not come back. The earlier design defined
-  every copy `weak_odr` in every module, where a private name of the template's unit
-  had no declaration.
+  defines it, with that unit as the emitting unit. One definition is one symbol, so
+  there is no duplicate-symbol link failure, and a private name of the template's unit
+  is declared where the copy is defined.
 - **The cache.** The home unit's object holds copies that other units ask for, for types
   that other units declare. Its key covers the signature and the body of each copy it
   holds, and the interface of every unit of the program (`compiler/fingerprint.py`), so
@@ -155,7 +151,7 @@ have run — so the analyzer installs a late interner on the tables: the new typ
 monomorphized, resolved and derived at resolution time, and again for the copies'
 bodies in the drain.
 
-Inference is call-site-only in v1: there is no `@(...)` slot on a method call. The one
+Inference is call-site-only: there is no `@(...)` slot on a method call. The one
 shape that cannot be solved is the bare-param lambda (`|x| ...` has no type of its
 own), and CE2063 names the escape: annotate the parameter, or pass a named function. A
 method-level name that repeats a receiver-target parameter is CE2064.
@@ -181,7 +177,7 @@ Every unhandled-Result position has a gate:
 | a discarded statement | CW2001 |
 | `??` on a bare method | CE2507 |
 
-## Scope of v1, and what is parked
+## Scope, and what is parked
 
 **Owned elements**: `filter` ships fully general — it clones each kept element. `map`
 and `fold` stay copy/primitive-element, like the free functions.
@@ -191,12 +187,11 @@ and `fold` stay copy/primitive-element, like the free functions.
 - **(a) A bare opt-out for free functions.** The remaining asymmetry: a function
   cannot be infallible. A method chooses its channel; a function cannot decline one.
 - **(b) The perk-method channel — SHIPPED.** A perk method declares `| E` exactly as an
-  extension method does (`HANDLES.md` ruling R1). The contract and the implementation
-  declare it in the same shape and must agree, and CE0133 is now the relational
+  extension method does. The contract and the implementation
+  declare it in the same shape and must agree, and CE0133 is the relational
   diagnostic that says so: the primary at the implementation, a note at the contract
-  method. Everything else carried over unchanged — `_validate_method_body` already
-  read the channel, and the backend already emits every perk method through the
-  extension path.
+  method. `_validate_method_body` reads the channel, and the backend emits every perk
+  method through the extension path.
 - **(c) Extension visibility.** See the stated asymmetry above; a visibility marker on
   extensions is a separate decision nobody has asked for yet.
 

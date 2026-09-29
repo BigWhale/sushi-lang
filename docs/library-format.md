@@ -157,7 +157,7 @@ is the authority, and the index is a cache of it.
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
     "units": [str],                    # Unit names present in the source section
                                        #   The library's OWN units, and every index
-                                       #   below reads the same filter (#594): a
+                                       #   below reads the same filter: a
                                        #   bundled stdlib module and an imported
                                        #   source library both arrive as ordinary
                                        #   compilation units, and a consumer states
@@ -221,8 +221,8 @@ is the authority, and the index is a cache of it.
     # `List<i32>` and not `List@(i32)`: a consumer reads these back with
     # `parse_type_string`, so this is a wire format. Rendering `@(...)` is the report's
     # job. The consumer's ONE reader is `LibraryRegistry._parse_functions`: it reads all
-    # three keys into the signature, so a `| E` is the call's Err arm at the consumer
-    # (#541), and a spelling that names an instantiation the consumer has not interned
+    # three keys into the signature, so a `| E` is the call's Err arm at the consumer,
+    # and a spelling that names an instantiation the consumer has not interned
     # (`Box<i32>`, an explicit `Result<i32, MyErr>` return) reads back as the generic
     # reference the producer wrote it from -- so the instantiate pass collects it and a
     # Result is never wrapped twice.
@@ -282,7 +282,7 @@ is the authority, and the index is a cache of it.
                     "name": str,
                     "has_data": bool,
                     "data_types": [str],  # If has_data: every payload type, in
-                                          #   written order (#966). A manifest that
+                                          #   written order. A manifest that
                                           #   states `has_data` and no `data_types`
                                           #   is refused (CE3512) and must be rebuilt
                     "doc": DOC         # If documented
@@ -294,7 +294,7 @@ is the authority, and the index is a cache of it.
         }
     ],
 
-    # What each unit RE-EXPORTS: one record per `public use`, in written order (#585).
+    # What each unit RE-EXPORTS: one record per `public use`, in written order.
     # `public use X` makes X's public names the unit's own, so the unit's importers get
     # them where its own names land. A SOURCE library needs no record -- its units are
     # in the source section and the consumer re-parses the statement -- but the index
@@ -303,7 +303,7 @@ is the authority, and the index is a cache of it.
     # plus the providers of what these name.
     #
     # `unit` is the unit that WROTE the statement, and only the library's own units
-    # appear (#594): a bundled stdlib module and an injected source library re-export
+    # appear: a bundled stdlib module and an injected source library re-export
     # on their own account. `kind` says which producer the target is, so the consumer
     # reaches the same provider builder the written statement would have:
     #
@@ -319,9 +319,7 @@ is the authority, and the index is a cache of it.
     #                library's re-export of one answers
     #
     # The whole key is absent when no unit says `public use`, so an ordinary library
-    # grows by nothing. A manifest written before the key reads as no re-export, which
-    # is what an older compiled library has -- the statement was refused (CE3514,
-    # retired).
+    # grows by nothing. An absent key means no re-export.
     "reexports": [
         {"unit": str, "path": str, "kind": str}
     ],
@@ -349,17 +347,17 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 7,                  # Templates schema version. 5 (#494): every
+        "version": 7,                  # Templates schema version. 5: every
                                        #   closure record is one per (unit, name),
                                        #   and a source-shipped template carries
                                        #   `bindings`. A binary .slib with an older
                                        #   schema is refused (CE3512) and must be
                                        #   rebuilt: its bare-name records can bind a
                                        #   template to another unit's body silently.
-                                       #   6 (#543): every public perk ships, and a
+                                       #   6: every public perk ships, and a
                                        #   generic-target perk implementation ships
                                        #   as a template (`generic_perk_impls`).
-                                       #   7 (#537): every perk method record carries
+                                       #   7: every perk method record carries
                                        #   its signature and receiver mode, on the
                                        #   contract and on both kinds of
                                        #   implementation. The one constant is
@@ -381,7 +379,7 @@ is the authority, and the index is a cache of it.
                 "free_perks": [str],   # Perk names from type-param bounds
                 "private": bool,       # Present (true) for closure-shipped helpers
                 "doc": DOC,            # If documented, and never when private
-                "bindings": {str: str} # v5 (#494, D4): every free name in `source`
+                "bindings": {str: str} # v5: every free name in `source`
                                        #   the producer's closure resolved, mapped to
                                        #   its link symbol. The consumer re-parses
                                        #   the source and binds each named call to
@@ -398,8 +396,8 @@ is the authority, and the index is a cache of it.
         "generic_enums": [ ... ],
 
         # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
-        # names it -- #543), plus any perk an exported template names in a constraint
-        # or implements. Each method is a record (v7, #537): its signature, its
+        # names it), plus any perk an exported template names in a constraint
+        # or implements. Each method is a record (v7): its signature, its
         # receiver mode when the contract declares `peek self` / `poke self`, and its
         # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
         #
@@ -427,7 +425,7 @@ is the authority, and the index is a cache of it.
             }
         ],
 
-        # Generic-target perk IMPLEMENTATIONS (v6, #543): `extend Box@(T) with Show`
+        # Generic-target perk IMPLEMENTATIONS (v6): `extend Box@(T) with Show`
         # is a TEMPLATE. It names no instantiation, so there is no symbol to declare
         # and link: it ships as source alone, and the consumer cuts one copy per
         # instantiation of `Box` it names, exactly as for its own template. The
@@ -451,9 +449,9 @@ is the authority, and the index is a cache of it.
         # carry external linkage in the bitcode); constants and types ship with
         # source -- the consumer needs a constant's value for compile-time
         # evaluation, and a type's shape to register it before a monomorphized
-        # template body names it. Since v5 every record is one per (unit, name):
+        # template body names it. Every record is one per (unit, name) (v5):
         # two of the library's own units may each ship a private `helper`, and
-        # each record names its unit (#494).
+        # each record names its unit.
         "private_functions": [
             {                          # No doc: a private symbol is not documented API
                 "name": str,
@@ -481,15 +479,14 @@ is the authority, and the index is a cache of it.
     # A name and its kind, and nothing else: no signature, no body, no source. Written
     # for every kind, and the whole key is ABSENT when a library keeps nothing.
     #
-    # It exists so that a consumer naming one hears CE3005 rather than CE2008 (#469): on
-    # the binary path the symbol is in the consumer's tables not at all, and "undefined"
-    # was the wrong word for a function the library defines and deliberately kept. A name
-    # here is not shipped and clashes with nothing, so a consumer may declare its own
-    # function of the same name. A kept TYPE answers the same way from the type funnel,
-    # where the wrong word was "unknown type". A kept CONSTANT answers from the scope
-    # pass, which lets the name through so the type pass can say whose it is (#487): a
-    # PUBLIC constant registers from `public_constants[].source`, so "no such name" would
-    # be the wrong word for the one next to it that the library kept.
+    # It exists so that a consumer naming one hears CE3005: on the binary path the
+    # symbol is not in the consumer's tables, and "undefined" would be the wrong word for
+    # a function the library defines and deliberately keeps. A name here is not shipped
+    # and clashes with nothing, so a consumer may declare its own function of the same
+    # name. A kept TYPE answers CE3005 the same way from the type funnel. A kept CONSTANT
+    # answers from the scope pass, which lets the name through so the type pass can say
+    # whose it is: a PUBLIC constant registers from `public_constants[].source`, so "no
+    # such name" would be the wrong word for the one next to it that the library keeps.
     #
     # A name the CLOSURE ships is not here. Each private is named in exactly one of the
     # two places, and the closure carries a private constant and a private type as
@@ -499,7 +496,7 @@ is the authority, and the index is a cache of it.
         {
             "name": str,
             "kind": str                # "function" / "generic_function" / "struct"
-                                       #   / "enum" / "constant"
+                                       #   / "enum" / "constant" / "variable"
         }
     ]
 }
@@ -546,17 +543,23 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 
 | Code | Description |
 |------|-------------|
+| CE3500 | The `--lib` output path does not end in `.slib` |
+| CE3502 | A `use <lib/...>` names a library that no search directory holds |
 | CE3503 | The library's `requires_compiler` excludes the running compiler |
+| CE3504 | A binary or hybrid library was built for another platform |
 | CE3505 | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | CE3506 | Source section truncated |
 | CE3508 | Invalid magic bytes (not a valid `.slib` file) |
 | CE3509 | Unsupported format version |
 | CE3510 | Metadata section truncated |
 | CE3511 | Bitcode section truncated |
-| CE3512 | Invalid MessagePack metadata |
+| CE3507 | The bitcode of a binary or hybrid library does not link |
+| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, or the templates schema is older than version 7 |
 | CE3513 | File exceeds maximum size (1GB) |
 | CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | CE3516 | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
+| CE3517 | The `nori.toml` in the working directory is not valid |
+| CE3518 | The `nori.toml` in the working directory cannot be read |
 
 One truncation code per section rather than one shared code: the message names which
 section is short, and that is what tells a reader where the file was cut.
@@ -566,19 +569,19 @@ section is short, and that is what tells a reader where the file was cut.
 Use `--lib-info` to display library metadata:
 
 ```bash
-./sushic --lib-info mylib.slib
+./sushic --lib-info mylib.slib --docs
 ```
 
-Example output:
+Example output, with `--docs` (without it, no doc block prints):
 
 ```
 Library: mylib
 Version: 1.0.0
 Kind: source
-Compiler: 0.11.1
-Requires compiler: ~0.11
-Compiled: 2026-08-23T10:30:00+00:00
-Protocol: 2.2
+Compiler: 0.12.0
+Requires compiler: ~0.12
+Compiled: 2026-09-28T19:18:00+00:00
+Protocol: 2.3
 
 Units (1):
   mylib
@@ -587,45 +590,62 @@ Units (1):
 Public Functions (3):
   fn add(i32 a, i32 b) i32
     Adds two numbers.
+
     - Parameter a: The first addend.
+
     - Parameter b: The second addend.
+
     - Returns: The sum.
+
   fn multiply(i32 a, i32 b) i32
   fn shout(nom string s) string
+    Hands the string back, and takes it over.
 
 Public Structs (1):
   struct Point:
     A point in the plane.
+
     i32 x
       The distance along x.
+
     i32 y
       The distance along y.
 
-Source: 1,204 bytes
+Source: 643 bytes
 ```
 
-A documented symbol prints its block two spaces further in than its own line, and a symbol
-with no block prints exactly as it always did. `multiply` above has no doc block; `shout`
-has none either, and its `nom` shows the one parameter mode a type cannot spell (`peek` and
-`poke` are part of the type string). `docs/documentation-blocks.md` carries the record and
+A documented symbol prints its block two spaces further in than its own line, with a blank
+line between the prose and each tag. A symbol with no block prints as a bare line: `multiply`
+above has no doc block. The `nom` of `shout` shows the one parameter mode a type cannot spell
+(`peek` and `poke` are part of the type string). `docs/documentation-blocks.md` carries the record and
 what does not travel in it.
 
 ## Implementation Notes
 
 ### Reading
 
-1. Read and validate 16-byte magic
-2. Read 4-byte version, reject if unsupported
-3. Read 4-byte flags and 4-byte kind, skip 16 bytes of reserved fields
-4. Read 8-byte metadata length
-5. Read metadata blob, deserialize with MessagePack
-6. Read 8-byte source length
-7. Read source blob, deserialize with MessagePack (skip it to reach the bitcode)
-8. Read 8-byte bitcode length
-9. Read bitcode blob
+Before the file is opened, a path that does not end in `.slib` is CE3516. An OS error of the
+open or of a read is CE3515.
 
-A reader that wants only part of this stops early: `read_metadata_only` stops after step 5,
-`read_source_only` after step 7, and `read_section_sizes` reports both payload lengths
+1. Read and validate the 16-byte magic (CE3508)
+2. Refuse a file larger than 1 GiB (CE3513), before any section is read
+3. Read the 4-byte version, reject it if unsupported (CE3509)
+4. Read the 4-byte flags and 4-byte kind, skip 16 bytes of reserved fields
+5. Read the 8-byte metadata length
+6. Read the metadata blob, deserialize it with MessagePack (CE3512)
+7. Read the 8-byte source length
+8. Read the source blob, deserialize it with MessagePack (skip it to reach the bitcode)
+9. Read the 8-byte bitcode length
+10. Read the bitcode blob
+After the read, the consumer and `--lib-info` check the manifest against `MANIFEST_SCHEMA`
+(`check_manifest`, CE3512).
+
+Each declared section length is checked against the bytes that are left in the file BEFORE the
+read. A length that is too long is a truncation: CE3510 (metadata), CE3506 (source) or CE3511
+(bitcode).
+
+A reader that wants only part of this stops early: `read_metadata_only` stops after step 6,
+`read_source_only` after step 8, and `read_section_sizes` reports both payload lengths
 without keeping either blob.
 
 ### Writing

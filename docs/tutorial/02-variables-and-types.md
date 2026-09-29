@@ -19,8 +19,8 @@ trips up people coming from C or Java for about five minutes and then feels natu
 
 Local variables are **mutable** — you can change a variable's value after declaring it.
 There's no `mut` keyword to write, because a `let` has no immutable variety to distinguish
-it from. (Compile-time immutability is a separate construct, `const`, not a flavour of
-`let`.)
+it from. For a value that never changes, use a `const` (see
+[Constants and unit variables](#constants-and-unit-variables) below).
 
 Changing a variable uses a different operator from declaring one: you **reassign** with
 `:=`, not `=`. The single `=` belongs only to the initial `let`; `:=` updates an
@@ -54,12 +54,11 @@ strings. And `has_towel`, a `bool`, printed as the word `true`: a boolean displa
     existing variable rather than making a new one.
 
 !!! note "Reassigning vs. shadowing"
-    `:=` is **reassignment**: the same variable, a new value, the same type. Declaring the
-    name again with `let` is something different — **shadowing** — which introduces a
-    *separate* variable that reuses the name and leaves the original untouched. The compiler
-    warns when a `let` shadows a name from an outer scope (`CW1002`), so when you mean
-    "update this variable," reach for `:=`. This is the mirror image of languages like Rust,
-    which make variables immutable by default and lean on shadowing instead.
+    `:=` is **reassignment**: the same variable, a new value, the same type. A `let` in a
+    *nested* block can use a name that an outer block already declares. This is
+    **shadowing**: the inner `let` makes a *separate* variable, and the outer variable does
+    not change. The compiler gives the warning `CW1002` for each shadow. When you want to
+    change a variable, use `:=`.
 
 ## The primitive types
 
@@ -100,8 +99,14 @@ grouped float 3.141_592: 3.14159
 ```
 
 The first four lines are the same value, `42`, written four ways. The underscores in the
-last four are purely cosmetic — the compiler ignores them. (We cast `0xDEAD_BEEF` to `u32`
-because it's larger than a signed `i32` can hold without wrapping to a negative number.)
+last four are purely cosmetic — the compiler ignores them.
+
+A literal gets its type from its context. In `let u32 flags = 0xDEAD_BEEF`, the annotation
+`u32` gives the literal the type `u32`, so no cast is necessary. A parameter, a struct field
+and the other operand of an operator also give a literal its type. When there is no
+context, an integer literal is an `i32` and a float literal is an `f64`. A literal that the
+type cannot hold is an error: `let u8 b = 256` gives `CE2073` ("literal 256 out of range for
+u8").
 
 !!! note "One underscore, between two digits"
     Digit grouping with `_` works in every base — `1_000_000` and `3.141_592` as much as
@@ -126,11 +131,16 @@ integer division 42 / 5: 8
 float division 42.0 / 5.0: 8.4
 widened to i64: 42
 u8 max: 255
+whole float: 42
 ```
 
 Dividing two `i32` values does **integer** division (`42 / 5` is `8`, the remainder is
-dropped). Cast both operands to `f64` first and you get `8.4`. Notice that whole floats
-like `42.0` print without a trailing `.0`.
+dropped). Cast both operands to `f64` first and you get `8.4`. A whole float such as
+`42.0` prints without a trailing `.0`.
+
+The `u8` line has no cast: the annotation gives the literal `255` the type `u8`. A cast is
+for a *value* that already has a type, such as the `i32` variable `distance`. Literal
+typing does not convert a value.
 
 ## The blank type `~`
 
@@ -163,17 +173,45 @@ Here `inner` exists only inside the `if`, while `outer` is reachable both inside
 it. The `announce` function uses the blank type: it prints a boarding call and returns
 nothing.
 
+## Constants and unit variables
+
+A `const` is a named value that the compiler calculates at compile time. You declare it at
+the top level of a file, outside every function. A `const` never changes; an assignment to
+one is an error.
+
+A `var` at the top level is **unit-level storage**: one variable for the whole program.
+The program sets its value before `main` starts. Every function in the file can read it and
+change it with `:=`.
+
+```sushi
+--8<-- "docs/tutorial/examples/02-variables-and-types/constants.sushi"
+```
+
+Output:
+
+```
+Heart of Gold carries 4 crew
+Jumps so far: 2
+```
+
+The initializer of a `const` or a `var` must be a constant expression: literals, other
+constants, operators and `as`. It cannot call a function. By default, a `const` and a `var`
+are private to their file; [Chapter 4](04-functions.md#public-and-private-declarations)
+shows how to make them `public`.
+
 ## What you learned
 
-- Declare variables with `let Type name = value`; reassign them in place with `:=` (a
-  second `let` with the same name *shadows* rather than updates).
+- Declare variables with `let Type name = value`; reassign them in place with `:=`. A
+  `let` in a nested block that reuses an outer name *shadows* it (`CW1002`).
 - Primitive types are explicit about size and signedness: `i8`..`i64`, `u8`..`u64`, `f32`,
   `f64`, `bool`, `string`. A bare integer literal defaults to `i32`.
-- Integer literals come in decimal, `0x` hex, `0b` binary, and `0o` octal; the prefixed
-  forms allow `_` digit grouping.
-- Convert between numeric types explicitly with `as` — nothing happens implicitly.
+- Integer literals come in decimal, `0x` hex, `0b` binary, and `0o` octal; every base
+  allows `_` digit grouping.
+- A literal gets its type from its context (`let u8 b = 255`). Convert a *value* between
+  numeric types explicitly with `as` — nothing happens implicitly.
 - `~` is the blank (void-style) type for functions that return nothing.
 - Variables are scoped to the block they're declared in.
+- `const` is a compile-time value; a top-level `var` is one variable for the whole program.
 
 Next we put these values to work making decisions and repeating ourselves. On to
 [Control Flow](03-control-flow.md).

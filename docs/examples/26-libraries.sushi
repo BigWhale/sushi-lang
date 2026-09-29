@@ -2,33 +2,34 @@
 #
 # This example demonstrates how to create and use libraries in Sushi.
 #
-# Libraries allow you to compile reusable code that can be linked into
-# multiple programs. This enables modular architecture and code sharing.
+# Libraries let you reuse code in many programs. This enables a modular
+# architecture and code sharing.
 #
 # LIBRARY COMPILATION:
 #
-#   # Step 1: Compile source to library
-#   ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.slib
+#   # Step 1: Compile the source to a library. A library states its version:
+#   # --lib-version gives it, or a nori.toml in the current directory does.
+#   mkdir -p /tmp/sushilib
+#   ./sushic --lib --lib-version 1.0.0 docs/examples/mathlib.sushi -o /tmp/sushilib/mathlib.slib
 #
-#   This creates a single .slib file containing bitcode and metadata.
+#   This makes one .slib file. The default kind is a SOURCE library: it carries
+#   the source text and the metadata, and the program that uses it compiles it.
+#   (--lib-kind binary ships LLVM bitcode instead.)
 #
 # USING THE LIBRARY:
 #
-#   # Step 2: Set library search path and compile program
-#   export SUSHI_LIB_PATH=/tmp
+#   # Step 2: Change the import below to `use <lib/mathlib>`, set the library
+#   # search path, and compile the program
+#   export SUSHI_LIB_PATH=/tmp/sushilib
 #   ./sushic docs/examples/26-libraries.sushi -o program
 #
 #   The use <lib/mathlib> statement tells the compiler to:
-#   1. Load mathlib.slib and read metadata for type information
-#   2. Link the bitcode into the final executable
+#   1. Find mathlib.slib on SUSHI_LIB_PATH and read its metadata
+#   2. Compile the library units with the program, and link them in
 #
-# For this example to work with precompiled libraries:
-#   1. Run: ./sushic --lib docs/examples/mathlib.sushi -o /tmp/mathlib.slib
-#   2. Run: export SUSHI_LIB_PATH=/tmp
-#   3. Run: ./sushic docs/examples/26-libraries.sushi
-#
-# Alternatively, use source import for development:
-#   use "mathlib"  # Import source file directly
+# As written, this example imports the library source directly, which is
+# useful during development:
+#   use "mathlib"  # Import the source file directly
 
 use "mathlib"
 

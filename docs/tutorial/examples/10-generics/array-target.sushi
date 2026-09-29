@@ -1,0 +1,17 @@
+extend T[] second() Maybe@(T):
+    return self.get(1).clone()
+
+extend i32[] sum() i32:
+    let i32 total = 0
+    foreach(n in self.iter()):
+        total := total + n
+    return total
+
+fn main() i32:
+    let i32[] numbers = from([40, 2])
+    let string[] names = from(["Arthur", "Ford"])
+
+    println("second number: {numbers.second().realise(0)}")
+    println("second name: {names.second().realise('nobody')}")
+    println("sum: {numbers.sum()}")
+    return Result.Ok(0)

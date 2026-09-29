@@ -15,10 +15,11 @@ use <net/error>
 `NetError` is a predefined enum -- the compiler synthesizes it, and no unit declares it --
 and this module is its HOME. The import is what brings the bare name into a unit, exactly
 as `<io/fs>` brings `FileMode` and `<collections/hashmap>` brings `HashMap`; `use
-<net/error> as ne` puts it behind the dot instead (`ne.NetError.TimedOut`). Every net
-module re-exports this one (`docs/design/unit-namespaces.md`, section 8.1), so a unit
-that matches on a net module's error needs no second import: `use <net/tcp>` alone
-brings `NetError`.
+<net/error> as ne` puts it behind the dot instead (`ne.NetError.TimedOut`). `<net/tcp>`,
+`<net/udp>`, `<net/dns>` and `<net/ip>` re-export this module
+(`docs/design/unit-namespaces.md`, section 8.1), so a unit that matches on their errors
+needs no second import: `use <net/tcp>` alone brings `NetError`. `<net/url>` answers its
+own `UrlError` and does not re-export this module.
 
 ```sushi
 public enum NetError:
@@ -35,7 +36,7 @@ payload, so a variant is only ever appended. The mapping from `errno` is on the
 
 ## Functions
 
-### `to_io() -> IoError`
+### `to_io() IoError`
 
 ```sushi
 extend NetError to_io() IoError

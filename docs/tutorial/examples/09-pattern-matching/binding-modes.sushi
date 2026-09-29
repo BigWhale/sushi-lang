@@ -1,0 +1,48 @@
+enum Cargo:
+    Crates(i32)
+    Names(string[])
+
+fn keep(nom string[] names) ~:
+    println("Names kept: {names.len()}")
+    return Result.Ok(~)
+
+fn load() Cargo:
+    return Result.Ok(Cargo.Names(from(["Arthur", "Ford"])))
+
+fn main() i32:
+    let Cargo hold = Cargo.Crates(3)
+
+    match hold:
+        Cargo.Crates(count) ->
+            println("Crates: {count}")
+        Cargo.Names(names) ->
+            println("Names: {names.len()}")
+
+    match hold:
+        Cargo.Crates(poke count) ->
+            count := count + 1
+        Cargo.Names(_) ->
+            println("no crates")
+
+    match hold:
+        Cargo.Crates(count) ->
+            println("Crates now: {count}")
+        Cargo.Names(_) ->
+            println("no crates")
+
+    match load():
+        Result.Ok(Cargo.Names(nom names)) ->
+            keep(nom names)
+        Result.Ok(Cargo.Crates(_)) ->
+            println("only crates")
+        Result.Err(_) ->
+            println("could not load")
+
+    let Cargo manifest = Cargo.Names(from(["Zaphod"]))
+    match nom manifest:
+        Cargo.Names(nom names) ->
+            keep(nom names)
+        Cargo.Crates(_) ->
+            println("only crates")
+
+    return Result.Ok(0)

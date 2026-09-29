@@ -130,9 +130,8 @@ above the first member, so one `pending` flag covers the owner and its members.
   prints a header, so each section obeys the rule, and the style of the header is written
   once.
 - **A signature.** `render_signature` is the one renderer for a concrete and a generic
-  function, and for a perk method. A generic function printed `(template)` where its
-  parameters go, before this renderer, and thus its `- Parameter` tags were stored and
-  never printed (R46). The default error type is `StdError`, and a signature that takes it
+  function, and for a perk method, so a generic function prints its parameters and its
+  `- Parameter` tags like a concrete one (R46). The default error type is `StdError`, and a signature that takes it
   does not say so. Thus a record with no `error_type` prints no error arm (R49).
 - **A parameter mode.** `nom` is the one mode that a type cannot spell, so it comes from the
   `mode` field of the record. `peek` and `poke` are already part of the type string. The

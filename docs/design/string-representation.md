@@ -1,8 +1,6 @@
 # String Value Representation
 
-Status: **Decided** (keep the 3-field fat pointer). Supersedes the open question in
-issue #152. Related: #145 (string-value RAII), #146 (landed the representation), #149
-and #151 (ABI hardening), #147 (struct-field RAII).
+Status: **Decided** (keep the 3-field fat pointer).
 
 ## Decision
 
@@ -21,7 +19,7 @@ of `size` (the 2-field / 12-byte alternative).
 
 ## Why a runtime ownership bit at all
 
-String-value RAII (#145) has to free heap strings (interpolation, string methods,
+String-value RAII has to free heap strings (interpolation, string methods,
 `to_string*`, int/float formatting) but must never free a global-backed literal. The
 two are the **same `string` type** and flow indistinguishably through generics,
 containers, `Result`/`Maybe` payloads, and `nom` parameters. Ownership therefore
@@ -42,41 +40,43 @@ Given a runtime bit, the only sub-choice is where to store it:
 | | 3-field `{data, size, owned}` (chosen) | High-bit in `size` |
 |---|---|---|
 | String size | 16 B | 12 B |
-| `Result@(string)`/`Maybe@(string)` enum | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
+| `Result@(string, E)`/`Maybe@(string)` enum, at the time of the decision | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
 | `size` reads | clean `i32`, no masking | **every** read must mask off the ownership bit |
 | Failure mode of a missed site | a memcpy/memmove *length* is wrong → **loud crash**, easy to find | a masked *size* read is wrong by 2^31 → **silent corruption** |
 | Number of hazard sites | few (mem* length arguments) | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
 | `size` max | full `i32` | `2^31 - 1` |
 
+The enum row describes the enum layout at the time of the decision. Every enum is
+`{i32 tag, [K x i64] data}` with the payload at offset 8, so `Result@(string, StdError)` is
+`{i32, [2 x i64]}`, 24 bytes, and the 12-byte alternative also needs `[2 x i64]`. The row
+does not separate the two choices; the other rows do.
+
 High-bit packing trades a small, closed, **loud** problem for a large, open, **silent**
 one. It would have to mask the ownership bit at every one of the dozens of places that
 read a string's size; missing one yields a length off by 2^31 that corrupts rather than
 crashes. The 3-field shape keeps `size` a clean `i32`, keeps `owned` orthogonal and
-inspectable, and was simpler to land.
+inspectable, and is simpler.
 
 ## The ABI fallout, and why it does not justify switching
 
-The 16-byte, 3-field shape produced three ABI bugs, all now fixed:
+The 16-byte, 3-field shape has two ABI hazards, and both are **guardable**:
 
-1. ARM64 undef-register poisoning of the `owned` byte (#146).
-2. `Result@(string)`/`Maybe@(string)` payload-size corruption — the enum data array had to
-   be sized to preserve `owned@12` (#146).
-3. x86-64 out-of-bounds: the 20-byte enum plus passing a string's raw `i32 size`
-   (adjacent to `owned` + padding) as a `mem*` length let garbage upper bits reach
-   glibc's SIMD routines (#149, then all remaining sites hardened in #151).
+- **Manual payload byte-copies.** The enum layout `{i32 tag, [K x i64] data}` puts the
+  payload base at an 8-aligned offset, and every payload offset is naturally aligned
+  (`TypeSizing.payload_field_offsets` is the one authority), so the `owned` byte and the
+  size survive every payload store and load.
+- **Manual `mem*` lengths.** A string's raw `i32 size` sits next to `owned` and padding, so
+  as a `mem*` length it can carry garbage upper bits into libc's SIMD routines. The backend
+  uses the `i64`-length `llvm.memcpy`/`memmove` intrinsics with the `i32` size
+  zero-extended. The by-value passing/return of the enum itself is handled correctly by
+  LLVM's target ABI lowering; the backend has no manual `sret`/`byval`, so there is no
+  separate aggregate-ABI hazard.
 
-These fall into two categories, both closed and both **guardable**:
-
-- **Manual payload byte-copies** — fixed by marking enum-payload store/load `align=1`.
-- **Manual `mem*` lengths** — fixed by using the `i64`-length `llvm.memcpy`/`memmove`
-  intrinsics with the `i32` size zero-extended (#149/#151). The by-value passing/return
-  of the 20-byte enum itself is handled correctly by LLVM's target ABI lowering; the
-  backend has no manual `sret`/`byval`, so there is no separate aggregate-ABI hazard.
-
-The residual worry (#152) is recurrence: a *new* site that passes a string's `i32` size
-to a `mem*` routine. That is cheaply prevented by a lint/CI check that flags any
-`i32`-length `llvm.mem*` intrinsic — a proportionate guardrail, not a reason to rebuild
-the string ABI and take on the pervasive masking obligation above.
+The risk is recurrence: a *new* site that passes a string's `i32` size
+to a `mem*` routine. A CI gate prevents it: `tests/unit/test_mem_intrinsic_is_one_seam.py`
+refuses an `llvm.mem*` declaration outside the one seam (`backend/expressions/memory.py`)
+and any declaration with an `i32` length. That is a proportionate guardrail, not a reason to
+rebuild the string ABI and take on the pervasive masking obligation above.
 
 ## Consequence
 
@@ -85,13 +85,13 @@ directly as a `mem*` length — zero-extend to `i64` and use the `i64`-length in
 See `sushi_lang/backend/runtime/strings.py` and the stdlib `declare_memcpy` helper
 (`sushi_lang/sushi_stdlib/src/libc_declarations.py`) for the pattern.
 
-## Update (Phase 9, 2026-08-14): `string` is no longer a copy type
+## Update (Phase 9, 2026-08-14): a `string` moves
 
 This document's decision — the 3-field fat pointer, the runtime `owned` bit — is **unchanged**. What
 changed is a different question entirely: whether a `string` *value* is copied or moved at an
 ownership sink. See `docs/design/ownership-conventions.md` for the full model; the short version:
 
-A `string` now **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
+A `string` **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
 `Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a `nom` parameter,
 rebinding it, or putting it in a constructor field moves it — reusing the source afterward is
 **CE2405**. The one exception: a `string` bound directly from a string literal (`let string s =
@@ -99,10 +99,10 @@ rebinding it, or putting it in a constructor field moves it — reusing the sour
 owning no heap and behaves like a copy — both the original and any number of downstream bindings of
 it stay usable, because nothing was ever transferred. This exception is tracked per-**binding**, not
 per-**type**: `BuiltinType.STRING` carries no such flag, so a `string` field inside a struct, or a
-`string` produced by interpolation, a method call, or a rebind, is a ordinary MOVE with no exception
+`string` produced by interpolation, a method call, or a rebind, is an ordinary MOVE with no exception
 — see `docs/memory-management.md` for worked examples.
 
-**Why the runtime `owned` bit still matters, given that the compiler now tracks ownership statically
+**Why the runtime `owned` bit still matters, given that the compiler tracks ownership statically
 for strings too.** It would be tempting to think a compile-time MOVE/PLAIN classification makes the
 runtime bit redundant. It does not, for the same reason the bit existed in the first place (see
 "Why a runtime ownership bit at all", above): static tracking is necessarily conservative at every
@@ -116,7 +116,7 @@ fully track — costs one branch and no `free()` call. Without the bit, "when in
 would mean "when in doubt, actually free," which is unsound the moment the doubt is wrong. The bit
 is what lets the type system be conservative without being wrong.
 
-## Update (#449, 2026-08-24): the order operators read bytes
+## Update (2026-08-24): the order operators read bytes
 
 `<`, `>`, `<=` and `>=` on two strings are a byte order, which agrees with Rust and Go.
 `emit_string_order` (`backend/runtime/strings.py`) builds one three-way `i32` and then applies
@@ -126,7 +126,7 @@ the operator once, so all four operators share a single path:
 2. When `n` is zero, no call is made and the byte difference is zero. `memcmp` requires two
    valid pointers even for a length of zero, and an empty string may carry a null `data`.
 3. Otherwise the byte difference is `memcmp(lhs.data, rhs.data, n)`, with `n` zero-extended
-   from `i32` to `i64` — the standing rule of this document (#149).
+   from `i32` to `i64` — the standing rule of this document.
 4. The answer is the byte difference when it is non-zero, and `lhs.size - rhs.size` otherwise.
    A size is a non-negative `i32`, so that subtraction cannot overflow.
 

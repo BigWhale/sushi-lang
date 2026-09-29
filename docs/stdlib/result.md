@@ -8,9 +8,14 @@ Type-safe error handling with explicit success and error types.
 
 `Result@(T, E)` is a generic enum that represents either success (`Ok`) containing a value of type `T`, or failure (`Err`) containing an error of type `E`.
 
-All functions in Sushi implicitly return `Result@(T, E)` where:
+Every function that you declare with `fn` returns `Result@(T, E)`, where:
 - `T` is the declared return type
-- `E` is the error type (defaults to `StdError` if not specified)
+- `E` is the error type (`StdError` if the declaration does not name one)
+
+Two kinds of callable do not return a `Result`. An extension method with no `| E`
+channel returns a bare value, and an FFI external returns the raw C value.
+
+The error type `E` must be an enum. Any other type is CE2084.
 
 ## Type Syntax
 
@@ -25,9 +30,21 @@ fn add(i32 a, i32 b) i32:
 ### Custom Error Type
 
 ```sushi
-enum MathError:
-    DivisionByZero
-    Overflow
+enum ParseError:
+    Empty
+    NotANumber
+
+fn parse_digit(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    return Result.Ok(7)
+# Returns Result@(i32, ParseError)
+```
+
+A predefined error enum is used in the same way. `MathError` comes with `use <math>`:
+
+```sushi
+use <math>
 
 fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
@@ -36,19 +53,27 @@ fn divide(i32 a, i32 b) i32 | MathError:
 # Returns Result@(i32, MathError)
 ```
 
+Do not declare an enum with the name of a predefined enum (for example `enum MathError`).
+The compiler always knows the predefined enums, also in a unit that does not import their
+home module, so a second declaration is CE2046.
+
 ### Explicit Syntax
 
 ```sushi
-fn foo() Result@(i32, MyError):
+fn foo() Result@(i32, ParseError):
     return Result.Ok(42)
 ```
 
+A declaration uses one of the two forms. `fn foo() Result@(i32, ParseError) | ParseError`
+mixes them and is CE2085.
+
 ## Standard Error Enums
 
-Sushi provides built-in error types. Each but `StdError` has a HOME module, and the import
-is what brings the bare name into a unit (`docs/design/unit-namespaces.md`, #574). A
-module whose calls answer an enum re-exports its home (#586), so the import a program
-already writes is the one that brings the name:
+Sushi provides built-in enums. Each one but `StdError` has a HOME module, and the import
+of that module brings the bare name into a unit (see
+[Unit namespaces](../design/unit-namespaces.md)). A module whose calls answer an enum
+re-exports its home (`public use`), so the import that a program already writes is the
+one that brings the name:
 
 | enum | home | also brought by |
 |---|---|---|
@@ -92,11 +117,50 @@ File system operation errors.
 
 ### IoError
 
-I/O operation errors.
+The errors of a read, a write, a seek, `open()` and `close()`. Every `Reader`, `Writer`
+and `Seek` method answers `IoError`.
 
-- `IoError.ReadError` - Read operation failed
-- `IoError.WriteError` - Write operation failed
-- `IoError.FlushError` - Flush operation failed
+- `IoError.NotFound` - The file does not exist
+- `IoError.PermissionDenied` - Insufficient permissions
+- `IoError.AlreadyExists` - The file already exists
+- `IoError.IsDirectory` - The path refers to a directory
+- `IoError.ConnectionReset` - The peer reset the connection
+- `IoError.TimedOut` - The operation timed out
+- `IoError.Closed` - The handle or the connection is closed
+- `IoError.Interrupted` - A signal interrupted the call
+- `IoError.WouldBlock` - The call would block
+- `IoError.DiskFull` - No space left on the device
+- `IoError.TooManyOpen` - Too many open files
+- `IoError.InvalidInput` - An argument is not valid
+- `IoError.Os(i32)` - The raw `errno` value
+- `IoError.Other` - Any other error
+
+### NetError
+
+The errors of a network construction or address operation (`connect`, `listen`,
+`accept`, name resolution).
+
+- `NetError.ConnectionRefused`, `NetError.ConnectionReset`, `NetError.TimedOut`,
+  `NetError.Closed`
+- `NetError.AddressInUse`, `NetError.AddressNotAvailable`, `NetError.InvalidAddress`
+- `NetError.NetworkUnreachable`, `NetError.HostUnreachable`, `NetError.ResolveFailed`
+- `NetError.PermissionDenied`, `NetError.TooManyOpen`, `NetError.Interrupted`,
+  `NetError.MessageTooLarge`, `NetError.Other`
+
+See [Net errors](net/error.md).
+
+### FileMode
+
+The mode argument of `open()`. It is not an error type.
+
+- `FileMode.Read`, `FileMode.Write`, `FileMode.Append` - Text modes (`"r"`, `"w"`, `"a"`)
+- `FileMode.ReadB`, `FileMode.WriteB`, `FileMode.AppendB` - Binary modes
+
+### SeekFrom
+
+The origin argument of `seek()`. It is not an error type.
+
+- `SeekFrom.Start`, `SeekFrom.Current`, `SeekFrom.End`
 
 ### ProcessError
 
@@ -130,15 +194,20 @@ fn get_answer() i32:
 Create an error result containing an error value.
 
 ```sushi
+use <math>
+
 fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
         return Result.Err(MathError.DivisionByZero)
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` requires an error value. Calling it with zero arguments is a compile error (**CE2050** — wrong argument count for the `Err` variant), not a deprecation warning.
+**Important:** `Result.Err()` requires an error value. Calling it with zero arguments is a compile error (**CE2050**, wrong argument count for the `Err` variant). As a pattern, `Result.Err()` with no binding is **CE2044**; write `Result.Err(_)` to discard the value.
 
 ## Methods
+
+The examples in this section call `divide` from the block above, so they need
+`use <math>`.
 
 ### `.is_ok() -> bool`
 
@@ -169,11 +238,15 @@ let Result@(i32, MathError) result = divide(10, 0)
 let Maybe@(MathError) error = result.err()
 
 match error:
-    Maybe.Some(e) ->
-        println("Error occurred: {e}")
+    Maybe.Some(MathError.DivisionByZero) ->
+        println("Error occurred: division by zero")
+    Maybe.Some(_) ->
+        println("Error occurred")
     Maybe.None() ->
         println("No error")
 ```
+
+An enum value cannot go into an interpolation hole (CE2035). Match on it to print it.
 
 ### `.expect(message: string) -> T`
 
@@ -222,7 +295,7 @@ fn inner() i32 | ErrorA:
     return Result.Ok(42)
 
 fn outer() i32 | ErrorB:
-    let i32 x = inner()??  # ❌ Error: cannot propagate ErrorA to ErrorB
+    let i32 x = inner()??  # CE2511: cannot propagate ErrorA to ErrorB
     return Result.Ok(x)
 ```
 
@@ -230,7 +303,7 @@ To use `??`, the inner function's error type must match the outer function's err
 
 ```sushi
 fn outer() i32 | ErrorA:
-    let i32 x = inner()??  # ✅ Both use ErrorA
+    let i32 x = inner()??  # correct: both use ErrorA
     return Result.Ok(x)
 ```
 
@@ -241,7 +314,7 @@ Using `??` in the `main()` function generates a compiler warning and is highly d
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
-    let i32 x = risky()??  # ⚠️ Warning CW2511
+    let i32 x = risky()??  # warning CW2511
     return Result.Ok(0)
 ```
 
@@ -254,7 +327,7 @@ fn main() i32:
         Result.Ok(x) ->
             println("Got: {x}")
             return Result.Ok(0)
-        Result.Err(e) ->
+        Result.Err(_) ->
             println("Failed")
             return Result.Ok(1)
 ```
@@ -269,16 +342,17 @@ match divide(10, 2):
         println("Result: {value}")
     Result.Err(MathError.DivisionByZero) ->
         println("Cannot divide by zero")
-    Result.Err(e) ->
-        println("Other error: {e}")
+    Result.Err(_) ->
+        println("Other error")
 ```
 
 ## Usage in Conditionals
 
-Result can be used directly in `if` statements (checks for Ok):
+A condition must be a `bool`. A `Result` in an `if` or a `while` condition, or as an
+operand of `and`/`or`/`xor`/`not`, is CE2516. Test it with `.is_ok()` or `.is_err()`:
 
 ```sushi
-if (divide(10, 2)):
+if (divide(10, 2).is_ok()):
     println("Success!")
 else:
     println("Failed")
@@ -300,6 +374,8 @@ else:
 ### Basic Error Handling
 
 ```sushi
+use <collections/strings>
+
 enum ValidationError:
     TooShort
     TooLong
@@ -315,8 +391,13 @@ fn validate_username(string name) ~ | ValidationError:
 
 ### Error Propagation Chain
 
+`open()` and `read_all()` both answer `IoError`, so the function declares the same
+channel and `??` propagates with no conversion:
+
 ```sushi
-fn read_config() string | FileError:
+use <io/fs>
+
+fn read_config() string | IoError:
     let File f = open("config.txt", FileMode.Read())??
     let string content = f.read_all()??
     return Result.Ok(content)
@@ -325,6 +406,8 @@ fn read_config() string | FileError:
 ### Combining with Maybe
 
 ```sushi
+use <math>
+
 fn safe_divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
         return Result.Err(MathError.DivisionByZero)

@@ -6,8 +6,8 @@ Detailed documentation of Sushi's multi-pass semantic analysis pipeline.
 
 ## Pass Overview
 
-The passes have NAMES, not numbers. A number goes out of order the moment a pass is
-inserted between two others, which is what the old numbered scheme did to itself.
+There are 19 passes. The passes have NAMES, not numbers, because a number goes out of
+order when a pass is inserted between two others.
 `SemanticAnalyzer.check()` (`semantics/semantic_analyzer.py`) is the code authority on the
 order; this list mirrors it. `_check_multi_file` runs that order, one call per stage,
 each named for the stage it runs.
@@ -21,7 +21,7 @@ each named for the stage it runs.
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
 | `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
-| `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing | `semantics/semantic_analyzer.py` |
+| `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing (CE0138) | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
@@ -38,15 +38,15 @@ The last four run per unit, in one loop, so the whole-program passes above them 
 unit before any function body is walked.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
-**AST builder**, which reads a fixed array's size while the unit is parsed (Known
-Limitation 12) and keeps a constant table of its own for it; the `typecheck` pass; and
+**AST builder**, which reads a fixed array's size while the unit is parsed (so a
+size is a literal or a constant of the same unit) and keeps a constant table of its own for it; the `typecheck` pass; and
 the backend. The last two share the collect pass's table, and with it the fold memo.
 
 ### The word "phase"
 
 "Phase" names the three sub-steps of the `typecheck` pass per statement — resolution →
-propagation → validation. It never names a pass. Where you meet `#300 phase 2` or
-"Phase 9" in the tree, those are work phases of an issue or of a past project, not passes.
+propagation → validation. It never names a pass. Where a comment in the tree says
+"phase" about an issue or a project, it names a work step, not a pass.
 
 ## The `collect` pass: headers and constants
 
@@ -76,7 +76,7 @@ The collectors run kind by kind, so the collection order is not the source order
 they run, `claim_unit_names` (`collect/unit_names.py`) sorts the unit's top-level
 declarations by position and refuses each later declaration of a name that an earlier one
 of another kind holds: `CE0006` for a struct beside an enum, `CE1005` for every other
-pair (#1069, #1076). A refused declaration enters no table. Two declarations of one kind
+pair. A refused declaration enters no table. Two declarations of one kind
 stay with that kind's collector and its own code.
 
 ### A unit is collected after the units it depends on
@@ -84,7 +84,7 @@ stay with that kind's collector and its own code.
 The compilation order (`UnitManager.topological_sort`) yields every unit AFTER the units
 it depends on. The walk itself counts in-degree as "how many units depend on me" and so
 produces the opposite; the result is reversed once, and the direction is a ruling
-(`docs/design/unit-namespaces.md` section 13.2): a unit's scope is built from what its own
+(`docs/design/unit-namespaces.md` section 6.2): a unit's scope is built from what its own
 imports declare, so the declaring unit has to be collected already.
 
 A source library's units and a bundled Sushi-source stdlib module are injected as ordinary
@@ -92,15 +92,13 @@ compilation units, and `build_dependency_graph` records the edge that an import 
 creates. That is why a library unit comes first without being told to. A binary `.slib`
 matches no unit and adds no edge, because it has no unit to compile.
 
-Two hand-patches retired with the order. Library units were pulled to the front of the
-collect loop, and every unit's perk DEFINITIONS were swept up ahead of the loop so that an
-implementation could meet the two rules that read the perk table -- the perk exists
-(`CE4003`), and its marker lets this unit implement it (`CE4011`). A perk declared next
-door is in the table when the implementing unit is reached, so neither patch is needed.
+The order also serves the two rules that read the perk table when an implementation is
+collected -- the perk exists (`CE4003`), and its marker lets this unit implement it
+(`CE4011`). A perk declared next door is in the table when the implementing unit is reached.
 Two perks are in the table before any unit is collected: `Drop` and `Hashable`, the
 compiler's own (`register_predefined_perks`). The constraint check reads `Hashable`
 through the derive pass's predicate, `hashability_of`, so no implementation table
-entry stands for a derived hash (#696).
+entry stands for a derived hash.
 
 ### Example
 
@@ -115,10 +113,10 @@ fn add(i32 a, i32 b) i32:  # Register signature
     return Result.Ok(a + b)
 ```
 
-**Output:**
-- `constants = {'MAX': 100}`
-- `functions = {'add': FunctionSignature(...)}`
-- `generic_types = {'Pair': GenericStruct(...)}`
+**Output**, in `SymbolTables` (`semantics/tables.py`):
+- `tables.constants`: a `ConstSig` for `MAX`
+- `tables.functions`: a `FuncSig` for `add`
+- `tables.generic_structs`: the template of `Pair`
 
 ### One seam for who may name what
 
@@ -152,9 +150,8 @@ This pass is the only whole-program pass that walks every unit's AST while shari
 reporter -- the per-unit passes each build their own through `_unit_reporter(unit)`. A span
 is meaningless without the file it came from, so `CollectorPass.run` names the unit it is
 reading (`Reporter.origin`), and `Reporter._record` stamps it onto every diagnostic the pass
-raises. Without it, a declaration in a non-entry unit was reported against the ENTRY file:
-the head line named a line the user did not write, and the caret landed on whatever text sat
-at that column (#473).
+raises. So a diagnostic about a declaration in a non-entry unit names the file of that unit,
+not the entry file.
 
 A `first defined here` note needs one thing more. It points at a table entry, and the entry
 may have been made while a DIFFERENT unit was being collected, so each record remembers its
@@ -162,9 +159,12 @@ own file: `files` beside `spans` on the struct and enum tables, `PerkTable.files
 `filename` field on `FuncSig`, `ConstSig` and `ExternalSig`. `note_first_declaration` is the
 one place that reads them.
 
-### Limitations
+### Constants
 
-Constants can only be literal values (no expressions).
+A constant initializer is a constant expression: literals, other constants, operators,
+`as`, and a struct construction or an enum variant whose arguments are all constant. The
+fold is `semantics/const_eval.py`. A constant cannot call a function or a method. A unit
+variable (`var`) also takes an empty container (`List.new()`, `from([])`).
 
 ### FFI External Collection
 
@@ -254,7 +254,7 @@ Library units are skipped, both ways. A consumer must not be told about the libr
 author's doc typos, and must not be warned once per undocumented symbol in every library
 it imports.
 
-The test runner's stdlib doc-block gate (#953) sets the hidden environment variable
+The test runner's stdlib doc-block gate sets the hidden environment variable
 `SUSHI_STDLIB_DOC_GATE=1`. It has no CLI flag, in the style of `SUSHI_SPELLING_GATE`. When
 it is set, the pass also checks each BUNDLED stdlib unit, the units whose name is in
 `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`), and `--warn-missing-docs` adds the
@@ -294,7 +294,7 @@ The pass runs immediately after `docs`, for the same reason: it must read the wr
 declarations. The `libraries` step adds the constants of a binary library to a host unit,
 and `monomorphize` adds the instances.
 
-Library units are skipped. The test runner's dead-code gate (#959) sets the hidden
+Library units are skipped. The test runner's dead-code gate sets the hidden
 environment variable `SUSHI_STDLIB_DEAD_GATE=1`. When it is set, the pass also checks each
 bundled stdlib unit, in the same way that `SUSHI_STDLIB_DOC_GATE=1` works for the `docs`
 pass. The runner compiles the program that imports every bundled module, and each program
@@ -317,7 +317,7 @@ See `docs/ffi.md`.
 
 ## The `libraries` pass: library symbol registration
 
-**File:** `semantics/library_registration.py` (`LibraryRegistration`; the analyzer calls `seed_perks` ahead of the collect loop and `register` after it)
+**File:** `semantics/library_registration.py` (`LibraryRegistration`; the analyzer calls `seed_perks` and `seed_generic_types` ahead of the collect loop, and `register` after it)
 
 Every symbol a linked `.slib` exports enters the same tables the consumer's own `collect`
 filled: structs, enums, functions, published constants, export-closure private helpers and
@@ -358,7 +358,7 @@ A binding holds the PROVIDER and never the written path: `_inject_library_source
 renames a library's units and leaves `UseStatement.path` alone, so an alias built from
 the path would break the moment a library unit imported its sibling.
 
-A stdlib provider also lists the PREDEFINED enums homed at its module (#574, Ruling 3).
+A stdlib provider also lists the PREDEFINED enums homed at its module.
 No unit declares `FileMode`, so no declaration record can say who may write it; the
 `collect` pass stamps each of the nine with its home (`EnumType.home_module`, the table
 is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`), `homed_enums` reads the stamp for
@@ -408,8 +408,7 @@ and a private one is refused at the use site with `CE3005` -- filtering privates
 would turn "not yours" into "no such name".
 
 The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, and the
-`scope` pass through `_is_namespace`. Both used to carry their own copy of the
-local-wins rule.
+`scope` pass through `_is_namespace`. Neither carries its own copy of the local-wins rule.
 
 ## The `entrypoint` pass: main's rule
 
@@ -420,16 +419,14 @@ The ONE home of main's rule. It checks four things, in this order:
 1. an executable carries a `main` -- `CE3007`;
 2. a library carries none -- `CE3501`;
 3. `main` returns an integer type (i8-i64, u8-u64) -- `CE0106`;
-4. `main` takes no parameters or exactly one `string[] args`, which answers
-   `main_expects_args` for the back end.
+4. `main` takes no parameters or exactly one `string[] args` -- `CE0138`. The answer
+   sets `main_expects_args` for the back end.
 
 The build kind reaches the analyzer as the `is_library` keyword, the way the library
 linker does. The `args` array is a BORROWED view of argv, so moving it is `CE2410`.
 
-The first three used to live elsewhere -- `CE3007` and `CE3501` in `compiler/pipeline.py`
-after the analysis, `CE0106` in the collect pass -- so the pass named for the rule held
-the least of it. The `CW3003` foreign-extension warning stays in the pipeline: it is not
-about main.
+The `CW3003` foreign-extension warning is in the pipeline, because it is not about
+`main`.
 
 ## The `instantiate` pass: generic instantiation collection
 
@@ -453,20 +450,20 @@ may name that instantiation nowhere else: a `match` arm binds the payload, or th
 passed straight on. The generic-target extension and perk-implementation copies are cut from
 the set this pass collects, so the pass records the SUBSTITUTED signature of every generic
 call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
--- through the same type walk a concrete declaration gets (#549, #555).
+-- through the same type walk a concrete declaration gets.
 
 The typecheck pass's inferrer types a generic call through its monomorphized copy, which does
 not exist yet, so it answers nothing for one here. A `match` over a generic call therefore
 types its arm bindings from that substituted signature, and a generic called with such a
-binding is collected like any other (#549).
+binding is collected like any other.
 
 ### Where a type names an instantiation
 
 A type names an instantiation in every position that HOLDS a type, and the reader of those
 positions is `type_walk.walk_named_types` -- the one walk over a type. `peek Box@(string)`,
-`fn(i32) -> Box@(string)` and a struct field of that function type each name `Box@(string)`,
-and the recursion written here saw an array, a struct and an enum alone: the declaration
-answered CE2001 for a type the program declares (#603).
+`fn(i32) -> Box@(string)` and a struct field of that function type each name `Box@(string)`.
+A hand-written recursion that sees only an array, a struct and an enum misses those
+positions, so this pass does not write one.
 
 There are two node handlers over that one walk, because the two readers see two spellings of
 one instantiation. `instantiate/type_collection.py` reads a WRITTEN type -- a
@@ -518,7 +515,7 @@ exactly as it interns its signature's.
 
 A substituted type that is itself an instance -- the `Box<string>` a `Box@(B)` field
 becomes under `B := string`, a `Maybe<string>` payload, a `Pair<i32, string>` return --
-is published to its table when it is BUILT (`TypeMonomorphizer._publish`, #577). The
+is published to its table when it is BUILT (`TypeMonomorphizer._publish`). The
 collector sees what the program spells; the substitutor is the one place every producer
 passes, so publishing there is the worklist, and the analyzer reads the reached
 instances back as instantiations for the copies below. An abstract instance, a
@@ -530,13 +527,12 @@ not published.
 Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
 passes as an ordinary function -- correctly, because a per-instance truth is only visible
 there: a consume that is a plain copy for one type argument is CE2411 for an owning one.
-What must not follow is the COUNT. A fault in the shared body used to be told once per
-instantiation, at one caret, so the number of reports tracked how many times the caller
-happened to instantiate the function (#648).
+What must not follow is the COUNT. A fault in the shared body is reported once, at one
+caret, and not once per instantiation.
 
 The copy is stamped `instance_of` with the template's name. `Reporter.enter_body(func)`
 reads it -- the one seam every per-unit pass calls to say whose body it is about to read,
-and the same seam that answers whose FILE the spans belong to (#471) -- and sets
+and the same seam that answers whose FILE the spans belong to -- and sets
 `collapse_repeats`, so a diagnostic whose `diagnostic_identity` has already been recorded
 is dropped. The identity is the kind, the code, the MESSAGE, the file and the span, so a
 finding that genuinely differs by type argument keeps its own message and is still told:
@@ -547,7 +543,7 @@ made, and stays visible.
 
 A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
 `instance_of` onto what it lifts. The `borrow` pass is the one that walks the template as
-well as the copies, so a borrow fault was N + 1 rather than N.
+well as the copies, and `collapse_repeats` reduces those walks to one report per fault.
 
 ### The substitution walk is total
 
@@ -555,9 +551,7 @@ well as the copies, so a borrow fault was N + 1 rather than N.
 wherever an instantiated body names one. Both walks are TOTAL over their node union, and
 the fall-through is a hard CE0135. A copy is not an acceptable answer: a node with no arm
 keeps the type parameter, and the compiler's own bookkeeping name -- `T`, `U` -- reaches
-the user (#602). The walk handled a cast and a `??` only, so a cast one level deep
-answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation
-answered CE2002 and a `foreach` item annotation answered CE2001.
+the user.
 
 The walk substitutes every type the SOURCE writes: a cast target, the type arguments of a
 call, a lambda's parameters, return and `| E` channel, a `let` annotation and a `foreach`
@@ -574,44 +568,59 @@ An instantiation that violates a perk constraint is CE4006 ONCE, at the first si
 named it -- the collector records `(span, file)` per instantiation for this -- with a note
 at the constraint, which may stand in another file (a stdlib template's). It is built
 nowhere: not cached, not published, so no template copy is ever cut for it, and the
-whole-program analysis STOPS after the monomorphize step, the CE2095 precedent (#579,
-Ruling 4). The per-unit passes would only have read the same fault back as a CE2008 from
+whole-program analysis STOPS after the monomorphize step, as it does after
+CE2095. The per-unit passes would only have read the same fault back as a CE2008 from
 inside a copy's body.
 
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after
 that -- the tables are the authority on what exists -- gets its copies afterwards, and a
-copy's body can instantiate more functions, so this runs to a fixpoint (#555). A perk
+copy's body can instantiate more functions, so this runs to a fixpoint. A perk
 constraint on such a type reads the templates as well as the registered copies, so its
 answer does not depend on the order the copies were cut in.
 
 ### Example
 
-**Generic definition:**
+**Generic definitions:**
 ```sushi
 struct Pair@(T, U):
     T first
     U second
 
-extend Pair@(T, U) swap@(T, U)() Pair@(U, T):
-    return Result.Ok(Pair(first: self.second, second: self.first))
+extend Pair@(T, U) swapped() Pair@(U, T):
+    return Pair(self.second.clone(), self.first.clone())
+
+fn first_of@(T, U)(Pair@(T, U) p) T:
+    return Result.Ok(p.first.clone())
+
+fn main() i32:
+    let Pair@(i32, string) p = Pair(42, "Mostly Harmless")
+    let Pair@(string, i32) q = p.swapped()
+    println("{q.first} {q.second} {first_of(p).realise(0)}")
+    return Result.Ok(0)
 ```
 
-**After monomorphization for `Pair@(i32, string)`:**
-```sushi
-struct Pair__i32__string:
-    i32 first
-    string second
+**What the program asks for:** the struct instances `Pair@(i32, string)` and
+`Pair@(string, i32)`, the extension copy `swapped` for each of them (the body of one
+copy names the other), and the function instance `first_of@(i32, string)`.
 
-extend Pair__i32__string swap() Pair__string__i32:
-    return Result.Ok(Pair__string__i32(first: self.second, second: self.first))
-```
+### Names of the instances
 
-### Name Mangling
+A TYPE instance is interned under its name with angle brackets, for example
+`Pair<i32, string>`. That name is internal: `display_type()`
+(`semantics/generics/type_display.py`) gives the `@(...)` spelling back for a diagnostic.
+The LLVM struct of the instance carries the same name.
 
-- `Pair@(i32, string)` → `Pair__i32__string`
-- `List@(T)` → `List__i32`, `List__string`
-- Nested: `Maybe@(Maybe@(i32))` → `Maybe__Maybe__i32`
+A FUNCTION instance gets a mangled symbol (`semantics/generics/name_mangling.py`):
+
+| Instance | Symbol |
+|---|---|
+| `first_of@(i32, string)` in unit `main` | `main$first_of__i32_string` (`mangle_function_name`, with the unit prefix) |
+| `swapped` on `Pair@(i32, string)` | `Pair__i32_string_swapped` (`extension_symbol`) |
+
+An extension method with its own type parameters adds `__` and those type arguments to
+the extension symbol. A pack instance adds `.pack` and the pack arity, for example
+`.pack2`.
 
 ## The `resolve` pass: field and variant type resolution
 
@@ -634,7 +643,7 @@ already in the tables.
    its record.
 4. **Spelled Result returns** — `resolve_function_returns()` interns each
    `fn f() Result@(T, E)` return through `intern_wrapper_enum` and stamps the enum on
-   `FuncDef.resolved_result` (#857). `ret` keeps the type as written, because the
+   `FuncDef.resolved_result`. `ret` keeps the type as written, because the
    typecheck pass rules on a qualified name in it. The backend reads the stamp through
    `declared_result_of`, its one reader of a function's Result.
 
@@ -677,7 +686,7 @@ resolved field types, and BEFORE `derive`, because a derived hash walks a type b
 It is also the one pass that STOPS the analysis on failure: every later pass assumes a
 finitely-sized type.
 
-The pass owns EVERY inline cycle (#677): a struct field, a fixed-size array element and an
+The pass owns EVERY inline cycle: a struct field, a fixed-size array element and an
 enum payload are all stored inline. A pure enum cycle reads the same `CE2095` as the struct
 twin -- once per cycle, at the first member's declaration, with the chain:
 
@@ -691,10 +700,8 @@ enum B:
 ```
 
 The walk visits every struct before any enum, so a mixed cycle is reported at its struct
-whatever the declaration order. An enum cycle used to be `CE2052` from the `derive` pass: a
-file name with no caret, once per member, and once more for every instance a call site
-solved late. `CE2052` and `CE0128` (the sort's internal guard) are retired, and the
-`derive` pass has no sort left: the table it writes holds a lazy emitter per type, and no
+whatever the declaration order. The
+`derive` pass has no sort: the table it writes holds a lazy emitter per type, and no
 reader depends on an order.
 
 A late-interned instance -- a `Tree@(bool)` a call site solves from an argument and no
@@ -709,7 +716,8 @@ from the new roots finds every new cycle and repeats none.
 
 ### Purpose
 
-Auto-generate `.hash() -> u64` and `.clone()` for all types.
+Derive `.hash() -> u64` and `.clone()` for each type that can have them. The rules for
+`hash()` are below.
 
 ### Algorithm
 
@@ -747,9 +755,9 @@ return hash
 ### Where a derived method lives
 
 The pass writes each method into `SymbolTables.derived_methods`, which belongs to ONE
-compilation (#601). It has to: the method closes over the type it was derived for, type
+compilation. It has to: the method closes over the type it was derived for, type
 identity is nominal, and two programs compiled in one process that each declare a `Point`
-name one key -- so a module-level table handed the second program the first one's emitter,
+name one key -- so a module-level table would hand the second program the first one's emitter,
 closed over the first one's fields, and the first one's answer to "can this be hashed".
 Any host that compiles twice in a process reaches that, the pytest layer and a future
 language server included.
@@ -774,25 +782,28 @@ kinds: `UNHASHABLE_KINDS` names every kind a derived hash cannot read, `WALKED_K
 names the kinds that answer through what they hold, and `HASHABLE_KINDS` names the
 primitives. `tests/unit/test_hashability_dispatch_is_total.py` is the gate.
 
-`LET_THROUGH_KINDS` is the fourth set, and `PointerType` is all of it. A pointer has no
-spelling in Sushi and reaches the walk only in a container the compiler synthesizes --
-`List@(T).data`, `Own@(T).value` -- and letting it through is what gives those two a
-derived hash. That hash cannot be emitted: `Own@(i32).hash()` reads CE0052. Refusing it
-is therefore right, but it takes the derived hash off every container, so it is a ruling
-of its own and is named here instead of left to fall through in silence.
+`LET_THROUGH_KINDS` is the fourth set, and it is EMPTY. A kind belongs in
+`UNHASHABLE_KINDS` or in a walk, never in a hole: a kind that no set names would fall out
+of the walk and read as hashable, and the backend could then not emit the hash.
 
-The tables have to be explicit. Each of the three walks used to carry its own chain of
-`isinstance` arms, and a kind no chain named fell out of the loop untouched -- which
-reads as hashable. A struct with a `fn(i32) -> i32` field therefore got a `hash()` the
-backend could not emit, and the user read CE0052: an internal error, with no file and no
-line, about a program that was theirs to fix (#618).
+A container answers from what it HOLDS, never from its backing fields.
+`CONTAINER_HASH_KINDS` names the containers that hash and the backend emitter kind of
+each (`container_hash_kind`): a `List@(T)` hashes its elements and then its length, and an
+`Own@(T)` hashes its payload, so two allocations of one value hash alike. A
+`HashMap@(K, V)` has NO derived hash, because the order of its slots is not the order of
+its entries.
+
+A `Hashable` implementation is the override. `hash_override_of` reads the
+perk-implementation tables, and an override wins at every held position: a struct field,
+an enum payload, an array element, a `List` or `Own` element and a map key. The backend
+reads the same order in `emit_value_hash` (`backend/types/value_hash.py`): the override,
+then the derived method, then the primitive built-ins.
 
 A type that derives no `hash()` has no such method, so a `.hash()` call on it is CE2008
 at the call site, with the line and the caret.
 
-### Limitations
-
-Nested arrays cannot be hashed (type system constraint).
+`.clone()` is refused on a type that declares a resource or holds one (CE2431); the
+escape is `.share()`.
 
 ## The `shadowing` pass: an extension may not shadow a built-in
 
@@ -800,7 +811,7 @@ Nested arrays cannot be hashed (type system constraint).
 
 All three resolution layers pick a built-in method before an extension method, so an
 extension whose name collides with one could never be called. That is `CE2097` rather than
-silent dead code (#239).
+silent dead code.
 
 Placement is load-bearing at BOTH ends: after `derive`, which registers the struct and enum
 `hash`/`clone`, and after the generic-extension table merge, which is where a monomorphized
@@ -814,7 +825,7 @@ extension table. It is the sanctioned way to replace a built-in. See
 
 **File:** `semantics/passes/borrow/destroy_effects.py`
 
-Which functions destroy a `poke` parameter, transitively (#168). The `borrow` pass reads
+Which functions destroy a `poke` parameter, transitively. The `borrow` pass reads
 the summary to decide whether a call invalidates the caller's value.
 
 Computed ONCE over EVERY unit, because `borrow` runs per unit: a per-unit summary would
@@ -826,65 +837,44 @@ make a cross-unit callee invisible.
 
 ### Purpose
 
-Track variable lifetimes, scopes, and ownership.
+Track declarations and block scopes, and find the kind of each bare name. Moves, borrows
+and destroyed values are the work of the `borrow` pass.
 
 ### Responsibilities
 
-1. **Variable Declarations**: Register all `let` declarations
-2. **Scope Analysis**: Track block-level scopes
-3. **Move Semantics**: Mark variables as moved
-4. **Usage Tracking**: Detect undefined variables
-5. **What KIND of name is this**: the bare-name ladder, from `semantics/name_ladder.py`
+1. **Declarations**: register each `let`, parameter and pattern binding in its scope
+2. **Scopes**: track block-level scopes
+3. **Names**: report a name that reaches nothing (CE1001)
+4. **What KIND of name is this**: the bare-name ladder, from `semantics/name_ladder.py`
 
 ### The bare-name ladder
 
 `docs/design/unit-namespaces.md` section 8 gives an unqualified name one ordered ladder
 over the KINDS it can reach: a local, a constant, a registry constant, a function, a
 namespace, a type, nothing. This pass and the typecheck pass both walk it, and the ORDER
-lives in `semantics/name_ladder.py` so neither can drift from the other -- which is what
-happened at the type rung, where an enum name in a value position escaped both passes
-and died in the emitter as `CE0055` (#600). Each pass answers one question per rung with
+lives in `semantics/name_ladder.py` so neither can drift from the other. Each pass answers one question per rung with
 its own lookups (`ScopeAnalyzer.is_local` … `is_type`, and `visitor._InferenceRungs`),
 `classify` walks them, and `tests/unit/test_bare_name_ladder_is_one.py` is the gate.
 
 This pass owns the two rungs that are not values: a type name in a value position or
 under a borrow is `CE2105`, and a name that reaches nothing is `CE1001`.
 
-### Variable States
-
-- **Declared**: Variable exists in scope
-- **Moved**: Ownership transferred, cannot use
-- **Destroyed**: Explicitly destroyed via `.destroy()`
-- **Borrowed**: Temporarily passed by reference
-
-### Examples
-
-**Valid:**
-```sushi
-let i32 x = 42
-let i32 y = x  # OK: primitives copy
-```
-
-**Invalid:**
-```sushi
-let i32[] arr = from([1, 2, 3])
-let i32[] moved = arr
-println(arr.len())  # ERROR CE2405: Use of moved variable 'arr'
-```
-
 ### Scope Tracking
 
+<!-- docs-sweep: error CE1001 -->
 ```sushi
 fn example() i32:
-    let i32 x = 1  # Scope 0 (function)
+    let i32 x = 1          # scope 0 (the function)
 
     if (true):
-        let i32 y = 2  # Scope 1 (if block)
-        x := 3         # OK: x from outer scope
+        let i32 y = 2      # scope 1 (the if block)
+        x := y + 3         # OK: x is in an outer scope
 
-    # println(y)  # ERROR CE1003: Undefined variable 'y'
+    println(y)             # CE1001: use of undeclared identifier 'y'
+    return Result.Ok(x)
 
-    return Result.Ok(0)
+fn main() i32:
+    return Result.Ok(example().realise(0))
 ```
 
 ## The `typecheck` pass: type validation
@@ -895,88 +885,98 @@ fn example() i32:
 
 Ensure all expressions and statements are type-correct.
 
-### Modular Type Checking
+### Three phases per statement
 
-**types/utils.py** - Type utilities
-- `is_numeric()`, `is_integer()`, `is_float()`
-- Type comparison and normalization
+The pass checks each statement in three phases, in this order:
 
-**types/inference.py** - Type inference
-- Infer types from literals
-- Propagate types through expressions
+1. **resolution** (`types/resolution.py`): a written type becomes a resolved type.
+2. **propagation** (`types/propagation.py`): a declared type goes down into the value,
+   and the pass stamps `resolved_enum_type` and `resolved_struct_type` for the backend.
+   Propagation MUST run before validation.
+3. **validation** (`types/compatibility.py`, `types/expressions.py`,
+   `types/result_validation.py`): the value is checked against the type.
 
-**FFI call-site resolution** - `type_visitor.py::visit_dotcall` (both the
-`ExpressionValidator` and `TypeInferenceVisitor`) has a new first branch: when the
-receiver is a `Name` that is a registered external namespace **and not a bound
-local** (locals shadow namespaces), it resolves the `ExternalSig`, validates
-argument count/types, sets the inferred return type to the raw C type (no Result
-wrapping), and annotates the node with `external_ref = (ns, name)` for the
-backend. `??` on a raw foreign value therefore falls out as the existing
-`CE2507`.
+### Modules
 
-**types/compatibility.py** - Type compatibility
-- Check if type A can be assigned to type B
-- Handle Result@(T) unwrapping
+All paths are under `semantics/passes/`.
 
-**types/expressions.py** - Expression type checking
-- Binary operators (+, -, *, /, %, ==, !=, <, >, and, or)
-- Unary operators (-, not)
-- Function calls
-- Array access
-- Struct field access
+| Module | What it holds |
+|---|---|
+| `types/__init__.py` | `TypeValidator`, the entry of the pass; `ReadOnlyInferrer` for the early passes |
+| `types/visit/` | the three visitors, one module each: `statements.py`, `expressions.py`, `inference.py` (what an expression yields), and `helpers.py` |
+| `types/visitor.py` | a facade that re-exports the visitors for the modules outside the pass |
+| `types/arguments.py` | `check_arguments`: the one argument check (the count, then each argument) |
+| `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
+| `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
+| `types/expressions.py` | operators, and the three closed operand rules: `reject_non_bool_condition`, `reject_non_numeric_arithmetic`, `reject_uncomparable_operands` |
+| `types/statements.py` | `let`, rebind, `if`, `while`, `foreach`, `return` |
+| `types/control_flow.py`, `types/signatures.py` | the return paths (CE0107, CE0140) and the declaration signatures |
+| `types/matching.py` | patterns and exhaustiveness |
+| `types/arrays.py` | the built-in array methods, and `reject_non_i32` for an index, a count or a range bound |
+| `types/constants.py` | constant definitions |
+| `types/public_signatures.py` | the fence over every public signature (CE3009, CE3010, the `ptr` fence) |
+| `types/visibility.py` | the pass's view of the visibility seam |
+| `types/qualified.py` | a type name behind an alias (`geo.Vec`) |
+| `types/externals.py` | the FFI checks (the `externs` and `ffi-clash` passes also run from here) |
+| `types/perks.py`, `types/field_matcher.py`, `types/inference.py`, `types/utils.py` | perk checks, named struct arguments, inference helpers, shared helpers |
 
-**types/matching.py** - Pattern match validation
-- Exhaustiveness checking
-- Variant data extraction
-- Nested pattern support
+The type predicates (`is_numeric_type`, `is_integer_type`, `is_float_type` and the others)
+are in `semantics/type_predicates.py`.
 
-**types/calls.py** - Function call validation
-- Argument count matching
-- Parameter type compatibility
-- Return type inference
+**FFI call-site resolution.** `TypeValidator._resolve_external_call` asks the namespace
+table (`resolve_namespaced`) for the name behind the dot. When the binding is an extern,
+it stamps `external_ref = (provider origin, name)` on the node for the backend and gives
+back the `ExternalSig`. The call yields the raw C type, with no Result around it, so `??`
+on a foreign value is `CE2507`.
 
-**types/statements.py** - Statement validation
-- Variable declarations
-- Rebinding
-- Control flow (if, while, foreach)
-- Return statements
+### Return paths
+
+A body that can reach its end with no `return` is `CE0107`: a `~` function too, a `| E`
+extension or perk method, and a lambda block body. There is no implicit `Result.Ok`. A
+bare `~` extension or perk method has no Result and may reach its end.
+
+A statement after a statement that always ends the path is `CE0140`: one diagnostic for
+each block, at the first dead statement, with a note at the statement that ends the path.
+
+<!-- docs-sweep: error CE0107 -->
+```sushi
+fn sign(i32 x) i32:        # CE0107: the path with x == 0 has no return
+    if (x > 0):
+        return Result.Ok(1)
+    elif (x < 0):
+        return Result.Ok(-1)
+
+fn main() i32:
+    return Result.Ok(0)
+    println("never")       # CE0140: unreachable statement
+```
 
 ### A field the type does not declare
 
 A name behind a VALUE's dot is a field of that value's type, and one the type does not
-declare is `CE2106`, at the read. The pass used to walk past it entirely: the read reached
-codegen, and the backend was the first thing to notice, answering `CE0029` -- tier 1, no
-file, no line, no caret, and the note that says the fault is a bug in the compiler, for
-what is a typo (#630). The four backend `CE0029` sites stay where they are and go back to
-being the internal backstop they read as.
+declare is `CE2106`, at the read. The four backend `CE0029` sites are an internal
+backstop that no program reaches.
 
-A receiver that carries NO field reads the same rule (#661). An array, a primitive, a
+A receiver that carries NO field reads the same rule. An array, a primitive, a
 string, a closure and a `ptr` declare nothing, so every name behind their dot is a miss.
-They used to reach the backend too, and there the SHAPE of the read picked the internal
-code: `CE0031` off a name or an assignment target, `CE0044` through a field, `CE0043`
-through an array element. `_field_names_of` (`passes/types/expressions.py`) is the one
+`_field_names_of` (`passes/types/expressions.py`) is the one
 answer to "which fields does this receiver declare": a struct answers its own list, a
 fieldless kind answers the empty list, and everything else answers None.
 
-None means the position is not this rule's. A namespace member, a bare enum variant
-(#545), an unresolved name, a generic reference and a receiver the pass could not type all
+None means the position is not this rule's. A namespace member, a bare enum variant,
+an unresolved name, a generic reference and a receiver the pass could not type all
 belong elsewhere, and a false `CE2106` there would be worse than the internal error it
 replaces.
 
-An ENUM receiver answers the empty list too (#666). #661 had left it out, and that one was
-worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend
-unwrapped the receiver to its payload struct and read field 0, which is the TAG.
-`pts.get(0).x` compiled clean and printed 0 where the element held 11, with no diagnostic
-of any kind, and a test fixture had frozen the wrong number. An enum carries variants, and
+An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
+`CE2106`. An enum carries variants, and
 a variant is reached by a pattern and not by a dot, so the note says that and the help says
 how to get at the value: `??`, `.realise(default)` or `match` for a built-in wrapper
-(`is_builtin_wrapper_enum`), `match` for a user enum. The refusal closes the three tier-1
-codes the read used to reach -- `CE0031` off a name, `CE0029` through a wrapper the backend
-had already unwrapped, `CE0067` off a call. A `Maybe@(T)` gets no implicit unwrap: nothing
-else in the language has one, it reads against the rule that a condition is a bool and
-nothing else (#522/#532), and the `None` arm has no answer.
+(`is_builtin_wrapper_enum`), `match` for a user enum. A `Maybe@(T)` gets no implicit
+unwrap: nothing else in the language has one, it reads against the rule that a condition
+is a bool and nothing else, and the `None` arm has no answer.
 
-A METHOD is not a field, and a bound-method value is deferred to Tier 2, so `v.probe` with
+A METHOD is not a field, and a bound-method value is not supported yet, so `v.probe` with
 no parentheses is the same refusal with a note that says so. `_is_a_method` asks the
 extension table for what the program declares and `builtin_method_exists` for what the
 compiler declares, so `s.len` reads the same note. Otherwise the help quotes
@@ -996,7 +996,7 @@ let i32 y = x + 10  # OK: i32 + i32 → i32
 **Invalid:**
 ```sushi
 let i32 x = 42
-let i32 y = x + "hello"  # ERROR CE2xxx: Cannot add i32 and string
+let i32 y = x + "hello"  # CE2509: operator '+' cannot be used with string types
 ```
 
 **Result Handling:**
@@ -1004,7 +1004,7 @@ let i32 y = x + "hello"  # ERROR CE2xxx: Cannot add i32 and string
 fn get_value() i32:
     return Result.Ok(42)
 
-# ERROR CE2505: Cannot assign Result@(i32) to i32
+# CE2505: cannot assign Result@(T, E) to non-Result variable without handling
 let i32 x = get_value()
 
 # OK: Use .realise()
@@ -1024,12 +1024,11 @@ through `_validate_function` -- the `annotate` hook -- like every other function
 the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
 only what no lifted function carries: the function TYPE the enclosing expression needs,
 and the capture rules (CE2094), because lift consumes the capture list into the
-environment struct. Walking the body in both places checked it twice and reported every
-fault in it twice (#629).
+environment struct. So the body is checked once, and a fault in it is reported once.
 
 The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
-hook is what types a `Lambda` node, so a nested lambda lifted first carried no parameter
-types, no captures and no channel, and its own body was never checked.
+hook is what types a `Lambda` node, so a nested lambda lifted first would carry no parameter
+types, no captures and no channel, and its own body would not be checked.
 
 The environment parameter is a `poke` borrow, never a `peek` one. See
 `docs/design/closures.md`.
@@ -1044,7 +1043,7 @@ Enforce memory safety rules for references.
 
 ### Rules
 
-1. **A reference-typed `let` is a checked borrow binding (#409; CE2413 retired)**
+1. **A reference-typed `let` is a checked borrow binding**
 
 ```sushi
 let i32 x = 42
@@ -1054,11 +1053,13 @@ r := r + 1               # x is 43
 
 `bind_let_reference` (`passes/borrow/bindings.py`) registers the binding with its full
 `ReferenceType`, freezes the owner (CE2412 on a later mutation), and refuses a second
-`poke` of the same owner (CE2403) or a `peek`/`poke` mix (CE2407). Before #409 the form
-was rejected as CE2413 rather than compiled as an unchecked
-alias.
+`poke` of the same owner (CE2403) or a `peek`/`poke` mix (CE2407). A write through a
+`peek` binding is CE2408.
 
-2. **Cannot move/rebind while borrowed**
+2. **A call borrow ends with the call; a `let`-borrow freezes its owner**
+
+A `peek` or `poke` argument borrows for the call only, so the owner is free again after
+the call:
 
 ```sushi
 fn borrow(peek i32 x) i32:
@@ -1066,45 +1067,79 @@ fn borrow(peek i32 x) i32:
 
 fn main() i32:
     let i32 num = 42
-    let i32 borrowed = borrow(peek num).realise(0)
-    # num := 50  # ERROR CE1007: Cannot rebind while borrowed
+    let i32 got = borrow(peek num).realise(0)
+    num := 50              # OK: the borrow ended with the call
+    println("{num} {got}")
     return Result.Ok(0)
 ```
 
-3. **Cannot borrow temporaries**
+A `let` that reads through an owner is a borrow for the rest of its block. A change to
+the owner while that borrow lives is CE2412:
 
+<!-- docs-sweep: error CE2412 -->
 ```sushi
-# ERROR: Cannot borrow temporary expression
-# let i32 x = func(peek (5 + 3))
+struct Wrapper:
+    i32[] items
 
-# OK: Use variable
-let i32 temp = 5 + 3
-let i32 x = func(peek temp)
+fn main() i32:
+    let Wrapper w = Wrapper(items: from([1, 2, 3]))
+    let i32[] view = w.items
+    w.items.push(4)        # CE2412: cannot mutate 'w' while 'view' borrows from it
+    println(view.len())
+    return Result.Ok(0)
 ```
 
-4. **Use-after-destroy detection**
+3. **A borrow needs a stable address**
+
+```sushi
+fn func(peek i32 x) i32:
+    return Result.Ok(x)
+
+# CE2404: cannot borrow '(5 + 3)': expression has no stable address
+# let i32 x = func(peek (5 + 3)).realise(0)
+
+# OK: borrow a variable
+let i32 temp = 5 + 3
+let i32 x = func(peek temp).realise(0)
+```
+
+4. **Use after a move, use after a destroy**
+
+```sushi
+let i32[] arr = from([1, 2, 3])
+let i32[] moved = arr
+println(arr.len())         # CE2405: cannot borrow moved variable 'arr'
+```
 
 ```sushi
 let i32[] arr = from([1, 2, 3])
 arr.destroy()
-# println(arr.len())  # ERROR CE2406: Use of destroyed variable 'arr'
+println(arr.len())         # CE2406: use of destroyed variable 'arr'
 ```
+
+The second fragment also gives CE2024 ("use of destroyed dynamic array") from the
+`typecheck` pass, at the same position. Thus one fault gives two diagnostics today.
 
 5. **A `let` reading through an owner BORROWS, and consuming or invalidating that borrow is an
    error (CE2411, CE2412)**
 
 A `let` does not always take ownership of what it binds. Its OWNERSHIP is derived from the
-*provenance* of its source expression -- one of three: `OWNED` (a bare local or a by-value
-parameter), `BORROWED` (a `match`/`foreach` binding, a `peek`/`poke` parameter, or any read
-through a still-live owner -- a field, an index, a container get-out), or `FRESH` (a constructor, a
-call result, `.clone()`, a literal). See `docs/design/ownership-conventions.md` for the full
-classification table.
+*provenance* of its source expression -- one of three: `OWNED` (a bare local, or a `nom`
+parameter), `BORROWED` (a plain, `peek` or `poke` parameter, a `match`/`foreach` binding,
+or any read through a still-live owner -- a field, an index, a container get-out), or
+`FRESH` (a constructor, a call result, `.clone()`, a literal). See
+`docs/design/ownership-conventions.md` for the full classification table.
 
+<!-- docs-sweep: error CE2411 -->
 ```sushi
 struct Wrapper:
     i32[] items
 
-fn take(i32[] xs) ~:
+fn look(i32[] xs) ~:
+    println("{xs.len()}")
+    return Result.Ok(~)
+
+fn take(nom i32[] xs) ~:
     println("{xs.len()}")
     return Result.Ok(~)
 
@@ -1112,16 +1147,15 @@ fn main() i32:
     let Wrapper w = Wrapper(items: from([1, 2, 3]))
     let i32[] borrowed = w.items  # borrowed BORROWS from w; no allocation happens
 
-    # ERROR CE2411: cannot consume 'borrowed': another owner keeps this value
-    # take(borrowed)
-
-    take(borrowed.clone())  # OK: an independent copy
+    look(borrowed)                # OK: a plain parameter is a borrow too
+    take(nom borrowed.clone())    # OK: the callee takes an independent copy
+    take(nom borrowed)            # CE2411: cannot consume 'borrowed': another owner keeps this value
     return Result.Ok(0)
 ```
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`
-while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a by-value sink is
-**CE2411**. A value binding and a reference binding (rule 1) are tracked the same way; the
+while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a `nom`
+parameter or another consuming position is **CE2411**. A value binding and a reference binding (rule 1) are tracked the same way; the
 reference binding adds the WRITE path -- a store through it reaches the owner.
 
 6. **A loop body is checked in rounds, and `break` / `continue` end a path**
@@ -1145,45 +1179,30 @@ no second CE2405 in round 2.
 
 ### Borrow Tracking
 
-**Data structures:**
-```python
-active_borrows: Dict[str, BorrowId] = {}
-destroyed_variables: Set[str] = set()
-```
+`BorrowChecker` (`passes/borrow/__init__.py`) keeps the state of one callable:
 
-**On borrow:**
-```python
-if var in active_borrows:
-    raise BorrowError("Already borrowed")
-active_borrows[var] = borrow_id
-```
+- `borrow_state: Dict[str, BorrowState]`: one record for each name
+  (`passes/borrow/state.py`). A record holds the `peek` and `poke` counts, `is_moved`,
+  `is_destroyed`, the owner a `let`-borrow reads out of (`borrows_from`), where the name
+  was moved or invalidated, and the kind of the name (a `let`-borrow, a borrow parameter,
+  a unit variable, main's `args`).
+- `active_borrows: Set[str]`: the names that a call borrows in the current statement. It
+  is cleared for each statement.
+- `_scope_binding_borrows`: one frame for each open block, so a `let`-borrow ends with its
+  block.
+- `callee_modes`: the parameter modes of each callee, from `semantics/param_modes.py`.
 
-**On borrow end (function return):**
-```python
-del active_borrows[var]
-```
-
-**On destroy:**
-```python
-destroyed_variables.add(var)
-```
-
-**On usage:**
-```python
-if var in destroyed_variables:
-    raise UseAfterDestroyError("CE2406")
-if var in moved_variables:
-    raise UseAfterMoveError("CE2405")
-```
+The checker does not raise. Each finding goes through the reporter as a registered code
+(`self.err.emit(...)`), so one run reports every fault.
 
 ## Pass Interdependencies
 
 ```
 whole program, once:
 
-  collect → docs → externs → libraries → namespaces → ffi-clash → entrypoint
-     → instantiate → monomorphize → resolve → finite-types → derive → shadowing
-     → effects
+  collect → docs → unused → externs → libraries → namespaces → ffi-clash
+     → entrypoint → instantiate → monomorphize → resolve → finite-types → derive
+     → shadowing → effects
 
 then per unit, in one loop:
 
@@ -1194,7 +1213,7 @@ Each turn of that loop reports into a reporter of its own, and `_merge_unit` dra
 into the program reporter through `in_source_order` (`internals/report.py`). The four
 passes each walk the unit whole, so what they emit is in PASS order and a reader wants
 the FILE: a fault the `lift` pass found in a lambda body would otherwise stand behind
-every fault the `typecheck` pass found (#629). A file keeps the place its first
+every fault the `typecheck` pass found. A file keeps the place its first
 diagnostic gave it -- the order the passes reached the files in is information, and
 alphabetical is not -- and the sort is stable, so two findings on one caret keep pass
 order.
@@ -1203,6 +1222,8 @@ order.
 - `docs` needs `collect` (the merged unit table), and must run BEFORE `instantiate` and
   `monomorphize`, or one mistake in a generic's block is reported once per instantiation,
   and `--warn-missing-docs` demands a block on every monomorphized clone
+- `unused` needs `collect`, and runs before `libraries` and `monomorphize`, because it reads
+  the WRITTEN declarations of each unit
 - `externs`, `libraries` and `entrypoint` need `collect` (the tables and the signatures)
 - `namespaces` needs `collect` (a unit's declarations, the FFI table, the registry) and
   `libraries` (a binary library's declarations arrive from a manifest and nowhere else);
@@ -1226,17 +1247,21 @@ order.
 ## Error Examples by Pass
 
 **`scope`:**
-- CE1003: Undefined variable
-- CE2405: Use of moved variable
+- CE1001: use of undeclared identifier
+- CE2105: a type name in a value position
 
 **`typecheck`:**
-- CE2xxx: Type mismatch
+- CE2002 and the other CE2xxx codes: type mismatch
 - CE2009: wrong argument count, `.realise()` included
-- CE2505: Assigning Result@(T) without handling
+- CE2505: cannot assign Result@(T, E) to non-Result variable without handling
+- CE0107: a path with no `return`; CE0140: an unreachable statement
 
 **`borrow`:**
-- CE1007: Cannot rebind while borrowed
-- CE2406: Use of destroyed variable
+- CE2405: cannot borrow moved variable
+- CE2406: use of destroyed variable
+- CE2411: cannot consume a borrow
+- CE2412: cannot mutate an owner while a `let`-borrow lives
+- CE2404: a borrow of an expression with no stable address
 
 ---
 

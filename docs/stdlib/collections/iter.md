@@ -83,7 +83,7 @@ with `match`, or with `.realise(default)`.
 
 ## Free functions
 
-### `map@(T, U)(List@(T) xs, fn(T) -> U f) -> List@(U)`
+### `map@(T, U)(List@(T) xs, fn(T) -> U f) -> List@(U) | StdError`
 
 Apply `f` to every element, collecting the results into a new list.
 
@@ -101,7 +101,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T)`
+### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T) | StdError`
 
 Keep the elements for which `pred` returns `true`.
 
@@ -120,7 +120,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U`
+### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U | StdError`
 
 Reduce the list left-to-right, threading `acc` through `f`.
 

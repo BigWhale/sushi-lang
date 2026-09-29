@@ -32,8 +32,12 @@ print it. That's the twist worth slowing down for.
 ## Everything returns a `Result`
 
 In [Chapter 1](01-getting-started.md) we saw `main` end with `return Result.Ok(0)`. That
-wasn't special to `main`. **Every** Sushi function returns a `Result` — a value that is
-either a success (`Result.Ok(value)`) or a failure (`Result.Err(error)`).
+wasn't special to `main`. **Every** function that you declare with `fn` returns a
+`Result` — a value that is either a success (`Result.Ok(value)`) or a failure
+(`Result.Err(error)`). There are two exceptions, and both come later: a *bare* extension
+method ([Chapter 11](11-perks-and-extensions.md)) returns its value directly, and a C
+function that you call through FFI ([Chapter 14](14-stdlib-ffi-libraries.md)) returns a
+raw C value.
 
 When you write a function whose return type looks like a plain `i32`:
 
@@ -60,7 +64,7 @@ now we just need to *consume* the results.
 A function returns a `Result`, so the caller has to open the box. There's a tempting
 operator, `??`, that unwraps it in one character — but using `??` inside `main` triggers a
 warning (CW2511), so in `main` we use safer, explicit tools instead. (`??` is perfectly
-fine in *other* functions, as you'll see in the next chapter.)
+fine in *other* functions, as you will see in [Chapter 6](06-error-handling.md).)
 
 Two everyday techniques work well in `main`:
 
@@ -89,6 +93,41 @@ branch runs. The last line shows `.realise(-1)` standing in `-1` because the div
 failed. At no point did we touch `??`, and at no point could we have forgotten the failure
 case.
 
+## Parameter modes
+
+A parameter can have a **mode**. The mode tells who owns the argument during and after the
+call. There are four:
+
+| Declaration | Call | What the function gets |
+|---|---|---|
+| `string s` | `f(s)` | A **borrow** (the default). The function can read the value. The caller keeps it. |
+| `peek string s` | `f(peek s)` | A read-only borrow through a pointer. |
+| `poke i32 n` | `f(poke n)` | A read-write borrow through a pointer. A change is visible to the caller. |
+| `nom string s` | `f(nom s)` | The value itself. The function owns it now, and the caller cannot use it again. |
+
+A mode is written at both ends: in the declaration and at the call. If the two do not
+agree, the compiler refuses the call and tells you which marker to add.
+
+```sushi
+--8<-- "docs/tutorial/examples/04-functions/parameter-modes.sushi"
+```
+
+Output:
+
+```
+Crew size: 2
+Still ours: 2
+Jumps: 2
+Boarding: Arthur
+Boarding: Ford
+```
+
+`count` borrows `crew`, so `main` can use `crew` after the call. `add_one` changes the
+caller's `jumps` through `poke`. `board` takes `crew` with `nom`: after `board(nom crew)`,
+a use of `crew` in `main` is the error `CE2405` ("cannot borrow moved variable"). For most
+parameters, the default borrow is correct. [Chapter 12](12-memory-management.md) explains
+ownership in full.
+
 ## Custom error types
 
 `StdError` is the default, but a function can declare its own error type with the
@@ -112,14 +151,11 @@ This is only a taste — designing error types, propagating them with `??`, and 
 matching on the specific failure is the subject of
 [Chapter 6](06-error-handling.md).
 
-## `public` functions
+## Public and private declarations
 
-By default a function is private to its file. Marking it `public` makes it part of the
-file's exported surface, so other units in a multi-file project can call it. The syntax is
-just the keyword `public` in front of `fn`:
-
-The same marker, and the same default, apply to a `const`, a `struct`, an `enum` and a
-`perk` — five declarations, all private until they say otherwise.
+By default a function is private to its **unit**. A unit is one source file. Marking the
+function `public` makes it part of the unit's exported surface, so other units in a
+multi-file project can call it. The syntax is the keyword `public` in front of `fn`:
 
 ```sushi
 --8<-- "docs/tutorial/examples/04-functions/public-fn.sushi"
@@ -135,6 +171,9 @@ perimeter: 26
 In a single-file program like this, `public` makes no practical difference — but it's the
 habit you'll want once your programs grow past one file.
 
+The same marker, and the same default, apply to a `const`, a `var`, a `struct`, an `enum`
+and a `perk`. These six declarations are all private until they say otherwise.
+
 One rule to know before you get there: a **public thing may not hand out a private one**.
 If `public fn area()` returns a `Rect`, then `Rect` has to be `public` too, or the compiler
 refuses the signature — a caller in another unit would receive a type it cannot even name.
@@ -142,15 +181,17 @@ refuses the signature — a caller in another unit would receive a type it canno
 ## What you learned
 
 - Declare functions with `fn name(Type param, ...) ReturnType:` and call them by name.
-- **Every** function returns a `Result`. A bare return type like `i32` is shorthand for
+- Every `fn` returns a `Result`. A bare return type like `i32` is shorthand for
   `Result@(i32, StdError)`, so every path must end in `Result.Ok(...)` or `Result.Err(...)`.
+- A parameter is a borrow by default. `peek` and `poke` borrow through a pointer, and `nom`
+  gives the value to the function. The mode is written at both ends.
 - In `main`, consume a `Result` without `??`: use `if (result.is_ok()):` / `else:` and
   `.realise(default)`.
 - Declare a custom error type with `fn foo() T | ErrorType` — explored fully in
   [Chapter 6](06-error-handling.md).
 - `public fn` exports a function for use by other units, and `public` does the same for a
-  `const`, a `struct`, an `enum` and a `perk`. A public signature may only name public
-  types.
+  `const`, a `var`, a `struct`, an `enum` and a `perk`. A public signature may only name
+  public types.
 
 Functions give us reusable building blocks. Next we look closely at the type we've been
 printing all along: text. On to [Strings](05-strings.md).

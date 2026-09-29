@@ -38,7 +38,7 @@ public struct TcpListener:
 use <net/tcp>
 
 fn serve(nom TcpStream client) ~:
-    println("serving")
+    println("serving: {client.is_open()}")
     return Result.Ok(~)          # client closes here
 
 fn main() i32:
@@ -51,11 +51,11 @@ fn main() i32:
 
 ## Constructors
 
-### `listen(string host, i32 port, i32 backlog) -> Result@(TcpListener, NetError)`
+### `listen(string host, i32 port, i32 backlog) TcpListener | NetError`
 
 Bind a listening socket. Port 0 asks the kernel to choose; `l.local_port()` reads it back.
 
-### `connect(string host, i32 port) -> Result@(TcpStream, NetError)`
+### `connect(string host, i32 port) TcpStream | NetError`
 
 Connect to a host and port. There is no connect timeout — an unreachable address waits for the kernel.
 
@@ -134,6 +134,11 @@ Bound how long a call may wait. **Set these before anything blocks.** Without th
 ### `s.peer_ip()`, `s.peer_port()`, `s.local_port()`, `l.local_port()`
 
 Who is at each end. All four carry the `| NetError` channel. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
+
+### `s.is_open() bool` and `l.is_open() bool`
+
+Whether the handle still holds an open descriptor. A handle that `listen()` or `connect()`
+answered is open; a placeholder such as `TcpListener(-1)` is not.
 
 ### `s.close(nom self) ~ | NetError` and `l.close(nom self) ~ | NetError`
 

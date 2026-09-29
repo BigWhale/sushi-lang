@@ -1,5 +1,7 @@
 # io/contracts
 
+[← Back to Standard Library](../../standard-library.md)
+
 `Reader`, `Writer` and `Seek`: what a handle can DO, named apart from what a handle IS.
 
 ## Import
@@ -61,7 +63,7 @@ Two things follow for a caller:
 - **A handle you write through must be writable storage**: a `let` local, a `poke`
   parameter, a `nom` or `poke` match binding (`Result.Ok(nom f) -> f.write(...)`), or a
   unit variable. The console handles are `public var File` declarations in `<io/fs>`,
-  which is what gives `stdout.write(...)` an address to reach (the ruling on #546;
+  which is what gives `stdout.write(...)` an address to reach (see
   `docs/design/unit-storage.md`).
 
 ## Why every contract method answers IoError
@@ -117,8 +119,8 @@ already reached the kernel by the time it returns. The call is in the contract b
 buffered writer is where it earns its name, and a caller that moves up a layer should not
 have to add it back.
 
-Getting bytes onto the DISK is `fsync`, a much stronger promise, and not what `flush` ever
-meant.
+Getting bytes onto the DISK is `fsync`, a much stronger promise, and not what `flush`
+means.
 
 ## read_all
 

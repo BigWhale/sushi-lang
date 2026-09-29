@@ -136,9 +136,9 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `seek` | `(poke self, i64 offset, SeekFrom origin) i64 \| IoError` -- answers the NEW position | `Seek` |
 | `read_all` | `(poke self) string \| IoError` -- the whole file, from the current position | `File` |
 | `readln` | `() Maybe@(string) \| IoError` -- one line, newline stripped; `None` at the end | `File` |
-| `readch` | `() string \| IoError` -- one byte, as text | `File` |
-| `writeln` | `(string data) ~ \| IoError` | `File` |
-| `tell` | `() i64 \| IoError` | `File` |
+| `readch` | `(poke self) string \| IoError` -- one byte, as text | `File` |
+| `writeln` | `(poke self, string data) ~ \| IoError` | `File` |
+| `tell` | `(poke self) i64 \| IoError` | `File` |
 | `read_at` | `(i64 offset, i32 count) u8[] \| IoError` -- one read at an offset; the position does not move | `File` |
 | `write_at` | `(i64 offset, u8[] data) i32 \| IoError` -- one write at an offset, answers the count; the position does not move | `File` |
 | `share` | `() File \| IoError` -- `dup(2)`: a second OWNER over the SAME open file description, so the offset is SHARED | `File` |
@@ -147,9 +147,10 @@ callable on a `TcpStream` too, which is what `<io/contracts>` is for.
 | `close` | `(nom self) ~ \| IoError` -- CONSUMES the handle | `File` |
 
 A `File` closes itself when its owner leaves scope, so `close()` is only needed where the
-failure has to be SEEN. Every method is a plain borrow except `close()`, which CONSUMES
-the handle: a file's position lives in the kernel, not in the struct, so a read and a
-write need no mutable receiver.
+failure has to be SEEN. The contract methods and `read_all`, `readch`, `writeln` and
+`tell` take `poke self`, so the handle must be writable storage. `readln`, `read_at`,
+`write_at`, `share`, `is_open` and `is_terminal` take a plain borrow. `close()` takes
+`nom self` and CONSUMES the handle.
 
 **A `File` keeps no line loop.** There is no `File.lines()`: an unbuffered handle
 yielding lines is one system call per line, which is the cost the buffer exists to
@@ -329,7 +330,7 @@ function written against `Writer` keeps compiling when the handle it is given is
 for a [`BufWriter`](buf.md), where the call does real work.
 
 Getting the bytes onto the DISK is `fsync()`, a much stronger promise, and not what
-`flush()` has ever meant.
+`flush()` means.
 
 ### close
 
@@ -438,7 +439,8 @@ in.
 | the call | channel |
 |---|---|
 | `open()`, `close()`, and every read, write and seek on a `File` | `IoError` |
-| the path utilities -- `exists`, `remove`, `rename`, `stat`, `mkdir_all`, `read_dir` | `FileError` |
+| the path utilities -- `remove`, `rename`, `stat`, `mkdir_all`, `read_dir`, `file_size` | `FileError` |
+| `exists`, `is_file`, `is_dir` | none: a bare `bool` |
 | the `fd_*` descriptor primitives | `FileError` |
 
 A read, a write and a seek answer `IoError` because those are the `Reader` / `Writer` /
@@ -450,26 +452,12 @@ it carries ONE channel from end to end and needs no conversion in the middle.
 
 ### IoError
 
-```sushi
-enum IoError:
-    NotFound()          # ENOENT - the path does not exist
-    PermissionDenied()  # EACCES, EPERM - insufficient permissions
-    AlreadyExists()     # EEXIST - the path is already there
-    IsDirectory()       # EISDIR - the path is a directory
-    ConnectionReset()   # ECONNRESET, ECONNABORTED
-    TimedOut()          # ETIMEDOUT
-    Closed()            # EPIPE, ENOTCONN, EBADF
-    Interrupted()       # EINTR
-    WouldBlock()        # EAGAIN, EWOULDBLOCK
-    DiskFull()          # ENOSPC - no space left on device
-    TooManyOpen()       # EMFILE, ENFILE - too many open files
-    InvalidInput()      # EINVAL, ENAMETOOLONG
-    Os(i32 errno)       # the raw errno, for a failure with no variant of its own
-    Other()             # anything else
-```
+The variants, their order and the errno values each one covers are listed once, on
+[I/O errors](error.md). A failure on a `File` goes through `FileError` first, so a `File`
+method answers only the variants that have a `FileError` twin, `InvalidInput` and `Other`.
 
-`Os(i32)` is how detail survives without a global `last_errno()`, which would not be
-thread-safe. Match it when you need the number:
+`Os(i32)` keeps an errno without a global `last_errno()`, which is not thread-safe. No
+stdlib call answers it today, but a `match` can name it:
 
 ```sushi
 use <io/fs>
@@ -489,20 +477,8 @@ fn main() i32:
 
 ### FileError
 
-The path utilities and the descriptor primitives keep their own enum:
-
-```sushi
-enum FileError:
-    NotFound()          # ENOENT - file does not exist
-    PermissionDenied()  # EACCES, EPERM - insufficient permissions
-    AlreadyExists()     # EEXIST - file already exists
-    IsDirectory()       # EISDIR - path refers to a directory
-    DiskFull()          # ENOSPC - no space left on device
-    TooManyOpen()       # EMFILE, ENFILE - too many open files
-    InvalidPath()       # ENAMETOOLONG - invalid path or filename
-    IOError()           # EIO - generic I/O error
-    Other()             # any other error
-```
+The path utilities and the descriptor primitives keep their own enum. It is listed on
+[I/O errors](error.md#overview), with the errno values each variant covers.
 
 `<io/fs>` converts one into the other at its own boundary, with
 `extend FileError to_io() IoError`, so a caller never writes the conversion.
@@ -586,12 +562,59 @@ fn main() i32:
 
 ## File Utility Functions
 
+### exists, is_file and is_dir
+
+Ask what is at a path.
+
+```sushi
+fn exists(string path) bool
+fn is_file(string path) bool
+fn is_dir(string path) bool
+```
+
+Each one answers a bare `bool` and has no error arm: a path that cannot be read answers
+`false`. `is_file` and `is_dir` follow a symbolic link and answer for its target;
+`is_symlink` answers for the link itself.
+
+```sushi
+use <io/files>
+
+fn main() i32:
+    let string path = "/etc"
+    if (is_dir(path)):
+        println("{path} is a directory")
+    elif (exists(path)):
+        println("{path} is something else")
+    else:
+        println("{path} is not there")
+    return Result.Ok(0)
+```
+
+### file_size
+
+The size of a file, in bytes.
+
+```sushi
+fn file_size(string path) i64 | FileError
+```
+
+```sushi
+use <io/files>
+
+fn main() i32:
+    match file_size("data.txt"):
+        Result.Ok(n) -> println("{n} bytes")
+        Result.Err(FileError.NotFound) -> println("no such file")
+        Result.Err(_) -> println("cannot read the size")
+    return Result.Ok(0)
+```
+
 ### remove
 
 Delete a file from the filesystem.
 
 ```sushi
-fn remove(string path) -> Result@(i32, FileError)
+fn remove(string path) i32 | FileError
 ```
 
 **Parameters:**
@@ -599,7 +622,7 @@ fn remove(string path) -> Result@(i32, FileError)
 
 **Returns:**
 - `Result.Ok(0)` - File successfully deleted
-- `Result.Err()` - Failed to delete file (doesn't exist, permission denied, etc.)
+- `Result.Err(e)` - Failed to delete file (doesn't exist, permission denied, etc.)
 
 **Example:**
 
@@ -624,7 +647,7 @@ fn main() i32:
 Rename or move a file or directory.
 
 ```sushi
-fn rename(string old_path, string new_path) -> Result@(i32, FileError)
+fn rename(string old_path, string new_path) i32 | FileError
 ```
 
 **Parameters:**
@@ -633,7 +656,7 @@ fn rename(string old_path, string new_path) -> Result@(i32, FileError)
 
 **Returns:**
 - `Result.Ok(0)` - Successfully renamed/moved
-- `Result.Err()` - Failed (source doesn't exist, permission denied, etc.)
+- `Result.Err(e)` - Failed (source doesn't exist, permission denied, etc.)
 
 **Example:**
 
@@ -658,8 +681,8 @@ fn main() i32:
 The modification and status-change times of a path, as unix seconds.
 
 ```sushi
-fn mtime(string path) -> Result@(i64, FileError)
-fn ctime(string path) -> Result@(i64, FileError)
+fn mtime(string path) i64 | FileError
+fn ctime(string path) i64 | FileError
 ```
 
 **Example:**
@@ -681,7 +704,7 @@ fn main() i32:
 The raw `st_mode` of a path: the file-type bits plus the permission bits.
 
 ```sushi
-fn mode(string path) -> Result@(i32, FileError)
+fn mode(string path) i32 | FileError
 ```
 
 **Example:**
@@ -705,7 +728,7 @@ Ask whether the path itself is a symbolic link. This is the one query that does
 NOT follow the link (`lstat`); `is_file` and `is_dir` answer for the target.
 
 ```sushi
-fn is_symlink(string path) -> Result@(bool, FileError)
+fn is_symlink(string path) bool | FileError
 ```
 
 **Example:**
@@ -729,7 +752,7 @@ fn main() i32:
 List the entries of a directory.
 
 ```sushi
-fn read_dir(string path) -> Result@(string[], FileError)
+fn read_dir(string path) string[] | FileError
 ```
 
 **Parameters:**
@@ -763,7 +786,7 @@ fn main() i32:
 Create a new directory with specified permissions.
 
 ```sushi
-fn mkdir(string path, i32 mode) -> Result@(i32, FileError)
+fn mkdir(string path, i32 mode) i32 | FileError
 ```
 
 **Parameters:**
@@ -772,7 +795,7 @@ fn mkdir(string path, i32 mode) -> Result@(i32, FileError)
 
 **Returns:**
 - `Result.Ok(0)` - Directory created successfully
-- `Result.Err()` - Failed (already exists, permission denied, parent doesn't exist)
+- `Result.Err(e)` - Failed (already exists, permission denied, parent doesn't exist)
 
 **Example:**
 
@@ -801,7 +824,7 @@ fn main() i32:
 Remove an empty directory.
 
 ```sushi
-fn rmdir(string path) -> Result@(i32, FileError)
+fn rmdir(string path) i32 | FileError
 ```
 
 **Parameters:**
@@ -809,7 +832,7 @@ fn rmdir(string path) -> Result@(i32, FileError)
 
 **Returns:**
 - `Result.Ok(0)` - Directory removed successfully
-- `Result.Err()` - Failed (doesn't exist, not empty, permission denied)
+- `Result.Err(e)` - Failed (doesn't exist, not empty, permission denied)
 
 **Example:**
 
@@ -833,7 +856,7 @@ fn main() i32:
 Copy a file's contents to a new location.
 
 ```sushi
-fn copy(string src, string dst) -> Result@(i32, FileError)
+fn copy(string src, string dst) i32 | FileError
 ```
 
 **Parameters:**
@@ -842,7 +865,7 @@ fn copy(string src, string dst) -> Result@(i32, FileError)
 
 **Returns:**
 - `Result.Ok(0)` - File copied successfully
-- `Result.Err()` - Failed (source doesn't exist, permission denied, I/O error)
+- `Result.Err(e)` - Failed (source doesn't exist, permission denied, I/O error)
 
 **Example:**
 
@@ -870,9 +893,7 @@ use <io/files>
 fn backup_and_cleanup(string path) ~:
     let string backup = "{path}.bak"
 
-    # path is used twice below; clone it for the first call so it stays
-    # usable for the second (a by-value string argument moves)
-    match copy(path.clone(), backup):
+    match copy(path, backup):
         Result.Ok(_) ->
             println("Backup created")
         Result.Err(_) ->
@@ -899,7 +920,7 @@ fn main() i32:
 
 ## The descriptor layer
 
-Underneath the `file` handle sits a thin layer over the raw descriptor. It is the same
+Underneath the `File` handle sits a thin layer over the raw descriptor. It is the same
 shape `<net/socket>` gives `<net/tcp>` — the primitives a handle type is written on top
 of — and it comes in two halves.
 
@@ -911,8 +932,8 @@ which is what makes them the ones a handle is written on.
 
 `fd_open`, `fd_dup`, `fd_close` and `fd_isatty` belong to neither half.
 
-### `fd_pread(i32 fd, i64 offset, i32 max) -> Result@(u8[], FileError)`
-### `fd_pwrite(i32 fd, i64 offset, u8[] data) -> Result@(i32, FileError)`
+### `fd_pread(i32 fd, i64 offset, i32 max) u8[] | FileError`
+### `fd_pwrite(i32 fd, i64 offset, u8[] data) i32 | FileError`
 
 Read or write at an offset **without moving the descriptor's file position**. That is
 what makes them the answer for concurrent reads of one file: the offset is an argument,
@@ -925,7 +946,7 @@ I/O converged on this primitive — C and POSIX have `pread(2)` and `pwrite(2)`,
 end of file. `fd_pwrite` answers the count it took; looping until the whole buffer is
 gone is the caller's job.
 
-### `fd_open(string path, i32 intent, i32 mode) -> Result@(i32, FileError)`
+### `fd_open(string path, i32 intent, i32 mode) i32 | FileError`
 
 `intent` says what the caller WANTS, not what the platform calls it:
 
@@ -943,14 +964,14 @@ read-only, which is the safe reading of a value this function does not know.
 
 `mode` is the permission bits a newly created file gets, as an integer — `420` is `0644`.
 
-### `fd_read(i32 fd, i32 max) -> Result@(u8[], FileError)`
+### `fd_read(i32 fd, i32 max) u8[] | FileError`
 
 ONE `read(2)` from the descriptor's current position, which it advances. The answer
 carries what ARRIVED and may be shorter than asked for; an **empty array is end of file**
 and not an error, so a caller loops until the answer is empty.
 
-### `fd_write(i32 fd, u8[] data) -> Result@(i32, FileError)`
-### `fd_write_str(i32 fd, string s) -> Result@(i32, FileError)`
+### `fd_write(i32 fd, u8[] data) i32 | FileError`
+### `fd_write_str(i32 fd, string s) i32 | FileError`
 
 Write every byte, looping past a short write, and answer the count. `fd_write_str` takes
 the string's own bytes with no `to_bytes()` copy in front of them — a fat pointer already
@@ -959,12 +980,10 @@ carries a pointer and a length, which is what `write(2)` wants.
 Unlike `sock_send`, these do not hand a partial write back to the caller. A socket's
 partial write is information — how much the peer's window took — and a file's is not.
 
-### `fd_readln(i32 fd) -> Result@(Maybe@(string), FileError)`
+### `fd_readln(i32 fd) Maybe@(string) | FileError`
 
 One line, the newline **stripped**, in a `Maybe`. A blank line is `Maybe.Some("")` and
-the end of the file is `Maybe.None`, so the two are never the same answer. It used to
-answer an empty string for both, which truncated a file at its first blank line and made
-a failed read look like a clean end.
+the end of the file is `Maybe.None`, so the two are never the same answer.
 
 It has two paths, and which one runs depends on whether the descriptor can seek:
 
@@ -977,7 +996,7 @@ The byte-at-a-time path costs 4.49s over the same 200 000 lines, nearly all of i
 kernel. That is the price of not losing data, and it is only paid where it must be. For
 bulk line reading over any descriptor, the buffered reader is the general answer.
 
-### `fd_seek(i32 fd, i64 offset, i32 whence) -> Result@(i64, FileError)`
+### `fd_seek(i32 fd, i64 offset, i32 whence) i64 | FileError`
 
 Move the descriptor's file position, and answer the NEW position. `whence` is an intent
 like `fd_open`'s: `0` from the start, `1` from the current position, `2` from the end.
@@ -985,19 +1004,19 @@ like `fd_open`'s: `0` from the start, `1` from the current position, `2` from th
 There is no `fd_tell`, because it would say nothing new: the current position is
 `fd_seek(fd, 0, 1)`.
 
-### `fd_isatty(i32 fd) -> bool`
+### `fd_isatty(i32 fd) bool`
 
 Whether the descriptor is a terminal. A **bare bool**, not a Result: a descriptor that is
 not a terminal and a descriptor that is not open both answer false, so there is no
 failure a caller could act on.
 
-### `fd_dup(i32 fd) -> Result@(i32, FileError)`
+### `fd_dup(i32 fd) i32 | FileError`
 
 A **second descriptor over the same open file description**. The offset is shared, so
 this is for the shared-listener pattern and not for concurrent reads of one file —
 `fd_pread` and `fd_pwrite` are that. `File.share()` is written on it.
 
-### `fd_close(i32 fd) -> Result@(i32, FileError)`
+### `fd_close(i32 fd) i32 | FileError`
 
 Close one descriptor.
 
@@ -1119,14 +1138,12 @@ fn main() i32:
 
 ### Path Separators
 
-- **Unix/Linux/macOS:** Forward slash `/`
-- **Recommended:** Use forward slashes for cross-platform compatibility
+Sushi runs on macOS and Linux. Both use the forward slash `/`.
 
 ```sushi
 use <io/fs>
 
 fn read_input() string | IoError:
-    # Unix-style paths work on all platforms
     let File f = open("data/input.txt", FileMode.Read())??
     return Result.Ok(f.read_all()??)
 
@@ -1140,17 +1157,12 @@ fn main() i32:
 
 ### Line Endings
 
-Different platforms use different line endings:
-- **Unix/Linux/macOS:** `\n` (LF)
-- **Windows:** `\r\n` (CRLF)
-
-Sushi uses `\n` internally. When reading files, line endings are preserved.
+macOS and Linux end a line with `\n` (LF). `read()` and `read_all()` keep every byte, so a
+`\r\n` in a file stays in the text. `readln()` removes the `\n` only.
 
 ### File Permissions
 
-File permissions are platform-specific:
-- **Unix/Linux/macOS:** Standard POSIX permissions (user/group/other)
-- **Windows:** ACLs
+macOS and Linux use POSIX permissions (user, group and other).
 
 `PermissionDenied` error occurs when the process lacks required permissions.
 
@@ -1261,6 +1273,6 @@ Use `FileMode.Append()` to preserve existing content.
 - [Buffered I/O](buf.md) - `BufReader` and `BufWriter` over any handle
 - [I/O Contracts](contracts.md) - `Reader`, `Writer` and `Seek`
 - [Console I/O](console.md) - Standard input/output/error operations
-- [String Methods](../../standard-library.md) - String operations for file content
+- [String Methods](../collections/strings.md) - String operations for file content
 - [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
 - [Error Handling](../../error-handling.md) - Result and Maybe types

@@ -1,0 +1,33 @@
+use <collections/hashmap>
+
+struct Pair@(T, U):
+    T first
+    U second
+
+const Pair@(i32, bool) ANSWER = Pair(42, true)
+const Maybe@(i32) NO_LIMIT = Maybe.None
+
+var Maybe@(HashMap@(string, i32)) cache = Maybe.None
+
+fn lookup(string key) i32:
+    match cache:
+        Maybe.None ->
+            let HashMap@(string, i32) fresh = HashMap.new()
+            fresh.insert("answer", ANSWER.first)
+            cache := Maybe.Some(fresh)
+            println("filled the cache")
+        Maybe.Some(_) -> println("read the cache")
+    match cache:
+        Maybe.Some(m) -> return Result.Ok(m.get(key).realise(-1))
+        Maybe.None -> return Result.Ok(-1)
+
+fn main() i32:
+    println("{ANSWER.first} {ANSWER.second} {NO_LIMIT.is_none()}")
+
+    let Pair@(string, i32) p = Pair("towel", 1)
+    let Pair@(string, i32) q = p.clone()
+    println("a clone hashes like the original: {p.hash() == q.hash()}")
+
+    println(lookup("answer").realise(0))
+    println(lookup("answer").realise(0))
+    return Result.Ok(0)

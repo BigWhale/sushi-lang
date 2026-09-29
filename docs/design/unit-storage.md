@@ -24,11 +24,10 @@ shape -- a marker, a type, a name, an initializer -- and a different kind:
 
 ## What it is for
 
-The console handles were the forcing case. `stdout`, `stderr` and `stdin` were `File`
-CONSTANTS, and nothing writes a constant: the moment the `Writer` contract took
-`poke self` (so that a `BufWriter@(W)` could implement it), `stdout.write(...)` would have
-stopped compiling (CE2400). A `var` gives the console handle storage the contract can
-write, so the spelling stays and the contract can move.
+The console handles are the main case. `stdout`, `stderr` and `stdin` are `public var
+File`, because the `Writer` contract takes `poke self` (so that a `BufWriter@(W)` can
+implement it), and nothing writes a constant (CE2400). A `var` gives the console handle
+storage the contract can write.
 
 A private `var` is the common case in Go and Zig code, and it is what keeps `public var`
 honest:
@@ -56,7 +55,7 @@ with it. Two consequences:
   spot. `from([1, 2])` does not either: the elements need a buffer. Both are CE0108. One
   predicate, `allocates_nothing` in `semantics/const_eval.py`, is read by the typecheck pass
   and the backend alike, so the two cannot disagree about what qualifies.
-- **An enum variant qualifies** (#551): a payload-free variant is a tag over a zero
+- **An enum variant qualifies**: a payload-free variant is a tag over a zero
   payload, so `var Maybe@(HashMap@(K, V)) cache = Maybe.None` is the cache-filled-on-
   first-use shape the ruling names, and the first call rebinds it with
   `cache := Maybe.Some(map)`. The variant is built against the DECLARED type -- the
@@ -75,7 +74,7 @@ already exist apply to it with one addition:
   method such as `close()` would hand storage nothing re-initializes to a callee or a
   binding that frees it. The rule is CE2410's, the one that fences `main`'s argv view,
   and it applies to an OWNING type only: a plain `var i32` copies out freely. It reads
-  the same for a `const`, which has no owner either (#726): a take of a `const string`
+  the same for a `const`, which has no owner either: a take of a `const string`
   is CE2436 and `.clone()` is the escape, while a `const i32` copies out.
 - **A rebind is the one way to change what it holds.** `stdout := f` consumes `f`, drops
   the old value the way a local's rebind does, and stores the new one. A `let`-borrow out
@@ -85,8 +84,8 @@ already exist apply to it with one addition:
   `var` the caller is reading; that is what storage means, and it is the caller's to
   order.
 
-The scope pass owns "what kind of name is this", and it asks one gate:
-`reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
+The scope pass owns "what kind of name is this". It and the typecheck pass ask one gate
+for every borrow position: `reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
 position a constant fails there -- a `poke`/`peek` of it, a `poke` foreach over it, a
 `let poke`/`let peek` bound from it, a `poke self` call on it, a `poke` pattern binding
 into it, and the same through an alias -- and it passes the CE1002 gate on a rebind
@@ -95,10 +94,8 @@ target. The typecheck pass's CE2096 gate (a write into a constant) asks the reco
 `geo.SIZE := 3` is still refused.
 
 Every one of those readers asks the SCOPED lookup, never `ConstantTable.by_name`. The
-flat view holds one record per NAME over the whole program and is first-wins, so a unit
-whose own `var` shared a name with an earlier unit's `const` was refused, and a unit whose
-own `const` shared a name with an earlier unit's `var` was let through to write read-only
-memory (#685).
+flat view holds one record per NAME over the whole program and is first-wins, so it
+cannot tell the `var` of one unit from the `const` of the same name in another unit.
 
 ## Never destroyed at exit
 
@@ -139,9 +136,9 @@ with its `link_symbol`, and the consumer declares it.
 - **`static`**: in Sushi "static" already means a function called on a TYPE name
   (`List.new()`, `f64.from_bits(b)`; `Static(ty, name)` in `docs/design/ir.md`), "static
   dispatch" is everywhere, and in C `static` means internal linkage, close to the
-  opposite of an exported unit-level value. **That reservation was spent** (#542): the
-  word is now the surface marker for a receiver-less method -- `extend Vec static
-  at(i32 x, i32 y) Vec:` -- so it means exactly what it already meant internally, and
+  opposite of an exported unit-level value. The word is the surface marker for a
+  receiver-less method -- `extend Vec static at(i32 x, i32 y) Vec:` -- so it means
+  exactly what it means internally, and
   Sushi has no static STORAGE at all. The record is
   `docs/design/method-resolution.md`.
 - **`let` at the top level**: `let` names a block-scoped binding with RAII drop, and one
@@ -153,7 +150,7 @@ with its `link_symbol`, and the consumer declares it.
   reason to stay private.
 - **Two contracts** (a `BufRead`-style perk for the buffered types) and **relaxing
   CE2400** so a constant could satisfy a `poke self` contract: both were the routes the
-  ruling on #546 did not take. A buffered-direction contract for `lines()`, `read_line()`
+  ruling did not take. A buffered-direction contract for `lines()`, `read_line()`
   and `fill()` is a separate, later question.
 
 ## History
