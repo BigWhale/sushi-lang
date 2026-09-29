@@ -14,6 +14,7 @@ programming with zero runtime overhead.
 - [The Predefined Perks](#the-predefined-perks)
 - [Multiple Constraints](#multiple-constraints)
 - [Common Patterns](#common-patterns)
+- [Perk Visibility](#perk-visibility)
 - [Error Codes](#error-codes)
 - [Known Limitations](#known-limitations)
 
@@ -26,10 +27,12 @@ Perks provide a way to:
 - Achieve zero-cost abstractions through monomorphization
 
 **Key Design Principles:**
-- Perks return bare types (not `Result@(T)`), so a perk method body has no error
-  channel: `??` is rejected there (CE0131). Handle a Result in the body with `match`
-  or `.realise(default)`. A `??` inside a lambda in the body is legal -- the lambda
-  has its own Result channel
+- A perk method returns a bare value (not a `Result@(T, E)`) unless it declares an error
+  channel `| E`. A bare perk method body has no channel, so `??` is refused there
+  (CE0131). Handle a Result in the body with `match` or `.realise(default)`, or declare
+  `| E` on the contract and on every implementation (see
+  [Error Channels on Perk Methods](#error-channels-on-perk-methods)). A `??` inside a
+  lambda in the body is legal, because the lambda has its own Result channel
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing). The one exception is
   the predefined `Hashable`, which every type with a derived `hash()` satisfies
@@ -45,22 +48,28 @@ perk Displayable:
     fn debug() string
 
 perk Comparable:
-    fn compare(peek Point other) i32
+    fn compare(Point other) i32
 ```
 
 Two perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`)
 and `Drop` (`fn drop(poke self) ~`). A unit that declares either is **CE4001**. See
 [The Predefined Perks](#the-predefined-perks).
 
-A perk method that takes the implementing type by reference names that type
-explicitly (there is no `Self` keyword) and must use an explicit `peek` / `poke`
-borrow. The implementation and call site must use the same borrow kind.
+There is no `Self` type, so a perk method that takes a value of the implementing type
+names that type explicitly (`fn compare(Point other) i32`). A parameter is a borrow by
+default, as in every function. The parameter modes `nom`, `peek` and `poke` are part of the
+signature, so the implementation must write the same modes as the contract.
+
+The receiver `self` is a borrow by default too. A method that changes its receiver declares
+`poke self` on the contract and on every implementation. The io contracts use this form
+(see [io contracts](stdlib/io/contracts.md)).
 
 **Rules:**
-- Perk methods do not return `Result@(T)` (unlike regular functions)
+- A perk method returns a bare value, unless it declares `| E`
 - Methods can access `self` implicitly
-- Methods can take parameters including references
+- Methods can take parameters in any of the four parameter modes
 - Multiple methods can be defined in a single perk
+- A perk cannot hold a static method (CE4014), because it has no `Self` to construct
 
 ## Implementing Perks
 
@@ -83,14 +92,59 @@ extend Point with Displayable:
         return "Point({self.x}, {self.y})"
 
     fn debug() string:
-        return "Point { x: {self.x}, y: {self.y} }"
+        return "Point(x: {self.x}, y: {self.y})"
 ```
 
+A `{` in a double-quoted string always opens an interpolation hole, and a hole cannot hold a
+string literal. For a literal brace, use a single-quoted string (`'{'`), which does not
+interpolate.
+
 **Implementation Rules:**
-- All methods defined in the perk must be implemented
-- Method signatures must match exactly (parameters, return types)
+- All methods defined in the perk must be implemented (CE4005)
+- Method signatures must match exactly: parameters, modes, return type (CE4004) and error
+  channel (CE0133)
 - Can implement multiple perks for the same type
 - Can access struct fields via `self`
+- A name has one home: a perk method and an ordinary extension method of the same name on
+  one type is CE4007. A name is a contract method or a convenience method, never both
+- A function type cannot be the target (CE2110)
+
+### Error Channels on Perk Methods
+
+A perk method can declare an error channel `| E`. The contract and every implementation
+must declare the same channel (CE0133). The body then spells both constructors, as a
+function body does: `return Result.Ok(value)` and `return Result.Err(e)`. A bare
+`return value` in a channel body is CE2030. `??` is legal in the body, and the call answers a
+`Result@(T, E)`:
+
+```sushi
+enum ReadError:
+    Empty
+
+perk Source:
+    fn next_value(poke self) i32 | ReadError
+
+struct Counter:
+    i32 left
+
+extend Counter with Source:
+    fn next_value(poke self) i32 | ReadError:
+        if (self.left == 0):
+            return Result.Err(ReadError.Empty)
+        self.left := self.left - 1
+        return Result.Ok(self.left)
+
+fn drain@(S: Source)(poke S src) i32 | ReadError:
+    let i32 a = src.next_value()??
+    let i32 b = src.next_value()??
+    return Result.Ok(a + b)
+
+fn main() i32:
+    let Counter c = Counter(left: 3)
+    println(drain(poke c).realise(-1))    # 2 + 1 = 3
+    println(drain(poke c).realise(-1))    # the counter is empty: -1
+    return Result.Ok(0)
+```
 
 ### A generic type may implement a perk
 
@@ -120,8 +174,15 @@ fn main() i32:
 A concrete type argument is a **constraint** rather than a parameter name, the same rule
 an extension target follows: `extend Box@(i32) with Show` applies to `Box@(i32)` and to
 nothing else, and a partially concrete target such as `extend Pair@(i32, U) with Show` is
-**CE2098** -- there is no partial specialization. An instantiation the program never
-names costs nothing: no copy is made.
+**CE2098** -- there is no partial specialization. The compiler makes no copy for an
+instantiation that the program does not name.
+
+The compiler checks the header of a template implementation one time, on the written
+template, and not for each instance. So `fn f(T x) i32` against a contract
+`fn f(i32 x) i32` is **CE4004**, also when every instance uses `T = i32`. To implement the
+contract for one instance, write the concrete target: `extend Box@(i32) with Pk`. The
+compiler also checks a template that has no instance, and a concrete implementation that the
+program does not use.
 
 `Drop` is no exception: a generic target may implement it, and each instantiation's copy
 carries it. The orphan rule still applies and reads the target's BASE name, so only the
@@ -159,9 +220,12 @@ fn main() i32:
 ### Enum Constraints
 
 ```sushi
-enum Result@(T: Displayable, E):
-    Ok(T)
-    Err(E)
+perk Displayable:
+    fn display() string
+
+enum Tagged@(T: Displayable):
+    One(T)
+    Nothing()
 
 enum Status:
     Active(i32)
@@ -172,7 +236,17 @@ extend Status with Displayable:
         match self:
             Status.Active(n) -> return "Active: {n}"
             Status.Inactive() -> return "Inactive"
+
+fn main() i32:
+    let Tagged@(Status) t = Tagged.One(Status.Active(3))
+    match t:
+        Tagged.One(s) -> println(s.display())
+        Tagged.Nothing() -> println("nothing")
+    return Result.Ok(0)
 ```
+
+The compiler checks a constraint at each written type. `Tagged@(i32)` is **CE4006**, because
+`i32` does not implement `Displayable`.
 
 ## Generic Functions with Perks
 
@@ -311,7 +385,7 @@ extend CustomKey with Hashable:
     fn hash() u64:
         let u64 id_hash = self.id as u64
         let u64 name_hash = self.name.hash()
-        return id_hash * 31 as u64 + name_hash
+        return id_hash * 31 + name_hash
 ```
 
 ### Displayable Pattern
@@ -341,13 +415,13 @@ Used for types that can be compared:
 
 ```sushi
 perk Comparable:
-    fn compare(peek Score other) i32
+    fn compare(Score other) i32
 
 struct Score:
     i32 value
 
 extend Score with Comparable:
-    fn compare(peek Score other) i32:
+    fn compare(Score other) i32:
         if (self.value < other.value):
             return -1
         if (self.value > other.value):
@@ -355,7 +429,7 @@ extend Score with Comparable:
         return 0
 
 fn find_max@(T: Comparable)(T a, T b) T:
-    let i32 cmp = a.compare(peek b)
+    let i32 cmp = a.compare(b)
     if (cmp >= 0):
         return Result.Ok(a)
     return Result.Ok(b)
@@ -370,7 +444,7 @@ perk Displayable:
     fn display() string
 
 perk Comparable:
-    fn compare(peek Point other) i32
+    fn compare(Point other) i32
 
 struct Point:
     i32 x
@@ -385,7 +459,7 @@ extend Point with Displayable:
         return "({self.x}, {self.y})"
 
 extend Point with Comparable:
-    fn compare(peek Point other) i32:
+    fn compare(Point other) i32:
         let i32 self_sum = self.x + self.y
         let i32 other_sum = other.x + other.y
         if (self_sum < other_sum):
@@ -400,10 +474,25 @@ fn main() i32:
 
     println(p1.display())
     let u64 h = p1.hash()
-    let i32 cmp = p1.compare(peek p2)
+    let i32 cmp = p1.compare(p2)
+    println("{h} {cmp}")
 
     return Result.Ok(0)
 ```
+
+## Perk Visibility
+
+A perk is private by default, as every declaration is. Write `public perk` to export it.
+What a private perk hides is the CONTRACT:
+
+- Another unit cannot implement a private perk or constrain a type parameter with it
+  (CE4011). A method that the perk provides stays callable, because a unit that can name the
+  type can call what the type implements.
+- A public declaration cannot constrain a type parameter with a private perk of its own unit
+  (CE3010), because the caller would have to name a perk that it cannot see.
+
+An implementation (`extend T with P`) carries no `public` marker. It is as visible as its
+target type.
 
 ## Error Codes
 
@@ -414,45 +503,21 @@ Perk-related compiler errors:
 | CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable` or `Drop`, which the compiler predefines |
 | CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
 | CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
-| CE4004 | Method signature mismatch | Wrong parameter types or return type |
+| CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
 | CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
-| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with type lacking Hashable. Reported once, at the type that names the instantiation, with a note at the constraint; the analysis stops there and no copy of the template is cut for the refused instantiation (#579) |
-| CE4007 | Method name conflict | Perk method name conflicts with existing method |
+| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with a type that is not `Hashable`. Reported one time, at the type that names the instantiation, with a note at the constraint |
+| CE4007 | Method name conflict | A perk method and an extension method of the same name on one type |
+| CE4010 | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
+| CE4011 | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
+| CE4012 | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
+| CE4014 | Static method in a perk | `static fn get() i32` in an implementation |
+| CE0133 | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |
+| CE2110 | Function type as the target | `extend fn(i32) -> i32 with Show:` |
+| CE3010 | Private perk in a public constraint | `public fn f@(T: MyPrivatePerk)(T x) ~` |
 
 ## Known Limitations
 
-### 1. Generic Function Type Inference
-
-Cannot extract type parameters from complex generic types in function parameters:
-
-```sushi
-# Does NOT work - type inference limitation
-fn hash_container@(T: Hashable)(Container@(T) c) u64:
-    return Result.Ok(c.value.hash())
-
-# Works - simple type parameter
-fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
-```
-
-**Workaround:** Use simple type parameters only.
-
-### 2. Nested Generic Function Calls
-
-Generic functions calling other generic functions may fail to monomorphize:
-
-```sushi
-# May not work correctly
-fn wrapper@(T: Hashable)(T value) u64:
-    return compute_hash(value)  # Nested generic call
-
-fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
-```
-
-**Workaround:** Avoid chained generic function calls or inline the logic.
-
-### 3. No Generic Perks
+### 1. No Generic Perks
 
 Perks cannot have type parameters. Declaring one is a compile error:
 
@@ -463,47 +528,31 @@ perk Iterator@(Item):
 # CE4010: perk Iterator cannot have type parameters
 ```
 
-**Status:** Planned for future release. The compiler rejects the declaration outright
-(**CE4010**) — it used to be silently accepted and ignored.
+The rule applies to an implementation method too: it cannot declare type parameters of its
+own (`fn show@(U)(U x) i32:` inside `extend Box with Shown:`), because the contract has no
+slot to match them against. That is the same **CE4010**. In the perk declaration itself,
+`fn make@(U)(U x) i32` is a parse error (**CE6001**). A generic method is a plain
+extension method: `extend Box pick@(U)(U x) i32:`.
 
-The rule reaches the other end too: an implementation method may not declare type
-parameters of its own (`fn show@(U)(U x) i32:` inside `extend Box with Shown:`), because
-the contract has no slot to match them against. That is the same **CE4010**, at the list
-itself. A generic method is a plain extension method — `extend Box pick@(U)(U x) i32:`.
-
-**This example is not a missing feature, though.** Iteration needs no perk: `foreach`
-walks any type carrying `next()` that answers `Maybe@(T)`, resolved as a method rather
-than through a contract. That is a PROTOCOL, and it exists precisely because a perk
-cannot name what it yields — see
+Iteration needs no perk. `foreach` walks any type that has a `next()` method that answers
+`Maybe@(T)`. The compiler finds that method by name, not through a contract. See
 [Iteration (design)](design/iteration.md), ruling 1.
 
-### 4. No Perk Inheritance
+### 2. No Perk Inheritance
 
-Perks cannot require other perks:
+A perk cannot require another perk. Write both constraints at the use site instead:
+`@(T: Hashable + Displayable)`.
 
-```sushi
-# NOT supported
-perk Ord: Eq:
-    fn compare(&Self other) i32
-```
+### 3. No Default Implementations
 
-**Status:** Deferred to v0.6.
+Each implementation must write every method of the perk. A perk method has no body in the
+perk declaration.
 
-### 5. No Default Implementations
+### 4. No `Self` Type
 
-All perk methods must be fully implemented:
-
-```sushi
-# NOT supported
-perk Eq:
-    fn equals(&Self other) bool
-
-    # Cannot provide default implementation
-    fn not_equals(&Self other) bool:
-        return not self.equals(other)
-```
-
-**Status:** Deferred to v0.6.
+A perk method cannot name "the implementing type". A method that takes a value of that type
+names a concrete type in its signature, so the perk fits that type only. For the same reason,
+a perk cannot hold a static method or a constructor (CE4014).
 
 ## Best Practices
 

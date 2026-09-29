@@ -7,15 +7,17 @@ Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)
 ## Table of Contents
 
 - [Philosophy](#philosophy)
-- [Result@(T, E)](#result)
+- [Result@(T, E)](#resultt-e)
   - [Error Type Syntax](#error-type-syntax)
   - [Standard Error Enums](#standard-error-enums)
   - [Creating Results](#creating-results)
   - [Handling Results](#handling-results)
   - [Result Methods](#result-methods)
-- [Maybe@(T)](#maybe)
-- [Error Propagation (??)](#error-propagation)
+- [Maybe@(T)](#maybet)
+- [Error Propagation](#error-propagation)
+- [Error Channels on Methods](#error-channels-on-methods)
 - [Patterns and Best Practices](#patterns-and-best-practices)
+- [Error Codes](#error-codes)
 
 ## Philosophy
 
@@ -53,9 +55,7 @@ fn add(i32 a, i32 b) i32:
 #### Custom Error Type with | Syntax
 
 ```sushi
-enum MathError:
-    DivisionByZero
-    Overflow
+use <math>
 
 fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
@@ -63,6 +63,14 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 # Returns Result@(i32, MathError)
 ```
+
+`MathError` is a predefined enum, and `use <math>` brings its name. Do not declare your own
+`enum MathError`: a predefined name cannot be declared again (**CE2046**), also in a unit
+with no `use <math>`. Give your own error enum a new name. The examples below use this
+`divide`.
+
+The error type `E` must be an enum, in both spellings (`T | E` and `Result@(T, E)`). Do not
+mix the two spellings in one signature (**CE2085**).
 
 #### Explicit Result@(T, E) Syntax
 
@@ -74,12 +82,14 @@ fn foo() Result@(i32, MyError):
 ### Standard Error Enums
 
 Sushi provides built-in error types for common error conditions. Each but `StdError` has
-a HOME module, and the import brings the bare name (`use <math>` for `MathError`):
+a HOME module, and the import brings the bare name (`use <math>` for `MathError`). A module
+that re-exports the home module brings the name too: `use <io/fs>` brings `IoError` and
+`FileError`.
 
 - **StdError** - Generic fallback (`StdError.Error`); in scope everywhere, no import
 - **MathError** (`<math>`) - Mathematical errors (`DivisionByZero`, `Overflow`, `Underflow`, `InvalidInput`)
-- **FileError** (`<io/fs>`) - Path and descriptor errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`, `TooManyOpen`, `InvalidPath`, `IOError`, `Other`)
-- **IoError** (`<io/contracts>`) - What every read, write, seek, `open()` and `close()` answers (`NotFound`, `TimedOut`, `Closed`, `WouldBlock`, `Os(i32)`, ...)
+- **FileError** (`<io/error>`, also through `<io/fs>`) - Path and descriptor errors (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`, `TooManyOpen`, `InvalidPath`, `IOError`, `Other`)
+- **IoError** (`<io/error>`, also through `<io/contracts>`, `<io/fs>` and `<io/buf>`) - What every read, write, seek, `open()` and `close()` answers (`NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `ConnectionReset`, `TimedOut`, `Closed`, `Interrupted`, `WouldBlock`, `DiskFull`, `TooManyOpen`, `InvalidInput`, `Os(i32)`, `Other`)
 - **NetError** (`<net/error>`) - Connect, bind and resolve errors (`ConnectionRefused`, `TimedOut`, `ResolveFailed`, ...)
 - **ProcessError** (`<sys/process>`) - Process management (`SpawnFailed`, `ExitFailure`, `SignalReceived`)
 - **EnvError** (`<sys/env>`) - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
@@ -92,9 +102,8 @@ See [Result@(T, E) API Reference](stdlib/result.md) for complete details.
 # Success - Always provide the value
 return Result.Ok(value)
 
-# Failure - Must now include error data
-enum MathError:
-    DivisionByZero
+# Failure - always include the error value
+use <math>
 
 fn divide(i32 a, i32 b) i32 | MathError:
     if (b == 0):
@@ -102,7 +111,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` without error data is a **compile error** (**CE2050** — wrong argument count for the `Err` variant), not a deprecation. Always include the error value.
+**Important:** `Result.Err()` without an error value is a **compile error** (**CE2050**, wrong argument count for the `Err` variant). Always include the error value.
 
 **Every constructor is spelled.** The compiler never wraps a bare value into `Ok`. A
 `return value` in a body that answers a Result is **CE2030**, and a `~` success is
@@ -120,7 +129,13 @@ extend i32 half_checked() i32 | OddError:
 ```
 
 A method with NO channel is the other way round: it returns the value itself, and both
-constructors are refused there (**CE2091**).
+constructors are refused there (**CE2091**). See
+[Error Channels on Methods](#error-channels-on-methods).
+
+A body that can reach its end with no `return` is **CE0107**. This includes a `~` function,
+a `| E` method and a lambda block body: a `~` body ends with `return Result.Ok(~)`. A
+statement after a statement that always ends the path (a `return` in every branch) is
+**CE0140**.
 
 ### Handling Results
 
@@ -172,9 +187,8 @@ if (divide(10, 2).is_ok()):      # the success test
     println("ok")
 ```
 
-The wrapper used to answer for its Ok tag, so `if (f())` on a `Result@(bool, E)` ran the
-true branch for `Ok(false)` and never read the bool. Both readings were legal, so the
-compiler could not choose one (#522).
+On a `Result@(bool, E)`, `if (f())` could ask for the Ok tag or for the bool in it. The
+compiler does not choose one, so you write the question.
 
 **A field of the value is not a field of the wrapper either.** A `Result@(T, E)` and a
 `Maybe@(T)` are enums, and an enum carries variants, so a dot on the wrapper is
@@ -192,10 +206,6 @@ fn main() i32:
     println("{first.x}")
     return Result.Ok(0)
 ```
-
-This one used to compile clean. The read reached the back end, which unwrapped the
-receiver to the payload struct and read field 0 -- the enum TAG. The program printed 0
-where the element held 11, with no diagnostic of any kind (#666).
 
 #### Using Pattern Matching
 
@@ -410,7 +420,7 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-## Error Propagation (??)
+## Error Propagation
 
 The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors automatically.
 
@@ -425,14 +435,19 @@ use <io/fs>
 
 fn read_config() string | IoError:
     let Result@(File, IoError) result = open("config.txt", FileMode.Read())
-    match result:
-        Result.Ok(f) ->
+    match nom result:
+        Result.Ok(nom f) ->
             match f.read_all():
-                Result.Ok(content) -> return Result.Ok(content)
+                Result.Ok(nom content) -> return Result.Ok(content)
                 Result.Err(e) -> return Result.Err(e)
         Result.Err(e) ->
             return Result.Err(e)
 ```
+
+A bare pattern binding borrows the payload. `read_all()` needs a `File` that it can change,
+and `return` gives the string away, so both bindings TAKE their payload with `nom`. To take
+from a named local, write `match nom result:`. See
+[Binding Modes](language-guide.md#binding-modes).
 
 **With `??`:**
 
@@ -446,13 +461,14 @@ fn read_config() string | IoError:
 
 ### How It Works
 
-For `Result@(T)`:
+For `Result@(T, E)`:
 - `Result.Ok(value)?? → value` (unwraps)
-- `Result.Err()?? → return Result.Err()` (propagates)
+- `Result.Err(e)?? → return Result.Err(e)` (propagates; `E` must be the error type of the
+  enclosing function)
 
 For `Maybe@(T)`:
 - `Maybe.Some(value)?? → value` (unwraps)
-- `Maybe.None()?? → return Result.Err()` (propagates as error)
+- `Maybe.None()??` returns early with an `Err` (propagates as an error)
 
 ### Chaining Operations
 
@@ -600,9 +616,9 @@ fn main() i32:
 # ERROR CE2507: Using ?? on non-Result/non-Maybe type
 # let i32 x = 5??
 
-# ERROR CE2508: Using ?? outside Result-returning function
+# ERROR CE0131: ?? in a BARE extension method (no `| E`), which has no Result to return
 extend i32 squared() i32:
-    # let i32 x = might_fail()??  # Not allowed here
+    # let i32 x = might_fail()??  # Not allowed here; declare `| E` on the method instead
     return self * self
 
 # ERROR CE2511: Error type mismatch in propagation
@@ -673,16 +689,56 @@ The cost is one word per signature, and `<encoding/msgpack>` pays it throughout:
 infallible helpers carry `| MpError` so the fallible ones compose over them. A helper
 shared between two modules with different error types takes a wrapper in one of them.
 
+## Error Channels on Methods
+
+An extension method and a perk method return a BARE value by default: no `Result`, no
+`Result.Ok(...)` in the body (**CE2091**), and no `??` in the body (**CE0131**). Handle a
+Result inside such a body with `match` or `.realise(default)`.
+
+A method that can fail declares an error channel `| E`, as a function does. Then:
+
+- the call answers `Result@(T, E)`, and the caller handles it with `??`, `.realise()` or
+  `match`
+- the body spells both constructors, `return Result.Ok(...)` and `return Result.Err(...)`;
+  a bare `return value` is **CE2030**
+- `??` is legal in the body, and the error types must match exactly (**CE2511**)
+
+```sushi
+enum OddError:
+    TooOdd
+
+extend i32 half_checked() i32 | OddError:
+    if (self % 2 == 1):
+        return Result.Err(OddError.TooOdd)
+    return Result.Ok(self / 2)
+
+extend i32 quarter_checked() i32 | OddError:
+    let i32 half = self.half_checked()??
+    return Result.Ok(half.half_checked()??)
+
+fn main() i32:
+    println(12.quarter_checked().realise(-1))    # 3
+    println(6.quarter_checked().realise(-1))     # 3 is odd: -1
+    return Result.Ok(0)
+```
+
+A method chain stops at a channel that is still unhandled. `n.half_checked().squared()` is
+**CE2515**, because `.squared()` is a method of `i32` and not of the `Result`. Write
+`n.half_checked()??.squared()` in a body with the same channel, or handle the Result first.
+
+On a perk method, the contract and every implementation must declare the same channel
+(**CE0133**). See [Perks](perks.md#error-channels-on-perk-methods).
+
 ## Patterns and Best Practices
 
 ### 1. Always Provide Meaningful Defaults
 
 ```sushi
-# Good: Clear what -1 means
-let i32 index = find_position().realise(-1)  # -1 = not found
+# Good: clear what -1 means
+let i32 count = count_lines(path).realise(-1)  # -1 = the file could not be read
 
-# Better: Use Maybe@(T) and match
-match find_position():
+# Better for a search: a Maybe@(T) says "not found" in the type
+match text.find("x"):
     Maybe.Some(pos) -> println("At {pos}")
     Maybe.None() -> println("Not found")
 ```
@@ -754,24 +810,34 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-### 5. Result@(Maybe@(T)) for Three States
+### 5. Result@(Maybe@(T), E) for Three States
 
 ```sushi
-fn lookup(HashMap@(string, i32) map, string key) Maybe@(i32):
+use <collections/hashmap>
+
+fn lookup(HashMap@(string, i32) map, string key, bool corrupted) Maybe@(i32):
     # Three possible states:
     # 1. Found value: Ok(Some(value))
-    # 2. Key not found: Ok(None)  - not an error!
-    # 3. Internal error: Err()     - map corrupted, etc.
-
-    if (map_is_corrupted()):
-        return Result.Err(StdError.Error())
-
+    # 2. Key not found: Ok(None)  - not an error
+    # 3. Internal error: Err(StdError.Error)
+    if (corrupted):
+        return Result.Err(StdError.Error)
     return Result.Ok(map.get(key))
+
+fn main() i32:
+    let HashMap@(string, i32) map = HashMap.new()
+    map.insert("answer", 42)
+    match lookup(map, "answer", false):
+        Result.Ok(Maybe.Some(v)) -> println("Found {v}")
+        Result.Ok(Maybe.None) -> println("No such key")
+        Result.Err(_) -> println("The map is damaged")
+    map.free()
+    return Result.Ok(0)
 ```
 
 ### 6. Avoid Silent Failures
 
-<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
+<!-- docs-sweep: skip (calls load, which the narrative owns) -->
 ```sushi
 # Bad: Silently returns default
 fn get_config() string:
@@ -784,7 +850,7 @@ fn load_config() string:
 
 fn main() i32:
     let Result@(string, StdError) config = load_config()
-    if (config):
+    if (config.is_ok()):
         let string value = config.realise("")
         println("Loaded: {value}")
     else:
@@ -797,16 +863,29 @@ fn main() i32:
 
 Common error codes related to error handling:
 
+- **CE0107**: A body can reach its end with no `return`
+- **CE0131**: `??` in a bare extension or perk method (no `| E`)
+- **CE0133**: A perk implementation and its contract declare different error channels
+- **CE0140**: A statement after a statement that always ends the path
 - **CE2009**: `.realise()` wrong argument count (the code of every miscount)
+- **CE2030**: A bare `return value` in a body that answers a Result
+- **CE2050**: `Result.Err()` with no error value
+- **CE2085**: `| E` together with an explicit `Result@(T, E)` return type
+- **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare method (no `| E`)
+- **CE2106**: A field read on a `Result` or a `Maybe` (take the value first)
 - **CE2503**: `.realise()` default type mismatch
-- **CE2505**: Assigning `Result@(T)` to non-Result without handling
-- **CE2507**: Using `??` on non-Result/non-Maybe type
-- **CE2508**: Using `??` outside Result-returning function
-- **CW2001**: Unused `Result@(T)` value (warning)
+- **CE2505**: Assigning a `Result@(T, E)` to a non-Result without handling
+- **CE2507**: Using `??` on a non-Result, non-Maybe type
+- **CE2511**: `??` with an error type that differs from the function's error type
+- **CE2515**: A method chain continues past an unhandled channel
+- **CE2516**: A `Result` or a `Maybe` used as a condition
+- **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
+- **CW2001**: Unused `Result@(T, E)` value (warning)
+- **CW2511**: `??` in `main()` (warning)
 
 ---
 
 **See also:**
-- [Standard Library](standard-library.md) - Complete Result@(T) and Maybe@(T) API
+- [Standard Library](standard-library.md) - Complete Result@(T, E) and Maybe@(T) API
 - [Language Reference](language-reference.md) - Syntax details
 - [Examples](examples/README.md) - Error handling patterns in practice
