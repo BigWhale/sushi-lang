@@ -74,7 +74,15 @@ and LLVM-powered code generation.
 - Parameter modes: a parameter borrows by default, `nom` hands the value over, and
   `peek`/`poke` borrow by pointer, all with compile-time borrow checking
 - `Own@(T)` heap allocation for recursive types (linked lists, trees)
-- Extension methods for zero-cost method chaining
+- Extension methods for zero-cost method chaining, with an optional error channel (`| E`)
+  and static methods (`extend Vec static at(...)`, called as `Vec.at(...)`)
+- Visibility: every declaration is private to its unit unless it says `public`
+- Units as namespaces (`use "geometry" as geo`) and re-exports (`public use`)
+- Unit-level storage (`var`) beside compile-time constants (`const`)
+- Reference bindings (`let peek T x = ...`, `let poke T x = ...`)
+- The predefined perks `Drop` (a type that owns a resource) and `Hashable`
+- Documentation blocks (`##: ... :##`) that the compiler checks and a library carries
+- I/O contracts (`Reader`, `Writer`, `Seek`) and buffered I/O (`BufReader`, `BufWriter`)
 - Closures / lambdas (`|x| expr`) with RAII-managed, move-semantics captures
 - First-class functions (`fn(i32) -> i32` values, passable and callable)
 - Foreign Function Interface (`unsafe external "C"`) for calling C libraries
@@ -105,7 +113,7 @@ export SUSHI_LIB_PATH=.                   # Set library path
 ./sushic main.sushi                       # use <lib/mylib> in source
 ```
 
-### Hello World
+### Mostly Harmless
 
 ```sushi
 fn main() i32:
@@ -130,7 +138,7 @@ fn main() i32:
   and semantics
 - [Standard Library](https://bigwhale.github.io/sushi-lang/standard-library/) - Built-in types and
   functions
-- [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result@(T)`,
+- [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result@(T, E)`,
   `Maybe@(T)`, and `??` operator
 - [Memory Management](https://bigwhale.github.io/sushi-lang/memory-management/) - RAII, references,
   and ownership
@@ -152,7 +160,8 @@ fn main() i32:
 
 ### Explicit Error Handling
 
-All functions return `Result@(T)` for type-safe error handling:
+Every function returns a `Result@(T, E)`. A function that declares only `T` returns
+`Result@(T, StdError)`:
 
 ```sushi
 fn divide(i32 a, i32 b) i32:
@@ -187,7 +196,7 @@ Exhaustive pattern matching with enums:
 ```sushi
 enum Status:
     Idle()
-    Working(i32 progress)
+    Working(i32)
     Done()
 
 fn check(Status s) ~:
@@ -242,25 +251,25 @@ fn main() i32:
 Static polymorphism through perks with zero runtime overhead:
 
 ```sushi
-perk Hashable:
-    fn hash() u64
+perk Shape:
+    fn area() i32
 
-struct Point:
-    i32 x
-    i32 y
+struct Rect:
+    i32 w
+    i32 h
 
-extend Point with Hashable:
-    fn hash() u64:
-        return (self.x as u64) + (self.y as u64)
+extend Rect with Shape:
+    fn area() i32:
+        return self.w * self.h
 
 # Generic function with perk constraint
-fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+fn total_area@(T: Shape)(T value) i32:
+    return Result.Ok(value.area())
 
 fn main() i32:
-    let Point p = Point(10, 20)
-    let u64 h = compute_hash(p)??  # Type inferred automatically
-    println("Hash: {h}")
+    let Rect r = Rect(4, 5)
+    let i32 a = total_area(r).realise(0)  # T is inferred as Rect
+    println("Area: {a}")
     return Result.Ok(0)
 ```
 
@@ -291,13 +300,13 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/variadics/) for the full design and Phase-1 limitations.
+See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/variadics/) for the full design and its limits.
 
 ## Optimization Levels
 
 | Level         | Description              | Use Case                       |
 |---------------|--------------------------|--------------------------------|
-| `none` / `O0` | No optimization          | Debugging                      |
+| `none`        | No optimization          | Debugging                      |
 | `mem2reg`     | Basic SROA (default)     | Quick builds                   |
 | `O1`          | Basic optimizations      | Fast compilation               |
 | `O2`          | Moderate optimizations   | **Recommended** for production |
@@ -317,8 +326,8 @@ See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/vari
 # Run test suite
 python tests/run_tests.py
 
-# Run with runtime validation, enforcing every EXPECT_* directive
-python tests/run_tests.py --enhanced
+# Only the fixtures that do not run a binary (the fast diagnostics gate)
+python tests/run_tests.py --compile-only
 
 # Run only the leak-annotated subset (the same check, a faster gate)
 python tests/run_tests.py --leaks-only
@@ -327,10 +336,11 @@ python tests/run_tests.py --leaks-only
 python tests/run_tests.py --filter hashmap
 ```
 
-`--enhanced` executes each compiled binary and enforces the `# EXPECT_*` directives it
-declares, including `EXPECT_NO_LEAKS`: the binary is re-run under a malloc-interposer
-(`tests/leakcheck`) and any outstanding allocation fails the test. `--leaks-only` runs the
-same check over just the tests carrying that directive.
+Every run executes each compiled binary and enforces the `# EXPECT_*` directives it
+declares, including `EXPECT_NO_LEAKS`: the binary is run again under a malloc interposer
+(`tests/leakcheck`) and an allocation that is not freed fails the test. A flag only selects
+WHICH fixtures run, never how hard they are checked. `--leaks-only` selects the tests that
+carry `EXPECT_NO_LEAKS`.
 
 CI (GitHub Actions) additionally runs `ruff` and `mypy` (blocking over a growing set of
 type-checked packages, informational over the full tree) as a lint gate, and the
@@ -371,8 +381,10 @@ sushi/
 │   │   └── types/               # Type-specific codegen
 │   ├── sushi_stdlib/            # Standard library
 │   │   ├── src/                 # Python IR generators
+│   │   ├── src_sushi/           # Stdlib modules written in Sushi
 │   │   └── dist/                # Precompiled .bc files
 │   └── packager/                # Nori package manager CLI
+├── toolchain/                   # Sushi programs that compile Sushi (repository only)
 ├── sushic                       # Development wrapper script
 ├── tests/                       # Test suite
 └── docs/                        # Documentation
@@ -406,7 +418,7 @@ brew install cmake
 brew install llvm@20
 
 # Install Python dependencies
-uv sync --dev
+uv sync --extra dev
 
 # Build standard library
 uv run python sushi_lang/sushi_stdlib/build.py
@@ -433,8 +445,8 @@ cat program.ll
 # Run test suite
 uv run python tests/run_tests.py
 
-# Run with runtime validation
-uv run python tests/run_tests.py --enhanced
+# Run the Python unit layer
+uv run python -m pytest -q
 ```
 
 ## Building a Distribution Package

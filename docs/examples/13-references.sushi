@@ -1,11 +1,14 @@
 # Example 13: References and Borrowing
 #
 # This example demonstrates Sushi's borrowing system. Borrowing allows a function
-# to temporarily access a variable without taking ownership of it. In Sushi,
-# borrowing is implemented through references with explicit borrow modes:
+# to temporarily access a variable without taking ownership of it. A parameter has
+# one of four modes, marked at both the declaration and the call site:
 #
-# - peek T: Read-only borrow (multiple allowed simultaneously)
-# - poke T: Read-write borrow (exclusive access, only one at a time)
+# - T:      a borrow (the default). The caller keeps the value; the callee reads it.
+# - peek T: a read-only borrow by pointer (many allowed at the same time)
+# - poke T: a read-write borrow by pointer (exclusive: only one at a time)
+# - nom T:  the value is handed over. The callee owns and frees it, and the caller
+#           cannot use it again.
 #
 # Key concepts covered:
 # - Borrowing: Temporary access to a variable without ownership transfer
@@ -15,8 +18,9 @@
 # - Compile-time borrow checking enforces safety rules
 # - Unit return type (~) for side-effect-only functions
 #
-# Note: Unlike dynamic arrays which use move semantics, primitives and strings
-# use copy semantics. Borrowing via references avoids copies and enables mutation.
+# Note: A primitive copies. A value that owns heap memory (a dynamic array, a List,
+# a string that is not bound directly from a literal) moves. A poke borrow lets
+# the callee change the caller's variable in place.
 
 fn increment_count(poke i32 counter) ~:
     # Modify the referenced variable in-place

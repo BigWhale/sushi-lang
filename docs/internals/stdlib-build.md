@@ -2,23 +2,32 @@
 
 [← Back to Documentation](../index.md) | [Architecture](architecture.md)
 
-How the Sushi stdlib's precompiled bitcode is generated, kept fresh, and linked.
+How the Sushi stdlib is made: the precompiled bitcode units, how they stay fresh and how
+they are linked, and the stdlib modules that are written in Sushi.
 
 ## Overview
 
-The stdlib is not written in Sushi and does not use the `.slib` format. It is a set of
-Python modules that emit LLVM IR directly (via llvmlite), compiled ahead of time into
-per-platform `.bc` files.
+The stdlib has two halves. Neither uses the `.slib` format.
 
-| Aspect | Standard Library | User Libraries |
-|--------|-------------------|----------------|
-| Source | Python emitting LLVM IR | Sushi source code |
-| Format | Raw `.bc` (LLVM bitcode) | `.slib` (bitcode + metadata) |
-| Build tool | `sushi_stdlib/build.py` | `./sushic --lib` |
-| Metadata | Built into the compiler (`stdlib_registry.py`) | Embedded in the `.slib` file |
-| Freshness | Content-fingerprinted, auto-rebuilt by the compiler | N/A (compiled per invocation) |
+- **Bitcode units.** A set of Python modules emits LLVM IR directly (with llvmlite). The IR
+  is compiled ahead of time into one `.bc` file for each unit and platform.
+- **Sushi-source modules.** Fifteen modules are written in Sushi, under
+  `sushi_stdlib/src_sushi/`: `collections/iter`, `compression/zlib`, `encoding/msgpack`,
+  `io/buf`, `io/contracts`, `io/error`, `io/fs`, `io/path`, `net/dns`, `net/error`,
+  `net/ip`, `net/tcp`, `net/udp`, `net/url` and `toolchain/slib`. The compiler injects each
+  one as an ordinary compilation unit when a program imports it
+  (`semantics/stdlib_registry.py`, `SOURCE_STDLIB_MODULES`). Most of them call the bitcode
+  units underneath (for example `io/fs` over `io/files`, `net/tcp` over `net/socket`).
 
-Raw LLVM IR gives the stdlib access to constructs the Sushi language itself doesn't
+| Aspect | Bitcode units | Sushi-source modules | User Libraries |
+|--------|---------------|----------------------|----------------|
+| Source | Python emitting LLVM IR | Sushi source code | Sushi source code |
+| Format | Raw `.bc` (LLVM bitcode) | `.sushi` files in the package | `.slib` (source text by default; bitcode for the `binary` and `hybrid` kinds) |
+| Build tool | `sushi_stdlib/build.py` | none (compiled with the program) | `./sushic --lib` |
+| Metadata | Built into the compiler (`stdlib_registry.py`) | The declarations in the source | Embedded in the `.slib` file |
+| Freshness | Content-fingerprinted, auto-rebuilt by the compiler | In the unit cache key through the dependency graph | Compiled per invocation |
+
+Raw LLVM IR gives the bitcode units access to constructs the Sushi language itself doesn't
 expose (raw libc externs, manual struct layout for `string`/`Result`/`Maybe`, etc.),
 and lets generic containers (`List@(T)`, `HashMap@(K, V)`) be emitted inline per
 instantiation instead of precompiled for every possible type argument.
@@ -27,7 +36,8 @@ instantiation instead of precompiled for every possible type argument.
 
 ```
 sushi_lang/sushi_stdlib/
-├── build.py              # Build script (build_all, per-unit build_* functions)
+├── build.py              # Build script: build_all() over the STDLIB_BITCODE_UNITS table
+├── src_sushi/            # Stdlib modules written in Sushi (see Overview)
 ├── src/                  # Python IR generators, one package per unit
 │   ├── collections/
 │   │   ├── strings/      # generate_module_ir() -> collections/strings.bc
@@ -38,6 +48,7 @@ sushi_lang/sushi_stdlib/
 │   ├── sys/
 │   │   ├── env/          # -> sys/env.bc
 │   │   └── process/      # -> sys/process.bc
+│   ├── net/              # -> net/socket.bc
 │   ├── math/              # -> math.bc
 │   ├── random/            # -> random.bc
 │   ├── time/               # -> time.bc
@@ -48,9 +59,11 @@ sushi_lang/sushi_stdlib/
     ├── darwin/
     │   ├── collections/strings.bc
     │   ├── core/primitives.bc
-    │   ├── io/{stdio,files}.bc
+    │   ├── io/files.bc
+    │   ├── net/socket.bc
     │   ├── sys/{env,process}.bc
     │   ├── math.bc, random.bc, time.bc
+    │   ├── symbols.json         # the symbols that the .bc files define
     │   └── .build_fingerprint   # marker written by stdlib_builder.py
     └── linux/              # same layout; only produced by building on Linux
 ```
@@ -95,7 +108,10 @@ python sushi_lang/sushi_stdlib/build.py [--platform darwin|linux]
 This calls `build_all(platform_name)`, which initializes LLVM's native target, loops
 over the rows of `STDLIB_BITCODE_UNITS` (for each row: import the generator, call
 `generate_module_ir()`, `llvm.parse_assembly()` the IR, write `.as_bitcode()` to
-`dist/<platform>/<unit>.bc`), then writes the freshness marker described below. `--platform`
+`dist/<platform>/<unit>.bc`), then writes the symbol manifest `symbols.json` (every symbol
+that the `.bc` files define) and, last, the freshness marker described below. The manifest
+comes first: a build that stops between the two leaves no marker, so the next compile
+builds again. `--platform`
 only affects which `dist/` subdirectory the output lands in; without it, the platform
 is auto-detected via `platform_detect.get_current_platform()`. Cross-compilation is not
 supported — build on the target OS.
@@ -103,8 +119,10 @@ supported — build on the target OS.
 ## Staying Fresh: `backend/stdlib_builder.py`
 
 `dist/*.bc` files are prebuilt artifacts, not regenerated per compile. The compiler
-does not blindly trust them: `sushi_lang/compiler/pipeline.py` calls
-`ensure_stdlib_built()` before linking any stdlib unit, which:
+does not blindly trust them. Before it links a stdlib unit, `sushi_lang/compiler/pipeline.py`
+calls its one entry point, `build_stdlib()`, which calls `ensure_stdlib_built()`
+(`backend/stdlib_builder.py`). A failure of a generator is **CE0007**.
+`ensure_stdlib_built()`:
 
 1. Detects the current platform.
 2. Compares `compute_stdlib_source_fingerprint()` (see below) against the digest
@@ -124,7 +142,11 @@ SHA-256 over:
   alike),
 - every `*.py` under `sushi_lang/backend/types/primitives/` (the package `build.py`
   generates `core/primitives` from),
-- `sushi_lang/sushi_stdlib/build.py` itself.
+- `sushi_lang/sushi_stdlib/build.py` itself,
+- `sushi_lang/backend/types/core/mapping.py` and `sizing.py` (the enum layout, which the
+  `.bc` files must match byte for byte),
+- `sushi_lang/backend/runtime/constants.py` (the errno tables, which are baked into the
+  `.bc` files).
 
 Each path is hashed as `<path relative to sushi_lang/>:<file bytes>`, sorted, so the
 digest is stable across checkouts and platform-independent (the same sources produce
@@ -135,10 +157,9 @@ full rebuild of all units, not just the one that changed. This is deliberate: sh
 helpers legitimately affect many units, and stdlib rebuilds are cheap relative to a
 real compile.
 
-The hasher skips a listed path that does not exist, which once silently dropped the
-primitives generator from the digest when it became a package (edits stopped
-invalidating `.build_fingerprint`). The source list is now pinned by
-`tests/unit/test_fingerprint.py`, which fails if any listed path goes missing.
+The hasher skips a listed path that does not exist. `tests/unit/test_fingerprint.py` pins
+the source list and fails when a listed path is missing, so a moved generator cannot
+drop out of the digest.
 
 ## Forcing a Rebuild
 
@@ -147,10 +168,10 @@ invalidating `.build_fingerprint`). The source list is now pinned by
 ```
 
 `cli.py` handles this before any source file is required: it calls
-`backend.stdlib_builder.detect_platform()` then `build_all(platform_name)` directly
-(the *loud*, non-quiet path — full per-unit progress output), unconditionally,
-bypassing the fingerprint check entirely. A `StdlibBuildError` (`CE0007`) wraps any
-exception from the build. If no source file is given, the compiler exits 0 after the
+`pipeline.build_stdlib(rebuild=True)`, which calls `build_all(detect_platform())` (the
+*loud*, non-quiet path — full per-unit progress output), unconditionally, and bypasses
+the fingerprint check. A `StdlibBuildError` (`CE0007`) wraps any exception from the
+build. If no source file is given, the compiler exits 0 after the
 build; if one is given, compilation proceeds normally afterward (using the bitcode
 just rebuilt).
 
@@ -158,11 +179,11 @@ just rebuilt).
 
 At compile time, `backend/stdlib_linker.py` (`StdlibLinker`) resolves each `use
 <module>` referencing a stdlib path to its `.bc` file(s) under `dist/<platform>/` and
-links them into the output module. A handful of unit names are *virtual* — they
-resolve to no `.bc` file because they're emitted inline instead
-(`collections/hashmap`, and `collections/iter`, which is a bundled **Sushi-source**
-module compiled as an ordinary unit — see `semantics/stdlib_registry.py`'s
-`SOURCE_STDLIB_MODULES`, distinct from the `.bc` units this doc covers).
+links them into the output module. Some unit names are *virtual*
+(`StdlibLinker._virtual_units`): they resolve to no `.bc` file. `collections/hashmap` is
+virtual because the HashMap is emitted inline for each instantiation. Every Sushi-source
+module (the fifteen names in the Overview) is virtual too, because it is compiled as an
+ordinary unit of the program.
 
 Module *metadata* (which functions a unit exposes, their signatures, validators) is
 registered separately in `semantics/stdlib_registry.py`'s `StdlibRegistry.KNOWN_MODULES`
@@ -174,8 +195,19 @@ compile-time function metadata). `compiler/loader.py` is unrelated — it handle
 
 ## Adding a New Stdlib Module
 
+A module written in Sushi (the usual choice when the module can be written in Sushi):
+
+1. Write the module as a `.sushi` file under `src_sushi/`. Mark each concrete export
+   `public`, and give each declaration a documentation block (the runner's stdlib
+   doc-block gate checks them).
+2. Add one entry to `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`).
+3. Add the module name to `StdlibLinker._virtual_units` (`backend/stdlib_linker.py`).
+
+A bitcode unit (for code that needs raw IR, for example a libc extern or a manual layout):
+
 1. Write the generator: a package/module under `src/` with `generate_module_ir()`.
-2. Add a `build_@(name)()` function to `build.py` and call it from `build_all()`.
+2. Add one `StdlibBitcodeUnit(unit, generator)` row to `STDLIB_BITCODE_UNITS` in
+   `build.py`. `build_all()` builds every row.
 3. Register the module's function metadata in `StdlibRegistry.KNOWN_MODULES`
    (`semantics/stdlib_registry.py`) so `use <name>` type-checks calls into it.
 4. If the unit needs its own `.bc` resolution logic beyond the default
@@ -183,8 +215,8 @@ compile-time function metadata). `compiler/loader.py` is unrelated — it handle
    `.bc` files, like `io`), extend `StdlibLinker._resolve_stdlib_unit`.
 
 `compute_stdlib_source_fingerprint()`'s whole-tree scan over `sushi_stdlib/src/`
-picks up any new generator automatically — no fingerprint-list update needed unless
-the generator lives outside that tree (see the `core/primitives` gap above).
+picks up any new generator automatically. A generator that lives outside that tree must
+be added to `_stdlib_generator_sources()` (`compiler/fingerprint.py`).
 
 ## Generic Types
 
@@ -193,8 +225,7 @@ the generator lives outside that tree (see the `core/primitives` gap above).
 instantiation at compile time. The emitters live in `sushi_lang/backend/generics/`
 (`list/`, `hashmap/`, `maybe.py`, `own.py`, `results.py`), with the IR-free half
 (method validation, type-table plumbing) in the mirroring
-`sushi_lang/semantics/generics/`. There is no `sushi_stdlib/generics/` directory —
-it existed pre-Tier-4.2 and was deleted when the split above was introduced.
+`sushi_lang/semantics/generics/`.
 
 ## Troubleshooting
 
@@ -206,8 +237,8 @@ platform directories are not interchangeable. Build on the target platform (or v
 **Edited a generator, nothing changed** — normal compiles rebuild automatically
 (`ensure_stdlib_built`) as long as the edited file is under `sushi_stdlib/src/`, is
 `sushi_stdlib/build.py`, or is one of the paths in
-`compute_stdlib_source_fingerprint()`. If the file isn't covered (see the
-`core/primitives` gap above), force it with `./sushic --build-stdlib`. As a last
+`_stdlib_generator_sources()`. If the file isn't covered, force it with
+`./sushic --build-stdlib`. As a last
 resort, delete `dist/<platform>/.build_fingerprint` to force the next compile to treat
 the directory as stale.
 
@@ -218,5 +249,5 @@ the directory as stale.
 ## See Also
 
 - [Libraries](../libraries.md) - User library creation (`.slib` format)
-- [Library Format](../library-format.md) - `.slib` binary format specification
+- [Library Format](../library-format.md) - `.slib` file format specification
 - [Architecture](architecture.md) - Compiler overview

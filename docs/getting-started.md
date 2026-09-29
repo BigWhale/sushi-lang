@@ -9,7 +9,8 @@ This guide will help you set up Sushi and write your first program.
 - **Python 3.13+** (managed by uv)
 - **LLVM 20** (for code generation - llvmlite 0.45 requirement)
 - **cmake** (required for building llvmlite)
-- **macOS, Linux, or WSL** (Windows support via WSL)
+- **macOS or Linux** (the standard library is built for `darwin` and `linux`; Windows is not a
+  supported target)
 
 ## Installation
 
@@ -41,13 +42,13 @@ source .venv/bin/activate
 [latest release](https://github.com/BigWhale/sushi-lang/releases/latest) and install it:
 
 ```bash
-pip install sushi_lang-0.10.0-py3-none-any.whl
+pip install sushi_lang-0.12.0-py3-none-any.whl
 ```
 
 Or install straight from the release URL without downloading first:
 
 ```bash
-pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.10.0/sushi_lang-0.10.0-py3-none-any.whl
+pip install https://github.com/BigWhale/sushi-lang/releases/download/v0.12.0/sushi_lang-0.12.0-py3-none-any.whl
 ```
 
 Or, using the GitHub CLI together with `uv`:
@@ -62,7 +63,7 @@ This installs the `sushic` compiler and the `nori` package manager onto your `PA
 **3. Verify:**
 
 ```bash
-sushic --help
+sushic --version
 ```
 
 **Note**: Installed from the wheel, the compiler is the `sushic` command on your `PATH`. The rest
@@ -132,15 +133,15 @@ brew install uv
 ### 4. Install Python Dependencies
 
 ```bash
-# Install all dependencies (including dev dependencies)
-uv sync --dev
+# Install all dependencies, and the dev tools
+uv sync --extra dev
 
 # This will:
 # - Create a virtual environment at .venv/
 # - Install lark (parser)
 # - Build and install llvmlite (LLVM bindings)
-# - Install colorama (colored output)
-# - Install dev tools (pytest, ruff, black, mypy)
+# - Install colorama (colored output) and msgpack
+# - Install the dev tools (pytest, pytest-xdist, ruff, mypy, vulture, pre-commit, tqdm)
 ```
 
 **Note**: Building llvmlite may take a few minutes on first install.
@@ -152,18 +153,18 @@ uv sync --dev
 uv run python sushi_lang/sushi_stdlib/build.py
 
 # This generates LLVM bitcode for:
-# - collections/strings, io/fs, io/files
-# - time, math, sys/env, random
+# - collections/strings, core/primitives, io/files
+# - time, math, sys/env, sys/process, random, net/socket
 ```
 
 ### 6. Verify Installation
 
 ```bash
 # Test the compiler
-./sushic --help
+./sushic --version
 
 # You should see:
-# 🍣 Sushi (すし) Lang Compiler • 0.10.0
+# 🍣 Sushi (すし) Lang Compiler • 0.12.0
 # Python 3.x.x • llvmlite 0.45.1 • LLVM 20.x.x
 ```
 
@@ -187,7 +188,7 @@ fn main() i32:
 ./sushic hello.sushi
 ```
 
-This creates an executable named `hello` (or `hello.exe` on Windows).
+This creates an executable named `hello`.
 
 ### 3. Run It
 
@@ -209,8 +210,9 @@ fn main() i32:
 ```
 - Every Sushi program starts with a `main` function
 - It returns `i32` (a 32-bit integer)
-- Actually, all functions implicitly return `Result@(T)`, so a regular would return `Result@(i32)`, however, 
-  because this is `main`, it will automatically realise this Result and return an integer back to shell.
+- Every function returns a `Result@(T, E)`. A function that declares only `i32` returns
+  `Result@(i32, StdError)`. For `main`, the compiler takes the integer out of the Result and
+  gives it to the shell as the exit code.
 
 ```sushi
     println("Mostly Harmless")
@@ -222,9 +224,9 @@ fn main() i32:
 ```sushi
     return Result.Ok(0)
 ```
-- Explicit error handling: functions return `Result.Ok(value)` for success
-- Or `Result.Err()` for failure
-- The compiler enforces that you handle all possible errors
+- Explicit error handling: a function returns `Result.Ok(value)` for success
+- Or `Result.Err(error)` for failure, for example `Result.Err(StdError.Error)`
+- A Result that you do not use gives a warning (CW2001)
 
 ## Compilation Options
 
@@ -314,10 +316,11 @@ Compile and run:
 ./calculator
 ```
 
-Output:
+Output (both calls to `divide` run before the checks, so the message from `divide` comes
+first):
 ```
-42 / 6 = 7
 Error: Cannot divide by zero!
+42 / 6 = 7
 Second division failed (as expected)
 ```
 
@@ -352,7 +355,7 @@ chmod +x sushic
 Install dependencies with uv:
 
 ```bash
-uv sync --dev
+uv sync --extra dev
 ```
 
 ### "llvmlite only officially supports LLVM 20"
@@ -365,7 +368,7 @@ brew uninstall llvm
 brew install llvm@20
 
 # Then rebuild dependencies
-uv sync --dev
+uv sync --extra dev
 ```
 
 ### "FileNotFoundError: [Errno 2] No such file or directory: 'cmake'"

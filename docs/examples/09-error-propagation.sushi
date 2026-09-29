@@ -1,7 +1,7 @@
 # Example 09: Error Propagation with ??
 #
 # This example demonstrates the ?? operator for automatic error propagation.
-# The ?? operator provides a clean way to handle Result@(T) values by either
+# The ?? operator provides a clean way to handle Result@(T, E) values by either
 # unwrapping the Ok value or immediately propagating the Err up the call stack.
 #
 # Key concepts covered:
@@ -27,7 +27,7 @@ fn might_fail(bool succeed) i32:
 fn calculate_with_propagation(bool succeed) i32:
     # Demonstrates ?? operator chaining multiple fallible operations
     # If might_fail returns Err, ?? propagates it immediately and
-    # this function returns Result.Err() without executing further code
+    # this function returns that Result.Err(...) without executing further code
     let i32 value = might_fail(succeed)??
 
     # This line only executes if might_fail succeeded
@@ -43,7 +43,7 @@ fn main() i32:
     println("Success case: {result1}")  # Prints: 142
 
     # Failure case: might_fail(false) returns Err, which propagates immediately
-    # The function returns Result.Err(), so .realise(-1) returns the default -1
+    # The function returns a Result.Err(...), so .realise(-1) returns the default -1
     let i32 result2 = calculate_with_propagation(false).realise(-1)
     println("Failure case: {result2}")  # Prints: -1
 

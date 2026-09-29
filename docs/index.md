@@ -16,7 +16,7 @@ compiler internals in one place.
 
 ## Start here
 
-- **[Tutorial](tutorial/index.md)** — a guided, start-to-finish course in 14 chapters; every
+- **[Tutorial](tutorial/index.md)** — a guided, start-to-finish course in 19 chapters; every
   example is compiled and run.
 - **[Getting Started](getting-started.md)** — install the compiler and build your first program.
 - **[Language Guide](language-guide.md)** — a friendly tour of Sushi's key features.
@@ -30,6 +30,7 @@ compiler internals in one place.
 - [Perks](perks.md) — traits/interfaces for polymorphism with static dispatch
 - [First-Class Functions](first-class-functions.md) — function types and function values
 - [Closures](closures.md) — capturing lambda literals and escaping closures
+- [Variadics](variadics.md) — native `...T`, parameter packs, and C variadic externs
 - [Foreign Function Interface](ffi.md) — calling external C functions via `unsafe external`
 
 ## Reference
@@ -39,14 +40,17 @@ compiler internals in one place.
 - [Standard Library](standard-library.md) — built-in types (`Result`, `Maybe`, `List`, `HashMap`)
 - [Compiler Reference](compiler-reference.md) — CLI options, optimization levels, error codes
 - [Libraries](libraries.md) — creating and linking reusable libraries
-- [Library Format](library-format.md) — the `.slib` binary format
+- [Library Format](library-format.md) — the `.slib` file format
 - [Nori Package Manager](package-manager.md) — packaging, installing, and managing libraries
 
 ## Standard library
 
-`Result` and `Maybe`; collections (`arrays`, `List`, `HashMap`, `strings`); I/O
-(`console`, `files`); and `math`, `time`, `random`, `env`, `process`, `platform`. See the
-**Standard library** section in the navigation.
+`Result` and `Maybe`; collections (arrays, `List`, `HashMap`, strings, the `iter`
+combinators); I/O (console, files, errors, the `Reader`/`Writer`/`Seek` contracts, buffered
+I/O, path algebra, file-system operations); networking (errors, sockets, TCP, UDP, DNS, IP
+addresses, URLs); MessagePack, zlib compression and the `.slib` reader; and `math`, `time`,
+`random`, `env`, `process`, `platform`. See the **Standard library** section in the
+navigation.
 
 ## Internals
 

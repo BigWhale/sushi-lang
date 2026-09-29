@@ -7,20 +7,23 @@ advanced features and compiler internals.
 
 **New to Sushi?** Start here:
 - [Getting Started](getting-started.md) - Installation, setup, and your first program
-- [Tutorial](tutorial/index.md) - A guided, start-to-finish tutorial (14 chapters, every example compiled and run). Builds into a static site with MkDocs: `uv sync --extra docs && uv run mkdocs serve`
+- [Tutorial](tutorial/index.md) - A guided, start-to-finish tutorial (19 chapters, every example compiled and run). Builds into a static site with MkDocs: `uv sync --extra docs && uv run mkdocs serve`
 - [Language Guide](language-guide.md) - Friendly tour of Sushi's key features
-- [Examples](examples/README.md) - Learn by example with 21 annotated programs
+- [Examples](examples/README.md) - Learn by example with 29 annotated programs
 
 ## Language Documentation
 
 **Core language reference:**
 - [Language Reference](language-reference.md) - Complete syntax and semantics reference
 - [Documentation Blocks](documentation-blocks.md) - `##: ... :##`, the three positions, the tag vocabulary, and the checks
-- [Standard Library](standard-library.md) - Built-in types (`Result@(T)`, `Maybe@(T)`, `List@(T)`, `HashMap@(K,V)`)
-- [Error Handling](error-handling.md) - `Result@(T)`, `Maybe@(T)`, and the `??` operator
+- [Standard Library](standard-library.md) - Built-in types (`Result@(T, E)`, `Maybe@(T)`, `List@(T)`, `HashMap@(K, V)`)
+- [Error Handling](error-handling.md) - `Result@(T, E)`, `Maybe@(T)`, and the `??` operator
 - [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own@(T)`
 - [Generics](generics.md) - Generic types, functions, and monomorphization
 - [Perks](perks.md) - Traits/interfaces for polymorphic behavior with static dispatch
+- [First-Class Functions](first-class-functions.md) - Function types and function values
+- [Closures](closures.md) - Capturing lambda literals and escaping closures
+- [Variadics](variadics.md) - Native `...T`, parameter packs, and C variadic externs
 - [Foreign Function Interface](ffi.md) - Calling external C functions via `unsafe external` (the `ptr` type, the Result-exemption, the safe-wrapper pattern)
 
 ## Tooling
@@ -33,7 +36,7 @@ advanced features and compiler internals.
 **Using and understanding the compiler:**
 - [Compiler Reference](compiler-reference.md) - CLI options, optimization levels, error codes
 - [Libraries](libraries.md) - Creating and linking reusable libraries
-- [Library Format](library-format.md) - `.slib` binary format specification
+- [Library Format](library-format.md) - `.slib` file format specification
 - [Internals: Architecture](internals/architecture.md) - Compiler pipeline and design
 - [Internals: Semantic Passes](internals/semantic-passes.md) - Pass-by-pass analysis details
 - [Internals: Backend](internals/backend.md) - LLVM code generation
@@ -42,7 +45,7 @@ advanced features and compiler internals.
 ## Examples
 
 Browse [examples/](examples/README.md) directory for hands-on learning:
-- Basic programs (hello world, variables, functions)
+- Basic programs (the first program, variables, functions)
 - String handling and interpolation
 - Error handling patterns
 - Collections (arrays, lists, hashmaps)
@@ -87,7 +90,7 @@ nori remove my-package                     # Remove a package
 ```sushi
 use <io/fs>
 
-# Functions return Result@(T)
+# A function that declares T returns Result@(T, StdError)
 fn add(i32 a, i32 b) i32:
     return Result.Ok(a + b)
 
@@ -99,7 +102,7 @@ fn read_file() string | IoError:
 # Pattern matching
 match result:
     Result.Ok(value) -> println("Got: {value}")
-    Result.Err() -> println("Failed")
+    Result.Err(_) -> println("Failed")
 
 # Generics
 struct Pair@(T, U):

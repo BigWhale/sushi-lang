@@ -15,7 +15,7 @@
 # - Single quotes ('...'): Plain literals, no interpolation
 #
 # Sushi strings are UTF-8 encoded. String concatenation is done via
-# interpolation, not the + operator. Many string methods return Result@(T)
+# interpolation, not the + operator. Many string methods return Result@(T, E)
 # or Maybe@(T) for safe error handling.
 
 use <collections/strings>
