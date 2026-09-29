@@ -20,7 +20,7 @@ each named for the stage it runs.
 | `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
 | `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
-| `ffi-clash` | reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
+| `ffi-clash` | fold each link name written as a string constant (CE5015), then reject an `unsafe external` that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
 | `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing (CE0138) | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |

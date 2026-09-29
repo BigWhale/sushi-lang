@@ -127,7 +127,8 @@ class SemanticAnalyzer:
             externs       extern signatures, ptr unit gate       _check_externs                    passes/types/externals.py
             libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
-            ffi-clash     an extern naming a defined symbol      _check_ffi_clash                  passes/types/externals.py
+            ffi-clash     link-name constants, then an extern    _check_ffi_clash                  passes/types/externals.py
+                          naming a defined symbol
             entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
             instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
             monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
@@ -358,7 +359,8 @@ class SemanticAnalyzer:
             self._merge_unit(unit_reporter)
 
     def _check_ffi_clash(self, compilation_order: list[Unit]) -> None:
-        """ffi-clash: an extern naming a symbol this build defines (CE5013)."""
+        """ffi-clash: fold the link-name constants (#1089), then an extern naming a symbol
+        this build defines (CE5013)."""
         # An `unsafe external` may name a FOREIGN symbol, never one this build defines
         # (#470). It reads the whole program's symbols, the linked libraries included, so
         # it cannot run with the per-unit extern validation above -- the registry does

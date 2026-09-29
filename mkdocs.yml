@@ -166,4 +166,5 @@ nav:
       - "Intermediate Representation (design)": design/ir.md
       - "Slib Info Tool (design)": design/slib-info.md
       - "Stdlib Syscall Layer (design)": design/stdlib-syscall-layer.md
+      - "FFI Memory Features (design)": design/ffi-memory.md
   - Examples: examples/README.md
