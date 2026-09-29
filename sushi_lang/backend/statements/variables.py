@@ -135,6 +135,8 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     if isinstance(dst, ir.IntType):
         casted_value = codegen.utils.cast_to_int_width(val, dst)
         codegen.builder.store(casted_value, slot)
+    elif isinstance(dst, (ir.FloatType, ir.DoubleType)):
+        codegen.builder.store(val, slot)
     elif (isinstance(dst, ir.PointerType) and
           isinstance(dst.pointee, ir.IntType) and
           dst.pointee.width == 8):

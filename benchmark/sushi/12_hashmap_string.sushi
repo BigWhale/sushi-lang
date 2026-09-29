@@ -1,0 +1,13 @@
+use <collections/hashmap>
+
+fn main() i32:
+    let i32 n = 200000
+    let HashMap@(string, i32) m = HashMap.new()
+    foreach(i in 0..n):
+        m.insert("key{i}", i)
+    let i64 total = 0
+    foreach(i in 0..n):
+        if (m.contains_key("key{i * 3}")):
+            total := total + 1
+    println("{m.len()} {total}")
+    return Result.Ok(0)

@@ -1,0 +1,8 @@
+fn tak(i32 x, i32 y, i32 z) i32:
+    if (y < x):
+        return Result.Ok(tak(tak(x - 1, y, z)??, tak(y - 1, z, x)??, tak(z - 1, x, y)??)??)
+    return Result.Ok(z)
+
+fn main() i32:
+    println(tak(22, 16, 8).realise(0))
+    return Result.Ok(0)

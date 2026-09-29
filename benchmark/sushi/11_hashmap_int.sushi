@@ -1,0 +1,14 @@
+use <collections/hashmap>
+
+fn main() i32:
+    let i32 n = 500000
+    let HashMap@(i32, i32) m = HashMap.new()
+    foreach(i in 0..n):
+        m.insert(i * 7, i)
+    let i64 total = 0
+    foreach(i in 0..n * 2):
+        match m.get(i * 7):
+            Maybe.Some(v) -> total := total + (v as i64)
+            Maybe.None() -> total := total + 0
+    println("{m.len()} {total}")
+    return Result.Ok(0)

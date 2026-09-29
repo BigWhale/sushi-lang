@@ -1,0 +1,6 @@
+fn main() i32:
+    let i64 s = 0
+    foreach(i in 0..30000000):
+        s := s + (((i % 7) * 3) as i64)
+    println(s)
+    return Result.Ok(0)

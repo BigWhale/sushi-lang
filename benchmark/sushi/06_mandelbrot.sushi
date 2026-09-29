@@ -1,0 +1,21 @@
+fn main() i32:
+    let i32 w = 240
+    let i32 h = 160
+    let i32 max_iter = 100
+    let i32 inside = 0
+    foreach(py in 0..h):
+        foreach(px in 0..w):
+            let f64 cr = (px as f64) * 3.0 / (w as f64) - 2.0
+            let f64 ci = (py as f64) * 2.0 / (h as f64) - 1.0
+            let f64 zr = 0.0
+            let f64 zi = 0.0
+            let i32 it = 0
+            while (it < max_iter and zr * zr + zi * zi <= 4.0):
+                let f64 t = zr * zr - zi * zi + cr
+                zi := 2.0 * zr * zi + ci
+                zr := t
+                it := it + 1
+            if (it == max_iter):
+                inside := inside + 1
+    println(inside)
+    return Result.Ok(0)

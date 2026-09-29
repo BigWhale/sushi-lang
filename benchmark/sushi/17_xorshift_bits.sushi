@@ -1,0 +1,10 @@
+fn main() i32:
+    let u64 x = 88172645463325252
+    let u64 acc = 0
+    foreach(_ in 0..10000000):
+        x := x ^ (x << 13)
+        x := x ^ (x >> 7)
+        x := x ^ (x << 17)
+        acc := acc + (x >> 56)
+    println(acc)
+    return Result.Ok(0)

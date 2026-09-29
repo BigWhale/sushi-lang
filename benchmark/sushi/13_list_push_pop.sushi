@@ -1,0 +1,9 @@
+fn main() i32:
+    let List@(i32) l = List.new()
+    foreach(i in 0..3000000):
+        l.push(i % 1000)
+    let i64 total = 0
+    while (not l.is_empty()):
+        total := total + (l.pop().realise(0) as i64)
+    println(total)
+    return Result.Ok(0)

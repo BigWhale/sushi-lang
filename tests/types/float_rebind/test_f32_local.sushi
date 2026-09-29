@@ -1,0 +1,9 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: 1.5\n
+#
+# A rebind of a local f32 stores the new value.
+fn main() i32:
+    let f32 s = 0.0
+    s := 1.5
+    println(s)
+    return Result.Ok(0)
