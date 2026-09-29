@@ -10,7 +10,8 @@ from typing import Any, Optional
 
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, ForeignPtrType, Type
+from sushi_lang.semantics.typesys import (
+    BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, ReferenceType, Type)
 
 # The C ABI's own allowlist. It is not the numeric set plus two: a `~` crosses the
 # boundary as void, and nothing else here is a numeric rule.
@@ -55,6 +56,22 @@ def is_c_abi_scalar(ty: Optional[Type]) -> bool:
 def is_c_abi_type(ty: Optional[Type]) -> bool:
     """Strict allowlist for a declared parameter or return."""
     return is_c_abi_scalar(ty) or nullable_payload(ty) is not None
+
+
+def is_byte_buffer(ty: Optional[Type]) -> bool:
+    """A `u8[]`, bare or `peek` / `poke`: it crosses as the pointer to its first byte (#1088).
+
+    A parameter only. C cannot answer a Sushi array, and a C callee cannot take one, so
+    a return is CE5003 and `nom` is CE2428 like every `nom` at the boundary.
+    """
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    return isinstance(ty, DynamicArrayType) and ty.base_type == BuiltinType.U8
+
+
+def is_c_abi_param(ty: Optional[Type]) -> bool:
+    """The allowlist of a declared parameter: the return's, plus a byte buffer."""
+    return is_c_abi_type(ty) or is_byte_buffer(ty)
 
 
 def intern_boundary_type(ty: Optional[Type], enums: Any) -> Optional[Type]:

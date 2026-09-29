@@ -1,0 +1,9 @@
+# A `poke u8[]` extern parameter is marked at both ends (#1088), as every `poke` is.
+# EXPECT_ERROR_CODE: CE2006
+unsafe external "C" as libc because "probe":
+    fn read(i32 fd, poke u8[] buf, i64 n) i64 = "read"
+
+fn main() i32:
+    let u8[] buf = from([0; 8])
+    let i64 got = libc.read(0, buf, 8)
+    return Result.Ok(got as i32)

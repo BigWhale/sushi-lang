@@ -1,0 +1,19 @@
+# A `poke u8[]` extern parameter lets C fill the array in place (#1088): `read` writes
+# into a zeroed buffer, and `truncate` cuts it to the count C answered.
+# RUN_IN_FIXTURE_DIR
+# EXPECT_STDOUT_EXACT: "15: Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "reading bytes from a descriptor":
+    fn open(string path, i32 flags, ...) i32 = "open"
+    fn read(i32 fd, poke u8[] buf, i64 n) i64 = "read"
+    fn close(i32 fd) i32 = "close"
+
+fn main() i32:
+    let i32 fd = libc.open("towel.txt", 0)
+    let u8[] buf = from([0; 64])
+    let i64 got = libc.read(fd, poke buf, buf.len() as i64)
+    let i32 rc = libc.close(fd)
+    buf.truncate(got as i32)
+    println("{got}: {buf.to_string()}")
+    return Result.Ok(rc)

@@ -78,8 +78,10 @@ External signatures are limited to the **C-representable subset**:
 - `string` - auto-marshalled to/from C `char*` (below)
 - `Maybe@(string)` and `Maybe@(ptr)` - a pointer that may be NULL
   ([Null at the boundary](#null-at-the-boundary))
+- `u8[]`, `peek u8[]` and `poke u8[]` - a byte buffer, as a parameter only
+  ([Byte buffers](#byte-buffers))
 
-Anything else (`Result@(T,E)`, any other `Maybe@(T)`, structs, arrays `T[]`,
+Anything else (`Result@(T,E)`, any other `Maybe@(T)`, structs, other arrays,
 references, named user types) is a hard error: **`CE5003`**. The check is a strict
 allowlist, so an unknown user type cannot slip through.
 
@@ -168,6 +170,47 @@ A Sushi `string` is a UTF-8 fat pointer with three fields,
 The copy is per-call. The marshalling is invisible in your source, but the
 freeing is real: inspect the IR with `./sushic --dump-ll` and you will see a
 `free` of the marshalled `char*` in the function's cleanup path.
+
+### Byte buffers
+
+A `u8[]` parameter crosses as the pointer to its first byte. The count is a separate
+parameter, as C declares it, and the Sushi side passes `buf.len()` or the size it
+allocated.
+
+| Written | Crosses as | The C side may |
+|---|---|---|
+| `u8[] buf` or `peek u8[] buf` | `i8*` to the first byte | read `len` bytes |
+| `poke u8[] buf` | `i8*` to the first byte | read and write `len` bytes |
+| `nom u8[] buf` | refused, `CE2428` | a C function cannot take ownership of a Sushi array |
+| a `u8[]` return | refused, `CE5003` | C cannot answer a Sushi array; a `ptr` plus a copy is the route |
+
+A C function fills a `poke` buffer in place and answers a count. The wrapper allocates
+the buffer with `from([0; n])`, so every byte has a value and `len` is `n`, and then
+cuts it to the count with `.truncate(count)`. Nothing sets a length past what was
+written, so no uninitialized byte is ever readable.
+
+<!-- docs-sweep: skip (reads a file that the page does not ship) -->
+```sushi
+unsafe external "C" as libc because "reading bytes from a descriptor":
+    fn open(string path, i32 flags, ...) i32 = "open"
+    fn read(i32 fd, poke u8[] buf, i64 n) i64 = "read"
+    fn close(i32 fd) i32 = "close"
+
+fn main() i32:
+    let i32 fd = libc.open("towel.txt", 0)
+    let u8[] buf = from([0; 64])
+    let i64 got = libc.read(fd, poke buf, buf.len() as i64)
+    let i32 rc = libc.close(fd)
+    buf.truncate(got as i32)
+    println(buf.to_string())
+    return Result.Ok(rc)
+```
+
+The `poke` argument is a write for the borrow checker, as any `poke` argument is, and
+it is marked at both ends. The array is a borrow at the call and stays the caller's;
+nothing is registered for a scope-exit free, unlike a marshalled `string`. A `u8[]` in
+the `...` position of a variadic extern is `CE5005`. Other element types (`i32[]`,
+`f64[]`) and a fixed `u8[N]` stay `CE5003` for now.
 
 ## Variadic externs
 

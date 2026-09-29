@@ -13,7 +13,8 @@ from llvmlite import ir
 from sushi_lang.backend.expressions.calls.utils import marshal_cstr
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.semantics.externs_manifest import ERRNO_LOCATION_SYMBOLS
-from sushi_lang.semantics.ffi_boundary import is_pointer_value, nullable_payload
+from sushi_lang.semantics.ffi_boundary import (
+    is_byte_buffer, is_pointer_value, nullable_payload)
 from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHODS, FOREIGN_PTR_WIDTHS
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, deref_type
 
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
 def marshal_argument(codegen: 'LLVMCodegen', arg, param_ty) -> ir.Value:
     """The C value of one fixed argument."""
     value = codegen.expressions.emit_expr(arg)
+    if is_byte_buffer(param_ty):
+        return _byte_buffer_data(codegen, arg, value, deref_type(param_ty))
     if param_ty == BuiltinType.STRING:
         return marshal_cstr(codegen, value)
     payload = nullable_payload(param_ty)
@@ -31,6 +34,20 @@ def marshal_argument(codegen: 'LLVMCodegen', arg, param_ty) -> ir.Value:
         own_temporary(codegen, arg, value, param_ty)
         return _marshal_nullable(codegen, value, param_ty, payload)
     return value
+
+
+def _byte_buffer_data(codegen: 'LLVMCodegen', arg, value: ir.Value, array_ty) -> ir.Value:
+    """A `u8[]` crosses as its data pointer (#1088). A named array stays the caller's,
+    a borrow at the call; a temporary gets an owner here, as any unbound value does."""
+    from sushi_lang.backend.gep_utils import gep_dynamic_array_data
+    from sushi_lang.backend.types.arrays.addressing import as_array_address
+
+    if isinstance(value.type, ir.PointerType):
+        address = value  # a `peek` / `poke` argument: the caller's own descriptor
+    else:
+        slot = own_temporary(codegen, arg, value, array_ty)
+        address = slot if slot is not None else as_array_address(codegen, value)
+    return codegen.builder.load(gep_dynamic_array_data(codegen, address), name="ffi_bytes")
 
 
 def _marshal_nullable(codegen: 'LLVMCodegen', maybe: ir.Value, maybe_ty, payload) -> ir.Value:

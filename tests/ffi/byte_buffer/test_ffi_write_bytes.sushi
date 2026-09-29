@@ -1,0 +1,14 @@
+# A `u8[]` extern parameter crosses as the pointer to its first byte (#1088), so
+# `write` sends the bytes of the array.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+unsafe external "C" as libc because "writing bytes to a descriptor":
+    fn write(i32 fd, u8[] buf, i64 n) i64 = "write"
+
+fn main() i32:
+    let u8[] buf = "Mostly Harmless\n".to_bytes()
+    let i64 sent = libc.write(1, buf, buf.len() as i64)
+    return Result.Ok((sent - 16) as i32)

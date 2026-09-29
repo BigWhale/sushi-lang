@@ -1,0 +1,14 @@
+# A `peek u8[]` extern parameter is the same crossing, marked at both ends (#1088).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n16\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+unsafe external "C" as libc because "writing bytes to a descriptor":
+    fn write(i32 fd, peek u8[] buf, i64 n) i64 = "write"
+
+fn main() i32:
+    let u8[] buf = "Mostly Harmless\n".to_bytes()
+    let i64 sent = libc.write(1, peek buf, buf.len() as i64)
+    println("{buf.len()}")
+    return Result.Ok((sent - 16) as i32)

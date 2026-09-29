@@ -19,7 +19,7 @@ _add(ErrorMessage("CE5002", Severity.ERROR,
 
 _add(ErrorMessage("CE5003", Severity.ERROR,
     "external signature uses non-C-ABI type '{type}'",
-    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL (#1085): a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, an array, a reference and a user type cannot cross the C ABI boundary."))
+    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL (#1085): a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A PARAMETER may also be a byte buffer, `u8[]`, `peek u8[]` or `poke u8[]`, which crosses as the pointer to its first byte (#1088); a `u8[]` return is refused, because C cannot answer a Sushi array. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, any other array (`i32[]`, a fixed `u8[N]`), a reference and a user type cannot cross the C ABI boundary."))
 
 _add(ErrorMessage("CE5004", Severity.ERROR,
     "variadic external '{name}' requires at least one fixed parameter",
