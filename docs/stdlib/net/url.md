@@ -45,7 +45,7 @@ use <net/url>
 fn main() i32:
     match parse_url("https://omakase.lubica.net/api/v1/packages?q=json"):
         Result.Ok(u) ->
-            println("{u.scheme} {u.host} {u.port_or_default()} {u.path}")
+            println("{u.scheme} {u.host} {u.port_or_default().realise(0)} {u.path}")
         Result.Err(e) -> println("{e.text()}")
 
     return Result.Ok(0)
@@ -60,9 +60,9 @@ The query is the **raw** text after `?`, not a list of pairs: whether `&` or `;`
 
 `parse_url` is the one free function. The questions a parsed URL answers are **bare** extension methods — none of them can fail, so none carries a wrapper.
 
-### `u.port_or_default() i32`
+### `u.port_or_default() Maybe@(i32)`
 
-The written port, or the scheme's default. The known schemes are `http` 80, `https` 443, `ws` 80, `wss` 443, `ftp` 21 and `ssh` 22; anything else with no port answers `-1`.
+The written port, or the scheme's default. The known schemes are `http` 80, `https` 443, `ws` 80, `wss` 443, `ftp` 21 and `ssh` 22; anything else with no port answers `Maybe.None()`.
 
 ### `u.host_is_ipv6_literal() bool`
 
