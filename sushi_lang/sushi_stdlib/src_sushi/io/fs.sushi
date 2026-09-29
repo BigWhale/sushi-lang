@@ -407,7 +407,7 @@ by line wants BufReader from <io/buf>.
 - Returns: The line, or None at end of file.
 - Errors: IoError, when the read failed.
 :##
-extend File readln() Maybe@(string) | IoError:
+extend File readln(poke self) Maybe@(string) | IoError:
     match fd_readln(self.fd):
         Result.Ok(nom line) -> return Result.Ok(line)
         Result.Err(e) -> return Result.Err(e.to_io())

@@ -146,7 +146,7 @@ Read input from standard input.
 Read a line from stdin (blocks until newline).
 
 ```sushi
-fn File.readln() Maybe@(string) | IoError
+fn File.readln(poke self) Maybe@(string) | IoError
 ```
 
 **Returns:** the line without its newline, or `Maybe.None` when standard input ends. A

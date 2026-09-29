@@ -34,6 +34,10 @@ All notable changes to Sushi Lang will be documented in this file.
 - **Every public error enum of the Sushi-source stdlib has `text()`.** `ZError`,
   `MpError` and `SlibError` now give one stable line through `e.text()`, as `UrlError`
   did. `zlib_error_text(e)` is gone: write `e.text()`, with no `??`.
+- **`File.readln()` takes `poke self`,** as `readch()`, `writeln()` and `tell()` do: all
+  four move the file position. A read-only `File` (a plain parameter, a `peek` binding, a
+  bare-`self` extension) cannot call it any more (CE2421 / CE2422); declare the receiver
+  `poke`.
 
 ## [0.13.0] - 2026-09-29
 

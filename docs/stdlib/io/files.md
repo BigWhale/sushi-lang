@@ -220,7 +220,7 @@ fn main() i32:
 Read one line from the file, without its newline.
 
 ```sushi
-fn File.readln() Maybe@(string) | IoError
+fn File.readln(poke self) Maybe@(string) | IoError
 ```
 
 **Returns:** the line, or `Maybe.None` at end of file. A blank line is `Maybe.Some("")`,
