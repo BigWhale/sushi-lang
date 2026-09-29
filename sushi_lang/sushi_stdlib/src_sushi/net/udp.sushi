@@ -26,6 +26,7 @@ time round.
 
 use <net/socket>
 public use <net/error>
+public use <net/handle>
 
 ##:
 One bound UDP socket.

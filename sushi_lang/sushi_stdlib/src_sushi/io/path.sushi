@@ -42,7 +42,7 @@ A path with a trailing separator has an empty basename.
 public fn basename(string path) string:
     match path.find_last("/"):
         Maybe.Some(i) -> return Result.Ok(path.s(i + 1, path.len()))
-        Maybe.None -> return Result.Ok(path.clone())
+        Maybe.None() -> return Result.Ok(path.clone())
 
 ##:
 Returns the part before the last separator.
@@ -60,7 +60,7 @@ public fn dirname(string path) string:
             if (head.replace("/", "").is_empty()):
                 return Result.Ok(head)
             return Result.Ok(strip_trailing_separators(head)??)
-        Maybe.None -> return Result.Ok("")
+        Maybe.None() -> return Result.Ok("")
 
 ##:
 Returns the extension of the last component, without the leading dot.
@@ -79,7 +79,7 @@ public fn extension(string path) string:
             if (leading_dots_reach(name, d)??):
                 return Result.Ok("")
             return Result.Ok(name.s(d + 1, name.len()))
-        Maybe.None -> return Result.Ok("")
+        Maybe.None() -> return Result.Ok("")
 
 ##:
 Normalizes a path lexically.
@@ -102,14 +102,12 @@ public fn normalize(string path) string:
     foreach(part in parts.iter()):
         if (part.is_empty() or part == "."):
             ~
+        elif (part == ".."):
+            pop_or_keep_dotdot(poke kept, rooted)
         else:
-            if (part == ".."):
-                pop_or_keep_dotdot(poke kept, rooted)
-            else:
-                kept.push(part.clone())
+            kept.push(part.clone())
 
     let string body = rebuild(kept)??
-    kept.free()
     if (rooted):
         return Result.Ok(root.concat(body))
     if (body.is_empty()):
@@ -176,10 +174,10 @@ fn pop_or_keep_dotdot(poke List@(string) kept, bool rooted) ~:
                 if (last == ".."):
                     kept.push("..")
                     return Result.Ok(~)
-            Maybe.None -> ~
+            Maybe.None() -> ~
         match kept.pop():
             Maybe.Some(_) -> ~
-            Maybe.None -> ~
+            Maybe.None() -> ~
         return Result.Ok(~)
     if (not rooted):
         kept.push("..")
@@ -201,5 +199,5 @@ fn rebuild(List@(string) kept) string:
                     out := out.concat("/").concat(part)
                 else:
                     out := part.clone()
-            Maybe.None -> ~
+            Maybe.None() -> ~
     return Result.Ok(out)

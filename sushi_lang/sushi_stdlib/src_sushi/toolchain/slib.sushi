@@ -1,18 +1,19 @@
 ##:
-A reader for the metadata of a `.slib` library, written in Sushi.
+A reader for a `.slib` library, written in Sushi.
 
-The module reads the fixed 52-byte little-endian header and the MessagePack metadata
-map of a version-4 `.slib` file. It agrees with the Python reader
-`LibraryFormat.read_metadata_only`. It reads the length of a payload section, and never
-the payload itself.
+The module reads the fixed 52-byte little-endian header, the MessagePack metadata map
+and the section lengths of a version-4 `.slib` file. It reads the length of a payload
+section, and never the payload itself. The three readers walk one header with one
+error enum, so each gives the same fault for a damaged file:
 
-`read_library` is the reader of `slib-info`. It also makes sure that the metadata map
-has the shape of a manifest (`check_manifest`), and its `SlibFault` names each fault as
-precisely as the Python reader of `--lib-info` does.
+- `read_metadata` reads the metadata map. It agrees with the Python reader
+  `LibraryFormat.read_metadata_only`.
+- `sizes` and `bitcode_size` read the section lengths. They do not compare the bitcode
+  length with the file.
+- `read_library` is the reader of `slib-info`. It compares every length with the file,
+  and makes sure that the metadata map has the shape of a manifest (`check_manifest`).
 
-The four spare header fields are read and not validated. Metadata must be less than
-2 GiB: a larger length casts to a negative count, the read gives no bytes, and the
-decode of the empty blob fails.
+The four spare header fields are read and not validated.
 :##
 
 use <io/fs>
@@ -20,333 +21,47 @@ public use <io/error>
 use <encoding/msgpack>
 use <collections/strings>
 
+##: The 16 bytes at the start of every `.slib` file. :##
+const u8[16] SLIB_MAGIC = [0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3]
+
+##: The length of the fixed header, in bytes. :##
+const u64 HEADER_SIZE = 52
+
+##: The length of the magic at the start of the header, in bytes. :##
+const u64 MAGIC_SIZE = 16
+
+##: The offset of the container version (a u32) in the header. :##
+const i32 VERSION_AT = 16
+
+##: The offset of the metadata length (a u64) in the header. :##
+const i32 METADATA_LENGTH_AT = 44
+
+##: The container version that this reader reads. :##
+const u64 CONTAINER_VERSION = 4
+
+##: The length of the field before each payload section that gives its length, in bytes. :##
+const u64 LENGTH_FIELD_SIZE = 8
+
+##: The largest `.slib` file that a reader reads: 1 GiB, as in the Python reader. :##
+public const u64 SLIB_MAX_FILE_SIZE = 1_073_741_824
+
+##: A section of a `.slib` file. :##
+public enum SlibSection:
+    ##: The header and the metadata blob. :##
+    Metadata()
+    ##: The source section and its length field. :##
+    Source()
+    ##: The bitcode section and its length field. :##
+    Bitcode()
+
 ##:
-Why a .slib file could not be read.
+Why a `.slib` file could not be read.
 
 `Io` carries the error of the open or of a read, so a directory, a file with no read
 permission and a missing file each keep their own cause. `Truncated` is a file that
 ends too early, and never a read that failed.
 :##
 public enum SlibError:
-    ##: The open or a read failed. The `IoError` names the cause. :##
-    Io(IoError)
-    ##: The 16 magic bytes at the start of the file do not match. :##
-    BadMagic()
-    ##: The header gives a container version that is not 4. :##
-    BadVersion(u32)
-    ##: The file ends inside the header or inside a section. :##
-    Truncated()
-    ##: The metadata blob is not valid MessagePack. :##
-    Decode(MpError)
-
-##:
-Reads an unsigned little-endian integer from a byte buffer.
-
-The caller makes sure that the buffer holds the bytes. The `SlibError` channel lets a
-caller use `??`.
-
-- Parameter h: The buffer to read.
-- Parameter off: The index of the first byte.
-- Parameter nbytes: The number of bytes to read, 8 or fewer.
-- Returns: The integer.
-- Errors: This function does not fail.
-:##
-fn slib_le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
-    let u64 acc = 0
-    foreach(i in 0..nbytes):
-        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
-    return Result.Ok(acc)
-
-##:
-Opens a file to read bytes, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter path: The path of the file.
-- Returns: The open file.
-- Errors: `SlibError.Io` when the open fails.
-:##
-fn slib_open(string path) File | SlibError:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) -> return Result.Ok(f)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Reads bytes from a file, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter f: The file to read.
-- Parameter count: The number of bytes to read.
-- Returns: The bytes. At the end of the file there are fewer than `count`.
-- Errors: `SlibError.Io` when the read fails.
-:##
-fn slib_read(poke File f, i32 count) u8[] | SlibError:
-    match f.read_bytes(count):
-        Result.Ok(nom bytes) -> return Result.Ok(bytes)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Gives the size of an open file, and puts the file back at its start.
-
-- Parameter f: The file.
-- Returns: The size, in bytes.
-- Errors: `SlibError.Io` when a seek fails.
-:##
-fn slib_size(poke File f) u64 | SlibError:
-    match f.seek(0, SeekFrom.End):
-        Result.Ok(end) ->
-            match f.seek(0, SeekFrom.Start):
-                Result.Ok(_) -> return Result.Ok(end as u64)
-                Result.Err(e) -> return Result.Err(SlibError.Io(e))
-        Result.Err(e) ->
-            return Result.Err(SlibError.Io(e))
-
-##:
-Moves forward in a file, and puts an `IoError` in the `SlibError` channel.
-
-- Parameter f: The file.
-- Parameter count: The number of bytes to step over.
-- Errors: `SlibError.Io` when the seek fails.
-:##
-fn slib_skip(poke File f, u64 count) ~ | SlibError:
-    match f.seek(count as i64, SeekFrom.Current):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(SlibError.Io(e))
-
-##:
-Makes sure that the header has the correct magic, a full length, and the version.
-
-The magic comes first in the file, so it is checked first: a file whose first bytes
-are not the magic is `BadMagic` whatever its length.
-
-- Parameter header: The header bytes. There can be fewer than 52.
-- Errors: `SlibError.BadMagic`, `SlibError.Truncated` or `SlibError.BadVersion`.
-:##
-fn slib_header_check(peek u8[] header) ~ | SlibError:
-    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    foreach(i in 0..header.len()):
-        if (i < 16 and header[i] != magic[i]):
-            return Result.Err(SlibError.BadMagic())
-    if (header.len() < 52):
-        return Result.Err(SlibError.Truncated())
-    let u64 version = slib_le_uint(peek header, 16, 4)??
-    if (version != 4):
-        return Result.Err(SlibError.BadVersion(version as u32))
-    return Result.Ok(~)
-
-##:
-Reads and decodes the metadata map of a `.slib` file.
-
-The metadata length that the header gives is compared with the size of the file
-before the blob is read.
-
-- Parameter path: The path of the library.
-- Returns: The metadata map, as a `MsgValue` tree.
-- Errors: A `SlibError` that names the fault.
-:##
-public fn read_metadata(string path) MsgValue | SlibError:
-    let File f = slib_open(path)??
-    let u64 total = slib_size(poke f)??
-    let u8[] header = slib_read(poke f, 52)??
-    slib_header_check(peek header)??
-    let u64 mlen = slib_le_uint(peek header, 44, 8)??
-    if (mlen > total - 52):
-        return Result.Err(SlibError.Truncated())
-    let u8[] blob = slib_read(poke f, mlen as i32)??
-    match decode(blob):
-        Result.Ok(nom v) ->
-            return Result.Ok(v)
-        Result.Err(e) ->
-            return Result.Err(SlibError.Decode(e))
-
-##:
-The byte lengths of the two payload sections after the metadata blob.
-
-A source library has no bitcode, and a binary library has no source.
-:##
-public struct SlibSizes:
-    ##: The length of the source section, in bytes. :##
-    u64 source
-    ##: The length of the bitcode section, in bytes. :##
-    u64 bitcode
-
-##:
-Reads the length of the two payload sections, in one pass over the file.
-
-A version-4 container has a length-prefixed source section between the metadata and
-the bitcode. Thus the reader steps over the source section to get to the bitcode
-length. The metadata and source lengths are compared with what is left of the file.
-The bitcode length is read and not compared: `read_library` compares it.
-
-- Parameter path: The path of the library.
-- Returns: The two lengths.
-- Errors: A `SlibError` that names the fault.
-:##
-public fn sizes(string path) SlibSizes | SlibError:
-    let File f = slib_open(path)??
-    let u64 total = slib_size(poke f)??
-    let u8[] header = slib_read(poke f, 52)??
-    slib_header_check(peek header)??
-    let u64 mlen = slib_le_uint(peek header, 44, 8)??
-    let u64 left = total - 52
-    if (mlen > left):
-        return Result.Err(SlibError.Truncated())
-    slib_skip(poke f, mlen)??
-    left := left - mlen
-    let u8[] src_field = slib_read(poke f, 8)??
-    if (src_field.len() < 8):
-        return Result.Err(SlibError.Truncated())
-    left := left - 8
-    let u64 slen = slib_le_uint(peek src_field, 0, 8)??
-    if (slen > left):
-        return Result.Err(SlibError.Truncated())
-    slib_skip(poke f, slen)??
-    left := left - slen
-    let u8[] size_field = slib_read(poke f, 8)??
-    if (size_field.len() < 8):
-        return Result.Err(SlibError.Truncated())
-    let u64 bclen = slib_le_uint(peek size_field, 0, 8)??
-    return Result.Ok(SlibSizes(slen, bclen))
-
-##:
-Reads the length of the bitcode section alone.
-
-- Parameter path: The path of the library.
-- Returns: The length of the bitcode section, in bytes.
-- Errors: A `SlibError` that names the fault.
-:##
-public fn bitcode_size(string path) u64 | SlibError:
-    let SlibSizes both = sizes(path)??
-    return Result.Ok(both.bitcode)
-
-##:
-The shape of a manifest, one row per field that a reader uses.
-
-A row is four words: the record kind, the key, the type, and whether the field is
-required. The Python reader has the same rows in `MANIFEST_SCHEMA`
-(`sushi_lang/backend/library_format.py`), and the two tables must agree.
-:##
-const string[111] SLIB_MANIFEST_SCHEMA = [
-    'manifest library_name str yes',
-    'manifest library_version str yes',
-    'manifest platform str yes',
-    'manifest compiler_version str yes',
-    'manifest compiled_at str yes',
-    'manifest sushi_lib_version str yes',
-    'manifest kind str no',
-    'manifest requires_compiler str no',
-    'manifest units strs no',
-    'manifest unit_docs {}doc no',
-    'manifest reexports []reexport no',
-    'manifest public_functions []function no',
-    'manifest public_constants []constant no',
-    'manifest public_variables []constant no',
-    'manifest structs []struct no',
-    'manifest enums []enum no',
-    'manifest templates @templates no',
-    'manifest not_exported []not_exported no',
-    'manifest foreign_extensions []foreign_extension no',
-    'manifest dependencies strs no',
-    'templates generic_functions []function no',
-    'templates generic_structs []generic_type no',
-    'templates generic_enums []generic_type no',
-    'templates perks []perk no',
-    'templates perk_impls []perk_impl no',
-    'templates generic_perk_impls []perk_impl no',
-    'templates private_functions []helper no',
-    'templates constants []closure_constant no',
-    'templates private_types []private_type no',
-    'function name str yes',
-    'function return_type str yes',
-    'function params []param no',
-    'function type_params []type_param no',
-    'function error_type str no',
-    'function source str no',
-    'function unit str no',
-    'function doc @doc no',
-    'helper name str yes',
-    'helper params []param no',
-    'helper return_type str no',
-    'helper error_type str no',
-    'helper unit str no',
-    'helper link_symbol str no',
-    'param name str yes',
-    'param type str yes',
-    'param mode str no',
-    'type_param name str yes',
-    'type_param constraints strs no',
-    'type_param is_pack bool no',
-    'constant name str yes',
-    'constant type str yes',
-    'constant source str no',
-    'constant link_symbol str no',
-    'constant doc @doc no',
-    'closure_constant name str no',
-    'closure_constant source str no',
-    'closure_constant link_symbol str no',
-    'private_type name str no',
-    'private_type source str no',
-    'struct name str yes',
-    'struct fields []field yes',
-    'struct is_generic bool no',
-    'struct type_params strs no',
-    'struct doc @doc no',
-    'field name str yes',
-    'field type str yes',
-    'field doc @doc no',
-    'enum name str yes',
-    'enum variants []variant yes',
-    'enum is_generic bool no',
-    'enum type_params strs no',
-    'enum doc @doc no',
-    'variant name str yes',
-    'variant has_data bool no',
-    'variant data_types strs has_data',
-    'variant doc @doc no',
-    'generic_type name str yes',
-    'generic_type source str no',
-    'generic_type type_params []type_param no',
-    'generic_type doc @doc no',
-    'perk name str yes',
-    'perk source str no',
-    'perk methods []method no',
-    'perk doc @doc no',
-    'perk_impl type str yes',
-    'perk_impl perk str yes',
-    'perk_impl type_args strs no',
-    'perk_impl source str no',
-    'perk_impl methods []method no',
-    'perk_impl doc @doc no',
-    'method name str yes',
-    'method return_type str yes',
-    'method params []param no',
-    'method self_mode str no',
-    'method error_type str no',
-    'method doc @doc no',
-    'doc summary str no',
-    'doc body str no',
-    'doc params map no',
-    'doc examples []example no',
-    'doc returns str no',
-    'doc errors str no',
-    'example code str yes',
-    'example caption str no',
-    'reexport unit str yes',
-    'reexport path str yes',
-    'reexport kind str no',
-    'not_exported name str yes',
-    'not_exported kind str no',
-    'foreign_extension type str yes',
-    'foreign_extension method str yes'
-]
-
-##: The largest `.slib` file that `read_library` reads: 1 GiB, as in the Python reader. :##
-const u64 SLIB_MAX_FILE_SIZE = 1073741824
-
-##:
-Why `read_library` could not read a library.
-
-It gives the cause in more detail than `SlibError`: a truncation names the section
-and the byte counts, and a manifest with the wrong shape names the field.
-:##
-public enum SlibFault:
     ##: The open or a read failed. The `IoError` names the cause. :##
     Io(IoError)
     ##: The 16 magic bytes at the start of the file do not match. :##
@@ -362,14 +77,33 @@ public enum SlibFault:
     ##: The metadata map does not have the shape of a manifest. The string gives the reason. :##
     Invalid(string)
 
-##: A section of a `.slib` file. :##
-public enum SlibSection:
-    ##: The header and the metadata blob. :##
-    Metadata()
-    ##: The source section and its length field. :##
-    Source()
-    ##: The bitcode section and its length field. :##
-    Bitcode()
+##:
+Gives one stable line of text for an error.
+
+The text does not include the payloads, so a caller can compare it.
+
+- Returns: The text.
+:##
+extend SlibError text() string:
+    match self:
+        SlibError.Io(_) -> return "the file cannot be read"
+        SlibError.BadMagic() -> return "not a .slib file (bad magic)"
+        SlibError.BadVersion(_) -> return "unsupported container version"
+        SlibError.Truncated(_, _, _) -> return "a section is truncated"
+        SlibError.TooLarge(_) -> return "the file is larger than 1 GiB"
+        SlibError.Decode(_) -> return "the metadata does not decode as MessagePack"
+        SlibError.Invalid(_) -> return "the metadata does not have the shape of a manifest"
+
+##:
+The byte lengths of the two payload sections after the metadata blob.
+
+A source library has no bitcode, and a binary library has no source.
+:##
+public struct SlibSizes:
+    ##: The length of the source section, in bytes. :##
+    u64 source
+    ##: The length of the bitcode section, in bytes. :##
+    u64 bitcode
 
 ##: A library that `read_library` read: its manifest and the lengths of its payload sections. :##
 public struct SlibLibrary:
@@ -379,28 +113,343 @@ public struct SlibLibrary:
     SlibSizes sizes
 
 ##:
-Gives the word at a position in a row of words that one space divides.
+Reads an unsigned little-endian integer from a byte buffer.
 
-- Parameter row: The row.
-- Parameter n: The position of the word, from 0.
-- Returns: The word, or `""` when the row has fewer words.
+The caller makes sure that the buffer holds the bytes.
+
+- Parameter h: The buffer to read.
+- Parameter off: The index of the first byte.
+- Parameter nbytes: The number of bytes to read, 8 or fewer.
+- Returns: The integer.
 - Errors: This function does not fail.
 :##
-fn schema_word(string row, i32 n) string | SlibFault:
-    let string rest = row.clone()
-    let i32 i = 0
-    while (i < n):
-        match rest.find(" "):
-            Maybe.Some(at) ->
-                rest := rest.s(at + 1, rest.len())
-            Maybe.None() ->
-                return Result.Ok("")
-        i := i + 1
-    match rest.find(" "):
-        Maybe.Some(at) ->
-            return Result.Ok(rest.s(0, at))
-        Maybe.None() ->
-            return Result.Ok(rest)
+fn le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
+    let u64 acc = 0
+    foreach(i in 0..nbytes):
+        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
+    return Result.Ok(acc)
+
+##:
+Opens a file to read bytes.
+
+- Parameter path: The path of the file.
+- Returns: The open file.
+- Errors: `SlibError.Io` when the open fails.
+:##
+fn open_library(string path) File | SlibError:
+    match open(path, FileMode.ReadB()):
+        Result.Ok(nom f) -> return Result.Ok(f)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
+
+##:
+Gives the size of an open file, and puts the file back at its start.
+
+- Parameter f: The file.
+- Returns: The size, in bytes.
+- Errors: `SlibError.Io` when a seek fails.
+:##
+fn file_size(poke File f) u64 | SlibError:
+    match f.seek(0, SeekFrom.End):
+        Result.Ok(end) ->
+            match f.seek(0, SeekFrom.Start):
+                Result.Ok(_) -> return Result.Ok(end as u64)
+                Result.Err(e) -> return Result.Err(SlibError.Io(e))
+        Result.Err(e) ->
+            return Result.Err(SlibError.Io(e))
+
+##:
+Reads the bytes of one part of a section, after it makes sure that the file has them.
+
+- Parameter f: The file to read.
+- Parameter count: The number of bytes that the section needs.
+- Parameter left: The number of bytes that are left in the file.
+- Parameter section: The section that the bytes are in.
+- Returns: The bytes.
+- Errors: `SlibError.Truncated` when `count` is more than `left` or the read gives
+  fewer bytes, `SlibError.Io` when the read fails.
+:##
+fn read_part(poke File f, u64 count, u64 left, SlibSection section) u8[] | SlibError:
+    if (count > left):
+        return Result.Err(SlibError.Truncated(section, count, left))
+    match f.read_bytes(count as i32):
+        Result.Ok(nom bytes) ->
+            if ((bytes.len() as u64) < count):
+                return Result.Err(SlibError.Truncated(section, count, bytes.len() as u64))
+            return Result.Ok(bytes)
+        Result.Err(e) ->
+            return Result.Err(SlibError.Io(e))
+
+##:
+Steps over one part of a section, after it makes sure that the file has it.
+
+- Parameter f: The file.
+- Parameter count: The number of bytes that the section needs.
+- Parameter left: The number of bytes that are left in the file.
+- Parameter section: The section that the bytes are in.
+- Errors: `SlibError.Truncated` when `count` is more than `left`, `SlibError.Io` when
+  the seek fails.
+:##
+fn skip_part(poke File f, u64 count, u64 left, SlibSection section) ~ | SlibError:
+    if (count > left):
+        return Result.Err(SlibError.Truncated(section, count, left))
+    match f.seek(count as i64, SeekFrom.Current):
+        Result.Ok(_) -> return Result.Ok(~)
+        Result.Err(e) -> return Result.Err(SlibError.Io(e))
+
+##:
+Reads and checks the fixed header, and gives the metadata length.
+
+The checks are in the order of the Python reader of `--lib-info`: the magic first, so
+a file whose first bytes are not the magic is `BadMagic` whatever its length, then the
+size limit, then the header length, then the version.
+
+- Parameter f: The file, at its start.
+- Parameter total: The size of the file.
+- Returns: The length of the metadata blob. It is not yet compared with the file.
+- Errors: `SlibError.BadMagic`, `SlibError.TooLarge`, `SlibError.Truncated`,
+  `SlibError.BadVersion` or `SlibError.Io`.
+:##
+fn read_header(poke File f, u64 total) u64 | SlibError:
+    let u64 first = MAGIC_SIZE
+    if (total < MAGIC_SIZE):
+        first := total
+    let u8[] header = read_part(poke f, first, total, SlibSection.Metadata())??
+    foreach(i in 0..header.len()):
+        if (header[i] != SLIB_MAGIC[i]):
+            return Result.Err(SlibError.BadMagic())
+    if (total > SLIB_MAX_FILE_SIZE):
+        return Result.Err(SlibError.TooLarge(total))
+    if (total < HEADER_SIZE):
+        return Result.Err(SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, total))
+    let u8[] rest = read_part(poke f, HEADER_SIZE - first, total - first, SlibSection.Metadata())??
+    header.extend(rest)
+    let u64 version = le_uint(peek header, VERSION_AT, 4)??
+    if (version != CONTAINER_VERSION):
+        return Result.Err(SlibError.BadVersion(version as u32))
+    return Result.Ok(le_uint(peek header, METADATA_LENGTH_AT, 8)??)
+
+##:
+Reads and decodes the metadata blob.
+
+- Parameter f: The file, after the header.
+- Parameter mlen: The length of the blob.
+- Parameter left: The number of bytes that are left in the file.
+- Returns: The metadata map, as a `MsgValue` tree.
+- Errors: `SlibError.Truncated`, `SlibError.Decode` or `SlibError.Io`.
+:##
+fn read_blob(poke File f, u64 mlen, u64 left) MsgValue | SlibError:
+    let u8[] blob = read_part(poke f, mlen, left, SlibSection.Metadata())??
+    match decode(blob):
+        Result.Ok(nom meta) -> return Result.Ok(meta)
+        Result.Err(e) -> return Result.Err(SlibError.Decode(e))
+
+##:
+Reads the lengths of the two payload sections, and steps over the source section.
+
+A version-4 container has a length-prefixed source section between the metadata and
+the bitcode. Thus the reader steps over the source section to get to the bitcode
+length. The source length is compared with what is left of the file, and the bitcode
+length is not.
+
+- Parameter f: The file, after the metadata blob.
+- Parameter left: The number of bytes that are left in the file. The read takes the
+  two length fields and the source section off it.
+- Returns: The two lengths.
+- Errors: `SlibError.Truncated` or `SlibError.Io`.
+:##
+fn read_sections(poke File f, poke u64 left) SlibSizes | SlibError:
+    let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Source())??
+    left := left - LENGTH_FIELD_SIZE
+    let u64 slen = le_uint(peek src_field, 0, 8)??
+    skip_part(poke f, slen, left, SlibSection.Source())??
+    left := left - slen
+    let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Bitcode())??
+    left := left - LENGTH_FIELD_SIZE
+    let u64 bclen = le_uint(peek bc_field, 0, 8)??
+    return Result.Ok(SlibSizes(slen, bclen))
+
+##:
+Reads and decodes the metadata map of a `.slib` file.
+
+- Parameter path: The path of the library.
+- Returns: The metadata map, as a `MsgValue` tree.
+- Errors: A `SlibError` that names the fault.
+:##
+public fn read_metadata(string path) MsgValue | SlibError:
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    return Result.Ok(read_blob(poke f, mlen, total - HEADER_SIZE)??)
+
+##:
+Reads the length of the two payload sections, in one pass over the file.
+
+The metadata blob is stepped over and not decoded. The bitcode length is read and not
+compared with the file: `read_library` compares it.
+
+- Parameter path: The path of the library.
+- Returns: The two lengths.
+- Errors: A `SlibError` that names the fault.
+:##
+public fn sizes(string path) SlibSizes | SlibError:
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    let u64 left = total - HEADER_SIZE
+    skip_part(poke f, mlen, left, SlibSection.Metadata())??
+    left := left - mlen
+    return Result.Ok(read_sections(poke f, poke left)??)
+
+##:
+Reads the length of the bitcode section alone.
+
+- Parameter path: The path of the library.
+- Returns: The length of the bitcode section, in bytes.
+- Errors: A `SlibError` that names the fault.
+:##
+public fn bitcode_size(string path) u64 | SlibError:
+    let SlibSizes both = sizes(path)??
+    return Result.Ok(both.bitcode)
+
+##: Whether a record must hold a field. :##
+enum Presence:
+    ##: The record must hold the field. :##
+    Required()
+    ##: The record can leave the field out. :##
+    Optional()
+    ##: The record must hold the field when its bool field of this name is true. :##
+    RequiredWhen(string)
+
+##: One row of the manifest shape: a field of one record kind. :##
+struct SchemaRow:
+    ##: The record kind that the row applies to. :##
+    string kind
+    ##: The key of the field. :##
+    string key
+    ##: The schema type of the value. :##
+    string spec
+    ##: Whether the record must hold the field. :##
+    Presence presence
+
+##:
+The shape of a manifest, one row per field that a reader uses.
+
+The Python reader has the same rows in `MANIFEST_SCHEMA`
+(`sushi_lang/backend/library_format.py`), and the two tables must agree.
+:##
+const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
+    SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
+    SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'platform', 'str', Presence.Required()),
+    SchemaRow('manifest', 'compiler_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'compiled_at', 'str', Presence.Required()),
+    SchemaRow('manifest', 'sushi_lib_version', 'str', Presence.Required()),
+    SchemaRow('manifest', 'kind', 'str', Presence.Optional()),
+    SchemaRow('manifest', 'requires_compiler', 'str', Presence.Optional()),
+    SchemaRow('manifest', 'units', 'strs', Presence.Optional()),
+    SchemaRow('manifest', 'unit_docs', '{}doc', Presence.Optional()),
+    SchemaRow('manifest', 'reexports', '[]reexport', Presence.Optional()),
+    SchemaRow('manifest', 'public_functions', '[]function', Presence.Optional()),
+    SchemaRow('manifest', 'public_constants', '[]constant', Presence.Optional()),
+    SchemaRow('manifest', 'public_variables', '[]constant', Presence.Optional()),
+    SchemaRow('manifest', 'structs', '[]struct', Presence.Optional()),
+    SchemaRow('manifest', 'enums', '[]enum', Presence.Optional()),
+    SchemaRow('manifest', 'templates', '@templates', Presence.Optional()),
+    SchemaRow('manifest', 'not_exported', '[]not_exported', Presence.Optional()),
+    SchemaRow('manifest', 'foreign_extensions', '[]foreign_extension', Presence.Optional()),
+    SchemaRow('manifest', 'dependencies', 'strs', Presence.Optional()),
+    SchemaRow('templates', 'generic_functions', '[]function', Presence.Optional()),
+    SchemaRow('templates', 'generic_structs', '[]generic_type', Presence.Optional()),
+    SchemaRow('templates', 'generic_enums', '[]generic_type', Presence.Optional()),
+    SchemaRow('templates', 'perks', '[]perk', Presence.Optional()),
+    SchemaRow('templates', 'perk_impls', '[]perk_impl', Presence.Optional()),
+    SchemaRow('templates', 'generic_perk_impls', '[]perk_impl', Presence.Optional()),
+    SchemaRow('templates', 'private_functions', '[]helper', Presence.Optional()),
+    SchemaRow('templates', 'constants', '[]closure_constant', Presence.Optional()),
+    SchemaRow('templates', 'private_types', '[]private_type', Presence.Optional()),
+    SchemaRow('function', 'name', 'str', Presence.Required()),
+    SchemaRow('function', 'return_type', 'str', Presence.Required()),
+    SchemaRow('function', 'params', '[]param', Presence.Optional()),
+    SchemaRow('function', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('function', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('function', 'source', 'str', Presence.Optional()),
+    SchemaRow('function', 'unit', 'str', Presence.Optional()),
+    SchemaRow('function', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('helper', 'name', 'str', Presence.Required()),
+    SchemaRow('helper', 'params', '[]param', Presence.Optional()),
+    SchemaRow('helper', 'return_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'unit', 'str', Presence.Optional()),
+    SchemaRow('helper', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('param', 'name', 'str', Presence.Required()),
+    SchemaRow('param', 'type', 'str', Presence.Required()),
+    SchemaRow('param', 'mode', 'str', Presence.Optional()),
+    SchemaRow('type_param', 'name', 'str', Presence.Required()),
+    SchemaRow('type_param', 'constraints', 'strs', Presence.Optional()),
+    SchemaRow('type_param', 'is_pack', 'bool', Presence.Optional()),
+    SchemaRow('constant', 'name', 'str', Presence.Required()),
+    SchemaRow('constant', 'type', 'str', Presence.Required()),
+    SchemaRow('constant', 'source', 'str', Presence.Optional()),
+    SchemaRow('constant', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('constant', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('closure_constant', 'name', 'str', Presence.Optional()),
+    SchemaRow('closure_constant', 'source', 'str', Presence.Optional()),
+    SchemaRow('closure_constant', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('private_type', 'name', 'str', Presence.Optional()),
+    SchemaRow('private_type', 'source', 'str', Presence.Optional()),
+    SchemaRow('struct', 'name', 'str', Presence.Required()),
+    SchemaRow('struct', 'fields', '[]field', Presence.Required()),
+    SchemaRow('struct', 'is_generic', 'bool', Presence.Optional()),
+    SchemaRow('struct', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('struct', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('field', 'name', 'str', Presence.Required()),
+    SchemaRow('field', 'type', 'str', Presence.Required()),
+    SchemaRow('field', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('enum', 'name', 'str', Presence.Required()),
+    SchemaRow('enum', 'variants', '[]variant', Presence.Required()),
+    SchemaRow('enum', 'is_generic', 'bool', Presence.Optional()),
+    SchemaRow('enum', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('enum', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('variant', 'name', 'str', Presence.Required()),
+    SchemaRow('variant', 'has_data', 'bool', Presence.Optional()),
+    SchemaRow('variant', 'data_types', 'strs', Presence.RequiredWhen('has_data')),
+    SchemaRow('variant', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('generic_type', 'name', 'str', Presence.Required()),
+    SchemaRow('generic_type', 'source', 'str', Presence.Optional()),
+    SchemaRow('generic_type', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('generic_type', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('perk', 'name', 'str', Presence.Required()),
+    SchemaRow('perk', 'source', 'str', Presence.Optional()),
+    SchemaRow('perk', 'methods', '[]method', Presence.Optional()),
+    SchemaRow('perk', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('perk_impl', 'type', 'str', Presence.Required()),
+    SchemaRow('perk_impl', 'perk', 'str', Presence.Required()),
+    SchemaRow('perk_impl', 'type_args', 'strs', Presence.Optional()),
+    SchemaRow('perk_impl', 'source', 'str', Presence.Optional()),
+    SchemaRow('perk_impl', 'methods', '[]method', Presence.Optional()),
+    SchemaRow('perk_impl', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('method', 'name', 'str', Presence.Required()),
+    SchemaRow('method', 'return_type', 'str', Presence.Required()),
+    SchemaRow('method', 'params', '[]param', Presence.Optional()),
+    SchemaRow('method', 'self_mode', 'str', Presence.Optional()),
+    SchemaRow('method', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('method', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('doc', 'summary', 'str', Presence.Optional()),
+    SchemaRow('doc', 'body', 'str', Presence.Optional()),
+    SchemaRow('doc', 'params', 'map', Presence.Optional()),
+    SchemaRow('doc', 'examples', '[]example', Presence.Optional()),
+    SchemaRow('doc', 'returns', 'str', Presence.Optional()),
+    SchemaRow('doc', 'errors', 'str', Presence.Optional()),
+    SchemaRow('example', 'code', 'str', Presence.Required()),
+    SchemaRow('example', 'caption', 'str', Presence.Optional()),
+    SchemaRow('reexport', 'unit', 'str', Presence.Required()),
+    SchemaRow('reexport', 'path', 'str', Presence.Required()),
+    SchemaRow('reexport', 'kind', 'str', Presence.Optional()),
+    SchemaRow('not_exported', 'name', 'str', Presence.Required()),
+    SchemaRow('not_exported', 'kind', 'str', Presence.Optional()),
+    SchemaRow('foreign_extension', 'type', 'str', Presence.Required()),
+    SchemaRow('foreign_extension', 'method', 'str', Presence.Required())
+]
 
 ##:
 Gives the schema word for the kind of a value.
@@ -409,7 +458,7 @@ Gives the schema word for the kind of a value.
 - Returns: `str`, `bool`, `map`, `list`, `nil`, or `other`.
 - Errors: This function does not fail.
 :##
-fn value_kind(MsgValue v) string | SlibFault:
+fn value_kind(MsgValue v) string | SlibError:
     match v:
         MsgValue.Str(_) -> return Result.Ok("str")
         MsgValue.Bool(_) -> return Result.Ok("bool")
@@ -425,7 +474,7 @@ Gives the words for a scalar schema type, as a reason says them.
 - Returns: The words.
 - Errors: This function does not fail.
 :##
-fn type_words(string spec) string | SlibFault:
+fn type_words(string spec) string | SlibError:
     if (spec == "str"):
         return Result.Ok("a string")
     if (spec == "bool"):
@@ -440,34 +489,46 @@ Finds the first field of a record that does not agree with the rows of its kind.
 - Parameter rec: The record. It is a map.
 - Parameter kind: The record kind of the rows to use.
 - Parameter where: The path of the record, or `""` for the top of the manifest.
-- Returns: The reason, or `Maybe.None` when the record agrees.
+- Returns: The reason, or `Maybe.None()` when the record agrees.
 - Errors: This function does not fail.
 :##
-fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibFault:
+fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibError:
     foreach(r in 0..SLIB_MANIFEST_SCHEMA.len()):
-        let string row_kind = schema_word(SLIB_MANIFEST_SCHEMA[r], 0)??
-        if (row_kind == kind):
-            let string key = schema_word(SLIB_MANIFEST_SCHEMA[r], 1)??
-            let string spec = schema_word(SLIB_MANIFEST_SCHEMA[r], 2)??
-            let string req = schema_word(SLIB_MANIFEST_SCHEMA[r], 3)??
-            let string name = key.clone()
+        let SchemaRow row = SLIB_MANIFEST_SCHEMA[r]
+        if (row.kind == kind):
+            let string name = row.key.clone()
             if (where != ""):
-                name := "{where}.{key}"
-            match map_index(rec, key).realise(Maybe.None()):
+                name := "{where}.{row.key}"
+            match map_index(rec, row.key).realise(Maybe.None()):
                 Maybe.Some(at) ->
                     match rec:
                         MsgValue.Map(_, vals) ->
-                            let Maybe@(string) fault = value_fault(vals[at], spec, name)??
+                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)??
                             if (fault.is_some()):
                                 return Result.Ok(fault)
                         _ ->
                             return Result.Ok(Maybe.Some("field '{name}' is not a map"))
                 Maybe.None() ->
-                    if (req == "yes"):
-                        return Result.Ok(Maybe.Some("missing required field '{name}'"))
-                    if (req != "no" and map_get_bool(rec, req).realise(Maybe.None()).realise(false)):
+                    if (is_required(rec, row.presence)??):
                         return Result.Ok(Maybe.Some("missing required field '{name}'"))
     return Result.Ok(Maybe.None())
+
+##:
+Tells if a record must hold a field that it does not hold.
+
+- Parameter rec: The record. It is a map.
+- Parameter presence: The presence of the field in its row.
+- Returns: True when the record must hold the field.
+- Errors: This function does not fail.
+:##
+fn is_required(MsgValue rec, Presence presence) bool | SlibError:
+    match presence:
+        Presence.Required() ->
+            return Result.Ok(true)
+        Presence.Optional() ->
+            return Result.Ok(false)
+        Presence.RequiredWhen(flag) ->
+            return Result.Ok(map_get_bool(rec, flag).realise(Maybe.None()).realise(false))
 
 ##:
 Finds why a value does not have a schema type.
@@ -475,10 +536,10 @@ Finds why a value does not have a schema type.
 - Parameter v: The value.
 - Parameter spec: The schema type.
 - Parameter name: The path of the value.
-- Returns: The reason, or `Maybe.None` when the value has the type.
+- Returns: The reason, or `Maybe.None()` when the value has the type.
 - Errors: This function does not fail.
 :##
-fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibFault:
+fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibError:
     let string kind = value_kind(v)??
     if (spec == "nstr"):
         if (kind == "nil" or kind == "str"):
@@ -526,146 +587,39 @@ Makes sure that a metadata map has the shape of a manifest.
 The Python reader makes the same check with the same rows, and gives the same reason.
 
 - Parameter meta: The metadata map.
-- Errors: `SlibFault.Invalid` with the reason for the first field that is wrong.
+- Errors: `SlibError.Invalid` with the reason for the first field that is wrong.
 :##
-public fn check_manifest(MsgValue meta) ~ | SlibFault:
+public fn check_manifest(MsgValue meta) ~ | SlibError:
     let string kind = value_kind(meta)??
     if (kind != "map"):
-        return Result.Err(SlibFault.Invalid("the metadata is not a map"))
+        return Result.Err(SlibError.Invalid("the metadata is not a map"))
     match record_fault(meta, "manifest", "")??:
-        Maybe.Some(reason) ->
-            return Result.Err(SlibFault.Invalid(reason.clone()))
+        Maybe.Some(nom reason) ->
+            return Result.Err(SlibError.Invalid(reason))
         Maybe.None() ->
             return Result.Ok(~)
-
-##:
-Opens a file to read bytes, and puts an `IoError` in the `SlibFault` channel.
-
-- Parameter path: The path of the file.
-- Returns: The open file.
-- Errors: `SlibFault.Io` when the open fails.
-:##
-fn fault_open(string path) File | SlibFault:
-    match open(path, FileMode.ReadB()):
-        Result.Ok(nom f) -> return Result.Ok(f)
-        Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-
-##:
-Reads the bytes of one part of a section, after it makes sure that the file has them.
-
-- Parameter f: The file to read.
-- Parameter count: The number of bytes that the section needs.
-- Parameter left: The number of bytes that are left in the file.
-- Parameter section: The section that the bytes are in.
-- Returns: The bytes.
-- Errors: `SlibFault.Truncated` when `count` is more than `left`, `SlibFault.Io` when
-  the read fails.
-:##
-fn read_part(poke File f, u64 count, u64 left, SlibSection section) u8[] | SlibFault:
-    if (count > left):
-        return Result.Err(SlibFault.Truncated(section, count, left))
-    match f.read_bytes(count as i32):
-        Result.Ok(nom bytes) ->
-            if ((bytes.len() as u64) < count):
-                return Result.Err(SlibFault.Truncated(section, count, bytes.len() as u64))
-            return Result.Ok(bytes)
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Io(e))
-
-##:
-Steps over one part of a section, after it makes sure that the file has it.
-
-- Parameter f: The file.
-- Parameter count: The number of bytes that the section needs.
-- Parameter left: The number of bytes that are left in the file.
-- Parameter section: The section that the bytes are in.
-- Errors: `SlibFault.Truncated` when `count` is more than `left`, `SlibFault.Io` when
-  the seek fails.
-:##
-fn skip_part(poke File f, u64 count, u64 left, SlibSection section) ~ | SlibFault:
-    if (count > left):
-        return Result.Err(SlibFault.Truncated(section, count, left))
-    match f.seek(count as i64, SeekFrom.Current):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-
-##:
-Gives the size of an open file, and puts the file back at its start.
-
-- Parameter f: The file.
-- Returns: The size, in bytes.
-- Errors: `SlibFault.Io` when a seek fails.
-:##
-fn fault_size(poke File f) u64 | SlibFault:
-    match f.seek(0, SeekFrom.End):
-        Result.Ok(end) ->
-            match f.seek(0, SeekFrom.Start):
-                Result.Ok(_) -> return Result.Ok(end as u64)
-                Result.Err(e) -> return Result.Err(SlibFault.Io(e))
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Io(e))
-
-##:
-Tells if the bytes agree with the start of the magic.
-
-- Parameter bytes: The first bytes of the file. There can be fewer than 16.
-- Returns: True when each byte agrees with the magic at the same position.
-- Errors: This function does not fail.
-:##
-fn magic_matches(peek u8[] bytes) bool | SlibFault:
-    let u8[] magic = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    foreach(i in 0..bytes.len()):
-        if (i < 16 and bytes[i] != magic[i]):
-            return Result.Ok(false)
-    return Result.Ok(true)
 
 ##:
 Reads a whole library: its manifest, and the lengths of its payload sections.
 
 The reader makes the same checks as the Python reader of `--lib-info`, in the same
 order, so both halves of the command report the same fault for a damaged file: the
-magic first, then the size limit, then each length against what is left of the file,
-before the bytes are read. The
-manifest must have the shape of `SLIB_MANIFEST_SCHEMA`.
+header first, then each length against what is left of the file, before the bytes are
+read. The manifest must have the shape of `SLIB_MANIFEST_SCHEMA`.
 
 - Parameter path: The path of the library.
 - Returns: The manifest and the section lengths.
-- Errors: A `SlibFault` that names the fault.
+- Errors: A `SlibError` that names the fault.
 :##
-public fn read_library(string path) SlibLibrary | SlibFault:
-    let File f = fault_open(path)??
-    let u64 total = fault_size(poke f)??
-    let u64 first = 16
-    if (total < 16):
-        first := total
-    let u8[] magic = read_part(poke f, first, total, SlibSection.Metadata())??
-    if (not magic_matches(peek magic)??):
-        return Result.Err(SlibFault.BadMagic())
-    if (total > SLIB_MAX_FILE_SIZE):
-        return Result.Err(SlibFault.TooLarge(total))
-    if (total < 52):
-        return Result.Err(SlibFault.Truncated(SlibSection.Metadata(), 52, total))
-    let u8[] rest = read_part(poke f, 36, total - first, SlibSection.Metadata())??
-    let u64 version = slib_le_uint(peek rest, 0, 4).realise(0)
-    if (version != 4):
-        return Result.Err(SlibFault.BadVersion(version as u32))
-    let u64 mlen = slib_le_uint(peek rest, 28, 8).realise(0)
-    let u64 left = total - 52
-    let u8[] blob = read_part(poke f, mlen, left, SlibSection.Metadata())??
+public fn read_library(string path) SlibLibrary | SlibError:
+    let File f = open_library(path)??
+    let u64 total = file_size(poke f)??
+    let u64 mlen = read_header(poke f, total)??
+    let u64 left = total - HEADER_SIZE
+    let MsgValue meta = read_blob(poke f, mlen, left)??
     left := left - mlen
-    match decode(blob):
-        Result.Ok(nom meta) ->
-            let u8[] src_field = read_part(poke f, 8, left, SlibSection.Source())??
-            left := left - 8
-            let u64 slen = slib_le_uint(peek src_field, 0, 8).realise(0)
-            skip_part(poke f, slen, left, SlibSection.Source())??
-            left := left - slen
-            let u8[] bc_field = read_part(poke f, 8, left, SlibSection.Bitcode())??
-            left := left - 8
-            let u64 bclen = slib_le_uint(peek bc_field, 0, 8).realise(0)
-            if (bclen > left):
-                return Result.Err(SlibFault.Truncated(SlibSection.Bitcode(), bclen, left))
-            check_manifest(meta)??
-            return Result.Ok(SlibLibrary(meta, SlibSizes(slen, bclen)))
-        Result.Err(e) ->
-            return Result.Err(SlibFault.Decode(e))
+    let SlibSizes both = read_sections(poke f, poke left)??
+    if (both.bitcode > left):
+        return Result.Err(SlibError.Truncated(SlibSection.Bitcode(), both.bitcode, left))
+    check_manifest(meta)??
+    return Result.Ok(SlibLibrary(meta, both))

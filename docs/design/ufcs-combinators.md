@@ -179,8 +179,8 @@ Every unhandled-Result position has a gate:
 
 ## Scope, and what is parked
 
-**Owned elements**: `filter` ships fully general — it clones each kept element. `map`
-and `fold` stay copy/primitive-element, like the free functions.
+**Owned elements**: every combinator is general over the element type. `filter` clones
+each kept element, and `fold` clones `init` once, so an owning accumulator works too.
 
 **Parked open questions**, recorded and not expanded here:
 

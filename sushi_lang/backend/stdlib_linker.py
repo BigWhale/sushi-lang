@@ -120,6 +120,7 @@ class StdlibLinker:
         "io/path",
         "net/dns",
         "net/error",
+        "net/handle",
         "net/ip",
         "net/tcp",
         "net/udp",

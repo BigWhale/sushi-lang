@@ -146,7 +146,7 @@ Read input from standard input.
 Read a line from stdin (blocks until newline).
 
 ```sushi
-fn File.readln() Maybe@(string) | IoError
+fn File.readln(poke self) Maybe@(string) | IoError
 ```
 
 **Returns:** the line without its newline, or `Maybe.None` when standard input ends. A
@@ -534,7 +534,7 @@ use <io/fs>
 use <io/buf>
 
 fn emit_many(i32 count) ~ | IoError:
-    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
+    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)
     foreach(i in 0..count):
         out.write_line("line {i}")??
     out.finish()??               # the ONE drain, and its failure is seen

@@ -9,7 +9,7 @@ fn report@(W: Writer)(poke W dst, string line) ~ | IoError:
 
 fn write_log(string path) ~ | IoError:
     let File f = open(path, FileMode.Write())??
-    let BufWriter@(File) w = BufWriter.new(nom f, 8192)??
+    let BufWriter@(File) w = BufWriter.new(nom f, 8192)
     report(poke w, "Arthur: towel packed")??
     report(poke w, "Ford: thumb ready")??
     w.finish()??
@@ -17,7 +17,7 @@ fn write_log(string path) ~ | IoError:
 
 fn count_lines(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = BufReader.new(nom f, 4096)??
+    let BufReader@(File) r = BufReader.new(nom f, 4096)
     let i32 n = 0
     foreach(line?? in r.lines()):
         report(poke stdout, "read: {line}")??

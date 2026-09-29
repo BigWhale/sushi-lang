@@ -37,7 +37,7 @@ fn run() ~ | IoError:
     let string a = read_all(poke plain)??
     println("file: {a}")
 
-    let BufReader@(File) r = BufReader.new(nom open(PATH, FileMode.Read())??, 4)??
+    let BufReader@(File) r = BufReader.new(nom open(PATH, FileMode.Read())??, 4)
     let string b = read_all(poke r)??
     println("buffered: {b}")
 
@@ -49,7 +49,7 @@ fn run() ~ | IoError:
     let string d = again.read_all()??
     println("method: {d}")
 
-    let BufReader@(File) rb = BufReader.new(nom open(PATH, FileMode.Read())??, 4)??
+    let BufReader@(File) rb = BufReader.new(nom open(PATH, FileMode.Read())??, 4)
     let string e = rb.read_all()??
     println("buffered method: {e}")
     return Result.Ok(~)

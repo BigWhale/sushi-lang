@@ -1,4 +1,4 @@
-# The close helper has one home, <net/error>, and both socket modules reach it. A program
+# The close helper has one home, <net/handle>, and both socket modules reach it. A program
 # that imports <net/tcp> and <net/udp> closes a handle of each kind, and the helper is
 # public: a slot that already reads -1 is a success and stays -1.
 # EXPECT_RUNTIME_EXIT: 0

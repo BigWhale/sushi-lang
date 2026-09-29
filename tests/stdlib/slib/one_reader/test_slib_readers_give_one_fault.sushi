@@ -1,0 +1,79 @@
+# The three readers walk one header with one error enum, so each gives the same
+# detailed fault: a file that ends inside the header, and a metadata length past the
+# end of the file. The fixture removes its directory.
+# EXPECT_STDOUT_EXACT: "header: Truncated(Metadata, 52, 20) Truncated(Metadata, 52, 20) Truncated(Metadata, 52, 20)\nlong: Truncated(Metadata, 4096, 1) Truncated(Metadata, 4096, 1) Truncated(Metadata, 4096, 1)\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+
+use <io/fs>
+use <toolchain/slib>
+
+const string ROOT = "/tmp/sushi_slib_readers_give_one_fault"
+
+fn push_le(poke u8[] out, u64 value, i32 count) ~:
+    foreach(i in 0..count):
+        out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
+    return Result.Ok(~)
+
+fn header(u64 meta_len) u8[]:
+    let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
+    push_le(poke out, 4, 4)??
+    push_le(poke out, 0, 24)??
+    push_le(poke out, meta_len, 8)??
+    return Result.Ok(out)
+
+fn write_file(string path, peek u8[] bytes) bool:
+    match open(path, FileMode.WriteB()):
+        Result.Ok(nom out) ->
+            out.write_bytes(bytes)
+            out.close()
+            return Result.Ok(true)
+        Result.Err(_) ->
+            return Result.Ok(false)
+
+fn section(SlibSection s) string:
+    match s:
+        SlibSection.Metadata() -> return Result.Ok("Metadata")
+        SlibSection.Source() -> return Result.Ok("Source")
+        SlibSection.Bitcode() -> return Result.Ok("Bitcode")
+
+fn fault(SlibError e) string:
+    match e:
+        SlibError.Truncated(s, expected, actual) ->
+            return Result.Ok("Truncated({section(s)??}, {expected}, {actual})")
+        _ -> return Result.Ok("another SlibError")
+
+fn check(string name) ~:
+    let string path = "{ROOT}/{name}.slib"
+    let string a = "Ok"
+    match read_metadata(path):
+        Result.Ok(_) -> a := "Ok"
+        Result.Err(e) -> a := fault(e)??
+    let string b = "Ok"
+    match sizes(path):
+        Result.Ok(_) -> b := "Ok"
+        Result.Err(e) -> b := fault(e)??
+    let string c = "Ok"
+    match read_library(path):
+        Result.Ok(_) -> c := "Ok"
+        Result.Err(e) -> c := fault(e)??
+    println("{name}: {a} {b} {c}")
+    return Result.Ok(~)
+
+fn run_test() i32:
+    if (mkdir_all(ROOT, 0o755).is_err()):
+        return Result.Ok(1)
+    let u8[] cut = header(0)??
+    let u8[] short = cut.ss(0, 20)
+    write_file("{ROOT}/header.slib", peek short)??
+    let u8[] long = header(4096)??
+    long.push(0xc0)
+    write_file("{ROOT}/long.slib", peek long)??
+    check("header")??
+    check("long")??
+    remove_all(ROOT)
+    return Result.Ok(0)
+
+fn main() i32:
+    remove_all(ROOT)
+    return Result.Ok(run_test().realise(1))

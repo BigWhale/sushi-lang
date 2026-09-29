@@ -4,6 +4,41 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`<collections/iter>` takes an owning element and an owning accumulator.** The free
+  `filter` over a `List@(string)` was CE2411, and every `fold` with a `string` accumulator
+  was CE2426 and CE2411. Both diagnostics pointed into the stdlib source. `filter` now
+  clones each kept element, and `fold` clones `init` once.
+- **`MpError.Truncated` carries one kind of offset.** A str or bin payload shorter than its
+  count gave the end of the buffer, and a length prefix gave the read position. Every path
+  now gives the offset of the read that could not complete.
+
+### Changed
+
+- **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
+  `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`
+  names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file
+  larger than 1 GiB (`TooLarge`), as `read_library` did. A match on `SlibError.Truncated()`
+  becomes `SlibError.Truncated(_, _, _)`.
+- **`BufReader.new` and `BufWriter.new` have no error channel.** Neither could fail, so
+  every call wrote `??`. Each now answers the buffered type: drop the `??`, and a `match`
+  over the call becomes a plain binding.
+- **The four well-known IP addresses are constants.** `v4_loopback()`, `v4_any()`,
+  `v6_loopback()` and `v6_any()` are now `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK` and
+  `V6_ANY`, with no `??`.
+- **`Url.port_or_default()` answers `Maybe@(i32)`.** An unknown scheme with no written
+  port answered `-1`; it now answers `Maybe.None()`.
+- **`close_socket` moved to `<net/handle>`.** `<net/tcp>` and `<net/udp>` re-export it, so
+  a program that imports either one reaches it as before; `<net/error>` no longer has it.
+- **Every public error enum of the Sushi-source stdlib has `text()`.** `ZError`,
+  `MpError` and `SlibError` now give one stable line through `e.text()`, as `UrlError`
+  did. `zlib_error_text(e)` is gone: write `e.text()`, with no `??`.
+- **`File.readln()` takes `poke self`,** as `readch()`, `writeln()` and `tell()` do: all
+  four move the file position. A read-only `File` (a plain parameter, a `peek` binding, a
+  bare-`self` extension) cannot call it any more (CE2421 / CE2422); declare the receiver
+  `poke`.
+
 ## [0.13.0] - 2026-09-29
 
 A program can now talk to the world around it. `File` is an ordinary type in `<io/fs>`,

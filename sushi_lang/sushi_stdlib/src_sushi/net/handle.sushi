@@ -1,0 +1,30 @@
+##:
+net/handle -- the release of a socket descriptor, for every socket handle of the net modules.
+
+`<net/tcp>` and `<net/udp>` re-export this module (`public use`), so a program that
+imports one of them can call `close_socket` too. A program that holds its sockets as
+`TcpStream`, `TcpListener` or `UdpSocket` values never needs to call it; it is for a
+descriptor that no handle owns.
+:##
+
+use <net/socket>
+use <net/error>
+
+##:
+Releases a socket descriptor exactly once, and writes -1 over it.
+
+The ONE place the guard and the sock_close() call are spelled. The close() method and the
+destructor of every socket handle in <net/tcp> and <net/udp> call it. A slot that already
+reads -1 is a success, and nothing is closed.
+
+- Parameter fd: The descriptor slot to release. Reads -1 afterwards.
+- Returns: Nothing.
+- Errors: NetError, when the descriptor could not be closed.
+:##
+public fn close_socket(poke i32 fd) ~ | NetError:
+    if (fd < 0):
+        return Result.Ok(~)
+    let i32 held = fd
+    fd := -1
+    sock_close(held)??
+    return Result.Ok(~)

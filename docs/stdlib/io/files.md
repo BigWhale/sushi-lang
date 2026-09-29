@@ -220,7 +220,7 @@ fn main() i32:
 Read one line from the file, without its newline.
 
 ```sushi
-fn File.readln() Maybe@(string) | IoError
+fn File.readln(poke self) Maybe@(string) | IoError
 ```
 
 **Returns:** the line, or `Maybe.None` at end of file. A blank line is `Maybe.Some("")`,
@@ -1181,7 +1181,7 @@ use <io/buf>
 
 fn show(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = BufReader.new(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)
 
     foreach(line?? in r.lines()):
         println(line)

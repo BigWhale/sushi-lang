@@ -71,13 +71,11 @@ answer is held in memory at once. File.read_all() and BufReader.read_all() forwa
 :##
 public fn read_all@(R: Reader)(poke R r) string | IoError:
     let u8[] all = from([])
-    let bool done = false
-    while (not done):
+    while (true):
         let u8[] chunk = r.read_bytes(65536)??
         if (chunk.len() == 0):
-            done := true
-        else:
-            all.extend(chunk)
+            break
+        all.extend(chunk)
     return Result.Ok(all.to_string())
 
 ##:

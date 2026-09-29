@@ -130,11 +130,11 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 
 !!! note "Element ownership"
     `map` and `fold` borrow each element and give it to your function, so they work on
-    every element type. The **method-form `filter`** clones each kept element, so an
-    owning element type works there (not a type that refuses `.clone()`, such as a `Drop`
-    type). Give it a function reference, because a lambda parameter cannot have an owning
-    type (`CE2094`, chapter 18). The free-function `filter` keeps the element itself, so
-    it works on plain element types only.
+    every element type. `filter`, in both forms, clones each kept element, so an owning
+    element type works there too (not a type that refuses `.clone()`, such as a `Drop`
+    type). For a container element (`T[]`, `List@(T)`, `Own@(T)`), give it a function
+    reference, because a lambda parameter cannot be an owning container (`CE2094`,
+    chapter 18). A `string` lambda parameter is legal.
 
 !!! warning "Annotate bare-parameter lambdas passed to a combinator"
     A bare-parameter lambda (`|x| ...`) cannot infer its type *against a generic parameter*, since
@@ -163,7 +163,8 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 - Each combinator takes a `fn(...)` value: a lambda (capturing or not) or a plain function
   reference.
 - `compose` returns a closure that captures and calls the two functions you give it.
-- `map` and `fold` borrow each element; the method-form `filter` clones the kept elements,
-  and the free `filter` takes plain elements only.
+- `map` and `fold` borrow each element, `filter` clones the kept elements, and `fold`
+  clones `init` once. So an owning element or accumulator type (`string`) works in both
+  forms.
 - Annotate bare-parameter lambdas. A generic function goes in directly when the other
   arguments solve its type parameters; otherwise bind it to a typed local first.

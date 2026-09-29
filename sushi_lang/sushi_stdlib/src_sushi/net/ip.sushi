@@ -29,43 +29,23 @@ public enum IpAddr:
     ##: An IPv6 address, as the high 64 bits and then the low 64 bits. :##
     V6(u64, u64)
 
-##:
-The IPv4 loopback, 127.0.0.1.
+##: The IPv4 loopback, 127.0.0.1. :##
+public const IpAddr V4_LOOPBACK = IpAddr.V4(0x7f00_0001)
 
-- Returns: The address 127.0.0.1.
-:##
-public fn v4_loopback() IpAddr:
-    return Result.Ok(IpAddr.V4(2_130_706_433))
+##: The IPv4 unspecified address, 0.0.0.0. :##
+public const IpAddr V4_ANY = IpAddr.V4(0)
 
-##:
-The IPv4 unspecified address, 0.0.0.0.
+##: The IPv6 loopback, ::1. :##
+public const IpAddr V6_LOOPBACK = IpAddr.V6(0, 1)
 
-- Returns: The address 0.0.0.0.
-:##
-public fn v4_any() IpAddr:
-    return Result.Ok(IpAddr.V4(0))
-
-##:
-The IPv6 loopback, ::1.
-
-- Returns: The address ::1.
-:##
-public fn v6_loopback() IpAddr:
-    return Result.Ok(IpAddr.V6(0, 1))
-
-##:
-The IPv6 unspecified address, ::.
-
-- Returns: The address ::.
-:##
-public fn v6_any() IpAddr:
-    return Result.Ok(IpAddr.V6(0, 0))
+##: The IPv6 unspecified address, ::. :##
+public const IpAddr V6_ANY = IpAddr.V6(0, 0)
 
 ##:
 Parses an address from its text, in either family.
 
-A text holding a dot and no colon is read as IPv4; anything else is read as
-IPv6. A trailing character is a refusal rather than an ignored suffix.
+A text with a colon is read as IPv6; anything else is read as IPv4. A
+trailing character is a refusal rather than an ignored suffix.
 
 - Parameter text: The address to read.
 - Returns: The parsed address.
@@ -221,11 +201,7 @@ fn parse_octet(string piece) u32 | NetError:
     let i32 width = piece.len()
     if (width == 0 or width > 3):
         return Result.Err(NetError.InvalidAddress)
-    # Every owning temporary here is bound before it is read. An unbound one in
-    # an operand position is not freed, so a parser that runs over every
-    # character of every address would leak one string per character.
-    let string leading = piece.char_at(0)
-    if (width > 1 and leading == "0"):
+    if (width > 1 and piece.char_at(0) == "0"):
         return Result.Err(NetError.InvalidAddress)
     let u32 value = 0
     foreach(i in 0..width):
@@ -267,8 +243,7 @@ fn parse_group(string piece) u16 | NetError:
         return Result.Err(NetError.InvalidAddress)
     let u32 value = 0
     foreach(i in 0..width):
-        let string digit = piece.char_at(i)
-        let u32 nibble = hex_value(digit)??
+        let u32 nibble = hex_value(piece.char_at(i))??
         value := value * 16 + nibble
     return Result.Ok(value as u16)
 
@@ -291,10 +266,6 @@ fn hex_value(string digit) u32 | NetError:
 
 ##:
 The eight groups of an IPv6 address, with any `::` run expanded.
-
-A binding is never rebound from a borrow to an owned string here: the two
-shapes take their own branch and their own bindings, so every owned piece has
-one owner from the start.
 
 - Parameter text: The address to read.
 - Returns: Exactly eight groups, most significant first.
@@ -397,9 +368,6 @@ fn v6_groups(u64 high, u64 low) u16[]:
 
 ##:
 Renders a V6 payload as RFC 5952 text.
-
-The pieces are collected and joined rather than concatenated onto an
-accumulator, which keeps every owned string with one owner.
 
 - Parameter high: The high 64 bits.
 - Parameter low: The low 64 bits.

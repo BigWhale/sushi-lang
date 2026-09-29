@@ -341,11 +341,18 @@ def test_the_sushi_schema_is_the_python_schema():
     from sushi_lang.backend.library_format import MANIFEST_SCHEMA
     text = (REPO / "sushi_lang/sushi_stdlib/src_sushi/toolchain/slib.sushi").read_text(
         encoding="utf-8")
-    block = re.search(r"const string\[(\d+)\] SLIB_MANIFEST_SCHEMA = \[\n(.*?)\n\]",
+    block = re.search(r"const SchemaRow\[(\d+)\] SLIB_MANIFEST_SCHEMA = \[\n(.*?)\n\]",
                       text, re.S)
     assert block is not None, "SLIB_MANIFEST_SCHEMA is gone from toolchain/slib.sushi"
-    rows = re.findall(r"^    '([^']*)',?$", block.group(2), re.M)
-    assert rows == [" ".join(row) for row in MANIFEST_SCHEMA]
+    lines = block.group(2).split("\n")
+    row = re.compile(r"^    SchemaRow\('([^']*)', '([^']*)', '([^']*)', "
+                     r"Presence\.(Required\(\)|Optional\(\)|RequiredWhen\('([^']*)'\))\),?$")
+    matched = [row.match(line) for line in lines]
+    assert all(matched), [line for line, m in zip(lines, matched, strict=True) if m is None]
+    presence = {"Required()": "yes", "Optional()": "no"}
+    rows = [(m.group(1), m.group(2), m.group(3), presence.get(m.group(4), m.group(5)))
+            for m in matched if m is not None]
+    assert rows == list(MANIFEST_SCHEMA)
     assert int(block.group(1)) == len(MANIFEST_SCHEMA)
 
 

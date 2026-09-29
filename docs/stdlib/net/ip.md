@@ -32,7 +32,7 @@ The payload is numeric on purpose. A `V4` carries one `u32` and a `V6` carries t
 
 ### `parse_ip(string text) IpAddr | NetError`
 
-Read an address of either family. A text holding a dot and no colon is read as IPv4; anything else is read as IPv6. The error is `NetError.InvalidAddress`, which is what lets this compose with `<net/dns>` under `??` without a third error enum.
+Read an address of either family. A text with a colon is read as IPv6; anything else is read as IPv4. The error is `NetError.InvalidAddress`, which is what lets this compose with `<net/dns>` under `??` without a third error enum.
 
 ```sushi
 use <net/ip>
@@ -67,9 +67,10 @@ The questions an address answers about itself. Each answers a plain `bool`.
 
 `is_private` covers 10/8, 172.16/12 and 192.168/16 for IPv4, and fc00::/7 for IPv6.
 
-### `v4_loopback()`, `v4_any()`, `v6_loopback()`, `v6_any()`
+### `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK`, `V6_ANY`
 
-The four addresses worth having by name: `127.0.0.1`, `0.0.0.0`, `::1` and `::`.
+The four addresses worth having by name: `127.0.0.1`, `0.0.0.0`, `::1` and `::`. Each is
+a constant `IpAddr`, so it needs no `??`: `let IpAddr home = V4_LOOPBACK`.
 
 ## Limitations
 

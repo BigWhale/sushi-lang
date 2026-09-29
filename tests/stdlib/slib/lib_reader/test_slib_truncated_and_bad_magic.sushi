@@ -51,7 +51,7 @@ fn write_file(string path, peek u8[] bytes) bool:
 fn plain(SlibError e) string:
     match e:
         SlibError.BadMagic() -> return Result.Ok("BadMagic")
-        SlibError.Truncated() -> return Result.Ok("Truncated")
+        SlibError.Truncated(_, _, _) -> return Result.Ok("Truncated")
         _ -> return Result.Ok("another SlibError")
 
 fn section(SlibSection s) string:
@@ -60,12 +60,12 @@ fn section(SlibSection s) string:
         SlibSection.Source() -> return Result.Ok("Source")
         SlibSection.Bitcode() -> return Result.Ok("Bitcode")
 
-fn fault(SlibFault e) string:
+fn fault(SlibError e) string:
     match e:
-        SlibFault.BadMagic() -> return Result.Ok("BadMagic")
-        SlibFault.Truncated(s, expected, actual) ->
+        SlibError.BadMagic() -> return Result.Ok("BadMagic")
+        SlibError.Truncated(s, expected, actual) ->
             return Result.Ok("Truncated({section(s)??}, {expected}, {actual})")
-        _ -> return Result.Ok("another SlibFault")
+        _ -> return Result.Ok("another SlibError")
 
 fn check(string name) ~:
     let string path = "{ROOT}/{name}.slib"

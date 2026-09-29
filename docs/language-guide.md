@@ -1625,7 +1625,7 @@ use <io/buf>
 
 fn number_lines(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
-    let BufReader@(File) r = BufReader.new(nom f, 8192)??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)
 
     let i32 n = 0
     foreach(line?? in r.lines()):
@@ -1651,7 +1651,7 @@ use <io/buf>
 
 fn write_report(string path, i32 count) ~ | IoError:
     let File f = open(path, FileMode.Write())??
-    let BufWriter@(File) w = BufWriter.new(nom f, 8192)??
+    let BufWriter@(File) w = BufWriter.new(nom f, 8192)
     w.write_line("Report")??
     w.write_line("Items processed: {count}")??
     w.finish()??               # the ONE drain, and its failure is seen

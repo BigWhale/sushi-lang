@@ -153,12 +153,13 @@ The port to connect to: the one written, or the scheme's default.
 
 The known schemes are http 80, https 443, ws 80, wss 443, ftp 21 and ssh 22.
 
-- Returns: The written port, the scheme's default, or -1 when no default is known.
+- Returns: The written port, the scheme's default, or `Maybe.None()` when the text has no
+  port and the scheme has no known default.
 :##
-extend Url port_or_default() i32:
+extend Url port_or_default() Maybe@(i32):
     if (self.port != 0):
-        return self.port
-    return default_port(self.scheme).realise(-1)
+        return Maybe.Some(self.port)
+    return default_port(self.scheme).realise(Maybe.None())
 
 ##:
 Whether the host was written as a bracketed IPv6 literal.
@@ -191,7 +192,7 @@ extend Url text() string:
         pieces.push("[{self.host}]")
     else:
         pieces.push("{self.host}")
-    if (self.port != 0 and self.port != default_port(self.scheme).realise(-1)):
+    if (self.port != 0 and self.port != default_port(self.scheme).realise(Maybe.None()).realise(0)):
         pieces.push(":{self.port}")
     pieces.push("{self.path}")
     if (self.query.len() > 0):
@@ -204,18 +205,18 @@ extend Url text() string:
 The default port of a scheme.
 
 - Parameter scheme: The lowercased scheme.
-- Returns: The default port, or -1 when the scheme has no known one.
+- Returns: The default port, or `Maybe.None()` when the scheme has no known one.
 :##
-fn default_port(string scheme) i32:
+fn default_port(string scheme) Maybe@(i32):
     if (scheme == "http" or scheme == "ws"):
-        return Result.Ok(80)
+        return Result.Ok(Maybe.Some(80))
     if (scheme == "https" or scheme == "wss"):
-        return Result.Ok(443)
+        return Result.Ok(Maybe.Some(443))
     if (scheme == "ftp"):
-        return Result.Ok(21)
+        return Result.Ok(Maybe.Some(21))
     if (scheme == "ssh"):
-        return Result.Ok(22)
-    return Result.Ok(-1)
+        return Result.Ok(Maybe.Some(22))
+    return Result.Ok(Maybe.None())
 
 ##:
 Whether a text is a scheme.

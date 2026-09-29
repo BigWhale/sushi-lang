@@ -1,8 +1,9 @@
 # A URL with an authority and no path gets `/`, as RFC 3986 6.2.3 requires,
 # which is what makes http://host and http://host/ the same address. A port
 # that was not written reads 0, and the scheme's default is a separate
-# question, so the struct never claims a port the text did not carry.
-# EXPECT_STDOUT_EXACT: "path / port 0 default 80\npath / port 0 default 443\npath /x port 9000 default 9000\npath / port 0 default -1\n"
+# question, so the struct never claims a port the text did not carry. A scheme with no
+# known default and no written port answers None.
+# EXPECT_STDOUT_EXACT: "path / port 0 default 80\npath / port 0 default 443\npath /x port 9000 default 9000\npath / port 0 default none\n"
 # EXPECT_NO_LEAKS: true
 
 use <net/url>
@@ -10,7 +11,9 @@ use <net/url>
 fn show(string text) ~:
     match parse_url(text):
         Result.Ok(u) ->
-            println("path {u.path} port {u.port} default {u.port_or_default()}")
+            match u.port_or_default():
+                Maybe.Some(d) -> println("path {u.path} port {u.port} default {d}")
+                Maybe.None() -> println("path {u.path} port {u.port} default none")
         Result.Err(_) -> println("{text} refused")
     return Result.Ok(~)
 

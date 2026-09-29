@@ -12,7 +12,7 @@ fn show(u8[] blob) ~:
         Result.Ok(out) ->
             println("UNEXPECTED OK len={out.len()}")
         Result.Err(e) ->
-            println("{zlib_error_text(e)??}")
+            println("{e.text()}")
     return Result.Ok(~)
 
 fn run_test() i32:

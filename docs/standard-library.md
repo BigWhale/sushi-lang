@@ -35,6 +35,7 @@ Complete reference for Sushi's standard library modules and types.
 
 - [Socket primitives](stdlib/net/socket.md) - the raw BSD calls
 - [Net errors](stdlib/net/error.md) - `NetError`, the error vocabulary of the net modules
+- [Socket handles](stdlib/net/handle.md) - `close_socket`, the one release of a socket descriptor
 - [TCP](stdlib/net/tcp.md) - `TcpStream` and `TcpListener`
 - [UDP](stdlib/net/udp.md) - `UdpSocket`, send_to and recv_from
 - [DNS](stdlib/net/dns.md) - a host name resolved into typed addresses
@@ -195,7 +196,7 @@ use <io/fs>
 use <io/buf>
 
 fn greet() ~ | IoError:
-    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)??
+    let BufWriter@(File) out = BufWriter.new(nom stdout.share()??, 8192)
     out.write_line("Mostly Harmless")??
     out.finish()??
     return Result.Ok(~)
@@ -259,7 +260,7 @@ fn greet() ~ | IoError:
 **zlib** - DEFLATE and the RFC 1950 container, written in Sushi (no C library, no FFI):
 - `zlib_compress(src, level)`, `zlib_uncompress(src)` - the container, with an Adler-32 trailer
 - `deflate_raw(src, level)`, `inflate_raw(src)` - a bare RFC 1951 stream
-- `adler32(data)`, `zlib_error_text(e)` - the checksum, and one stable line per error
+- `adler32(data)`, `e.text()` on a `ZError` - the checksum, and one stable line per error
 - The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
   only, so its ratio is short of a full encoder's
 
@@ -346,7 +347,8 @@ Each `<time>` function answers `Result@(..., StdError)`.
 - `connect(host, port)`, `listen(host, port, backlog)` - TCP streams and listeners
 - UDP sockets, DNS resolution, IP addresses and URL splitting
 - `<net/tcp>`, `<net/udp>`, `<net/dns>` and `<net/ip>` re-export `<net/error>`, so
-  `NetError` comes with each of them
+  `NetError` comes with each of them. `<net/tcp>` and `<net/udp>` also re-export
+  `<net/handle>` (`close_socket`)
 - See the pages in the [Networking](#networking) list above
 
 ### Process (`use <sys/process>`)

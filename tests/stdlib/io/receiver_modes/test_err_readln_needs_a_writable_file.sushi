@@ -1,0 +1,13 @@
+# readln() moves the file position, as readch(), writeln() and tell() do, so it takes a
+# poke receiver like them. A read-only File cannot call it.
+# EXPECT_ERROR_CODE: CE2422
+use <io/fs>
+
+fn first_line(File f) string:
+    match f.readln():
+        Result.Ok(Maybe.Some(nom line)) -> return Result.Ok(line)
+        Result.Ok(Maybe.None()) -> return Result.Ok("")
+        Result.Err(_) -> return Result.Ok("")
+
+fn main() i32:
+    return Result.Ok(0)

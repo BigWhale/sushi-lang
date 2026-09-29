@@ -86,7 +86,7 @@ Read what one read gives, up to `max` bytes.
 ### `sock_close(i32 fd) i32 | NetError`
 
 Close a descriptor. For a descriptor that no handle owns, `close_socket(poke i32 fd)` in
-[`<net/error>`](error.md#close_socketpoke-i32-fd-neterror) is the guarded form: it closes
+[`<net/handle>`](handle.md#close_socketpoke-i32-fd-neterror) is the guarded form: it closes
 the descriptor once and writes `-1` over the slot, so a second call closes nothing.
 
 ### `sock_dup(i32 fd) i32 | NetError`

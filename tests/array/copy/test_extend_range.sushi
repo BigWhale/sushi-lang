@@ -1,5 +1,5 @@
 # `.extend_range(src, start, count)` appends a RANGE with no temporary array (#462).
-# `zinflate_stored` and `zdeflate_stored` write this loop.
+# `inflate_stored` and `deflate_stored` write this loop.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 0 30 40 50 9\n"

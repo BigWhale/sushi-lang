@@ -60,21 +60,9 @@ a loop cannot form. The order follows read_dir() and is unspecified.
 - Errors: FileError, when a directory cannot be listed.
 :##
 public fn walk(string path) string[] | FileError:
-    let List@(string) acc = List.new()
-    match walk_into(path, poke acc):
-        Result.Ok(_) -> ~
-        Result.Err(e) ->
-            acc.free()
-            return Result.Err(e)
-    let i32 n = acc.len()
-    let string[] out = from([""; n])
-    foreach(i in 0..n):
-        match acc.get(i):
-            Maybe.Some(p) ->
-                out[i] := p.clone()
-            Maybe.None -> ~
-    acc.free()
-    return Result.Ok(out)
+    let string[] acc = from([])
+    walk_into(path, poke acc)??
+    return Result.Ok(acc)
 
 ##:
 Creates a directory and every missing parent.
@@ -145,7 +133,7 @@ Collects the regular files under one directory into the accumulator.
 - Parameter acc: The collected file paths.
 - Errors: FileError, when the directory cannot be listed.
 :##
-fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
+fn walk_into(string dir, poke string[] acc) ~ | FileError:
     let string[] names = read_dir(dir)??
     foreach(name in names.iter()):
         let string full = join(dir, name).realise("")
@@ -153,7 +141,7 @@ fn walk_into(string dir, poke List@(string) acc) ~ | FileError:
             if (not is_symlink(full)??):
                 walk_into(full, poke acc)??
         else:
-            acc.push(full.clone())
+            acc.push(full)
     return Result.Ok(~)
 
 ##:
@@ -419,7 +407,7 @@ by line wants BufReader from <io/buf>.
 - Returns: The line, or None at end of file.
 - Errors: IoError, when the read failed.
 :##
-extend File readln() Maybe@(string) | IoError:
+extend File readln(poke self) Maybe@(string) | IoError:
     match fd_readln(self.fd):
         Result.Ok(nom line) -> return Result.Ok(line)
         Result.Err(e) -> return Result.Err(e.to_io())

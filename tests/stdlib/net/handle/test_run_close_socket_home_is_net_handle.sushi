@@ -1,0 +1,14 @@
+# close_socket has its home in <net/handle>. A program that imports that module alone
+# can release a descriptor slot that no handle owns: a slot that already reads -1 is a
+# success, and it stays -1.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "closed\nslot -1\n"
+use <net/handle>
+
+fn main() i32:
+    let i32 slot = -1
+    match close_socket(poke slot):
+        Result.Ok(_) -> println("closed")
+        Result.Err(_) -> println("close_socket failed")
+    println("slot {slot}")
+    return Result.Ok(0)

@@ -44,8 +44,8 @@ A function cannot return a borrow, so no reader gives a subtree back. A printer 
 with `map_index`, and gives `vals[at]` to the next printer as a borrow. Only a leaf string
 is copied. An absent key prints as a `Nil` value prints.
 
-`ml_get_str` gives `""` for an absent key and for an empty string. Thus the tool tests a
-doc record for `Nil` (`ml_is_nil`) before it reads the record.
+`get_str` gives `""` for an absent key and for an empty string. Thus the tool tests a
+doc record for `Nil` (`is_nil`) before it reads the record.
 
 ## 5. The surface spelling of a type
 

@@ -67,7 +67,7 @@ Gives the payload of a `Str` value.
 - Parameter v: The value to read.
 - Returns: The string, or `""` for a value of a different kind.
 :##
-fn ml_str(MsgValue v) string:
+fn str(MsgValue v) string:
     match v:
         MsgValue.Str(s) ->
             return Result.Ok(s.clone())
@@ -81,7 +81,7 @@ Gives the `Str` value under a string key.
 - Parameter key: The key to find.
 - Returns: The string, or `""` when the key is absent or its value is not a `Str`.
 :##
-fn ml_get_str(MsgValue m, string key) string:
+fn get_str(MsgValue m, string key) string:
     return Result.Ok(map_get_str(m, key)??.realise(""))
 
 ##:
@@ -91,7 +91,7 @@ Gives the `Bool` value under a string key.
 - Parameter key: The key to find.
 - Returns: The bool, or false when the key is absent or its value is not a `Bool`.
 :##
-fn ml_get_bool(MsgValue m, string key) bool:
+fn get_bool(MsgValue m, string key) bool:
     return Result.Ok(map_get_bool(m, key)??.realise(false))
 
 ##:
@@ -100,7 +100,7 @@ Gives the number of elements of an `Arr` value.
 - Parameter v: The value to read.
 - Returns: The count, or 0 for a value of a different kind.
 :##
-fn ml_len(MsgValue v) i32:
+fn len(MsgValue v) i32:
     match v:
         MsgValue.Arr(items) ->
             return Result.Ok(items.len())
@@ -114,11 +114,11 @@ Gives the number of elements of the `Arr` value under a string key.
 - Parameter key: The key to find.
 - Returns: The count, or 0 when the key is absent.
 :##
-fn ml_len_at(MsgValue m, string key) i32:
+fn len_at(MsgValue m, string key) i32:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key)??:
-                Maybe.Some(at) -> return Result.Ok(ml_len(vals[at])??)
+                Maybe.Some(at) -> return Result.Ok(len(vals[at])??)
                 Maybe.None() -> return Result.Ok(0)
         _ ->
             return Result.Ok(0)
@@ -133,9 +133,9 @@ Joins the `Str` elements of an `Arr` value with a separator.
 fn join_strs(MsgValue list, string sep) string:
     match list:
         MsgValue.Arr(items) ->
-            let string[] parts = new()
+            let string[] parts = from([])
             foreach(item in items.iter()):
-                parts.push(ml_str(item)??)
+                parts.push(str(item)??)
             return Result.Ok(sep.join(parts))
         _ ->
             return Result.Ok("")
@@ -163,7 +163,7 @@ Tells if a value is `Nil`.
 - Parameter v: The value to read.
 - Returns: True for a `Nil` value.
 :##
-fn ml_is_nil(MsgValue v) bool:
+fn is_nil(MsgValue v) bool:
     match v:
         MsgValue.Nil() ->
             return Result.Ok(true)
@@ -210,14 +210,12 @@ Finds the Markdown mark that opens at `i`. The longest mark is tried first.
 - Returns: The mark, or `""`.
 :##
 fn mark_at(string line, i32 i) string:
-    let i32 n = line.len()
-    if (i + 2 <= n):
-        if (line.s(i, i + 2) == "**"):
-            return Result.Ok("**")
     let string one = line.char_at(i)
     if (one == "`"):
         return Result.Ok("`")
     if (one == "*"):
+        if (i + 1 < line.len() and line.char_at(i + 1) == "*"):
+            return Result.Ok("**")
         return Result.Ok("*")
     return Result.Ok("")
 
@@ -241,17 +239,12 @@ Finds the next position of `mark`, at `start` or after it.
 - Parameter line: The line of prose.
 - Parameter start: The index where the search starts.
 - Parameter mark: The mark.
-- Returns: The position, or -1.
+- Returns: The position, or `Maybe.None()` when the rest of the line has no such mark.
 :##
-fn close_at(string line, i32 start, string mark) i32:
-    let i32 n = line.len()
-    let i32 mlen = mark.len()
-    let i32 probe = start
-    while (probe + mlen <= n):
-        if (line.s(probe, probe + mlen) == mark):
-            return Result.Ok(probe)
-        probe := probe + 1
-    return Result.Ok(0 - 1)
+fn close_at(string line, i32 start, string mark) Maybe@(i32):
+    match line.s(start, line.len()).find(mark):
+        Maybe.Some(at) -> return Result.Ok(Maybe.Some(start + at))
+        Maybe.None() -> return Result.Ok(Maybe.None())
 
 ##:
 Tells if a mark and its text are a span, or punctuation.
@@ -260,12 +253,9 @@ The rules are in `docs/design/slib-info.md` section 6.
 
 - Parameter mark: The mark.
 - Parameter inner: The text between the two marks.
-- Parameter close: The index of the closing mark, or -1.
 - Returns: True for a span.
 :##
-fn is_span(string mark, string inner, i32 close) bool:
-    if (close < 0):
-        return Result.Ok(false)
+fn is_span(string mark, string inner) bool:
     if (inner == ""):
         return Result.Ok(false)
     if (mark == "`"):
@@ -285,29 +275,31 @@ Changes the Markdown marks of one line of prose into styles.
 fn render_inline(string line, Opts o) string:
     if (o.reset == ""):
         return Result.Ok(line.clone())
-    let string out = ""
+    let string[] pieces = from([])
     let i32 n = line.len()
     let i32 i = 0
     while (i < n):
         let string mark = mark_at(line, i)??
         if (mark == ""):
-            let string one = line.char_at(i)
-            out := "{out}{one}"
+            pieces.push(line.char_at(i))
             i := i + 1
-        else:
-            let i32 mlen = mark.len()
-            let i32 close = close_at(line, i + mlen, mark)??
-            let string inner = ""
-            if (close >= 0):
-                inner := line.s(i + mlen, close)
-            if (is_span(mark, inner, close)??):
-                let string style = style_of(mark, o)??
-                out := "{out}{style}{inner}{o.reset}"
-                i := close + mlen
-            else:
-                out := "{out}{mark}"
-                i := i + mlen
-    return Result.Ok(out)
+            continue
+        let i32 mlen = mark.len()
+        let i32 next = i + mlen
+        match close_at(line, next, mark)??:
+            Maybe.Some(close) ->
+                let string inner = line.s(next, close)
+                if (is_span(mark, inner)??):
+                    pieces.push(style_of(mark, o)??)
+                    pieces.push(inner)
+                    pieces.push("{o.reset}")
+                    next := close + mlen
+                else:
+                    pieces.push(mark)
+            Maybe.None() ->
+                pieces.push(mark)
+        i := next
+    return Result.Ok("".join(pieces))
 
 ##:
 Prints each line of a text with its indent, and an opener before the first line.
@@ -349,11 +341,11 @@ Prints one doc record: the summary, the body, the tags and the examples.
 fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     if (not o.docs):
         return Result.Ok(false)
-    if (ml_is_nil(doc)??):
+    if (is_nil(doc)??):
         return Result.Ok(false)
     let bool printed = false
-    let string summary = ml_get_str(doc, "summary")??
-    let string body = ml_get_str(doc, "body")??
+    let string summary = get_str(doc, "summary")??
+    let string body = get_str(doc, "body")??
     if (summary != ""):
         print_lines(indent, summary, "", 0, o)??
         printed := true
@@ -363,13 +355,13 @@ fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
         print_lines(indent, body, "", 0, o)??
         printed := true
     printed := print_param_tags_at(owner, doc, indent, printed, o)??
-    let string returns = ml_get_str(doc, "returns")??
+    let string returns = get_str(doc, "returns")??
     if (returns != ""):
         if (printed):
             println("")
         print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len(), o)??
         printed := true
-    let string errors = ml_get_str(doc, "errors")??
+    let string errors = get_str(doc, "errors")??
     if (errors != ""):
         if (printed):
             println("")
@@ -416,7 +408,7 @@ fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed
         MsgValue.Arr(params) ->
             let bool p = printed
             foreach(param in params.iter()):
-                let string pn = ml_get_str(param, "name")??
+                let string pn = get_str(param, "name")??
                 let string ptext = param_text(doc, pn)??
                 if (ptext != ""):
                     if (p):
@@ -441,7 +433,7 @@ fn param_text(MsgValue doc, string name) string:
     match doc:
         MsgValue.Map(_, vals) ->
             match map_index(doc, "params")??:
-                Maybe.Some(at) -> return Result.Ok(ml_get_str(vals[at], name)??)
+                Maybe.Some(at) -> return Result.Ok(get_str(vals[at], name)??)
                 Maybe.None() -> return Result.Ok("")
         _ ->
             return Result.Ok("")
@@ -480,13 +472,13 @@ fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
             foreach(ex in items.iter()):
                 if (p):
                     println("")
-                let string caption = ml_get_str(ex, "caption")??
+                let string caption = get_str(ex, "caption")??
                 if (caption == ""):
                     println("{indent}- {o.blue}Example{o.reset}:")
                 else:
                     print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
                                 "- Example: ".len(), o)??
-                print_code(indent, ml_get_str(ex, "code")??, o)??
+                print_code(indent, get_str(ex, "code")??, o)??
                 p := true
             return Result.Ok(p)
         _ ->
@@ -557,7 +549,7 @@ Writes the parameter list of a function record, with the receiver mode first.
 - Returns: The parameter list.
 :##
 fn render_params(MsgValue f) string:
-    let string head = ml_get_str(f, "self_mode")??
+    let string head = get_str(f, "self_mode")??
     if (head != ""):
         head := "{head} self"
     match f:
@@ -578,13 +570,13 @@ Writes each parameter of a `params` array after the receiver text.
 fn render_param_list(MsgValue ps, nom string out) string:
     match ps:
         MsgValue.Arr(items) ->
-            let string[] parts = new()
+            let string[] parts = from([])
             if (out != ""):
                 parts.push(out)
             foreach(p in items.iter()):
-                let string t = to_surface(ml_get_str(p, "type")??)??
-                let string pn = ml_get_str(p, "name")??
-                let string declared = ml_get_str(p, "mode")??
+                let string t = to_surface(get_str(p, "type")??)??
+                let string pn = get_str(p, "name")??
+                let string declared = get_str(p, "mode")??
                 let string mode = ""
                 if (declared == "nom"):
                     mode := "nom "
@@ -601,12 +593,12 @@ Writes the signature of one function record, concrete or generic.
 - Returns: The signature.
 :##
 fn render_signature(MsgValue f, Opts o) string:
-    let string bare = ml_get_str(f, "name")??
+    let string bare = get_str(f, "name")??
     let string name = "{o.bold}{bare}{o.reset}"
     let string generic = render_type_params(f)??
     let string params = render_params(f)??
-    let string ret = to_surface(ml_get_str(f, "return_type")??)??
-    let string err = ml_get_str(f, "error_type")??
+    let string ret = to_surface(get_str(f, "return_type")??)??
+    let string err = get_str(f, "error_type")??
     if (err == ""):
         return Result.Ok("fn {name}{generic}({params}) {ret}")
     let string serr = to_surface(err)??
@@ -638,7 +630,7 @@ Prints each function record of an array, with its doc record.
 - Parameter o: The options of the run.
 :##
 fn print_signatures(MsgValue funcs, string title, Opts o) ~:
-    if (not section(title, ml_len(funcs)??, o)??):
+    if (not section(title, len(funcs)??, o)??):
         return Result.Ok(~)
     match funcs:
         MsgValue.Arr(items) ->
@@ -679,9 +671,9 @@ fn render_type_param_list(MsgValue tps) string:
         MsgValue.Arr(items) ->
             if (items.len() == 0):
                 return Result.Ok("")
-            let string[] parts = new()
+            let string[] parts = from([])
             foreach(tp in items.iter()):
-                let string tname = ml_get_str(tp, "name")??
+                let string tname = get_str(tp, "name")??
                 let string cs = join_at(tp, "constraints", " + ")??
                 let string one = ""
                 if (cs == ""):
@@ -722,15 +714,15 @@ Prints each constant or variable record of an array, with its doc record.
 - Parameter o: The options of the run.
 :##
 fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~:
-    if (not section(title, ml_len(list)??, o)??):
+    if (not section(title, len(list)??, o)??):
         return Result.Ok(~)
     match list:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(c in items.iter()):
                 pending := open_record(pending)??
-                let string t = to_surface(ml_get_str(c, "type")??)??
-                let string name = ml_get_str(c, "name")??
+                let string t = to_surface(get_str(c, "type")??)??
+                let string name = get_str(c, "name")??
                 println("  {keyword} {t} {name}")
                 pending := print_doc(c, "    ", o)??
         _ ->
@@ -745,9 +737,9 @@ Writes the `@(T, U)` suffix of a generic struct or enum record.
 - Returns: The suffix, or `""`.
 :##
 fn render_named_type_params(MsgValue rec) string:
-    if (not ml_get_bool(rec, "is_generic")??):
+    if (not get_bool(rec, "is_generic")??):
         return Result.Ok("")
-    if (ml_len_at(rec, "type_params")?? == 0):
+    if (len_at(rec, "type_params")?? == 0):
         return Result.Ok("")
     let string body = join_at(rec, "type_params", ", ")??
     return Result.Ok("@({body})")
@@ -775,14 +767,14 @@ Prints each struct record, with its doc record and its fields.
 - Parameter o: The options of the run.
 :##
 fn print_struct_list(MsgValue structs, Opts o) ~:
-    if (not section("Public Structs", ml_len(structs)??, o)??):
+    if (not section("Public Structs", len(structs)??, o)??):
         return Result.Ok(~)
     match structs:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(s in items.iter()):
                 pending := open_record(pending)??
-                let string name = ml_get_str(s, "name")??
+                let string name = get_str(s, "name")??
                 let string generic = render_named_type_params(s)??
                 println("  struct {name}{generic}:")
                 pending := print_doc(s, "    ", o)??
@@ -823,8 +815,8 @@ fn print_fields(MsgValue fields, bool pending, Opts o) bool:
             let bool p = pending
             foreach(fld in items.iter()):
                 p := open_record(p)??
-                let string ft = to_surface(ml_get_str(fld, "type")??)??
-                let string fname = ml_get_str(fld, "name")??
+                let string ft = to_surface(get_str(fld, "type")??)??
+                let string fname = get_str(fld, "name")??
                 println("    {ft} {fname}")
                 p := print_doc(fld, "      ", o)??
             return Result.Ok(p)
@@ -854,14 +846,14 @@ Prints each enum record, with its doc record and its variants.
 - Parameter o: The options of the run.
 :##
 fn print_enum_list(MsgValue enums, Opts o) ~:
-    if (not section("Public Enums", ml_len(enums)??, o)??):
+    if (not section("Public Enums", len(enums)??, o)??):
         return Result.Ok(~)
     match enums:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(e in items.iter()):
                 pending := open_record(pending)??
-                let string name = ml_get_str(e, "name")??
+                let string name = get_str(e, "name")??
                 let string generic = render_named_type_params(e)??
                 println("  enum {name}{generic}:")
                 pending := print_doc(e, "    ", o)??
@@ -901,9 +893,9 @@ fn render_data_types(MsgValue v) string:
                 Maybe.Some(at) ->
                     match vals[at]:
                         MsgValue.Arr(types) ->
-                            let string[] parts = new()
+                            let string[] parts = from([])
                             foreach(t in types.iter()):
-                                parts.push(to_surface(ml_str(t)??)??)
+                                parts.push(to_surface(str(t)??)??)
                             return Result.Ok(", ".join(parts))
                         _ ->
                             return Result.Ok("")
@@ -925,8 +917,8 @@ fn print_variants(MsgValue variants, bool pending, Opts o) bool:
             let bool p = pending
             foreach(v in items.iter()):
                 p := open_record(p)??
-                let string vname = ml_get_str(v, "name")??
-                if (ml_get_bool(v, "has_data")??):
+                let string vname = get_str(v, "name")??
+                if (get_bool(v, "has_data")??):
                     let string dt = render_data_types(v)??
                     println("    {vname}({dt})")
                 else:
@@ -965,14 +957,14 @@ Prints each generic struct or enum record, with its doc record.
 - Parameter o: The options of the run.
 :##
 fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o) ~:
-    if (not section(title, ml_len(list)??, o)??):
+    if (not section(title, len(list)??, o)??):
         return Result.Ok(~)
     match list:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(r in items.iter()):
                 pending := open_record(pending)??
-                let string name = ml_get_str(r, "name")??
+                let string name = get_str(r, "name")??
                 let string generic = render_type_params(r)??
                 println("  {keyword} {name}{generic}:")
                 pending := print_doc(r, "    ", o)??
@@ -1042,14 +1034,14 @@ Prints each perk record, with its doc record and its methods.
 - Parameter o: The options of the run.
 :##
 fn print_perk_list(MsgValue perks, Opts o) ~:
-    if (not section("Perks", ml_len(perks)??, o)??):
+    if (not section("Perks", len(perks)??, o)??):
         return Result.Ok(~)
     match perks:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(r in items.iter()):
                 pending := open_record(pending)??
-                let string name = ml_get_str(r, "name")??
+                let string name = get_str(r, "name")??
                 println("  perk {name}:")
                 pending := print_doc(r, "    ", o)??
                 pending := print_methods(r, pending, o)??
@@ -1065,8 +1057,8 @@ Writes the target of an implementation record, for example `Box@(T)`.
 - Returns: The target.
 :##
 fn render_impl_target(MsgValue r) string:
-    let string target = to_surface(ml_get_str(r, "type")??)??
-    if (ml_len_at(r, "type_args")?? == 0):
+    let string target = to_surface(get_str(r, "type")??)??
+    if (len_at(r, "type_args")?? == 0):
         return Result.Ok(target)
     let string body = join_at(r, "type_args", ", ")??
     return Result.Ok("{target}@({body})")
@@ -1104,7 +1096,7 @@ fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
             foreach(r in items.iter()):
                 p := open_record(p)??
                 let string target = render_impl_target(r)??
-                let string contract = ml_get_str(r, "perk")??
+                let string contract = get_str(r, "perk")??
                 println("  extend {target} with {contract}:")
                 p := print_doc(r, "    ", o)??
                 p := print_methods(r, p, o)??
@@ -1119,8 +1111,8 @@ Prints the concrete and the generic-target implementations of perks, in one sect
 - Parameter o: The options of the run.
 :##
 fn print_perk_impls(MsgValue templates, Opts o) ~:
-    let i32 concrete_n = ml_len_at(templates, "perk_impls")??
-    let i32 generic_n = ml_len_at(templates, "generic_perk_impls")??
+    let i32 concrete_n = len_at(templates, "perk_impls")??
+    let i32 generic_n = len_at(templates, "generic_perk_impls")??
     if (not section("Perk Implementations", concrete_n + generic_n, o)??):
         return Result.Ok(~)
     let bool pending = false
@@ -1152,13 +1144,13 @@ Prints each foreign extension record.
 - Parameter o: The options of the run.
 :##
 fn print_foreign_list(MsgValue claims, Opts o) ~:
-    if (not section("Foreign Extensions", ml_len(claims)??, o)??):
+    if (not section("Foreign Extensions", len(claims)??, o)??):
         return Result.Ok(~)
     match claims:
         MsgValue.Arr(items) ->
             foreach(c in items.iter()):
-                let string target = to_surface(ml_get_str(c, "type")??)??
-                let string method = ml_get_str(c, "method")??
+                let string target = to_surface(get_str(c, "type")??)??
+                let string method = get_str(c, "method")??
                 println("  extend {target} {method}")
         _ ->
             return Result.Ok(~)
@@ -1189,14 +1181,14 @@ Prints each unit name, with its doc record.
 - Parameter o: The options of the run.
 :##
 fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~:
-    if (not section("Units", ml_len(units)??, o)??):
+    if (not section("Units", len(units)??, o)??):
         return Result.Ok(~)
     match units:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(u in items.iter()):
                 pending := open_record(pending)??
-                let string name = ml_str(u)??
+                let string name = str(u)??
                 println("  {name}")
                 pending := print_unit_doc(meta, name, o)??
         _ ->
@@ -1245,14 +1237,14 @@ Prints each re-export record as the `public use` statement that made it.
 - Parameter o: The options of the run.
 :##
 fn print_reexport_list(MsgValue records, Opts o) ~:
-    if (not section("Re-exports", ml_len(records)??, o)??):
+    if (not section("Re-exports", len(records)??, o)??):
         return Result.Ok(~)
     match records:
         MsgValue.Arr(items) ->
             foreach(r in items.iter()):
-                let string unit = ml_get_str(r, "unit")??
-                let string path = ml_get_str(r, "path")??
-                let string kind = ml_get_str(r, "kind")??
+                let string unit = get_str(r, "unit")??
+                let string path = get_str(r, "path")??
+                let string kind = get_str(r, "kind")??
                 let string target = "<{path}>"
                 if (kind == "unit"):
                     target := "\"{path}\""
@@ -1285,12 +1277,12 @@ Prints each dependency.
 - Parameter o: The options of the run.
 :##
 fn print_dependency_list(MsgValue deps, Opts o) ~:
-    if (not section("Dependencies", ml_len(deps)??, o)??):
+    if (not section("Dependencies", len(deps)??, o)??):
         return Result.Ok(~)
     match deps:
         MsgValue.Arr(items) ->
             foreach(d in items.iter()):
-                let string s = ml_str(d)??
+                let string s = str(d)??
                 println("  <{s}>")
         _ ->
             return Result.Ok(~)
@@ -1362,14 +1354,14 @@ A field that the kind of the library makes meaningless does not print.
 - Parameter o: The options of the run.
 :##
 fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
-    let string libname = ml_get_str(meta, "library_name")??
-    let string libver = ml_get_str(meta, "library_version")??
-    let string kind = ml_get_str(meta, "kind")??
-    let string plat = ml_get_str(meta, "platform")??
-    let string comp = ml_get_str(meta, "compiler_version")??
-    let string req = ml_get_str(meta, "requires_compiler")??
-    let string at = ml_get_str(meta, "compiled_at")??
-    let string proto = ml_get_str(meta, "sushi_lib_version")??
+    let string libname = get_str(meta, "library_name")??
+    let string libver = get_str(meta, "library_version")??
+    let string kind = get_str(meta, "kind")??
+    let string plat = get_str(meta, "platform")??
+    let string comp = get_str(meta, "compiler_version")??
+    let string req = get_str(meta, "requires_compiler")??
+    let string at = get_str(meta, "compiled_at")??
+    let string proto = get_str(meta, "sushi_lib_version")??
     println("Library: {libname}")
     println("Version: {libver}")
     println("Kind: {kind}")
@@ -1430,15 +1422,15 @@ gives the same code for the same fault.
 - Parameter path: The path of the library.
 - Parameter e: The fault.
 :##
-fn print_fault(string path, SlibFault e) ~:
+fn print_fault(string path, SlibError e) ~:
     match e:
-        SlibFault.Io(io) ->
+        SlibError.Io(io) ->
             print_diagnostic("CE3515", "cannot read library file '{path}': {io_cause(io)??}")??
-        SlibFault.BadMagic() ->
+        SlibError.BadMagic() ->
             print_diagnostic("CE3508", "invalid library file '{path}': not a valid .slib file (bad magic)")??
-        SlibFault.BadVersion(v) ->
+        SlibError.BadVersion(v) ->
             print_diagnostic("CE3509", "unsupported library format version '{v}' in '{path}' (compiler supports version 4)")??
-        SlibFault.Truncated(section, expected, actual) ->
+        SlibError.Truncated(section, expected, actual) ->
             let string counts = "(expected {expected} bytes, got {actual})"
             match section:
                 SlibSection.Metadata() ->
@@ -1447,11 +1439,11 @@ fn print_fault(string path, SlibFault e) ~:
                     print_diagnostic("CE3506", "corrupted library file '{path}': source section truncated {counts}")??
                 SlibSection.Bitcode() ->
                     print_diagnostic("CE3511", "corrupted library file '{path}': bitcode section truncated {counts}")??
-        SlibFault.TooLarge(size) ->
-            print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum 1073741824 bytes")??
-        SlibFault.Decode(_) ->
+        SlibError.TooLarge(size) ->
+            print_diagnostic("CE3513", "library file too large '{path}': {size} bytes exceeds maximum {SLIB_MAX_FILE_SIZE} bytes")??
+        SlibError.Decode(_) ->
             print_diagnostic("CE3512", "invalid library metadata in '{path}': the metadata does not decode as MessagePack")??
-        SlibFault.Invalid(reason) ->
+        SlibError.Invalid(reason) ->
             print_diagnostic("CE3512", "invalid library metadata in '{path}': {reason}")??
     return Result.Ok(~)
 
@@ -1520,8 +1512,8 @@ Gives the value of an environment variable.
 :##
 fn env_value(string name) string:
     match getenv(name):
-        Maybe.Some(v) ->
-            return Result.Ok(v.clone())
+        Maybe.Some(nom v) ->
+            return Result.Ok(v)
         Maybe.None() ->
             return Result.Ok("")
 
@@ -1567,20 +1559,19 @@ fn run_tool(peek string[] args) i32:
             return Result.Ok(0)
         if (a == "--docs"):
             show_docs := true
+        elif (a.starts_with("--color=")):
+            colour := a.s(8, a.len())
+            if (colour != "always" and colour != "never" and colour != "auto"):
+                print_usage_error("--color takes always, never or auto: {a}")??
+                return Result.Ok(2)
+        elif (a.starts_with("-")):
+            print_usage_error("unknown option: {a}")??
+            return Result.Ok(2)
         else:
-            if (a.starts_with("--color=")):
-                colour := a.s(8, a.len())
-                if (colour != "always" and colour != "never" and colour != "auto"):
-                    print_usage_error("--color takes always, never or auto: {a}")??
-                    return Result.Ok(2)
-            else:
-                if (a.starts_with("-")):
-                    print_usage_error("unknown option: {a}")??
-                    return Result.Ok(2)
-                if (path != ""):
-                    print_usage_error("more than one file named: {a}")??
-                    return Result.Ok(2)
-                path := a.clone()
+            if (path != ""):
+                print_usage_error("more than one file named: {a}")??
+                return Result.Ok(2)
+            path := a.clone()
         i := i + 1
 
     if (path == ""):

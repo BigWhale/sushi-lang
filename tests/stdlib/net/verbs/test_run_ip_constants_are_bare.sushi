@@ -1,16 +1,15 @@
-# The four addresses <net/ip> has by name lose their ip_ prefix: v4_any(), v4_loopback(),
-# v6_any() and v6_loopback() (#571). The v4_loopback, v6_any and v6_loopback names had no
-# call anywhere until this test.
+# The four addresses <net/ip> has by name are constants, and each carries no channel,
+# because a well-known address cannot fail: V4_ANY, V4_LOOPBACK, V6_ANY, V6_LOOPBACK.
 # EXPECT_STDOUT_EXACT: "0.0.0.0\n127.0.0.1\n::\n::1\ntrue true true true\n"
 # EXPECT_NO_LEAKS: true
 
 use <net/ip>
 
 fn show_all() ~:
-    let IpAddr a = v4_any()??
-    let IpAddr b = v4_loopback()??
-    let IpAddr c = v6_any()??
-    let IpAddr d = v6_loopback()??
+    let IpAddr a = V4_ANY
+    let IpAddr b = V4_LOOPBACK
+    let IpAddr c = V6_ANY
+    let IpAddr d = V6_LOOPBACK
     println(a.text())
     println(b.text())
     println(c.text())
