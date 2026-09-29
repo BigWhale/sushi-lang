@@ -278,13 +278,13 @@ it built at run time was a run of one value:
 
 | Site | Before | How often |
 |---|---|---|
-| `zlib.sushi:164-179` `zfixed_lit` | 288 entries by `push`, in four runs | each fixed block |
-| `zlib.sushi:183-189` `zfixed_dist` | 30 entries of `5` by `push` | each fixed block |
-| `zlib.sushi:253-263` `zinflate_clen` | 19 zeros by `push` | each dynamic block |
-| `zlib.sushi:94-99` `zhuff_build` | `count[16]` and `offs[16]` zeroed by `push` | each Huffman code |
-| `zlib.sushi:482`, fill at `:487-497` `zdeflate_fixed` | 32768 entries of `-1` by `push`, 128 KiB | each `deflate` call |
+| `zlib.sushi:164-179` `fixed_lit` | 288 entries by `push`, in four runs | each fixed block |
+| `zlib.sushi:183-189` `fixed_dist` | 30 entries of `5` by `push` | each fixed block |
+| `zlib.sushi:253-263` `inflate_clen` | 19 zeros by `push` | each dynamic block |
+| `zlib.sushi:94-99` `huff_build` | `count[16]` and `offs[16]` zeroed by `push` | each Huffman code |
+| `zlib.sushi:482`, fill at `:487-497` `deflate_fixed` | 32768 entries of `-1` by `push`, 128 KiB | each `deflate` call |
 
-`zinflate_fixed` (`zlib.sushi:245-249`) calls the first two, and the block loop
+`inflate_fixed` (`zlib.sushi:245-249`) calls the first two, and the block loop
 (`zlib.sushi:623-635`) reaches it once for every fixed block in the stream. So a stream of
 *k* fixed blocks pays about 700 bounds-checked appends *k* times, for two tables that the
 format fixes and never changes.
@@ -305,8 +305,8 @@ These two are the evidence that Ruling 3 waits for.
 **One item left this list during the rewrite.** The ENCODER's two lookups -- a length to its
 length code, a distance to its distance code -- read as computed tables, and they are not:
 each is a step function whose value is constant over a run, so a repeated element writes it
-directly. `zlen_index` walked 29 base entries backwards for every match it emitted and now
-reads one slot of a 256-entry table written in 29 runs. `zdist_index` does the same through
+directly. `len_index` walked 29 base entries backwards for every match it emitted and now
+reads one slot of a 256-entry table written in 29 runs. `dist_index` does the same through
 the range split zlib's own encoder uses, because one direct table would need 32768 slots.
 
 The lesson generalizes, and it is worth stating before Ruling 3 opens: **a table is a run
@@ -410,7 +410,7 @@ is a constant expression or an empty container, so a table built at run time is 
 `var` that starts empty and is filled on first use (`var Maybe@(T) cache = Maybe.None`).
 That keeps a table, but it does not compute one at compile time: the table is not
 `.rodata`, and each program pays for the build when it runs. `compression/zlib` does not use
-it: `zfixed_lit` builds its `ZHuff` for each block, and the value goes from call to call as a
+it: `fixed_lit` builds its `ZHuff` for each block, and the value goes from call to call as a
 `peek` parameter.
 
 ## History

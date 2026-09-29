@@ -138,7 +138,7 @@ Reads the next `need` bits, low bit first, which is how DEFLATE packs a plain va
 - Returns: The bits, as an unsigned value.
 - Errors: `ZError.Truncated` when the input ends first.
 :##
-fn zbits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
+fn bits_get(peek u8[] src, poke ZBits s, i32 need) u32 | ZError:
     while (s.cnt < need):
         if (s.pos >= src.len()):
             return Result.Err(ZError.Truncated(s.pos))
@@ -163,7 +163,7 @@ incomplete.
 - Returns: The code.
 - Errors: `ZError.BadCode` when a length is more than 15 or the code is over-subscribed.
 :##
-fn zhuff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
+fn huff_build(peek i32[] lengths, i32 n) ZHuff | ZError:
     let i32[] count = from([0; 16])
 
     foreach(sym in 0..n):
@@ -203,12 +203,12 @@ Decodes one symbol, one bit at a time.
 - Returns: The symbol.
 - Errors: `ZError.Truncated`, or `ZError.BadCode` when no code of 15 bits or fewer matches.
 :##
-fn zhuff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
+fn huff_decode(peek u8[] src, poke ZBits s, peek ZHuff h) i32 | ZError:
     let i32 code = 0
     let i32 first = 0
     let i32 index = 0
     foreach(len in 1..16):
-        code := code | (zbits_get(peek src, poke s, 1)?? as i32)
+        code := code | (bits_get(peek src, poke s, 1)?? as i32)
         let i32 count = h.count[len]
         if ((code - count) < first):
             return Result.Ok(h.symbol[index + (code - first)])
@@ -223,9 +223,9 @@ Builds the fixed literal and length code of RFC 1951 section 3.2.6.
 - Returns: The code.
 - Errors: This function does not fail for the fixed lengths.
 :##
-fn zfixed_lit() ZHuff | ZError:
+fn fixed_lit() ZHuff | ZError:
     let i32[] lengths = from([8;144, 9;112, 7;24, 8;8])
-    return Result.Ok(zhuff_build(peek lengths, 288)??)
+    return Result.Ok(huff_build(peek lengths, 288)??)
 
 ##:
 Builds the fixed distance code: thirty codes of five bits.
@@ -235,9 +235,9 @@ The code is incomplete on purpose. The two spare patterns decode to nothing.
 - Returns: The code.
 - Errors: This function does not fail for the fixed lengths.
 :##
-fn zfixed_dist() ZHuff | ZError:
+fn fixed_dist() ZHuff | ZError:
     let i32[] lengths = from([5; 30])
-    return Result.Ok(zhuff_build(peek lengths, 30)??)
+    return Result.Ok(huff_build(peek lengths, 30)??)
 
 ##:
 Decodes a stored block (BTYPE 00).
@@ -250,7 +250,7 @@ as little-endian 16-bit values.
 - Parameter out: The output. The block adds its bytes to it.
 - Errors: `ZError.Truncated`, or `ZError.BadStoredLength` when LEN and NLEN are not complements.
 :##
-fn zinflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
+fn inflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     s.acc := 0
     s.cnt := 0
     if ((s.pos + 4) > src.len()):
@@ -279,10 +279,10 @@ output. The copy can overlap the bytes that it writes.
 - Parameter distcode: The distance code.
 - Errors: `ZError.Truncated`, `ZError.BadCode`, `ZError.BadSymbol` or `ZError.BadDistance`.
 :##
-fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
+fn inflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
                   peek ZHuff lencode, peek ZHuff distcode) ~ | ZError:
     while (true):
-        let i32 sym = zhuff_decode(peek src, poke s, peek lencode)??
+        let i32 sym = huff_decode(peek src, poke s, peek lencode)??
         if (sym < 256):
             out.push(sym as u8)
         elif (sym == 256):
@@ -291,12 +291,12 @@ fn zinflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
             let i32 li = sym - 257
             if (li >= 29):
                 return Result.Err(ZError.BadSymbol(sym))
-            let i32 lx = zbits_get(peek src, poke s, ZLIB_LEN_EXTRA[li])?? as i32
+            let i32 lx = bits_get(peek src, poke s, ZLIB_LEN_EXTRA[li])?? as i32
             let i32 length = ZLIB_LEN_BASE[li] + lx
-            let i32 dsym = zhuff_decode(peek src, poke s, peek distcode)??
+            let i32 dsym = huff_decode(peek src, poke s, peek distcode)??
             if (dsym >= 30):
                 return Result.Err(ZError.BadSymbol(dsym))
-            let i32 dx = zbits_get(peek src, poke s, ZLIB_DIST_EXTRA[dsym])?? as i32
+            let i32 dx = bits_get(peek src, poke s, ZLIB_DIST_EXTRA[dsym])?? as i32
             let i32 dist = ZLIB_DIST_BASE[dsym] + dx
             if (dist > out.len()):
                 return Result.Err(ZError.BadDistance(dist, out.len()))
@@ -310,12 +310,12 @@ Decodes a fixed-Huffman block (BTYPE 01) with the two fixed codes.
 - Parameter src: The compressed input.
 - Parameter s: The bit cursor. The read moves it.
 - Parameter out: The output. The block adds its bytes to it.
-- Errors: The errors of `zinflate_codes`.
+- Errors: The errors of `inflate_codes`.
 :##
-fn zinflate_fixed(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
-    let ZHuff lencode = zfixed_lit()??
-    let ZHuff distcode = zfixed_dist()??
-    zinflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
+fn inflate_fixed(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
+    let ZHuff lencode = fixed_lit()??
+    let ZHuff distcode = fixed_dist()??
+    inflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
     return Result.Ok(~)
 
 ##:
@@ -329,11 +329,11 @@ The lengths of this code come in the order of `ZLIB_CLEN_ORDER`.
 - Returns: The code-length code.
 - Errors: `ZError.Truncated` or `ZError.BadCode`.
 :##
-fn zinflate_clen(peek u8[] src, poke ZBits s, i32 ncode) ZHuff | ZError:
+fn inflate_clen(peek u8[] src, poke ZBits s, i32 ncode) ZHuff | ZError:
     let i32[] clen = from([0; 19])
     foreach(i in 0..ncode):
-        clen[ZLIB_CLEN_ORDER[i]] := zbits_get(peek src, poke s, 3)?? as i32
-    return Result.Ok(zhuff_build(peek clen, 19)??)
+        clen[ZLIB_CLEN_ORDER[i]] := bits_get(peek src, poke s, 3)?? as i32
+    return Result.Ok(huff_build(peek clen, 19)??)
 
 ##:
 Reads the literal, length and distance code lengths with the code-length code.
@@ -347,11 +347,11 @@ Symbol 16 repeats the length before it. Symbols 17 and 18 repeat a zero.
 - Returns: The lengths.
 - Errors: `ZError.Truncated`, `ZError.BadCode` or `ZError.BadSymbol`.
 :##
-fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
+fn inflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                     i32 total) i32[] | ZError:
     let i32[] lengths = from([])
     while (lengths.len() < total):
-        let i32 sym = zhuff_decode(peek src, poke s, peek clencode)??
+        let i32 sym = huff_decode(peek src, poke s, peek clencode)??
         if (sym < 16):
             lengths.push(sym)
         else:
@@ -362,11 +362,11 @@ fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                     if (lengths.len() == 0):
                         return Result.Err(ZError.BadCode())
                     val := lengths[lengths.len() - 1]
-                    rep := 3 + (zbits_get(peek src, poke s, 2)?? as i32)
+                    rep := 3 + (bits_get(peek src, poke s, 2)?? as i32)
                 17 ->
-                    rep := 3 + (zbits_get(peek src, poke s, 3)?? as i32)
+                    rep := 3 + (bits_get(peek src, poke s, 3)?? as i32)
                 18 ->
-                    rep := 11 + (zbits_get(peek src, poke s, 7)?? as i32)
+                    rep := 11 + (bits_get(peek src, poke s, 7)?? as i32)
                 _ ->
                     return Result.Err(ZError.BadSymbol(sym))
             if ((lengths.len() + rep) > total):
@@ -385,31 +385,31 @@ Only a code with one used symbol or fewer can be incomplete. This is the rule of
 - Parameter out: The output. The block adds its bytes to it.
 - Errors: `ZError.Truncated`, `ZError.BadCode` or `ZError.BadSymbol`.
 :##
-fn zinflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
-    let i32 nlen = (zbits_get(peek src, poke s, 5)?? as i32) + 257
-    let i32 ndist = (zbits_get(peek src, poke s, 5)?? as i32) + 1
-    let i32 ncode = (zbits_get(peek src, poke s, 4)?? as i32) + 4
+fn inflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
+    let i32 nlen = (bits_get(peek src, poke s, 5)?? as i32) + 257
+    let i32 ndist = (bits_get(peek src, poke s, 5)?? as i32) + 1
+    let i32 ncode = (bits_get(peek src, poke s, 4)?? as i32) + 4
     if (nlen > 286):
         return Result.Err(ZError.BadSymbol(nlen))
     if (ndist > 30):
         return Result.Err(ZError.BadSymbol(ndist))
 
-    let ZHuff clencode = zinflate_clen(peek src, poke s, ncode)??
-    let i32[] lengths = zinflate_lengths(peek src, poke s, peek clencode, nlen + ndist)??
+    let ZHuff clencode = inflate_clen(peek src, poke s, ncode)??
+    let i32[] lengths = inflate_lengths(peek src, poke s, peek clencode, nlen + ndist)??
 
     let i32[] litlen = lengths.ss(0, nlen)
-    let ZHuff lencode = zhuff_build(peek litlen, nlen)??
+    let ZHuff lencode = huff_build(peek litlen, nlen)??
     if (lencode.left != 0):
         if (nlen != (lencode.count[0] + lencode.count[1])):
             return Result.Err(ZError.BadCode())
 
     let i32[] distlen = lengths.ss(nlen, ndist)
-    let ZHuff distcode = zhuff_build(peek distlen, ndist)??
+    let ZHuff distcode = huff_build(peek distlen, ndist)??
     if (distcode.left != 0):
         if (ndist != (distcode.count[0] + distcode.count[1])):
             return Result.Err(ZError.BadCode())
 
-    zinflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
+    inflate_codes(peek src, poke s, poke out, peek lencode, peek distcode)??
     return Result.Ok(~)
 
 ##:
@@ -438,7 +438,7 @@ Writes `n` bits of `v`, low bit first, which is how DEFLATE packs a plain value.
 - Parameter v: The value.
 - Parameter n: The number of bits to write.
 :##
-fn zput_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~:
+fn put_bits(poke u8[] out, poke ZOut w, u32 v, i32 n) ~:
     w.acc := w.acc | (v << w.cnt)
     w.cnt := w.cnt + n
     while (w.cnt >= 8):
@@ -459,10 +459,10 @@ format.
 - Parameter n: The number of bits in the code.
 - Errors: This function does not fail.
 :##
-fn zput_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
+fn put_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~ | ZError:
     foreach(i in (n - 1)..=0):
         let u32 bit = (code >> i) & 1
-        zput_bits(poke out, poke w, bit, 1)
+        put_bits(poke out, poke w, bit, 1)
     return Result.Ok(~)
 
 ##:
@@ -471,7 +471,7 @@ Writes the last partial byte, with zero bits as padding.
 - Parameter out: The output. The function adds the bytes that it completes.
 - Parameter w: The bit accumulator.
 :##
-fn zflush(poke u8[] out, poke ZOut w) ~:
+fn flush(poke u8[] out, poke ZOut w) ~:
     if (w.cnt > 0):
         out.push((w.acc & 255) as u8)
         w.acc := 0
@@ -485,7 +485,7 @@ Gives the fixed literal and length code of one symbol, RFC 1951 section 3.2.6.
 - Returns: The code.
 - Errors: `ZError.BadSymbol` when the symbol is 288 or more.
 :##
-fn zfixed_code(i32 sym) ZCode | ZError:
+fn fixed_code(i32 sym) ZCode | ZError:
     if (sym < 144):
         return Result.Ok(ZCode((48 + sym) as u32, 8))
     if (sym < 256):
@@ -503,7 +503,7 @@ Gives the length code of a match of 3 to 258 bytes.
 - Returns: The length code, 0 to 28.
 - Errors: `ZError.BadSymbol` when the length is out of range.
 :##
-fn zlen_index(i32 length) i32 | ZError:
+fn len_index(i32 length) i32 | ZError:
     if (length < 3):
         return Result.Err(ZError.BadSymbol(length))
     if (length > 258):
@@ -521,7 +521,7 @@ zlib uses the same split.
 - Returns: The distance code, 0 to 29.
 - Errors: `ZError.BadDistance` when the distance is out of range.
 :##
-fn zdist_index(i32 dist) i32 | ZError:
+fn dist_index(i32 dist) i32 | ZError:
     if (dist < 1):
         return Result.Err(ZError.BadDistance(dist, 0))
     if (dist > 32768):
@@ -542,18 +542,18 @@ code needs no table.
 - Parameter dist: The distance, 1 to 32768.
 - Errors: `ZError.BadSymbol` or `ZError.BadDistance` when a value is out of range.
 :##
-fn zemit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~ | ZError:
-    let i32 li = zlen_index(length)??
-    let ZCode lc = zfixed_code(257 + li)??
-    zput_code(poke out, poke w, lc.bits, lc.len)??
+fn emit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~ | ZError:
+    let i32 li = len_index(length)??
+    let ZCode lc = fixed_code(257 + li)??
+    put_code(poke out, poke w, lc.bits, lc.len)??
     let i32 lextra = ZLIB_LEN_EXTRA[li]
     if (lextra > 0):
-        zput_bits(poke out, poke w, (length - ZLIB_LEN_BASE[li]) as u32, lextra)
-    let i32 di = zdist_index(dist)??
-    zput_code(poke out, poke w, di as u32, 5)??
+        put_bits(poke out, poke w, (length - ZLIB_LEN_BASE[li]) as u32, lextra)
+    let i32 di = dist_index(dist)??
+    put_code(poke out, poke w, di as u32, 5)??
     let i32 dextra = ZLIB_DIST_EXTRA[di]
     if (dextra > 0):
-        zput_bits(poke out, poke w, (dist - ZLIB_DIST_BASE[di]) as u32, dextra)
+        put_bits(poke out, poke w, (dist - ZLIB_DIST_BASE[di]) as u32, dextra)
     return Result.Ok(~)
 
 ##:
@@ -566,7 +566,7 @@ The matcher uses it to put the positions that can share a prefix in one bucket.
 - Returns: The hash, 0 to 32767.
 - Errors: This function does not fail.
 :##
-fn zhash3(peek u8[] src, i32 i) i32 | ZError:
+fn hash3(peek u8[] src, i32 i) i32 | ZError:
     let i32 a = (src[i] as i32) << 10
     let i32 b = (src[i + 1] as i32) << 5
     let i32 c = src[i + 2] as i32
@@ -582,7 +582,7 @@ Counts the bytes that agree at `a` and at `b`.
 - Returns: The count, 258 or less, and not past the end of the input.
 - Errors: This function does not fail.
 :##
-fn zmatch_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
+fn match_len(peek u8[] src, i32 a, i32 b, i32 n) i32 | ZError:
     foreach(l in 0..258):
         if ((b + l) >= n):
             return Result.Ok(l)
@@ -599,7 +599,7 @@ empty final block.
 - Parameter src: The input.
 - Parameter out: The output. The function adds the blocks to it.
 :##
-fn zdeflate_stored(peek u8[] src, poke u8[] out) ~:
+fn deflate_stored(peek u8[] src, poke u8[] out) ~:
     let i32 n = src.len()
     let i32 pos = 0
     while (true):
@@ -633,10 +633,10 @@ match along the chain.
 - Parameter level: The level, 1 to 9. It sets how far the search goes along a chain.
 - Errors: This function does not fail for a valid level.
 :##
-fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
+fn deflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
     let ZOut w = ZOut(0, 0)
-    zput_bits(poke out, poke w, 1, 1)
-    zput_bits(poke out, poke w, 1, 2)
+    put_bits(poke out, poke w, 1, 1)
+    put_bits(poke out, poke w, 1, 2)
 
     let i32 n = src.len()
     let i32[] head = from([-1; 32768])
@@ -648,7 +648,7 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
         let i32 best_len = 0
         let i32 best_dist = 0
         if ((pos + 3) <= n):
-            let i32 h = zhash3(peek src, pos)??
+            let i32 h = hash3(peek src, pos)??
             let i32 cand = head[h]
             prev[pos] := cand
             head[h] := pos
@@ -659,7 +659,7 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
                 let i32 dist = pos - cand
                 if (dist > 32768):
                     break
-                let i32 l = zmatch_len(peek src, cand, pos, n)??
+                let i32 l = match_len(peek src, cand, pos, n)??
                 if (l > best_len):
                     best_len := l
                     best_dist := dist
@@ -668,23 +668,23 @@ fn zdeflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~ | ZError:
                 cand := prev[cand]
                 tries := tries + 1
         if (best_len >= 3):
-            zemit_match(poke out, poke w, best_len, best_dist)??
+            emit_match(poke out, poke w, best_len, best_dist)??
             # register the positions the match covers, so later matches see them
             foreach(k in 1..best_len):
                 let i32 p = pos + k
                 if ((p + 3) <= n):
-                    let i32 hh = zhash3(peek src, p)??
+                    let i32 hh = hash3(peek src, p)??
                     prev[p] := head[hh]
                     head[hh] := p
             pos := pos + best_len
         else:
-            let ZCode c = zfixed_code(src[pos] as i32)??
-            zput_code(poke out, poke w, c.bits, c.len)??
+            let ZCode c = fixed_code(src[pos] as i32)??
+            put_code(poke out, poke w, c.bits, c.len)??
             pos := pos + 1
 
-    let ZCode eob = zfixed_code(256)??
-    zput_code(poke out, poke w, eob.bits, eob.len)??
-    zflush(poke out, poke w)
+    let ZCode eob = fixed_code(256)??
+    put_code(poke out, poke w, eob.bits, eob.len)??
+    flush(poke out, poke w)
     return Result.Ok(~)
 
 ##:
@@ -725,17 +725,17 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
         return Result.Err(ZError.BadLevel(level))
     let u8[] out = from([])
     if (level == 0):
-        zdeflate_stored(peek src, poke out)
+        deflate_stored(peek src, poke out)
         return Result.Ok(out)
 
-    zdeflate_fixed(peek src, poke out, level)??
+    deflate_fixed(peek src, poke out, level)??
     # A fixed literal costs eight or nine bits, so incompressible input grows.
     let i32 blocks = 1 + (src.len() / 65535)
     let i32 stored_size = src.len() + (5 * blocks)
     if (out.len() <= stored_size):
         return Result.Ok(out)
     let u8[] plain = from([])
-    zdeflate_stored(peek src, poke plain)
+    deflate_stored(peek src, poke plain)
     return Result.Ok(plain)
 
 ##:
@@ -747,7 +747,7 @@ Bits 6 and 7 are the level hint. The value makes CMF * 256 + FLG a multiple of 3
 - Returns: The FLG byte.
 - Errors: This function does not fail.
 :##
-fn zlib_flg(i32 level) i32 | ZError:
+fn header_flg(i32 level) i32 | ZError:
     if (level < 2):
         return Result.Ok(1)
     if (level < 6):
@@ -771,7 +771,7 @@ public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
     let u8[] out = from([])
     # CMF: method 8 with a 32 KiB window
     out.push(120)
-    out.push(zlib_flg(level)?? as u8)
+    out.push(header_flg(level)?? as u8)
 
     let u8[] body = deflate_raw(src, level)??
     out.extend(body)
@@ -796,15 +796,15 @@ public fn inflate_raw(u8[] src) u8[] | ZError:
     let u8[] out = from([])
     let ZBits s = ZBits(0, 0, 0)
     while (true):
-        let i32 last = zbits_get(peek src, poke s, 1)?? as i32
-        let i32 btype = zbits_get(peek src, poke s, 2)?? as i32
+        let i32 last = bits_get(peek src, poke s, 1)?? as i32
+        let i32 btype = bits_get(peek src, poke s, 2)?? as i32
         match btype:
             0 ->
-                zinflate_stored(peek src, poke s, poke out)??
+                inflate_stored(peek src, poke s, poke out)??
             1 ->
-                zinflate_fixed(peek src, poke s, poke out)??
+                inflate_fixed(peek src, poke s, poke out)??
             2 ->
-                zinflate_dynamic(peek src, poke s, poke out)??
+                inflate_dynamic(peek src, poke s, poke out)??
             _ ->
                 return Result.Err(ZError.BadBlockType(btype))
         if (last == 1):

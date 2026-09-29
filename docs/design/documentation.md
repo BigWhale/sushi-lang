@@ -885,7 +885,7 @@ per-symbol record, so the manifest gains one top-level key:
 
 A map beside the existing `units` array, not a change to it. `units` is an ordered list and
 the order is load-bearing for the consumer's injection; readers index it as an array, and
-`slib_info.sushi`'s `ml_len` helper works on an `Arr` and returns nothing for a `Map`.
+`slib_info.sushi`'s `len` helper works on an `Arr` and returns nothing for a `Map`.
 
 A **library**-level description is not this feature's business. `nori.toml`
 `[package] description` already carries one, and it is the only prose Omakase renders.
@@ -907,17 +907,17 @@ That last point is about the *reader*, not about the *tool*. `slib_info.sushi` n
 known keys, and it needs work:
 
 - **Parameters render in declaration order, read from the signature and looked up by name.**
-  This is normative, not a suggestion. `ml_get_str(params, name)` while walking the
+  This is normative, not a suggestion. `get_str(params, name)` while walking the
   function's existing `params` array costs no new helper. The reason is the ORDER and only
   the order: whatever order a map happened to have would not be the signature's.
 
   An earlier draft of this bullet also said a `Map` cannot be walked at all. That is true
-  of the `ml_*` helpers -- `ml_len` is `Arr`-only -- and not of the language.
+  of the map-lookup helpers -- `len` is `Arr`-only -- and not of the language.
   `MsgValue.Map(MsgValue[], MsgValue[])` destructures in a `match`, and `map_get` in the
   stdlib does exactly that. Phase 3 reads `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte
   for byte. §9 carries that obligation.
-- **`ml_get_str` cannot tell an absent key from an empty string.** Both give `""`. Suppress
+- **`get_str` cannot tell an absent key from an empty string.** Both give `""`. Suppress
   on empty, or test for `Nil` first.
 
 ### Size
@@ -1112,8 +1112,8 @@ closes a block, and a signature with no block has none to close.
 
 The two implementations need these helpers, under these names:
 
-- `ml_is_nil(MsgValue) -> bool`, because `ml_get_str` cannot tell an absent key from an
-  empty string -- both give `""`. A doc record is read with `ml_get` and tested for `Nil`.
+- `is_nil(MsgValue) -> bool`, because `get_str` cannot tell an absent key from an
+  empty string -- both give `""`. A doc record is read with `map_get` and tested for `Nil`.
 - `print_lines(indent, text, opener)` -- `text.split("\n")`, one `println` per line, an
   empty line printed empty, and `opener` on the FIRST line with every later line indented
   past it. Python must use `str.split("\n")` and **not** `splitlines()`: the latter drops

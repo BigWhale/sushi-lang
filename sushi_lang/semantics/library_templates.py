@@ -22,7 +22,7 @@ def doc_record(doc: Optional["DocBlock"]) -> Optional[dict]:
     """One doc block as a manifest record, or None when it says nothing.
 
     Every field is optional and an EMPTY one is omitted, so a reader that has only
-    `ml_get_str` cannot mistake an absent field for an empty string. The whole block
+    `get_str` cannot mistake an absent field for an empty string. The whole block
     (`DocBlock.text`) is deliberately not carried: the index would then hold its own
     input, duplicating text a source library already ships verbatim
     (`docs/design/documentation.md` section 8).
