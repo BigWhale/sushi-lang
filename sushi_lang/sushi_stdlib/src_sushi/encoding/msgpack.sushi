@@ -38,7 +38,7 @@ public enum MsgValue:
 
 ##: Why a buffer did not decode. :##
 public enum MpError:
-    ##: The input ended. The payload is the byte offset where it ended. :##
+    ##: The input ended. The payload is the offset of the read that could not complete. :##
     Truncated(i32)
     ##: The tag is ext, fixext, timestamp or `0xc1`. The payload is the tag byte. :##
     Unsupported(u8)
@@ -138,7 +138,7 @@ itself. The fixstr path gets here with no `mp_len` check.
 :##
 fn mp_take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
     if (count > buf.len() - cur.pos):
-        return Result.Err(MpError.Truncated(buf.len()))
+        return Result.Err(MpError.Truncated(cur.pos))
     let u8[] out = buf.ss(cur.pos, count)
     cur.pos := cur.pos + count
     return Result.Ok(out)

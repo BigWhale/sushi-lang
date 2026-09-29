@@ -41,7 +41,7 @@ public enum MsgValue:
     Map(MsgValue[], MsgValue[])    # parallel keys/values, wire order kept
 
 public enum MpError:
-    Truncated(i32)      # byte offset where the input ran out
+    Truncated(i32)      # offset of the read that could not complete
     Unsupported(u8)     # ext, fixext, timestamp, or the never-used 0xc1 tag
     BadUtf8(i32)        # offset just past the offending str payload
     Trailing(i32)       # bytes remain after the root value
@@ -188,7 +188,7 @@ fn classify(u8[] buf) string:
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->
-                    return Result.Ok("input ended at byte {off}")
+                    return Result.Ok("input ended in the value at byte {off}")
                 MpError.Unsupported(t) ->
                     return Result.Ok("unsupported tag {t}")
                 MpError.BadUtf8(off) ->
@@ -198,7 +198,7 @@ fn classify(u8[] buf) string:
 
 fn main() i32:
     let u8[] truncated = from([0xa5, 0x68])
-    println(classify(truncated).realise("error"))    # input ended at byte 2
+    println(classify(truncated).realise("error"))    # input ended in the value at byte 1
     return Result.Ok(0)
 ```
 

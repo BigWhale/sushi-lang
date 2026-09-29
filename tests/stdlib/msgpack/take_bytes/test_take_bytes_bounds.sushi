@@ -2,7 +2,7 @@
 # bytes than the buffer holds is Truncated, through the length prefix (bin 8,
 # str 8) and through the fixstr path, which reads no length prefix. A payload that
 # fits exactly decodes, and the cursor stops after it.
-# EXPECT_STDOUT_EXACT: "Truncated(2)\nTruncated(2)\nTruncated(2)\nTruncated(4)\nbin(7,8)\n"hi"\n"ok"\n""\n[bin(9),5]\n["ab",bin()]\n"
+# EXPECT_STDOUT_EXACT: "Truncated(2)\nTruncated(2)\nTruncated(1)\nTruncated(2)\nbin(7,8)\n"hi"\n"ok"\n""\n[bin(9),5]\n["ab",bin()]\n"
 # EXPECT_NO_LEAKS: true
 
 use <encoding/msgpack>

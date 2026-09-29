@@ -1,7 +1,7 @@
 # Decode errors are values, not exits. Each case prints the matched error arm:
 # empty input, truncated payloads, unsupported tags (0xc1, ext, fixext),
 # invalid UTF-8 in a str payload, and trailing bytes after the root value.
-# EXPECT_STDOUT_EXACT: "Truncated(0)\nTruncated(2)\nTruncated(1)\nUnsupported(193)\nUnsupported(212)\nUnsupported(199)\nBadUtf8(2)\nTrailing(1)\nTruncated(2)\nTruncated(2)\n"
+# EXPECT_STDOUT_EXACT: "Truncated(0)\nTruncated(1)\nTruncated(1)\nUnsupported(193)\nUnsupported(212)\nUnsupported(199)\nBadUtf8(2)\nTrailing(1)\nTruncated(2)\nTruncated(2)\n"
 # EXPECT_NO_LEAKS: true
 
 use <encoding/msgpack>

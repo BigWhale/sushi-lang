@@ -10,6 +10,9 @@ All notable changes to Sushi Lang will be documented in this file.
   `filter` over a `List@(string)` was CE2411, and every `fold` with a `string` accumulator
   was CE2426 and CE2411. Both diagnostics pointed into the stdlib source. `filter` now
   clones each kept element, and `fold` clones `init` once.
+- **`MpError.Truncated` carries one kind of offset.** A str or bin payload shorter than its
+  count gave the end of the buffer, and a length prefix gave the read position. Every path
+  now gives the offset of the read that could not complete.
 
 ## [0.13.0] - 2026-09-29
 
