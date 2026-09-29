@@ -157,7 +157,7 @@ is the authority, and the index is a cache of it.
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
     "units": [str],                    # Unit names present in the source section
                                        #   The library's OWN units, and every index
-                                       #   below reads the same filter (#594): a
+                                       #   below reads the same filter: a
                                        #   bundled stdlib module and an imported
                                        #   source library both arrive as ordinary
                                        #   compilation units, and a consumer states
@@ -221,8 +221,8 @@ is the authority, and the index is a cache of it.
     # `List<i32>` and not `List@(i32)`: a consumer reads these back with
     # `parse_type_string`, so this is a wire format. Rendering `@(...)` is the report's
     # job. The consumer's ONE reader is `LibraryRegistry._parse_functions`: it reads all
-    # three keys into the signature, so a `| E` is the call's Err arm at the consumer
-    # (#541), and a spelling that names an instantiation the consumer has not interned
+    # three keys into the signature, so a `| E` is the call's Err arm at the consumer,
+    # and a spelling that names an instantiation the consumer has not interned
     # (`Box<i32>`, an explicit `Result<i32, MyErr>` return) reads back as the generic
     # reference the producer wrote it from -- so the instantiate pass collects it and a
     # Result is never wrapped twice.
@@ -282,7 +282,7 @@ is the authority, and the index is a cache of it.
                     "name": str,
                     "has_data": bool,
                     "data_types": [str],  # If has_data: every payload type, in
-                                          #   written order (#966). A manifest that
+                                          #   written order. A manifest that
                                           #   states `has_data` and no `data_types`
                                           #   is refused (CE3512) and must be rebuilt
                     "doc": DOC         # If documented
@@ -294,7 +294,7 @@ is the authority, and the index is a cache of it.
         }
     ],
 
-    # What each unit RE-EXPORTS: one record per `public use`, in written order (#585).
+    # What each unit RE-EXPORTS: one record per `public use`, in written order.
     # `public use X` makes X's public names the unit's own, so the unit's importers get
     # them where its own names land. A SOURCE library needs no record -- its units are
     # in the source section and the consumer re-parses the statement -- but the index
@@ -303,7 +303,7 @@ is the authority, and the index is a cache of it.
     # plus the providers of what these name.
     #
     # `unit` is the unit that WROTE the statement, and only the library's own units
-    # appear (#594): a bundled stdlib module and an injected source library re-export
+    # appear: a bundled stdlib module and an injected source library re-export
     # on their own account. `kind` says which producer the target is, so the consumer
     # reaches the same provider builder the written statement would have:
     #
@@ -319,9 +319,7 @@ is the authority, and the index is a cache of it.
     #                library's re-export of one answers
     #
     # The whole key is absent when no unit says `public use`, so an ordinary library
-    # grows by nothing. A manifest written before the key reads as no re-export, which
-    # is what an older compiled library has -- the statement was refused (CE3514,
-    # retired).
+    # grows by nothing. An absent key means no re-export.
     "reexports": [
         {"unit": str, "path": str, "kind": str}
     ],
@@ -349,17 +347,17 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 7,                  # Templates schema version. 5 (#494): every
+        "version": 7,                  # Templates schema version. 5: every
                                        #   closure record is one per (unit, name),
                                        #   and a source-shipped template carries
                                        #   `bindings`. A binary .slib with an older
                                        #   schema is refused (CE3512) and must be
                                        #   rebuilt: its bare-name records can bind a
                                        #   template to another unit's body silently.
-                                       #   6 (#543): every public perk ships, and a
+                                       #   6: every public perk ships, and a
                                        #   generic-target perk implementation ships
                                        #   as a template (`generic_perk_impls`).
-                                       #   7 (#537): every perk method record carries
+                                       #   7: every perk method record carries
                                        #   its signature and receiver mode, on the
                                        #   contract and on both kinds of
                                        #   implementation. The one constant is
@@ -381,7 +379,7 @@ is the authority, and the index is a cache of it.
                 "free_perks": [str],   # Perk names from type-param bounds
                 "private": bool,       # Present (true) for closure-shipped helpers
                 "doc": DOC,            # If documented, and never when private
-                "bindings": {str: str} # v5 (#494, D4): every free name in `source`
+                "bindings": {str: str} # v5: every free name in `source`
                                        #   the producer's closure resolved, mapped to
                                        #   its link symbol. The consumer re-parses
                                        #   the source and binds each named call to
@@ -398,8 +396,8 @@ is the authority, and the index is a cache of it.
         "generic_enums": [ ... ],
 
         # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
-        # names it -- #543), plus any perk an exported template names in a constraint
-        # or implements. Each method is a record (v7, #537): its signature, its
+        # names it), plus any perk an exported template names in a constraint
+        # or implements. Each method is a record (v7): its signature, its
         # receiver mode when the contract declares `peek self` / `poke self`, and its
         # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
         #
@@ -427,7 +425,7 @@ is the authority, and the index is a cache of it.
             }
         ],
 
-        # Generic-target perk IMPLEMENTATIONS (v6, #543): `extend Box@(T) with Show`
+        # Generic-target perk IMPLEMENTATIONS (v6): `extend Box@(T) with Show`
         # is a TEMPLATE. It names no instantiation, so there is no symbol to declare
         # and link: it ships as source alone, and the consumer cuts one copy per
         # instantiation of `Box` it names, exactly as for its own template. The
@@ -451,9 +449,9 @@ is the authority, and the index is a cache of it.
         # carry external linkage in the bitcode); constants and types ship with
         # source -- the consumer needs a constant's value for compile-time
         # evaluation, and a type's shape to register it before a monomorphized
-        # template body names it. Since v5 every record is one per (unit, name):
+        # template body names it. Every record is one per (unit, name) (v5):
         # two of the library's own units may each ship a private `helper`, and
-        # each record names its unit (#494).
+        # each record names its unit.
         "private_functions": [
             {                          # No doc: a private symbol is not documented API
                 "name": str,
@@ -481,15 +479,14 @@ is the authority, and the index is a cache of it.
     # A name and its kind, and nothing else: no signature, no body, no source. Written
     # for every kind, and the whole key is ABSENT when a library keeps nothing.
     #
-    # It exists so that a consumer naming one hears CE3005 rather than CE2008 (#469): on
-    # the binary path the symbol is in the consumer's tables not at all, and "undefined"
-    # was the wrong word for a function the library defines and deliberately kept. A name
-    # here is not shipped and clashes with nothing, so a consumer may declare its own
-    # function of the same name. A kept TYPE answers the same way from the type funnel,
-    # where the wrong word was "unknown type". A kept CONSTANT answers from the scope
-    # pass, which lets the name through so the type pass can say whose it is (#487): a
-    # PUBLIC constant registers from `public_constants[].source`, so "no such name" would
-    # be the wrong word for the one next to it that the library kept.
+    # It exists so that a consumer naming one hears CE3005: on the binary path the
+    # symbol is not in the consumer's tables, and "undefined" would be the wrong word for
+    # a function the library defines and deliberately keeps. A name here is not shipped
+    # and clashes with nothing, so a consumer may declare its own function of the same
+    # name. A kept TYPE answers CE3005 the same way from the type funnel. A kept CONSTANT
+    # answers from the scope pass, which lets the name through so the type pass can say
+    # whose it is: a PUBLIC constant registers from `public_constants[].source`, so "no
+    # such name" would be the wrong word for the one next to it that the library keeps.
     #
     # A name the CLOSURE ships is not here. Each private is named in exactly one of the
     # two places, and the closure carries a private constant and a private type as

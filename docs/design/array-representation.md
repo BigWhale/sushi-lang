@@ -1,7 +1,7 @@
 # Dynamic Array Value Representation
 
 Status: **Decided** (a `T[]` is its descriptor, by value, and `emit_expr` yields it).
-Closes #281 and #283, plus two shapes neither issue named. Companion to
+Companion to
 `string-representation.md`, which answers the same question for `string`.
 
 ## Decision
@@ -12,8 +12,7 @@ A dynamic array value is a **3-field descriptor**:
 { i32 len, i32 cap, T* data }
 ```
 
-`ll_type(DynamicArrayType)` has always said so. The rule this document adds is about
-`emit_expr`:
+`ll_type(DynamicArrayType)` says so. The rule this document adds is about `emit_expr`:
 
 > **`emit_expr` of a `T[]` yields the DESCRIPTOR, by value** — the same contract every other
 > type has. Exactly one place turns it into an address: `as_array_address` in
@@ -24,26 +23,17 @@ a mutating method reach the owner: a `Name` receiver hands over its slot, and a 
 hands over a GEP into the struct. A value can only have come from a temporary, so nobody else
 can observe the copy `as_array_address` spills.
 
-## What was wrong
+## Why the descriptor goes by value
 
-`emit_expr` disagreed with itself. An inline `from([...])` returned a POINTER to a fresh
-alloca; `emit_expr` of a `Name` returned the descriptor. So a *value* position could receive
-a pointer and an *address* position could receive a value, and which one you got depended on
-how the array was spelled:
+One contract for every position is the point. If one spelling of an array (an inline
+`from([...])`) gave a pointer and another (a `Name`) gave the descriptor, a value position
+could receive a pointer and an address position could receive a value, and the result would
+depend on how the array was spelled. The container sinks (`Own.alloc`, `List.push`) want a
+value to `store`, and the array methods want an address to `gep`, so neither side can be
+normalized alone.
 
-| shape | what arrived | what the consumer wanted | symptom |
-|---|---|---|---|
-| `Own.alloc(from([1,2,3]))` | pointer | value, to `store` | `cannot store {i32,i32,i32*}* to {i32,i32,i32*}*` (#281) |
-| `l.push(from([1,2]))` | pointer | value, to `store` | the identical message (#283) |
-| `let w = ...; Own.alloc(w)` then `o.get().len()` | value | address, to `gep` | `'IntType' object has no attribute 'gep'` |
-| `o.get()[0]` | value | address, to `gep` | `'LiteralStructType' object has no attribute 'pointee'` |
-
-The last two were never filed. They are the same defect seen from the other side, and they
-are the reason a fix that only normalized the two container sinks would have been wrong: the
-array *methods* want an address just as much as the sinks want a value.
-
-Two positions were already right, and they are the evidence for which way round the rule
-goes — a struct field and a function parameter both take the descriptor by value:
+Two positions give the direction of the rule -- a struct field and a function parameter both
+take the descriptor by value:
 
 ```llvm
 %Row.0 = type { { i32, i32, ptr } }
@@ -51,57 +41,33 @@ define internal { i32, [2 x i64] } @take({ i32, i32, ptr } %a)
   %v = load { i32, i32, ptr }, ptr %v_struct        ; the call site loads first
 ```
 
-## Two producers that disagreed, and how the drift was found
-
-`to_bytes()` and `split()` kept the old shape long after the rule was written. Each
-`alloca`d a slot, stored the returned struct into it and handed back the ADDRESS, so a
-`u8[]` from a string and a `u8[]` from anything else were different things in the same
-position.
-
-The cost was paid by whoever consumed one. Three sites grew a
-"if it is a pointer to a dynamic array, load it" branch --
-`statements/variables.py`, `statements/initialization.py` and `types/core/inference.py` --
-and one of them named `to_bytes()` in its comment. Any consumer WITHOUT that branch
-crashed: `fd_pwrite(fd, 0, s.to_bytes())` was CE0000, an internal error, while
-`fd_pwrite(fd, 0, other.clone())` in the same position worked, because `.clone()` obeys
-the rule. The regression test is `tests/array/value_seam/`.
-
-**The two producers now answer the descriptor, and the three sites STAY.** They were
-instrumented to crash if they ever fired and the suite was re-run: five tests still hit
-them, so they are a normalisation point rather than a workaround. Two producers remain
-and they are different in kind:
-
-- `f.read_bytes(n)`, the file builtin, was the SAME violation. It was deleted rather than
-  repaired: `File.read_bytes` is now Sushi source over `fd_read` (`src_sushi/io/fs.sushi`).
-- `let i32[] b = w.items` is NOT a violation. A field read is a GEP by nature -- the
-  paragraph above says so -- and the `let` is where it must be loaded and deep-copied.
-
-The lesson is narrow and worth keeping: a defensive branch is only dead once something
-has proved it cannot fire. Deleting the two producers and re-running the suite would have
-come back green either way.
+Every producer answers the descriptor: `to_bytes()` and `split()` included, and
+`File.read_bytes` is Sushi source over `fd_read` (`src_sushi/io/fs.sushi`). The regression
+test is `tests/array/value_seam/`. Three consumers keep an "if it is a pointer to a dynamic
+array, load it" branch -- `statements/variables.py`, `statements/initialization.py` and
+`types/core/inference.py`. They are a normalisation point, not a workaround: a field read
+such as `let i32[] b = w.items` is a GEP by nature, and the `let` is where it must be loaded
+and deep-copied.
 
 ## Why not make `ll_type` a pointer instead
 
-That would make the type system agree with what `emit_expr` used to produce, and it was
-rejected. The descriptor is already a fat pointer; a second indirection would change the ABI
-of every struct with an array field and every `T[]` parameter, and it would re-open the
-question of who owns the pointee — a question the descriptor answers today by being owned
+That was rejected. The descriptor is already a fat pointer; a second indirection would change
+the ABI of every struct with an array field and every `T[]` parameter, and it would re-open
+the question of who owns the pointee — a question the descriptor answers by being owned
 wherever it is stored.
 
 ## The fixed array's own seam
 
-A `T[N]` never had this problem, because it never had the duality: `[N x T]` is a value
-everywhere, and `emit_member_access` hands a fixed-array field over BY VALUE while it hands a
+A `T[N]` has no duality: `[N x T]` is a value everywhere, and `emit_member_access` hands a fixed-array field over BY VALUE while it hands a
 dynamic one over as a GEP. That difference is deliberate and stays -- returning a pointer from
 the fixed field read would change what an assignment, an argument and a hash receive.
 
-What a fixed array lacked was the other half: **a rule for the RECEIVER of a built-in method**.
-Nine sites re-derived one -- two in the dispatcher, three in the iterators, two in the hashing,
-and one each in `get` and `clone` -- and each fell back to an `alloca` of a COPY for any
-receiver that was not a bare `Name`. So `b.slots.fill(9)` filled the copy and the owner kept
-its old elements, with no diagnostic possible, because that store is legal (#480).
+A fixed array needs the other half: **a rule for the RECEIVER of a built-in method**. A
+receiver that falls back to an `alloca` of a COPY is silently wrong: `b.slots.fill(9)` would
+fill the copy and leave the owner unchanged, and no diagnostic is possible, because that store
+is legal.
 
-`as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`) is the one rule now. It
+`as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`) is the one rule. It
 resolves the address from the AST rather than from the value, through
 `try_get_struct_alloca`, which already walks a `Name`, a nested field chain, an `IndexAccess`
 and a reference parameter.
@@ -126,7 +92,7 @@ consuming use with no decision.
 ## A run-time length, and the cursor
 
 An array literal element may fill more than one slot: `value; count` repeats one value, and
-`a..b` yields a sequence (#446, #478). Both may have a count the compiler cannot read, and
+`a..b` yields a sequence. Both may have a count the compiler cannot read, and
 only in a `from()` literal -- a fixed array's length is part of its TYPE, and a constant's
 evaluator needs the values.
 
@@ -141,10 +107,9 @@ for run in emitted:
     cursor = builder.add(cursor, run.count)
 ```
 
-The cursor is shorter than the constant arithmetic it replaced, and it is why a run-time
-element may sit anywhere in a literal: nothing depends on a compile-time position. When
-every count is constant the adds are folded in the emitter, so an all-readable literal emits
-what it emitted before.
+The cursor is why a run-time element may sit anywhere in a literal: nothing depends on a
+compile-time position. When every count is constant the adds are folded in the emitter, so
+an all-readable literal emits no run-time arithmetic for the cursor.
 
 `emit_dynamic_array_of_length` (`backend/types/arrays/utils.py`) is the allocation for a
 run-time length. Capacity equals the length rather than the next power of two, which is safe
@@ -177,17 +142,11 @@ the slot it allocates, so `let i32[] e = new()` has nothing left to do and store
 That is the same reason `from()` has its own arm there -- a declaration fills the slot it owns
 rather than building a value to copy into it.
 
-Before the stamp existed the emitter had nothing to build from and answered with a scalar
-placeholder, so `new()` was a value only where a caller special-cased it: a `let` and a struct
-constructor. As an argument and as a `.realise()` default it was CE0017, as a `Result.Ok()`
-payload it packed the placeholder and aborted at scope exit, and a rebind crashed the compiler
-(#460).
-
 ## The one element address
 
 `emit_element_pointer` (`backend/types/arrays/indexing.py`) is the single place that turns an
 `IndexAccess` into an element address, and it emits the bounds check on the way. It has two
-consumers now: the READ (`arr[i]`) and, since #261, the WRITE (`arr[i] := v`). That is why the
+consumers: the READ (`arr[i]`) and the WRITE (`arr[i] := v`). That is why the
 write is bounds-checked by construction rather than by a second check written beside it.
 
 The write emits its VALUE before it asks for the address. A dynamic array can reallocate while
@@ -199,10 +158,9 @@ right operand before place.
 
 `extend`, `extend_range`, `s` and `ss` are the same operation with different arguments, so
 they share one emitter (`backend/types/arrays/copy.py`). Four emitters would mean four
-bounds rules and four answers to what the source owns -- the shape the fixed-array receiver took,
-where nine sites carried nine address rules and two of them were silently wrong.
+bounds rules and four answers to what the source owns.
 
-The rule the copy follows is #478's Ruling 7 in its general form:
+The rule the copy follows:
 
 > **A bulk write borrows its source, and every slot it writes takes its own `copy_out`.**
 
@@ -219,10 +177,10 @@ an exclusive END or a LENGTH. `clamp_range` takes that as a flag and narrows bot
 way, and the arguments reach it RAW -- the start is clamped FIRST, which is what makes
 `.s(-2, 3)` three elements and not five.
 
-**A range outside the source is clamped, never trapped**, the answer `string.s` and
-`string.ss` have always given. That also makes the walk safe by construction: it compares
-with an unsigned predicate, so a negative count would read as four billion, and the clamp
-removes that rather than leaving a guard to fire. RE2024 existed to trap it and is retired.
+**A range outside the source is clamped, never trapped**, the same answer `string.s` and
+`string.ss` give. That also makes the walk safe by construction: it compares with an
+unsigned predicate, so a negative count would read as four billion, and the clamp removes
+that rather than leaving a guard to fire.
 
 Clamping is deliberately unlike `arr[i]`, which traps RE2020. An index names ONE element and
 either has it or does not; a range asks for what overlaps, and can always answer.
@@ -248,10 +206,7 @@ leave a nested reference unresolved (`List<List<i32>>` holds a `GenericTypeRef`)
 (`semantics/generics/type_strings.py`) is the one splitter of a type STRING, the form that a
 library manifest carries.
 
-The design came from a defect: each container carried a hand-rolled reader that parsed the
-interned name, and **none of the readers had an array case**. The element resolved to `None`,
-the typecheck pass stamped nothing on the `??`, and the backend reported **CE0124**.
-
-`HashMap@(K, V[])` was broken exactly as `List@(T[])` was, and no issue mentioned it. That is
-the argument for one reader rather than three: the third copy had the same hole and nobody
-had looked.
+One reader, not one per container: a hand-rolled reader that parses the interned name
+misses a case (an array element, `List@(T[])` or `HashMap@(K, V[])`), the element resolves to
+`None`, the typecheck pass stamps nothing on the `??`, and the backend reports **CE0124**.
+A hole in one reader is then a hole in one place.

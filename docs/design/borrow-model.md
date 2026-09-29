@@ -166,8 +166,8 @@ the same type.
 `FunctionType` carries `param_modes`.** `peek` and `poke` ride on the parameter's own type
 and survive any rebuild; `nom` does not, and a rebuild that omits the field silently says
 "every parameter borrows" rather than "the modes are unknown". Resolution, three
-substitution walks and a manifest read all did exactly that — so `nom` in a fn-type
-annotation was unusable, and two shapes double freed (#368). Use `dataclasses.replace` to
+substitution walks and a manifest read each rebuild a function type, and a rebuild that
+drops the modes makes `nom` in a fn-type annotation unusable and can double free. Use `dataclasses.replace` to
 rebuild, and `declared_modes(params)` to build from a signature.
 `tests/unit/test_fn_type_metadata_survives.py` pins both halves: each transformation
 round-trips a type with non-default metadata, and no construction under `semantics/` may
@@ -176,22 +176,18 @@ leave `param_modes` unstated.
 One resolver answers "what are the modes of this callee?" for every kind in the section 5
 table. It is modelled on the closed `ConsumingUse` enum: `CalleeKind` is a closed set, and
 a member with no row fails a unit test statically. The borrow pass and the backend call the same
-resolver, which is what stops the two halves drifting the way they did before this ruling.
+resolver, which stops the two halves drifting apart.
 
 One applier applies it. Every call shape reaches `apply_mode` in
 `semantics/passes/borrow/calls.py` — a direct call, an indirect call through a fn-typed
-local, and an indirect call through a fn-typed struct field. That last one had a thinner arm
-of its own, which never registered the implicit borrow of an unmarked argument, so
-`h.handler(arr, poke arr)` compiled clean and read the buffer the `poke` had reallocated
-(#365). Reading the mode from one place and applying it in several is the same hazard as
+local, and an indirect call through a fn-typed struct field. Reading the mode from one place and applying it in several is the same hazard as
 deriving it in several.
 
 ## 7. Rules that follow
 
 - **A function type carries the mode, and stays invariant.** `fn(nom string) -> i32` and
   `fn(string) -> i32` are different types, in both directions. Without this, one
-  indirection defeats the rule — which is exactly what #335 showed for `peek` and `poke`,
-  and #368 for `nom`. The `poke` to `peek` coercion is a property of the call-site position,
+  indirection defeats the rule, for `peek` and `poke` and for `nom` alike. The `poke` to `peek` coercion is a property of the call-site position,
   not of the type pair, so it does not travel into a stored function type. `types_compatible`
   compares `FunctionType.modes` for this, in one place, rather than asking each parameter.
 - **A perk declares the mode, and the implementation must match it.** This is CE4004, which
@@ -227,7 +223,7 @@ at every type class.
 
 ## 9. Diagnostics
 
-New:
+The mode codes:
 
 | code | what |
 |---|---|
@@ -245,54 +241,49 @@ method name is what tells a reader which happened.
 A `const` receiver is refused for both marked kinds, and each reads its own code. The
 `poke` write lands in read-only storage: that is CE2400. The `nom` take has no owner to
 take from, and unit-level storage is never moved out of whichever keyword declares it:
-that is CE2436, and `stdout.close()` is the case it catches (#726). A `peek self`
-receiver only reads, so it is legal on a constant (#713). The two marked kinds differ on
+that is CE2436, and `stdout.close()` is the case it catches. A `peek self`
+receiver only reads, so it is legal on a constant. The two marked kinds differ on
 a TEMPORARY: a `poke self` needs an address the caller keeps, so a call result is CE2404,
 while a `nom self` takes ownership and a temporary is owned by construction.
 
-Re-aimed:
+The codes that the modes shape:
 
-- **CE2405** (use after move) now fires from a call argument only when the parameter is
-  `nom`. At a borrow parameter it no longer fires at all, which deletes the false positive
-  at every stdlib call site.
-- **CE2410** (cannot move `main`'s argv view) is re-aimed at the declaration. Under borrow
-  by default, passing `args` to an unmarked parameter is legal and correct; passing it to a
-  `nom` parameter is the error.
-- **CE2422** (cannot write through a by-value method parameter) becomes the general rule for
-  a borrow parameter of any callable, not only of a method.
+- **CE2405** (use after move) fires from a call argument only when the parameter is `nom`.
+  A borrow parameter does not move its argument, so a stdlib call site never reports it.
+- **CE2410** (cannot move `main`'s argv view): passing `args` to an unmarked parameter is
+  legal; passing it to a `nom` parameter is the error.
+- **CE2422** (cannot write through a borrow parameter) is the rule for a borrow parameter
+  of any callable, not only of a method.
 
-Unchanged: CE2411, CE2408, CE2421, CE2414, CE2426, CE2412, CE2401, CE2403, CE2407.
-(CE2429, the unbound chained receiver, joined the read-only kinds later — #352,
-2026-08-20; see `borrowing.md` §5.)
+The borrow codes CE2411, CE2408, CE2421, CE2414, CE2426, CE2412, CE2401, CE2403 and CE2407
+apply as `borrowing.md` §5 states them. CE2429 (the unbound chained receiver) is one of the
+read-only kinds (`borrowing.md` §5).
 
 ## 10. What this makes possible
 
 The immediate reason for the ruling was the stdlib question: "who frees a `string` that a
-program gives to a stdlib function?". The answer is now in the signature, so the question
+program gives to a stdlib function?". The answer is in the signature, so the question
 does not have to be re-asked as each stdlib module moves from generated IR to Sushi source.
 
 Two more follow:
 
 - **A library can declare a borrow.** The `.slib` manifest carries the mode as its own
-  field, so a consumer sees the same signature the library author wrote. Before this, the
-  manifest serialized `peek string` into a type string that the consumer's parser could
-  not read back.
+  field, so a consumer sees the same signature the library author wrote.
 - **The default is the safe one.** The mode a careless author gets is the one that cannot
   double-free, and the dangerous one has to be written down at both ends.
 
 ## 10b. The other boundary: a pattern binding
 
 **Added 2026-08-30.** A call is not the only place a value crosses
-into a new name. A `match` arm binds a payload, and until this ruling that binding could
-only ever borrow -- there was no route by which a `match` arm took ownership of what it
-bound, for `List@(T)` and `T[]` as much as for a handle.
+into a new name. A `match` arm binds a payload, and the binding needs a way to take
+ownership of what it binds, for `List@(T)` and `T[]` as much as for a handle.
 
 The pattern boundary carries the same three modes, with the same meanings, marked the same
 way:
 
 | pattern | what the binding is | who frees | write through it | rebind the name |
 |---|---|---|---|---|
-| `Ok(x)` | a SHALLOW copy of the payload | the scrutinee's owner | no -- CE2414 | no -- CE2414 (#590) |
+| `Ok(x)` | a SHALLOW copy of the payload | the scrutinee's owner | no -- CE2414 | no -- CE2414 |
 | `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes | yes |
 | `Ok(nom x)` | the value, now the arm's | **the arm** | yes | yes |
 
@@ -314,14 +305,13 @@ An arm takes the variant WHOLE (CE2433): what suppresses the match's free is the
 scrutinee, not one payload slot, so a payload left borrowed beside a taken one would be
 freed by nobody. A per-slot take needs a drop flag per payload and is a later change.
 
-`peek` and `poke` are unchanged by the ruling except in one place: a binding into a
-TEMPORARY was CE2404, because a temporary had no address. It has one now -- the match parks
-what it owns in a slot for the whole statement, which `nom` needed in any case.
+A `peek` or `poke` binding into a TEMPORARY is legal: the match parks what it owns in a
+slot for the whole statement, so the temporary has an address.
 
-**A place, ruled 2026-09-27 (#788).** Under a match that only borrows its scrutinee, a
+**A place, ruled 2026-09-27.** Under a match that only borrows its scrutinee, a
 `peek` / `poke` binding takes the places a `let peek` / `let poke` takes: a name, or a
 member or index chain off one (`match b.s:`, `match xs[1]:`, `match c.b.s:`). The address
-exists -- the reference `let` reads it -- so "no stable address" was false for a place.
+exists -- the reference `let` reads it.
 The rules are the reference `let`'s, at the binding: the owner is the ROOT of the place
 (`walk_place`), frozen for the arm (CE2412); one `poke` binding of an owner at a time
 (CE2403) and no `peek` beside a `poke` (CE2407), where the bindings of ONE pattern are
@@ -332,7 +322,7 @@ CE2408. CE2404 stays for a borrowed scrutinee that is not a place: a get-out beh
 A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
 into read-only memory, so the pointer has nothing to point at and a write through the
 binding lands there. That is CE2400, the same answer a `poke self` call on a constant
-reads, and `semantics/constant_borrow.py` is where every position asks it (#685). A `peek`
+reads, and `semantics/constant_borrow.py` is where every position asks it. A `peek`
 and a bare binding READ the payload, and reading a constant is legal -- through a place
 rooted in a constant too (`match B.s:`, `match TS[0]:`): the root decides whether a `poke`
 is allowed, never whether the place has an address.
@@ -379,12 +369,10 @@ agree with, so CE2427's both-ends rule has no field-take twin either.
 
 ## 10d. The fourth boundary: `??` over a place
 
-**Added 2026-09-02, #548.** The unwrap moves the payload out of its wrapper, so `??` is a
-consuming position too -- `ConsumingUse.TRY`. Over a call it always was one in effect: the
-Result is a temporary, nothing else frees it, and the payload lands in the position that
-takes it. Over a NAMED wrapper the same words hid a second owner. `let string got = r??`
-gave `got` the buffer and left `r` registered to free it as well, and the program printed
-garbage before it aborted.
+**Added 2026-09-02.** The unwrap moves the payload out of its wrapper, so `??` is a
+consuming position too -- `ConsumingUse.TRY`. Over a call the Result is a temporary,
+nothing else frees it, and the payload lands in the position that takes it. Over a NAMED
+wrapper, `let string got = r??` gives `got` the buffer, so `r` must not free it too.
 
 The rule is the one every other boundary has: the payload has the provenance of what it
 was unwrapped from.

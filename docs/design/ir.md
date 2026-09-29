@@ -253,8 +253,8 @@ safe. This is a language fact worth guarding: the day an iterator becomes bindab
 ### 4.6 A rebind frees the OLD value, in a fixed order
 
 `emit_rebind` reads the new value FIRST, then destroys the old value, then stores. The
-order is normative: the source may alias the value about to be freed (#303 double-freed
-a string, #304 leaked an array). Drop placement carries this as rule 6 of 8.10.
+order is normative: the source may alias the value about to be freed, so any other order
+double-frees a string or leaks an array. Drop placement carries this as rule 6 of 8.10.
 
 ### 4.7 A constant is read while its unit's AST is built
 
@@ -358,7 +358,7 @@ deadline.
 | The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty | when the old backend is deleted |
 
 A sibling gate is also already in force: the ruff rule `TID251` (`pyproject.toml`) — no
-llvmlite IMPORT outside `backend/` and `sushi_stdlib/`. `semantics` no longer names an
+llvmlite IMPORT outside `backend/` and `sushi_stdlib/`. `semantics` names no
 LLVM type, which is the precondition for both IRs living there.
 
 ---
@@ -388,7 +388,7 @@ lowering consumes it. Three passes move to SHIR: `typecheck`, `lift`, `borrow`.*
 
 `effects` has the same shape of problem from the other side. It is a WHOLE-PROGRAM pass
 (`passes/borrow/destroy_effects.py`): it walks every body once, before the per-unit
-loop, and computes which functions destroy a `poke` parameter, transitively (#168). At
+loop, and computes which functions destroy a `poke` parameter, transitively. At
 that point in the pipeline no SHIR exists — SHIR bodies are built inside the per-unit
 loop. So `effects` cannot move without restructuring the loop, and it does not need to:
 it reads bodies and writes only a summary table that `borrow` consumes.
@@ -500,7 +500,7 @@ Arg = (value: Expr, marker: Convention | None)
 resolves it to (S5). The split exists because lowering runs before `typecheck`: `x.f()`
 cannot know whether `f` is a builtin, an extension or a perk method until the type of
 `x` is known. `Static` covers a call on a type name — `List.new()`, `hm.HashMap.new()`
-behind an alias (#506), `f64.from_bits(b)` — which has no receiver EXPRESSION at all.
+behind an alias, `f64.from_bits(b)` — which has no receiver EXPRESSION at all.
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
@@ -836,8 +836,9 @@ SHIR only so that `typecheck` and `borrow` could report against the source (G7).
 
 ### 8.10 Drop placement
 
-Six rules. They encode the two regimes of #414, plus the rebind order of #303/#304, and
-nothing else:
+Six rules. They encode the two drop regimes (a local moved on every path has no drop; a
+local moved on some paths has a drop flag), plus the rebind order of 4.6, and nothing
+else:
 
 1. An owning local gets `StorageLive` at its declaration and `StorageDead` after its
    last use in the enclosing block.
@@ -851,7 +852,7 @@ nothing else:
    drop; an `Owned` parameter drops in the callee.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value — and
    the order is normative (4.6): compute the new value FIRST, then `Drop` the old, then
-   store. The source may alias the value about to be freed (#303, #304). A rebind
+   store. The source may alias the value about to be freed. A rebind
    through a `poke` parameter follows the same rule, through the pointer.
 
 ### 8.11 A worked example
@@ -1100,7 +1101,7 @@ The plan is written elsewhere; these are the design-level invariants it must hon
    BEFORE lowering the owning types, not during. A missing leak test there is a bug
    that survives to the end undetected.
 6. **The incremental cache is preserved.** A monomorphized instance carries its
-   declaring unit (PR #510), so SLIR functions group into one module per unit exactly
+   declaring unit, so SLIR functions group into one module per unit exactly
    as the emitters do today, and the per-unit `.o` cache keys on the same fingerprints.
 7. **The seam gates travel with their seams** (10.3): a gate is ported in the same
    change that moves what it guards, never later.

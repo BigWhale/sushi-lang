@@ -143,8 +143,7 @@ class SushiLexer(RegexLexer):
         ],
 
         # Interpolated expression inside a double-quoted string. `{...}` holds an
-        # ordinary expression, so it is lexed as one: the state used to carry a
-        # second, smaller expression lexer that knew neither `[`, `??` nor `==`.
+        # ordinary expression, so it is lexed with the full expression rules.
         "interp": [
             (r"\}", String.Interpol, "#pop"),
             include("root"),

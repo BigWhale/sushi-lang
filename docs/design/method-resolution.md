@@ -3,7 +3,7 @@
 How `x.method(args)` is resolved, in what order, and why a user extension method can never
 displace a built-in one.
 
-Status: **decided**. The rule is enforced by `CE2097` (issue #239).
+Status: **decided**. The rule is enforced by `CE2097`.
 
 ## The rule
 
@@ -26,7 +26,7 @@ lower-priority; it is unreachable.
 ## The three layers
 
 The same precedence is implemented three times, and all three must agree. Any disagreement is
-a bug of the class #239 collected:
+a bug:
 
 | layer | file | what it decides |
 |---|---|---|
@@ -42,20 +42,14 @@ dispatcher.
 Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
 `if value_type is None: return`, so a family that fails to infer does not report anything --
 the annotation is simply never checked, and the mismatch reaches the backend as a `CE0017`
-internal error. Two separate defects hid there for weeks:
-
-- Every **primitive** return type was un-inferred, because the inference layer read the
-  builtin-method registry, which the *backend* populates at import time -- and the pipeline
-  imports codegen lazily, after semantic analysis. `let u32 b = f64val.to_bits()` compiled and
-  silently truncated the 64-bit pattern.
-- `string.to_str()` / `string.hash()` were un-inferred for a second reason: the registry
-  was **first-match-wins** then, and the string checker matched on the receiver type alone.
-  It claimed every method name on a `string`, and a claim whose inferrer then returns
-  `None` *ends* the chain rather than falling through.
+internal error. Two faults can hide there: an inference layer that reads the
+backend-populated builtin-method registry (the pipeline imports codegen after semantic
+analysis, so the registry is empty then), and a family that claims a name it cannot type
+(a claim whose inferrer returns `None` *ends* the chain rather than falling through).
 
 Two rules follow, and both are load-bearing:
 
-1. **A family must claim only what it can actually type.** The table now claims through
+1. **A family must claim only what it can actually type.** The table claims through
    one `claim()`, and the families claim DISJOINTLY
    (`tests/unit/test_method_family_dispatch_is_one.py`), so an over-broad claim is an
    overlap that the gate refuses, not a missing family that nobody notices.
@@ -73,7 +67,7 @@ and it holds no list of its own: it asks the family TABLE
 (`semantics/passes/types/method_registry.py`). Each family carries an ANSWER -- does the
 compiler define this name on this receiver, with no perk question -- and the claim the
 typecheck pass reads is that answer, less a call that a perk implementation takes for a
-family that yields to one. So the seam and the pass read one list (#812):
+family that yields to one. So the seam and the pass read one list:
 
 - **arrays** (fixed and dynamic) -- `len`, `get`, `push`, `pop`, `iter`, `clone`, `hash`, ...
 - **string** -- the stdlib string methods, plus the primitive `to_str`/`hash`
@@ -86,10 +80,8 @@ family that yields to one. So the seam and the pass read one list (#812):
 A perk implementation changes the claim and not the answer: it is the sanctioned override,
 so an extension of a built-in name is still CE2097. `tests/unit/test_builtin_method_seam.py`
 holds the seam and the table equal over a matrix of receivers and names, with the names
-read from each family's own table. It used to compare the predicate NAMES spelled in the
-two files, which a predicate reached through a helper defeated. Two places answering one
-question drift; that is the #248 lesson (*if the same question is asked in six places,
-the fix is a seam, not a fallback*).
+read from each family's own table. Two places answering one question drift (*if the same
+question is asked in six places, the fix is a seam, not a fallback*).
 
 ## The family order
 
@@ -99,12 +91,12 @@ Inside the built-in step, both layers try the families in one canonical order:
 
 The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair applies
 to `StructType`/`EnumType`, the function-value clone to `FunctionType` -- so the order is
-arbitrary. What matters is that validation and codegen state the SAME one: the two layers
-used to state it oppositely, and a type that ever satisfied two families would have
-dispatched differently per layer with no diagnostic (#273).
+arbitrary. What matters is that validation and codegen state the SAME one: if the two layers stated
+it differently, a type that satisfied two families would dispatch differently per layer
+with no diagnostic.
 `tests/unit/test_method_resolution_family_order.py` pins the order in both files.
 
-**#751 measured the disjointness rather than asserting it.** At most ONE family claims any
+**The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family
 (`tests/unit/test_method_family_dispatch_is_one.py`). So the order cannot decide an answer,
 which is why the two orders never diverged in practice. The one thing the order still
@@ -148,8 +140,8 @@ struct Point:
     i32 x
     i32 y
 
-# The supported way to replace the compiler-derived hash. `Hashable` is predefined
-# (#696): every type with a derived hash satisfies it, and this is the override.
+# The supported way to replace the compiler-derived hash. `Hashable` is predefined:
+# every type with a derived hash satisfies it, and this is the override.
 extend Point with Hashable:
     fn hash() u64:
         return 999999 as u64
@@ -178,8 +170,7 @@ both ends:
 
 - **after the derive pass**, which registers the struct/enum `hash`/`clone`;
 - **after the generic-extension merge loop**, because a monomorphized `extend Box@(i32) hash()`
-  only enters the extension table there. Running earlier is exactly why that shape went
-  uncovered in the first cut.
+  only enters the extension table there. An earlier check does not see that shape.
 
 It keys on whether a built-in genuinely exists for that pair, never on the bare method name --
 so a type that carries no such built-in (a struct the compiler could not derive `hash` for, say)
@@ -187,8 +178,7 @@ can still be extended with a `hash()` of its own.
 
 ## Which types an extension applies TO
 
-A separate question from precedence, and settled by the same principle. Status: **decided**,
-issue #393.
+A separate question from precedence, and settled by the same principle. Status: **decided**.
 
 > **A concrete type argument in an extension target is a CONSTRAINT, not a type-parameter
 > name.** `extend Box@(i32)` applies to `Box@(i32)` and to nothing else.
@@ -200,11 +190,6 @@ issue #393.
 | `extend Box@(i32) f()` **and** `extend Box@(string) f()` | legal -- two types, two methods |
 | `extend Box@(T) f()` **and** `extend Box@(i32) f()` | **rejected** -- `CE0101`, relational |
 | `extend Pair@(i32, U) f()` -- partially concrete | **rejected** -- `CE2098` |
-
-The argument used to be stored as a type-parameter *name*, so `extend Box@(i32) tag()`
-registered for every instantiation of `Box`: it answered a `Box@(string)` receiver, and it was
-a `CE0000` as soon as the body touched the type. A perk implementation on the same target had
-always scoped correctly -- one question, two answer sites, which is the #239 class exactly.
 
 **A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
 and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
@@ -223,7 +208,7 @@ CE4006 for a type that does. It also puts `Drop` within reach: `TypeQueries.drop
 the perk table, so the copy registered here is in the set before `derive`, `effects` and
 the `borrow` pass ask whether the instantiation owns a resource.
 
-**A LATE instantiation gets its copy too** (#555). A type named only inside a generic body
+**A LATE instantiation gets its copy too.** A type named only inside a generic body
 -- `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls -- is interned while
 that body is substituted, after the first cut. Every instantiation the tables hold with no
 copy yet is cut afterwards, to a fixpoint, so `Box@(string)` has its `show()` whether the
@@ -267,7 +252,7 @@ not a typo. Resolution still runs first — a method found on the wrapper itself
 ## The static method: a name behind the TYPE's dot
 
 A separate question again, and the constructor half of method resolution. Status:
-**decided**, issue #542.
+**decided**.
 
 > **A name behind a type's dot is a MEMBER of that type: a variant, or a static method.
 > Never both. A local of the same name wins first.**
@@ -308,7 +293,7 @@ a method named `static` are not writable.
 
 Everything in the right column that is not about the receiver is unchanged. A static's
 parameters BORROW unless marked `nom`; its owning return is the caller's; its `| E`
-channel spells `Result.Ok(...)` and `Result.Err(...)` as a free function does (#848). The one thing it lacks is a receiver,
+channel spells `Result.Ok(...)` and `Result.Err(...)` as a free function does. The one thing it lacks is a receiver,
 and the two positions that could name one are one fault with one code:
 
 - a receiver MODE in the signature -- `extend Vec static at(poke self)`,
@@ -322,16 +307,15 @@ Every target an extension may name, **except an array**. A struct, an enum, a
 **primitive** (`extend f64 static of_int(i32 v) f64:`), a built-in generic
 (`extend List@(i32) static of_one(i32 v) List@(i32):`) and a **generic** target, which
 is a template like any other: one copy per instantiation. A generic static's type
-arguments are solved in two steps, as ONE resolution (#573). First from the ARGUMENTS,
+arguments are solved in two steps, as ONE resolution. First from the ARGUMENTS,
 for every target type parameter that a parameter names (`nom R src` names `R`), exactly
 as a generic free function solves its own. Then from the PROPAGATION STAMP at the
 binding site, for every type parameter still unsolved -- there is no receiver to read
 it from. `Cage.holding(9)` with a plain `T item` is solved by the first step and needs
 no annotation; `Cage.empty()` is solved by the second, and `BufReader.new(nom f, 8192)`
 is the stdlib's example of the first: `R` comes from the handle, in every position,
-which is what lets a `| E` static be written at all -- a Result-valued call is never
-stamped, so the stamp alone (the rule from #542 to #573) left `match`, `.realise` and
-`??` all refused.
+which is what lets a `| E` static be written at all: a Result-valued call is never
+stamped, so the stamp alone could not solve `match`, `.realise` or `??` over it.
 
 An ARRAY target is **CE2104**. An array type has no spelling in an expression position
 -- `i32[].two()` is a parse error, and no form reaches it -- so the declaration would
@@ -378,11 +362,11 @@ A name has exactly one home, so both are refused where they are written:
 
 | written | refusal |
 |---|---|
-| a static and an instance method of one name on one type | **CE0101**, the duplicate-extension rule it always was |
+| a static and an instance method of one name on one type | **CE0101**, the duplicate-extension rule |
 | a static and a VARIANT of one name on one enum | **CE2103**, relational -- the variant would always win, which is CE2097's hazard |
 
-CE2045 grew a second half for the same reason: a name behind an enum's dot could have
-been either member, so its help names both escapes.
+CE2045's help names both escapes for the same reason: a name behind an enum's dot could be
+either member.
 
 ### The built-in statics are static methods
 
@@ -391,25 +375,23 @@ been either member, so its help names both escapes.
 in one table (`semantics/statics.py:BUILTIN_STATICS`) and each is still emitted by its
 container's own narrow handler, because a container static has no `ExtendDef` to resolve
 and so has nothing yet to converge onto. The general path DEFERS to that table rather
-than refusing what it cannot find; #553's lesson is why the narrow handlers stay until a
-test proves the general path covers them.
+than refusing what it cannot find. The narrow handlers stay until a test proves that the
+general path covers them.
 
 ### The seams
 
 | question | where |
 |---|---|
 | does this name denote a TYPE, of any kind | `semantics/statics.py:names_a_type` -- the scope pass and the typecheck pass both ask it |
-| does this bare name in a TARGET's argument position name a declared thing (a type, or a perk) | `semantics/generics/extension_targets.py:DeclaredTypeNamer` -- the type half is `names_a_type`, the perk half is the classifier's own rule; the extension path, the perk-implementation path and the array path all hand it to the classifier (#653). Gate: `tests/unit/test_declared_type_predicate_is_one.py` |
+| does this bare name in a TARGET's argument position name a declared thing (a type, or a perk) | `semantics/generics/extension_targets.py:DeclaredTypeNamer` -- the type half is `names_a_type`, the perk half is the classifier's own rule; the extension path, the perk-implementation path and the array path all hand it to the classifier. Gate: `tests/unit/test_declared_type_predicate_is_one.py` |
 | which type does this receiver name, and does it declare that static | `passes/types/calls/statics.py` -- the validation half and the inference half both read it |
 | instance or static (they share one table) | ONE filter at the end of `resolve_extension_method`; `resolve_method(..., static=True)` skips the perk rung outright |
 | what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a new kind, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
-| the alias fold | `fold_namespaced_static`, unchanged in shape: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` (#506) |
+| the alias fold | `fold_namespaced_static`, unchanged in shape: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` |
 
-The refusal for a type whose dot holds no such member is **CE2102**. It replaced a
-CE1001 "use of undeclared identifier 'Box'" for a struct declared three lines above: the
-fault was the POSITION, not the name, and the fix is in the scope pass, which now lets a
-type name through in a receiver position and leaves the answer to the pass that has the
-method tables.
+The refusal for a type whose dot holds no such member is **CE2102**. The fault is the
+POSITION, not the name: the scope pass lets a type name through in a receiver position and
+leaves the answer to the pass that has the method tables.
 
 ### Prior art
 
@@ -425,7 +407,7 @@ method tables.
 | **Go, Zig** | no term -- a package or namespace function | `bufio.NewReader(f)` |
 
 Sushi says **static method**, which is what most of that table says.
-`docs/design/unit-storage.md` had already reserved the word: `var` took unit-level
+`docs/design/unit-storage.md` reserves the word: `var` took unit-level
 storage precisely so that "static" could keep meaning a function called on a type name.
 Sushi has no static STORAGE.
 
@@ -446,7 +428,7 @@ outnumbers a static call 22 to 1 (10,469 to 479).
   constructor. CE4014.
 - **No overloading.** A name has one home; both collisions above are refusals.
 - **No export through a BINARY `.slib`.** A binary library ships no extension method at
-  all today, instance or static, so this is a pre-existing limit and not a static one. A
+  all, instance or static, so this limit is not particular to a static. A
   SOURCE `.slib` ships the declaration as text and a static exports through it.
 
 ## A perk method and an extension method differ in one thing
@@ -469,7 +451,7 @@ perk Source:
 
 extend Counter with Source:
     fn read_one() i32 | SourceError:
-        return Result.Ok(self.value)   # both constructors are spelled (#848)
+        return Result.Ok(self.value)   # both constructors are spelled
 ```
 
 The channel is part of the signature, so the contract and the implementation must
@@ -488,18 +470,14 @@ pass whose tables say which bare names are declared -- `Box@(T)` and `Box@(Point
 spelled identically and mean opposite things. ONE predicate answers that question for the
 extension path, the perk-implementation path and the array path alike: `DeclaredTypeNamer`,
 beside the classifier, reads the four type tables through `statics.names_a_type` and the
-perk table (#653). A perk is not a type, but a perk name is a declared name: `extend
+perk table. A perk is not a type, but a perk name is a declared name: `extend
 Box@(Show)` constrains rather than binding a parameter called `Show`, and the name then
-fails as a type where every other type position fails it. Before #653 the two collectors
-answered from two different sets, so `extend Box@(Cage) with Show` was a template over
-every `Box` while `extend Box@(Cage) g()` constrained, and a perk name went the other way
-round. The answer is carried on the
+fails as a type where every other type position fails it. The answer is carried on the
 declaration (`ExtendDef.target_shape`) and on its collected signature
 (`GenericExtensionMethod.target_key`), so the instantiate and monomorphize passes read it instead of deciding
 again from a different set of visible types. `instantiation_key` is the one authority for the
-mangled name a concrete target matches; the perk-impl table built its own and joined the
-arguments differently, so a two-argument concrete target registered under a name no receiver
-ever resolved to.
+mangled name a concrete target matches, for the extension table and the perk-impl table
+alike.
 
 ## Related
 

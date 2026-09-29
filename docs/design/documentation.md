@@ -685,8 +685,8 @@ gains `warn_missing_docs: bool = False`, beside `unit_manager`, `library_linker`
 `BuildOptions` the way `--ignore-compiler-version` is read. A `CompilerOptions` object is the right
 answer to the SECOND warning flag and the wrong answer to the first.
 
-The second warning flag came with #959 (`--warn-unused`), and the object came with it. The
-keyword is now `lints: Lints`, a frozen dataclass in `semantics/semantic_analyzer.py` with
+With a second warning flag (`--warn-unused`), the keyword is `lints: Lints`, a frozen
+dataclass in `semantics/semantic_analyzer.py` with
 one field for each warning-control flag (`missing_docs`, `unused`). `BuildOptions.lints`
 makes it from the command line, and `compile_multi_file` passes it to the analyzer.
 
@@ -753,7 +753,7 @@ place, at lex time, before the builder has an opinion.
 ### The doc family
 
 CE70xx, in the `docs.py` module under `sushi_lang/internals/errors/`. A code may only be added
-in the file that owns its range, and CE7xxx was entirely unused before this module.
+in the file that owns its range, and the CE7xxx range belongs to this module.
 
 It needed four supporting changes:
 
@@ -775,8 +775,7 @@ carry `Category.DOCS` and still live there, because the range test returns every
 a `CW` code.
 
 `tests/unit/test_error_registry.py` holds an exact `REGISTRY_SIZE` tripwire, and it needs a
-bump. Nothing else: the running changelog that comment used to carry was deleted in #444, and
-the comment now says why. Why a code exists belongs in its `doc` field in
+bump. Nothing else, and the comment says why. Why a code exists belongs in its `doc` field in
 `internals/errors/docs.py`; what changed belongs in the `CHANGELOG` and the git log.
 
 Phase 2 registers ten codes in all — CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
@@ -933,8 +932,8 @@ so an undocumented library pays nothing, and the record stores the parsed fields
 raw block.
 
 The third is that **the blob will be compressed** (R8). Both of the reasons `libraries.md`
-gave for not compressing have expired: `compression/zlib.sushi` is in the stdlib, so a
-Sushi-side inflate is no longer missing, and `FLAGS` bit 0 is already claimed. That is a
+gave for not compressing do not hold: `compression/zlib.sushi` is in the stdlib, so a
+Sushi-side inflate exists, and `FLAGS` bit 0 is claimed. That is a
 `libraries.md` decision and a container decision, so it is not this feature's to take — but
 it is the reason nothing here is shaped around a byte budget.
 
@@ -1578,8 +1577,8 @@ absent when there is no example. `slib-info` does not print examples: S9 is a pl
 and a fenced program inside it would bury the signature. Phase 6 renders them.
 
 **Amended by R48.** Phase 6 gave the record the CAPTION as well, and gated the whole
-documented report behind `--docs` (R50) -- so a fenced program no longer buries anything,
-because a reader who did not ask for prose does not get any.
+documented report behind `--docs` (R50) -- so a fenced program shows only under `--docs`,
+and a reader who did not ask for prose does not get any.
 
 This closes R7, the one thing an author could write that phase 3 dropped.
 
@@ -1699,7 +1698,9 @@ about a file.
 
 ---
 
-## 12. Phases
+## 12. Phases (record)
+
+Every phase below is built. This section is the record of what each phase delivered.
 
 **Phase 2 — the language.** The three terminals, the `_NEWLINE` narrowing, the seven rule
 edits, the `DOC_BLOCK` peel in `parse_block`, `DocBlock` and `DocTag`, the doc parser and
@@ -1724,9 +1725,9 @@ question: what a block claims, and what it leaves out.
 **Phase 6 — the report.** `slib-info` prints what it carries, and prints it better.
 Layout (R38, R39), colour behind one decision (R41, R43), the rendered Markdown subset
 (R40, R44), `- Example:` (R48), the four sections and two spellings that were wrong
-(R45-R47, R49), and `--docs` to gate the prose (R50). It also grew `is_terminal()` in
-`<io/stdio>` (R42), because a tool that wants colour has to ask whether anyone is
-looking. That module was later retired and the method is a `File` method in `<io/fs>`.
+(R45-R47, R49), and `--docs` to gate the prose (R50). It also added `is_terminal()`
+(R42), because a tool that wants colour has to ask whether anyone is looking. It is a
+`File` method in `<io/fs>`.
 
 **A Markdown checker was cut from this phase, and §2 of the plan records why.** A Sushi
 tool has no Sushi parser: `slib_info.sushi` reads a `.slib` through msgpack and cannot open
@@ -1744,9 +1745,6 @@ Check the user documentation that it is still valid and add things that were don
 that phase if applicable. Move this section's own phase row, and the status banner at the
 top, in the same commit — a phase that ships and still reads DESIGN is the one drift a
 reader cannot detect.
-
-Phases 2 to 5 shared one branch, `feat/doc-block`, and merged together. Phase 6 has its
-own branch, `feat/doc-block-markdown`.
 
 ### What each phase must NOT do
 
