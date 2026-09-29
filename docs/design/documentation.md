@@ -53,9 +53,9 @@ the doc block can check it against the declaration standing next to it:
   have no equivalent check, because neither has a declared error type. Note the limit: every
   function has an error arm — `| E` when written, `StdError` when not — so what §6 checks is
   that the tag is present and not what the prose says.
-- `slib-info` could print the parameter **mode** — `nom`, `peek`, `poke` — beside each
-  documented parameter, with nothing supplied by the author. The mode is already in the
-  manifest and is not printed today; §9 carries that as phase-3 work.
+- `slib-info` prints the parameter **mode** — `nom`, `peek`, `poke` — beside each
+  documented parameter, with nothing supplied by the author. The mode is in the manifest
+  (R5 in §8 records the ruling).
 
 None of these are available to pydoc, and none are the point of the feature on their own.
 They are the reason the block belongs in the grammar rather than beside it.
@@ -254,8 +254,8 @@ one. `[\s\S]` matches a newline without needing a DOTALL flag. The regex itself 
 to settle; what §2 fixes is the two rules it has to enforce. A single lazy
 `/##:[\s\S]*?:##/` enforces neither, and §2 shows what that costs.
 
-The priorities matter. Lark's basic lexer (`lexer="basic"`,
-`sushi_lang/internals/parser.py:44`) resolves overlapping terminals by priority, so
+The priorities matter. Lark's basic lexer (`lexer="basic"`, the
+parser options in `sushi_lang/internals/parser.py`) resolves overlapping terminals by priority, so
 `DOC_BLOCK` must outrank `COMMENT: /#+[^\n]*/`, which would otherwise claim a single-line
 block — both match `##: foo :##` to the same length, and length alone does not separate
 them. `DOC_OPEN` and `DOC_CLOSE` sit between the two: they match only when `DOC_BLOCK` could
@@ -376,7 +376,7 @@ alternatives: `extend_with_def` is the indented `function_def+` body the sketch 
 `extend_def` ends in `block` and is already covered by the `block` edit. Only the first
 alternative changes.
 
-The parser is LALR(1) (`sushi_lang/internals/parser.py:40`). A single-token alternative
+The parser is LALR(1) (the parser options in `sushi_lang/internals/parser.py`). A single-token alternative
 introduces no conflict: the parser shifts `DOC_BLOCK` and the following token decides
 whether a declaration follows.
 
@@ -401,7 +401,7 @@ carries the argument that actually decides the question.
 
 ### A doc block must never become a statement
 
-`parse_block` (`sushi_lang/semantics/ast_builder/statements/blocks.py:13`) routes every
+`parse_block` (`sushi_lang/semantics/ast_builder/statements/blocks.py`) routes every
 child through `parse_stmt`. Its loop gains one branch that peels `DOC_BLOCK` children out
 and hands them to the attachment step instead.
 
@@ -478,7 +478,7 @@ that documents nothing is a warning the `docs` pass raises. Dropping such a bloc
 builder would make it vanish silently, which is the failure mode of §1 read backwards.
 
 The nearest existing precedent for author prose surviving into the AST is
-`ExternalBlock.reason` (`ast.py:205`), the `because "..."` string.
+`ExternalBlock.reason` (`semantics/ast.py`), the `because "..."` string.
 
 Both classes must appear in `ast.py`'s `__all__`.
 `tests/unit/test_ast_all_is_complete.py` is the gate, and it exists because `Spread` once
@@ -520,9 +520,9 @@ in `orphan_docs`.
 A new whole-program pass named `docs`, running **after `collect` and before `externs`**.
 
 The order lives in the `SemanticAnalyzer.check()` docstring, which is the authority;
-`docs/internals/semantic-passes.md` describes each pass, and the pass list in `CLAUDE.md`
-gains one name. Fifteen passes becomes sixteen, so every place that states the count moves
-with it.
+`docs/internals/semantic-passes.md` describes each pass. When the pass went in, the count
+went from fifteen to sixteen; later passes took it to nineteen, and every place that states
+the count moves with each new pass.
 
 Two reasons for that position:
 
@@ -622,9 +622,7 @@ family, with `Category.DOCS`. CW7001 is there already.
 
 **Every declaration is asked, public and private** (R29). The `public` marker is not the
 test, and the reason is the ruling itself: an internal API is documented surface as much as
-an exported one. The marker could not have answered the question either, because a constant
-carries no `PUBLIC` at all (#466, still open). A struct field and an enum variant are each
-asked on their own, because each carries its own `doc` key in the manifest and `--lib-info`
+an exported one. A struct field and an enum variant are each asked on their own, because each carries its own `doc` key in the manifest and `--lib-info`
 prints each under its owner (R31).
 
 **Two exemptions** (R30). `fn main()` is nobody's API, and a library cannot declare one at
@@ -699,13 +697,20 @@ turn a compiler flag on, so a flag-gated diagnostic had no fixture. One field on
 `--clean-cache`, `--build-stdlib`, `--cache-dir` — is refused with a printed warning.
 
 **R37 — phase 5 does not document the stdlib.** Documenting the bundled modules is a proof
-of concept that comes AFTER the implementation. The repo gate is a shrink-only budget, in
-the shape `REGISTRY_SIZE` already uses, and not an assertion of zero.
+of concept that comes AFTER the implementation. At phase 5 the repo gate was a shrink-only
+budget, in the shape `REGISTRY_SIZE` uses.
+
+That work is done. Every Sushi stdlib module and `slib-info` now carries its doc blocks,
+and the gate is an assertion of zero: the runner step `stdlib_doc_gate`
+(`tests/run_tests.py`) compiles one program that imports every `SOURCE_STDLIB_MODULES`
+module with `--warn-missing-docs` and `SUSHI_STDLIB_DOC_GATE=1`, and fails on any `docs`
+pass diagnostic under `src_sushi/`.
 
 ### Measured, at phase 5
 
-The test tree is not a corpus: nobody runs this flag over it. What counts is the bundled
-stdlib and the toolchain.
+This is a record of the measurement at phase 5, not the state today: the stdlib half is 0
+today (R37). The test tree is not a corpus: nobody runs this flag over it. What counted was
+the bundled stdlib and the toolchain.
 
 ```
 == stdlib(src_sushi), 4 modules      == toolchain/src, 1 program
@@ -719,9 +724,9 @@ stdlib and the toolchain.
 (function 51, variant 28, field 13, constant 8, struct 6, enum 4)
 ```
 
-CW7003, CW7004 and CW7005 report nothing because no bundled module carries a block yet.
-They are self-limiting by R33, and they are what makes the flag useful once the blocks
-exist.
+CW7003, CW7004 and CW7005 reported nothing because no bundled module carried a block at
+phase 5. They are self-limiting by R33, and they are what makes the flag useful now that the
+blocks exist.
 
 ---
 
@@ -747,10 +752,10 @@ place, at lex time, before the builder has an opinion.
 
 ### The doc family
 
-CE70xx, in a **new** `docs.py` module under `sushi_lang/internals/errors/`. A code may only be added
-in the file that owns its range, and CE7xxx is entirely unused today.
+CE70xx, in the `docs.py` module under `sushi_lang/internals/errors/`. A code may only be added
+in the file that owns its range, and CE7xxx was entirely unused before this module.
 
-This needs four supporting changes:
+It needed four supporting changes:
 
 1. A `DOCS = "docs"` member on `Category` in `internals/errors/registry.py`.
 2. An import of the new module in `internals/errors/__init__.py`. Registration is an
@@ -892,7 +897,8 @@ A **library**-level description is not this feature's business. `nori.toml`
   whole of read-side validation is the magic, the version, per-section truncation, msgpack
   well-formedness and a size cap. There is no key set and no schema, and every consumer reads
   it through `.get()`. An added optional key is not a format change.
-- `sushi_lib_version` stays at `"2.0"`. A reader that does not know the key ignores it.
+- `sushi_lib_version` did not change for the doc key (it is `"2.3"` today, for other
+  reasons). A reader that does not know the key ignores it.
 - `slib.sushi` needs no change. `read_metadata` returns the whole `MsgValue` tree, so
   the self-hosted reader reaches a new key without being taught about it.
 
@@ -1135,7 +1141,7 @@ the fallback, the success report may not.
 
 So every rendering change here is two implementations plus a rebuild through
 `toolchain/build.py`. This is the real cost of the requirement, and it is worth paying —
-the parity gate is what keeps the self-hosted tool honest.
+the library-report gate, which reads both halves, is what keeps the self-hosted tool honest.
 
 Three costs in particular, since "a plain dump" understates them:
 
@@ -1145,9 +1151,10 @@ Three costs in particular, since "a plain dump" understates them:
   splitter is one call on each side. `group_thousands` in `slib_info.sushi` is not the
   precedent for it.
 - **`toolchain/build.py` runs by hand.** A stale `toolchain/bin/slib-info` keeps printing the
-  old report, and **nothing tells you.** An earlier draft of this bullet said the parity test
-  catches it. It does not: `test_slib_info_parity.py` compiles `TOOL_SRC` into a temporary
-  directory on every run, so no test reads the built binary. After a rendering change, run
+  old report, and **nothing tells you.** The runner's library gates (`lib_reader_gate` and
+  `lib_info_report_gate`, `tests/run_tests.py`) read both halves, but they build
+  `toolchain/src/slib_info.sushi` into a temporary directory on every run, so no test reads
+  the built binary. After a rendering change, run
   `./toolchain/build.py` by hand; a green suite is not evidence that you did.
 - **Parameter modes.** §1 says `slib-info` can print `nom` / `peek` / `poke` from the manifest
   alone. Measured: it prints two of the three already, because `peek` and `poke` are part of
@@ -1582,17 +1589,19 @@ only when it has one. Measured: a `CW7001` in `collections/iter.sushi` is then r
 every program that imports the module. So the injector sets a provenance, the same way
 `_inject_library_source` does, and a user is never told about a stdlib doc typo.
 
-Nothing triggers this today, because no bundled module carries a block. It is the trap
-waiting for whoever writes the first one, and it is the prerequisite for documenting the
-stdlib later. It lands here because it is one line, and because the measurement that
-justifies it is fresh.
+Every bundled Sushi module carries its doc blocks now, so the rule is live in every
+program that imports one.
 
-The same line silences the diagnostic for us, so the repo needs its own gate: one pytest
-module runs `check_docs` over every module in `SOURCE_STDLIB_MODULES` and asserts no CE70xx
-and no CW7001.
+The same line silences the diagnostic for us, so the repo has its own gate: the runner step
+`stdlib_doc_gate` (`tests/run_tests.py`) compiles one program that imports every
+`SOURCE_STDLIB_MODULES` module with `--warn-missing-docs` and `SUSHI_STDLIB_DOC_GATE=1`. That
+variable makes the `docs` pass check the bundled units, which it skips otherwise; a user's
+source library stays skipped. The step fails on any `docs` pass diagnostic under
+`src_sushi/`.
 
 **R25 — the sweep grows a selector, and runs each example in its own directory.**
-`--only {all,docs,examples}`, and `all` is the default. Each run gets its own working
+`--only {all,docs,examples,files}` today (the `files` collector came later), and `all` is
+the default. Each run gets its own working
 directory inside the temp tree, so an example that writes a file leaves nothing behind. The
 compile timeout is 60 s, as it is today, and the run timeout is 10 s. A timeout is a failure
 with its own label. Output is NOT asserted: an example is documentation, and an

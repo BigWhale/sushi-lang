@@ -57,19 +57,19 @@ in `ownership-conventions.md` §8.5.
 
 ## 3. The mechanisms
 
-One surface vocabulary, six mechanisms. Each has its own extent and its own diagnostics.
+One surface vocabulary, seven mechanisms (and 3b, a variant of 3). Each has its own extent and its own diagnostics.
 
 | # | mechanism | spelling | extent | write through it | consume it |
 |---|---|---|---|---|---|
 | 1 | call-site borrow | `f(peek x)`, `f(poke y)` | one statement | the callee's mode decides | the argument is not consumed |
 | 2 | reference parameter | `fn f(poke T x)` | the function body | `peek`: **CE2408**; `poke`: in place | **CE2411** |
-| 3 | `let` binding of a read | `let v = c.get(0)??` | the enclosing block | not gated (§8) | **CE2411** |
+| 3 | `let` binding of a read | `let T v = c.get(0)??` | the enclosing block | not gated (§8) | **CE2411** |
 | 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **CE2414** | **CE2411** |
 | 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **CE2408** | **CE2411** |
 | 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **CE2421** (receiver), **CE2422** (by value) | **CE2411** |
 | 7 | pattern TAKING binding | `E.V(nom p)` | the arm | in place -- the arm owns it | yes: it is the owner |
 
-Seven now, and row 7 is the only one that is not a borrow at all. It is listed here because
+Row 7 is the only one that is not a borrow at all. It is listed here because
 it shares the surface vocabulary and because it is what row 4's diagnostic offers as a way
 out.
 
@@ -124,13 +124,17 @@ every rule above applies by construction. The match half rests on the enum paylo
 `{i32 tag, [K x i64] data}`, whose naturally aligned payload offsets come from one
 authority (`TypeSizing.payload_field_offsets`). Four fences: an iterable whose items have
 no address is **CE2423** (a range, `HashMap.entries()`); a reference binding in a NESTED
-match pattern is **CE2424** (extraction walks through temporary copies there); a temporary
-scrutinee is CE2404; and a `poke` binding out of a `peek` owner is CE2408, out of a
-constant CE2400. The temporary fence was LIFTED by HANDLES.md ruling R11: a match parks a
-scrutinee it owns in a slot for the whole statement, so the pointer has storage to aim at.
-CE2404 now means a read THROUGH a live owner, which still has none.
+match pattern is **CE2424** (extraction walks through temporary copies there); under a match
+that only borrows its scrutinee, the scrutinee must be a PLACE -- a name, or a member or index
+chain off one (`match b.s:`, `match xs[1]:`) -- and a borrowed scrutinee that is not a place
+(`match l.get(0)??:`) is **CE2404**; and a `poke` binding out of a `peek` owner is CE2408,
+out of a constant CE2400. A place binding follows the reference `let`'s rules (mechanism 3b):
+the root of the place is frozen for the arm (CE2412), one `poke` binding of an owner at a
+time (CE2403), no `peek` beside a `poke` (CE2407). A scrutinee the match OWNS (a temporary)
+is parked in a slot for the whole statement, so a binding into it has storage to aim at.
+`borrow-model.md` §10b is the rule.
 
-**7 — the pattern taking binding** (HANDLES.md ruling R11) is not a borrow: `E.V(nom p)`
+**7 — the pattern taking binding** is not a borrow: `E.V(nom p)`
 moves the payload out and the arm becomes its owner, so it is registered for its own free
 through `register_owning_value`, the complete registry router. What stops the second free
 is the SCRUTINEE'S drop flag, cleared at the head of the taking arm, so whether the match
@@ -192,12 +196,12 @@ a check beside it: the check that stood beside it covered `peek` alone, which is
 match binding came to be rebindable.
 
 The first five kinds are a TABLE (`READONLY_RECEIVERS`) behind one dispatcher
-(`reject_readonly_write`) with four call sites, so a new state-keyed kind is one row and not
+(`reject_readonly_write`) with six call sites, so a new state-keyed kind is one row and not
 a new walk — the fifth one (#344) cost exactly that. The codes stay separate because each
 carries its own escape, and rows four and five show why that convention earns its keep: a
-`match`/`foreach` binding is a private DEEP copy, so its write is only lost, while a
-`let`-borrow shares the owner's DATA, so its write is lost AND a reallocating one frees the
-owner's buffer. Same rule, different first answer.
+`match`/`foreach` binding is a SHALLOW copy of the payload, so the escape is a binding mode
+(`poke` to write through, `nom` to take), while a `let`-borrow is a view of the owner's
+data, so the escape is the reference `let` (`let poke T x = <place>`). Same rule, different first answer.
 
 **The sixth kind keys on SHAPE, not on state** (ruled 2026-08-20, #352; the live bug was
 #407). The other five are each a NAMED thing carrying a `BorrowState`; an unbound chained
@@ -253,14 +257,13 @@ Each gate turns the next occurrence of its bug class into a red test:
 |---|---|
 | `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
 | `test_scope_dispatch_is_total.py` | the same for the scope pass (CE0130) |
-| `test_peek_write_gate_is_total.py` | every method `borrow/methods.py:METHOD_EFFECTS` marks as mutating |
+| `test_peek_write_gate_is_total.py` | its case table covers every method in `MUTATING_METHODS` (the table is `METHOD_EFFECTS`, `semantics/method_effects.py`; it compiles nothing) |
 | `test_readonly_receiver_matrix.py` | every kind of the read-only table has its code (the per-cell programs went with the pytest tests that ran the compiler) |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
 | `test_ownership_table.py` | the 3x2 table, reference rows included |
 | `test_consuming_use_coverage.py` | nothing bypasses the backend seam |
-| `test_method_body_diagnostics.py` | all three callable kinds render the same evidence |
 | `test_enum_payload_layout.py` | the payload offsets mechanism 5 depends on |
-| `tests/references/` | the behaviour corpus, ~50 programs |
+| `tests/references/` | the behaviour corpus (the fixtures run the real compiler) |
 
 ## 8. Two questions about a `let`-borrow, not one
 
@@ -277,7 +280,7 @@ was lost from the owner's view, a push that forced a reallocation freed the owne
 field assignment and a `poke` borrow of the binding were ungated the same way.
 
 The row keys on `is_let_borrow`, not on `borrows_from is not None`. An owner with no
-`BorrowState` — a temporary, as in `let v = make()??.items` — records no owner name, and
+`BorrowState` — a temporary, as in `let List@(i32) v = make()??.items` — records no owner name, and
 the `borrows_from` spelling would have handed that case to CE2414, which tells the author
 their `let` is a match binding. The temporary's buffer is just as real.
 

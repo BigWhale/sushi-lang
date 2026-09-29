@@ -42,11 +42,16 @@ Given a runtime bit, the only sub-choice is where to store it:
 | | 3-field `{data, size, owned}` (chosen) | High-bit in `size` |
 |---|---|---|
 | String size | 16 B | 12 B |
-| `Result@(string)`/`Maybe@(string)` enum | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
+| `Result@(string, E)`/`Maybe@(string)` enum, at the time of the decision | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
 | `size` reads | clean `i32`, no masking | **every** read must mask off the ownership bit |
 | Failure mode of a missed site | a memcpy/memmove *length* is wrong → **loud crash**, easy to find | a masked *size* read is wrong by 2^31 → **silent corruption** |
 | Number of hazard sites | few (mem* length arguments) | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
 | `size` max | full `i32` | `2^31 - 1` |
+
+The enum row describes the enum layout of the time. Today every enum is
+`{i32 tag, [K x i64] data}` with the payload at offset 8, so `Result@(string, StdError)` is
+`{i32, [2 x i64]}`, 24 bytes, and the 12-byte alternative also needs `[2 x i64]`. The row
+no longer separates the two choices; the other rows still do.
 
 High-bit packing trades a small, closed, **loud** problem for a large, open, **silent**
 one. It would have to mask the ownership bit at every one of the dozens of places that
@@ -59,7 +64,7 @@ inspectable, and was simpler to land.
 The 16-byte, 3-field shape produced three ABI bugs, all now fixed:
 
 1. ARM64 undef-register poisoning of the `owned` byte (#146).
-2. `Result@(string)`/`Maybe@(string)` payload-size corruption — the enum data array had to
+2. `Result@(string, E)`/`Maybe@(string)` payload-size corruption — the enum data array had to
    be sized to preserve `owned@12` (#146).
 3. x86-64 out-of-bounds: the 20-byte enum plus passing a string's raw `i32 size`
    (adjacent to `owned` + padding) as a `mem*` length let garbage upper bits reach
@@ -67,16 +72,20 @@ The 16-byte, 3-field shape produced three ABI bugs, all now fixed:
 
 These fall into two categories, both closed and both **guardable**:
 
-- **Manual payload byte-copies** — fixed by marking enum-payload store/load `align=1`.
+- **Manual payload byte-copies** — first fixed by marking enum-payload store/load
+  `align=1`. The enum layout `{i32 tag, [K x i64] data}` replaced that workaround: the
+  payload base is 8-aligned and every payload offset is naturally aligned
+  (`TypeSizing.payload_field_offsets` is the one authority), so no `align=1` remains.
 - **Manual `mem*` lengths** — fixed by using the `i64`-length `llvm.memcpy`/`memmove`
   intrinsics with the `i32` size zero-extended (#149/#151). The by-value passing/return
-  of the 20-byte enum itself is handled correctly by LLVM's target ABI lowering; the
+  of the enum itself is handled correctly by LLVM's target ABI lowering; the
   backend has no manual `sret`/`byval`, so there is no separate aggregate-ABI hazard.
 
 The residual worry (#152) is recurrence: a *new* site that passes a string's `i32` size
-to a `mem*` routine. That is cheaply prevented by a lint/CI check that flags any
-`i32`-length `llvm.mem*` intrinsic — a proportionate guardrail, not a reason to rebuild
-the string ABI and take on the pervasive masking obligation above.
+to a `mem*` routine. A CI gate prevents it: `tests/unit/test_mem_intrinsic_is_one_seam.py`
+refuses an `llvm.mem*` declaration outside the one seam (`backend/expressions/memory.py`)
+and any declaration with an `i32` length. That is a proportionate guardrail, not a reason to
+rebuild the string ABI and take on the pervasive masking obligation above.
 
 ## Consequence
 

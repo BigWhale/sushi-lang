@@ -71,8 +71,8 @@ instrumented to crash if they ever fired and the suite was re-run: five tests st
 them, so they are a normalisation point rather than a workaround. Two producers remain
 and they are different in kind:
 
-- `f.read_bytes(n)`, the file builtin, is the SAME violation and is deleted rather than
-  repaired -- HANDLES.md Phase 5 rewrites it in Sushi over `fd_read`.
+- `f.read_bytes(n)`, the file builtin, was the SAME violation. It was deleted rather than
+  repaired: `File.read_bytes` is now Sushi source over `fd_read` (`src_sushi/io/fs.sushi`).
 - `let i32[] b = w.items` is NOT a violation. A field read is a GEP by nature -- the
   paragraph above says so -- and the `let` is where it must be loaded and deep-copied.
 
@@ -161,14 +161,16 @@ trip count, and an unreadable one walks with `first`, `step` and `count` compute
 ## The empty array, and `new()`
 
 An empty array is `{0, 0, null}`. `emit_empty_dynamic_array` (`backend/types/arrays/utils.py`)
-is the one builder of it, and a literal that counts nothing routes through it too -- `new()`
-and `from([0; 0])` are the same array.
+is the one builder of it, and `new()` and `from([])` are the same array. A literal cannot
+count zero elements with a count that the compiler can read: `from([0; 0])` is CE2017.
 
 `new()` names no element type. It takes one from the position it stands in: the typecheck pass
 stamps `DynamicArrayNew.resolved_type` in `propagate_types_to_value`, beside the arm that gives
 an array literal's elements their declared type. Every value position funnels there -- a call
 argument, an enum payload, a struct field, a rebind, and a `.realise()` default -- so the
-emitter always has a type to build from, and a missing stamp is CE0042 rather than a guess.
+emitter always has a type to build from. An empty `from([])` or `new()` in a position that
+gives no type (a receiver, an index base, a `println` argument) is the user error CE2111. A
+missing stamp in a position that gives a type is a compiler fault, CE0042, and never a guess.
 
 The `let` route is separate and stays so: `declare_dynamic_array` writes `{0, 0, null}` into
 the slot it allocates, so `let i32[] e = new()` has nothing left to do and stores nothing.
@@ -237,15 +239,18 @@ copy and has no alias.
 
 ## The type-argument reader
 
-`List@(i32[])` and `HashMap@(K, V[])` failed for a second, independent reason. A container
-recovers its element type by parsing its own interned name (`List<i32[]>`), and each
-container carried a hand-rolled reader: a builtin dictionary plus a struct-table and an
-enum-table lookup. **None of the three had an array case**, so the element resolved to `None`,
-the typecheck pass stamped nothing on the `??`, and the backend reported **CE0124**.
+A container reads its element types from the `generic_args` of its instance, and never
+from its interned name (`List<i32[]>`). The name is a spelling, not a thing to parse. The one
+reader is `instance_type_arguments` (`semantics/generics/list.py`). It resolves each argument
+RECURSIVELY against the struct and enum tables at read time, because the monomorphize pass can
+leave a nested reference unresolved (`List<List<i32>>` holds a `GenericTypeRef`).
+`parse_list_types` and `parse_hashmap_types` call it. `split_type_arguments`
+(`semantics/generics/type_strings.py`) is the one splitter of a type STRING, the form that a
+library manifest carries.
 
-All three now call `resolve_type_argument` (`semantics/generics/type_strings.py`), which wraps
-the real resolver and returns `None` for a name it cannot place — the answer a type-argument
-caller wants, where a manifest reader wants the raise.
+The design came from a defect: each container carried a hand-rolled reader that parsed the
+interned name, and **none of the readers had an array case**. The element resolved to `None`,
+the typecheck pass stamped nothing on the `??`, and the backend reported **CE0124**.
 
 `HashMap@(K, V[])` was broken exactly as `List@(T[])` was, and no issue mentioned it. That is
 the argument for one reader rather than three: the third copy had the same hole and nobody
