@@ -243,8 +243,7 @@ fn parse_group(string piece) u16 | NetError:
         return Result.Err(NetError.InvalidAddress)
     let u32 value = 0
     foreach(i in 0..width):
-        let string digit = piece.char_at(i)
-        let u32 nibble = hex_value(digit)??
+        let u32 nibble = hex_value(piece.char_at(i))??
         value := value * 16 + nibble
     return Result.Ok(value as u16)
 

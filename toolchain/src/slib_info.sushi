@@ -1520,8 +1520,8 @@ Gives the value of an environment variable.
 :##
 fn env_value(string name) string:
     match getenv(name):
-        Maybe.Some(v) ->
-            return Result.Ok(v.clone())
+        Maybe.Some(nom v) ->
+            return Result.Ok(v)
         Maybe.None() ->
             return Result.Ok("")
 

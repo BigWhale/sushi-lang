@@ -594,8 +594,8 @@ public fn check_manifest(MsgValue meta) ~ | SlibError:
     if (kind != "map"):
         return Result.Err(SlibError.Invalid("the metadata is not a map"))
     match record_fault(meta, "manifest", "")??:
-        Maybe.Some(reason) ->
-            return Result.Err(SlibError.Invalid(reason.clone()))
+        Maybe.Some(nom reason) ->
+            return Result.Err(SlibError.Invalid(reason))
         Maybe.None() ->
             return Result.Ok(~)
 
