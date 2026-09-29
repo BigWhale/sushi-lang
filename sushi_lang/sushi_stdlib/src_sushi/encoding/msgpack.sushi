@@ -170,7 +170,7 @@ Decodes the elements of an array.
 - Errors: The first error of an element.
 :##
 fn mp_take_arr(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
-    let MsgValue[] items = new()
+    let MsgValue[] items = from([])
     foreach(_ in 0..count):
         let MsgValue child = mp_decode_value(peek buf, poke cur)??
         items.push(child)
@@ -186,8 +186,8 @@ Decodes the key and value pairs of a map into parallel arrays, in wire order.
 - Errors: The first error of a key or a value.
 :##
 fn mp_take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
-    let MsgValue[] keys = new()
-    let MsgValue[] vals = new()
+    let MsgValue[] keys = from([])
+    let MsgValue[] vals = from([])
     foreach(_ in 0..count):
         let MsgValue k = mp_decode_value(peek buf, poke cur)??
         keys.push(k)
@@ -328,7 +328,7 @@ a copy of it.
 
 - Parameter m: The map to scan.
 - Parameter key: The string key to find.
-- Returns: The position of the key, or `Maybe.None` when the key is absent or `m` is not
+- Returns: The position of the key, or `Maybe.None()` when the key is absent or `m` is not
   a map.
 :##
 public fn map_index(MsgValue m, string key) Maybe@(i32):
@@ -349,7 +349,7 @@ without a copy, use `map_index`.
 
 - Parameter m: The map to read.
 - Parameter key: The string key to find.
-- Returns: A copy of the value, or `Maybe.None` when the key is absent or `m` is not a map.
+- Returns: A copy of the value, or `Maybe.None()` when the key is absent or `m` is not a map.
 :##
 public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
@@ -365,7 +365,7 @@ The string under a string key. Only the string is copied, never the map.
 
 - Parameter m: The map to read.
 - Parameter key: The string key to find.
-- Returns: The `Str` payload, or `Maybe.None` when the key is absent, its value is not a
+- Returns: The `Str` payload, or `Maybe.None()` when the key is absent, its value is not a
   `Str`, or `m` is not a map.
 :##
 public fn map_get_str(MsgValue m, string key) Maybe@(string):
@@ -385,7 +385,7 @@ The bool under a string key.
 
 - Parameter m: The map to read.
 - Parameter key: The string key to find.
-- Returns: The `Bool` payload, or `Maybe.None` when the key is absent, its value is not a
+- Returns: The `Bool` payload, or `Maybe.None()` when the key is absent, its value is not a
   `Bool`, or `m` is not a map.
 :##
 public fn map_get_bool(MsgValue m, string key) Maybe@(bool):
@@ -426,13 +426,13 @@ public fn show(MsgValue v) string:
         MsgValue.Str(s) ->
             return Result.Ok("\"{s}\"")
         MsgValue.Bin(bytes) ->
-            let string[] bin_parts = new()
+            let string[] bin_parts = from([])
             foreach(b in bytes.iter()):
                 bin_parts.push("{b}")
             let string bin_body = ",".join(bin_parts)
             return Result.Ok("bin({bin_body})")
         MsgValue.Arr(items) ->
-            let string[] arr_parts = new()
+            let string[] arr_parts = from([])
             foreach(item in items.iter()):
                 arr_parts.push(show(item)??)
             let string arr_body = ",".join(arr_parts)
@@ -440,7 +440,7 @@ public fn show(MsgValue v) string:
         MsgValue.Map(keys, vals) ->
             let string open_brace = '{'
             let string close_brace = '}'
-            let string[] map_parts = new()
+            let string[] map_parts = from([])
             foreach(k in 0..keys.len()):
                 let string ks = show(keys[k])??
                 let string vs = show(vals[k])??

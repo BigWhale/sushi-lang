@@ -472,7 +472,7 @@ Finds the first field of a record that does not agree with the rows of its kind.
 - Parameter rec: The record. It is a map.
 - Parameter kind: The record kind of the rows to use.
 - Parameter where: The path of the record, or `""` for the top of the manifest.
-- Returns: The reason, or `Maybe.None` when the record agrees.
+- Returns: The reason, or `Maybe.None()` when the record agrees.
 - Errors: This function does not fail.
 :##
 fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibError:
@@ -519,7 +519,7 @@ Finds why a value does not have a schema type.
 - Parameter v: The value.
 - Parameter spec: The schema type.
 - Parameter name: The path of the value.
-- Returns: The reason, or `Maybe.None` when the value has the type.
+- Returns: The reason, or `Maybe.None()` when the value has the type.
 - Errors: This function does not fail.
 :##
 fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibError:

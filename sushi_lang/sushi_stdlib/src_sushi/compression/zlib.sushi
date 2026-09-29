@@ -351,7 +351,7 @@ Symbol 16 repeats the length before it. Symbols 17 and 18 repeat a zero.
 :##
 fn zinflate_lengths(peek u8[] src, poke ZBits s, peek ZHuff clencode,
                     i32 total) i32[] | ZError:
-    let i32[] lengths = new()
+    let i32[] lengths = from([])
     while (lengths.len() < total):
         let i32 sym = zhuff_decode(peek src, poke s, peek clencode)??
         if (sym < 16):
@@ -725,7 +725,7 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
         return Result.Err(ZError.BadLevel(level))
     if (level > 9):
         return Result.Err(ZError.BadLevel(level))
-    let u8[] out = new()
+    let u8[] out = from([])
     if (level == 0):
         zdeflate_stored(peek src, poke out)
         return Result.Ok(out)
@@ -736,7 +736,7 @@ public fn deflate_raw(u8[] src, i32 level) u8[] | ZError:
     let i32 stored_size = src.len() + (5 * blocks)
     if (out.len() <= stored_size):
         return Result.Ok(out)
-    let u8[] plain = new()
+    let u8[] plain = from([])
     zdeflate_stored(peek src, poke plain)
     return Result.Ok(plain)
 
@@ -770,7 +770,7 @@ the input.
 - Errors: `ZError.BadLevel` when the level is not 0 to 9.
 :##
 public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
-    let u8[] out = new()
+    let u8[] out = from([])
     # CMF: method 8 with a 32 KiB window
     out.push(120)
     out.push(zlib_flg(level)?? as u8)
@@ -795,7 +795,7 @@ The function reads stored, fixed and dynamic blocks, up to the final block.
 - Errors: A `ZError` that names the fault.
 :##
 public fn inflate_raw(u8[] src) u8[] | ZError:
-    let u8[] out = new()
+    let u8[] out = from([])
     let ZBits s = ZBits(0, 0, 0)
     let i32 last = 0
     while (last == 0):

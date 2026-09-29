@@ -133,7 +133,7 @@ Joins the `Str` elements of an `Arr` value with a separator.
 fn join_strs(MsgValue list, string sep) string:
     match list:
         MsgValue.Arr(items) ->
-            let string[] parts = new()
+            let string[] parts = from([])
             foreach(item in items.iter()):
                 parts.push(ml_str(item)??)
             return Result.Ok(sep.join(parts))
@@ -578,7 +578,7 @@ Writes each parameter of a `params` array after the receiver text.
 fn render_param_list(MsgValue ps, nom string out) string:
     match ps:
         MsgValue.Arr(items) ->
-            let string[] parts = new()
+            let string[] parts = from([])
             if (out != ""):
                 parts.push(out)
             foreach(p in items.iter()):
@@ -679,7 +679,7 @@ fn render_type_param_list(MsgValue tps) string:
         MsgValue.Arr(items) ->
             if (items.len() == 0):
                 return Result.Ok("")
-            let string[] parts = new()
+            let string[] parts = from([])
             foreach(tp in items.iter()):
                 let string tname = ml_get_str(tp, "name")??
                 let string cs = join_at(tp, "constraints", " + ")??
@@ -901,7 +901,7 @@ fn render_data_types(MsgValue v) string:
                 Maybe.Some(at) ->
                     match vals[at]:
                         MsgValue.Arr(types) ->
-                            let string[] parts = new()
+                            let string[] parts = from([])
                             foreach(t in types.iter()):
                                 parts.push(to_surface(ml_str(t)??)??)
                             return Result.Ok(", ".join(parts))

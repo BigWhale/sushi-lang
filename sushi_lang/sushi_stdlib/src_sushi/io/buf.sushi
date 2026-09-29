@@ -259,7 +259,7 @@ extend Lines@(R) next(poke self) Maybe@(Result@(string, IoError)):
         Result.Ok(Maybe.Some(nom line)) ->
             let Maybe@(Result@(string, IoError)) got = Maybe.Some(Result.Ok(nom line))
             return got
-        Result.Ok(Maybe.None) ->
+        Result.Ok(Maybe.None()) ->
             self.stopped := true
             let Maybe@(Result@(string, IoError)) done = Maybe.None()
             return done
