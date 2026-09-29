@@ -251,7 +251,7 @@ fn close_at(string line, i32 start, string mark) i32:
         if (line.s(probe, probe + mlen) == mark):
             return Result.Ok(probe)
         probe := probe + 1
-    return Result.Ok(0 - 1)
+    return Result.Ok(-1)
 
 ##:
 Tells if a mark and its text are a span, or punctuation.

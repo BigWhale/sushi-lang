@@ -216,7 +216,7 @@ The stop is STICKY. A read failure reaches the caller once, as Some(Err(e)), and
 call after it answers None. Nothing retries and nothing is skipped, so a loop over this
 iterator cannot spin on a descriptor that keeps failing.
 :##
-public struct Lines@(R):
+public struct Lines@(R: Reader):
     ##: The reader being walked. This value owns it, and the handle under it. :##
     BufReader@(R) reader
     ##: Whether the end or a failure has already been answered once. :##

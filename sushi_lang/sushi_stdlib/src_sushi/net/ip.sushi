@@ -64,8 +64,8 @@ public fn v6_any() IpAddr:
 ##:
 Parses an address from its text, in either family.
 
-A text holding a dot and no colon is read as IPv4; anything else is read as
-IPv6. A trailing character is a refusal rather than an ignored suffix.
+A text with a colon is read as IPv6; anything else is read as IPv4. A
+trailing character is a refusal rather than an ignored suffix.
 
 - Parameter text: The address to read.
 - Returns: The parsed address.
@@ -221,11 +221,7 @@ fn parse_octet(string piece) u32 | NetError:
     let i32 width = piece.len()
     if (width == 0 or width > 3):
         return Result.Err(NetError.InvalidAddress)
-    # Every owning temporary here is bound before it is read. An unbound one in
-    # an operand position is not freed, so a parser that runs over every
-    # character of every address would leak one string per character.
-    let string leading = piece.char_at(0)
-    if (width > 1 and leading == "0"):
+    if (width > 1 and piece.char_at(0) == "0"):
         return Result.Err(NetError.InvalidAddress)
     let u32 value = 0
     foreach(i in 0..width):
@@ -291,10 +287,6 @@ fn hex_value(string digit) u32 | NetError:
 
 ##:
 The eight groups of an IPv6 address, with any `::` run expanded.
-
-A binding is never rebound from a borrow to an owned string here: the two
-shapes take their own branch and their own bindings, so every owned piece has
-one owner from the start.
 
 - Parameter text: The address to read.
 - Returns: Exactly eight groups, most significant first.
@@ -397,9 +389,6 @@ fn v6_groups(u64 high, u64 low) u16[]:
 
 ##:
 Renders a V6 payload as RFC 5952 text.
-
-The pieces are collected and joined rather than concatenated onto an
-accumulator, which keeps every owned string with one owner.
 
 - Parameter high: The high 64 bits.
 - Parameter low: The low 64 bits.
