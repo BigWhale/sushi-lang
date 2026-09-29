@@ -4,7 +4,28 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-29
+
+A program can now talk to the world around it. `File` is an ordinary type in `<io/fs>`,
+`<io/contracts>` names what a handle can do (`Reader`, `Writer`, `Seek`), `<io/buf>` reads
+and writes through a buffer and owns the line loop, and six `<net/...>` modules open
+sockets, resolve names and parse addresses and URLs. A type that owns a descriptor says so
+with the `Drop` perk, and closes on its own drop.
+
+The language gains the parts those modules needed. A static method is called on the type
+name, `var` is storage at the top of a unit, `public use` re-exports an import, `let peek`
+and `let poke` bind a checked reference, a pattern binding carries a mode, and `foreach`
+walks any type that has `next()`. An extension method can have an error channel, type
+parameters and an array target.
+
+And the compiler says more of what it knows. A condition is a bool and nothing else, a
+statement that can never run is an error, a channel method spells its success, an index
+is an `i32` in every position, and one name has one declaration in a unit. Each of these
+is a rule that a program could break in silence before; a program that broke one needs a
+change to compile here. A `.slib` built by 0.12 needs a rebuild.
+
 ### Language
+
 - **One name has one declaration in a unit, whatever its kind** (#1076). Two declarations of
   one name and different kinds (`fn`, `const`, `var`, `struct`, `enum`, `perk`) had no rule:
   `const box` beside `fn box` was the internal error CE0000, `struct box` beside `fn box` gave
@@ -297,71 +318,14 @@ All notable changes to Sushi Lang will be documented in this file.
   item is **CE2517**; an unwalkable iterable is CE2033, re-texted. A protocol iterator
   is destroyed on every exit path.
 
-### Fixed
-- **The cache key hashes the text that was compiled** (#1062). It read the unit's file again
-  after the analysis, so a file that changed during a build stored the old object under the
-  new key, and later builds linked stale code. A cache entry and a source-library unit are
-  written atomically. A unit with no source text is the internal error CE0142.
-- **`nori.toml` is read from the working directory only** (#1066). `sushic --lib`, a program
-  compile and `nori` looked in the source directory and every parent. A present manifest must
-  be valid: a bad value is CE3517 now (it was skipped), and a manifest that cannot be read is
-  the new **CE3518**, with the reason from the system. A `[files]` entry that leaves the
-  project is NE2008.
-
-- **A generic instance reached only through substitution is interned** (#577). A `Box@(B)` field
-  that became `Box<string>` at monomorphization was never interned, and the `derive` pass gave
-  CE0128, a false CE2052, CE2008 or a backend KeyError. A `from([...])` literal given to
-  `.extend()` takes the element type of the receiver (#576).
-- **A predefined enum has a home module** (#574). `fs.FileMode` behind `use <io/fs> as fs` was
-  CE2001. The import now gates the bare name of each of the nine predefined enums but
-  `StdError`. A built-in static with no stamp is CE2060 and not an internal error (#570).
-- **A constraint violation is one located diagnostic** (#579). CE4006 has a file and a line, and
-  the analysis stops after it, so the extension copies give no second CE2008. The four
-  load-if-pointer sites are re-instrumented and the dead ones are gone (#553).
-- **`HashMap.insert` over an existing key destroys what it replaces** (#591). The old value and
-  the consumed key leaked on the update path.
-- **The cache key reads a dependency's full interface** (#593). A struct's fields, an enum's
-  variant order and the VALUE of a public constant were outside the digest, so a dependent kept
-  a stale object. A type reached through a `public use` is in it.
-- **A constant folds once** (#597). A chain of 22 constants that each name the previous one twice
-  took 59 seconds. The table holds the folded value, keyed by unit and name.
-- **One hashability walk per type** (#598). `can_struct_be_hashed` copied its visited set for
-  each field and the `derive` pass asked twice. 13 structs of fan-out 4 went from 28.5 s to 0.45 s.
-- **An FFI diagnostic names the unit that holds the fault** (#599). CE5009, CE5003 and CW5001
-  from a second unit printed the entry file. A Unit holds its own source text.
-- **The derived hash and clone belong to one compilation** (#601). The table was module-global,
-  so two programs in one process with a `Point` each shared an emitter.
-- **The substitution walk is total** (#602). A cast, explicit call-site type arguments and a
-  lambda annotation inside a generic body kept their type parameter (CE2014, CE2035, CE2061,
-  CE2002 on a legal program).
-- **One walk finds every instantiation a type names** (#603). A generic instance reached only
-  through a `peek` or `poke` parameter or a function type was CE2001.
-- **Four dispatch holes closed** (#625, #624, #610, #618). A lambda expression body reads the
-  declared return type; the typecheck stamp names the struct of a receiver; a field read's
-  receiver owns what nothing else names; a type kind with no hashability answer is refused.
-- **A container's hash reads what it holds, and the map is refused** (#628). `Own@(T)` and
-  `List@(T)` hash their contents; four programs that ended in an internal error are diagnostics.
-- **A lambda body is walked once** (#629). Every fault in it was reported twice. Lift owns the
-  body; the typecheck pass keeps the function type and the capture rules (CE2094).
-- **An unknown field is answered where it is written** (#630). It was CE0029 with no location;
-  it is CE2106 with a caret.
-- **One report per generic function** (#648). Each instance carried the template's spans, so a
-  fault in the body printed once for every instance. The io/error example is fixed (#649).
-- **One error-type rule for both spellings of a Result** (#668). `T | E` and `Result@(T, E)`
-  both require an enum. A user's generic enum is legal in the short form.
-- **The AST builder and its walks, S1 frontend batch** (#631-#643, #654, #655, #658, #664).
-  A generic perk implementation is in the declaration walk; top-level declarations dispatch
-  from one table; the parameter, loop-tail, import-path and member-name rules each have one
-  reader; the AST walk is total and a miss is a located CE0136; the builder reports eight of
-  its rules through a `Reporter` and goes on (CE6006, CE2071, CE2099, CE2418, CE2424, CE2434,
-  CE2425, CE6103); nine dead branches and two stale doc references are deleted.
-- **Containment of the AST and of llvmlite.** Every dataclass in `semantics/ast.py` is
-  `slots=True`, so a write to an undeclared attribute raises. llvmlite appears only in
-  `backend/` and `sushi_stdlib/`.
-- **The `<io/files>` generators share their frames.** The four syscall wrappers are one
-  function and the Result Ok-payload build is written once. No symbol or layout moves.
+- **`foreach(_ in ...)` discards the item** (#968). `_` binds nothing, as in a `match` pattern, and
+  never gives CW1001; a named binder the body never reads still does. It holds for every form: a
+  plain or typed binder, `peek`/`poke _`, and `foreach(_?? in ...)`, which propagates an `Err` and
+  discards the `Ok` value. The six stdlib `while` loops that existed only for an unread counter
+  are `foreach(_ in ...)` now.
 
 ### Standard Library
+
 - **The constructor vocabulary: a static is `new`, a free function is a bare verb**
   (#571). A function that builds a value of a type from its arguments and allocates for
   it is a static named `new`; a function that DOES something -- opens, connects, listens,
@@ -492,231 +456,13 @@ All notable changes to Sushi Lang will be documented in this file.
   socket's partial write says what the peer's window took, and `write_bytes`, which
   writes everything, cannot.
 
-### Testing
-- **The runner tests run one instance at a time, and only when the runner changes** (#1071).
-  `pytest` excludes them by default (`-m runner` selects them); CI runs them serially, only
-  when a runner file changes or on a push to main. The checkout lock and the
-  `writes_the_checkout` marker are gone, and a runner test on an xdist worker fails at once.
-- **The mypy ratchet and the fresh-tree gates agree with the primary checkout** (#529, #530).
-  `follow_imports = "silent"` stops a fresh environment from reporting 2954 errors outside the
-  named packages.
-- **The test harness cannot report a pass it did not earn** (#604, #605). A fixture is identified
-  by its path, and a skipped leak assertion fails the run.
-- **An interpolated string in argument position has one owner** (#521).
-- **Agent skills configuration** is added under `docs/agents/`.
-
-### Testing
-- **One home per pytest property** (#1051): three duplicate checks deleted, five split properties
-  merged (one shared `tests/unit/expr_dispatch.py` for the dispatch-totality gates, one registry
-  check over all seven signature tables), `test_diagnostic_coverage.py` renamed
-  `test_error_fixtures_name_their_code.py`. `test_backend_has_no_assert.py` is now the ruff rule
-  `S101` (backend and driver), and `test_llvmlite_containment.py` the ruff rule `TID251`.
-- **The pytest layer holds no dead residue** (#1052): the dead `needs_sushic` guard, three vacuous
-  operand tables, eight tombstone tests and about 60 empty section comments are gone; vulture now
-  scans `tests/unit/` too, with its own whitelist.
-- **20 redundant fixtures are deleted** (#1049), and four twins now test what their header claimed:
-  the enum-first CE0006 order, the CE2002 note, and the CE0108 and CE0111 spans.
-- **Success fixtures assert their value** (#1050): 17 fixtures whose only assertion was a short
-  `CONTAINS` now assert the exact stdout, 14 exit-0-only fixtures check what they compute, and a
-  text gate refuses a success fixture whose every stdout assertion is 3 characters or fewer.
-
-### Testing
-- **Every fixture lives in a feature directory** (#1054-#1058). The 1,377 fixtures that sat flat at
-  an area root (40% of the corpus) and the issue-numbered `tests/bugs/` directory are moved to
-  `tests/<area>/<feature>/`; `tests/bugs/` is gone. A move changed the path only: a dump of every
-  fixture's parsed directives and body hash is equal before and after (3473 fixtures).
-
-### Testing
-- **The test runner compiles through a fork-server** (#1059). One server process imports the
-  compiler and builds its grammar once, then forks one child per compile; each child runs the real
-  CLI entry with the fixture's arguments, directory and environment. `--fresh-processes` keeps a
-  fresh `sushic` per compile, and the `test-linux` CI job runs that way. The rebuild and
-  `STDLIB_MODULE` fixtures always get a fresh process. A runner test compiles a fixed sample in both
-  modes and requires the same exit code, stdout, stderr and leak result. An error fixture's compile
-  fell from about 270 ms to 34 ms.
-
-### Fixed
-- **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
-  `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of
-  a generic body is now walked for the function values it holds, for a function, an extension and
-  a perk implementation alike.
-- **Every span in an interpolation hole is a file position** (#1038). Only `loc` and two member
-  spans were moved, so CE2062, CE2427, CE6102 and CE5009 in a hole pointed at the hole's own
-  column (often line 1). Every `Span` field is now moved through one walk, and the offset reads
-  the stripped hole text and the line of a literal that runs across lines.
-- **A malformed `nori.toml` under `sushic --lib` is the new CE3517** (#1040). A file that is not
-  TOML or UTF-8, or that has a table or a field of the wrong TOML type, was skipped with no report;
-  the build now stops and names nori's code (NE1002, NE1003, NE1010, NE1011). A missing file stays
-  silent.
-
-### Changed
-- **The compiler caches its grammar tables** (#1046) in the user cache directory
-  (`SUSHI_GRAMMAR_CACHE_DIR` overrides it; `off` turns it off), and one parser serves the program
-  and an interpolation hole, so the second grammar build is gone. A stale, truncated or foreign file
-  is rebuilt, never trusted. About 165 ms less per compile; a 33-fixture sample fell about 40%.
-
-### Testing
-- **The runner tests share one harness** (#1053): `tests/unit/runner/_harness.py`, a `runner`
-  marker on every module (`pytest -m "not runner"` is the fast loop), and a `-n 4` run in CI with a
-  lock for the tests that write the checkout. The two green halves that repeated a corpus step are
-  deleted. The runner layer fell from about 193 s to about 80 s.
-- **`tests/perf/` is deleted** (#1048): it was never collected, and its regression half started the
-  compiler inside pytest.
-
-### Fixed
-- **A diagnostic in an argument of a generic call is printed once** (#1037). The argument-count
-  check walked every argument and the check of the solved instance walked it again, so
-  `id(5 / 0)` printed CE0112 two times (a misplaced spread printed CE0120 two times). The count
-  check now reads the count only; a call with no solved instance walks its arguments once.
-- **The CE2408 and CE2422 helps read the type** (#1039): a write through a `peek` reference or a
-  by-value method parameter of a resource type is no longer offered `.clone()` (CE2431); it is
-  offered `.share()` when the type has one.
-
-### Testing
-- **A header line that looks like a directive is one the runner knows** (#1041). An unknown name
-  (`EXPECTED_OUTPUT`) or a valued name with no `:` (a bare `EXPECT_STDERR_EMPTY`) was dropped with
-  no message; it now fails its fixture. The eight bare `EXPECT_STDERR_EMPTY` lines assert now, the
-  125 dead `EXPECTED_*` lines are gone, and prose in a header no longer starts with a capital
-  directive-shaped word.
-- **`TEST_TYPE` is gone** (#1043): nothing read it; 632 header lines are deleted.
-- **The output gate sees a write through a console handle** (#1042) and has a stderr row: a
-  success fixture that writes stdout or stderr on its normal path asserts that stream. Four
-  fixtures that asserted nothing about their output now do.
-- **The runner has no weaker mode** (#1045): `--mode` is deleted, and results are keyed by the
-  fixture's path under `tests/`.
-- **A test run writes no cache into the source tree** (#1044): every compile of a run shares one
-  cache directory in the run's temporary directory, and the pre-run purge is deleted.
-- **The helper libraries build in parallel, and a narrowed run builds only the ones it needs**
-  (#1047); a filtered run of 22 fixtures fell from about 24 s to 7 s.
-
-### Fixed
-- **A store through a `poke` reference after its owner changed is CE2412** (#1026). `r := v`
-  through a `let poke` or a `poke` pattern binding, after the owner was rebound or its payload
-  replaced, compiled and wrote into freed storage. The field, index and method writes were
-  already refused; the plain store now reads the same predicate.
-- **A `foreach(poke x in ...)` item beside a live reference of its owner is refused** (#1027):
-  CE2403 beside a `poke`, CE2407 for a `peek`/`poke` mix, the rule of the pattern binding. An item
-  over an owned temporary is not checked.
-- **CE2430 in a loop is printed once** (#1032). Every borrow diagnostic goes through the pass's
-  reporter now, so the dry run of a loop body tells nothing.
-- **The CE2414 and CE2426 helps read the type** (#1033): a resource type is no longer offered
-  `.clone()` (CE2431), and the CE2414 tail is right for it.
-- **An `expand` loop variable is named as written** (#1031): a borrow diagnostic printed the pack
-  element's hidden name once per copy, and a foreach item, a pattern binding or a lambda
-  parameter in an `expand` body warned once per copy.
-- **A generic function value to a generic callee is solved in two steps** (#1029). `apply(gen, 3)`
-  was CE2060 + CE2093; the callee's type arguments come from the other arguments first, then the
-  value is solved against the substituted parameter, and the program prints `7`. A value the
-  substituted type does not solve stays CE2093; a callee solved only by the value stays CE2060.
-- **A member access and an index access locate the whole expression** (#1030). `c.GREETING` was
-  underlined from the dot and `xs[0]` from the bracket; a diagnostic about the read now marks
-  `c.GREETING` and `xs[0]`. CE2106 and CE2045 still mark the member alone. Many diagnostics move
-  their column; no text changes.
-- **A diagnostic renders the same text painted and plain** (#997): Unicode mode wrote two spaces
-  after the bar when colour was off. **The last note's close guide ends under its tick** (#998).
-- **nori checks the TOML type of each `nori.toml` field** (#1025). An integer name crashed nori and
-  a string in a list field was read per character; both are the new **NE1011**. A listing that
-  skips a manifest prints its code.
-
-### Changed
-- **Type arguments resolve through the one type walk** (#791): `resolve_type_args` calls
-  `map_named_types`, and the backend reads the `Drop` set through `drops_of` only. The error arm
-  of a function-type argument is now resolved to its enum; no interned name changes.
-
-### Fixed
-- **A `peek`/`poke` pattern binding takes a place** (#788). `match b.s: Shade.Dim(poke r)` over a
-  field or an element of a local or a constant was CE2404 "no stable address", and `let poke`
-  took the same place. A reference pattern binding now takes the places `let peek` / `let poke`
-  take: the root is frozen for the arm (CE2412), one `poke` at a time (CE2403, CE2407 -- which a
-  bare-name pattern binding did not check either), a constant root refuses only `poke` (CE2400).
-  CE2404 stays for a scrutinee that is not a place.
-- **A constant or `var` behind an alias is never moved out of** (#1016). `return Result.Ok(c.GREETING)`
-  was the internal error CE0129, and `let string s = c.GREETING` compiled; both are CE2436, as the
-  flat name is.
-- **Inside an `expand` body a diagnostic names the written local** (#1022): a borrow error printed the
-  copy name (`#s_x0`) once per copy, and a shadowing `let` gave no CW1002.
-- **The CE2411 help offers `.share()` only for a type that has it** (#1023): it offered `l.share()`
-  for a `List@(File)`, which is CE2008.
-- **An output that cannot be written is a coded error** (#1010). An `-o` that names a directory was
-  CE3008 from the linker, and an unwritable output, `.slib`, object or cache directory was CE0000.
-  All are the new **CE3020** ("cannot write '<path>': <reason>"), checked in the one home of the
-  output path before code generation; CE3500 moved into the same check.
-- **A library's warnings stay with its author** (#1007). A consumer showed every lint of a binary
-  template or a source library and exited 1. A warning located in a library unit is not reported
-  and does not change the exit status; errors still show; the stdlib gates still see the stdlib.
-  There is no template check at `--lib`: a template is checked when code instantiates it.
-- **A generic function value is legal in every position its type is solved** (#1021): an argument, a
-  rebind, a `return`, a field, a payload, a `.realise()` default -- it was legal only in a `let`, and
-  elsewhere only when another call happened to make the instance.
-- **A nested generic `.realise()` chain as an argument no longer crashes** (#1028): the solver was
-  handed a table object where it needs the name dict (CE0000).
-
 ### Tooling
+
 - **nori errors carry codes** (#1000). A new `NExxxx` family (40 codes) in the one registry,
   rendered through the compiler's reporter on stderr. An operating-system error or a malformed
   TOML file from the user's environment was "a bug in nori" with exit 2; it is NE4001 / NE1002
   with exit 1. `nori search` prints its table separator with colour off too (#999).
 
-### Testing
-- **`BUILD_LIB_BINARY: x.sushi`** builds a fixture's own library as a binary `.slib`.
-
-### Fixed
-- **A generic enum constructor with no declared type takes its type from the payload** (#1005).
-  `match Maybe.Some(1):`, `Maybe.Some(1).is_some()`, `Maybe.Some(5)??`, a `foreach` over one, an
-  interpolation hole and a generic argument reached the backend with no instance and stopped
-  with an internal error (CE0113, CE0055, CE0124, CE0015, CE2060). The payload now gives the
-  instance (`Maybe.Some(1)` is `Maybe@(i32)`). An arm that nothing gives -- the error type of
-  `Result.Ok(1)`, the type of `Maybe.None()` -- is the new **CE2112**, whose help asks for a
-  declared type; there is no `StdError` default. Where a declared type reaches the constructor
-  and does not fit, the position's own mismatch is the one diagnostic (`f(Maybe.None())` against
-  an `i32` parameter was CE0055 and is CE2006).
-- **A refused written type gives one diagnostic** (#991). After CE2001, the `let`, rebind,
-  argument and return checks compared values against the unknown type and added a second error
-  (`cannot assign Iterator@(i32) to Iterator@(i32)`). A refused type now compares equal to
-  everything, through the one compatibility seam, and gives no instance to a constructor.
-- **A generic function behind an alias is a function value where its type is solved** (#1017):
-  `let fn(i32) -> i32 f = l.gen` was CE2093, and the bare form worked.
-- **A `let` in an `expand` body is unique over the instance** (#1018). A nested `expand` over the
-  same pack, and two sibling `expand`s, that declared one local name gave CE0000 (duplicate
-  local). An unused `let` in an `expand` body gives ONE CW1001 with the written name (#1019); it
-  gave one per copy, each with the compiler's copy name.
-- **A `foreach` over a temporary copy does not freeze the original** (#1014): `foreach(x in
-  a.clone().iter())` with `a.push(5)` in the body was CE2412, for the iterator and for an item
-  that views an owning element. A place and a get-out receiver still freeze.
-- **The borrow flow models `break` and `continue`** (#993). A change or a move followed by
-  `break` in a loop over the container's iterator was CE2412, and a move then `break` gave a
-  false CE2405; the same shape with `return` compiled. The break paths now join the state after
-  the loop, so a move before a `break` is still seen there.
-- **A `nom` move of the container under its iterator is one diagnostic** (#995): it was CE2405
-  and CE2412 at one place.
-- **A borrow help never offers `.clone()` for a type that owns a resource** (#994). The CE2412
-  help under a `foreach` offered `l.clone().iter()` for a `List@(File)` (CE2431), and named the
-  root, not the receiver (`h.clone()` for `h.items.iter()`); the two `let`-borrow CE2412 helps
-  and the CE2401 help offered `.clone()` on a resource too. One clone test decides every help.
-
-### Fixed
-- **A string temporary in a comparison is freed, and so is a condition's temporary on each
-  evaluation** (#1004). An owning string operand of `==`, `!=`, `<`, `<=`, `>` or `>=` got no
-  owner and leaked, in every position. An owning temporary in a `while` condition had one owner
-  in the enclosing scope, so every evaluation but the last leaked. Each `if` test and `while`
-  condition now has a scope of its own, closed before the branch. This also closes a read of an
-  uninitialised stack slot: a temporary made in an `elif` test was freed at the join from the
-  paths that never made it.
-- **A hidden local can no longer collide with a user name** (#1001, #1015). The compiler named
-  its hidden locals with legal identifiers (`__fe_item0`, `__fe_discard0`, `__fe_iter0`,
-  `__closure_env`, a pack element `args_0`, an unrolled `expand` local `t__x0`). A user variable
-  of that name read the loop item (a silent wrong value), gave CE0000, or gave a false
-  diagnostic. Every such name is now made by one helper, `hidden_name`, with a `#` the grammar
-  refuses, and a gate refuses a new synthesized name outside it.
-- **A bare function value names the unit's own function** (#1003). With an imported generic of
-  the same name, `let fn(string) -> i32 f = pick` took the import: the wrong function ran, or
-  the program was refused (CE4006, CE2093). The call and the value positions read one helper.
-- **A function of another unit is a function value** (#1013), bare (`plain`, CE1001 before) and
-  behind an alias (`l.plain`, CE2008 before), from a source unit, a `public use` re-export and a
-  library alike. A private one is CE3005 ("cannot take the value of private function"), an
-  ambiguous bare name CE3012, and a generic one CE2093.
-
-### Tooling
 - **`--warn-unused` reports dead code** (#959). Two warnings, off by default: CW1004, a private
   top-level declaration nothing in its unit reaches (the roots are every `public` declaration,
   every `extend` block and perk implementation, the `unsafe external` blocks and `main`), and
@@ -727,7 +473,6 @@ All notable changes to Sushi Lang will be documented in this file.
   step compiles the all-modules program and each `toolchain/src/` program with both and fails on
   a finding; today there are none.
 
-### Tooling
 - **Cyclomatic complexity is gated, as a ratchet.** Ruff selected `F`, `E`, `W` and `B`, so
   no complexity rule ran and the worst functions in the tree were invisible to CI. `C901`
   is on with the threshold at the worst function in the lint scope,
@@ -746,20 +491,17 @@ All notable changes to Sushi Lang will be documented in this file.
   `slib-info` tool change together, and `--docs` prints a perk method's block under its
   signature, which the record could not carry before.
 
-### Language
-- **`foreach(_ in ...)` discards the item** (#968). `_` binds nothing, as in a `match` pattern, and
-  never gives CW1001; a named binder the body never reads still does. It holds for every form: a
-  plain or typed binder, `peek`/`poke _`, and `foreach(_?? in ...)`, which propagates an `Err` and
-  discards the `Ok` value. The six stdlib `while` loops that existed only for an unread counter
-  are `foreach(_ in ...)` now.
-
-### Fixed
-- **An `-o` path whose directory does not exist is CE3019** (#1006). It was the internal error
-  CE0000 (`FileNotFoundError`, `NotADirectoryError`) for a program, a `.ll` and a `.slib`, and a
-  misleading CE3008 "linking failed" for a two-unit build. One check in the one home for the output
-  path names the directory, before code generation.
-
 ### Changed
+
+- **The compiler caches its grammar tables** (#1046) in the user cache directory
+  (`SUSHI_GRAMMAR_CACHE_DIR` overrides it; `off` turns it off), and one parser serves the program
+  and an interpolation hole, so the second grammar build is gone. A stale, truncated or foreign file
+  is rebuilt, never trusted. About 165 ms less per compile; a 33-fixture sample fell about 40%.
+
+- **Type arguments resolve through the one type walk** (#791): `resolve_type_args` calls
+  `map_named_types`, and the backend reads the `Drop` set through `drops_of` only. The error arm
+  of a function-type argument is now resolved to its enum; no interned name changes.
+
 - **The pipeline takes a `BuildOptions`** (#981), a frozen record built once from the command line,
   not the argparse namespace. `compile_multi_file` runs named steps; the output path, the `.ll`
   write and the stdlib build each have one home; a `.slib` source section comes from the manifest
@@ -770,68 +512,15 @@ All notable changes to Sushi Lang will be documented in this file.
   CE2043 and CE3004. `LibraryMetadata.version` (read from a key no writer wrote) goes. A ruff `ARG`
   ratchet counts the unused parameters and may only go down (177 today).
 
-### Testing
-- **`OUTPUT_PATH: <relative path>`** lets a fixture name its `-o` path inside its own copy, which
-  also lets a fixture build a library (`COMPILER_FLAGS: --lib ...`); four CE3019 fixtures use it.
-
-### Fixed
-- **A library keeps every payload type of a variant** (#966). The manifest kept the first payload
-  type only, so `--lib-info` printed `Blue(string)` for `Blue(string, i32)`, and a consumer of a
-  binary or hybrid library that bound both payloads was refused with CE2044. The variant record
-  now carries `data_types`, a list; a library built before this change is refused by the manifest
-  check (CE3512, "missing required field ... data_types") and must be rebuilt. Two constraints on
-  one type parameter print joined with ` + `, as they are written, in both report halves.
-
-### Changed
 - **The `--lib-info` renderer lives in `sushi_lang/compiler/lib_info.py`** (#982), driven by one
   table of 14 sections; `cli.py` goes from 880 to 370 lines. The output is byte-identical in both
   halves over every helper library, three kinds, four switch sets. The complexity ratchet (C901)
   comes down from 41 to 32.
 
-### Testing
-- **The runner gates the report lines** that #966 fixed: a runner step builds one library in each
-  kind and checks both `--lib-info` halves and a consumer that binds both payloads.
-
-### Fixed
-- **`--lib-info` and the consumer check a library's shape once** (#977, #978, #967). A damaged
-  `.slib` gave a Python traceback and exit 1 from `--lib-info`, blank fields from the `slib-info`
-  tool, or CE0000 `KeyError` in a consumer; a syntax error in a library's template was reported
-  at the consumer's `use` line. `library_format.py` now holds one manifest schema (`MANIFEST_SCHEMA`,
-  `check_manifest`) that both `--lib-info` halves and the consumer read, and `<toolchain/slib>` has
-  the same rows (`check_manifest`, `read_library`, `SlibFault`). A missing or mistyped field, a
-  template that does not parse or holds more than one declaration, is CE3512 naming the library
-  and the field. The reader checks the magic first, then the 1 GiB limit before any read, then
-  every declared length against the bytes left. A missing file is CE3515, a name that does not end
-  in `.slib` is the new CE3516, and `--lib-info` runs inside the CE0000 guard. `module_merger` no
-  longer writes a dump to `/tmp`.
-- **A unit's own function beats an imported generic of the same name** (#963). The typecheck pass
-  chose the unit's own function for a bare call, but the instantiate pass still recorded the
-  imported generic and judged its perk constraint (CE4006). Both passes now ask one predicate.
-
-### Changed
 - **The backend drops the flat `variable_types` table** (#958). Nothing read it; every deref reads
   the scope manager's semantic type. The loop frame loses the exit action the table needed. The IR
   of 269 fixtures is byte-identical.
 
-### Testing
-- **The runner gates the library readers.** A runner step builds a hybrid and a binary library,
-  damages copies of them (truncated, bad magic, oversize length, a manifest missing a field), and
-  runs `--lib-info` in both halves and a consumer over each copy; every case must report its code.
-
-### Fixed
-- **A source that is not UTF-8 is CE3017, not the internal error CE0000** (#979). The main source
-  and every imported unit go through one reader, and the diagnostic names the file and the byte
-  (`byte 0xff on line 2 is not valid UTF-8`) or the system reason (`Is a directory`). A run with no
-  source is CE3018. A failed `--write-ll` is the warning CW0002 and the build exits 1; it printed a
-  bare line and exited 0.
-- **A flag that has no effect is the warning CW0003** (#980): `--docs` without `--lib-info`,
-  `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib` or on the
-  incremental path (which writes no program object), and `--write-ll` on the incremental path.
-  `--write-ll` on a program of two or more units now exits 1.
-- **`UdpSocket.close()` consumes the handle** (#961), as `TcpStream.close()` does: a use after the
-  close is CE2435. The shared close helper is the public `close_socket` in `<net/error>`.
-
-### Changed
 - **The manifest writer has one extractor per pair** (#985): types, and constants with variables.
   The type-name scan walks through `walk_nodes`. `TEMPLATES_SCHEMA_VERSION` lives in
   `backend/library_format.py`, and a pytest source scan checks that every key a reader of the
@@ -839,32 +528,6 @@ All notable changes to Sushi Lang will be documented in this file.
 - **`remove_all` through a regular file is documented as an error** (#960): a path such as
   `dir/plainfile/child` answers `FileError.InvalidPath`; only a missing path is success.
 
-### Testing
-- **The runner reads a fixture as bytes** (#979). A fixture whose directive block the runner could
-  not decode passed WITHOUT its directives checked; it now fails. The corpus gates read through one
-  reader (`corpus_files`, `corpus_text` in `tests/test_metadata.py`) that yields files only, and a
-  file that is not UTF-8 is allowed only beside a `test_err_` fixture that declares CE3017.
-
-### Fixed
-- **The compiler works in the user's directory** (#976, #974, #971). The `sushic` wrapper changes
-  into the checkout, and the compiler read the checkout where it meant the user's directory: a
-  `.slib` next to the program or in `.sushi_bento/` was not found (CE3502), a relative
-  `SUSHI_LIB_PATH` entry resolved against the checkout, and a bare `--clean-cache` REMOVED THE
-  CHECKOUT'S OWN CACHE. The compiler now changes into `SUSHI_CWD` once, at the top of `main()`, and
-  the second mechanism (`get_effective_cwd`) is gone. A relative `--cache-dir` lands in the user's
-  directory (#974), and one `CacheManager` per run holds a source library's units too, under
-  `--cache-dir` and not next to the program (#971).
-- **The CE0006 note for a type a binary library ships names the library** (#972). It said "defined
-  by the compiler". The loaded manifest now carries the `.slib` path, and the note reads
-  `declared by the library <path>`.
-- **`nori` follows the colour rules of `sushic`** (#986): `NO_COLOR`, `CLICOLOR_FORCE` and the new
-  `--color {auto,always,never}` go through the one styling seam, and the banner names Nori.
-- **`nori` errors name their file** (#987). A bad `nori.toml` or a bad archive names the file (and
-  the line and column where TOML gives them) and exits 1; an internal error exits 2 with a bug
-  note, and `--traceback` appends the Python traceback. `extract` takes the archive's top
-  directory from the manifest, not from the first member.
-
-### Changed
 - **The report renderer draws every snippet through one helper** (#983); `format()` is a loop of
   three steps and the two broad `except` clauses are narrow. The rendered text is unchanged in all
   four modes (1428 captures compared).
@@ -872,39 +535,6 @@ All notable changes to Sushi Lang will be documented in this file.
   its four kinds through one loop. Every helper library's `.slib` is byte-identical in all three
   kinds.
 
-### Testing
-- **The runner states paths in the user's directory**: `BUILD_LIB_AT: <src> -> <target>`,
-  `FIXTURE_CACHE_DIR: <rel>`, `EXPECT_PATH_EXISTS` / `EXPECT_PATH_ABSENT`,
-  `EXPECT_PATH_EXISTS_BEFORE_CLEAN` and `THEN_CLEAN_CACHE: bare|source`. A bare clean that removes
-  the checkout's own cache fails the fixture.
-
-### Fixed
-- **A `foreach` over a container iterator freezes the container's storage** (#956). A body that
-  pushed onto the list it walked (`foreach(x in l.iter()): l.push(x)`) compiled, and the loop read
-  freed memory after the push reallocated. While the loop walks `c.iter()`, `.keys()`, `.values()`
-  or `.entries()`, a change that can move or free the storage -- `push`, `insert`, `extend`,
-  `pop`, `remove`, `clear`, `truncate`, `reserve`, a rebind, a `poke` or `nom` of the container --
-  is now **CE2412**, with the loop header in a note. An in-place write (`fill`, `reverse`, an
-  indexed assignment) stays legal, as it was ruled for a plain item; the item freeze still refuses
-  it where the item views an owning element. The fact is `moves_storage` in
-  `semantics/method_effects.py`.
-
-### Testing
-- **The runner tests have one home, `tests/unit/runner/`, and a gate keeps the compiler out of every
-  other pytest test** (#959 steps 1-4). A pytest test outside that directory that parses Sushi, runs
-  the semantic analyzer, generates code or starts `sushic` fails, and a control proves the gate
-  fires. Every `EXPECT_*` directive has a red and a green runner test, and the new
-  `EXPECT_ERROR_CODES_EXACT: CE1001, CE2002` compares the exact set of codes a compilation reports.
-- **The runner tests the incremental cache again** (#988). A fixture directory with a `v2/`
-  subdirectory is compiled, then overwritten with `v2/` and compiled again with the same cache;
-  `EXPECT_REBUILT` / `EXPECT_CACHED` name the units the second build reports, and
-  `EXPECT_STDOUT_EXACT_BEFORE_REBUILD` the first binary's output. `RUN_IN_FIXTURE_DIR` starts
-  `sushic` in the fixture's own directory, `BUILD_LIB` builds a source library first, and
-  `STDLIB_MODULE` registers a Sushi-source stdlib module. Nine fixtures under `tests/cache/` pin a
-  dependency's struct shape, an enum payload, a `public use` chain, a constant, a source-library
-  edge and a stdlib-source edge.
-
-### Changed
 - **`foreach` replaces the counter loops of the Sushi stdlib and of `slib-info`** (#949, #950),
   where the bound cannot fall below the start. A loop whose body does not read its counter stays a
   `while` loop (#968).
@@ -913,24 +543,10 @@ All notable changes to Sushi Lang will be documented in this file.
   every module (#934), and the reserved `.slib` header bit `FLAG_SOURCE_COMPRESSED` is kept by a
   whitelist entry with its reason (#938). The dead-code ratchet is empty.
 
-### Changed
 - **Every Sushi stdlib module and `slib-info` carries its doc blocks** (#953): zlib, msgpack,
   toolchain/slib and collections/iter reach 0 missing blocks, and the design records of
   `slib-info` move to `docs/design/slib-info.md`.
 
-### Testing
-- **The test runner gates the stdlib doc blocks.** A full run and `--compile-only` compile one
-  program that imports every Sushi-source stdlib module with `--warn-missing-docs` and the internal
-  variable `SUSHI_STDLIB_DOC_GATE=1`, which makes the `docs` pass check the bundled stdlib units too
-  (a user's source library stays unchecked; unset, nothing changes). A missing or malformed block
-  in a stdlib module fails the run.
-
-### Fixed
-- **A struct that loses its name to an enum no longer cascades at its uses** (#921). A consumer's
-  struct refused with CE0006 also gave CE2001, CE2008, CE6104 and CE2106 at every construction,
-  named argument and field read of it. A contested type name now stops the cascade at every use.
-
-### Changed
 - **The dead Sushi stdlib code is removed** (#954): two unused imports, the `ztake` helper, and the
   error channel of three zlib functions that cannot fail. The public names with no caller in the
   repository stay (they are API), and a fixture now calls each one.
@@ -944,7 +560,6 @@ All notable changes to Sushi Lang will be documented in this file.
   binder pointed at `??`. Every diagnostic on `<expr>??` now starts at its operand.
 - **`slib-info` reports an internal error and exits 2** (#951). It exited 99 with no message.
 
-### Changed
 - **One string fat-pointer builder** (#939): the unused `IRMemoryBuilder` and the second builder
   are removed; the IR is byte-identical.
 - **`slib-info` and `show` use the string `join`, and a msgpack str/bin payload is copied in one
@@ -955,7 +570,6 @@ All notable changes to Sushi Lang will be documented in this file.
   helpers and the number-to-string conversions went on with a null pointer. It is RE2021 now,
   through one seam (`emit_checked_malloc`).
 
-### Changed
 - **`read_all` is one generic function over the `Reader` perk** (#946). `<io/contracts>` exports
   `read_all@(R: Reader)(poke R r)`; `File.read_all` and `BufReader.read_all` forward to it.
 - **`slib-info` reads the manifest through borrows** (#948). A string leaf is copied once, not three
@@ -976,7 +590,6 @@ All notable changes to Sushi Lang will be documented in this file.
 - **`--lib-info` and `use <lib/...>` give CE3515 for a library they cannot read** (#943). The
   Python fallback printed a traceback, and a `use <lib/...>` that named a directory was CE0000.
 
-### Changed
 - **`<io/fs>` uses `??` for four pass-through `match` blocks, and `mkdir_all` is flat** (#945).
 - **pytest runs no Sushi compiler.** Every pytest test that parsed, analyzed, generated code or
   spawned `sushic` is removed; the fixture corpus is the one compiler test harness. The test
@@ -1866,7 +1479,6 @@ All notable changes to Sushi Lang will be documented in this file.
 - **Monomorphization keeps a receiver's mode.** A `poke self` method on a generic
   target was copied without its mode, twice over -- #253's shape on a generic target.
 
-### Changed
 - **The dead code in the backend, the packager and the internals is deleted** (#916): two
   modules, about forty functions, methods and constants, three attributes that were written and
   never read, one unused parameter, and the second-round orphans the deletion left. The program
@@ -2386,7 +1998,382 @@ All notable changes to Sushi Lang will be documented in this file.
   name in a table has a row in every reader. `<time>`, `<sys/env>`, `<sys/process>` and
   `<random>` keep their own shape and are the follow-up.
 
+### Fixed
+
+- **The cache key hashes the text that was compiled** (#1062). It read the unit's file again
+  after the analysis, so a file that changed during a build stored the old object under the
+  new key, and later builds linked stale code. A cache entry and a source-library unit are
+  written atomically. A unit with no source text is the internal error CE0142.
+- **`nori.toml` is read from the working directory only** (#1066). `sushic --lib`, a program
+  compile and `nori` looked in the source directory and every parent. A present manifest must
+  be valid: a bad value is CE3517 now (it was skipped), and a manifest that cannot be read is
+  the new **CE3518**, with the reason from the system. A `[files]` entry that leaves the
+  project is NE2008.
+
+- **A generic instance reached only through substitution is interned** (#577). A `Box@(B)` field
+  that became `Box<string>` at monomorphization was never interned, and the `derive` pass gave
+  CE0128, a false CE2052, CE2008 or a backend KeyError. A `from([...])` literal given to
+  `.extend()` takes the element type of the receiver (#576).
+- **A predefined enum has a home module** (#574). `fs.FileMode` behind `use <io/fs> as fs` was
+  CE2001. The import now gates the bare name of each of the nine predefined enums but
+  `StdError`. A built-in static with no stamp is CE2060 and not an internal error (#570).
+- **A constraint violation is one located diagnostic** (#579). CE4006 has a file and a line, and
+  the analysis stops after it, so the extension copies give no second CE2008. The four
+  load-if-pointer sites are re-instrumented and the dead ones are gone (#553).
+- **`HashMap.insert` over an existing key destroys what it replaces** (#591). The old value and
+  the consumed key leaked on the update path.
+- **The cache key reads a dependency's full interface** (#593). A struct's fields, an enum's
+  variant order and the VALUE of a public constant were outside the digest, so a dependent kept
+  a stale object. A type reached through a `public use` is in it.
+- **A constant folds once** (#597). A chain of 22 constants that each name the previous one twice
+  took 59 seconds. The table holds the folded value, keyed by unit and name.
+- **One hashability walk per type** (#598). `can_struct_be_hashed` copied its visited set for
+  each field and the `derive` pass asked twice. 13 structs of fan-out 4 went from 28.5 s to 0.45 s.
+- **An FFI diagnostic names the unit that holds the fault** (#599). CE5009, CE5003 and CW5001
+  from a second unit printed the entry file. A Unit holds its own source text.
+- **The derived hash and clone belong to one compilation** (#601). The table was module-global,
+  so two programs in one process with a `Point` each shared an emitter.
+- **The substitution walk is total** (#602). A cast, explicit call-site type arguments and a
+  lambda annotation inside a generic body kept their type parameter (CE2014, CE2035, CE2061,
+  CE2002 on a legal program).
+- **One walk finds every instantiation a type names** (#603). A generic instance reached only
+  through a `peek` or `poke` parameter or a function type was CE2001.
+- **Four dispatch holes closed** (#625, #624, #610, #618). A lambda expression body reads the
+  declared return type; the typecheck stamp names the struct of a receiver; a field read's
+  receiver owns what nothing else names; a type kind with no hashability answer is refused.
+- **A container's hash reads what it holds, and the map is refused** (#628). `Own@(T)` and
+  `List@(T)` hash their contents; four programs that ended in an internal error are diagnostics.
+- **A lambda body is walked once** (#629). Every fault in it was reported twice. Lift owns the
+  body; the typecheck pass keeps the function type and the capture rules (CE2094).
+- **An unknown field is answered where it is written** (#630). It was CE0029 with no location;
+  it is CE2106 with a caret.
+- **One report per generic function** (#648). Each instance carried the template's spans, so a
+  fault in the body printed once for every instance. The io/error example is fixed (#649).
+- **One error-type rule for both spellings of a Result** (#668). `T | E` and `Result@(T, E)`
+  both require an enum. A user's generic enum is legal in the short form.
+- **An unknown error type is one diagnostic at the channel** (#662, #663). On a free function,
+  `fn f() i32 | NoSuchError` put the CE2001 caret on the return type and added a CE2084,
+  where an extension method gave CE2001 alone. The caret is on the channel type now, and
+  both declaration kinds give CE2001 alone.
+- **The AST builder and its walks, S1 frontend batch** (#631-#643, #654, #655, #658, #664).
+  A generic perk implementation is in the declaration walk; top-level declarations dispatch
+  from one table; the parameter, loop-tail, import-path and member-name rules each have one
+  reader; the AST walk is total and a miss is a located CE0136; the builder reports eight of
+  its rules through a `Reporter` and goes on (CE6006, CE2071, CE2099, CE2418, CE2424, CE2434,
+  CE2425, CE6103); nine dead branches and two stale doc references are deleted.
+- **Containment of the AST and of llvmlite.** Every dataclass in `semantics/ast.py` is
+  `slots=True`, so a write to an undeclared attribute raises. llvmlite appears only in
+  `backend/` and `sushi_stdlib/`.
+- **The `<io/files>` generators share their frames.** The four syscall wrappers are one
+  function and the Result Ok-payload build is written once. No symbol or layout moves.
+
+- **A generic function value in a generic body is solved** (#1036). `apply_c(gen)` inside
+  `fn inner@(U)` was CE2093 although the parameter type `fn(i32) -> i32` solves `gen`; each copy of
+  a generic body is now walked for the function values it holds, for a function, an extension and
+  a perk implementation alike.
+- **Every span in an interpolation hole is a file position** (#1038). Only `loc` and two member
+  spans were moved, so CE2062, CE2427, CE6102 and CE5009 in a hole pointed at the hole's own
+  column (often line 1). Every `Span` field is now moved through one walk, and the offset reads
+  the stripped hole text and the line of a literal that runs across lines.
+- **A malformed `nori.toml` under `sushic --lib` is the new CE3517** (#1040). A file that is not
+  TOML or UTF-8, or that has a table or a field of the wrong TOML type, was skipped with no report;
+  the build now stops and names nori's code (NE1002, NE1003, NE1010, NE1011). A missing file stays
+  silent.
+
+- **A diagnostic in an argument of a generic call is printed once** (#1037). The argument-count
+  check walked every argument and the check of the solved instance walked it again, so
+  `id(5 / 0)` printed CE0112 two times (a misplaced spread printed CE0120 two times). The count
+  check now reads the count only; a call with no solved instance walks its arguments once.
+- **The CE2408 and CE2422 helps read the type** (#1039): a write through a `peek` reference or a
+  by-value method parameter of a resource type is no longer offered `.clone()` (CE2431); it is
+  offered `.share()` when the type has one.
+
+- **A store through a `poke` reference after its owner changed is CE2412** (#1026). `r := v`
+  through a `let poke` or a `poke` pattern binding, after the owner was rebound or its payload
+  replaced, compiled and wrote into freed storage. The field, index and method writes were
+  already refused; the plain store now reads the same predicate.
+- **A `foreach(poke x in ...)` item beside a live reference of its owner is refused** (#1027):
+  CE2403 beside a `poke`, CE2407 for a `peek`/`poke` mix, the rule of the pattern binding. An item
+  over an owned temporary is not checked.
+- **CE2430 in a loop is printed once** (#1032). Every borrow diagnostic goes through the pass's
+  reporter now, so the dry run of a loop body tells nothing.
+- **The CE2414 and CE2426 helps read the type** (#1033): a resource type is no longer offered
+  `.clone()` (CE2431), and the CE2414 tail is right for it.
+- **An `expand` loop variable is named as written** (#1031): a borrow diagnostic printed the pack
+  element's hidden name once per copy, and a foreach item, a pattern binding or a lambda
+  parameter in an `expand` body warned once per copy.
+- **A generic function value to a generic callee is solved in two steps** (#1029). `apply(gen, 3)`
+  was CE2060 + CE2093; the callee's type arguments come from the other arguments first, then the
+  value is solved against the substituted parameter, and the program prints `7`. A value the
+  substituted type does not solve stays CE2093; a callee solved only by the value stays CE2060.
+- **A member access and an index access locate the whole expression** (#1030). `c.GREETING` was
+  underlined from the dot and `xs[0]` from the bracket; a diagnostic about the read now marks
+  `c.GREETING` and `xs[0]`. CE2106 and CE2045 still mark the member alone. Many diagnostics move
+  their column; no text changes.
+- **A diagnostic renders the same text painted and plain** (#997): Unicode mode wrote two spaces
+  after the bar when colour was off. **The last note's close guide ends under its tick** (#998).
+- **nori checks the TOML type of each `nori.toml` field** (#1025). An integer name crashed nori and
+  a string in a list field was read per character; both are the new **NE1011**. A listing that
+  skips a manifest prints its code.
+
+- **A `peek`/`poke` pattern binding takes a place** (#788). `match b.s: Shade.Dim(poke r)` over a
+  field or an element of a local or a constant was CE2404 "no stable address", and `let poke`
+  took the same place. A reference pattern binding now takes the places `let peek` / `let poke`
+  take: the root is frozen for the arm (CE2412), one `poke` at a time (CE2403, CE2407 -- which a
+  bare-name pattern binding did not check either), a constant root refuses only `poke` (CE2400).
+  CE2404 stays for a scrutinee that is not a place.
+- **A constant or `var` behind an alias is never moved out of** (#1016). `return Result.Ok(c.GREETING)`
+  was the internal error CE0129, and `let string s = c.GREETING` compiled; both are CE2436, as the
+  flat name is.
+- **Inside an `expand` body a diagnostic names the written local** (#1022): a borrow error printed the
+  copy name (`#s_x0`) once per copy, and a shadowing `let` gave no CW1002.
+- **The CE2411 help offers `.share()` only for a type that has it** (#1023): it offered `l.share()`
+  for a `List@(File)`, which is CE2008.
+- **An output that cannot be written is a coded error** (#1010). An `-o` that names a directory was
+  CE3008 from the linker, and an unwritable output, `.slib`, object or cache directory was CE0000.
+  All are the new **CE3020** ("cannot write '<path>': <reason>"), checked in the one home of the
+  output path before code generation; CE3500 moved into the same check.
+- **A library's warnings stay with its author** (#1007). A consumer showed every lint of a binary
+  template or a source library and exited 1. A warning located in a library unit is not reported
+  and does not change the exit status; errors still show; the stdlib gates still see the stdlib.
+  There is no template check at `--lib`: a template is checked when code instantiates it.
+- **A generic function value is legal in every position its type is solved** (#1021): an argument, a
+  rebind, a `return`, a field, a payload, a `.realise()` default -- it was legal only in a `let`, and
+  elsewhere only when another call happened to make the instance.
+- **A nested generic `.realise()` chain as an argument no longer crashes** (#1028): the solver was
+  handed a table object where it needs the name dict (CE0000).
+
+- **A generic enum constructor with no declared type takes its type from the payload** (#1005).
+  `match Maybe.Some(1):`, `Maybe.Some(1).is_some()`, `Maybe.Some(5)??`, a `foreach` over one, an
+  interpolation hole and a generic argument reached the backend with no instance and stopped
+  with an internal error (CE0113, CE0055, CE0124, CE0015, CE2060). The payload now gives the
+  instance (`Maybe.Some(1)` is `Maybe@(i32)`). An arm that nothing gives -- the error type of
+  `Result.Ok(1)`, the type of `Maybe.None()` -- is the new **CE2112**, whose help asks for a
+  declared type; there is no `StdError` default. Where a declared type reaches the constructor
+  and does not fit, the position's own mismatch is the one diagnostic (`f(Maybe.None())` against
+  an `i32` parameter was CE0055 and is CE2006).
+- **A refused written type gives one diagnostic** (#991). After CE2001, the `let`, rebind,
+  argument and return checks compared values against the unknown type and added a second error
+  (`cannot assign Iterator@(i32) to Iterator@(i32)`). A refused type now compares equal to
+  everything, through the one compatibility seam, and gives no instance to a constructor.
+- **A generic function behind an alias is a function value where its type is solved** (#1017):
+  `let fn(i32) -> i32 f = l.gen` was CE2093, and the bare form worked.
+- **A `let` in an `expand` body is unique over the instance** (#1018). A nested `expand` over the
+  same pack, and two sibling `expand`s, that declared one local name gave CE0000 (duplicate
+  local). An unused `let` in an `expand` body gives ONE CW1001 with the written name (#1019); it
+  gave one per copy, each with the compiler's copy name.
+- **A `foreach` over a temporary copy does not freeze the original** (#1014): `foreach(x in
+  a.clone().iter())` with `a.push(5)` in the body was CE2412, for the iterator and for an item
+  that views an owning element. A place and a get-out receiver still freeze.
+- **The borrow flow models `break` and `continue`** (#993). A change or a move followed by
+  `break` in a loop over the container's iterator was CE2412, and a move then `break` gave a
+  false CE2405; the same shape with `return` compiled. The break paths now join the state after
+  the loop, so a move before a `break` is still seen there.
+- **A `nom` move of the container under its iterator is one diagnostic** (#995): it was CE2405
+  and CE2412 at one place.
+- **A borrow help never offers `.clone()` for a type that owns a resource** (#994). The CE2412
+  help under a `foreach` offered `l.clone().iter()` for a `List@(File)` (CE2431), and named the
+  root, not the receiver (`h.clone()` for `h.items.iter()`); the two `let`-borrow CE2412 helps
+  and the CE2401 help offered `.clone()` on a resource too. One clone test decides every help.
+
+- **A string temporary in a comparison is freed, and so is a condition's temporary on each
+  evaluation** (#1004). An owning string operand of `==`, `!=`, `<`, `<=`, `>` or `>=` got no
+  owner and leaked, in every position. An owning temporary in a `while` condition had one owner
+  in the enclosing scope, so every evaluation but the last leaked. Each `if` test and `while`
+  condition now has a scope of its own, closed before the branch. This also closes a read of an
+  uninitialised stack slot: a temporary made in an `elif` test was freed at the join from the
+  paths that never made it.
+- **A hidden local can no longer collide with a user name** (#1001, #1015). The compiler named
+  its hidden locals with legal identifiers (`__fe_item0`, `__fe_discard0`, `__fe_iter0`,
+  `__closure_env`, a pack element `args_0`, an unrolled `expand` local `t__x0`). A user variable
+  of that name read the loop item (a silent wrong value), gave CE0000, or gave a false
+  diagnostic. Every such name is now made by one helper, `hidden_name`, with a `#` the grammar
+  refuses, and a gate refuses a new synthesized name outside it.
+- **A bare function value names the unit's own function** (#1003). With an imported generic of
+  the same name, `let fn(string) -> i32 f = pick` took the import: the wrong function ran, or
+  the program was refused (CE4006, CE2093). The call and the value positions read one helper.
+- **A function of another unit is a function value** (#1013), bare (`plain`, CE1001 before) and
+  behind an alias (`l.plain`, CE2008 before), from a source unit, a `public use` re-export and a
+  library alike. A private one is CE3005 ("cannot take the value of private function"), an
+  ambiguous bare name CE3012, and a generic one CE2093.
+
+- **An `-o` path whose directory does not exist is CE3019** (#1006). It was the internal error
+  CE0000 (`FileNotFoundError`, `NotADirectoryError`) for a program, a `.ll` and a `.slib`, and a
+  misleading CE3008 "linking failed" for a two-unit build. One check in the one home for the output
+  path names the directory, before code generation.
+
+- **A library keeps every payload type of a variant** (#966). The manifest kept the first payload
+  type only, so `--lib-info` printed `Blue(string)` for `Blue(string, i32)`, and a consumer of a
+  binary or hybrid library that bound both payloads was refused with CE2044. The variant record
+  now carries `data_types`, a list; a library built before this change is refused by the manifest
+  check (CE3512, "missing required field ... data_types") and must be rebuilt. Two constraints on
+  one type parameter print joined with ` + `, as they are written, in both report halves.
+
+- **`--lib-info` and the consumer check a library's shape once** (#977, #978, #967). A damaged
+  `.slib` gave a Python traceback and exit 1 from `--lib-info`, blank fields from the `slib-info`
+  tool, or CE0000 `KeyError` in a consumer; a syntax error in a library's template was reported
+  at the consumer's `use` line. `library_format.py` now holds one manifest schema (`MANIFEST_SCHEMA`,
+  `check_manifest`) that both `--lib-info` halves and the consumer read, and `<toolchain/slib>` has
+  the same rows (`check_manifest`, `read_library`, `SlibFault`). A missing or mistyped field, a
+  template that does not parse or holds more than one declaration, is CE3512 naming the library
+  and the field. The reader checks the magic first, then the 1 GiB limit before any read, then
+  every declared length against the bytes left. A missing file is CE3515, a name that does not end
+  in `.slib` is the new CE3516, and `--lib-info` runs inside the CE0000 guard. `module_merger` no
+  longer writes a dump to `/tmp`.
+- **A unit's own function beats an imported generic of the same name** (#963). The typecheck pass
+  chose the unit's own function for a bare call, but the instantiate pass still recorded the
+  imported generic and judged its perk constraint (CE4006). Both passes now ask one predicate.
+
+- **A source that is not UTF-8 is CE3017, not the internal error CE0000** (#979). The main source
+  and every imported unit go through one reader, and the diagnostic names the file and the byte
+  (`byte 0xff on line 2 is not valid UTF-8`) or the system reason (`Is a directory`). A run with no
+  source is CE3018. A failed `--write-ll` is the warning CW0002 and the build exits 1; it printed a
+  bare line and exited 0.
+- **A flag that has no effect is the warning CW0003** (#980): `--docs` without `--lib-info`,
+  `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib` or on the
+  incremental path (which writes no program object), and `--write-ll` on the incremental path.
+  `--write-ll` on a program of two or more units now exits 1.
+- **`UdpSocket.close()` consumes the handle** (#961), as `TcpStream.close()` does: a use after the
+  close is CE2435. The shared close helper is the public `close_socket` in `<net/error>`.
+
+- **The compiler works in the user's directory** (#976, #974, #971). The `sushic` wrapper changes
+  into the checkout, and the compiler read the checkout where it meant the user's directory: a
+  `.slib` next to the program or in `.sushi_bento/` was not found (CE3502), a relative
+  `SUSHI_LIB_PATH` entry resolved against the checkout, and a bare `--clean-cache` REMOVED THE
+  CHECKOUT'S OWN CACHE. The compiler now changes into `SUSHI_CWD` once, at the top of `main()`, and
+  the second mechanism (`get_effective_cwd`) is gone. A relative `--cache-dir` lands in the user's
+  directory (#974), and one `CacheManager` per run holds a source library's units too, under
+  `--cache-dir` and not next to the program (#971).
+- **The CE0006 note for a type a binary library ships names the library** (#972). It said "defined
+  by the compiler". The loaded manifest now carries the `.slib` path, and the note reads
+  `declared by the library <path>`.
+- **`nori` follows the colour rules of `sushic`** (#986): `NO_COLOR`, `CLICOLOR_FORCE` and the new
+  `--color {auto,always,never}` go through the one styling seam, and the banner names Nori.
+- **`nori` errors name their file** (#987). A bad `nori.toml` or a bad archive names the file (and
+  the line and column where TOML gives them) and exits 1; an internal error exits 2 with a bug
+  note, and `--traceback` appends the Python traceback. `extract` takes the archive's top
+  directory from the manifest, not from the first member.
+
+- **A `foreach` over a container iterator freezes the container's storage** (#956). A body that
+  pushed onto the list it walked (`foreach(x in l.iter()): l.push(x)`) compiled, and the loop read
+  freed memory after the push reallocated. While the loop walks `c.iter()`, `.keys()`, `.values()`
+  or `.entries()`, a change that can move or free the storage -- `push`, `insert`, `extend`,
+  `pop`, `remove`, `clear`, `truncate`, `reserve`, a rebind, a `poke` or `nom` of the container --
+  is now **CE2412**, with the loop header in a note. An in-place write (`fill`, `reverse`, an
+  indexed assignment) stays legal, as it was ruled for a plain item; the item freeze still refuses
+  it where the item views an owning element. The fact is `moves_storage` in
+  `semantics/method_effects.py`.
+
+- **A struct that loses its name to an enum no longer cascades at its uses** (#921). A consumer's
+  struct refused with CE0006 also gave CE2001, CE2008, CE6104 and CE2106 at every construction,
+  named argument and field read of it. A contested type name now stops the cascade at every use.
+
 ### Testing
+
+- **The runner tests run one instance at a time, and only when the runner changes** (#1071).
+  `pytest` excludes them by default (`-m runner` selects them); CI runs them serially, only
+  when a runner file changes or on a push to main. The checkout lock and the
+  `writes_the_checkout` marker are gone, and a runner test on an xdist worker fails at once.
+- **The mypy ratchet and the fresh-tree gates agree with the primary checkout** (#529, #530).
+  `follow_imports = "silent"` stops a fresh environment from reporting 2954 errors outside the
+  named packages.
+- **The test harness cannot report a pass it did not earn** (#604, #605). A fixture is identified
+  by its path, and a skipped leak assertion fails the run.
+- **An interpolated string in argument position has one owner** (#521).
+- **Agent skills configuration** is added under `docs/agents/`.
+
+- **One home per pytest property** (#1051): three duplicate checks deleted, five split properties
+  merged (one shared `tests/unit/expr_dispatch.py` for the dispatch-totality gates, one registry
+  check over all seven signature tables), `test_diagnostic_coverage.py` renamed
+  `test_error_fixtures_name_their_code.py`. `test_backend_has_no_assert.py` is now the ruff rule
+  `S101` (backend and driver), and `test_llvmlite_containment.py` the ruff rule `TID251`.
+- **The pytest layer holds no dead residue** (#1052): the dead `needs_sushic` guard, three vacuous
+  operand tables, eight tombstone tests and about 60 empty section comments are gone; vulture now
+  scans `tests/unit/` too, with its own whitelist.
+- **20 redundant fixtures are deleted** (#1049), and four twins now test what their header claimed:
+  the enum-first CE0006 order, the CE2002 note, and the CE0108 and CE0111 spans.
+- **Success fixtures assert their value** (#1050): 17 fixtures whose only assertion was a short
+  `CONTAINS` now assert the exact stdout, 14 exit-0-only fixtures check what they compute, and a
+  text gate refuses a success fixture whose every stdout assertion is 3 characters or fewer.
+
+- **Every fixture lives in a feature directory** (#1054-#1058). The 1,377 fixtures that sat flat at
+  an area root (40% of the corpus) and the issue-numbered `tests/bugs/` directory are moved to
+  `tests/<area>/<feature>/`; `tests/bugs/` is gone. A move changed the path only: a dump of every
+  fixture's parsed directives and body hash is equal before and after (3473 fixtures).
+
+- **The test runner compiles through a fork-server** (#1059). One server process imports the
+  compiler and builds its grammar once, then forks one child per compile; each child runs the real
+  CLI entry with the fixture's arguments, directory and environment. `--fresh-processes` keeps a
+  fresh `sushic` per compile, and the `test-linux` CI job runs that way. The rebuild and
+  `STDLIB_MODULE` fixtures always get a fresh process. A runner test compiles a fixed sample in both
+  modes and requires the same exit code, stdout, stderr and leak result. An error fixture's compile
+  fell from about 270 ms to 34 ms.
+
+- **The runner tests share one harness** (#1053): `tests/unit/runner/_harness.py`, a `runner`
+  marker on every module (`pytest -m "not runner"` is the fast loop), and a `-n 4` run in CI with a
+  lock for the tests that write the checkout. The two green halves that repeated a corpus step are
+  deleted. The runner layer fell from about 193 s to about 80 s.
+- **`tests/perf/` is deleted** (#1048): it was never collected, and its regression half started the
+  compiler inside pytest.
+
+- **A header line that looks like a directive is one the runner knows** (#1041). An unknown name
+  (`EXPECTED_OUTPUT`) or a valued name with no `:` (a bare `EXPECT_STDERR_EMPTY`) was dropped with
+  no message; it now fails its fixture. The eight bare `EXPECT_STDERR_EMPTY` lines assert now, the
+  125 dead `EXPECTED_*` lines are gone, and prose in a header no longer starts with a capital
+  directive-shaped word.
+- **`TEST_TYPE` is gone** (#1043): nothing read it; 632 header lines are deleted.
+- **The output gate sees a write through a console handle** (#1042) and has a stderr row: a
+  success fixture that writes stdout or stderr on its normal path asserts that stream. Four
+  fixtures that asserted nothing about their output now do.
+- **The runner has no weaker mode** (#1045): `--mode` is deleted, and results are keyed by the
+  fixture's path under `tests/`.
+- **A test run writes no cache into the source tree** (#1044): every compile of a run shares one
+  cache directory in the run's temporary directory, and the pre-run purge is deleted.
+- **The helper libraries build in parallel, and a narrowed run builds only the ones it needs**
+  (#1047); a filtered run of 22 fixtures fell from about 24 s to 7 s.
+
+- **`BUILD_LIB_BINARY: x.sushi`** builds a fixture's own library as a binary `.slib`.
+
+- **`OUTPUT_PATH: <relative path>`** lets a fixture name its `-o` path inside its own copy, which
+  also lets a fixture build a library (`COMPILER_FLAGS: --lib ...`); four CE3019 fixtures use it.
+
+- **The runner gates the report lines** that #966 fixed: a runner step builds one library in each
+  kind and checks both `--lib-info` halves and a consumer that binds both payloads.
+
+- **The runner gates the library readers.** A runner step builds a hybrid and a binary library,
+  damages copies of them (truncated, bad magic, oversize length, a manifest missing a field), and
+  runs `--lib-info` in both halves and a consumer over each copy; every case must report its code.
+
+- **The runner reads a fixture as bytes** (#979). A fixture whose directive block the runner could
+  not decode passed WITHOUT its directives checked; it now fails. The corpus gates read through one
+  reader (`corpus_files`, `corpus_text` in `tests/test_metadata.py`) that yields files only, and a
+  file that is not UTF-8 is allowed only beside a `test_err_` fixture that declares CE3017.
+
+- **The runner states paths in the user's directory**: `BUILD_LIB_AT: <src> -> <target>`,
+  `FIXTURE_CACHE_DIR: <rel>`, `EXPECT_PATH_EXISTS` / `EXPECT_PATH_ABSENT`,
+  `EXPECT_PATH_EXISTS_BEFORE_CLEAN` and `THEN_CLEAN_CACHE: bare|source`. A bare clean that removes
+  the checkout's own cache fails the fixture.
+
+- **The runner tests have one home, `tests/unit/runner/`, and a gate keeps the compiler out of every
+  other pytest test** (#959 steps 1-4). A pytest test outside that directory that parses Sushi, runs
+  the semantic analyzer, generates code or starts `sushic` fails, and a control proves the gate
+  fires. Every `EXPECT_*` directive has a red and a green runner test, and the new
+  `EXPECT_ERROR_CODES_EXACT: CE1001, CE2002` compares the exact set of codes a compilation reports.
+- **The runner tests the incremental cache again** (#988). A fixture directory with a `v2/`
+  subdirectory is compiled, then overwritten with `v2/` and compiled again with the same cache;
+  `EXPECT_REBUILT` / `EXPECT_CACHED` name the units the second build reports, and
+  `EXPECT_STDOUT_EXACT_BEFORE_REBUILD` the first binary's output. `RUN_IN_FIXTURE_DIR` starts
+  `sushic` in the fixture's own directory, `BUILD_LIB` builds a source library first, and
+  `STDLIB_MODULE` registers a Sushi-source stdlib module. Nine fixtures under `tests/cache/` pin a
+  dependency's struct shape, an enum payload, a `public use` chain, a constant, a source-library
+  edge and a stdlib-source edge.
+
+- **The test runner gates the stdlib doc blocks.** A full run and `--compile-only` compile one
+  program that imports every Sushi-source stdlib module with `--warn-missing-docs` and the internal
+  variable `SUSHI_STDLIB_DOC_GATE=1`, which makes the `docs` pass check the bundled stdlib units too
+  (a user's source library stays unchecked; unset, nothing changes). A missing or malformed block
+  in a stdlib module fails the run.
+
 - **One test runner, and every flag selects** (#760, #765). `tests/run_tests.py` carried a
   second runner beside `enhanced_test_runner.py` that compiled every fixture and checked the
   compiler's EXIT STATUS alone. It read no `EXPECT_*` directive -- a `test_err_` fixture

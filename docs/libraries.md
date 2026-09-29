@@ -287,8 +287,8 @@ Example output, with `--docs`:
 Library: mylib
 Version: 1.0.0
 Kind: source
-Compiler: 0.12.0
-Requires compiler: ~0.12
+Compiler: 0.13.0
+Requires compiler: ~0.13
 Compiled: 2026-09-28T19:18:00+00:00
 Protocol: 2.3
 
