@@ -73,6 +73,18 @@ def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
     )
 
 
+def _link_name_expr(node: Optional[Tree]):
+    """`= NAME` or `= alias.NAME`: the constant a link name is read from (#1089)."""
+    if node is None:
+        return None
+    from sushi_lang.semantics.ast import MemberAccess, Name
+    names = [tok for tok in node.children if isinstance(tok, Token)]
+    if len(names) == 1:
+        return Name(id=str(names[0].value), loc=span_of(names[0]))
+    return MemberAccess(receiver=Name(id=str(names[0].value), loc=span_of(names[0])),
+                        member=str(names[1].value), loc=span_of(node))
+
+
 def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
     """Parse: FN NAME "(" [parameters] ")" type "=" STRING"""
     name_tok: Optional[Token] = None
@@ -86,7 +98,8 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
 
     if name_tok is None:
         ice(t, "missing NAME")
-    if link_tok is None:
+    link_expr = _link_name_expr(first_tree(t.children, "extern_link_name"))
+    if link_tok is None and link_expr is None:
         ice(t, "missing link-name STRING")
 
     params_node = first_tree(t.children, "extern_params")
@@ -108,7 +121,8 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
         name=str(name_tok.value),
         params=params,
         ret=ret_ty,
-        link_name=_strip_string_token(link_tok),
+        link_name=_strip_string_token(link_tok) if link_tok is not None else "",
+        link_expr=link_expr,
         is_variadic=is_variadic,
         name_span=span_of(name_tok),
         ret_span=span_of(ret_node),

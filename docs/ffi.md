@@ -53,6 +53,12 @@ The Sushi-visible name and the C symbol are decoupled
 anything; the linker resolves the symbol after `=`. This is what lets you bind
 `printf` without shadowing any Sushi name.
 
+The link name is a string literal, or a string constant when the symbol differs per
+platform: `= STAT_SYMBOL` or `= platform.STAT_SYMBOL`, where `<sys/platform>` declares
+`stat$INODE64` on macOS x86_64 and `stat` elsewhere. The constant is folded in the unit
+that declares the block, and every rule below reads the folded name. A constant of another
+type is `CE5015`, and a name that is no constant is `CE1001`.
+
 **The C symbol must be foreign.** An `unsafe external` reaches OUT of the program, so the
 name after `=` may not be one this build defines -- a function of any unit, a constant, a
 symbol a linked library brought in, its private ones included, or one the standard library
@@ -506,6 +512,7 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | `CE5011` | error | A method outside the foreign-memory set is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
 | `CE5012` | error | A `ptr` appears as a generic type argument outside `Result`/`Maybe` (e.g. `HashMap@(i32, ptr)`, `List@(ptr)`). |
 | `RE2025` | runtime | A foreign return declared `string` or `ptr` was NULL. Declare it `Maybe@(string)` / `Maybe@(ptr)`. |
+| `CE5015` | error | A link name written as a constant is not a string constant. |
 | `CE5014` | error | `errno()` is called in a unit that declares no `unsafe external` block. |
 | `CE5013` | error | A link-name names a symbol this build **defines** -- a function of any unit, a constant, one a linked library brought in, or one the standard library generates. FFI names foreign symbols only. The note says where the symbol is defined. |
 

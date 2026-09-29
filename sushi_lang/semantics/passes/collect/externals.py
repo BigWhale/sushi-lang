@@ -109,29 +109,39 @@ class ExternalCollector:
         self.externals.add(sig)
 
     def _check_reserved_clash(self, decl: 'ExternalDecl', sig: ExternalSig) -> None:
-        reserved = RESERVED_EXTERNS.get(decl.link_name)
-        if reserved is None:
-            return
-        reserved_params, reserved_ret = reserved
-        if not self._abi_compatible(sig, reserved_params, reserved_ret):
-            er.emit(self.r, er.ERR.CE5001, decl.name_span or decl.loc, symbol=decl.link_name)
+        reject_reserved_clash(self.r, decl, sig)
 
-    def _abi_compatible(self, sig: ExternalSig, reserved_params, reserved_ret) -> bool:
-        """True if `sig` and the reserved signature lower to the same C declaration."""
-        from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
 
-        def abi_key(ty):
-            if isinstance(ty, ForeignPtrType):
-                return "i8*"
-            if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
-                return "i8*"
-            return ty
+def reject_reserved_clash(reporter: Reporter, decl: 'ExternalDecl', sig: ExternalSig) -> None:
+    """CE5001: a link name a compiler built-in declares, with another signature.
 
-        if abi_key(sig.ret_type) != abi_key(reserved_ret):
-            return False
-        # `sig.param_types` holds only the fixed params (a trailing `...` is not a
-        # param), so a variadic binding's fixed params must match the reserved fixed
-        # params; the `...` then covers the built-in's var_arg.
-        sig_params = tuple(abi_key(p) for p in sig.param_types)
-        reserved_keys = tuple(abi_key(p) for p in reserved_params)
-        return sig_params == reserved_keys
+    A link name written as a constant is empty at collection, and the `ffi-clash` step
+    asks again once it has folded the name (#1089).
+    """
+    reserved = RESERVED_EXTERNS.get(sig.link_name)
+    if reserved is None:
+        return
+    reserved_params, reserved_ret = reserved
+    if not _abi_compatible(sig, reserved_params, reserved_ret):
+        er.emit(reporter, er.ERR.CE5001, decl.name_span or decl.loc, symbol=sig.link_name)
+
+
+def _abi_compatible(sig: ExternalSig, reserved_params, reserved_ret) -> bool:
+    """True if `sig` and the reserved signature lower to the same C declaration."""
+    from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+
+    def abi_key(ty):
+        if isinstance(ty, ForeignPtrType):
+            return "i8*"
+        if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+            return "i8*"
+        return ty
+
+    if abi_key(sig.ret_type) != abi_key(reserved_ret):
+        return False
+    # `sig.param_types` holds only the fixed params (a trailing `...` is not a
+    # param), so a variadic binding's fixed params must match the reserved fixed
+    # params; the `...` then covers the built-in's var_arg.
+    sig_params = tuple(abi_key(p) for p in sig.param_types)
+    reserved_keys = tuple(abi_key(p) for p in reserved_params)
+    return sig_params == reserved_keys

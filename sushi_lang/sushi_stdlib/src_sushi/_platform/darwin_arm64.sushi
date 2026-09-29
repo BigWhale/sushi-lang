@@ -1,0 +1,314 @@
+##:
+The platform constants for `darwin_arm64`.
+
+The compiler picks one file per platform and architecture for `use <sys/platform>`,
+and every file declares the same names. Each value comes from
+`tests/platform_probe/probe.c`, compiled on that platform.
+:##
+
+# open(2) flags and lseek(2) whences
+
+##: `open` flag: read only. :##
+public const i32 O_RDONLY = 0
+
+##: `open` flag: write only. :##
+public const i32 O_WRONLY = 1
+
+##: `open` flag: read and write. :##
+public const i32 O_RDWR = 2
+
+##: `open` flag: create the file if it does not exist. :##
+public const i32 O_CREAT = 512
+
+##: `open` flag: cut an existing file to zero length. :##
+public const i32 O_TRUNC = 1024
+
+##: `open` flag: every write goes to the end. :##
+public const i32 O_APPEND = 8
+
+##: `lseek` whence: from the start. :##
+public const i32 SEEK_SET = 0
+
+##: `lseek` whence: from the current offset. :##
+public const i32 SEEK_CUR = 1
+
+##: `lseek` whence: from the end. :##
+public const i32 SEEK_END = 2
+
+# struct stat, and the file type bits of st_mode
+
+##: The size of `struct stat` in bytes. :##
+public const i32 STAT_SIZE = 144
+
+##: The byte offset of `st_mode`. :##
+public const i32 ST_MODE_OFFSET = 4
+
+##: The width of `st_mode` in bytes. :##
+public const i32 ST_MODE_BYTES = 2
+
+##: The byte offset of `st_size`, an `i64`. :##
+public const i32 ST_SIZE_OFFSET = 96
+
+##: The byte offset of the modification time, a `struct timespec`. :##
+public const i32 ST_MTIME_OFFSET = 48
+
+##: The byte offset of the status change time, a `struct timespec`. :##
+public const i32 ST_CTIME_OFFSET = 64
+
+##: The mask of the file type bits in `st_mode`. :##
+public const i32 S_IFMT = 61440
+
+##: File type: a regular file. :##
+public const i32 S_IFREG = 32768
+
+##: File type: a directory. :##
+public const i32 S_IFDIR = 16384
+
+##: File type: a symbolic link. :##
+public const i32 S_IFLNK = 40960
+
+##: File type: a character device. :##
+public const i32 S_IFCHR = 8192
+
+##: The link name of `stat` with the 64-bit inode layout. :##
+public const string STAT_SYMBOL = "stat"
+
+##: The link name of `lstat` with the 64-bit inode layout. :##
+public const string LSTAT_SYMBOL = "lstat"
+
+##: The link name of `readdir` with the 64-bit inode layout. :##
+public const string READDIR_SYMBOL = "readdir"
+
+##: The byte offset of `d_name` in `struct dirent`. :##
+public const i32 DIRENT_NAME_OFFSET = 21
+
+# Clocks
+
+##: `clock_gettime` clock: the wall clock. :##
+public const i32 CLOCK_REALTIME = 0
+
+##: `clock_gettime` clock: a clock that never goes back. :##
+public const i32 CLOCK_MONOTONIC = 6
+
+##: The size of `struct timespec` in bytes. :##
+public const i32 TIMESPEC_SIZE = 16
+
+##: The size of `struct timeval` in bytes. :##
+public const i32 TIMEVAL_SIZE = 16
+
+##: The byte offset of `tv_usec`. :##
+public const i32 TIMEVAL_USEC_OFFSET = 8
+
+##: The width of `tv_usec` in bytes. :##
+public const i32 TIMEVAL_USEC_BYTES = 4
+
+# Sockets
+
+##: Address family: any. :##
+public const i32 AF_UNSPEC = 0
+
+##: Address family: IPv4. :##
+public const i32 AF_INET = 2
+
+##: Address family: IPv6. :##
+public const i32 AF_INET6 = 30
+
+##: Socket type: a stream (TCP). :##
+public const i32 SOCK_STREAM = 1
+
+##: Socket type: datagrams (UDP). :##
+public const i32 SOCK_DGRAM = 2
+
+##: Protocol: TCP. :##
+public const i32 IPPROTO_TCP = 6
+
+##: Protocol: UDP. :##
+public const i32 IPPROTO_UDP = 17
+
+##: `setsockopt` level: the socket itself. :##
+public const i32 SOL_SOCKET = 65535
+
+##: Socket option: reuse a local address. :##
+public const i32 SO_REUSEADDR = 4
+
+##: Socket option: the receive timeout, a `struct timeval`. :##
+public const i32 SO_RCVTIMEO = 4102
+
+##: Socket option: the send timeout, a `struct timeval`. :##
+public const i32 SO_SNDTIMEO = 4101
+
+##: Socket option: read and clear the pending error. :##
+public const i32 SO_ERROR = 4103
+
+##: Socket option that stops SIGPIPE for the socket, or 0 where the platform has none. :##
+public const i32 SO_NOSIGPIPE = 4130
+
+##: `send` flag that stops SIGPIPE for one call, or 0 where the platform has none. :##
+public const i32 MSG_NOSIGNAL = 524288
+
+##: `shutdown` how: both directions. :##
+public const i32 SHUT_RDWR = 2
+
+##: `getaddrinfo` flag: an address to bind. :##
+public const i32 AI_PASSIVE = 1
+
+##: `getaddrinfo` flag: the host is a numeric address. :##
+public const i32 AI_NUMERICHOST = 4
+
+##: `getnameinfo` flag: answer the numeric address. :##
+public const i32 NI_NUMERICHOST = 2
+
+##: The size of a host name buffer for `getnameinfo`. :##
+public const i32 NI_MAXHOST = 1025
+
+##: The size of a buffer for the text of an IPv6 address. :##
+public const i32 INET6_ADDRSTRLEN = 46
+
+##: The `getaddrinfo` answer that means: read `errno`. :##
+public const i32 EAI_SYSTEM = 11
+
+##: The size of `struct sockaddr_in` in bytes. :##
+public const i32 SOCKADDR_IN_SIZE = 16
+
+##: The size of `struct sockaddr_in6` in bytes. :##
+public const i32 SOCKADDR_IN6_SIZE = 28
+
+##: The size of `struct sockaddr_storage` in bytes. :##
+public const i32 SOCKADDR_STORAGE_SIZE = 128
+
+##: The byte offset of the address family in a `sockaddr`. :##
+public const i32 SOCKADDR_FAMILY_OFFSET = 1
+
+##: The width of the address family in bytes. :##
+public const i32 SOCKADDR_FAMILY_BYTES = 1
+
+##: The byte offset of the port in a `sockaddr_in`. :##
+public const i32 SOCKADDR_PORT_OFFSET = 2
+
+##: The size of `struct addrinfo` in bytes. :##
+public const i32 ADDRINFO_SIZE = 48
+
+##: The byte offset of `ai_flags`. :##
+public const i32 AI_FLAGS_OFFSET = 0
+
+##: The byte offset of `ai_family`. :##
+public const i32 AI_FAMILY_OFFSET = 4
+
+##: The byte offset of `ai_socktype`. :##
+public const i32 AI_SOCKTYPE_OFFSET = 8
+
+##: The byte offset of `ai_protocol`. :##
+public const i32 AI_PROTOCOL_OFFSET = 12
+
+##: The byte offset of `ai_addrlen`. :##
+public const i32 AI_ADDRLEN_OFFSET = 16
+
+##: The byte offset of `ai_canonname`. :##
+public const i32 AI_CANONNAME_OFFSET = 24
+
+##: The byte offset of `ai_addr`. :##
+public const i32 AI_ADDR_OFFSET = 32
+
+##: The byte offset of `ai_next`. :##
+public const i32 AI_NEXT_OFFSET = 40
+
+# errno numbers
+
+##: errno: the operation is not permitted. :##
+public const i32 EPERM = 1
+
+##: errno: no such file or directory. :##
+public const i32 ENOENT = 2
+
+##: errno: a signal interrupted the call. :##
+public const i32 EINTR = 4
+
+##: errno: an input or output error. :##
+public const i32 EIO = 5
+
+##: errno: a bad file descriptor. :##
+public const i32 EBADF = 9
+
+##: errno: try again; on a blocking socket, a timeout. :##
+public const i32 EAGAIN = 35
+
+##: errno: permission denied. :##
+public const i32 EACCES = 13
+
+##: errno: the file exists. :##
+public const i32 EEXIST = 17
+
+##: errno: not a directory. :##
+public const i32 ENOTDIR = 20
+
+##: errno: is a directory. :##
+public const i32 EISDIR = 21
+
+##: errno: an argument is not valid. :##
+public const i32 EINVAL = 22
+
+##: errno: too many open files in the system. :##
+public const i32 ENFILE = 23
+
+##: errno: too many open files in the process. :##
+public const i32 EMFILE = 24
+
+##: errno: no space left on the device. :##
+public const i32 ENOSPC = 28
+
+##: errno: the other end of the pipe or socket is closed. :##
+public const i32 EPIPE = 32
+
+##: errno: the file name is too long. :##
+public const i32 ENAMETOOLONG = 63
+
+##: errno: too many levels of symbolic links. :##
+public const i32 ELOOP = 62
+
+##: errno: the operation is in progress. :##
+public const i32 EINPROGRESS = 36
+
+##: errno: a destination address is required. :##
+public const i32 EDESTADDRREQ = 39
+
+##: errno: the message is too long. :##
+public const i32 EMSGSIZE = 40
+
+##: errno: the protocol is not supported. :##
+public const i32 EPROTONOSUPPORT = 43
+
+##: errno: the address family is not supported. :##
+public const i32 EAFNOSUPPORT = 47
+
+##: errno: the address is in use. :##
+public const i32 EADDRINUSE = 48
+
+##: errno: the address is not available. :##
+public const i32 EADDRNOTAVAIL = 49
+
+##: errno: the network is down. :##
+public const i32 ENETDOWN = 50
+
+##: errno: the network cannot be reached. :##
+public const i32 ENETUNREACH = 51
+
+##: errno: the network dropped the connection. :##
+public const i32 ENETRESET = 52
+
+##: errno: the connection was aborted. :##
+public const i32 ECONNABORTED = 53
+
+##: errno: the peer reset the connection. :##
+public const i32 ECONNRESET = 54
+
+##: errno: the socket is not connected. :##
+public const i32 ENOTCONN = 57
+
+##: errno: the operation timed out. :##
+public const i32 ETIMEDOUT = 60
+
+##: errno: the peer refused the connection. :##
+public const i32 ECONNREFUSED = 61
+
+##: errno: the host cannot be reached. :##
+public const i32 EHOSTUNREACH = 65

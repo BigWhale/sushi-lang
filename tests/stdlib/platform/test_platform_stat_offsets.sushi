@@ -1,0 +1,26 @@
+# The platform file is right for this host (#1089): `stat` through the platform's link
+# name fills a `struct stat`, and the file type bits at the platform's `st_mode` offset
+# say that `/dev/null` is a character device.
+# EXPECT_STDOUT_EXACT: "stat: 0\ncharacter device: true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+
+unsafe external "C" as libc because "reading file metadata":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = STAT_SYMBOL
+
+fn file_mode(ptr buf) i32:
+    if (ST_MODE_BYTES == 2):
+        return Result.Ok(buf.load_u16(ST_MODE_OFFSET) as i32)
+    return Result.Ok(buf.load_i32(ST_MODE_OFFSET))
+
+fn main() i32:
+    let ptr buf = libc.malloc(STAT_SIZE as i64)
+    let i32 rc = libc.stat("/dev/null", buf)
+    let i32 mode = file_mode(buf).realise(0)
+    println("stat: {rc}")
+    println("character device: {(mode & S_IFMT) == S_IFCHR}")
+    libc.free(buf)
+    return Result.Ok(0)

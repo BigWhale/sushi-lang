@@ -388,6 +388,9 @@ class ExternalDecl(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    # A link name written as a string constant (#1089). `link_name` is empty until the
+    # `ffi-clash` step folds it.
+    link_expr: Optional["Expr"] = None
 
 @dataclass(slots=True)
 class ExternalBlock(Node):

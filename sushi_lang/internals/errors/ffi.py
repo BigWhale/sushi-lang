@@ -61,6 +61,10 @@ _add(ErrorMessage("CE5014", Severity.ERROR,
     "`errno()` is read in a unit with no `unsafe external` block",
     Category.FFI, "`errno()` answers the calling thread's `errno`, the cause a failed C call leaves behind (#1087). Only a C call can leave one, and only a unit that declares an `unsafe external` block can make a C call, so the built-in has the same confinement as the `ptr` type (CE5009): no danger zone, no errno. A unit's own `fn errno` is an ordinary declaration and wins over the built-in anywhere. Read `errno()` directly after the failed call and before any `close`, `free` or other C call, because those can overwrite it."))
 
+_add(ErrorMessage("CE5015", Severity.ERROR,
+    "the link name of external '{name}' is a constant of type {type}, not a string",
+    Category.FFI, "The link name after `=` in an `unsafe external` declaration is a string literal or a string constant (#1089): `= \"stat\"`, `= STAT_SYMBOL`, or `= platform.STAT_SYMBOL`. A constant is the form for a symbol that differs per platform, such as `stat$INODE64` on macOS x86_64, and `<sys/platform>` holds those names. The constant is folded in the unit that declares the block, and CE5013 and CE5001 read the folded name. A constant of another type names no symbol."))
+
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",
     Category.FFI, "Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other generic containers (HashMap, List, user-defined generics) cannot store an opaque handle. Wrap the pointer in a concrete struct and store that instead."))

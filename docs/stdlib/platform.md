@@ -198,6 +198,62 @@ with `get_platform_module('stdio')` to name the `stderr` handle a runtime error 
 to. The platform module is resolved once per generator module, at import time, and
 reused for every function it generates.
 
+## `<sys/platform>`: the platform constants for Sushi source
+
+A module written in Sushi cannot choose a value by platform: Sushi has no conditional
+compilation, and a dead branch still declares its extern, so at `--opt none` its call
+survives and fails to link. So the compiler selects a FILE. `use <sys/platform>` compiles
+the bundled file for the host:
+
+| Host | File |
+|---|---|
+| macOS on Apple Silicon | `src_sushi/_platform/darwin_arm64.sushi` |
+| macOS on x86_64 | `src_sushi/_platform/darwin_x86_64.sushi` |
+| Linux on x86_64 | `src_sushi/_platform/linux_x86_64.sushi` |
+
+Any other host is `CE3021`. Linux on aarch64 has no file, because Linux ships and is
+tested as x86_64 only.
+
+Each file holds `public const` declarations and nothing else, and every file declares the
+same names of the same types in the same order:
+
+- the `open` flags (`O_RDONLY` ... `O_APPEND`) and the `lseek` whences;
+- the `struct stat` size, the offsets and widths of `st_mode`, `st_size`, the times, the
+  file type bits (`S_IFMT`, `S_IFREG`, ...), and `dirent.d_name`;
+- the link names of `stat`, `lstat` and `readdir` (`stat$INODE64` on macOS x86_64);
+- the clock ids, and the `timespec` and `timeval` layouts;
+- the socket constants: families, types, levels, options, the `addrinfo` and `sockaddr`
+  offsets, and the SIGPIPE pair (`SO_NOSIGPIPE`, `MSG_NOSIGNAL`, 0 where a platform has
+  none);
+- the errno numbers the standard library maps to an error variant.
+
+```sushi
+use <sys/platform>
+
+unsafe external "C" as libc because "reading file metadata":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = STAT_SYMBOL
+
+fn main() i32:
+    let ptr buf = libc.malloc(STAT_SIZE as i64)
+    let i32 rc = libc.stat("/dev/null", buf)
+    let i64 size = buf.load_i64(ST_SIZE_OFFSET)
+    println("stat: {rc}, size: {size}")
+    libc.free(buf)
+    return Result.Ok(0)
+```
+
+**Where the values come from.** `tests/platform_probe/probe.c` prints a whole platform
+file, with `offsetof`, `sizeof` and the C headers of the host it is compiled on. To make
+or refresh a file, compile the probe on that host: `cc tests/platform_probe/probe.c -o
+probe && ./probe > sushi_lang/sushi_stdlib/src_sushi/_platform/<host>.sushi`. The macOS
+x86_64 file is made with `cc -arch x86_64` (Rosetta runs it), and the Linux file in the
+`linux/amd64` container. `tests/unit/test_platform_files.py` compiles the probe on the
+host of the test run and requires the host's file to be exactly what it prints, and it
+requires the three files to declare the same names. So the macOS CI checks the macOS
+arm64 file and the Linux CI checks the Linux file.
+
 ## Platform-Organized Build Outputs
 
 ### Distribution Structure

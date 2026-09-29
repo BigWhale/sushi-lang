@@ -364,12 +364,13 @@ class SemanticAnalyzer:
         # it cannot run with the per-unit extern validation above -- the registry does
         # not exist yet up there.
         from sushi_lang.semantics.passes.types.externals import (
-            reject_external_naming_a_defined_symbol,
+            fold_link_names, reject_external_naming_a_defined_symbol,
         )
         for unit in compilation_order:
             if unit.ast is None:
                 continue
             unit_reporter = self._unit_reporter(unit)
+            fold_link_names(unit_reporter, unit.ast, self.tables, unit.name)
             reject_external_naming_a_defined_symbol(
                 unit_reporter, unit.ast, self.tables, self.library_registry,
                 self.generated_symbols)

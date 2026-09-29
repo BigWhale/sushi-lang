@@ -16,6 +16,34 @@ if TYPE_CHECKING:
 # metadata for .bc/native modules) and the .bc virtual-unit table in stdlib_linker.
 _SRC_SUSHI_ROOT = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "src_sushi"
 
+# A module whose file differs per platform and architecture (#1089). The compiler has
+# no conditional compilation: it selects a FILE, one per host, and every file declares
+# the same names. The key is `<os>_<arch>` as `platform_key()` spells the host.
+PLATFORM_SOURCE_MODULES: Dict[str, Dict[str, Path]] = {
+    "sys/platform": {
+        key: _SRC_SUSHI_ROOT / "_platform" / f"{key}.sushi"
+        for key in ("darwin_arm64", "darwin_x86_64", "linux_x86_64")
+    },
+}
+
+
+def platform_key() -> str:
+    """The host as a platform file names it: `darwin_arm64`, `linux_x86_64`, ...
+
+    The compiler targets the host, and the host is the process it runs in.
+    """
+    import platform
+
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in ("arm64", "aarch64") else machine
+    return f"{platform.system().lower()}_{arch}"
+
+
+def platform_source(module_path: str) -> Optional[Path]:
+    """The file of a per-platform module for this host, or None when it has none."""
+    return PLATFORM_SOURCE_MODULES[module_path].get(platform_key())
+
+
 SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
@@ -34,6 +62,12 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
+# A per-platform module is an ordinary source module on a host that has its file. On
+# any other host the name stays known, and the injector says the host has no file.
+SOURCE_STDLIB_MODULES.update({
+    module: platform_source(module) or _SRC_SUSHI_ROOT / "_platform" / f"{platform_key()}.sushi"
+    for module in PLATFORM_SOURCE_MODULES
+})
 
 
 def is_source_stdlib_module(module_path: str) -> bool:

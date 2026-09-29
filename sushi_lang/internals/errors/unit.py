@@ -89,3 +89,7 @@ _add(ErrorMessage("CE3019", Severity.ERROR,
 _add(ErrorMessage("CE3020", Severity.ERROR,
     "cannot write '{path}': {reason}",
     Category.UNIT, "The compiler could not write a file that the command line asked for: the output named with `-o` (the binary, the `.slib`, the object file beside it) or a file in the `--cache-dir` cache. The reason is the operating system's. An `-o` path that is an existing directory, or that is in a directory the user cannot write, is refused after the analysis and before any code is generated; a write that fails later reads the same code. This is an input or environment condition and not a compiler bug, which is why it is not CE0000: a directory at the `-o` path used to reach the linker as CE3008, and a directory that could not be written used to reach the top-level guard as an internal error (#1010). Fix the path, remove the directory, or choose a directory that you can write."))
+
+_add(ErrorMessage("CE3021", Severity.ERROR,
+    "`use <{module}>` has no file for this host '{host}' (the hosts are: {hosts})",
+    Category.UNIT, "A per-platform standard-library module (#1089) is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host."))

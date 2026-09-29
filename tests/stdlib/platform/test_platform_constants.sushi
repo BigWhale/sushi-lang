@@ -1,0 +1,11 @@
+# `use <sys/platform>` compiles the host's platform file (#1089). These three values
+# are 0 on every supported host, so one expectation holds on all of them.
+# EXPECT_STDOUT_EXACT: "O_RDONLY 0\nSEEK_SET 0\nCLOCK_REALTIME 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/platform>
+
+fn main() i32:
+    println("O_RDONLY {O_RDONLY}")
+    println("SEEK_SET {SEEK_SET}")
+    println("CLOCK_REALTIME {CLOCK_REALTIME}")
+    return Result.Ok(0)

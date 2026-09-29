@@ -91,7 +91,9 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
   one function per row of that table (and per family in `family_tables()`), and
   refuses a module with no table with a `RuntimeError`.
 - **Source module**: add an entry to `SOURCE_STDLIB_MODULES` pointing at the
-  `.sushi` file.
+  `.sushi` file. A module with one file per platform and architecture
+  (`<sys/platform>`, under `src_sushi/_platform/`) is an entry in
+  `PLATFORM_SOURCE_MODULES`; the compiler selects the host's file.
 
 The typecheck pass reads a function's return type from its registry record.
 Two readers still ask the `<math>` module directly

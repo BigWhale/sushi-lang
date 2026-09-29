@@ -136,7 +136,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
     """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
-        SOURCE_STDLIB_MODULES, get_stdlib_registry, resolve_source_stdlib_path,
+        PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES, get_stdlib_registry,
+        platform_key, platform_source, resolve_source_stdlib_path,
     )
 
     reexported = _reexported_stdlib_modules(library_linker)
@@ -163,6 +164,12 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
             return True
         for module_path in sorted(todo):
             src_path = resolve_source_stdlib_path(module_path)
+            if module_path in PLATFORM_SOURCE_MODULES and platform_source(module_path) is None:
+                from sushi_lang.internals import errors as er
+                er.emit(reporter, er.ERR.CE3021, None, module=module_path,
+                        host=platform_key(),
+                        hosts=", ".join(sorted(PLATFORM_SOURCE_MODULES[module_path])))
+                return False
             if src_path is None or not src_path.exists():
                 from sushi_lang.internals import errors as er
                 er.emit(reporter, er.ERR.CE0007, None,

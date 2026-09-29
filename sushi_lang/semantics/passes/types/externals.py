@@ -72,6 +72,42 @@ def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Opti
     return None
 
 
+def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -> None:
+    """Fold each link name written as a string constant, in the declaring unit (#1089).
+
+    It runs where every unit's constants and aliases exist and before CE5013 reads the
+    names. The folded name is written to the declaration and to its collected signature,
+    which is what the backend declares.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+    from sushi_lang.semantics.const_eval import ConstantEvaluator, is_string_constant
+    from sushi_lang.semantics.passes.collect.externals import reject_reserved_clash
+
+    evaluator = ConstantEvaluator(reporter, tables.constants, unit_name,
+                                  tables.namespaces.get, tables.structs,
+                                  tables.enums).silent()
+    for block in getattr(program, "externals", None) or ():
+        for decl in block.decls:
+            link = decl.link_expr
+            if link is None:
+                continue
+            value = evaluator.evaluate(link, BuiltinType.STRING, link.loc)
+            if value is None:
+                written = (f"{link.receiver.id}.{link.member}"
+                           if isinstance(link, MemberAccess) else link.id)
+                er.emit(reporter, er.ERR.CE1001, link.loc, name=written)
+                continue
+            if not is_string_constant(value):
+                er.emit(reporter, er.ERR.CE5015, link.loc, name=decl.name,
+                        type=display_type(value.semantic_type))
+                continue
+            decl.link_name = str(value.value)
+            sig = tables.externals.lookup(block.namespace, decl.name)
+            if sig is not None:
+                sig.link_name = decl.link_name
+                reject_reserved_clash(reporter, decl, sig)
+
+
 def reject_external_naming_a_defined_symbol(
     reporter: Reporter, program: 'Program', tables, registry=None,
     generated_symbols=frozenset(),

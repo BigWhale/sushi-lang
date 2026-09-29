@@ -193,6 +193,25 @@ to `.bc` file paths for linking) and `stdlib_registry.py` (resolves a unit path 
 compile-time function metadata). `compiler/loader.py` is unrelated — it handles
 `.sushi` source-unit loading and `use`-statement bookkeeping, not stdlib bitcode.
 
+## Per-platform source modules
+
+A source module may have one file per platform and architecture (#1089). The first one
+is `<sys/platform>`. `PLATFORM_SOURCE_MODULES` (`semantics/stdlib_registry.py`) maps the
+module name to a file for each host key (`darwin_arm64`, `darwin_x86_64`,
+`linux_x86_64`), and `platform_key()` spells the host from Python's `platform` module.
+`SOURCE_STDLIB_MODULES` holds the host's file under the module name, so every other
+reader (the injector, the namespaces pass, the doc-block gate and the dead-code gate)
+sees an ordinary source module. On a host with no file the name stays known, and the
+injector refuses the import with `CE3021`.
+
+This is the whole of the platform selection for Sushi source. There is no conditional
+compilation: a platform file holds `public const` declarations only, and a module that
+needs a value writes `use <sys/platform>` and names the constant. A symbol that differs
+per platform is a `public const string` too, because the link name after `=` in an
+`unsafe external` declaration accepts a string constant (`docs/ffi.md`, "Link-name
+separation"). `docs/stdlib/platform.md` lists what the files hold and how the probe makes
+them.
+
 ## Adding a New Stdlib Module
 
 A module written in Sushi (the usual choice when the module can be written in Sushi):
@@ -200,7 +219,9 @@ A module written in Sushi (the usual choice when the module can be written in Su
 1. Write the module as a `.sushi` file under `src_sushi/`. Mark each concrete export
    `public`, and give each declaration a documentation block (the runner's stdlib
    doc-block gate checks them).
-2. Add one entry to `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`).
+2. Add one entry to `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`). A module
+   with one file per platform is an entry in `PLATFORM_SOURCE_MODULES` instead
+   ([Per-platform source modules](#per-platform-source-modules)).
 3. Add the module name to `StdlibLinker._virtual_units` (`backend/stdlib_linker.py`).
 
 A bitcode unit (for code that needs raw IR, for example a libc extern or a manual layout):
