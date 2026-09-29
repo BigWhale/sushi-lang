@@ -10,7 +10,10 @@ Comprehensive guide to Sushi's memory management: RAII, references, borrowing, a
 - [RAII (Automatic Cleanup)](#raii-automatic-cleanup)
 - [Move Semantics](#move-semantics)
 - [References and Borrowing](#references-and-borrowing)
-- [Own@(T) for Heap Allocation](#own-for-heap-allocation)
+- [Pattern Bindings](#pattern-bindings)
+- [Unit Variables Are Never Moved Out Of](#unit-variables-are-never-moved-out-of)
+- [Recursive Types](#recursive-types)
+- [Heap Allocation (`Own@(T)`)](#heap-allocation-ownt)
 - [Manual Memory Management](#manual-memory-management)
 
 ## Philosophy
@@ -19,9 +22,9 @@ Sushi provides memory safety without garbage collection:
 
 1. **RAII** - Resources freed automatically at scope exit
 2. **Compile-time borrow checking** - Prevents use-after-free and double-free
-3. **Move semantics** - Clear ownership transfer for every type that owns heap (dynamic arrays,
-   `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, capturing closures, `string`, and any struct/enum/fixed
-   array holding one of those)
+3. **Move semantics** - Clear ownership transfer for every type that owns a resource: a type that
+   owns heap (dynamic arrays, `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, capturing closures,
+   `string`), a type that implements `Drop`, and any struct/enum/fixed array holding one of those
 4. **Zero-cost abstractions** - No runtime overhead
 
 ## RAII (Automatic Cleanup)
@@ -265,29 +268,29 @@ fn main() i32:
 
 A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)??` -- do not
 copy. They hand back a **borrow**: a read-only view of storage the owner keeps and still frees.
-Reading it is free. **Consuming** it -- handing it to a `nom` parameter, returning it, storing it
-in a constructor -- is `CE2411`, because that would require ownership the borrow does not have.
-`.clone()` is the escape:
+Reading it is free. **Consuming** it -- storing it in a constructor, handing it to a `nom`
+parameter through a borrowed owner, returning it -- is `CE2411`, because that would require
+ownership the borrow does not have. `.clone()` is the escape:
 
 ```sushi
 struct Wrapper:
     string inner
 
-fn take(nom string s) ~:
-    println(s)
-    return Result.Ok(~)
-
 fn main() i32:
     let Wrapper w = Wrapper(inner: "Mostly Harmless")
 
     # ERROR CE2411: cannot consume 'w.inner': another owner keeps this value
-    # take(nom w.inner)
+    # let Wrapper other = Wrapper(w.inner)
 
-    take(nom w.inner.clone())  # OK: an independent copy
+    let Wrapper other = Wrapper(w.inner.clone())  # OK: an independent copy
+    println(other.inner)
     println(w.inner)           # OK: w still owns and still has its value
 
     return Result.Ok(0)
 ```
+
+A marked `nom w.inner` is not a borrow. It is a field take, and it spends `w` (see
+[Taking a Field Out](#taking-a-field-out)).
 
 A `let` behaves the same way for a source that reads through an owner: `let string x = w.inner`
 binds `x` as a borrow of `w`, not an independent copy -- see
@@ -321,10 +324,11 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-The marker is legal in a `let` initializer and in a `return`, one step off a bare name, and only
-where that name is a local the function **owns** -- through a `peek`/`poke` parameter or a
-`let`-borrow it is still `CE2411`, and so is a chain such as `nom a.b.c`. A field that owns nothing
-is copied as it always was; the marker changes nothing there.
+The marker is legal in three positions: a `let` initializer, a `return`, and a `nom` call argument
+(`take(nom s.label)`). It must be one step off a bare name, and that name must be a local the
+function **owns**. Through a parameter, a `peek`/`poke` parameter or a `let`-borrow it is
+`CE2411`, and so is a chain such as `nom a.b.c`. A field that owns nothing is copied; the marker
+changes nothing there.
 
 **A take spends the whole receiver.** There are no partial moves: what suppresses `s`'s own free is
 the whole value and not one field, so the fields left behind are destroyed at the take and `s` is
@@ -670,30 +674,43 @@ fn main() i32:
     return Result.Ok(0)
 ```
 
-5. **Cannot move/rebind while borrowed**
+5. **Cannot move a value in the statement that borrows it**
+
+A borrow in a call argument lasts only for that statement. In one statement, a value cannot be
+borrowed and also handed to a position that takes ownership:
 
 ```sushi
-fn use_ref(poke i32 x) ~:
-    x := x + 1
+fn both(peek string a, nom string b) ~:
+    println(a)
+    println(b)
     return Result.Ok(~)
 
 fn main() i32:
-    let i32 num = 42
-    use_ref(poke num)
-    # ERROR CE2401: Cannot rebind while borrowed
-    # num := 50
+    let string word = "Harmless"
+    let string s = "Mostly {word}"   # interpolation: s owns heap
+    # ERROR CE2401: cannot move 's' while it is borrowed
+    # both(peek s, nom s)
+
+    both(peek s, nom s.clone())   # OK: the owning position gets its own value
     return Result.Ok(0)
 ```
+
+After the statement, the borrow has ended: `use_ref(poke num)` followed by `num := 50` is legal.
 
 6. **Cannot borrow temporaries**
 
 ```sushi
-# ERROR: Cannot borrow temporary
-# let i32 x = add_one(peek (5 + 3))
+fn add_one(peek i32 x) i32:
+    return Result.Ok(x + 1)
 
-# OK: Use variable
-let i32 temp = 5 + 3
-let i32 x = add_one(peek temp).realise(0)
+fn main() i32:
+    # ERROR CE2404: cannot borrow '(5 + 3)': expression has no stable address
+    # let i32 x = add_one(peek (5 + 3)).realise(0)
+
+    let i32 temp = 5 + 3          # OK: a variable has an address
+    let i32 x = add_one(peek temp).realise(0)
+    println(x)
+    return Result.Ok(0)
 ```
 
 ### Borrowed `let` Bindings
@@ -743,7 +760,7 @@ fn main() i32:
    or take a value of your own with `.clone()` and rebind that. A `match`/`foreach` binding
    reads `CE2414` for the same reason, and a `peek` reference `CE2408`.
 
-**A `let` may also declare a reference *type*** (#409): `let poke T x = <place>` binds a
+**A `let` may also declare a reference *type***: `let poke T x = <place>` binds a
 pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
 mutation path a bare `Own@(T)` local had none of -- and `let peek T x = <place>` is the
 read-only twin. The binding is block-scoped and freezes its owner exactly as the implicit
@@ -766,6 +783,114 @@ fn main() i32:
 
     let peek Wrapper view = w.get()        # read-only; `inner`'s block has ended
     println("{view.items.len()}")          # 1
+    return Result.Ok(0)
+```
+
+### Other Freezes (`CE2412`)
+
+A `let`-borrow is not the only thing that freezes its owner. The compiler also refuses a change
+that can move or free storage that something still reads, with `CE2412`:
+
+- **A `foreach` over a container.** While a loop walks `c.iter()`, `.keys()`, `.values()` or
+  `.entries()`, a change to `c` that can move or free its storage is `CE2412`: `push`, `insert`,
+  `pop`, `remove`, `clear`, a rebind, or a `poke`/`nom` of `c`. A note shows the loop header.
+- **A bare `foreach` item of an owning element** freezes its container for the body.
+- **A bare pattern binding of an owning payload** freezes its owner for the arm.
+- **A borrowed argument to a call that changes its owner.** `a.fill(first)` and
+  `put(first, poke a)`, where `first` borrows from `a`, are `CE2412`. Pass `first.clone()`.
+- **A store through a `poke` reference** after its owner changed.
+
+```sushi
+fn main() i32:
+    let List@(i32) c = List.new()
+    c.push(1)
+    foreach(x in c.iter()):
+        println(x)
+        # ERROR CE2412: cannot mutate 'c' while 'c.iter()' borrows from it
+        # c.push(x)
+    c.push(2)                  # OK: the loop has ended
+    println(c.len())
+    return Result.Ok(0)
+```
+
+## Pattern Bindings
+
+A payload binding in a `match` arm, and a `foreach` item, carry a **mode**, the same three as a
+parameter:
+
+| binding | what it is | write through it | rebind it | consume it |
+|---|---|---|---|---|
+| `Msg.Text(s)` | a read-only view of the payload | no, `CE2414` | no, `CE2414` | no, `CE2411` |
+| `Msg.Count(poke n)` | a pointer into the payload | **yes**, the owner sees it | -- | no, `CE2411` |
+| `Msg.Text(nom s)` | the payload itself, taken | yes | yes | **yes** |
+
+- A **bare** binding borrows. The copy is shallow, so a write or a rebind would free a payload
+  that the scrutinee still owns: both are `CE2414`.
+- A **`poke`** binding points into the payload. The scrutinee can be a local, a field or an
+  element of a local (`match b.m:`), or a temporary. It follows the `let poke` rules: the owner is
+  frozen while it lives (`CE2412`), one `poke` at a time (`CE2403`), a `peek`/`poke` mix is
+  `CE2407`, and a `poke` of a constant is `CE2400`. `foreach(poke x in xs.iter())` writes each
+  element in place.
+- A **`nom`** binding takes the payload. It needs a scrutinee that the match OWNS: a temporary
+  (`match make()??:`), or a local that you hand over with `match nom m:`. After `match nom m:`, a
+  use of `m` is `CE2405`. A `nom` binding under a plain `match m:` is `CE2432`. An arm takes the
+  variant whole: a `nom` binding beside a bare binding of the same variant is `CE2433`.
+  `Own(nom x)` is `CE2434`.
+
+```sushi
+enum Msg:
+    Text(string)
+    Count(i32)
+
+fn make() Msg:
+    return Result.Ok(Msg.Text("fresh"))
+
+fn eat(nom string s) ~:
+    println(s)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Msg c = Msg.Count(1)
+    match c:
+        Msg.Count(poke n) -> n := n + 1       # writes into c
+        Msg.Text(_) -> println("text")
+
+    match make().realise(Msg.Count(0)):       # a temporary: the match owns it
+        Msg.Text(nom s) -> eat(nom s)
+        Msg.Count(_) -> println("count")
+
+    let Msg m = Msg.Text("kept")
+    match nom m:                              # m is handed to the match
+        Msg.Text(nom s) -> eat(nom s)
+        Msg.Count(n) -> println(n)
+    # a later `match m:` is ERROR CE2405: m was moved
+    return Result.Ok(0)
+```
+
+### `??` Spends a Named Wrapper
+
+`let string got = r??` takes the value out of `r`. When the `Result` or `Maybe` owns something
+in one of its arms, `r` is spent: a later use of `r` is `CE2405`. A wrapper that owns nothing
+copies, and `r` stays usable. A borrowed wrapper (a parameter or a binding) is read through: the
+`let` binds a borrow, and a consuming use of it is `CE2411`.
+
+## Unit Variables Are Never Moved Out Of
+
+A `var` at the top of a unit is storage that the program keeps for its whole run. You can borrow
+it (`peek`/`poke`), write a field of it, call a mutating method on it and rebind it. You can never
+move out of it: `f(nom v)`, `let T x = v` and `return v` are `CE2436` when the type owns a
+resource. A plain value copies out. To hand one away, take an independent value with
+`.clone()`.
+
+```sushi
+var List@(string) log = List.new()
+
+fn main() i32:
+    log.push("started")                   # a mutating method reaches the var
+    # ERROR CE2436: cannot move 'log': it is a unit variable
+    # let List@(string) mine = log
+    let List@(string) mine = log.clone()  # OK: an independent value
+    println(mine.len())
     return Result.Ok(0)
 ```
 
@@ -805,7 +930,7 @@ fn main() i32:
 `Node[] kids` works the same way, built with `from([...])`. When `root` goes out of scope its
 destructor walks the children, recursing into each one's own children, and frees every buffer.
 
-## Own@(T) for Heap Allocation
+## Heap Allocation (`Own@(T)`)
 
 `Own@(T)` provides explicit heap allocation for recursive types, and is the right choice for a
 single owned successor rather than a collection of them.
@@ -1044,11 +1169,11 @@ fn consume(nom i32[] arr) ~:
 
 Sushi prevents common memory errors at compile time:
 
-- ✅ No use-after-free (move checking)
-- ✅ No double-free (move checking)
-- ✅ No use-after-destroy (CE2406)
-- ✅ No data races (single borrow rule)
-- ✅ No dangling references (borrow checking)
+- No use-after-free (move checking)
+- No double-free (move checking)
+- No use-after-destroy (CE2406)
+- No data races (single borrow rule)
+- No dangling references (borrow checking)
 
 ---
 

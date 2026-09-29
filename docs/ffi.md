@@ -28,8 +28,8 @@ unsafe external "C" as libc because "bootstrap: call libc for the backend":
 | Element | Meaning |
 |---|---|
 | `unsafe external` | A contextual keyword pair, valid only as a top-level declaration. |
-| `"C"` | The ABI. Only `"C"` is accepted in v1; the slot reserves room for others. |
-| `as libc` | The **namespace binding**, chosen by you. Foreign names never enter Sushi's global scope. |
+| `"C"` | The ABI. Only `"C"` is accepted; the slot reserves room for others. |
+| `as libc` | The **namespace binding**, chosen by you. It binds only in the unit that declares the block. Foreign names never enter Sushi's global scope. |
 | `because "<reason>"` | **Optional.** The acknowledgment that silences the `CW5001` warning (see below). |
 | `fn name(params) ret = "symbol"` | One foreign declaration. No body. The Sushi-visible `name` and the C link `symbol` are separated. |
 
@@ -92,9 +92,9 @@ C traffics in raw pointers (`char*`, `FILE*`). FFI introduces an opaque,
 - **No null/bounds guarantees** - a returned `ptr` may be null; dereferencing is
   your responsibility.
 
-Sushi is and stays a **null-free** language. There is no `null` literal. In v1 a
-returned `ptr` is callable and returnable but not null-checkable; if a real need
-arises it will become an `is_null(ptr) -> bool` intrinsic, never a `null` literal.
+Sushi is and stays a **null-free** language. There is no `null` literal. You can
+pass and return a `ptr`, but you cannot test it for null. If a real need
+arises, it will become an `is_null(ptr) -> bool` intrinsic, never a `null` literal.
 
 ### Return types and the Result-exemption
 
@@ -115,8 +115,8 @@ live in a separate list and never reach the implicit-Result wrapping at all.
 
 ### String auto-marshalling (and the no-leak contract)
 
-A Sushi `string` is a `{ptr, len}` UTF-8 struct; C expects a null-terminated
-`char*`. At the boundary the compiler marshals automatically:
+A Sushi `string` is a UTF-8 fat pointer with three fields,
+`{i8* data, i32 size, i8 owned}`. C expects a null-terminated `char*`. At the boundary the compiler marshals automatically:
 
 - A `string` **argument** is copied into a fresh null-terminated `char*` for the
   call. That temporary is registered in a per-scope cleanup list and freed via
@@ -241,34 +241,50 @@ or null-checking - freeing the handle is still your job.
 
 ## `ptr` is unit-confined
 
-A **`public fn` may not expose `ptr` anywhere in its signature** - not as a
-parameter, not as a return type, not inside `Result@(ptr, E)` or `Maybe@(ptr)`.
-Violations are rejected at compile time with **`CE5008`**.
+A **public declaration may not expose `ptr` anywhere in its signature**: not as
+a parameter, not as a return type or error arm, not inside `Result@(ptr, E)` or
+`Maybe@(ptr)`, and not inside a struct or an enum that holds a `ptr`. The check
+walks into the fields of a struct. It applies to a `public fn`, a public
+generic, an extension method and a perk method. The compiler refuses a violation
+with **`CE5008`**.
 
 FFI is a private implementation detail of the unit that declares the
-`unsafe external` block. What a unit exports must be Sushi-shaped: either
-fully digested values (`string`, `i64`, ...) or a **wrapper struct**:
+`unsafe external` block. Thus a struct that holds a `ptr` stays in its unit, and
+what the unit exports is Sushi-shaped: fully digested values (`string`, `i64`,
+...) and functions that do the foreign work inside:
 
 ```sushi
-struct Handle:
-    ptr raw                 # struct fields MAY carry ptr across units
+unsafe external "C" as libc because "a scratch buffer from the C heap":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+struct Buffer:
+    ptr raw
     i64 size
 
-public fn open_buffer(i64 n) Handle:
-    return Result.Ok(Handle(libc.malloc(n), n))
+fn open_buffer(i64 n) Buffer:
+    return Result.Ok(Buffer(libc.malloc(n), n))
 
-public fn close_buffer(Handle h) ~:
-    libc.free(h.raw)
+fn close_buffer(Buffer b) ~:
+    libc.free(b.raw)
     return Result.Ok(~)
+
+public fn scratch_size(i64 n) i64:
+    let Buffer b = open_buffer(n)??
+    let i64 size = b.size
+    close_buffer(b)??
+    return Result.Ok(size)
 ```
 
-The wrapper-struct escape hatch is deliberate: a `ptr`
-riding inside a named struct is self-documenting, gives extension methods a
-receiver to attach to (`h.close()`), and is inert in other units anyway - the
-foreign namespace it came from is not visible there. Private functions are
-unrestricted: inside the FFI unit, `ptr` parameters and returns flow freely.
-The same rule already held at the library boundary (`CE5002`); `CE5008`
-enforces it one level down, between the units of a single program.
+`Buffer`, `open_buffer` and `close_buffer` are private, so their `ptr` is
+legal. `scratch_size` is public, and its signature holds only an `i64`.
+Private functions are unrestricted: inside the FFI unit, `ptr` parameters and
+returns flow freely. The same rule holds at the library boundary (`CE5002`);
+`CE5008` applies it between the units of one program.
+
+> The `CE5008` help text says that struct fields may carry `ptr` across units.
+> The check does not allow this: a `public struct` with a `ptr` field in a public
+> signature is `CE5008`, and a private struct in a public signature is `CE3009`.
 
 ## No danger zone, no `ptr`
 
@@ -280,8 +296,8 @@ written there is dead plumbing at best. The gate makes the unsafe realm
 textually identifiable: grep a codebase for `unsafe external` and you have
 found every file that can traffic in raw foreign handles.
 
-Other units still *hold* handles - through the wrapper structs the FFI unit
-declares. They just never name the raw type themselves.
+Other units never hold a raw handle. They call the public functions of the FFI
+unit, which take and return Sushi values.
 
 ## What `ptr` cannot do
 
@@ -298,7 +314,7 @@ rejects every operation that would pretend otherwise:
 
 What remains is exactly the *holding* set: local variables, private function
 parameters and returns, `Result@(ptr, E)`/`Maybe@(ptr)`, struct fields, and
-plain arrays (`ptr[]`). If a handle needs behavior - equality, hashing,
+plain arrays (`ptr[]`), all in the unit that declares the `unsafe external` block. If a handle needs behavior - equality, hashing,
 methods, a place in a collection - wrap it in a concrete struct and give the
 *struct* those things; the struct is real Sushi and plays by all the rules.
 
@@ -315,7 +331,7 @@ intrinsic, never as `==` or a `null` literal.
 | `CE5003` | error | An external signature uses a non-C-ABI type, or the ABI string is not `"C"`. |
 | `CE5004` | error | A variadic external (`...`) declares no fixed parameter. The C ABI needs at least one named argument for `va_start`. |
 | `CE5005` | error | A non-C-ABI value is passed as a variadic (`...`) argument at a call site. |
-| `CE5008` | error | A `public fn` exposes a foreign `ptr` in its signature (parameter, return, or inside `Result`/`Maybe`). Keep the function private or wrap the pointer in a struct. |
+| `CE5008` | error | A public declaration exposes a foreign `ptr` in its signature (parameter, return, error arm, inside `Result`/`Maybe`, or inside a struct field). Keep the declaration private. |
 | `CE5009` | error | `ptr` is named in a unit that declares no `unsafe external` block. No danger zone, no ptr. |
 | `CE5010` | error | A `ptr` is used with an operator (comparison, arithmetic, bitwise, logical). An opaque handle has no identity or arithmetic. |
 | `CE5011` | error | A method is called on a `ptr`. Wrap the handle in a struct and extend the struct. |
@@ -328,11 +344,11 @@ The `= "symbol"` string is the **link name**. It becomes an undefined external
 symbol reference in the generated object file; the linker must satisfy it. What
 satisfies it is the important part.
 
-Sushi links binaries by invoking the C compiler driver as `clang prog.o -o prog`
-(plus `-lm` on Linux). There is **no explicit `-lc`** and **no way to pass
-`-l@(lib)` or `-L@(path)`**. libc is linked anyway, for two compounding reasons:
+Sushi links binaries with the C compiler driver: `cc prog.o -o prog` (plus
+`-lm` on Linux). There is **no explicit `-lc`** and **no way to pass
+`-l<lib>` or `-L<path>`**. libc is linked anyway, for two reasons:
 
-1. **The clang driver links the C runtime into every executable** by default
+1. **The C compiler driver links the C runtime into every executable** by default
    (libc/libSystem plus the startup objects). This happens for any program,
    FFI or not.
 2. **Every Sushi binary already depends on libc.** The core runtime and stdlib
@@ -352,10 +368,10 @@ would link identically. It only controls how call sites read.
 **Consequence.** A symbol that is *not* in an always-linked library (a
 third-party `libfoo`, or anything needing `-l`/`-L`) will **compile but fail to
 link** with an `undefined symbol` error. There is currently no mechanism to tell
-the linker about additional libraries. v1 FFI is therefore limited to the
+the linker about additional libraries. Thus FFI is limited to the
 default-linked C runtime surface.
 
-## v1 scope and limitations
+## Scope and limitations
 
 - Only the `"C"` ABI is accepted.
 - **Only symbols in always-linked libraries** (libc/libSystem, plus libm on
@@ -369,8 +385,9 @@ default-linked C runtime surface.
   suffix reserves room for an optional future error-convention annotation.
 - No reverse FFI (exporting Sushi functions to C) and no callbacks into C.
 - Externals and foreign `ptr` cannot appear in a library public API (`CE5002`).
-- Externals are currently visible across compilation units rather than strictly
-  per-unit; treat the namespace as program-global for now.
+- The namespace of an `unsafe external` block binds only in the unit that
+  declares it. Another unit that names it gets `CE1001`. To use a foreign
+  function from two units, declare it in each unit, or export a Sushi wrapper.
 - A user type named `ptr` is shadowed by the reserved `ptr` type in type
   position; avoid `ptr` as a user type name.
 
