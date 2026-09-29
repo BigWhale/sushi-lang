@@ -1,0 +1,7 @@
+# A nested `Maybe` is not a nullable pointer (#1085) and stays CE5003.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn malloc(i64 n) Maybe@(Maybe@(ptr)) = "malloc"
+
+fn main() i32:
+    return Result.Ok(0)

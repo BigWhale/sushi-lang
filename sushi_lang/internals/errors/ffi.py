@@ -19,7 +19,7 @@ _add(ErrorMessage("CE5002", Severity.ERROR,
 
 _add(ErrorMessage("CE5003", Severity.ERROR,
     "external signature uses non-C-ABI type '{type}'",
-    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void). Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
+    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL (#1085): a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, an array, a reference and a user type cannot cross the C ABI boundary."))
 
 _add(ErrorMessage("CE5004", Severity.ERROR,
     "variadic external '{name}' requires at least one fixed parameter",
@@ -47,7 +47,7 @@ _add(ErrorMessage("CE5009", Severity.ERROR,
 
 _add(ErrorMessage("CE5010", Severity.ERROR,
     "foreign `ptr` cannot be used with operator '{op}'",
-    Category.FFI, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. If null-checking is ever needed it will arrive as an `is_null(ptr)` intrinsic, never as `==`."))
+    Category.FFI, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. There is nothing to test for null either: a null is never a Sushi value. A C function that may answer NULL is declared `Maybe@(ptr)` and its NULL arrives as `Maybe.None`, while a plain `ptr` return asserts non-null and a NULL there is RE2025 at the call (#1085). The `is_null(ptr)` intrinsic this text promised before is replaced by that rule."))
 
 _add(ErrorMessage("CE5011", Severity.ERROR,
     "foreign `ptr` has no methods (attempted '.{method}()')",

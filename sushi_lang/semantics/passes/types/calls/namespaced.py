@@ -36,8 +36,6 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
 
     if producer == "extern":
         validator._resolve_external_call(node)
-        for arg in node.args:
-            validator.validate_expression(arg)
         validate_external_call_args(validator, node)
         return
 

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
+from sushi_lang.semantics.ffi_boundary import nullable_payload
 from sushi_lang.semantics.typesys import BuiltinType
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 def _abi_param_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
     """Lower a parameter type to its C-ABI LLVM type."""
-    if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+    if ty == BuiltinType.STRING or nullable_payload(ty) is not None:
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)
 
@@ -24,7 +25,7 @@ def _abi_return_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
         return ir.VoidType()
     if isinstance(ty, BuiltinType) and ty == BuiltinType.BLANK:
         return ir.VoidType()
-    if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+    if ty == BuiltinType.STRING or nullable_payload(ty) is not None:
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)
 

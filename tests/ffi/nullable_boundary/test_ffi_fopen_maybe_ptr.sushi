@@ -1,0 +1,19 @@
+# A pointer return that may be null is declared `Maybe@(ptr)` (#1085): `fopen` of a
+# missing path answers `Maybe.None`, and of an existing file `Maybe.Some`.
+# EXPECT_STDOUT_EXACT: "missing: none\nexisting: closed 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "opening a C stream":
+    fn fopen(string path, string mode) Maybe@(ptr) = "fopen"
+    fn fclose(ptr stream) i32 = "fclose"
+
+fn probe(string label, string path) i32:
+    match libc.fopen(path, "r"):
+        Maybe.Some(f) -> println("{label}: closed {libc.fclose(f)}")
+        Maybe.None -> println("{label}: none")
+    return Result.Ok(0)
+
+fn main() i32:
+    let i32 a = probe("missing", "/sushi/no/such/file").realise(1)
+    let i32 b = probe("existing", "/dev/null").realise(1)
+    return Result.Ok(a + b)

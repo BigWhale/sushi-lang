@@ -1,0 +1,12 @@
+# A pointer parameter that accepts NULL is declared `Maybe@(ptr)` (#1085), and
+# `Maybe.None` crosses as NULL.
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "parsing an integer with strtol":
+    fn strtol(string s, Maybe@(ptr) end, i32 base) i64 = "strtol"
+
+fn main() i32:
+    let i64 n = libc.strtol("42", Maybe.None, 10)
+    println(n)
+    return Result.Ok(0)

@@ -9,6 +9,7 @@ from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
 from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
+from sushi_lang.backend.expressions.calls.foreign import marshal_argument, unmarshal_return
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
@@ -314,17 +315,10 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     if llvm_fn is None or sig is None:
         return None
 
-    # Marshal the FIXED arguments. `string` args become char* (i8*) and are
-    # registered for freeing at scope exit; everything else is passed through
-    # with param casting against the declared parameter type.
     num_fixed = len(sig.param_types)
-    emitted_args = []
-    for arg, param_ty in zip(expr.args[:num_fixed], sig.param_types, strict=True):
-        value = codegen.expressions.emit_expr(arg)
-        if isinstance(param_ty, BuiltinType) and param_ty == BuiltinType.STRING:
-            emitted_args.append(marshal_cstr(codegen, value))
-        else:
-            emitted_args.append(value)
+    emitted_args = [marshal_argument(codegen, arg, param_ty)
+                    for arg, param_ty in zip(expr.args[:num_fixed], sig.param_types,
+                                             strict=True)]
 
     params = list(llvm_fn.args)
     fixed_args = [codegen.utils.cast_for_param(v, p.type)
@@ -346,13 +340,9 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     call_result = codegen.builder.call(llvm_fn, fixed_args + trailing_args)
 
     ret_ty = sig.ret_type
-    if ret_ty is None or (isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.BLANK):
+    if ret_ty is None or ret_ty == BuiltinType.BLANK:
         return ir.Constant(codegen.i32, 0)
-    # `string` return: COPY the C char* into a fresh Sushi-owned buffer (#147). Sushi never
-    # frees the foreign pointer; the owned copy is RAII-freed at scope exit (no leak).
-    if isinstance(ret_ty, BuiltinType) and ret_ty == BuiltinType.STRING:
-        return codegen.runtime.strings.emit_cstr_to_owned_fat_pointer(call_result)
-    return call_result
+    return unmarshal_return(codegen, call_result, ret_ty)
 
 
 def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> ir.Value:

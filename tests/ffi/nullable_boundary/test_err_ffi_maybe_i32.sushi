@@ -1,0 +1,8 @@
+# Only `Maybe@(string)` and `Maybe@(ptr)` mean "may be null" (#1085); a `Maybe@(i32)`
+# has no C representation and stays CE5003.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn abs(Maybe@(i32) x) i32 = "abs"
+
+fn main() i32:
+    return Result.Ok(0)

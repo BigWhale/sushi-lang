@@ -130,7 +130,8 @@ class CollectorPass:
 
         self.external_collector = ExternalCollector(
             reporter=reporter,
-            externals=self.externals
+            externals=self.externals,
+            enums=self.enums,
         )
 
         self.function_collector = FunctionCollector(

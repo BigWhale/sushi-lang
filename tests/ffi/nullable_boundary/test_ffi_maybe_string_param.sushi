@@ -1,0 +1,13 @@
+# A `Maybe@(string)` parameter (#1085): `Maybe.Some(s)` crosses as the marshalled
+# `char*`, exactly as a plain `string` does.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "parsing an integer with atoi":
+    fn atoi(Maybe@(string) s) i32 = "atoi"
+
+fn main() i32:
+    let i32 n = 7
+    let string text = "{n}"
+    println(libc.atoi(Maybe.Some(text)))
+    return Result.Ok(0)

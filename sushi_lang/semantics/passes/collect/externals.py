@@ -1,12 +1,13 @@
 """Collection of FFI `unsafe external` declarations into an ExternalTable."""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
+from sushi_lang.semantics.ffi_boundary import intern_boundary_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
@@ -49,8 +50,11 @@ class ExternalTable:
 class ExternalCollector:
     """Collects `unsafe external` blocks into an ExternalTable."""
 
-    def __init__(self, reporter: Reporter, externals: ExternalTable) -> None:
+    def __init__(self, reporter: Reporter, externals: ExternalTable, enums: Any = None) -> None:
         self.r = reporter
+        # A nullable pointer (`Maybe@(ptr)`) is interned here, so every reader of the
+        # table meets the one Maybe the rest of the program names (#1085).
+        self.enums = enums
         # The unit being collected. This pass shares one reporter across every
         # unit, so a record it stores has to remember its own file (#473).
         self.current_unit_file: Optional[str] = None
@@ -79,8 +83,8 @@ class ExternalCollector:
         sig = ExternalSig(
             name=decl.name,
             link_name=decl.link_name,
-            param_types=tuple(p.ty for p in decl.params),
-            ret_type=decl.ret,
+            param_types=tuple(intern_boundary_type(p.ty, self.enums) for p in decl.params),
+            ret_type=intern_boundary_type(decl.ret, self.enums),
             namespace=block.namespace,
             is_variadic=decl.is_variadic,
             name_span=decl.name_span,
