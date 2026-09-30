@@ -1,0 +1,16 @@
+# A BINARY library ships a perk implementation whose method has a channel. The
+# consumer declares the method from the shipped implementation, and the declaration
+# must carry the channel: the call answers Result@(i32, StdError).
+# BUILD_LIB_BINARY: perk_chan_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "42\nerr\n"
+use <lib/perk_chan_bin_lib>
+
+fn show(Result@(i32, StdError) r) ~:
+    match r:
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("err")
+
+fn main() i32:
+    show(Tally(41).bump())
+    show(Tally(-1).bump())
+    return 0

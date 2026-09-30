@@ -461,8 +461,13 @@ class LLVMCodegen:
         self.emitting_unit = None
 
     def _declare_library_perk_impl_methods(self) -> None:
-        """Declare (never define) library-shipped perk-impl methods (C4a)."""
-        from sushi_lang.semantics.ast import ExtendDef
+        """Declare (never define) library-shipped perk-impl methods (C4a).
+
+        The one wrapper `_perk_method_to_extend_def` builds the declaration, so the
+        receiver mode and the channel ride along as they do for a local implementation;
+        only the types are resolved here, against the consumer's tables.
+        """
+        from dataclasses import replace
         from sushi_lang.semantics.typesys import UnknownType
         from sushi_lang.backend.types.core.resolution import require_named_type
 
@@ -483,15 +488,11 @@ class LLVMCodegen:
                 for param in method.params:
                     if param.ty is not None:
                         param.ty = _resolved(param.ty)
-                synthetic_ext = ExtendDef(
+                synthetic_ext = replace(
+                    _perk_method_to_extend_def(perk_impl, method),
                     target_type=target_type,
-                    name=method.name,
-                    params=method.params,
                     ret=_resolved(method.ret) if method.ret is not None else None,
-                    body=method.body,
-                    loc=method.loc,
-                    name_span=method.name_span,
-                    ret_span=method.ret_span,
+                    err_type=_resolved(method.err_type) if method.err_type is not None else None,
                 )
                 self.functions.emit_extension_method_decl(synthetic_ext)
 
