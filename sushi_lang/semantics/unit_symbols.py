@@ -37,14 +37,15 @@ def mangle_unit_symbol(unit_name: Optional[str], name: str) -> str:
     return f"{unit_name.replace('/', UNIT_SEP)}{UNIT_SEP}{name}"
 
 
-def function_symbol(name: str, unit_name: Optional[str] = None,
+def emitted_symbol(name: str, unit_name: Optional[str] = None,
                     link_symbol: Optional[str] = None) -> str:
-    """The symbol that a function EMITS. The back end names each function with it.
+    """The symbol that a function, a constant or a unit variable EMITS.
 
-    A binary library's record carries the `link_symbol` its producer gave the body, and
-    that name wins, because the consumer cannot compute it. Every other function takes
-    `mangle_unit_symbol`. CE5013 reads the same answer, so the check and the back end
-    cannot disagree about which symbols a build defines (#1098).
+    The back end names each function and each constant global with it. A binary
+    library's record carries the `link_symbol` its producer gave the declaration, and
+    that name wins, because the consumer cannot compute it. Every other declaration
+    takes `mangle_unit_symbol`. CE5013 reads the same answer, so the check and the back
+    end cannot disagree about which symbols a build defines (#1098).
     """
     return link_symbol or mangle_unit_symbol(unit_name, name)
 

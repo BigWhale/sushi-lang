@@ -1,0 +1,14 @@
+# A constant with the name of a C function emits `<unit>$abs`, not `abs` (#1098), so
+# an extern with the link name `abs` reaches the C function.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n5\n"
+
+const i32 abs = 7
+
+unsafe external "C" as libc because "a C function with the name of a constant":
+    fn c_abs(i32 n) i32 = "abs"
+
+fn main() i32:
+    println(abs)
+    println(libc.c_abs(-5))
+    return 0

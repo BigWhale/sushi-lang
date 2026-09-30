@@ -11,7 +11,7 @@ from sushi_lang.semantics.ffi_boundary import (
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.unit_symbols import function_symbol, mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 from .arguments import check_arguments
 
@@ -45,23 +45,25 @@ def _kept_symbols(lib) -> set[str]:
     with one unit, that is the exact symbol.
     """
     units = lib.raw_manifest.get("units") or [lib.name]
-    return {mangle_unit_symbol(unit, name)
+    return {emitted_symbol(name, unit)
             for name, kind in lib.not_exported.items()
             if kind in _KEPT_KINDS_WITH_A_SYMBOL
             for unit in units}
 
 
-def _function_emitting(symbol: str, funcs):
-    """The collected function whose emitted symbol is `symbol`, or None.
+def _declaration_emitting(symbol: str, table):
+    """The collected function or constant whose emitted symbol is `symbol`, or None.
 
     Two units may each declare a `helper`, and the flat view holds one of them, so
-    the walk also reads each unit's own view.
+    the walk also reads each unit's own view. A binary library's function carries its
+    `link_symbol`, and a library's unit variable carries it on its declaration.
     """
-    candidates = [*funcs.by_name.values(),
-                  *(sig for own in funcs.by_unit.values() for sig in own.values())]
+    candidates = [*table.by_name.values(),
+                  *(sig for own in table.by_unit.values() for sig in own.values())]
     for sig in candidates:
-        if symbol == function_symbol(sig.name, sig.unit_name,
-                                     getattr(sig, "link_symbol", None)):
+        link_symbol = (getattr(sig, "link_symbol", None)
+                       or getattr(getattr(sig, "decl", None), "link_symbol", None))
+        if symbol == emitted_symbol(sig.name, sig.unit_name, link_symbol):
             return sig
     return None
 
@@ -69,8 +71,8 @@ def _function_emitting(symbol: str, funcs):
 def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Optional[tuple]:
     """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
 
-    A function row compares the symbol that the function EMITS (`<unit>$<name>`, or a
-    binary library's `link_symbol`), not its Sushi name (#1098).
+    A function row and the constant row compare the symbol that the declaration EMITS
+    (`<unit>$<name>`, or a binary library's `link_symbol`), not its Sushi name (#1098).
 
     Ordered by how much the answer can say. A library record carries no span, so its
     note is a plain fact; a declaration this program holds carries its own file and
@@ -83,15 +85,15 @@ def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Opti
                         None, None)
 
         for lib_name, shipped in registry.get_all_private_functions().values():
-            if symbol == function_symbol(shipped.name, None, shipped.link_symbol):
+            if symbol == emitted_symbol(shipped.name, None, shipped.link_symbol):
                 return (f"library '{lib_name}' ships it in its export closure", None, None)
 
         for lib in registry.get_all_libraries().values():
-            if any(symbol == function_symbol(sig.name, None, sig.link_symbol)
+            if any(symbol == emitted_symbol(sig.name, None, sig.link_symbol)
                    for sig in lib.functions.values()):
                 return (f"library '{lib.name}' exports it", None, None)
 
-    sig = _function_emitting(symbol, tables.funcs)
+    sig = _declaration_emitting(symbol, tables.funcs)
     if sig is not None:
         if sig.name_span is not None:
             return ("defined here", sig.name_span, sig.filename)
@@ -99,8 +101,11 @@ def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Opti
         # compiler synthesized, not one the user wrote.
         return ("this program defines it", None, None)
 
-    if symbol in tables.constants.by_name:
-        return ("this program defines a constant of that name", None, None)
+    const = _declaration_emitting(symbol, tables.constants)
+    if const is not None:
+        if const.name_span is not None:
+            return ("the constant is defined here", const.name_span, const.filename)
+        return ("this program defines a constant that emits it", None, None)
 
     # The generated half: a symbol the stdlib generators emit, or one the backend
     # emits inline. No semantic table holds either, so both arrive as names (#472).
