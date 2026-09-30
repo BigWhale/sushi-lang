@@ -32,6 +32,9 @@ def channel_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
     from sushi_lang.semantics.generics.results import is_result_enum, signature_result_arms
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
+    from sushi_lang.semantics.channel import has_channel
+    if not has_channel(fn):
+        return None
     stamped = getattr(fn, "resolved_result", None)
     if is_result_enum(stamped):
         return stamped

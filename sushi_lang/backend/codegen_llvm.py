@@ -57,6 +57,7 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         # bare signature.
         err_type=getattr(method, "err_type", None),
         err_span=getattr(method, "err_span", None),
+        written_channel=getattr(method, "written_channel", None),
     )
 
 

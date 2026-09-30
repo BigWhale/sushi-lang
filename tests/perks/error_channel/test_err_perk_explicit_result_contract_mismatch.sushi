@@ -1,0 +1,15 @@
+# The channel of a perk contract is read by the one predicate: an explicit
+# `Result@(T, E)` return is a channel, and a bare implementation of it is CE0133.
+# EXPECT_ERROR_CODES_EXACT: CE0133
+perk Shape:
+    fn area() Result@(i32, StdError)
+
+struct Sq:
+    i32 s
+
+extend Sq with Shape:
+    fn area() i32:
+        return self.s * self.s
+
+fn main() i32:
+    return 0

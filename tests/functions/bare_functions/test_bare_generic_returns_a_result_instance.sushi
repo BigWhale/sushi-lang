@@ -1,0 +1,22 @@
+# A bare generic whose type argument is a Result stays bare: the channel is what the
+# signature WRITES, never what a substitution makes of it.
+# EXPECT_STDOUT_EXACT: "4\n4\n"
+fn half(i32 x) i32 | StdError:
+    if (x % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x / 2)
+
+struct Box@(T):
+    T v
+
+extend Box@(T) get() T:
+    return self.v
+
+fn ident@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let Box@(Result@(i32, StdError)) b = Box(half(8))
+    println(b.get().realise(-1))
+    println(ident(nom half(8)).realise(-1))
+    return 0
