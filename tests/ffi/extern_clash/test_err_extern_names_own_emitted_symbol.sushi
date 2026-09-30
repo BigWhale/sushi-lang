@@ -1,0 +1,14 @@
+# The link name spells the symbol that a function of this unit emits (#1098), so
+# the extern names a symbol that this build defines.
+# EXPECT_ERROR_CODE: CE5013
+
+unsafe external "C" as raw because "naming the symbol of a function of this unit":
+    fn mine(i32 n) i32 = "test_err_extern_names_own_emitted_symbol$mine"
+
+fn mine(i32 n) i32:
+    return n * 3
+
+fn main() i32:
+    println("{mine(3)}")
+    println("{raw.mine(7)}")
+    return 0

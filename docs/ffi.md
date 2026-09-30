@@ -68,6 +68,13 @@ generates (`string_len`, `sushi_sin`, and about 145 more). That is **CE5013**, a
 where the symbol is defined. A generated name is refused whether the program links that
 stdlib unit or not, so adding a `use` line never breaks a build that compiled before.
 
+The rule compares the SYMBOL that a function emits, not its Sushi name. A function `f` of
+the unit `geo/vec` emits `geo$vec$f` (`main` alone keeps its name), and a binary library's
+function emits the symbol its manifest records. So a wrapper may have the name of the C
+function it calls (`fn sin(f64 x) f64` beside `= "sin"`), and a user function named
+`getpid` does not break another unit's extern of `getpid`. A link name that spells an
+emitted symbol (`= "geo$vec$f"`) is still `CE5013`.
+
 The reason is that there is no link step left to keep the two apart. A program's units share
 one LLVM module and a linked library's module is merged into it, so a declaration and a
 definition of one name unify: the call enters the program's own body with the declared

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
-from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import function_symbol
 from sushi_lang.backend.generics.result_builder import call_value_type, declared_return_ll
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ class FunctionDeclarations:
         existing = self.codegen.funcs.declared(fn.name, unit_name)
         if existing is not None:
             return existing
-        symbol = mangle_unit_symbol(unit_name, fn.name)
+        symbol = function_symbol(fn.name, unit_name)
 
         # `main` gets the C signature `int main(int, char**)`; the wrapper calls the
         # program's own main under it. In library mode main is an ordinary function.

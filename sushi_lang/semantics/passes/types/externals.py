@@ -11,6 +11,7 @@ from sushi_lang.semantics.ffi_boundary import (
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.unit_symbols import function_symbol, mangle_unit_symbol
 
 from .arguments import check_arguments
 
@@ -31,27 +32,66 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _emit_block_warning(reporter, block)
 
 
+# The kept kinds that emit a symbol in the library bitcode. A generic function, a struct
+# and an enum emit none of that name.
+_KEPT_KINDS_WITH_A_SYMBOL = frozenset({"function", "constant", "variable"})
+
+
+def _kept_symbols(lib) -> set[str]:
+    """The symbols that a library's kept declarations emit.
+
+    A kept record carries a name and a kind, and no unit. The manifest lists the
+    library's units, so each unit's symbol of the name is a candidate. For a library
+    with one unit, that is the exact symbol.
+    """
+    units = lib.raw_manifest.get("units") or [lib.name]
+    return {mangle_unit_symbol(unit, name)
+            for name, kind in lib.not_exported.items()
+            if kind in _KEPT_KINDS_WITH_A_SYMBOL
+            for unit in units}
+
+
+def _function_emitting(symbol: str, funcs):
+    """The collected function whose emitted symbol is `symbol`, or None.
+
+    Two units may each declare a `helper`, and the flat view holds one of them, so
+    the walk also reads each unit's own view.
+    """
+    candidates = [*funcs.by_name.values(),
+                  *(sig for own in funcs.by_unit.values() for sig in own.values())]
+    for sig in candidates:
+        if symbol == function_symbol(sig.name, sig.unit_name,
+                                     getattr(sig, "link_symbol", None)):
+            return sig
+    return None
+
+
 def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Optional[tuple]:
     """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
+
+    A function row compares the symbol that the function EMITS (`<unit>$<name>`, or a
+    binary library's `link_symbol`), not its Sushi name (#1098).
 
     Ordered by how much the answer can say. A library record carries no span, so its
     note is a plain fact; a declaration this program holds carries its own file and
     line, which makes the diagnostic relational.
     """
     if registry is not None:
-        kept = registry.get_all_not_exported().get(symbol)
-        if kept is not None:
-            return (f"library '{kept[0]}' declares it and does not export it", None, None)
+        for lib in registry.get_all_libraries().values():
+            if symbol in _kept_symbols(lib):
+                return (f"library '{lib.name}' declares it and does not export it",
+                        None, None)
 
-        shipped = registry.get_all_private_functions().get(symbol)
-        if shipped is not None:
-            return (f"library '{shipped[0]}' ships it in its export closure", None, None)
+        for lib_name, shipped in registry.get_all_private_functions().values():
+            if symbol == function_symbol(shipped.name, None, shipped.link_symbol):
+                return (f"library '{lib_name}' ships it in its export closure", None, None)
 
         for lib in registry.get_all_libraries().values():
-            if symbol in lib.functions:
+            if any(symbol == function_symbol(sig.name, None, sig.link_symbol)
+                   for sig in lib.functions.values()):
                 return (f"library '{lib.name}' exports it", None, None)
 
-    sig = tables.funcs.by_name.get(symbol)
+    sig = _function_emitting(symbol, tables.funcs)
     if sig is not None:
         if sig.name_span is not None:
             return ("defined here", sig.name_span, sig.filename)

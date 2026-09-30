@@ -1,0 +1,8 @@
+# A unit that calls a C function through an extern, for a user unit that declares
+# a function of the same name (#1098).
+
+unsafe external "C" as c because "the process id":
+    fn getpid() i32 = "getpid"
+
+public fn process_id() i32:
+    return c.getpid()

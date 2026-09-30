@@ -1,0 +1,15 @@
+# A user function with the name of a C function that another unit calls through an
+# extern does not break that unit (#1098). The user `getpid` emits `<unit>$getpid`,
+# and the extern in `pid_unit` still reaches the C `getpid`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\n42\n"
+
+use "helpers/pid_unit"
+
+fn getpid() i32:
+    return 42
+
+fn main() i32:
+    println(process_id() > 0)
+    println(getpid())
+    return 0

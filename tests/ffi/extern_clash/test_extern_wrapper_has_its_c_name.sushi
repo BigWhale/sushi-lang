@@ -1,0 +1,15 @@
+# A wrapper may have the name of the C function it calls (#1098). The Sushi `sin`
+# emits the symbol `<unit>$sin`, so the extern's link name `sin` names no symbol
+# that this build defines.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n"
+
+unsafe external "C" as libc because "the C math library":
+    fn sin(f64 x) f64 = "sin"
+
+fn sin(f64 x) f64:
+    return libc.sin(x)
+
+fn main() i32:
+    println(sin(0.0))
+    return 0
