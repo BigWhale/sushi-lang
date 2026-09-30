@@ -53,14 +53,14 @@ of separators only. A path with no separator has an empty dirname.
 - Parameter path: The path to split.
 - Returns: The directory part, or an empty string.
 :##
-public fn dirname(string path) string | StdError:
+public fn dirname(string path) string:
     match path.find_last("/"):
         Maybe.Some(i) ->
             let string head = path.s(0, i + 1)
             if (head.replace("/", "").is_empty()):
-                return Result.Ok(head)
-            return Result.Ok(strip_trailing_separators(head))
-        Maybe.None() -> return Result.Ok("")
+                return head
+            return strip_trailing_separators(head)
+        Maybe.None() -> return ""
 
 ##:
 Returns the extension of the last component, without the leading dot.
@@ -70,16 +70,16 @@ The leading dots of a hidden file do not count: `.bashrc` has no extension.
 - Parameter path: The path to inspect.
 - Returns: The extension, or an empty string.
 :##
-public fn extension(string path) string | StdError:
+public fn extension(string path) string:
     let string name = basename(path)
     match name.find_last("."):
         Maybe.Some(d) ->
             if (d == 0):
-                return Result.Ok("")
+                return ""
             if (leading_dots_reach(name, d)):
-                return Result.Ok("")
-            return Result.Ok(name.s(d + 1, name.len()))
-        Maybe.None() -> return Result.Ok("")
+                return ""
+            return name.s(d + 1, name.len())
+        Maybe.None() -> return ""
 
 ##:
 Normalizes a path lexically.
@@ -92,9 +92,9 @@ kept as two, the POSIX implementation-defined form; posixpath does the same.
 - Parameter path: The path to normalize.
 - Returns: The normalized path.
 :##
-public fn normalize(string path) string | StdError:
+public fn normalize(string path) string:
     if (path.is_empty()):
-        return Result.Ok(".")
+        return "."
     let bool rooted = path.starts_with("/")
     let string root = root_prefix(path)
     let List@(string) kept = List.new()
@@ -109,10 +109,10 @@ public fn normalize(string path) string | StdError:
 
     let string body = rebuild(kept)
     if (rooted):
-        return Result.Ok(root.concat(body))
+        return root.concat(body)
     if (body.is_empty()):
-        return Result.Ok(".")
-    return Result.Ok(body)
+        return "."
+    return body
 
 ##:
 The root of a rooted path: `/`, kept as `//` when the root is exactly two

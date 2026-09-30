@@ -6,11 +6,11 @@
 struct Box@(T):
     T value
 
-fn tag(i32 n) i32:
-    return n
+fn tag(i32 n) i32 | StdError:
+    return Result.Ok(n)
 
 extend Box@(T) tagged() i32:
-    return tag(1)
+    return tag(1)??
 
 fn main() i32:
     println("Mostly Harmless")

@@ -90,12 +90,12 @@ class MainFunctionWrapper:
             args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
             user_main_args.append(self.codegen.builder.load(args_array, name="args_struct"))
 
-        self._return_exit_code(fn, user_main, user_main_args)
+        self._return_exit_code(user_main, user_main_args)
 
         self.codegen.functions.helpers.end_function()
         return c_main
 
-    def _return_exit_code(self, fn: FuncDef, user_main: ir.Function,
+    def _return_exit_code(self, user_main: ir.Function,
                           user_main_args: list[ir.Value]) -> None:
         """Call the user's main and return its value as an i32.
 

@@ -2,7 +2,7 @@
 # with the iterator. The move reaches the code after the loop, so the use there is
 # CE2405 (#993).
 # EXPECT_ERROR_CODES_EXACT: CE2405
-# EXPECT_STDERR_CONTAINS: 17:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 16:13: error [CE2405]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

@@ -6,7 +6,7 @@
 # the text. The reporter also drops an identical repeat in an instance, so a probe
 # with that drop turned off measured the count: one CE2405.
 # EXPECT_ERROR_CODES_EXACT: CE2405
-# EXPECT_STDERR_CONTAINS: :26:17: error [CE2405]: cannot borrow moved variable 's'.
+# EXPECT_STDERR_CONTAINS: :25:17: error [CE2405]: cannot borrow moved variable 's'.
 # EXPECT_STDERR_CONTAINS: note: 's' was moved here
 perk Display:
     fn display() string

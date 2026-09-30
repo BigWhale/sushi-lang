@@ -5,7 +5,7 @@ fn check_decode() bool | StdError:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     match decode(buf):
         Result.Ok(v) ->
-            let string shown = show(v)??
+            let string shown = show(v)
             let string want = '{"a":1,"b":[2]}'
             return Result.Ok(shown == want)
         Result.Err(_) ->

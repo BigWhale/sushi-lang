@@ -50,7 +50,7 @@ fn manifest(u8 has_data) u8[]:
 
 fn image(peek u8[] meta) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 4, 4)
+    push_le(poke out, 5, 4)
     push_le(poke out, 0, 24)
     push_le(poke out, meta.len() as u64, 8)
     out.extend(meta)

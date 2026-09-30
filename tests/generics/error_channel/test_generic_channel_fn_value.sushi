@@ -13,7 +13,7 @@ fn bump@(T)(T value, i32 by) i32 | StepError:
 
 fn run_step(i32 by) i32 | StepError:
     let fn(i32, i32) -> i32 | StepError step = bump
-    return Result.Ok(step(0, by))
+    return Result.Ok(step(0, by)??)
 
 fn main() i32:
     match run_step(3):

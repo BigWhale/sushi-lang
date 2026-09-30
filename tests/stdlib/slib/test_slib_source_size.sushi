@@ -24,7 +24,7 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     return h
 
 fn sized_fixture() u8[]:
-    let u8[] b = fixture_header(4, 1)
+    let u8[] b = fixture_header(5, 1)
     b.push(0xc0)
     b.push(5)
     let i32 s = 0

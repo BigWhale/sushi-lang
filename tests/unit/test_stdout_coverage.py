@@ -68,7 +68,8 @@ _STDERR_WRITE = _handle_write("stderr")
 
 # A match arm whose pattern is a failure: `Result.Err(...) ->`, `Maybe.None ->`.
 _FAILURE_ARM = re.compile(r"^\s*[\w.]*\b(?:Err\s*\(.*\)|None)\s*->")
-_RETURN_ERR = re.compile(r"^\s*return\s+Result\s*\.\s*Err\s*\(")
+# A block fails when it returns an Err, or, in a bare `main`, a nonzero exit code.
+_RETURN_ERR = re.compile(r"^\s*return\s+(?:Result\s*\.\s*Err\s*\(|[1-9]\d*\s*$)")
 
 
 def code_text(source: str) -> str:
@@ -110,7 +111,8 @@ def normal_path_lines(code: str) -> list[str]:
     """The code lines a passing run takes: not in a failure arm, not in a block that fails.
 
     A failure arm is a match arm on `Result.Err(...)` or `Maybe.None`. A block that fails
-    is a run of lines at one indentation that ends in `return Result.Err(...)`.
+    is a run of lines at one indentation that ends in `return Result.Err(...)`, or in a
+    nonzero exit code.
     """
     lines = [line for line in code.split("\n") if line.strip()]
     indents = [len(line) - len(line.lstrip()) for line in lines]

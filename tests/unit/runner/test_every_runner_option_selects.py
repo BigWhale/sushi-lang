@@ -68,7 +68,7 @@ def _twin(directory: Path, text: str) -> Path:
     directory.mkdir(parents=True)
     path = directory / "test_twin.sushi"
     path.write_text(f'# EXPECT_STDOUT_EXACT: "{text}\\n"\n# RUN_IN_FIXTURE_DIR\n\n'
-                    f'fn main() i32:\n    println("{text}")\n    return Result.Ok(0)\n',
+                    f'fn main() i32:\n    println("{text}")\n    return 0\n',
                     encoding="utf-8")
     return path
 

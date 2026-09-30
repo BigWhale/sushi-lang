@@ -14,10 +14,10 @@ from _harness import run_single, detail
 import enhanced_test_runner
 from test_metadata import parse_test_metadata
 
-EXITS_0 = "fn main() i32:\n    return Result.Ok(0)\n"
-PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
-LIBRARY = "public fn answer() i32:\n    return Result.Ok(42)\n"
-TWO_UNITS = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
+EXITS_0 = "fn main() i32:\n    return 0\n"
+PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return 0\n'
+LIBRARY = "public fn answer() i32:\n    return 42\n"
+TWO_UNITS = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return 0\n'
 DEP = "public const i32 N = 1\n"
 REFUSED = ("# EXPECT_ERROR_CODES_EXACT: CE3019\n"
            '# EXPECT_STDERR_CONTAINS: "is not a directory"\n')

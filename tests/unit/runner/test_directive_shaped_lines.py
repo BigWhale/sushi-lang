@@ -15,7 +15,7 @@ import pytest
 from _harness import run_single
 from test_metadata import parse_test_metadata
 
-BODY = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
+BODY = 'fn main() i32:\n    println("Mostly Harmless")\n    return 0\n'
 STDOUT = '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'
 
 

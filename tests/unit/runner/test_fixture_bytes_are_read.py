@@ -14,7 +14,7 @@ import pytest
 from _harness import run_single
 from test_metadata import parse_test_metadata
 
-BODY_WITH_A_BAD_BYTE = b'fn main() i32:\n    let string s = "\xff"\n    return Result.Ok(0)\n'
+BODY_WITH_A_BAD_BYTE = b'fn main() i32:\n    let string s = "\xff"\n    return 0\n'
 
 
 def _fixture(tmp_path: Path, name: str, data: bytes) -> Path:
@@ -64,7 +64,7 @@ def test_the_corpus_reader_yields_files_only(tmp_path):
 
     (tmp_path / "unit.sushi").mkdir()
     (tmp_path / "unit.sushi" / ".keep").write_text("")
-    (tmp_path / "real.sushi").write_text("fn main() i32:\n    return Result.Ok(0)\n")
+    (tmp_path / "real.sushi").write_text("fn main() i32:\n    return 0\n")
     assert corpus_files(tmp_path) == [tmp_path / "real.sushi"]
 
 

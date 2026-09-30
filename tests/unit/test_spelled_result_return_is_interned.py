@@ -3,7 +3,7 @@
 The `resolve` pass interns the spelled return through `intern_wrapper_enum` and stamps
 it on `FuncDef.resolved_result`. The declaration keeps the type as written, because the
 typecheck pass still has to rule on a qualified name in it. The backend then has one
-reader, `declared_result_of`, and the prototype has no structural arm of its own.
+reader, `channel_result_of`, and the prototype has no structural arm of its own.
 """
 from __future__ import annotations
 
@@ -16,7 +16,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from sushi_lang.backend.functions import declarations, helpers
+from sushi_lang.backend.functions import declarations
+from sushi_lang.backend.generics import result_builder
 from sushi_lang.internals.errors import InternalCompilerError
 from sushi_lang.semantics.ast import FuncDef
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
@@ -39,7 +40,7 @@ def test_the_prototype_has_no_spelled_result_arm():
 
 
 def test_the_one_reader_has_no_spelled_result_arm():
-    assert "GenericTypeRef" not in inspect.getsource(helpers.declared_result_of)
+    assert "GenericTypeRef" not in inspect.getsource(result_builder.channel_result_of)
 
 
 @pytest.mark.parametrize("node", [FuncDef, GenericFuncDef])
@@ -54,7 +55,7 @@ def test_the_reader_answers_the_stamp():
     spelled = GenericTypeRef(base_name="Result",
                              type_args=(BuiltinType.I32, UnknownType(name="E")))
     fn = SimpleNamespace(name="f", ret=spelled, err_type=None, resolved_result=interned)
-    assert helpers.declared_result_of(object(), fn) is interned
+    assert result_builder.channel_result_of(object(), fn) is interned
 
 
 def test_an_unstamped_spelled_return_is_an_internal_error():
@@ -62,7 +63,7 @@ def test_an_unstamped_spelled_return_is_an_internal_error():
                              type_args=(BuiltinType.I32, UnknownType(name="E")))
     fn = SimpleNamespace(name="f", ret=spelled, err_type=None, resolved_result=None)
     with pytest.raises(InternalCompilerError) as caught:
-        helpers.declared_result_of(object(), fn)
+        result_builder.channel_result_of(object(), fn)
     assert "CE0015" in str(caught.value)
 
 

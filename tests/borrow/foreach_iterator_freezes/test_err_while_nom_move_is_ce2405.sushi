@@ -1,7 +1,7 @@
 # A `while` loop has no iterator. A `nom` move of a local in its body is a use after
 # move on the next round, CE2405 (#995).
 # EXPECT_ERROR_CODES_EXACT: CE2405
-# EXPECT_STDERR_CONTAINS: 15:17: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 14:17: error [CE2405]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

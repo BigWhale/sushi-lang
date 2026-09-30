@@ -5,6 +5,6 @@ use <lib/twolib_src>
 
 fn main() i32:
     let i32 a = main_take(nom 1, 10)
-    let i32 b = side_take(nom 2, 10).realise(0)
+    let i32 b = side_take(nom 2, 10)
     println("{a} {b}")
     return 0

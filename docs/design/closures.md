@@ -541,7 +541,7 @@ What still stays CE2093 is covered once, in Part II §4.
 
 Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
 `tests/generics/generic_fn_reference/test_generic_fn_ref_higher_order.sushi`,
-`tests/generics/generic_fn_reference/test_warn_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`,
+`tests/generics/generic_fn_reference/test_generic_fn_ref_no_type.sushi`, `tests/generics/generic_fn_value_positions/`,
 `tests/generics/generic_fn_value_to_generic_callee/`.
 
 ## 9. Diagnostics (live)

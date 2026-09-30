@@ -3,7 +3,7 @@
 # Cleanup loads garbage, extracts slot 2 (drop_ptr) and CALLS it -> SIGBUS (exit 138).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "-99\n"
-fn fallible(i32 n) fn(i32) -> i32 | StdError:
+fn fallible(i32 n) Result@(fn(i32) -> i32, StdError):
     if (n < 0):
         return Result.Err(StdError.Error)
     return Result.Ok(|i32 x| x + n)

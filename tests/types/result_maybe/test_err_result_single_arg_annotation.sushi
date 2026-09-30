@@ -1,0 +1,9 @@
+# A Result names its error type: there is no default error type, so the one-argument
+# `Result@(T)` is a type-argument count fault (CE2062).
+# EXPECT_ERROR_CODE: CE2062
+
+fn compute() Result@(i32):
+  return Result.Ok(42)
+
+fn main() i32:
+  return 0

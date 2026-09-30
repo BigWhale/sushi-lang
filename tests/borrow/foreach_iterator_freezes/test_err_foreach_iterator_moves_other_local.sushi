@@ -1,7 +1,7 @@
 # A move of a local the loop does not walk is no change under the iterator. The use on
 # the next round is a use after move, CE2405, and nothing else (#995).
 # EXPECT_ERROR_CODES_EXACT: CE2405
-# EXPECT_STDERR_CONTAINS: 15:17: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 14:17: error [CE2405]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

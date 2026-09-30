@@ -15,10 +15,10 @@ fn pick() Maybe@(fn(i32) -> i32) | StdError:
 fn main() i32:
     let Maybe@(fn(i32) -> i32) m = Maybe.Some(g1)
     match m:
-        Maybe.Some(f) -> println(f(1).realise(0))
+        Maybe.Some(f) -> println(f(1))
         Maybe.None -> println("none")
     match pick():
-        Result.Ok(Maybe.Some(f)) -> println(f(1).realise(0))
+        Result.Ok(Maybe.Some(f)) -> println(f(1))
         Result.Ok(Maybe.None) -> println("none")
         Result.Err(_) -> println("err")
     return 0

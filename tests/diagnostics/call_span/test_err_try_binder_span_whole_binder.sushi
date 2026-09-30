@@ -15,12 +15,12 @@ extend Items next(poke self) Maybe@(Result@(i32, E1)):
     self.n := self.n + 1
     return Maybe.Some(Result.Ok(self.n))
 
-fn total() i32:
+fn total() i32 | StdError:
     let i32 sum = 0
     foreach(x?? in Items(0)):
         sum := sum + x
-    return sum
+    return Result.Ok(sum)
 
 fn main() i32:
-    println(total())
+    println(total().realise(0))
     return 0

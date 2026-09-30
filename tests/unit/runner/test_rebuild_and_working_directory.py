@@ -16,7 +16,7 @@ from _harness import run_single, detail
 import enhanced_test_runner
 from test_metadata import collect_fixtures, parse_test_metadata
 
-MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
+MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return 0\n'
 DEP_V1 = "public const i32 N = 1\n"
 DEP_V2 = "public const i32 N = 2\n"
 
@@ -134,7 +134,7 @@ READS_DATA = (
     '                Result.Ok(text) -> print(text)\n'
     '                Result.Err(_) -> println("unreadable")\n'
     '        Result.Err(_) -> println("no data.txt here")\n'
-    "    return Result.Ok(0)\n"
+    "    return 0\n"
 )
 
 
@@ -189,7 +189,7 @@ def _module_fixture(tmp_path: Path, header: str, use: str, dep: str) -> Path:
     (home / dep).write_text(DEP_V1, encoding="utf-8")
     path = home / "test_module.sushi"
     path.write_text(header + f"\n{use}\n\nfn main() i32:\n    println(\"{{N}}\")\n"
-                    "    return Result.Ok(0)\n", encoding="utf-8")
+                    "    return 0\n", encoding="utf-8")
     return path
 
 

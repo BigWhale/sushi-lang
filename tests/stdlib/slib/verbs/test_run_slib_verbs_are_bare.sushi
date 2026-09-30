@@ -1,6 +1,6 @@
 # <toolchain/slib> spells its three free functions by their verb: read_metadata(),
 # sizes() and bitcode_size(). The slib_ prefix named the unit, and the import already
-# does (#571). The fixture is a v4 header, a one-key metadata map, an empty source
+# does (#571). The fixture is a v5 header, a one-key metadata map, an empty source
 # section and a bitcode length of 12345 with no bitcode bytes after it.
 # EXPECT_STDOUT_EXACT: "{"library_name":"demo"}\n0 12345\n12345\n"
 # EXPECT_NO_LEAKS: true
@@ -25,7 +25,7 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     return h
 
 fn fixture() u8[]:
-    let u8[] b = fixture_header(4, 19)
+    let u8[] b = fixture_header(5, 19)
     let u8[] blob = from([0x81, 0xac, 0x6c, 0x69, 0x62, 0x72, 0x61, 0x72, 0x79, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0xa4, 0x64, 0x65, 0x6d, 0x6f])
     let u8[] source_len = from([0; 8])
     let u8[] bitcode_len = from([0x39, 0x30, 0, 0, 0, 0, 0, 0])
@@ -50,7 +50,7 @@ fn run_test() i32 | StdError:
         return Result.Ok(1)
     match read_metadata("test_slib_verbs.slib"):
         Result.Ok(meta) ->
-            println(show(meta)??)
+            println(show(meta))
         Result.Err(_) ->
             println("read failed")
     match sizes("test_slib_verbs.slib"):

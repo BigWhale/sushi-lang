@@ -142,7 +142,7 @@ def _program(tmp_path: Path) -> Path:
     home.mkdir()
     (home / "dep.sushi").write_text("public const i32 N = 7\n", encoding="utf-8")
     (home / "main.sushi").write_text(
-        'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n',
+        'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return 0\n',
         encoding="utf-8")
     return home
 

@@ -22,7 +22,7 @@ fn push_str(poke u8[] out, string s) ~:
 
 fn image(peek u8[] meta) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 4, 4)
+    push_le(poke out, 5, 4)
     push_le(poke out, 0, 8)
     push_le(poke out, 0, 8)
     push_le(poke out, 0, 8)

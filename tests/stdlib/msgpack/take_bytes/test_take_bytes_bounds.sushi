@@ -10,7 +10,7 @@ use <encoding/msgpack>
 fn check(u8[] buf) ~ | StdError:
     match decode(buf):
         Result.Ok(v) ->
-            println(show(v)??)
+            println(show(v))
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->

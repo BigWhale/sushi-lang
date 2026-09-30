@@ -21,7 +21,7 @@ MAGIC = "\U0001f363SUSHILIB\U0001f363".encode("utf-8")
 KIND_OFFSET = 24
 KINDS = {1: "source", 2: "binary", 3: "hybrid"}
 
-USES_LIB = 'use <lib/dep>\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
+USES_LIB = 'use <lib/dep>\n\nfn main() i32:\n    println("{N}")\n    return 0\n'
 DEP = "public const i32 N = 1\n"
 OUT_1 = '# EXPECT_STDOUT_EXACT: "1\\n"\n'
 
