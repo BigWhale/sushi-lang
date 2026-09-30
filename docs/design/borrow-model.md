@@ -7,7 +7,7 @@ This document is the normative spec for how a value crosses a call boundary. Whe
 section 8.6 state a mode rule, this document wins.
 
 `docs/design/ownership-conventions.md` stays normative for everything else about ownership:
-the two type classes, the three provenances, the 3x2 table, and the twelve consuming
+the two type classes, the three provenances, the 3x2 table, and the fifteen consuming
 positions. This document owns one of those positions, the call argument: the callee's
 declaration decides whether it consumes.
 
