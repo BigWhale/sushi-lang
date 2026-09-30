@@ -1,0 +1,14 @@
+# A plain fixed array COPIES: after `a := b` both names hold the value, and `b` stays usable.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a: 7 8 9\nb: 7 8 9\na: 1 8 9\nb: 7 8 9\n"
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    let i32[3] b = [7, 8, 9]
+    a := b
+    println("a: {a[0]} {a[1]} {a[2]}")
+    println("b: {b[0]} {b[1]} {b[2]}")
+    a[0] := 1
+    println("a: {a[0]} {a[1]} {a[2]}")
+    println("b: {b[0]} {b[1]} {b[2]}")
+    return 0
