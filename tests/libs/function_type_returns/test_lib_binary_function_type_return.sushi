@@ -1,0 +1,19 @@
+# A BINARY library exports functions that return a function type: a bare one, a
+# channel function that spells Result@(fn(A) -> B, E), and a bare one whose function
+# type carries its own `| E`. The consumer reads each return type from the manifest.
+# BUILD_LIB_BINARY: fntype_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "2\n3\n4\nerr\n"
+use <lib/fntype_bin_lib>
+
+fn main() i32:
+    let fn(i32) -> i32 f = make()
+    println(f(1))
+    match make_checked():
+        Result.Ok(g) -> println(g(1))
+        Result.Err(_) -> println("err")
+    let fn(i32) -> i32 | StdError h = make_fallible()
+    println(h(1).realise(0))
+    match h(-1):
+        Result.Ok(n) -> println(n)
+        Result.Err(_) -> println("err")
+    return 0
