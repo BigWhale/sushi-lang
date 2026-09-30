@@ -223,8 +223,8 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          node.loc, context=context) \
-                .help("handle the Result in the body: match on it, or use "
-                      ".realise(default)").emit()
+                .help("handle the Result or the Maybe in the body (match, "
+                      ".realise(default)), or write '| E' in the signature").emit()
         return True
 
     walk_nodes(body, refuse_a_try)

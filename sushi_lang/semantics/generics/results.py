@@ -80,7 +80,7 @@ def validate_result_realise_method_with_validator(
 
     from sushi_lang.semantics.typesys import BuiltinType
     if t_type == BuiltinType.BLANK:
-        er.emit(reporter, er.ERR.CE2506, call.loc)
+        er.emit(reporter, er.ERR.CE2506, call.loc, ty=display_type(result_type))
         return
 
     default_arg = call.args[0]
