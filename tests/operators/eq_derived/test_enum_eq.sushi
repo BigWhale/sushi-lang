@@ -1,0 +1,23 @@
+# `==` on an enum compares the variant, then the payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\nfalse\ntrue\ntrue\nfalse\n"
+
+enum Colour:
+    Red
+    Green
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+    Named(string)
+
+fn main() i32:
+    let Colour c = Colour.Red
+    println(c == Colour.Red)
+    println(c == Colour.Green)
+    let Shape s = Shape.Rect(3, 4)
+    println(s == Shape.Rect(4, 3))
+    println(s == Shape.Rect(3, 4))
+    println(Shape.Named("x") == Shape.Named("x"))
+    println(Shape.Circle(1) == Shape.Rect(1, 1))
+    return 0

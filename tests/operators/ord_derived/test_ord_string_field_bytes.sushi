@@ -1,0 +1,13 @@
+# A string held in a type orders by its bytes, and a prefix is less.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
+# EXPECT_NO_LEAKS: true
+
+struct Name:
+    string text
+
+fn main() i32:
+    println(Name("ab") < Name("abc"))
+    println(Name("Zed") < Name("abc"))
+    println(Name("b") < Name("a"))
+    return 0

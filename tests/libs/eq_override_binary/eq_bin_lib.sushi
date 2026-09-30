@@ -1,0 +1,7 @@
+public struct Key:
+    i32 id
+    i32 noise
+
+extend Key with Eq:
+    fn eq(Key other) bool:
+        return self.id == other.id

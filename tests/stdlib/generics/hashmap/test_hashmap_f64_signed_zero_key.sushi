@@ -1,0 +1,15 @@
+# A key compares by the total rule, and it hashes the same way: 0.0 and -0.0 are one
+# key.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\nzero\n"
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(f64, string) m = HashMap.new()
+    m.insert(0.0, "zero")
+    m.insert(-0.0, "zero")
+    println(m.len())
+    println(m.get(-0.0).realise("none"))
+    m.free()
+    return 0

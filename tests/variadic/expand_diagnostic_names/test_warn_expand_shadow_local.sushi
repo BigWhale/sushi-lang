@@ -6,14 +6,14 @@
 # turned off measured one CW1002.
 # EXPECT_ERROR_CODES_EXACT: CW1002
 # EXPECT_STDERR_CONTAINS: :19:9: warning [CW1002]: declared variable 'u' already exists in an outer scope.
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn f@(...Ts: Display)(...Ts args) ~ | StdError:
+fn f@(...Ts: Render)(...Ts args) ~ | StdError:
     let i32 u = 0
     expand(a in args):
         let i32 u = 1

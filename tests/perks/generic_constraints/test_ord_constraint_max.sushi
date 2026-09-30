@@ -1,0 +1,18 @@
+# `@(T: Ord)` accepts a derived order and a primitive one, and `<` reads it in the body.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n2 5\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn largest@(T: Ord)(T a, T b) T:
+    if (a < b):
+        return b
+    return a
+
+fn main() i32:
+    println(largest(3, 7))
+    let Point p = largest(Point(1, 9), Point(2, 5))
+    println("{p.x} {p.y}")
+    return 0

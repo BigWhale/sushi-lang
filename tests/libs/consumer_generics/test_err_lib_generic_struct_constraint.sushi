@@ -1,5 +1,5 @@
-# Consumer instantiates the library's constrained generic struct Ranked@(T: Ord)
-# at a type with no Ord impl. The constraint is re-checked relative to the
+# Consumer instantiates the library's constrained generic struct Ranked@(T: Greater)
+# at a type with no Greater impl. The constraint is re-checked relative to the
 # consumer's perk impls during struct monomorphization, so it must reject this
 # with CE4006 - proving consumer-relative constraint re-checking applies to a
 # library-shipped generic TYPE template, not just generic functions.

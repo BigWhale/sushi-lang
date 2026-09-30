@@ -5,14 +5,14 @@
 # copies by their written declaration and emits one CW1001 for the group.
 # EXPECT_ERROR_CODES_EXACT: CW1001
 # EXPECT_STDERR_CONTAINS: :17:9: warning [CW1001]: unused variable 'u'.
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let i32 u = 1
         println(a.display())

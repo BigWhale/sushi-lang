@@ -180,7 +180,7 @@ Three rules make this sound:
   `semantics/library_registration.py` runs. A library unit is an ordinary unit, so the
   ordinary passes handle it.
 - **Library units are COLLECTED first, and the order says why.** A consumer's
-  `extend i32 with Display` is checked against the perks visible when its own unit is
+  `extend i32 with Render` is checked against the perks visible when its own unit is
   collected, so a perk the library declares has to be in the table already. The
   compilation order yields every unit after the units it depends on
   (`docs/design/unit-namespaces.md` section 6.2), and `build_dependency_graph` records
@@ -491,8 +491,8 @@ No special case at all: a pack function carries `type_params` (with `is_pack=Tru
 the pack parameter) exactly like any other generic function, so it is collected into
 `generic_functions` and monomorphized per (arity, type-tuple) at the consumer's call
 site through the same path as §5.2. `tests/libs/helpers/format_lib.sushi` +
-`tests/libs/consumer_generics/test_lib_pack.sushi` exercise this: the library ships `perk Display` and
-`show_all@(...Ts: Display)`; the consumer supplies `Display` impls for `i32`/`string`
+`tests/libs/consumer_generics/test_lib_pack.sushi` exercise this: the library ships `perk Render` and
+`show_all@(...Ts: Render)`; the consumer supplies `Render` impls for `i32`/`string`
 and calls with zero and two arguments.
 
 ### 5.4 Concrete perk implementations

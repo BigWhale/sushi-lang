@@ -1,0 +1,35 @@
+# A key type with a `Hashable` and an `Eq` implementation is a legal key although its
+# fields hold a function value: the probe compares keys through the `Eq` override.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "found 42\n1\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+struct Route:
+    i32 id
+    fn(i32) -> i32 handler
+
+extend Route with Hashable:
+    fn hash() u64:
+        return self.id as u64
+
+extend Route with Eq:
+    fn eq(Route other) bool:
+        return self.id == other.id
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn thrice(i32 x) i32:
+    return x * 3
+
+fn main() i32:
+    let HashMap@(Route, i32) routes = HashMap.new()
+    routes.insert(Route(7, twice), 42)
+    match routes.get(Route(7, thrice)):
+        Maybe.Some(v) -> println("found {v}")
+        Maybe.None -> println("missing")
+    println(routes.len())
+    routes.free()
+    return 0

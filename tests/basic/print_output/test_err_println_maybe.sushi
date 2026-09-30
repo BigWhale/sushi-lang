@@ -1,0 +1,7 @@
+# A `Maybe` is not printed: the program handles the missing value first.
+# EXPECT_ERROR_CODE: CE2115
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(m)
+    return 0

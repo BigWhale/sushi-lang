@@ -44,10 +44,15 @@ def _element_equals(codegen: 'LLVMCodegen', element_ptr: ir.Value, needle: ir.Va
                     element_semantic_type: 'Type') -> ir.Value:
     """One element against the needle, as i1 -- the `==` the language defines.
 
-    The element set is CLOSED by the semantic gate (CE2100): numeric, bool, string.
+    The semantic gate (CE2100) admits the `==` operator's set: a primitive, which
+    compares here exactly as the operator does, and a struct or an enum, which asks
+    the one equality seam.
     """
     builder = codegen.builder
     element = builder.load(element_ptr, name="search_elem")
+    if not isinstance(element_semantic_type, BuiltinType):
+        from sushi_lang.backend.types.contracts import emit_value_eq
+        return emit_value_eq(codegen, element, needle, element_semantic_type)
     if element_semantic_type == BuiltinType.STRING:
         return codegen.runtime.strings.emit_string_comparison("==", element, needle)
     if element_semantic_type in _FLOATS:

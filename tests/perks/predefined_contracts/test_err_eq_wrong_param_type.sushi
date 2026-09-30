@@ -1,0 +1,14 @@
+# The contract's parameter is the implementing type, so an `i32` parameter does not
+# match it, and the help spells the signature the implementation must have.
+# EXPECT_ERROR_CODE: CE4004
+# EXPECT_STDERR_CONTAINS: fn eq(Point other) bool
+
+struct Point:
+    i32 x
+
+extend Point with Eq:
+    fn eq(i32 other) bool:
+        return self.x == other
+
+fn main() i32:
+    return 0

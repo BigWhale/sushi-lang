@@ -46,11 +46,15 @@ class DerivedMethodTable(BuiltinMethodRegistry):
     `hash_override` is the compilation's `Hashable` override predicate, set by
     `SymbolTables` over its perk-implementation tables. Every registration of a derived
     hash reads it, so a holder of an overridden type is hashable (#891).
+
+    `overrides` holds the same predicate for each contract the compiler derives
+    (`Eq`, `Ord`, `Display`), by perk name.
     """
 
     def __init__(self) -> None:
         super().__init__()
         self.hash_override: Optional[Callable[['Type'], bool]] = None
+        self.overrides: Dict[str, Callable[['Type'], bool]] = {}
 
     def get_method(self, target_type: 'Type',
                    method_name: str) -> Optional['BuiltinMethod']:

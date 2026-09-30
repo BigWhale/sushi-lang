@@ -661,12 +661,62 @@ fn main() i32:
 - `>` - Greater than
 - `>=` - Greater than or equal
 
-Equality accepts the numeric types, `bool` and `string`. An order (`<`, `<=`, `>`, `>=`)
-accepts the numeric types and `string`. Both operands must be of one type: a mixed pair is
-CE2513, two numeric types of different widths are CE2510, and a type that carries no such
-comparison is CE2514. A `bool` has no order, because `a < b` on two bools is almost always
-a typo for `!=`. Use `match` to ask which variant an enum holds, and compare the fields of a
-struct one at a time.
+Both operands must be of one type: a mixed pair is CE2513, and two numeric types of
+different widths are CE2510. A type with no such comparison is CE2514.
+
+**At the top level**, equality (`==`, `!=`) accepts the numeric types, `bool`, `string`, and
+every struct and enum. An order (`<`, `<=`, `>`, `>=`) accepts the numeric types, `string`,
+and every struct and enum. A bare `bool` has no order, because `a < b` on two bools is
+almost always a typo for `!=`.
+
+**A struct or an enum compares through a predefined perk.** `==` and `!=` read `Eq`, and the
+four order operators read `Ord` (see [Predefined Perks](#predefined-perks-drop-hashable-eq-ord-and-display)).
+The compiler derives both from what the type holds, so no declaration is needed:
+
+- **A struct** compares its fields in declaration order. The first difference decides.
+- **An enum** compares the variant first, in declaration order, and then the payload from
+  left to right. So `Maybe.Some(1) < Maybe.None` and `Result.Ok(1) < Result.Err(e)`.
+- **`Maybe` and `Result`** take `==` and `<` like any enum. A bare variant on one side takes
+  its type from the other side: `m == Maybe.None`.
+- **A bool field** orders `false` before `true`. The top-level refusal does not apply
+  inside a type.
+- **An array, a `List@(T)` and an `Own@(T)`** compare only when a type holds them. An array
+  and a list compare element by element, and a prefix is less. An `Own@(T)` compares its
+  payload.
+- **A `HashMap@(K, V)`, a `ptr`, a function value, a closure and an iterator** have no
+  equality and no order. A type that holds one has none either. The diagnostic adds a note
+  that names the field: `no derived Eq: field 'f' -> a function value`.
+
+An `extend T with Eq` or `extend T with Ord` implementation replaces the derived rule. The
+replacement wins in every position: the operator, a field of another derived method,
+`contains` and `index_of`, and a `HashMap` key.
+
+**Two float equalities.** A bare float `==` is IEEE: `NaN == NaN` is false, and `-0.0 == 0.0`
+is true. A float that a type HOLDS uses a total rule instead: `-0.0` equals `0.0`, every
+NaN equals every NaN, and a NaN orders after every number. So `compare` is zero exactly when
+`==` is true, and a struct with a float field is a usable sort key and map key.
+
+```sushi
+struct Version:
+    i32 major
+    i32 minor
+
+enum Level:
+    Low
+    High(i32)
+
+fn main() i32:
+    let Version a = Version(1, 2)
+    let Version b = Version(1, 10)
+    println(a == b)                    # false
+    println(a < b)                     # true: the first difference decides
+    println(Level.Low < Level.High(0)) # true: the variant decides first
+    println(Level.High(2) > Level.High(1))
+    return 0
+```
+
+Use `a.eq(b)` and `a.compare(b)` to call the contracts by name. See
+[Methods of the contracts](#methods-of-the-contracts).
 
 **A string comparison reads bytes.** It walks the UTF-8 bytes of the two strings, and the
 length breaks the tie when the common bytes agree, so a prefix comes out below the longer
@@ -1632,22 +1682,76 @@ implementation together.
 
 The guide is [Perks](perks.md).
 
-### Predefined Perks: `Drop` and `Hashable`
+### Predefined Perks: `Drop`, `Hashable`, `Eq`, `Ord` and `Display`
 
-The compiler declares two perks. Every unit can name them with no import, and a
-declaration of either name is `CE4001`.
+The compiler declares five perks. Every unit can name them with no import, and a
+declaration of any of the five names is `CE4001`.
 
-**`Drop`** (`fn drop(poke self) ~`) says that a type owns a resource that no field shows,
+| Perk | Contract | Read by |
+|------|----------|---------|
+| `Drop` | `fn drop(poke self) ~` | scope exit |
+| `Hashable` | `fn hash() u64` | `HashMap` keys, `.hash()` |
+| `Eq` | `fn eq(Self other) bool` | `==`, `!=`, `contains`, `index_of`, `HashMap` keys |
+| `Ord` | `fn compare(Self other) i32` | `<`, `<=`, `>`, `>=` |
+| `Display` | `fn to_str() string` | an interpolation hole, `print`, `println` |
+
+`compare` returns a negative number, zero or a positive number.
+
+**`Self` is a placeholder in the contract only.** A user perk still cannot write `Self`. An
+implementation of a predefined perk writes its own type where the contract says `Self`:
+`fn eq(Point other) bool`. A generic target writes its own instantiation:
+`extend Box@(T) with Eq:` with `fn eq(Box@(T) other) bool`. A mismatch is `CE4004`, and its
+help prints the contract with the target filled in.
+
+**`Drop`** says that a type owns a resource that no field shows,
 for example a file descriptor. A type that implements it MOVES like a `string`. When the
 value goes out of scope, `drop()` runs first, and then the owning fields are destroyed.
 At the end of a scope, the values are destroyed in the reverse order of their declaration.
 Only the unit that declares the type may implement `Drop` for it (`CE4012`), and a channel
 on `drop()` is `CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
 
-**`Hashable`** (`fn hash() u64`) is the constraint for a type that has a hash. Every type
+**`Hashable`** is the constraint for a type that has a hash. Every type
 with a derived hash implements it with no declaration. `extend T with Hashable` replaces
 the derived hash of `T`, and the replacement applies everywhere the value is hashed: as a
 field, as a payload, as a container element and as a map key.
+
+**`Eq`, `Ord` and `Display`** are derived for every struct and enum from what the type
+holds. The compiler does not register them in a table: it answers each call from the type.
+An implementation (`extend T with Eq`) is the override, and it wins in every position. A
+type that holds a function value, a `ptr` or a `HashMap@(K, V)` has no derived contract, and
+an implementation is the only way to give it one.
+
+A constraint `@(T: Eq)`, `@(T: Ord)` or `@(T: Display)` is satisfied by the same top-level
+rule as the operator. So `bool` satisfies `Eq` and does not satisfy `Ord`. Any other type is
+`CE4006`.
+
+#### Methods of the contracts
+
+- `a.eq(b)` and `a.compare(b)` exist on every struct and enum, and on every primitive
+  (`bool` included). A wrong argument type is `CE2006`.
+- `x.to_str()` exists on every struct and enum. The primitives already had `to_str`.
+- An explicit call reads an implementation when one exists. The operator reads the same one.
+
+Two perks cannot give one type the same method name: that is `CE4015`, with a note at the
+first one. A derived method is not a home. A type may implement a user perk that provides
+`compare`. An explicit `a.compare(b)` then reads the implementation, and `<` still reads
+`Ord`.
+
+```sushi
+struct Score:
+    i32 points
+
+extend Score with Ord:
+    fn compare(Score other) i32:
+        return other.points - self.points      # higher scores sort first
+
+fn main() i32:
+    let Score a = Score(9)
+    let Score b = Score(3)
+    println(a < b)                             # true: the override decides
+    println(a.compare(b))                      # -6
+    return 0
+```
 
 ```sushi
 struct Token:
@@ -2161,10 +2265,58 @@ println("Next: {x + 1}")
 println("Squared: {x * x}")
 ```
 
-**Supported types:** the integers, the floats, `bool` and `string`. A `bool` prints as
-`true` or `false`. Any other type -- a struct, an enum, an array, a `Maybe@(T)` or a
-`Result@(T, E)` -- is `CE2035`; take the value out first (`.realise(default)`, `??` or
-`match`), or interpolate its fields.
+**Supported types:** the integers, the floats, `bool`, `string`, and every struct and enum.
+A `bool` prints as `true` or `false`. A struct or an enum prints through the predefined
+perk `Display` (see [Predefined Perks](#predefined-perks-drop-hashable-eq-ord-and-display)).
+The compiler derives the text from what the type holds, and `extend T with Display` with
+`fn to_str() string` overrides it. `print` and `println` take the same values as a hole.
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+    Empty
+
+struct User:
+    string name
+    i32 age
+
+fn main() i32:
+    println("{Point(1, 2)}")            # Point(x: 1, y: 2)
+    println("{Shape.Rect(3, 4)}")       # Shape.Rect(3, 4)
+    println("{Shape.Empty}")            # Shape.Empty
+    let User u = User("Arthur Dent", 42)
+    println("{u}")                      # User(name: "Arthur Dent", age: 42)
+    println("{u.name}")                 # Arthur Dent
+    println(Point(0, 0))
+    return 0
+```
+
+**The derived format:**
+
+- A struct prints its name and its fields as `name: value`. A generic struct prints its base
+  name only: `Box(value: 1)`.
+- An enum prints `Enum.Variant`, and a payload follows by position: `Shape.Circle(5)`.
+  `Maybe` and `Result` print the same way when a type holds them: `Maybe.Some(3)`,
+  `Maybe.None`, `Result.Ok(1)`, `Result.Err(StdError.Error)`.
+- A string that a type holds prints in quotes, and its bytes are written as they are, with
+  no escaping. A string in a hole of its own prints bare.
+- An array and a `List@(T)` print as `[1, 2, 3]` and `["a", "b"]`. An empty one prints `[]`.
+- An `Own@(T)` prints its payload. A float prints as `%g`, as a float hole does. A `bool`
+  prints `true` or `false`, and `~` prints `~`.
+
+**What is refused:**
+
+- A type that holds a function value, a `ptr` or a `HashMap@(K, V)` has no string form. A
+  hole is `CE2035`, and `print` and `println` are `CE2115`. A note names the field.
+- A top-level `Result` stays `CE2037` in `print` and `println`, and is `CE2035` in a hole.
+- A top-level `Maybe` and a top-level array are `CE2115` in `print` and `println`, and
+  `CE2035` in a hole. Handle the value first (`match`, `.realise(default)`, `??`), or print
+  the elements. A type that HOLDS a `Maybe`, a `Result` or an array prints them.
 
 ### String Arguments in Interpolation
 
@@ -2220,7 +2372,9 @@ const bool IS_VALID = (100 > 50) and true # true
 - **Bitwise**: `&`, `|`, `^`, `~`, `<<`, `>>` (integer types only)
 - **Logical**: `and`, `or`, `xor`, `not` (boolean type only)
 - **Comparison**: `==`, `!=` (numeric, `bool`, `string`); `<`, `<=`, `>`, `>=` (numeric,
-  `string` -- by bytes). Both operands must be of one type
+  `string` -- by bytes). Both operands must be of one type. A comparison of a struct or an
+  enum in a constant initializer is `CE0110`: the derived `Eq` and `Ord` run only on
+  run-time values. The same comparison in a function body is legal
 - **Type casts**: `as` (between compatible types)
 
 A constant always holds a value its type can hold: it is computed at the declared width,
@@ -2231,7 +2385,8 @@ and an operation whose result leaves the type is **CE2077**. See
 
 A string constant can interpolate, and a hole takes any constant expression. Each hole
 prints exactly as the same expression prints at run time -- an integer at its declared
-width, a float as `%g` -- so a constant and a body never disagree about a value's text:
+width, a float as `%g` -- so a constant and a body never disagree about a value's text. A struct
+or an enum in a hole is `CE0108`, because `Display` runs only on a run-time value:
 
 ```sushi
 const i32 ANSWER = 42

@@ -1,17 +1,17 @@
 # A parameter-pack template travels through a BINARY library: the manifest record
 # marks the type parameter `is_pack`, and the consumer's registration reads that mark
-# back onto the re-parsed template (#675). The consumer supplies the `Display`
+# back onto the re-parsed template (#675). The consumer supplies the `Render`
 # implementations the pack expands over.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "n=1\ns=two\n"
 # EXPECT_NO_LEAKS
 use <lib/binary_api_lib>
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "n={self}"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return "s={self}"
 

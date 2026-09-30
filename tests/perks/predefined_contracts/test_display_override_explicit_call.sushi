@@ -1,0 +1,17 @@
+# A `Display` implementation answers an explicit `to_str` call.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a point\n"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+
+extend Point with Display:
+    fn to_str() string:
+        return "a point".clone()
+
+fn main() i32:
+    let Point p = Point(1)
+    let string s = p.to_str()
+    println(s)
+    return 0

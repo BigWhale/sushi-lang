@@ -4,14 +4,14 @@
 # The inner `let t` shadows the outer one: one CW1002 (#1022).
 # EXPECT_ERROR_CODES_EXACT: CW1002
 # EXPECT_STDOUT_EXACT: "outer 1\ninner 1\ninner 2\nafter 1\nouter 2\ninner 1\ninner 2\nafter 2\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "{self}"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let string t = a.display()
         println("outer {t}")

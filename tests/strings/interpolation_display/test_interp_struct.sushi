@@ -1,0 +1,19 @@
+# A struct prints through an interpolation hole with its field names, as the named
+# construction writes it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "p = Point(x: 1, y: -2)\nLine(start: Point(x: 0, y: 0), end: Point(x: 3, y: 4))\n"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Line:
+    Point start
+    Point end
+
+fn main() i32:
+    let Point p = Point(1, -2)
+    println("p = {p}")
+    println("{Line(Point(0, 0), Point(3, 4))}")
+    return 0

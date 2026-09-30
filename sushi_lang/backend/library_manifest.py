@@ -12,10 +12,17 @@ from sushi_lang.semantics.library_templates import (
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 from sushi_lang.semantics.ast import Node, VarDef
+from sushi_lang.semantics.generics.contracts import CONTRACTS
+from sushi_lang.semantics.passes.collect.perks import PerkCollector
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
+
+
+# The predefined perks whose implementation overrides a derived method. A library
+# ships its implementations of them although it declares none of them.
+OVERRIDABLE_PREDEFINED_PERKS = frozenset({PerkCollector.HASHABLE_PERK, *CONTRACTS})
 
 
 def own_units(units: list['Unit']) -> list['Unit']:
@@ -642,7 +649,10 @@ class LibraryManifestGenerator:
         generic_perk_impls, template_keys = self._generic_perk_impl_templates(
             own, referenced_perks)
         perks, shipped_perks = self._shipped_perks(own, referenced_perks)
-        perk_impls = self._concrete_perk_impls(own, shipped_perks, template_keys)
+        # An implementation of a predefined contract is an override the consumer's
+        # derived methods must read, and the consumer knows the contract already.
+        perk_impls = self._concrete_perk_impls(
+            own, shipped_perks | OVERRIDABLE_PREDEFINED_PERKS, template_keys)
 
         return {
             "version": TEMPLATES_SCHEMA_VERSION,

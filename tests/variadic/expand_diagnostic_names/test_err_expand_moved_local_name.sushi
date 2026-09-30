@@ -8,17 +8,17 @@
 # EXPECT_ERROR_CODES_EXACT: CE2405
 # EXPECT_STDERR_CONTAINS: :25:17: error [CE2405]: cannot borrow moved variable 's'.
 # EXPECT_STDERR_CONTAINS: note: 's' was moved here
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
 fn eat(nom string s) ~:
     println(s)
 
-fn f@(...Ts: Display)(...Ts args) ~ | StdError:
+fn f@(...Ts: Render)(...Ts args) ~ | StdError:
     expand(a in args):
         let string s = a.display()
         eat(nom s)

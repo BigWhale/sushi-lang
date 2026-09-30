@@ -1,0 +1,16 @@
+# `@(T: Display)` accepts a primitive and a derived string form, and the hole reads it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "<7>\n<Point(x: 1, y: 2)>\n"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+    i32 y
+
+fn show@(T: Display)(T v) ~:
+    println("<{v}>")
+
+fn main() i32:
+    show(7)
+    show(Point(1, 2))
+    return 0

@@ -11,10 +11,10 @@ from sushi_lang.semantics.visibility import (
     VisibilityTable, library_clash_origin, record_declaration,
     reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
-    PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
+    Param, PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import (
-    Type, BuiltinType, StructType, EnumType, FunctionType)
+    Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
 from .utils import reject_reference_in, reject_try_in_body
@@ -278,6 +278,13 @@ class PerkCollector:
     # hash satisfies it with no implementation, and `extend T with Hashable` is the one
     # override of the derived hash (#696). The constraint check reads this name.
     HASHABLE_PERK = "Hashable"
+    # The three contracts the operators, the interpolation hole and `println` read. The
+    # compiler derives each for a struct and an enum, and an implementation is the
+    # override. `Eq` and `Ord` compare with a second value of the implementing type, so
+    # their contracts name it with the `ReceiverType` placeholder.
+    EQ_PERK = "Eq"
+    ORD_PERK = "Ord"
+    DISPLAY_PERK = "Display"
 
     def _predefined_perks(self) -> List[PerkDef]:
         """The perks that ship with the compiler, public and importless."""
@@ -295,17 +302,42 @@ class PerkCollector:
                 methods=[PerkMethodSignature(name="hash", params=[], ret=BuiltinType.U64)],
                 is_public=True,
             ),
+            PerkDef(
+                loc=None,
+                name=self.EQ_PERK,
+                methods=[PerkMethodSignature(
+                    name="eq", params=[Param(name="other", ty=ReceiverType())],
+                    ret=BuiltinType.BOOL)],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.ORD_PERK,
+                methods=[PerkMethodSignature(
+                    name="compare", params=[Param(name="other", ty=ReceiverType())],
+                    ret=BuiltinType.I32)],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.DISPLAY_PERK,
+                methods=[PerkMethodSignature(name="to_str", params=[],
+                                             ret=BuiltinType.STRING)],
+                is_public=True,
+            ),
         ]
 
     def register_predefined_perks(self) -> None:
-        """Register the two perks that ship with the compiler.
+        """Register the perks that ship with the compiler.
 
         `Drop` declares a resource (HANDLES.md ruling R2): a type that implements it owns
         something RAII must release, whatever its fields say. `Hashable` names the
         derived hash (#696): a type satisfies it when the derive pass can hash it, and
-        an implementation is the override. Both stand beside the synthesized enums, so
-        they need no import -- `owns_resource` and a `@(T: Hashable)` constraint ask
-        every program the question, so the answer has to exist in every program.
+        an implementation is the override. `Eq`, `Ord` and `Display` follow the
+        `Hashable` rule for equality, order and the string form. All of them stand
+        beside the synthesized enums, so they need no import -- `owns_resource` and a
+        constraint ask every program the question, so the answer has to exist in every
+        program.
         """
         for perk in self._predefined_perks():
             if self.perks.get(perk.name) is not None:
@@ -462,6 +494,35 @@ class PerkCollector:
                 return True
         return False
 
+    def _reject_second_home(self, impl: ExtendWithDef, type_name: str) -> bool:
+        """CE4015: a method name that another perk already gives this type.
+
+        A name has one home. Two perks that each provide `compare` on one type leave a
+        call of it naming neither, and both bodies would take one symbol.
+        """
+        for other_perk in sorted(self.perk_impls.by_type.get(type_name, set())):
+            if other_perk == impl.perk_name:
+                continue
+            other = self.perk_impls.get(type_name, other_perk)
+            if other is None:
+                continue
+            taken = {m.name: m for m in other.methods}
+            for method in impl.methods or []:
+                previous = taken.get(method.name)
+                if previous is None:
+                    continue
+                diag = er.emit_with(self.r, ERR.CE4015,
+                                    method.name_span or method.loc,
+                                    method=method.name, perk=impl.perk_name,
+                                    other=other_perk)
+                prev_span = previous.name_span or previous.loc
+                if prev_span is not None:
+                    diag.note_at(f"perk '{other_perk}' provides '{method.name}' here",
+                                 prev_span)
+                diag.emit()
+                return True
+        return False
+
     def _refuse_methods(self, base_type_name: str, impl: ExtendWithDef) -> None:
         """Record every method of a refused implementation, so its calls stay silent."""
         for method in impl.methods or []:
@@ -584,6 +645,9 @@ class PerkCollector:
 
         if self._register_generic_template(impl, target_type):
             return True
+
+        if self._reject_second_home(impl, type_name):
+            return False
 
         if not self.perk_impls.register(impl, type_name,
                                         unit_name=self.current_unit_name):

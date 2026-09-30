@@ -1,0 +1,10 @@
+# An `Eq` implementation added in another unit changes `==` here, so this unit is
+# rebuilt: the derived equality it held no longer answers.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "false\n"
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_REBUILT: eqkey, test_eq_override_rebuild
+use "eqkey"
+
+fn main() i32:
+    println(Key(1, 2) == Key(1, 3))
+    return 0

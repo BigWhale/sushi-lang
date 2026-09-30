@@ -1,0 +1,26 @@
+# `contains` and `index_of` over an array of structs read the derived equality, and an
+# `Eq` implementation where the element has one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\n1\ntrue\n"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Tagged:
+    i32 key
+    i32 noise
+
+extend Tagged with Eq:
+    fn eq(Tagged other) bool:
+        return self.key == other.key
+
+fn main() i32:
+    let Point[] points = from([Point(1, 2), Point(3, 4)])
+    println(points.contains(Point(3, 4)))
+    println(points.contains(Point(4, 3)))
+    println(points.index_of(Point(3, 4)).realise(-1))
+    let Tagged[] tags = from([Tagged(5, 0)])
+    println(tags.contains(Tagged(5, 99)))
+    return 0

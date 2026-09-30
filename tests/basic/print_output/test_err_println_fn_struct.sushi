@@ -1,0 +1,13 @@
+# A struct that holds a function value has no derived string form.
+# EXPECT_ERROR_CODE: CE2115
+# EXPECT_STDERR_CONTAINS: field 'f' -> a function value
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    println(Handler(twice))
+    return 0

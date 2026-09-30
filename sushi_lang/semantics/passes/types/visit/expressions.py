@@ -94,6 +94,8 @@ class ExpressionValidator(RecursiveVisitor):
         # BEFORE validation, so the range check reads the sibling's type and not the
         # i32 default (#826); again after it, for a sibling only validation can type.
         self._context_type_operand_from_sibling(node, self._infer_leaving_no_trace)
+        if node.op in COMPARISON_OPS:
+            self._type_enum_operand_from_sibling(node)
         self.type_validator.validate_expression(node.left)
         self.type_validator.validate_expression(node.right)
         self._context_type_operand_from_sibling(
@@ -156,6 +158,23 @@ class ExpressionValidator(RecursiveVisitor):
                 return tv.infer_expression_type(expr)
         finally:
             tv.reporter = reporter
+
+    def _type_enum_operand_from_sibling(self, node: BinaryOp) -> None:
+        """`m == Maybe.None`: a bare variant takes its enum from the other operand.
+
+        The variant spells no type argument, so it has the type of its position, as
+        in a `let`; for a comparison that position is the other operand.
+        """
+        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+        from sushi_lang.semantics.typesys import EnumType, deref_type
+        left = deref_type(self._infer_leaving_no_trace(node.left))
+        right = deref_type(self._infer_leaving_no_trace(node.right))
+        if left == right:
+            return
+        if isinstance(left, EnumType):
+            propagate_types_to_value(self.type_validator, node.right, left)
+        elif isinstance(right, EnumType):
+            propagate_types_to_value(self.type_validator, node.left, right)
 
     def _context_type_operand_from_sibling(
             self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:
@@ -366,12 +385,28 @@ class ExpressionValidator(RecursiveVisitor):
         The check is here and not in the inference, because the inference runs more than
         once over one expression and reported one fault once for each run.
         """
+        from sushi_lang.semantics.generics.contracts import DISPLAY
+        from sushi_lang.semantics.passes.types.expressions import top_level_contract
+        from sushi_lang.semantics.passes.types.utils import names_no_type
+        from sushi_lang.semantics.typesys import deref_type
+        stamps = []
         for part in node.parts:
+            stamps.append(None)
             if isinstance(part, str):
                 continue
             self.visit(part)
             part_type = self.type_validator.infer_expression_type(part)
-            if part_type is not None and not is_string_convertible(part_type):
-                er.emit(self.type_validator.reporter, er.ERR.CE2035, part.loc,
-                        type=display_type(part_type))
+            if (part_type is None or is_string_convertible(part_type)
+                    or names_no_type(self.type_validator, deref_type(part_type))):
+                continue
+            printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY)
+            if printable:
+                stamps[-1] = deref_type(part_type)
+                continue
+            report = er.emit_with(self.type_validator.reporter, er.ERR.CE2035, part.loc,
+                                  type=display_type(part_type))
+            if reason is not None:
+                report = report.note(f"no derived Display: {reason}")
+            report.emit()
+        node.display_types = stamps if any(stamps) else None
 

@@ -50,6 +50,10 @@ def _emit_generic_hash(prim_type: BuiltinType) -> Any:
                 is_zero = builder.fcmp_ordered('==', receiver_value, zero_f32)
                 zero_bits = ir.Constant(u32, 0)
                 normalized_bits = builder.select(is_zero, zero_bits, bits_u32)
+                # Every NaN hashes alike: a key equality treats all NaNs as one value.
+                is_nan = builder.fcmp_unordered('uno', receiver_value, receiver_value)
+                normalized_bits = builder.select(is_nan, ir.Constant(u32, 0x7FC00000),
+                                                 normalized_bits)
 
                 bits_u64 = builder.zext(normalized_bits, u64)
             else:  # f64
@@ -59,6 +63,9 @@ def _emit_generic_hash(prim_type: BuiltinType) -> Any:
                 is_zero = builder.fcmp_ordered('==', receiver_value, zero_f64)
                 zero_bits = ir.Constant(u64, 0)
                 bits_u64 = builder.select(is_zero, zero_bits, bits_u64)
+                is_nan = builder.fcmp_unordered('uno', receiver_value, receiver_value)
+                bits_u64 = builder.select(is_nan, ir.Constant(u64, 0x7FF8000000000000),
+                                          bits_u64)
 
             multiplier = ir.Constant(u64, FXHASH_MULTIPLIER)
             return builder.mul(bits_u64, multiplier)

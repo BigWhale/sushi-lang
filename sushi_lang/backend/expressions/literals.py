@@ -91,10 +91,23 @@ def _emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) 
     string_values = []
     fresh_flags = []
 
-    for part in expr.parts:
+    display_types = expr.display_types or [None] * len(expr.parts)
+    for part, shown_as in zip(expr.parts, display_types, strict=True):
         if isinstance(part, str):
             string_values.append(codegen.runtime.strings.emit_string_literal(part))
             fresh_flags.append(False)
+        elif shown_as is not None:
+            # A struct or an enum: its `Display` form, a fresh string this interpolation
+            # frees once the concat has copied it. The value is only read.
+            from sushi_lang.backend.expressions.memory import own_temporary
+            from sushi_lang.backend.types.contracts import load_operand
+            from sushi_lang.backend.types.display import emit_value_to_str
+            shown = load_operand(codegen, codegen.expressions.emit_expr(part), shown_as)
+            own_temporary(codegen, part, shown, shown_as)
+            text = emit_value_to_str(codegen, shown, shown_as)
+            codegen.print_frames.register_value(text)
+            string_values.append(text)
+            fresh_flags.append(True)
         else:
             expr_value = codegen.expressions.emit_expr(part)
 

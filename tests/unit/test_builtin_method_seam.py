@@ -19,6 +19,7 @@ from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
 from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_RETURNS
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
+from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
 from sushi_lang.semantics.passes.types.arrays import _ARRAY_METHODS
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import (
@@ -113,7 +114,7 @@ NAMES = tuple(sorted(
     set(_ARRAY_METHODS) | set(METHOD_SPECS) | {"is_empty", "clone", "hash"}
     | set(RESULT_METHOD_ARITY) | set(MAYBE_METHOD_ARITY) | set(OWN_METHOD_ARITY)
     | set(HASHMAP_METHOD_ARITY) | set(LIST_METHOD_ARITY) | set(PRIMITIVE_METHOD_RETURNS)
-    | set(FOREIGN_PTR_METHOD_ARITY) | {"no_such_method"}))
+    | set(FOREIGN_PTR_METHOD_ARITY) | set(CONTRACT_METHOD_ARITY) | {"no_such_method"}))
 
 
 def _deref(receiver):

@@ -9,6 +9,8 @@ from sushi_lang.semantics.passes.collect.perks import PerkCollector, _get_type_n
 from sushi_lang.semantics.passes.resolve import table_resolver
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.contract_walk import perk_override_of
+from sushi_lang.semantics.generics.contracts import CONTRACTS, operand_contract
 from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -106,18 +108,27 @@ class ConstraintValidator:
                    for template in templates.templates(base))
 
     def _derived_implements(self, type_arg: Type, constraint_name: str) -> bool:
-        """Does the derive pass hash this type? Then it satisfies `Hashable` (#696).
+        """Does the compiler derive this contract for the type? Then it satisfies it.
+
+        `Hashable` (#696) and the three contracts `Eq`, `Ord` and `Display`.
 
         One predicate, the derive pass's own: `hashability_of`. A type it refuses -- a
         struct holding a `HashMap`, a `ptr`, a function value -- does not satisfy the
         constraint, unless an explicit `extend T with Hashable` answered above. A held
         type with such an implementation is the override and answers for itself (#891).
         """
-        if constraint_name != PerkCollector.HASHABLE_PERK:
-            return False
         resolve = (table_resolver(self.struct_table, self.enum_table)
                    if self.struct_table is not None and self.enum_table is not None
                    else None)
+        if constraint_name in CONTRACTS:
+            # `Eq`, `Ord` and `Display` read the rule their operators read, so a
+            # constraint never admits a type whose body would then refuse `==`.
+            overridden = perk_override_of(constraint_name, self.perk_impl_table,
+                                          self.generic_perk_impls)
+            return operand_contract(type_arg, constraint_name, overridden=overridden,
+                                    resolve=resolve)[0]
+        if constraint_name != PerkCollector.HASHABLE_PERK:
+            return False
         overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls)
         can_hash, _reason = hashability_of(type_arg, resolve=resolve, overridden=overridden)
         return can_hash

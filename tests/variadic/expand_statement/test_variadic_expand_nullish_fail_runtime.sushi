@@ -9,10 +9,10 @@
 # reports the failure. No crash / double-free.
 # EXPECT_STDOUT_EXACT: "ok:good\nfailed\n"
 # EXPECT_RUNTIME_EXIT: 0
-perk Display:
+perk Render:
     fn display() string
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
@@ -21,7 +21,7 @@ fn check(string s) string | StdError:
         return Result.Err(StdError.Error)
     return Result.Ok("ok:{s}")
 
-fn process@(...Ts: Display)(...Ts args) string | StdError:
+fn process@(...Ts: Render)(...Ts args) string | StdError:
     expand(a in args):
         let string shown = a.display()
         let string checked = check(shown)??

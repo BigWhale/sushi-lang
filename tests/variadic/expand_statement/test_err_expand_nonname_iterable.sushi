@@ -2,17 +2,17 @@
 # to unroll silently to ZERO statements: the body vanished, the program compiled
 # and ran without it (exit 0) - a silent miscompile, not an error.
 # EXPECT_ERROR_CODE: CE0119
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "i:{self}"
 
 fn helper() i32 | StdError:
     return Result.Ok(1)
 
-fn show@(...Ts: Display)(...Ts args) ~ | StdError:
+fn show@(...Ts: Render)(...Ts args) ~ | StdError:
     expand(a in helper()):
         println(a.display())
     return Result.Ok(~)

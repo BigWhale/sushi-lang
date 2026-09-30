@@ -138,22 +138,22 @@ extern `...` (libc varargs) mechanisms.
 ### Syntax
 
 ```sushi
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int:42"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-extend bool with Display:
+extend bool with Render:
     fn display() string:
         return "yes"
 
-fn print_all@(...Ts: Display)(...Ts args) ~:
+fn print_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 
@@ -166,7 +166,7 @@ fn main() i32:
 ### Semantics
 
 - **`...Ts`** in the type-parameter list declares a **type pack**. An optional perk constraint
-  (`...Ts: Display`) requires every bound element type to implement the named perk.
+  (`...Ts: Render`) requires every bound element type to implement the named perk.
 - **`...Ts args`** in the parameter list declares the corresponding **value pack**. The type-pack
   must appear last in the type-parameter list and the value pack must appear last in the parameter
   list.

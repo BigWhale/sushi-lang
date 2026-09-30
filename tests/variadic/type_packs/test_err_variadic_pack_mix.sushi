@@ -1,9 +1,9 @@
 # A type-pack value-param cannot be combined with a v1 native variadic -> CE0118.
 # EXPECT_ERROR_CODE: CE0118
-perk Display:
+perk Render:
     fn display() string
 
-fn f@(...Ts: Display)(...Ts rest, ...i32 nums) ~:
+fn f@(...Ts: Render)(...Ts rest, ...i32 nums) ~:
     return ~
 
 fn main() i32:

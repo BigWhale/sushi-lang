@@ -1,22 +1,22 @@
 # P1-T7b: i32, string, bool mixed; per-element behavior differs by concrete type
 # (each display() dispatches to a distinct extension impl after unrolling).
 # EXPECT_STDOUT_EXACT: "i=7\ns=hello\nb=true\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "i=7"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return "s={self}"
 
-extend bool with Display:
+extend bool with Render:
     fn display() string:
         return "b=true"
 
-fn print_all@(...Ts: Display)(...Ts args) ~:
+fn print_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

@@ -1,15 +1,15 @@
-# A perk-constrained type-pack '...Ts: Display' requires every element type
-# bound to the pack to implement Display. Here 'string' does not implement
-# Display, so the call must fail the typecheck pass with CE2090 (per-element constraint).
+# A perk-constrained type-pack '...Ts: Render' requires every element type
+# bound to the pack to implement Render. Here 'string' does not implement
+# Render, so the call must fail the typecheck pass with CE2090 (per-element constraint).
 # EXPECT_ERROR_CODE: CE2090
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn print_all@(...Ts: Display)(...Ts args) ~:
+fn print_all@(...Ts: Render)(...Ts args) ~:
     return ~
 
 fn main() i32:

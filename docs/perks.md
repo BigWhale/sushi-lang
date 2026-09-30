@@ -40,7 +40,8 @@ Perks provide a way to:
   [The error channel is opt-in](design/error-channel.md)
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing). The one exception is
-  the predefined `Hashable`, which every type with a derived `hash()` satisfies
+  the predefined `Hashable`, `Eq`, `Ord` and `Display`, which every type with a derived
+  method satisfies (`Eq`, `Ord` and `Display` by the top-level rule)
 - Full type checking at compile time
 
 ## Defining Perks
@@ -56,12 +57,13 @@ perk Comparable:
     fn compare(Point other) i32
 ```
 
-Two perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`)
-and `Drop` (`fn drop(poke self) ~`). A unit that declares either is **CE4001**. See
-[The Predefined Perks](#the-predefined-perks).
+Five perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`),
+`Drop` (`fn drop(poke self) ~`), `Eq` (`fn eq(Self other) bool`), `Ord`
+(`fn compare(Self other) i32`) and `Display` (`fn to_str() string`). A unit that declares
+any of them is **CE4001**. See [The Predefined Perks](#the-predefined-perks).
 
-There is no `Self` type, so a perk method that takes a value of the implementing type
-names that type explicitly (`fn compare(Point other) i32`). A parameter is a borrow by
+There is no `Self` type in a perk you write, so a perk method that takes a value of the
+implementing type names that type explicitly (`fn compare(Point other) i32`). A parameter is a borrow by
 default, as in every function. The parameter modes `nom`, `peek` and `poke` are part of the
 signature, so the implementation must write the same modes as the contract.
 
@@ -289,12 +291,72 @@ fn main() i32:
 
 ## The Predefined Perks
 
-Two perks ship with the compiler. Neither needs an import, neither can be declared
+Five perks ship with the compiler. None needs an import, none can be declared
 (**CE4001**), and no alias holds them: `sh.Hashable` is **CE2001**, as `sh.Drop` is.
+
+| Perk | Contract |
+|------|----------|
+| `Drop` | `fn drop(poke self) ~` |
+| `Hashable` | `fn hash() u64` |
+| `Eq` | `fn eq(Self other) bool` |
+| `Ord` | `fn compare(Self other) i32` (negative, zero or positive) |
+| `Display` | `fn to_str() string` |
+
+**`Self` exists in these contracts only.** A perk you write still cannot name its receiver.
+An implementation of `Eq`, `Ord` or `Display` writes its own type where the contract says
+`Self`. A generic target writes its own instantiation. A mismatch is **CE4004**, and its help
+prints the contract with the target filled in.
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+struct Box@(T):
+    T value
+    i32 tag
+
+extend Point with Eq:
+    fn eq(Point other) bool:
+        return self.x == other.x
+
+extend Box@(T) with Eq:
+    fn eq(Box@(T) other) bool:
+        return self.tag == other.tag
+
+fn main() i32:
+    let Box@(i32) a = Box(1, 7)
+    let Box@(i32) b = Box(2, 7)
+    println(Point(1, 2) == Point(1, 9))        # true: the override decides
+    println(a.eq(b))                           # true
+    return 0
+```
 
 **`Drop`** (`fn drop(poke self) ~`) declares a resource: a type that implements it
 owns something RAII must release, whatever its fields say. It is documented with
 [memory management](memory-management.md).
+
+**`Eq`, `Ord` and `Display`** are derived for every struct and enum from what it holds.
+The design is in [Derived contracts](design/derived-contracts.md).
+
+- `==` and `!=` read `Eq`. `<`, `<=`, `>` and `>=` read `Ord`. An interpolation hole,
+  `print` and `println` read `Display`.
+- **The implementation is the override.** It wins in every position: the operator, a field
+  of another derived method, `contains` and `index_of`, a `HashMap` key and `print`.
+- **Not derived:** a type that holds a function value, a `ptr`, a closure, an iterator or a
+  `HashMap@(K, V)`. An implementation gives such a type the contract. A constraint on it
+  is **CE4006**.
+- **Constraints follow the top-level rule.** `bool` satisfies `Eq` and `Display`. It does not
+  satisfy `Ord`, because a bare bool has no order. A bool FIELD orders `false` before `true`.
+- **Methods:** `a.eq(b)` and `a.compare(b)` exist on every struct, enum and primitive. `x.to_str()`
+  exists on every struct and enum. A wrong argument type is **CE2006**.
+- **One home per name.** Two perks that give one type a method of the same name are
+  **CE4015**. A derived method is not a home: a type can implement a user perk that provides
+  `compare`. An explicit `a.compare(b)` then reads that implementation, and `<` still reads
+  `Ord`.
+
+The rules of the order, the float equality and the text format are in the
+[Language Reference](language-reference.md#comparison).
 
 **`Hashable`** (`fn hash() u64`) is the contract of the derived `hash()`. The rule
 is NOMINAL and it reads one perk: a type satisfies `Hashable` when the compiler
@@ -309,8 +371,9 @@ derives a `hash()` for it, or when the type implements the perk itself.
 - **Overridable:** `extend T with Hashable: fn hash() u64:` REPLACES the derived hash
   everywhere (see [method resolution](design/method-resolution.md)). It also satisfies
   the constraint for a type the derive pass refuses. It gives a hash only: it does not
-  make the type comparable, so a type with no equality test (for example, a struct with
-  a function-typed field) is still not a `HashMap` key (**CE2055**, see
+  make the type comparable, so a type with no equality (for example, a struct with
+  a function-typed field) is still not a `HashMap` key (**CE2055**), unless it also
+  implements `Eq` (see
   [Key Requirements](stdlib/collections/hashmap.md#key-requirements)).
 
 A perk of your own follows the ordinary rule: only an explicit implementation
@@ -392,38 +455,39 @@ extend CustomKey with Hashable:
         return id_hash * 31 + name_hash
 ```
 
-### Displayable Pattern
+### Display Pattern
 
-Used for types that can be converted to strings:
+A struct already prints with a derived `Display`. Implement the predefined `Display` to
+replace the text. The replacement applies to a hole, `print` and `println`, and to a field
+of another type:
 
 ```sushi
-perk Displayable:
-    fn display() string
-
 struct User:
     string name
     i32 age
 
-extend User with Displayable:
-    fn display() string:
+extend User with Display:
+    fn to_str() string:
         return "{self.name} (age {self.age})"
 
-fn print_item@(T: Displayable)(T item) ~:
-    println(item.display())
+fn show@(T: Display)(T item) ~:
+    println(item)
+
+fn main() i32:
+    show(User("Arthur", 42))             # Arthur (age 42)
+    return 0
 ```
 
-### Comparable Pattern
+### Ordering Pattern
 
-Used for types that can be compared:
+A struct already orders by its fields in declaration order. Implement the predefined `Ord`
+to change the rule, and `Eq` to change equality. A comparison of two values reads it:
 
 ```sushi
-perk Comparable:
-    fn compare(Score other) i32
-
 struct Score:
     i32 value
 
-extend Score with Comparable:
+extend Score with Ord:
     fn compare(Score other) i32:
         if (self.value < other.value):
             return -1
@@ -431,11 +495,14 @@ extend Score with Comparable:
             return 1
         return 0
 
-fn find_max@(T: Comparable)(T a, T b) T:
-    let i32 cmp = a.compare(b)
-    if (cmp >= 0):
+fn find_max@(T: Ord)(T a, T b) T:
+    if (a >= b):
         return a
     return b
+
+fn main() i32:
+    println(find_max(Score(3), Score(9)).value)    # 9
+    return 0
 ```
 
 ### Multiple Perks Pattern
@@ -503,7 +570,7 @@ Perk-related compiler errors:
 
 | Code | Description | Example |
 |------|-------------|---------|
-| CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable` or `Drop`, which the compiler predefines |
+| CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
 | CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
 | CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
 | CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
@@ -513,6 +580,7 @@ Perk-related compiler errors:
 | CE4010 | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
 | CE4011 | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
 | CE4012 | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
+| CE4015 | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare` |
 | CE4014 | Static method in a perk | `static fn get() i32` in an implementation |
 | CE0133 | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |
 | CE2110 | Function type as the target | `extend fn(i32) -> i32 with Show:` |
@@ -553,8 +621,10 @@ perk declaration.
 
 ### 4. No `Self` Type
 
-A perk method cannot name "the implementing type". A method that takes a value of that type
-names a concrete type in its signature, so the perk fits that type only. For the same reason,
+A perk method that you write cannot name "the implementing type". A method that takes a value
+of that type names a concrete type in its signature, so the perk fits that type only. The
+predefined `Eq` and `Ord` are the exception: their contracts hold a `Self` placeholder that
+only the compiler can write, and an implementation writes its own type there. For the same reason,
 a perk cannot hold a static method or a constructor (CE4014).
 
 ## Best Practices
@@ -563,7 +633,7 @@ a perk cannot hold a static method or a constructor (CE4014).
 2. **Use descriptive names**: `Hashable`, `Displayable`, `Comparable` clearly indicate purpose
 3. **Minimize method count**: Fewer methods = easier to implement
 4. **Document constraints**: Make it clear what perks are required for generic types
-5. **Lean on the predefined `Hashable`**: a type the compiler can hash needs no implementation
+5. **Lean on the predefined perks**: a type the compiler can hash, compare or print needs no implementation of `Hashable`, `Eq`, `Ord` or `Display`
 6. **Test thoroughly**: Verify implementations work with generic functions
 
 ## See Also

@@ -4,14 +4,14 @@
 # EXPECT_ERROR_CODES_EXACT: CW1001
 # EXPECT_STDERR_CONTAINS: :16:9: warning [CW1001]: unused variable 't'.
 # EXPECT_STDERR_CONTAINS: :19:9: warning [CW1001]: unused variable 't'.
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "{self}"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let i32 t = 1
         println(a.display())

@@ -1,0 +1,9 @@
+# `Display` is predefined beside `Drop` and `Hashable`, so a unit that declares it
+# collides with the compiler's own definition.
+# EXPECT_ERROR_CODE: CE4001
+
+perk Display:
+    fn to_str() string
+
+fn main() i32:
+    return 0

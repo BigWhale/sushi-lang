@@ -4,14 +4,14 @@
 # EXPECT_STDOUT_EXACT: "int mine\nint mine\n"
 # EXPECT_STDERR_EMPTY: true
 
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     let string t__x0 = "mine"
     expand(a in args):
         let string t = a.display()

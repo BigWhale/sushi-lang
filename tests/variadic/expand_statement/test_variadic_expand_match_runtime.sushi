@@ -9,17 +9,17 @@
 # exercises the match-arm shadowing. The scrutinee is a fresh constructor each
 # copy (no intermediate `let`, which would clash as a duplicate local).
 # EXPECT_STDOUT_EXACT: "i:1\ninner:7\ni:2\ninner:7\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "i:{self}"
 
 enum Box:
     Val(i32)
 
-fn show@(...Ts: Display)(...Ts vs) ~:
+fn show@(...Ts: Render)(...Ts vs) ~:
     expand(a in vs):
         println(a.display())
         match Box.Val(7):

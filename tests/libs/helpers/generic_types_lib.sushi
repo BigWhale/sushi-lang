@@ -6,7 +6,7 @@
 
 # Perk referenced by the constrained generic struct below. A generic's
 # type-param constraint causes its perk DEFINITION to ship with the templates.
-public perk Ord:
+public perk Greater:
     fn gt(i32 other) bool
 
 # Simple generic struct container.
@@ -35,5 +35,5 @@ public struct Holder@(T):
 
 # Constrained generic struct: proves consumer-relative CE4006 re-checking for a
 # library-shipped generic TYPE template (not just a generic function).
-public struct Ranked@(T: Ord):
+public struct Ranked@(T: Greater):
     T value

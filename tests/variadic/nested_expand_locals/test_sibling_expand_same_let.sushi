@@ -2,14 +2,14 @@
 # first and of the second `expand` declare their locals in one scope, so each
 # copy name is unique over the whole instance (#1018).
 # EXPECT_STDOUT_EXACT: "first 1\nfirst 2\nsecond 1\nsecond 2\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "{self}"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let string t = a.display()
         println("first {t}")

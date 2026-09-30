@@ -13,8 +13,8 @@ from sushi_lang.backend.constants import (
 )
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
 from ..probe import emit_find_key, emit_lookup_key, emit_lookup_maybe, emit_probe_loop, ProbeSlot
+from sushi_lang.backend.types.contracts import emit_value_eq
 from ..utils import (
-    emit_key_equality_check,
     emit_insert_entry,
     emit_destroy_all_entries,
     emit_init_buckets_empty,
@@ -108,7 +108,7 @@ def emit_hashmap_insert(
     def on_occupied(slot: ProbeSlot) -> None:
         entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
         entry_key = builder.load(entry_key_ptr, name="entry_key")
-        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        keys_equal = emit_value_eq(codegen, key_value, entry_key, key_type)
 
         update_value_bb = builder.append_basic_block(name="update_value")
         builder.cbranch(keys_equal, update_value_bb, slot.continue_bb)

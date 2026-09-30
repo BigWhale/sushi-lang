@@ -76,6 +76,10 @@ family that yields to one. So the seam and the pass read one list:
 - **function values** -- `clone`
 - **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in the derive pass for every
   struct and enum
+- **the contract methods** -- `eq`, `compare` and `to_str`, the methods of the derived `Eq`, `Ord`
+  and `Display` ([derived-contracts.md](derived-contracts.md)). The derive pass registers none
+  of them: the family answers each call from the receiver type, through the contract walk.
+  It covers every struct and enum, and `eq` and `compare` cover every primitive
 
 A perk implementation changes the claim and not the answer: it is the sanctioned override,
 so an extension of a built-in name is still CE2097. `tests/unit/test_builtin_method_seam.py`
@@ -87,11 +91,12 @@ question is asked in six places, the fix is a seam, not a fallback*).
 
 Inside the built-in step, both layers try the families in one canonical order:
 
-> perk -> derived hash -> derived clone -> function-value clone -> primitive -> extension fallback
+> perk -> derived hash -> derived clone -> contract -> function-value clone -> primitive -> extension fallback
 
-The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair applies
-to `StructType`/`EnumType`, the function-value clone to `FunctionType` -- so the order is
-arbitrary. What matters is that validation and codegen state the SAME one: if the two layers stated
+The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair and the
+contract methods apply to `StructType`/`EnumType` (`eq` and `compare` also to a primitive),
+the function-value clone to `FunctionType` -- and the method names are disjoint, so the order
+is arbitrary. What matters is that validation and codegen state the SAME one: if the two layers stated
 it differently, a type that satisfied two families would dispatch differently per layer
 with no diagnostic.
 `tests/unit/test_method_resolution_family_order.py` pins the order in both files.
@@ -116,7 +121,7 @@ own members first:
 | **Java** | no extension methods; static methods *hide* rather than override, a long-standing source of confusion |
 | **JavaScript** | user wins -- which produced SmooshGate: TC39's `Array.prototype.flatten` broke MooTools-patched sites and had to be renamed `flat` |
 
-Sushi's auto-derived `hash`/`clone` are the `#[derive]` analogue, and **Sushi has no opt-out
+Sushi's auto-derived `hash`/`clone` (and the derived `Eq`/`Ord`/`Display`) are the `#[derive]` analogue, and **Sushi has no opt-out
 from derivation**. So a colliding extension is not merely lower-priority, it is unreachable by
 construction -- which meets the project's own bar for erroring rather than warning: *if the situation
 cannot possibly do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs
@@ -126,7 +131,8 @@ extension) and `CE0101` (duplicate extension method) are hard errors for strictl
 
 A perk implementation is Sushi's equivalent of writing a manual trait impl, and it takes
 precedence over every family that yields to a perk: the derived `hash`/`clone` pair, the
-function-value `clone` and the primitive family (`beats_perk=False`). The typecheck pass
+contract family (`eq`, `compare`, `to_str`), the function-value `clone` and the primitive
+family (`beats_perk=False`). The typecheck pass
 asks the perk implementation between the two halves of the family table
 (`passes/types/visit/inference.py` for the type, `calls/methods.py` for the check), and the
 codegen dispatcher runs its perk step before the auto-derived ones. The array, string,
@@ -354,7 +360,7 @@ names only the RETURN cannot be inferred (CE2060) and has to spell `box_new@(i32
 static reads the binding site instead. It is also why `new` is available as a static's
 name and not as a free function's (CE6001).
 
-### The two collisions
+### The two collisions, and a third for perks
 
 A name has exactly one home, so both are refused where they are written:
 
@@ -365,6 +371,16 @@ A name has exactly one home, so both are refused where they are written:
 
 CE2045's help names both escapes for the same reason: a name behind an enum's dot could be
 either member.
+
+**Two perks cannot share a method name on one type: CE4015.** `extend Score with Ord` and
+`extend Score with Ranked`, where both provide `compare`, leave a call of `compare` naming
+neither. The two bodies would also take one symbol. The error is relational, with a note at
+the first perk. The same rule gives CE4007 for a perk method beside an extension method.
+
+**A derived method is not a home.** A type that derives `compare` from `Ord` may implement a
+user perk that provides `compare`. An explicit `a.compare(b)` reads the implementation,
+because the contract family yields to a perk. `a < b` still reads `Ord`, because the
+operator asks the contract and not the method name.
 
 ### The built-in statics are static methods
 
