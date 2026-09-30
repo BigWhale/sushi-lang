@@ -10,8 +10,8 @@ from sushi_lang.internals.errors.registry import (
 
 
 _add(ErrorMessage("CW2001", Severity.WARNING,
-    "unused Result@(T) value (use .realise() or if statement to handle the result)",
-    Category.TYPE, "Result@(T) values should be explicitly handled to avoid losing error information."))
+    "unused '{ty}' value (handle it with match, .realise(default), or '??' in a body with a channel)",
+    Category.TYPE, "A call to a function with a '| E' channel answers a Result@(T, E), and a statement that drops it loses the error. Handle it with `match`, take the value with `.realise(default)`, or propagate it with `??` in a body that has a channel itself. A `~ | E` result is exempt: there is no value to lose, and the error is still the caller's to ignore. Until the bare-function change the text named `Result@(T)` (the implicit StdError channel, now CE2062) and advised an `if` on the Result (CE2516 since #522)."))
 
 # CW2511 ("?? operator used in main function") was RETIRED by the bare-function change
 # (docs/design/error-channel.md): `main` is bare, so a `??` in its body is CE0131.

@@ -206,7 +206,7 @@ def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional[
         er.emit_with(validator.reporter, er.ERR.CE0131, expr.loc,
                      context="a lambda without '| E'") \
             .help("write '| E' in the function type the lambda takes, or handle the "
-                  "Result in the body with match or .realise(default)").emit()
+                  "Result or the Maybe in the body (match, .realise(default))").emit()
     return None
 
 

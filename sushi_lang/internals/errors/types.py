@@ -342,7 +342,7 @@ _add(ErrorMessage("CE2090", Severity.ERROR,
     Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
 
 _add(ErrorMessage("CE2091", Severity.ERROR,
-    "{callable} must use a bare 'return <value>', not 'return Result.Ok(...)' or 'return Result.Err(...)'",
+    "{callable} must use a bare 'return <value>' ('return ~' in a '~' body), not 'return Result.Ok(...)' or 'return Result.Err(...)'",
     Category.TYPE, "A BARE function, lambda, or extension or perk-impl method (no '| E' and no Result@(T, E) return) has an unwrapped ABI: it answers the value itself and no Result, so both Result constructors are refused (docs/design/error-channel.md). A callable with a '| E' channel spells 'return Result.Ok(x)' and 'return Result.Err(e)', and a bare 'return x' there is CE2030. A bare function that can fail writes '| E'. Until #848 a channel body returned its success bare and the compiler wrapped it into Ok in silence (ruling 6 of the UFCS epic, reversed); CE2091 then also refused 'Result.Ok(...)' in a channel body. Until the bare-function change only a method could be bare."))
 
 _add(ErrorMessage("CE2092", Severity.ERROR,

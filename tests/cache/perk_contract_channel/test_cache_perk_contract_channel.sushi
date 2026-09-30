@@ -1,0 +1,14 @@
+# A perk contract method gains a channel. `caller` calls the method on a concrete type
+# and holds no template copy; the implementation is in `pinging`, which `caller` does
+# not import. So only the contract's cache key can tell `caller` that the call it holds
+# now answers a Result, and that key must carry the channel.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "ping 7\n"
+# EXPECT_STDOUT_EXACT: "pong 7\n"
+# EXPECT_REBUILT: contract, pinging, caller, test_cache_perk_contract_channel
+# EXPECT_CACHED: boxes
+use "pinging"
+use "caller"
+
+fn main() i32:
+    call_it()
+    return 0

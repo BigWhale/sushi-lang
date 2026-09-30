@@ -1,0 +1,10 @@
+# A `~ | E` function answers Result@(~, E), and its success has no value to extract,
+# so `.realise()` is CE2506. A bare `~` function answers no Result at all.
+# EXPECT_ERROR_CODES_EXACT: CE2506
+# EXPECT_STDERR_CONTAINS: "cannot call .realise() on 'Result@(~, StdError)'"
+fn h() ~ | StdError:
+    return Result.Ok(~)
+
+fn main() i32:
+    h().realise(~)
+    return 0

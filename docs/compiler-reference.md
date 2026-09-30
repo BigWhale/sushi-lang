@@ -847,7 +847,7 @@ fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
-    # WARNING CW2001: unused Result@(T) value
+    # WARNING CW2001: unused 'Result@(i32, StdError)' value
     get_value()
 
     return 0
