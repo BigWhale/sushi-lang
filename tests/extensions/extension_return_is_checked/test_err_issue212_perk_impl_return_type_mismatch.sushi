@@ -16,4 +16,4 @@ extend Box with Labeller:
 fn main() i32:
     let Box b = Box(1)
     println(b.label())
-    return Result.Ok(0)
+    return 0

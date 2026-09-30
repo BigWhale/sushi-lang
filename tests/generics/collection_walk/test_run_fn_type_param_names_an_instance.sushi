@@ -7,12 +7,12 @@
 struct Box@(T):
     T item
 
-fn apply(fn(i32) -> Box@(string) f) i32:
+fn apply(fn(i32) -> Box@(string) | StdError f) i32:
     match f(1):
         Result.Ok(b) -> println(b.item)
         Result.Err(_) -> println("no box")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

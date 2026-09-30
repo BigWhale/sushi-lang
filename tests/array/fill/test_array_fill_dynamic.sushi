@@ -1,4 +1,4 @@
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test fill() on dynamic array with the answer to life, the universe, and everything
     let i32[] vogons = from([0, 1, 2, 3, 4])
     vogons.fill(42)
@@ -19,4 +19,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

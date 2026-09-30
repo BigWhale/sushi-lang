@@ -16,4 +16,4 @@ fn main() i32:
     let u32 restored = wide >> count
     println("{restored}")
 
-    return Result.Ok(0)
+    return 0

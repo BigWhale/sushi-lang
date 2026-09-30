@@ -43,4 +43,4 @@ fn main() i32:
     if (final_size == 1):
         println("✓ Can reuse map after free")
 
-    return Result.Ok(0)
+    return 0

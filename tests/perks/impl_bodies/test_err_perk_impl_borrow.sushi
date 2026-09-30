@@ -15,15 +15,15 @@ struct Bag:
     i32 tag
 
 fn consume(nom i32[] a) i32:
-    return Result.Ok(a.len())
+    return a.len()
 
 extend Bag with Summable:
     fn total() i32:
         let i32[] items = from([1, 2, 3])
-        let i32 n = consume(nom items).realise(0)
+        let i32 n = consume(nom items)
         return n + items.len()
 
 fn main() i32:
     let Bag b = Bag(7)
     println(b.total())
-    return Result.Ok(0)
+    return 0

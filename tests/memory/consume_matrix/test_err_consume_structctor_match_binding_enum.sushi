@@ -32,4 +32,4 @@ fn main() i32:
                 Box.Full(xs) -> println("n={xs.len()}")
                 Box.Empty -> println("n=0")
         Wrap.No -> println("no")
-    return Result.Ok(0)
+    return 0

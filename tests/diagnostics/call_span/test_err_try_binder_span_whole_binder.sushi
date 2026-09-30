@@ -19,8 +19,8 @@ fn total() i32:
     let i32 sum = 0
     foreach(x?? in Items(0)):
         sum := sum + x
-    return Result.Ok(sum)
+    return sum
 
 fn main() i32:
-    println(total().realise(0))
-    return Result.Ok(0)
+    println(total())
+    return 0

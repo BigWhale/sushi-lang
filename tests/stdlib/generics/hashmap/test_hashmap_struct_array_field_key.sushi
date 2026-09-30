@@ -25,4 +25,4 @@ fn main() i32:
         Maybe.None -> println("miss")
     println("{m.len()}")
     m.free()
-    return Result.Ok(0)
+    return 0

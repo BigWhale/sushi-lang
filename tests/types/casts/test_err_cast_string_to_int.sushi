@@ -4,4 +4,4 @@
 fn main() i32:
   let string s = "hello"
   let i32 x = s as i32  # Should fail with CE2014
-  return Result.Ok(0)
+  return 0

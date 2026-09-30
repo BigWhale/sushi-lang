@@ -13,11 +13,11 @@ enum box:
     Huge
 
 fn box() i32:
-    return Result.Ok(4)
+    return 4
 
 fn main() i32:
     let box b = box.Big
     match b:
         box.Big -> println(1)
         box.Huge -> println(2)
-    return Result.Ok(0)
+    return 0

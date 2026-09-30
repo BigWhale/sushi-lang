@@ -13,7 +13,7 @@ fn main() i32:
                 Color.Red -> println("got red")
                 Color.Green -> println("got green")
                 Color.Blue(intensity) -> println("got blue {intensity}")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
     let Result@(Color, StdError) r2 = get_color(42)
     match r2:
@@ -22,6 +22,6 @@ fn main() i32:
                 Color.Red -> println("got red")
                 Color.Green -> println("got green")
                 Color.Blue(intensity) -> println("got blue {intensity}")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
-    return Result.Ok(0)
+    return 0

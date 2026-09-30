@@ -14,4 +14,4 @@ fn main() i32:
     let Acc@(i32) p = Acc(3)
     let Acc@(i32) q = Acc(m: 4)
     println("{p.m} {q.m}")
-    return Result.Ok(one().realise(0))
+    return one()

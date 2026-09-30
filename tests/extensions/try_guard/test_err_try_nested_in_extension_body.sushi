@@ -2,15 +2,15 @@
 # found too (#398).
 # EXPECT_ERROR_CODE: CE0131
 fn tag(i32 n) i32:
-    return Result.Ok(n)
+    return n
 
 extend i32 summed() i32:
     let i32 acc = 0
     foreach(i in 0..3):
         if (i > 1):
-            acc := acc + tag(i)??
+            acc := acc + tag(i)
     return acc
 
 fn main() i32:
     println("{8.summed()}")
-    return Result.Ok(0)
+    return 0

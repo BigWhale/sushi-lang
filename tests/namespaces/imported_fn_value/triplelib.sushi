@@ -1,2 +1,2 @@
 public fn triple(i32 x) i32:
-    return Result.Ok(x * 3)
+    return x * 3

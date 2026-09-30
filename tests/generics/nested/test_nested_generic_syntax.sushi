@@ -16,4 +16,4 @@ fn main() i32:
     let i32 expected = 21
 
     # Return 0 if both features work (nested generics parse, right shift computes correctly)
-    return Result.Ok(shifted - expected)
+    return shifted - expected

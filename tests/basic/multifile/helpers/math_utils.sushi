@@ -1,8 +1,8 @@
 # Helper unit with math utilities
 const i32 PI_TIMES_100 = 314
 
-public fn add(i32 a, i32 b) i32:
+public fn add(i32 a, i32 b) i32 | StdError:
     return Result.Ok(a + b)
 
-public fn square(i32 x) i32:
+public fn square(i32 x) i32 | StdError:
     return Result.Ok(x * x)

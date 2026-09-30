@@ -13,4 +13,4 @@ fn main() i32:
             match e:
                 StdError.Error -> println("std error")
     println("len {l.len()}")
-    return Result.Ok(0)
+    return 0

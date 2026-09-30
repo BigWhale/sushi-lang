@@ -6,7 +6,7 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn grow(poke i32[] arr) ~:
+fn grow(poke i32[] arr) ~ | StdError:
     arr.push(9)
     return Result.Ok(~)
 
@@ -18,4 +18,4 @@ fn main() i32:
             if (r.is_ok()):
                 println("grown")
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

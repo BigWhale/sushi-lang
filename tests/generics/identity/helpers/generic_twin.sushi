@@ -2,7 +2,7 @@
 # must reach its own body; the print marker says which body ran.
 fn twin@(T)(nom T x) T:
     println("helper twin")
-    return Result.Ok(x)
+    return x
 
 public fn twin_use() i32:
-    return Result.Ok(twin(nom 1)??)
+    return twin(nom 1)

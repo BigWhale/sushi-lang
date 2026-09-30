@@ -11,4 +11,4 @@ fn main() i32:
     let string path = "{base}tmp"
     let i32 b = chdir(path).realise(-1)
     println("rc={a} rc={b}")
-    return Result.Ok(0)
+    return 0

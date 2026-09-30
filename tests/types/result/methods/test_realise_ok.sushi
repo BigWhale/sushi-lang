@@ -14,7 +14,7 @@ fn main() i32:
     let i32 value = get_value().realise(0)
     if (value == 42):
         println("PASS: realise on Ok returns value")
-        return Result.Ok(0)
+        return 0
     else:
         println("FAIL: realise returned wrong value")
-        return Result.Ok(1)
+        return 1

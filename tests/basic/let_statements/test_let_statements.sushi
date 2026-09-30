@@ -10,4 +10,4 @@ fn main() i32:
   text := "updated"
 
   # num should be 200 after rebinding
-  return Result.Ok(num)
+  return num

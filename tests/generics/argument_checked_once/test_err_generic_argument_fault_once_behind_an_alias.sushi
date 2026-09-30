@@ -3,5 +3,5 @@
 use "helpers/checked_once_id" as co
 
 fn main() i32:
-    println(co.id(5 / 0).realise(0))
-    return Result.Ok(0)
+    println(co.id(5 / 0))
+    return 0

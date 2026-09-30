@@ -8,6 +8,6 @@ use "helpers/lib_rex"
 fn main() i32:
     greet("Ford")
     say_goodbye()
-    let i32 t = tag_lib().realise(0)
+    let i32 t = tag_lib()
     println("{t}")
-    return Result.Ok(0)
+    return 0

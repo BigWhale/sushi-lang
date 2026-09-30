@@ -27,4 +27,4 @@ fn main() i32:
     match Box.holding(nom Cat(4)):
         Result.Ok(b) -> println("{b.louder().realise(0) + 0 - 36}")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

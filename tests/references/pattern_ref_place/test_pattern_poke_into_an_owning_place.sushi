@@ -32,4 +32,4 @@ fn main() i32:
     match h.t:
         Two.Pair(a, b) -> println("{a} {b}")
         Two.None2 -> println("none")
-    return Result.Ok(0)
+    return 0

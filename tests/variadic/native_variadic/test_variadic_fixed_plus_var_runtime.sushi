@@ -3,8 +3,7 @@
 fn log_all(string prefix, ...i32 values) ~:
     foreach(v in values.iter()):
         println("{prefix}: {v}")
-    return Result.Ok(~)
 
 fn main() i32:
     log_all("val", 10, 20, 30)
-    return Result.Ok(0)
+    return 0

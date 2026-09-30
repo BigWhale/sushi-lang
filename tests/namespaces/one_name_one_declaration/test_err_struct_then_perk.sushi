@@ -17,4 +17,4 @@ perk box:
 fn main() i32:
     let box b = box(3)
     println(b.n)
-    return Result.Ok(0)
+    return 0

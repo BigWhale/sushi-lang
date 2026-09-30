@@ -22,4 +22,4 @@ fn main() i32:
     let i32 not_not_e = ~~e
     println(not_not_e)  # Should be 42 again
 
-    return Result.Ok(0)
+    return 0

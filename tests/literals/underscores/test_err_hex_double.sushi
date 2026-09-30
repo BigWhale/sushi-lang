@@ -6,4 +6,4 @@
 fn main() i32:
     let i32 bad = 0xD__E
     println("{bad}")
-    return Result.Ok(0)
+    return 0

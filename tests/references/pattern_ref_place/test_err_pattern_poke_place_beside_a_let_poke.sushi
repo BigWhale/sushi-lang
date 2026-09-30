@@ -16,4 +16,4 @@ fn main() i32:
         Shade.Dim(poke r) -> r := 9
         Shade.Lit(_) -> println("lit")
     w.s := Shade.Lit(3)
-    return Result.Ok(0)
+    return 0

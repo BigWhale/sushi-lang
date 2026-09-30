@@ -10,10 +10,9 @@ struct Holder:
 
 fn eat(nom Holder h) ~:
     println(h.f.is_open())
-    return Result.Ok(~)
 
-fn go(Holder h) ~:
-    eat(nom h)??
+fn go(Holder h) ~ | StdError:
+    eat(nom h)
     return Result.Ok(~)
 
 fn main() i32:
@@ -21,4 +20,4 @@ fn main() i32:
     match go(h):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

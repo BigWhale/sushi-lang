@@ -12,4 +12,4 @@ fn main() i32:
         a.reverse()
         a.fill(5)
     println("{a[0]} {a[1]} {a[2]}")
-    return Result.Ok(0)
+    return 0

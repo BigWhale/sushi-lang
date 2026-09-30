@@ -10,10 +10,10 @@
 struct Holder:
     Result@(string, StdError) r
 
-fn mk() string:
+fn mk() string | StdError:
     return Result.Ok("hi")
 
 fn main() i32:
     let Holder h = Holder(r: mk())
     println("ok = {h.r.is_ok()}")
-    return Result.Ok(0)
+    return 0

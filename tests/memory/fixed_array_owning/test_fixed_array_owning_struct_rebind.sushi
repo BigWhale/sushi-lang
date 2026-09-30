@@ -16,4 +16,4 @@ fn main() i32:
     let Buffer[2] bs = [Buffer(from([1])), Buffer(from([2]))]
     let Buffer[2] cs = bs
     println("cs={cs[0].data.len()}")
-    return Result.Ok(0)
+    return 0

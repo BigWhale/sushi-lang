@@ -33,8 +33,8 @@ fn run_test() i32:
     # A negative start on the length form clamps the same way.
     let i32[] f = src.ss(neg, 3)
     println("{f.len()} {f[0]} {f[1]} {f[2]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

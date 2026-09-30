@@ -16,4 +16,4 @@ fn main() i32:
     if (every == ~0):
         println("all set")
 
-    return Result.Ok(0)
+    return 0

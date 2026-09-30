@@ -17,4 +17,4 @@ fn main() i32:
     let i32 __fe_iter0 = 100
     foreach(v in Count(0)):
         println(v + __fe_iter0)
-    return Result.Ok(0)
+    return 0

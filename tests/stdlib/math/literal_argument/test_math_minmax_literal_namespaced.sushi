@@ -10,4 +10,4 @@ fn main() i32:
     println("{hi}")
     println("{lo}")
     println("{m.max(1, b)}")
-    return Result.Ok(0)
+    return 0

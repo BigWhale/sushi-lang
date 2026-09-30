@@ -8,18 +8,18 @@
 use <collections/strings>
 
 fn shout@(T)(T value) string:
-    return Result.Ok(value.to_str().upper())
+    return value.to_str().upper()
 
 fn measure@(T)(T value) i32:
-    return Result.Ok(value.to_str().len())
+    return value.to_str().len()
 
 fn describe@(T)(T value) string:
-    return Result.Ok(value.hash().to_str())
+    return value.hash().to_str()
 
 fn main() i32:
-    println(shout("ford prefect").realise("err"))
-    println(measure(12345).realise(0))
-    let string h = describe(42).realise("err")
+    println(shout("ford prefect"))
+    println(measure(12345))
+    let string h = describe(42)
     println(h.len() > 0)
     println("abc".find("b").realise(-1))
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ extend Box shift(i32 by, nom self) i32:
     return self.n + by
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

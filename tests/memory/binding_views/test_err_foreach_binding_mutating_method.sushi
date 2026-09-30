@@ -11,4 +11,4 @@ fn main() i32:
     foreach(r in rows.iter()):
         r.cells.push(9)
     rows.free()
-    return Result.Ok(0)
+    return 0

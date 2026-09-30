@@ -11,4 +11,4 @@ fn main() i32:
     let Pool p = Pool(List.new())
     let Pool q = p.clone()
     println("{q.handles.len()}")
-    return Result.Ok(0)
+    return 0

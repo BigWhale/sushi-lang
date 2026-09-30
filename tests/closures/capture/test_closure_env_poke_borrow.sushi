@@ -10,18 +10,17 @@
 # EXPECT_NO_LEAKS
 fn grow(poke List@(i32) l) ~:
     l.push(99)
-    return Result.Ok(~)
 
 fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     let fn() -> i32 f = |~|:
         grow(poke xs)
-        return Result.Ok(xs.len())
-    let i32 a = f()??
-    let i32 b = f()??
-    return Result.Ok(a + b)
+        return xs.len()
+    let i32 a = f()
+    let i32 b = f()
+    return a + b
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

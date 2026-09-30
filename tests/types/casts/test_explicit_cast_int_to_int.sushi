@@ -9,6 +9,6 @@ fn main() i32:
     # Cast i16 to i32 for arithmetic
     let i32 result = a + (b as i32)
     if (result == 142):
-      return Result.Ok(0)
+      return 0
 
-  return Result.Ok(1)
+  return 1

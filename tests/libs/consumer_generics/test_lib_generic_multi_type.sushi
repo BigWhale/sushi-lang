@@ -21,18 +21,18 @@ extend i64 with Ord:
         return self > (other as i64)
 
 fn max32() i32:
-    let i32 m = max_of(3, 7)??
-    return Result.Ok(m)
+    let i32 m = max_of(3, 7)
+    return m
 
 fn max64() i64:
     let i64 big = 40000000000 as i64
     let i64 small = 2 as i64
-    let i64 m = max_of(big, small)??
-    return Result.Ok(m)
+    let i64 m = max_of(big, small)
+    return m
 
 fn main() i32:
-    let i32 r32 = max32().realise(99)
+    let i32 r32 = max32()
     println(r32)
-    let i64 r64 = max64().realise(99 as i64)
+    let i64 r64 = max64()
     println(r64)
-    return Result.Ok(0)
+    return 0

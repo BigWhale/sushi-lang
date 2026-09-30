@@ -16,4 +16,4 @@ fn main() i32:
             println("fragment {u.fragment}")
         Result.Err(_) -> println("parse failed")
 
-    return Result.Ok(0)
+    return 0

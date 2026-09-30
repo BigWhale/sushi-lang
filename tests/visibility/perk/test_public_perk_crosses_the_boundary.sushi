@@ -13,11 +13,11 @@ extend Pallet with Loud:
         return "PALLET"
 
 fn say@(T: Loud)(T thing) string:
-    return Result.Ok(thing.shout())
+    return thing.shout()
 
 fn main() i32:
     let Muffler m = Muffler(3)
     let Pallet p = Pallet(2)
-    println(say(m).realise("none"))
-    println(say(p).realise("none"))
-    return Result.Ok(0)
+    println(say(m))
+    println(say(p))
+    return 0

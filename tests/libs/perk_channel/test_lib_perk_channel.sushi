@@ -9,4 +9,4 @@ fn main() i32:
     match g.probe(-1):
         Result.Ok(v) -> println("{v}")
         Result.Err(_) -> println("out of range")
-    return Result.Ok(0)
+    return 0

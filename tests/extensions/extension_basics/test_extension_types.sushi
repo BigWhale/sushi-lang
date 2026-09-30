@@ -40,6 +40,6 @@ fn main() i32:
 
   # Verify results
   if (squared == 16 and even == true and flag_as_int == 1 and msg_len == 42):
-    return Result.Ok(0)
+    return 0
   else:
-    return Result.Ok(1)
+    return 1

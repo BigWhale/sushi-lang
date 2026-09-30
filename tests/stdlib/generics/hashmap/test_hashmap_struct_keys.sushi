@@ -68,4 +68,4 @@ fn main() i32:
     else:
         println("✗ Expected 2 entries after removal")
 
-    return Result.Ok(0)
+    return 0

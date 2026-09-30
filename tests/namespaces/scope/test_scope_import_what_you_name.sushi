@@ -5,5 +5,5 @@ use "helpers/mid"
 use "helpers/deep"
 
 fn main() i32:
-    println("{mid_value().realise(0)} {deep_value().realise(0)}")
-    return Result.Ok(0)
+    println("{mid_value()} {deep_value()}")
+    return 0

@@ -7,11 +7,11 @@
 # EXPECT_ERROR_CODE: CE2405
 
 fn count(...string args) i32:
-    return Result.Ok(args.len())
+    return args.len()
 
 fn main() i32:
     let string[] argv = from(["mostly", "harmless"])
-    let i32 n = count(argv...).realise(-1)
+    let i32 n = count(argv...)
     println("count = {n}")
     println("argv[0] after bloom = {argv[0]}")
-    return Result.Ok(0)
+    return 0

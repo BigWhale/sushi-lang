@@ -16,27 +16,27 @@ fn main() i32:
 
     # Verify sinh(0) = 0
     if (abs(sinh_0) > 0.0001):
-        return Result.Ok(1)
+        return 1
 
     # Verify sinh(1) ~= 1.1752 (known value)
     if (abs(sinh_1 - 1.1752) > 0.001):
-        return Result.Ok(2)
+        return 2
 
     # Verify cosh(0) = 1
     if (abs(cosh_0 - 1.0) > 0.0001):
-        return Result.Ok(3)
+        return 3
 
     # Verify cosh(1) ~= 1.5431 (known value)
     if (abs(cosh_1 - 1.5431) > 0.001):
-        return Result.Ok(4)
+        return 4
 
     # Verify tanh(0) = 0
     if (abs(tanh_0) > 0.0001):
-        return Result.Ok(5)
+        return 5
 
     # Verify tanh(1) ~= 0.7616 (known value)
     if (abs(tanh_1 - 0.7616) > 0.001):
-        return Result.Ok(6)
+        return 6
 
     # Verify identity: cosh^2 - sinh^2 = 1
     let f64 x = 0.5
@@ -44,12 +44,12 @@ fn main() i32:
     let f64 c = cosh(x)
     let f64 identity = c * c - s * s
     if (abs(identity - 1.0) > 0.0001):
-        return Result.Ok(7)
+        return 7
 
     # Verify: tanh = sinh/cosh
     let f64 t = tanh(x)
     let f64 ratio = s / c
     if (abs(t - ratio) > 0.0001):
-        return Result.Ok(8)
+        return 8
 
-    return Result.Ok(0)
+    return 0

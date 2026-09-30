@@ -24,4 +24,4 @@ fn main() i32:
     let Inner@(Point) inner = Inner(Point(10, 20))
     let Outer@(Point) outer = Outer(inner)
     println(outer.inner.value.x)
-    return Result.Ok(0)
+    return 0

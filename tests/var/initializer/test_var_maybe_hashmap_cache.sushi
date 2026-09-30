@@ -17,10 +17,10 @@ fn lookup(string key) i32:
             println("filled")
         Maybe.Some(_) -> println("cached")
     match cache:
-        Maybe.Some(m) -> return Result.Ok(m.get(key).realise(-1))
-        Maybe.None -> return Result.Ok(-1)
+        Maybe.Some(m) -> return m.get(key).realise(-1)
+        Maybe.None -> return -1
 
 fn main() i32:
-    println(lookup("answer").realise(-2))
-    println(lookup("answer").realise(-2))
-    return Result.Ok(0)
+    println(lookup("answer"))
+    println(lookup("answer"))
+    return 0

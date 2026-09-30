@@ -6,7 +6,7 @@
 struct Box:
     i32 n
 
-fn eat(nom string s) i32:
+fn eat(nom string s) i32 | StdError:
     return Result.Ok(s.len())
 
 extend Box swallow(string s) i32:
@@ -19,4 +19,4 @@ fn main() i32:
     let string words = "words-{1}"
     let i32 n = b.swallow(words).realise(0)
     println(n)
-    return Result.Ok(0)
+    return 0

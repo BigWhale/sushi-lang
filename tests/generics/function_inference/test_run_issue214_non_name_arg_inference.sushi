@@ -17,16 +17,16 @@
 fn pick@(T)(i32 which, nom T val) T:
     if (which > 0):
         println("positive")
-    return Result.Ok(val)
+    return val
 
 fn amount() i32:
-    return Result.Ok(3)
+    return 3
 
 fn wrap@(T)(nom T v) T:
-    let T r = pick(amount()??, nom v)??
-    return Result.Ok(r)
+    let T r = pick(amount(), nom v)
+    return r
 
 fn main() i32:
-    let string s = wrap(nom "hi").realise("?")
+    let string s = wrap(nom "hi")
     println("s = {s}")
-    return Result.Ok(0)
+    return 0

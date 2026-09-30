@@ -4,13 +4,11 @@
 
 fn add_element(poke i32[] arr, i32 value) ~:
     arr.push(value)
-    return Result.Ok(~)
 
 fn replace_with_new(poke i32[] arr) ~:
     arr := from([100, 200, 300])
-    return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[] numbers = from([1, 2, 3])
     println(numbers.len())
     println(numbers.get(0)??)
@@ -27,4 +25,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

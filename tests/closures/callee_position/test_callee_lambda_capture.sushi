@@ -3,6 +3,6 @@
 # EXPECT_STDERR_EMPTY: true
 fn main() i32:
     let i32 k = 3
-    let i32 r = (|i32 q| k + q)(2).realise(0)
+    let i32 r = (|i32 q| k + q)(2)
     println(r)
-    return Result.Ok(0)
+    return 0

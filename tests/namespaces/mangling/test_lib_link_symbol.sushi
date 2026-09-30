@@ -5,5 +5,5 @@
 use <lib/mangle_closure_lib>
 
 fn main() i32:
-    println("{bumped@(i32)(5).realise(0)}")
-    return Result.Ok(0)
+    println("{bumped@(i32)(5)}")
+    return 0

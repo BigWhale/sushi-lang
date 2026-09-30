@@ -26,19 +26,19 @@ fn main() i32:
                 println("PASS: Struct in Ok works")
             else:
                 println("FAIL: Struct has wrong values")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error for valid input")
-            return Result.Ok(1)
+            return 1
 
     match create_person(nom "", 30):
         Result.Ok(_) ->
             println("FAIL: Should have gotten InvalidName error")
-            return Result.Ok(1)
+            return 1
         Result.Err(CustomError.InvalidName) ->
             println("PASS: InvalidName error works")
         Result.Err(_) ->
             println("FAIL: Got wrong error type")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

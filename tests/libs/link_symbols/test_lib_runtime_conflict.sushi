@@ -14,14 +14,14 @@ fn main() i32:
     # Call library functions that use println()
     let Result@(~, StdError) r1 = greet("World")
     if (r1.is_err()):
-        return Result.Ok(1)
+        return 1
 
     let Result@(~, StdError) r2 = say_goodbye()
     if (r2.is_err()):
-        return Result.Ok(1)
+        return 1
 
     # Main also uses println() directly
     println("Main also uses println")
 
     println("All runtime conflict tests passed")
-    return Result.Ok(0)
+    return 0

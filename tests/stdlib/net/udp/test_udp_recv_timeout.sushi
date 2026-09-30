@@ -10,7 +10,7 @@ fn main() i32:
     let UdpSocket s = bind("127.0.0.1", 0).realise(UdpSocket(-1))
     if (not s.set_timeouts(200, 200).is_ok()):
         println("set_timeouts failed")
-        return Result.Ok(1)
+        return 1
 
     match s.recv_from(64):
         Result.Ok(dg) -> println("wrong: {dg.data.len()} bytes arrived from nobody")
@@ -23,4 +23,4 @@ fn main() i32:
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 
-    return Result.Ok(0)
+    return 0

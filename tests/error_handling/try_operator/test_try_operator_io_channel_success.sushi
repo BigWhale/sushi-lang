@@ -16,7 +16,6 @@ fn write_test_file() ~:
             f.close()
         Result.Err(_) ->
             println("Failed to create test file")
-    return Result.Ok(~)
 
 fn read_first_line(string path) string | IoError:
     # Use ?? to unwrap the Result from open()
@@ -46,4 +45,4 @@ fn main() i32:
 
     println("Successfully read: {first_line}")
 
-    return Result.Ok(0)
+    return 0

@@ -11,4 +11,4 @@ fn main() i32:
     let string message = "Goodbye"
     println(message)
 
-    return Result.Ok(0)
+    return 0

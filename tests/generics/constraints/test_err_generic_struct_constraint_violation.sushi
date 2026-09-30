@@ -17,4 +17,4 @@ fn main() i32:
     # This should fail with CE4006 - NoHash has no derived hash
     let Container@(NoHash) c = Container(nh)
 
-    return Result.Ok(0)
+    return 0

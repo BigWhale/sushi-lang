@@ -9,4 +9,4 @@ fn main() i32:
     let bool b = true
     let bool r = b.flipped().flipped()
     println("{r}")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ use "helper_sizes"
 fn main() i32:
     let i32[SHARED_SIZE] counts = [1, 2, 3, 4]
     println("{counts.len()}")
-    return Result.Ok(0)
+    return 0

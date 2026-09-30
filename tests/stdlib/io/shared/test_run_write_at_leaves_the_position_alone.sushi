@@ -23,7 +23,7 @@ fn main() i32:
         Result.Ok(_) -> ~
         Result.Err(_) ->
             println("patch failed")
-            return Result.Ok(1)
+            return 1
 
     match open("write_at_probe.txt", FileMode.Read()):
         Result.Ok(nom r) ->
@@ -32,4 +32,4 @@ fn main() i32:
         Result.Err(_) -> println("reopen failed")
 
     remove("write_at_probe.txt").realise(0)
-    return Result.Ok(0)
+    return 0

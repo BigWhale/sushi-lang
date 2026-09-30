@@ -13,4 +13,4 @@ fn main() i32:
     println(a[0])
     println(a[1])
     println(a[2])
-    return Result.Ok(0)
+    return 0

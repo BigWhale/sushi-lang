@@ -7,7 +7,7 @@
 extend string say_it() string:
     return self
 
-fn make_tag() string:
+fn make_tag() string | StdError:
     let string s = "tag-{1}"
     return Result.Ok(s.say_it())
 
@@ -15,4 +15,4 @@ fn main() i32:
     match make_tag():
         Result.Ok(t) -> println("t: {t}")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

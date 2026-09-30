@@ -5,4 +5,4 @@ use <io/fs>
 
 fn main() i32:
     let fn(File) -> i32 f = |File h| 1
-    return Result.Ok(0)
+    return 0

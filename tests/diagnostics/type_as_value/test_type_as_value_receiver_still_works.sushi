@@ -17,4 +17,4 @@ fn main() i32:
     match c:
         Color.Red -> println("{box.weight}")
         Color.Blue -> println("0")
-    return Result.Ok(0)
+    return 0

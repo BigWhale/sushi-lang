@@ -30,4 +30,4 @@ fn main() i32:
     println("reverse={a.get(0).realise(0)}")
     a.fill(7)
     println("fill={a.get(3).realise(0)}")
-    return Result.Ok(0)
+    return 0

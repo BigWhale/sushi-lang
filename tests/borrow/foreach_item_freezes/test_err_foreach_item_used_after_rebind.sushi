@@ -7,4 +7,4 @@ fn main() i32:
     foreach(x in a.iter()):
         a := from(["three".clone()])
         println(x)
-    return Result.Ok(0)
+    return 0

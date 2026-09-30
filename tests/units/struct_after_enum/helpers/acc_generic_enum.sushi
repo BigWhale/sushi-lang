@@ -5,4 +5,4 @@ enum Acc@(T):
     Some(T)
 
 public fn one() i32:
-    return Result.Ok(1)
+    return 1

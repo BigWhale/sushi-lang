@@ -5,9 +5,9 @@ fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
     let i32 x = 5
-    let i32 s = sum(x...).realise(0)
-    return Result.Ok(0)
+    let i32 s = sum(x...)
+    return 0

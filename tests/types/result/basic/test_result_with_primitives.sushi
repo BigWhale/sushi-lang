@@ -4,13 +4,13 @@
 
 # Tests Result@(T, E) with primitive types
 
-fn test_i32() i32:
+fn test_i32() i32 | StdError:
     return Result.Ok(42)
 
-fn test_string() string:
+fn test_string() string | StdError:
     return Result.Ok("Mostly Harmless")
 
-fn test_bool() bool:
+fn test_bool() bool | StdError:
     return Result.Ok(true)
 
 fn main() i32:
@@ -20,10 +20,10 @@ fn main() i32:
                 println("PASS: i32 works")
             else:
                 println("FAIL: i32 wrong value")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: i32 got error")
-            return Result.Ok(1)
+            return 1
 
     match test_string():
         Result.Ok(value) ->
@@ -31,10 +31,10 @@ fn main() i32:
                 println("PASS: string works")
             else:
                 println("FAIL: string wrong value")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: string got error")
-            return Result.Ok(1)
+            return 1
 
     match test_bool():
         Result.Ok(value) ->
@@ -42,9 +42,9 @@ fn main() i32:
                 println("PASS: bool works")
             else:
                 println("FAIL: bool wrong value")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: bool got error")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

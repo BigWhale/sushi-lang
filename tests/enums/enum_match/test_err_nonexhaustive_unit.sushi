@@ -10,9 +10,9 @@ enum Shape:
 fn area(Shape s) i32:
     match s:
         Shape.Circle ->
-            return Result.Ok(1)
+            return 1
         Shape.Square ->
-            return Result.Ok(2)
+            return 2
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

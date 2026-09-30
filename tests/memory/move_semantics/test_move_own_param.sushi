@@ -5,11 +5,11 @@
 # EXPECT_NO_LEAKS: true
 
 fn unwrap(Own@(i32) b) i32:
-    return Result.Ok(b.get())
+    return b.get()
 
 fn main() i32:
     let Own@(i32) box = Own.alloc(42)
     # box is moved into unwrap(); unwrap() owns and frees it.
-    let i32 v = unwrap(box).realise(-1)
+    let i32 v = unwrap(box)
     println("boxed={v}")
-    return Result.Ok(0)
+    return 0

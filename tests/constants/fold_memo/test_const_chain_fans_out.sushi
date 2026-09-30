@@ -26,4 +26,4 @@ const i32 C21 = C20 + C20
 
 fn main() i32:
     println("{C21}")
-    return Result.Ok(0)
+    return 0

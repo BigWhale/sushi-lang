@@ -10,22 +10,22 @@ extend Box value() u32:
     return self.v
 
 fn make_u8() u8:
-    return Result.Ok(255 as u8)
+    return 255 as u8
 
 fn make_u16() u16:
-    return Result.Ok(65535 as u16)
+    return 65535 as u16
 
 fn make_u32() u32:
-    return Result.Ok(4294967295 as u32)
+    return 4294967295 as u32
 
 fn make_u64() u64:
-    return Result.Ok(18446744073709551615 as u64)
+    return 18446744073709551615 as u64
 
 fn run_test() i32:
-    println(make_u8()??)
-    println("{make_u16()??}")
-    println(make_u32()??)
-    println("{make_u64()??}")
+    println(make_u8())
+    println("{make_u16()}")
+    println(make_u32())
+    println("{make_u64()}")
 
     let Box b = Box(4294967295 as u32)
     println(b.value())
@@ -36,7 +36,7 @@ fn run_test() i32:
     let u32[] d32 = from([4294967295 as u32])
     println("{d32.get(0).realise(0 as u32)}")
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

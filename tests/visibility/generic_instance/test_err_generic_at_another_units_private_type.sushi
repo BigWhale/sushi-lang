@@ -6,6 +6,6 @@ use "helpers/picker"
 use "helpers/shades"
 
 fn main() i32:
-    let Shade s = picked(Shade(2)).realise(Shade(0))
+    let Shade s = picked(Shade(2))
     println("{s.tone}")
-    return Result.Ok(0)
+    return 0

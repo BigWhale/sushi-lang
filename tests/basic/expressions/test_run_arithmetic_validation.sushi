@@ -37,6 +37,6 @@ fn main() i32:
 
   # All validations should pass
   if (validation_count == 6):
-    return Result.Ok(0)                 # Success)
+    return 0                 # Success)
   else:
-    return Result.Ok(validation_count)  # Return number of passed validations for debugging)
+    return validation_count  # Return number of passed validations for debugging)

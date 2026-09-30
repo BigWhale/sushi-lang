@@ -5,8 +5,8 @@ use "helpers/geo" as geo
 
 fn run() i32:
     let geo.Vec v = geo.Vec(3, 4)
-    return Result.Ok(v.x + v.y)
+    return v.x + v.y
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

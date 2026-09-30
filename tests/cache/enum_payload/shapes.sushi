@@ -2,5 +2,5 @@ public enum Shape:
     Circle(i32)
     Square(i32)
 
-public fn make() Shape:
+public fn make() Shape | StdError:
     return Result.Ok(Shape.Square(7))

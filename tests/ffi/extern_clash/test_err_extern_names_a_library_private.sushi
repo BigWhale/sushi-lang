@@ -9,6 +9,6 @@ unsafe external "C" as raw because "naming a library private":
     fn reach(i32 n, i32 by) i32 = "scale"
 
 fn main() i32:
-    println("{double_it(21).realise(0)}")
+    println("{double_it(21)}")
     println("{raw.reach(4, 2)}")
-    return Result.Ok(0)
+    return 0

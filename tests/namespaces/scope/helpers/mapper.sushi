@@ -7,4 +7,4 @@ public fn counted() i32:
     m.insert(1, 2)
     let i32 n = m.len()
     m.free()
-    return Result.Ok(n)
+    return n

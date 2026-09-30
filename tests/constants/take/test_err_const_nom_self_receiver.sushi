@@ -13,4 +13,4 @@ const Holder OUT = Holder("out")
 
 fn main() i32:
     OUT.release()
-    return Result.Ok(0)
+    return 0

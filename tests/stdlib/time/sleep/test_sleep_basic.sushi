@@ -2,7 +2,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 use <time>
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     println("Testing basic sleep for 1 second...")
     let i32 result = sleep(1 as i64)??
     println("Sleep completed successfully")
@@ -16,4 +16,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

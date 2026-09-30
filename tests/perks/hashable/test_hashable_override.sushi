@@ -24,10 +24,10 @@ extend Point with Hashable:
         return 9 as u64
 
 fn fingerprint@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     let Handle h = Handle(from([]))
-    println(fingerprint(h).realise(0 as u64))
-    println(fingerprint(Point(1, 2)).realise(0 as u64))
-    return Result.Ok(0)
+    println(fingerprint(h))
+    println(fingerprint(Point(1, 2)))
+    return 0

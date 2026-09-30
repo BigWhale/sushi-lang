@@ -10,8 +10,8 @@ fn run() i32:
     let i32 base = 100
     let Holder h = Holder(|i32 x| x + base)
     let fn(i32) -> i32 f = h.op
-    return Result.Ok(f(10)??)
+    return f(10)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

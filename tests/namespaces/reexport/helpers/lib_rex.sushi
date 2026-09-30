@@ -3,4 +3,4 @@
 public use <lib/runtime_lib>
 
 public fn tag_lib() i32:
-    return Result.Ok(7)
+    return 7

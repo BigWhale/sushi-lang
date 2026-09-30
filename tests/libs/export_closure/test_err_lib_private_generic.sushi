@@ -8,4 +8,4 @@ use <lib/private_generic_lib>
 fn main() i32:
     let i32 a = unmarked(nom 7).realise(0)
     println("{a}")
-    return Result.Ok(0)
+    return 0

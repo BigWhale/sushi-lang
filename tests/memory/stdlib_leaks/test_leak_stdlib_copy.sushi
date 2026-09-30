@@ -15,7 +15,7 @@ fn main() i32:
             f.write("Mostly Harmless")
             f.close()
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     let i32 ok = copy('/tmp/sushi_leak_copy_src.txt', '/tmp/sushi_leak_copy_dst.txt').realise(-1)
     # The error path: no such source, so the first open(2) fails.
@@ -24,4 +24,4 @@ fn main() i32:
 
     remove('/tmp/sushi_leak_copy_src.txt').realise(-1)
     remove('/tmp/sushi_leak_copy_dst.txt').realise(-1)
-    return Result.Ok(0)
+    return 0

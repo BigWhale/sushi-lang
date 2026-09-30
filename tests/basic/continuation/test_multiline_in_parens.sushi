@@ -15,4 +15,4 @@ fn main() i32:
     let u8 digit = 55
     let u8 lower = 122
     println("{upper.is_alpha()} {digit.is_alpha()} {lower.is_alpha()}")
-    return Result.Ok(0)
+    return 0

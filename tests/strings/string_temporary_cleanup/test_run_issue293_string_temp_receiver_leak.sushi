@@ -19,22 +19,22 @@ use <collections/strings>
 
 fn go() string:
     let string base = "there"
-    return Result.Ok("hi-{base}")
+    return "hi-{base}"
 
 fn main() i32:
     # a method receiver
-    let i32 n = go().realise("err").len()
+    let i32 n = go().len()
     println(n)
 
     # a condition operand
-    if (go().realise("e").len() > 2):
+    if (go().len() > 2):
         println("long")
 
     # and the same receiver inside a loop, where the leak used to accumulate
     let i32 total = 0
     let i32 seen = 0
     while (seen < 5):
-        total := total + go().realise("e").len()
+        total := total + go().len()
         seen := seen + 1
     println(total)
-    return Result.Ok(0)
+    return 0

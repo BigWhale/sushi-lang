@@ -7,17 +7,17 @@
 # EXPECT_NO_LEAKS: true
 
 fn consume(i32[] arr) i32:
-    return Result.Ok(arr.len())
+    return arr.len()
 
 fn main() i32:
     let i32 n = 3
 
     if (n == 3):
         let i32[] buf = from([1, 2, 3])
-        println(consume(buf).realise(0))
+        println(consume(buf))
 
     if (n == 3):
         let i32[] buf = from([4, 5])
         println(buf.len())
 
-    return Result.Ok(0)
+    return 0

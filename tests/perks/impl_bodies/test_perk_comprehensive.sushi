@@ -50,4 +50,4 @@ fn main() i32:
     println(h)
     println(cmp)
     println(p2.x)
-    return Result.Ok(0)
+    return 0

@@ -3,4 +3,4 @@ const string APP_NAME = "SushiLang"
 
 fn main() i32:
     println(APP_NAME)
-    return Result.Ok(0)
+    return 0

@@ -8,10 +8,10 @@ const u32 MASK = 0xFF
 
 fn main() i32:
   if (MAXB != 200 as u8):
-    return Result.Ok(1)
+    return 1
   if (BIG != 5 as i64):
-    return Result.Ok(2)
+    return 2
   if (MASK != 255 as u32):
-    return Result.Ok(3)
+    return 3
   println("const literals ok")
-  return Result.Ok(0)
+  return 0

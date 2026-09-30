@@ -7,25 +7,25 @@
 
 use <encoding/msgpack>
 
-fn show_index(MsgValue m, string key) ~:
+fn show_index(MsgValue m, string key) ~ | StdError:
     match map_index(m, key)??:
         Maybe.Some(i) -> println("index {key}={i}")
         Maybe.None() -> println("index {key}=none")
     return Result.Ok(~)
 
-fn show_str(MsgValue m, string key) ~:
+fn show_str(MsgValue m, string key) ~ | StdError:
     match map_get_str(m, key)??:
         Maybe.Some(s) -> println("str {key}={s}")
         Maybe.None() -> println("str {key}=none")
     return Result.Ok(~)
 
-fn show_bool(MsgValue m, string key) ~:
+fn show_bool(MsgValue m, string key) ~ | StdError:
     match map_get_bool(m, key)??:
         Maybe.Some(b) -> println("bool {key}={b}")
         Maybe.None() -> println("bool {key}=none")
     return Result.Ok(~)
 
-fn check_map(MsgValue m) ~:
+fn check_map(MsgValue m) ~ | StdError:
     show_index(m, "s")??
     show_index(m, "b")??
     show_index(m, "n")??
@@ -39,7 +39,7 @@ fn check_map(MsgValue m) ~:
     show_bool(m, "zz")??
     return Result.Ok(~)
 
-fn check_scalar(MsgValue v) ~:
+fn check_scalar(MsgValue v) ~ | StdError:
     match map_index(v, "s")??:
         Maybe.Some(_) -> println("scalar index=some")
         Maybe.None() -> println("scalar index=none")
@@ -51,7 +51,7 @@ fn check_scalar(MsgValue v) ~:
         Maybe.None() -> println("scalar bool=none")
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # {"s": "hi", "b": true, "n": 5, 1: "k", "s": "dup"}
     let u8[] buf = from([0x85, 0xa1, 0x73, 0xa2, 0x68, 0x69, 0xa1, 0x62, 0xc3,
                          0xa1, 0x6e, 0x05, 0x01, 0xa1, 0x6b,
@@ -67,4 +67,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

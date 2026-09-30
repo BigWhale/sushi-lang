@@ -52,4 +52,4 @@ fn main() i32:
     let Box box = Box(1)
     println(box.tag(src.s(2, 5)))
 
-    return Result.Ok(0)
+    return 0

@@ -5,23 +5,23 @@ use <io/files>
 fn main() i32:
     match mkdir("/tmp/test_mkdir", 0o755):
         Result.Ok(_) -> println("Created")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
     if (not exists("/tmp/test_mkdir")):
         println("ERROR: Directory should exist")
-        return Result.Ok(1)
+        return 1
 
     if (not is_dir("/tmp/test_mkdir")):
         println("ERROR: Path should be a directory")
-        return Result.Ok(1)
+        return 1
 
     match rmdir("/tmp/test_mkdir"):
         Result.Ok(_) -> println("Removed")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
     if (exists("/tmp/test_mkdir")):
         println("ERROR: Directory should be removed")
-        return Result.Ok(1)
+        return 1
 
     println("OK: mkdir() and rmdir() work")
-    return Result.Ok(0)
+    return 0

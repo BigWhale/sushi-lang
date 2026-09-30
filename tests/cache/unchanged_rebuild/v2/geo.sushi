@@ -3,4 +3,4 @@ public struct Vec:
     i32 y
 
 public fn make() Vec:
-    return Result.Ok(Vec(x: 3, y: 4))
+    return Vec(x: 3, y: 4)

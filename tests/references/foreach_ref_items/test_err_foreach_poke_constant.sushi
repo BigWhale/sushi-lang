@@ -8,4 +8,4 @@ const i32[3] PRIMES = [2, 3, 5]
 fn main() i32:
     foreach(poke r in PRIMES.iter()):
         r := 0
-    return Result.Ok(0)
+    return 0

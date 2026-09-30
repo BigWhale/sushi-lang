@@ -6,4 +6,4 @@ struct Container@(T):
 fn main() i32:
     let Container@(i32) c = Container(from([1, 2, 3]))
     println(c.items.len())
-    return Result.Ok(0)
+    return 0

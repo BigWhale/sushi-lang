@@ -8,8 +8,7 @@
 # that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
 # unnoticed. `.len()` on the destination proves the buffer survived the transfer.
 #
-# The read-back sits in a helper because `??` in main is CW2511 and tests should not use
-# it; the helper is not part of what this file asserts.
+# The read-back sits in a helper; the helper is not part of what this file asserts.
 #
 # The element is an owning STRUCT rather than a bare `i32[]`: a `List@(i32[])` cannot be
 # read back out at all today (`l.get(0)??` is CE0124, the same under-support as the
@@ -22,7 +21,7 @@
 struct Buf:
     i32[] data
 
-fn head_len(peek List@(Buf) l) i32:
+fn head_len(peek List@(Buf) l) i32 | StdError:
     let Buf first = l.get(0)??
     return Result.Ok(first.data.len())
 
@@ -32,4 +31,4 @@ fn main() i32:
     l.push(w)
     println("n={head_len(peek l).realise(-1)}")
     l.destroy()
-    return Result.Ok(0)
+    return 0

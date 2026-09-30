@@ -5,9 +5,9 @@
 use "helpers/geo" as geo
 
 fn run() i32:
-    let geo.Hidden h = geo.origin()??
-    return Result.Ok(h.n)
+    let geo.Hidden h = geo.origin()
+    return h.n
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

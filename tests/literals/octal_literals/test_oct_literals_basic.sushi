@@ -31,4 +31,4 @@ fn main() i32:
     if (equal):
         println("Mostly Harmless")
     println(result)
-    return Result.Ok(0)
+    return 0

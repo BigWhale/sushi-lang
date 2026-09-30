@@ -58,7 +58,7 @@ fn main() i32:
     let bool r11 = s11.starts_with("x")
     println(r11)
 
-    return Result.Ok(0)
+    return 0
 
 # Expected output:
 # 1

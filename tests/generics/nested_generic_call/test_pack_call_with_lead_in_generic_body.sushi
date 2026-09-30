@@ -4,13 +4,13 @@
 
 fn lead_and_rest@(H, ...Ts)(H head, ...Ts rest) i32:
     println("{head} 2")
-    return Result.Ok(2)
+    return 2
 
 fn outer@(T)(T x) i32:
-    let i32 n = lead_and_rest(x, "a", x)??
-    return Result.Ok(n)
+    let i32 n = lead_and_rest(x, "a", x)
+    return n
 
 fn main() i32:
-    outer(42).realise(0)
-    outer("s").realise(0)
-    return Result.Ok(0)
+    outer(42)
+    outer("s")
+    return 0

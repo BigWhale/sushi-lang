@@ -11,7 +11,6 @@ fn show(string text) ~:
     match parse_ip(text):
         Result.Ok(a) -> println("{a.text()} ok")
         Result.Err(_) -> println("{text} refused")
-    return Result.Ok(~)
 
 fn main() i32:
     show("127.0.0.1")
@@ -29,4 +28,4 @@ fn main() i32:
                 refused := refused + 1
     println("rejected {refused}")
 
-    return Result.Ok(0)
+    return 0

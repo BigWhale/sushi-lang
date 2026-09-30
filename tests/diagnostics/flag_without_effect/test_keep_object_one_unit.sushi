@@ -5,4 +5,4 @@
 # A compile-only claim: the point is the absence of a warning, and a warning exits 1. The run asserts exit 0 and nothing more.
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

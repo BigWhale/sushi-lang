@@ -12,4 +12,4 @@ fn main() i32:
     let Tag[] a = from([Tag(s.upper(), 1), Tag(s.lower(), 2)])
     a.fill(a[0])
     println(a[1].label)
-    return Result.Ok(0)
+    return 0

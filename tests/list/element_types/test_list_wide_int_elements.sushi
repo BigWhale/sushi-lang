@@ -12,7 +12,7 @@
 # EXPECT_STDOUT_CONTAINS: "u64: 18446744073709551615 4294967296"
 # EXPECT_NO_LEAKS: true
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let List@(i16) small = List.new()
     small.push(300 as i16)
     small.push(32767 as i16)
@@ -41,4 +41,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

@@ -4,4 +4,4 @@ unsafe external "C" as libc because "bootstrap: call libc for the self-hosted ba
     fn strlen(string s) i64 = "strlen"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

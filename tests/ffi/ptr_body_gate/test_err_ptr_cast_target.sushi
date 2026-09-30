@@ -3,4 +3,4 @@
 fn main() i32:
     let i32 n = 0
     println("{n as ptr}")
-    return Result.Ok(0)
+    return 0

@@ -19,12 +19,12 @@ extend Box@(T) static holding(nom T item) Box@(T) | StdError:
     let i32 f = item.shout()??
     return Result.Ok(Box(nom item, f))
 
-fn work() i32:
+fn work() i32 | StdError:
     let Box@(Cat) b = Box.holding(nom Cat(4))??
     println("{b.first}")
     return Result.Ok(0)
 
 fn main() i32:
     let i32 r = work().realise(1)
-    return Result.Ok(r)
+    return r
 

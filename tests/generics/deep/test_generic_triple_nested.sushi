@@ -18,10 +18,10 @@ fn main() i32:
                     match result_val:
                         Result.Ok(answer) ->
                             println("{answer}")
-                            return Result.Ok(0)
+                            return 0
                         Result.Err(_) ->
-                            return Result.Ok(1)
+                            return 1
                 Maybe.None() ->
-                    return Result.Ok(2)
+                    return 2
         Result.Err(_) ->
-            return Result.Ok(3)
+            return 3

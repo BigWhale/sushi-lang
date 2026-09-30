@@ -20,10 +20,10 @@ fn main() i32:
                 println("PASS: Fixed array in Result works")
             else:
                 println("FAIL: Wrong array values")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error")
-            return Result.Ok(1)
+            return 1
 
     match get_dynamic_array():
         Result.Ok(arr) ->
@@ -31,9 +31,9 @@ fn main() i32:
                 println("PASS: Dynamic array in Result works")
             else:
                 println("FAIL: Wrong dynamic array")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

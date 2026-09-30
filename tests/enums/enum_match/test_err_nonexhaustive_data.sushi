@@ -10,7 +10,7 @@ enum Event:
 fn handle(Event e) i32:
     match e:
         Event.Click(x, y) ->
-            return Result.Ok(x + y)
+            return x + y
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

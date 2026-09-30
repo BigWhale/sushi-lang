@@ -7,4 +7,4 @@ extend float add(float value) float:
 
 fn main() i32:
   # This shouldn't be reached due to compilation error
-  return Result.Ok(0)
+  return 0

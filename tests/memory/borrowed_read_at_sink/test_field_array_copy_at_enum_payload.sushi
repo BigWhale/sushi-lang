@@ -25,4 +25,4 @@ fn main() i32:
         Box.Full(data) -> println("boxed={data.len()}")
         Box.Empty -> println("boxed=0")
     println("src={w.items.len()}")
-    return Result.Ok(0)
+    return 0

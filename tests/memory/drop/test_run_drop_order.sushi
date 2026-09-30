@@ -15,4 +15,4 @@ fn main() i32:
     let Handle b = Handle(2)
     let Handle c = Handle(3)
     println("{a.id}{b.id}{c.id}")
-    return Result.Ok(0)
+    return 0

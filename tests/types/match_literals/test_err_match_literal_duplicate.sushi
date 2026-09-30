@@ -5,12 +5,12 @@
 fn f(i32 n) string:
     match n:
         0x2a ->
-            return Result.Ok("hex answer")
+            return "hex answer"
         42 ->
-            return Result.Ok("decimal answer")
+            return "decimal answer"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(f(42).realise("err"))
-    return Result.Ok(0)
+    println(f(42))
+    return 0

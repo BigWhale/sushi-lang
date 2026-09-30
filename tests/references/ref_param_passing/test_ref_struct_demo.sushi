@@ -17,32 +17,31 @@ fn print_config(poke Config cfg) ~:
     print(cfg.port)
     print(" debug=")
     println(cfg.debug)
-    return Result.Ok(~)
 
 fn get_port(poke Config cfg) i32:
-    return Result.Ok(cfg.port)
+    return cfg.port
 
 fn is_debug_enabled(poke Config cfg) bool:
-    return Result.Ok(cfg.debug)
+    return cfg.debug
 
 fn run_test() i32:
     let Config cfg = Config("localhost", 8080, true)
 
     # Pass by reference - no copy, just a pointer
-    print_config(poke cfg)??
+    print_config(poke cfg)
 
     # Access fields through reference parameters
-    let i32 port = get_port(poke cfg)??
+    let i32 port = get_port(poke cfg)
     println(port)
 
-    let bool debug = is_debug_enabled(poke cfg)??
+    let bool debug = is_debug_enabled(poke cfg)
     println(debug)
 
     # Direct field access (to suppress unused warning)
     println(cfg.host)
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

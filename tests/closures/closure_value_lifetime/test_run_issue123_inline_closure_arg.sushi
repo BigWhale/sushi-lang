@@ -8,12 +8,12 @@
 # EXPECT_STDOUT_EXACT: "17\n"
 
 fn apply(fn(i32) -> i32 f, i32 x) i32:
-    return Result.Ok(f(x)??)
+    return f(x)
 
 fn run() i32:
     let i32 k = 7
-    return Result.Ok(apply(|i32 x| x + k, 10)??)
+    return apply(|i32 x| x + k, 10)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

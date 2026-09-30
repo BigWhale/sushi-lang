@@ -6,9 +6,8 @@
 # EXPECT_NO_LEAKS
 fn eat(i32 v) ~:
     println("ate {v}")
-    return Result.Ok(~)
 
-fn f(peek i32 x) ~:
+fn f(peek i32 x) ~ | StdError:
     eat(x)
     return Result.Ok(~)
 
@@ -17,4 +16,4 @@ fn main() i32:
     let Result@(~, StdError) r = f(peek n)
     if (r.is_ok()):
         println("after: {n}")
-    return Result.Ok(0)
+    return 0

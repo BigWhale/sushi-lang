@@ -6,9 +6,9 @@ unsafe external "C" as raw because "naming a function of this unit":
     fn mine(i32 n) i32 = "mine"
 
 fn mine(i32 n) i32:
-    return Result.Ok(n * 3)
+    return n * 3
 
 fn main() i32:
-    println("{mine(3).realise(0)}")
+    println("{mine(3)}")
     println("{raw.mine(7)}")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ fn main() i32:
     let string s = "mostly".concat(" harmless")
     let string t = "so long".concat(" and thanks")
     println([s, t].len())
-    return Result.Ok(0)
+    return 0

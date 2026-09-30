@@ -14,29 +14,29 @@ enum Held:
     Dynamic(i64[])
 
 fn take_fixed(i64[2] a) i64:
-    return Result.Ok(a[0])
+    return a[0]
 
 fn take_dynamic(nom i64[] a) i64:
-    return Result.Ok(a[0])
+    return a[0]
 
 fn give_fixed() i64[2]:
-    return Result.Ok([4294967303, 1])
+    return [4294967303, 1]
 
 fn give_dynamic() i64[]:
-    return Result.Ok(from([4294967303, 1]))
+    return from([4294967303, 1])
 
 fn run_test() i32:
     let Row r = Row([4294967303, 1], from([4294967303, 1]))
     println(r.fixed[0])
     println(r.dynamic[0])
 
-    println(take_fixed([4294967303, 1])??)
-    println(take_dynamic(nom from([4294967303, 1]))??)
+    println(take_fixed([4294967303, 1]))
+    println(take_dynamic(nom from([4294967303, 1])))
 
-    println(give_fixed()??[0])
+    println(give_fixed()[0])
     # Bound rather than indexed inline: an unbound owning array temporary from a call
     # leaks (#382), which is independent of this issue and pre-dates it.
-    let i64[] returned = give_dynamic()??
+    let i64[] returned = give_dynamic()
     println(returned[0])
 
     let Held h = Held.Fixed([4294967303, 1])
@@ -44,7 +44,7 @@ fn run_test() i32:
         Held.Fixed(v) -> println(v[0])
         Held.Dynamic(v) -> println(v[0])
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

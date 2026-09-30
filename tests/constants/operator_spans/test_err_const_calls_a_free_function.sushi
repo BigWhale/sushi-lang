@@ -3,9 +3,9 @@
 # A constant cannot call a function.
 
 fn seven() i32:
-    return Result.Ok(7)
+    return 7
 
 const i32 X = seven()
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

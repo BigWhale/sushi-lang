@@ -6,9 +6,9 @@ struct Box@(T):
     T item
 
 fn apply(fn(i32) -> Box@(i32) f, i32 n) i32:
-    let Box@(i32) b = f(n)??
-    return Result.Ok(b.item)
+    let Box@(i32) b = f(n)
+    return b.item
 
 fn main() i32:
-    println("{apply(|i32 x| Box(x * 2), 21).realise(0)}")
-    return Result.Ok(0)
+    println("{apply(|i32 x| Box(x * 2), 21)}")
+    return 0

@@ -1,13 +1,13 @@
 # EXPECT_STDOUT_EXACT: "3\n10\n30\n3\n20\n"
 # Test reference to dynamic array with method calls
 
-fn array_info(poke i32[] arr) ~:
+fn array_info(poke i32[] arr) ~ | StdError:
     println(arr.len())
     println(arr.get(0)??)
     println(arr.get(2)??)
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[] numbers = from([10, 20, 30])
 
     # Pass array by reference
@@ -21,4 +21,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

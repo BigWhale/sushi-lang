@@ -15,5 +15,5 @@ fn main() i32:
     let i32 k = 10
     let Handler h = Handler(|i32 x| x + k)
     let Handler h2 = h.clone()
-    println("h2={h2.f(5).realise(-1)}")
-    return Result.Ok(0)
+    println("h2={h2.f(5)}")
+    return 0

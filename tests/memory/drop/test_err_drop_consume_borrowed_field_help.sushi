@@ -15,12 +15,10 @@ struct Wrapper:
 
 fn eat(nom Handle h) ~:
     println("eating {h.id}")
-    return Result.Ok(~)
 
 fn steal(peek Wrapper w) ~:
     eat(nom w.inner)
-    return Result.Ok(~)
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

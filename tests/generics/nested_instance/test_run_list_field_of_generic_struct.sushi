@@ -14,4 +14,4 @@ fn main() i32:
     b.items.push("guide")
     let string first = b.items.get(0).realise('?')
     println("{b.items.len()} {first}")
-    return Result.Ok(0)
+    return 0

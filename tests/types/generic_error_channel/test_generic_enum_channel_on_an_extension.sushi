@@ -23,4 +23,4 @@ fn main() i32:
         Result.Ok(_) -> println("unexpected")
         Result.Err(MyErr.Bad(code)) -> println("bad {code}")
         Result.Err(MyErr.Worse) -> println("worse")
-    return Result.Ok(0)
+    return 0

@@ -5,11 +5,11 @@
 # EXPECT_STDOUT_CONTAINS: "v = "
 # EXPECT_NO_LEAKS: true
 
-fn mk() string:
+fn mk() string | StdError:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn main() i32:
     let Result@(string, StdError) r = mk()
     let string v = r.realise("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{'abcd'}")
     println("v = {v}")
-    return Result.Ok(0)
+    return 0

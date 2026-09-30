@@ -3,7 +3,7 @@
 # itself (#159); the method-call temp registry owns it now (#522).
 # EXPECT_STDOUT_EXACT: "ok\nsome\n"
 # EXPECT_NO_LEAKS
-fn make() string:
+fn make() string | StdError:
     return Result.Ok("Mostly Harmless".clone())
 
 fn main() i32:
@@ -14,4 +14,4 @@ fn main() i32:
     if (xs.get(1).is_some()):
         println("some")
 
-    return Result.Ok(0)
+    return 0

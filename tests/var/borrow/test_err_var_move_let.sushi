@@ -7,4 +7,4 @@ var i32[] table = from([])
 fn main() i32:
     let i32[] mine = table
     println("{mine.len()}")
-    return Result.Ok(0)
+    return 0

@@ -6,26 +6,26 @@
 fn wide(u64 v) string:
     match v:
         0xffff_ffff_ffff_ffff ->
-            return Result.Ok("max")
+            return "max"
         0b101 ->
-            return Result.Ok("five")
+            return "five"
         0o10 ->
-            return Result.Ok("eight")
+            return "eight"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn low(i64 v) string:
     match v:
         -9223372036854775808 ->
-            return Result.Ok("i64 min")
+            return "i64 min"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(wide(18446744073709551615).realise("err"))
-    println(wide(5).realise("err"))
-    println(wide(8).realise("err"))
-    println(wide(0).realise("err"))
-    println(low(-9223372036854775808).realise("err"))
-    println(low(1).realise("err"))
-    return Result.Ok(0)
+    println(wide(18446744073709551615))
+    println(wide(5))
+    println(wide(8))
+    println(wide(0))
+    println(low(-9223372036854775808))
+    println(low(1))
+    return 0

@@ -27,7 +27,7 @@ fn main() i32:
             out.close()
         Result.Err(_) ->
             stderr.write("Error: cannot create test file\n")
-            return Result.Err(StdError.Error)
+            return 1
 
     # Read file with seeking
     let Result@(File, IoError) read_result = open("test_seek_output.txt", FileMode.Read())
@@ -40,7 +40,7 @@ fn main() i32:
             println("After seek to start: {line}")
             f.close()
             println("Seek test completed")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             stderr.write("Error: cannot read test file\n")
-            return Result.Err(StdError.Error)
+            return 1

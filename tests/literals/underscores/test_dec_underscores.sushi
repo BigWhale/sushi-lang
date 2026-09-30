@@ -12,4 +12,4 @@ fn main() i32:
     let i32 e = -1_000
     let i64 f = 4_294_967_296
     println("{a} {b} {c} {d} {e} {f}")
-    return Result.Ok(0)
+    return 0

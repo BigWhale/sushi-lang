@@ -9,4 +9,4 @@ fn main() i32:
     foreach(i in lo..2):
         cnt := cnt + 1
     println("iters {cnt}")
-    return Result.Ok(0)
+    return 0

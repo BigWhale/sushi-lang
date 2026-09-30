@@ -9,4 +9,4 @@ fn main() i32:
     let i32[] a = none.realise(from([]))
     let i32[] b = some.realise(from([]))
     println("{a.len()} {b.len()}")
-    return Result.Ok(0)
+    return 0

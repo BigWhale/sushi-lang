@@ -12,8 +12,8 @@ fn main() i32:
             let Maybe@(i32) inner2 = val
             match inner2:
                 Maybe.Some(_) ->
-                    return Result.Ok(0)
+                    return 0
                 Maybe.None() ->
-                    return Result.Ok(1)
+                    return 1
         Maybe.None() ->
-            return Result.Ok(-1)
+            return -1

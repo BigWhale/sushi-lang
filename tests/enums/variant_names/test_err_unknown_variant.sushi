@@ -8,4 +8,4 @@ enum Color:
 
 fn main() i32:
     let Color c = Color.Purple()
-    return Result.Ok(0)
+    return 0

@@ -4,7 +4,7 @@
 public use "helpers/geometry"
 
 public fn area(Vec v) i32:
-    return Result.Ok(v.x * v.y)
+    return v.x * v.y
 
 public fn unit_square() Vec:
-    return Result.Ok(Vec(SIZE, SIZE))
+    return Vec(SIZE, SIZE)

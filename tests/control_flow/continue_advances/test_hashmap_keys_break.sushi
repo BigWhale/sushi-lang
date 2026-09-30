@@ -15,4 +15,4 @@ fn main() i32:
         if (k > 0):
             break
     println("steps {steps}")
-    return Result.Ok(0)
+    return 0

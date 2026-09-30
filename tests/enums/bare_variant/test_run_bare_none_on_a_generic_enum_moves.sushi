@@ -7,9 +7,9 @@
 
 fn none_of() Maybe@(string):
     let Maybe@(string) m = Maybe.None
-    return Result.Ok(m)
+    return m
 
 fn main() i32:
-    let Maybe@(string) m = none_of().realise(Maybe.Some("wrong"))
+    let Maybe@(string) m = none_of()
     println("{m.is_some()}")
-    return Result.Ok(0)
+    return 0

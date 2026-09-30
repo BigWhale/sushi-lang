@@ -11,15 +11,14 @@ struct H:
 fn take(List@(File) v, poke List@(File) dst) ~:
     println(v.len())
     dst.clear()
-    return Result.Ok(~)
 
-fn go() ~:
+fn go() ~ | StdError:
     let H h = H(List.new())
     let List@(File) v = h.items
-    take(v, poke h.items)??
+    take(v, poke h.items)
     return Result.Ok(~)
 
 fn main() i32:
     if (go().is_err()):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0

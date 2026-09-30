@@ -22,4 +22,4 @@ struct Node:
 fn main() i32:
     let Node root = Node(1, from([]))
     println("v={root.value} n={root.kids.len()}")
-    return Result.Ok(0)
+    return 0

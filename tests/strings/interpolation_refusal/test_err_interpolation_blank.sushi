@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2032
 # This test should FAIL compilation with CE2035
 
-fn get_blank() ~:
+fn get_blank() ~ | StdError:
     return Result.Ok(~)
 
 fn main() i32:
@@ -11,4 +11,4 @@ fn main() i32:
     # This should trigger CE2035 error - blank type cannot be interpolated
     println("Blank: {blank_val}")
 
-    return Result.Ok(0)
+    return 0

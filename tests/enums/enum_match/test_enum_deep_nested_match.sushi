@@ -17,31 +17,31 @@ enum Root:
 fn extract(Root r) i32:
     match r:
         Root.Alpha(Middle.Left(Leaf.Good(n))) ->
-            return Result.Ok(n)
+            return n
         Root.Alpha(Middle.Left(Leaf.Bad)) ->
-            return Result.Ok(-1)
+            return -1
         Root.Alpha(Middle.Right(Leaf.Good(n))) ->
-            return Result.Ok(n * 10)
+            return n * 10
         Root.Alpha(Middle.Right(Leaf.Bad)) ->
-            return Result.Ok(-2)
+            return -2
         Root.Beta(_) ->
-            return Result.Ok(-99)
+            return -99
 
 fn main() i32:
     let Leaf leaf = Leaf.Good(5)
     let Middle mid = Middle.Left(leaf)
     let Root root = Root.Alpha(mid)
 
-    let i32 v = extract(root).realise(0)
+    let i32 v = extract(root)
     if (v != 5):
         println("FAIL: expected 5 got {v}")
-        return Result.Ok(1)
+        return 1
 
     let Root beta = Root.Beta(Middle.Right(Leaf.Good(7)))
-    let i32 bv = extract(beta).realise(0)
+    let i32 bv = extract(beta)
     if (bv != -99):
         println("FAIL: Beta expected -99 got {bv}")
-        return Result.Ok(1)
+        return 1
 
     println("Deep nested match: {v}")
-    return Result.Ok(0)
+    return 0

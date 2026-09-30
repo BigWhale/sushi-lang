@@ -9,4 +9,4 @@ struct Box:
 fn main() i32:
     let Box b = Box(c.GREETING)
     println(b.s)
-    return Result.Ok(0)
+    return 0

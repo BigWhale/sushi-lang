@@ -3,4 +3,4 @@
 # EXPECT_ERROR_CODE: CE0138
 fn main(peek string[] args) i32:
     println("n {args.len()}")
-    return Result.Ok(0)
+    return 0

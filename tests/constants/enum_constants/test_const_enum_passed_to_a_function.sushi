@@ -11,13 +11,13 @@ const Shape UNIT = Shape.Circle(5)
 
 fn radius(Shape s) i32:
     match s:
-        Shape.Dot -> return Result.Ok(0)
-        Shape.Circle(r) -> return Result.Ok(r)
+        Shape.Dot -> return 0
+        Shape.Circle(r) -> return r
 
 fn main() i32:
     foreach(i in 0..3):
-        print("{i}:{radius(UNIT).realise(-1)}")
+        print("{i}:{radius(UNIT)}")
         if (i < 2):
             print(" ")
     println("")
-    return Result.Ok(0)
+    return 0

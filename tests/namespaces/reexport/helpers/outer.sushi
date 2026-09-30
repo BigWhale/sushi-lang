@@ -3,4 +3,4 @@
 public use "helpers/shapes"
 
 public fn describe(Vec v) string:
-    return Result.Ok("{v.x}x{v.y}")
+    return "{v.x}x{v.y}"

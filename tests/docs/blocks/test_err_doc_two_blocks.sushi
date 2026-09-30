@@ -4,9 +4,9 @@
 ##: Documents the function from above. :##
 fn probe() i32:
     ##: And documents the same function from inside its body. :##
-    return Result.Ok(7)
+    return 7
 
 fn main() i32:
-    let i32 n = probe().realise(0)
+    let i32 n = probe()
     println("{n}")
-    return Result.Ok(0)
+    return 0

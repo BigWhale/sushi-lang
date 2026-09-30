@@ -6,4 +6,4 @@ struct Pallet:
 
 public fn pallet_size() i32:
     let Pallet p = Pallet(4)
-    return Result.Ok(p.crates)
+    return p.crates

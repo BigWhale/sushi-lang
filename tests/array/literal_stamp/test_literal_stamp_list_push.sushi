@@ -11,4 +11,4 @@ fn main() i32:
     match l.get(0):
         Maybe.Some(p) -> println("{l.len()} {p[0] + p[1]}")
         Maybe.None() -> println("none")
-    return Result.Ok(0)
+    return 0

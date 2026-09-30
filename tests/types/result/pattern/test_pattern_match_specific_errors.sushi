@@ -22,31 +22,31 @@ fn main() i32:
     match open_file("missing.txt"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten NotFound")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyFileError.NotFound) ->
             println("PASS: NotFound pattern works")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
     match open_file("forbidden.txt"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten PermissionDenied")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyFileError.PermissionDenied) ->
             println("PASS: PermissionDenied pattern works")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
     match open_file("exists.txt"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten AlreadyExists")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyFileError.AlreadyExists) ->
             println("PASS: AlreadyExists pattern works")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

@@ -11,4 +11,4 @@ struct Point:
 fn main() i32:
     let i32 v = Point(7, 3).y
     println("{v}")
-    return Result.Ok(0)
+    return 0

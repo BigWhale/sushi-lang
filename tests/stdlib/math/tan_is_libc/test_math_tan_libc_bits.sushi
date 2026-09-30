@@ -11,4 +11,4 @@ fn main() i32:
     let bool b = tan(-1.0112971496820904).to_bits() == libc.tan(-1.0112971496820904).to_bits()
     let bool c = tan(1e10).to_bits() == libc.tan(1e10).to_bits()
     println("{a} {b} {c}")
-    return Result.Ok(0)
+    return 0

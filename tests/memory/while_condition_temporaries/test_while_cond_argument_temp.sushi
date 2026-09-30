@@ -5,12 +5,12 @@
 use <collections/strings>
 
 fn look(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let string a = "manifest x"
     let i32 i = 0
-    while (look(a.s(0, 8)).realise(0) == 8 and i < 3):
+    while (look(a.s(0, 8)) == 8 and i < 3):
         i := i + 1
     println(i)
-    return Result.Ok(0)
+    return 0

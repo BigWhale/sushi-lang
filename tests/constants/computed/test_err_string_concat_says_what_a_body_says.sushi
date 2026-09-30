@@ -8,4 +8,4 @@ const string GREETING = FIRST + " Harmless"
 
 fn main() i32:
     println(GREETING)
-    return Result.Ok(0)
+    return 0

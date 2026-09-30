@@ -8,9 +8,9 @@ Adds two numbers.
 - Parameter a: The second addend, with the name never renamed.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 fn main() i32:
-    let i32 n = add(1, 2).realise(0)
+    let i32 n = add(1, 2)
     println("{n}")
-    return Result.Ok(0)
+    return 0

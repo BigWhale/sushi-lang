@@ -17,4 +17,4 @@ fn main() i32:
     let H h1 = H(Box(1, |i32 x| x))
     let H h2 = H(Box(2, |i32 x| x + 1))
     println("same {h1.hash() == h2.hash()}")
-    return Result.Ok(0)
+    return 0

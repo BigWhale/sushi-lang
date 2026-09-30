@@ -8,4 +8,4 @@ use "output_paths_dep"
 
 fn main() i32:
     println("{ANSWER}")
-    return Result.Ok(0)
+    return 0

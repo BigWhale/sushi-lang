@@ -21,4 +21,4 @@ fn main() i32:
 
     println(product)  # Should print 0 (since values[0] is 0)
 
-    return Result.Ok(0)
+    return 0

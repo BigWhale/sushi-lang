@@ -6,6 +6,6 @@ use "helpers/prefix_own"
 
 fn main() i32:
     let string s = "a,b"
-    println(begins_with_a(s).realise(false))
+    println(begins_with_a(s))
     println(s.ends_with("b"))
-    return Result.Ok(0)
+    return 0

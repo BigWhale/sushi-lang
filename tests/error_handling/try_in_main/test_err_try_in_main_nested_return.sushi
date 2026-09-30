@@ -1,0 +1,9 @@
+# CE0131: a `??` nested inside the returned expression of the bare `main` is refused at
+# the whole `compute()??`, and only once (#743).
+# EXPECT_ERROR_CODES_EXACT: CE0131
+# EXPECT_STDERR_CONTAINS: 9:12: error [CE0131]
+fn compute() i32 | StdError:
+    return Result.Ok(7)
+
+fn main() i32:
+    return compute()?? + 1

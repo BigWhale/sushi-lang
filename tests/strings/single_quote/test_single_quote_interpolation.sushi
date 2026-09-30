@@ -3,7 +3,7 @@
 
 use <collections/strings>
 
-fn test_pad_left() ~:
+fn test_pad_left() ~ | StdError:
     let string s = "hello"
     let string result = s.pad_left(10, '*')
     let string interp = "{s.pad_left(10, '*')}"
@@ -13,7 +13,7 @@ fn test_pad_left() ~:
         println("FAIL: pad_left interpolation")
     return Result.Ok(~)
 
-fn test_find() ~:
+fn test_find() ~ | StdError:
     let string s = "hello world"
     let Maybe@(i32) result = s.find('world')
     let i32 index = result.realise(-1)
@@ -24,7 +24,7 @@ fn test_find() ~:
         println("FAIL: find interpolation")
     return Result.Ok(~)
 
-fn test_replace() ~:
+fn test_replace() ~ | StdError:
     let string s = "hello world"
     let string result = s.replace("world", "there")
     let string interp = "{s.replace('world', 'there')}"
@@ -34,7 +34,7 @@ fn test_replace() ~:
         println("FAIL: replace interpolation")
     return Result.Ok(~)
 
-fn test_empty_string() ~:
+fn test_empty_string() ~ | StdError:
     let string[] parts = from(["a", "b", "c"])
     let string result = "".join(parts)
     let string interp = "{''.join(parts)}"
@@ -53,4 +53,4 @@ fn main() i32:
         println("")
     if (test_empty_string().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

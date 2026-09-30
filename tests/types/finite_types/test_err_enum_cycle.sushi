@@ -11,4 +11,4 @@ enum B:
     Y(A)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

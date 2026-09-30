@@ -13,10 +13,10 @@ use <collections/strings>
 use <lib/shadow_modes_lib>
 
 fn eat(nom string s) i32:
-    return Result.Ok(s.len() * 2)
+    return s.len() * 2
 
 fn main() i32:
     let string msg = "answer"
-    println("{eat(nom msg).realise(0)}")
-    println("{drive().realise(0)}")
-    return Result.Ok(0)
+    println("{eat(nom msg)}")
+    println("{drive()}")
+    return 0

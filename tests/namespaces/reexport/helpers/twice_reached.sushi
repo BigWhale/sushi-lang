@@ -3,4 +3,4 @@
 public use "helpers/geometry"
 
 public fn doubled(Vec v) Vec:
-    return Result.Ok(Vec(v.x * 2, v.y * 2))
+    return Vec(v.x * 2, v.y * 2)

@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_EXACT: "7\n7\n"
 fn gen@(T)(T x) i32:
     let u64 h = x.hash()
-    return Result.Ok(7 + (h & 0) as i32)
+    return 7 + (h & 0) as i32
 
 struct Holder:
     fn(i32) -> i32 f
@@ -13,8 +13,8 @@ enum Op:
 
 fn main() i32:
     let Holder h = Holder(gen)
-    println(h.f(1).realise(0))
+    println(h.f(1))
     let Op o = Op.Apply(gen)
     match o:
         Op.Apply(g) -> println(g("x").realise(0))
-    return Result.Ok(0)
+    return 0

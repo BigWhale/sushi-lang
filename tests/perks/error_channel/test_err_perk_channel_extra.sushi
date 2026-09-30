@@ -15,4 +15,4 @@ extend Robot with Greet:
 fn main() i32:
     let Robot marvin = Robot(1)
     println(marvin.hello().realise(""))
-    return Result.Ok(0)
+    return 0

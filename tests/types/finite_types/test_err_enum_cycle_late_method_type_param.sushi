@@ -15,5 +15,5 @@ fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     match xs.wrap(true):
-        Tree.Leaf(_) -> return Result.Ok(0)
-        Tree.Node(_) -> return Result.Ok(1)
+        Tree.Leaf(_) -> return 0
+        Tree.Node(_) -> return 1

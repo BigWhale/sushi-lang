@@ -13,4 +13,4 @@ struct Cache:
 fn main() i32:
     let Cache c = Cache(1, HashMap.new())
     println("{c.hash()}")
-    return Result.Ok(0)
+    return 0

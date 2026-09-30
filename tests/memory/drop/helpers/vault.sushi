@@ -6,5 +6,5 @@ extend Vault with Drop:
     fn drop(poke self) ~:
         println("vault {self.id} closed")
 
-public fn open_vault(i32 id) Vault:
+public fn open_vault(i32 id) Vault | StdError:
     return Result.Ok(Vault(id))

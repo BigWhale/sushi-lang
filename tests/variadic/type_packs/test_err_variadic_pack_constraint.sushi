@@ -10,8 +10,8 @@ extend i32 with Display:
         return "int"
 
 fn print_all@(...Ts: Display)(...Ts args) ~:
-    return Result.Ok(~)
+    return ~
 
 fn main() i32:
     print_all(42, "nope")
-    return Result.Ok(0)
+    return 0

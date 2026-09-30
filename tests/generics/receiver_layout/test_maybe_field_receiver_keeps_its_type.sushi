@@ -16,4 +16,4 @@ fn main() i32:
     let f64 a = r.m.realise(0.0)
     let i64 b = w.m.realise(0)
     println("{a} {b}")
-    return Result.Ok(0)
+    return 0

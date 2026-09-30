@@ -4,9 +4,9 @@
 use "helpers/geo" as geo
 
 fn run() i32:
-    let geo.Box@(i32) b = geo.boxed(7)??
-    return Result.Ok(b.item)
+    let geo.Box@(i32) b = geo.boxed(7)
+    return b.item
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

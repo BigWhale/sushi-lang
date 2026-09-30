@@ -11,4 +11,4 @@ fn main() i32:
     let Vec v = Vec.at(1)
     let Vec w = v.at(2)
     println("{w.x}")
-    return Result.Ok(0)
+    return 0

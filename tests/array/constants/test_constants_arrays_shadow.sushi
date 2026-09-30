@@ -13,9 +13,9 @@ fn shadowed() i32:
     let i32[4] PRIMES = [7, 8, 9, 10]
     println("shadowed: {PRIMES[0]}")
     println("shadowed len: {PRIMES.len()}")
-    return Result.Ok(PRIMES[0])
+    return PRIMES[0]
 
 fn main() i32:
     println("constant: {PRIMES[0]}")
-    let i32 s = shadowed().realise(0)
-    return Result.Ok(s - 7)
+    let i32 s = shadowed()
+    return s - 7

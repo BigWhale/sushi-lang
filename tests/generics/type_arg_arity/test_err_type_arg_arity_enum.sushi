@@ -10,4 +10,4 @@ fn main() i32:
     match o:
         Opt.Some(_) -> println("some")
         Opt.Nothing -> println("nothing")
-    return Result.Ok(0)
+    return 0

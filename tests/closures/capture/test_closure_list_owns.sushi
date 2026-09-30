@@ -10,8 +10,8 @@ fn build() i32:
     fns.push(|i32 x| x * base)
     let i32 n = fns.len()
     fns.free()
-    return Result.Ok(n)
+    return n
 
 fn main() i32:
-    println(build().realise(-1))
-    return Result.Ok(0)
+    println(build())
+    return 0

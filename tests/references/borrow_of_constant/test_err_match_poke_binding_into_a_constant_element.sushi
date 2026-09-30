@@ -14,4 +14,4 @@ fn main() i32:
     match TONES[0]:
         Shade.Dim(poke r) -> r := r + 1
         Shade.Bright(_) -> println("bright")
-    return Result.Ok(0)
+    return 0

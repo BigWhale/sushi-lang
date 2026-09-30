@@ -9,5 +9,5 @@ struct Shown:
     i32 tag
 
 fn main() i32:
-    println("{touch().realise(0)}")
-    return Result.Ok(0)
+    println("{touch()}")
+    return 0

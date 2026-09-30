@@ -17,11 +17,11 @@ extend Words next(poke self) Maybe@(string):
 
 fn eat(nom string s) i32:
     println(s)
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let Words w = Words(3)
     let i32 total = 0
     foreach(s in w):
-        total := total + eat(nom s).realise(0)
-    return Result.Ok(total - 18)
+        total := total + eat(nom s)
+    return total - 18

@@ -7,12 +7,12 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 
 fn identity@(T)(T value) T:
-    return Result.Ok(value)
+    return value
 
 extend i32 boosted() i32:
-    return identity(21).realise(0) + self
+    return identity(21) + self
 
 fn main() i32:
     let i32 n = 21
     println(n.boosted())
-    return Result.Ok(0)
+    return 0

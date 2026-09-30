@@ -5,9 +5,9 @@
 fn twice(f64 x) f64:
     let f64 y = x
     y := y * 2.0
-    return Result.Ok(y)
+    return y
 
 fn main() i32:
-    let f64 r = twice(2.5).realise(0.0)
+    let f64 r = twice(2.5)
     println(r)
-    return Result.Ok(0)
+    return 0

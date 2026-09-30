@@ -28,4 +28,4 @@ extend Box@(T) with Show:
 fn main() i32:
     let Box@(i32) b = Box(7)
     println("{b.show()}")
-    return Result.Ok(0)
+    return 0

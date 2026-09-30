@@ -2,16 +2,16 @@
 # perk implementation on a generic target, as it is in a function (#1036).
 # EXPECT_STDOUT_EXACT: "8\n8\n1\n"
 fn gen@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn apply_t@(T)(fn(T) -> T f, T x) T:
-    return Result.Ok(f(x).realise(x))
+    return f(x)
 
 struct Box@(T):
     T v
 
 extend Box@(T) run() T:
-    return apply_t(gen, self.v).realise(self.v)
+    return apply_t(gen, self.v)
 
 perk Runs:
     fn go() i32
@@ -19,7 +19,7 @@ perk Runs:
 extend Box@(T) with Runs:
     fn go() i32:
         let fn(T) -> T f = gen
-        let T k = f(self.v).realise(self.v)
+        let T k = f(self.v)
         println(k)
         return 1
 
@@ -27,4 +27,4 @@ fn main() i32:
     let Box@(i32) b = Box(8)
     println(b.run())
     println(b.go())
-    return Result.Ok(0)
+    return 0

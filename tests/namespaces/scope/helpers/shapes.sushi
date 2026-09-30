@@ -3,4 +3,4 @@
 use "helpers/geometry"
 
 public fn origin() Vec:
-    return Result.Ok(Vec(3, 4))
+    return Vec(3, 4)

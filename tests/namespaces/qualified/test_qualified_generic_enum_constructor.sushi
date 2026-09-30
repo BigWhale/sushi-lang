@@ -14,4 +14,4 @@ fn main() i32:
     match e:
         slot.Slot.Filled(v) -> println("filled {v}")
         slot.Slot.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

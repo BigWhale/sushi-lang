@@ -15,4 +15,4 @@ fn main() i32:
     let Pair@(i32, i32) v = p.get()
     println("sum = {v.first + v.second}")
     p.destroy()
-    return Result.Ok(0)
+    return 0

@@ -14,4 +14,4 @@ extend Vec with Named:
 fn main() i32:
     let Vec v = Vec(1)
     println("{v.x}")
-    return Result.Ok(0)
+    return 0

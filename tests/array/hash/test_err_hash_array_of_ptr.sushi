@@ -11,4 +11,4 @@ unsafe external "C" as libc because "the test needs a ptr in scope; nothing is c
 fn main() i32:
     let ptr[] handles = from([])
     println("{handles.hash()}")
-    return Result.Ok(0)
+    return 0

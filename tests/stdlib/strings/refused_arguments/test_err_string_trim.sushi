@@ -5,4 +5,4 @@ fn main() i32:
     let string s = "  hello  "
     # Error: trim() takes no arguments
     let string r = s.trim("extra")
-    return Result.Ok(0)
+    return 0

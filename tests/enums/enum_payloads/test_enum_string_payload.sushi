@@ -10,30 +10,30 @@ enum Message:
 fn describe(Message m) string:
     match m:
         Message.Hello(name) ->
-            return Result.Ok("Hello, {name}!")
+            return "Hello, {name}!"
         Message.Goodbye(name) ->
-            return Result.Ok("Goodbye, {name}!")
+            return "Goodbye, {name}!"
         Message.Empty ->
-            return Result.Ok("No message")
+            return "No message"
 
 fn main() i32:
     let Message m1 = Message.Hello("world")
-    let string s1 = describe(m1).realise("error")
+    let string s1 = describe(m1)
     println("{s1}")
 
     let Message m2 = Message.Empty()
-    let string s2 = describe(m2).realise("error")
+    let string s2 = describe(m2)
     println("{s2}")
 
     let Message m3 = Message.Goodbye("Alice")
-    let string s3 = describe(m3).realise("error")
+    let string s3 = describe(m3)
     println("{s3}")
 
     if (s1 != "Hello, world!"):
-        return Result.Ok(1)
+        return 1
     if (s2 != "No message"):
-        return Result.Ok(1)
+        return 1
     if (s3 != "Goodbye, Alice!"):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

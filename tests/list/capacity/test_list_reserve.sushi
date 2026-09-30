@@ -14,12 +14,12 @@ fn main() i32:
     let i32 cap = data.capacity()
     if (cap < 52):  # Should have at least 2 (current) + 50 (reserved)
         println("ERROR: Expected capacity at least 52, got {cap}")
-        return Result.Ok(1)
+        return 1
 
     # Length should not change
     if (data.len() != len_before):
         println("ERROR: Length should not change after reserve")
-        return Result.Ok(2)
+        return 2
 
     # Reserve when already enough capacity (should not reallocate)
     let i32 cap_before = data.capacity()
@@ -28,7 +28,7 @@ fn main() i32:
 
     if (cap_after != cap_before):
         println("ERROR: Should not reallocate when capacity sufficient")
-        return Result.Ok(3)
+        return 3
 
     println("reserve tests passed!")
-    return Result.Ok(0)
+    return 0

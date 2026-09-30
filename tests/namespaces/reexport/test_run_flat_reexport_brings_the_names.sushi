@@ -7,14 +7,14 @@
 use "helpers/shapes"
 
 fn main() i32:
-    let Vec o = origin().realise(Vec(0, 0))
-    let Vec sq = unit_square().realise(Vec(0, 0))
-    let i32 a = area(o).realise(-1)
-    let i32 b = area(sq).realise(-1)
-    let Sign s = sign_of(-4).realise(Sign.Plus)
+    let Vec o = origin()
+    let Vec sq = unit_square()
+    let i32 a = area(o)
+    let i32 b = area(sq)
+    let Sign s = sign_of(-4)
     let string word = "plus"
     match s:
         Sign.Plus -> word := "plus"
         Sign.Minus -> word := "minus"
     println("{a} {b} {SIZE} {word}")
-    return Result.Ok(0)
+    return 0

@@ -11,4 +11,4 @@ var Maybe@(Point[]) cache = Maybe.None
 fn main() i32:
     if (cache.is_none()):
         println("empty")
-    return Result.Ok(0)
+    return 0

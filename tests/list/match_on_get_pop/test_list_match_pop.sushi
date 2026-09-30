@@ -9,27 +9,27 @@ fn main() i32:
         Maybe.Some(val) ->
             if (val != 100):
                 println("ERROR: Expected 100, got {val}")
-                return Result.Ok(1)
+                return 1
         Maybe.None() ->
             println("ERROR: Should have popped element")
-            return Result.Ok(2)
+            return 2
 
     # Pop again
     match data.pop():
         Maybe.Some(val) ->
             if (val != 42):
                 println("ERROR: Expected 42, got {val}")
-                return Result.Ok(3)
+                return 3
         Maybe.None() ->
             println("ERROR: Should have popped second element")
-            return Result.Ok(4)
+            return 4
 
     # Pop from empty list should return None
     match data.pop():
         Maybe.Some(_) ->
             println("ERROR: Should not have element after two pops")
-            return Result.Ok(5)
+            return 5
         Maybe.None() ->
             println("OK: Empty list returns None")
 
-    return Result.Ok(0)
+    return 0

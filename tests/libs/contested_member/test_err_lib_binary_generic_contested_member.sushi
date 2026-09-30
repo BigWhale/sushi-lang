@@ -11,4 +11,4 @@ struct Crate@(T):
 fn main() i32:
     let Crate@(i32) c = Crate(1)
     println("{c.mine}")
-    return Result.Ok(0)
+    return 0

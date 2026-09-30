@@ -6,4 +6,4 @@ fn main() i32:
     let string name = "Mostly Harmless"
     let i32 x = 1 - name
     println("{x}")
-    return Result.Ok(0)
+    return 0

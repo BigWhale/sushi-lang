@@ -11,23 +11,23 @@ fn pick_keep_first(Choice c) string:
     let string s = "{42}"
     match c:
         Choice.Keep() ->
-            return Result.Ok(s)
+            return s
         Choice.Toss() ->
-            return Result.Ok("tossed")
+            return "tossed"
 
 fn pick_toss_first(Choice c) string:
     let string s = "{42}"
     match c:
         Choice.Toss() ->
-            return Result.Ok("tossed")
+            return "tossed"
         Choice.Keep() ->
-            return Result.Ok(s)
+            return s
 
 fn main() i32:
     let Choice k = Choice.Keep()
     let Choice t = Choice.Toss()
-    println(pick_keep_first(k).realise("err"))
-    println(pick_keep_first(t).realise("err"))
-    println(pick_toss_first(k).realise("err"))
-    println(pick_toss_first(t).realise("err"))
-    return Result.Ok(0)
+    println(pick_keep_first(k))
+    println(pick_keep_first(t))
+    println(pick_toss_first(k))
+    println(pick_toss_first(t))
+    return 0

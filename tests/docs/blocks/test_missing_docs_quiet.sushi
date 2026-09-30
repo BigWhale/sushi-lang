@@ -18,7 +18,7 @@ Adds two numbers.
 - Returns: The sum.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 ##:
 Reads a ship's hull rating.
@@ -26,7 +26,7 @@ Reads a ship's hull rating.
 - Parameter ship: The ship to read.
 :##
 fn hull_of(Ship ship) i32:
-    return Result.Ok(ship.hull)
+    return ship.hull
 
 ##:
 Divides one number by another.
@@ -42,7 +42,7 @@ fn divide(i32 a, i32 b) i32 | DriveError:
 
 fn main() i32:
     let Ship s = Ship(7)
-    println("{add(1, 2).realise(0)}")
-    println("{hull_of(s).realise(0)}")
+    println("{add(1, 2)}")
+    println("{hull_of(s)}")
     println("{divide(9, 3).realise(0)}")
-    return Result.Ok(0)
+    return 0

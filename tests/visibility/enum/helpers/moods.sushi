@@ -8,4 +8,4 @@ enum Secret:
 public fn is_hidden() bool:
     let Secret s = Secret.Hidden
     match s:
-        Secret.Hidden -> return Result.Ok(true)
+        Secret.Hidden -> return true

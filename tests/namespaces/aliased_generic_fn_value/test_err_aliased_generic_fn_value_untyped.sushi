@@ -5,4 +5,4 @@ use "helpers/libg" as l
 
 fn main() i32:
     println(l.gen)
-    return Result.Ok(0)
+    return 0

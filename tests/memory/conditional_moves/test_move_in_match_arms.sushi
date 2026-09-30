@@ -11,15 +11,14 @@ enum Choice:
 
 fn eat(string s) ~:
     println("ate {s}")
-    return Result.Ok(~)
 
 fn run_test(Choice c) i32:
     let string val = "value-{1}"
     match c:
         Choice.First -> eat(val)
         Choice.Second -> eat(val)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    println(run_test(Choice.First()).realise(-1))
-    return Result.Ok(0)
+    println(run_test(Choice.First()))
+    return 0

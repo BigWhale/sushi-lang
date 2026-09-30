@@ -17,31 +17,31 @@
 
 # borrow (unmarked): the caller keeps the value and frees it.
 fn borrows(i32[] a) i32:
-    return Result.Ok(a.len())
+    return a.len()
 
 # nom: the callee becomes the owner and frees it.
 fn eats(nom i32[] a) i32:
-    return Result.Ok(a.len())
+    return a.len()
 
 # peek: by pointer, read only. The caller frees.
 fn reads(peek i32[] a) i32:
-    return Result.Ok(a.len())
+    return a.len()
 
 # poke: by pointer, read/write. The caller frees, and sees the write.
 fn writes(poke i32[] a) i32:
     a.push(4)
-    return Result.Ok(a.len())
+    return a.len()
 
 fn main() i32:
     let i32[] b = from([1, 2, 3])
-    println("borrow={borrows(b).realise(-1)} still={b.len()}")
+    println("borrow={borrows(b)} still={b.len()}")
 
     let i32[] n = from([1, 2, 3])
-    println("nom={eats(nom n).realise(-1)}")
+    println("nom={eats(nom n)}")
 
     let i32[] p = from([1, 2, 3])
-    println("peek={reads(peek p).realise(-1)} still={p.len()}")
+    println("peek={reads(peek p)} still={p.len()}")
 
     let i32[] w = from([1, 2, 3])
-    println("poke={writes(poke w).realise(-1)} still={w.len()}")
-    return Result.Ok(0)
+    println("poke={writes(poke w)} still={w.len()}")
+    return 0

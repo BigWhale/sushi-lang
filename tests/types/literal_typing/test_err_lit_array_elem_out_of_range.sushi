@@ -2,4 +2,4 @@
 # EXPECT_ERROR_CODE: CE2073
 fn main() i32:
   let i8[3] a = [1, 200, 3]
-  return Result.Ok(0)
+  return 0

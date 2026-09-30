@@ -11,12 +11,12 @@ enum Slot@(T):
 fn describe(nom Slot@(string) s) string:
     match s:
         Slot.Filled(v) ->
-            return Result.Ok("filled {v}")
+            return "filled {v}"
         Slot.Empty ->
-            return Result.Ok("empty")
+            return "empty"
 
 fn main() i32:
     let Slot@(string) a = Slot.Empty
-    println(describe(nom a).realise("?"))
-    println(describe(nom Slot.Filled("towel")).realise("?"))
-    return Result.Ok(0)
+    println(describe(nom a))
+    println(describe(nom Slot.Filled("towel")))
+    return 0

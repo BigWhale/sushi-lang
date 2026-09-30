@@ -9,4 +9,4 @@ struct Pair@(T, U):
 fn main() i32:
     let Pair@(i32, string) p = Pair(first: 1)
     println("{p.first}")
-    return Result.Ok(0)
+    return 0

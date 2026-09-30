@@ -23,9 +23,9 @@ fn test_struct_in_maybe() i32:
     if (mp.is_some()):
         let Point extracted = mp.realise(Point(0, 0))
         if (extracted.x == 10 and extracted.y == 20):
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0
 
 # Test 2: Maybe@(Struct) declared inside control flow (Issue #3)
 fn test_struct_in_control_flow() i32:
@@ -39,7 +39,7 @@ fn test_struct_in_control_flow() i32:
         if (mc.is_some()):
             let Config extracted = mc.realise(Config("default", 0, false))
             if (extracted.port == 8080 and extracted.enabled):
-                return Result.Ok(1)
+                return 1
 
     # Declare Maybe@(Struct) inside while block
     let i32 i = 0
@@ -51,10 +51,10 @@ fn test_struct_in_control_flow() i32:
             let Point ex = mp.realise(Point(0, 0))
             if (ex.y == 15):
                 i := i + 1  # Exit loop
-                return Result.Ok(1)
+                return 1
         i := i + 1
 
-    return Result.Ok(0)
+    return 0
 
 # Test 3: Nested struct types
 fn test_nested_struct_in_maybe() i32:
@@ -69,9 +69,9 @@ fn test_nested_struct_in_maybe() i32:
         if (c1.name == "myapp" and c1.port == 3000):
             # Test None variant
             if (mc2.is_none()):
-                return Result.Ok(1)
+                return 1
 
-    return Result.Ok(0)
+    return 0
 
 # Test 4: Pattern matching on Maybe@(Struct)
 fn test_struct_pattern_matching() i32:
@@ -82,9 +82,9 @@ fn test_struct_pattern_matching() i32:
     if (mp.is_some()):
         let Point extracted = mp.realise(Point(-1, -1))
         if (extracted.x == 100 and extracted.y == 200):
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0
 
 # Test 5: Multiple Maybe@(Struct) variables in same scope
 fn test_multiple_maybe_structs() i32:
@@ -102,27 +102,27 @@ fn test_multiple_maybe_structs() i32:
     let Config exc = mc1.realise(Config("", 0, false))
 
     if (ex1.x == 1 and ex2.y == 4 and exc.port == 8080):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 t1 = test_struct_in_maybe().realise(0)
+    let i32 t1 = test_struct_in_maybe()
     println("test_struct_in_maybe: {t1}")
 
-    let i32 t2 = test_struct_in_control_flow().realise(0)
+    let i32 t2 = test_struct_in_control_flow()
     println("test_struct_in_control_flow: {t2}")
 
-    let i32 t3 = test_nested_struct_in_maybe().realise(0)
+    let i32 t3 = test_nested_struct_in_maybe()
     println("test_nested_struct_in_maybe: {t3}")
 
-    let i32 t4 = test_struct_pattern_matching().realise(0)
+    let i32 t4 = test_struct_pattern_matching()
     println("test_struct_pattern_matching: {t4}")
 
-    let i32 t5 = test_multiple_maybe_structs().realise(0)
+    let i32 t5 = test_multiple_maybe_structs()
     println("test_multiple_maybe_structs: {t5}")
 
     let i32 total = t1 + t2 + t3 + t4 + t5
     println("All tests passed: {total}")
     let i32 expected = 5
-    return Result.Ok(total - expected)
+    return total - expected

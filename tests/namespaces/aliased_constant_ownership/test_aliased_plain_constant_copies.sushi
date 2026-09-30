@@ -4,8 +4,8 @@
 use "helpers/libc5" as c
 
 fn back() i32:
-    return Result.Ok(c.N)
+    return c.N
 
 fn main() i32:
-    println(back().realise(0))
-    return Result.Ok(0)
+    println(back())
+    return 0

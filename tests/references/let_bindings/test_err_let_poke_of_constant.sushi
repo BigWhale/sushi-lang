@@ -6,4 +6,4 @@ const i32 LIMIT = 10
 fn main() i32:
     let poke i32 n = LIMIT
     n := 1
-    return Result.Ok(0)
+    return 0

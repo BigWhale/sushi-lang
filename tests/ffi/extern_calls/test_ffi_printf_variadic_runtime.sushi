@@ -7,20 +7,20 @@ unsafe external "C" as libc because "formatted output via libc printf":
 
 # Safe wrapper: one string + one int variadic argument.
 fn say(string label, i32 value) i32:
-    return Result.Ok(libc.printf("%s = %d\n", label, value))
+    return libc.printf("%s = %d\n", label, value)
 
 # Safe wrapper: two int variadic arguments.
 fn pair(i32 a, i32 b) i32:
-    return Result.Ok(libc.printf("pair: %d, %d\n", a, b))
+    return libc.printf("pair: %d, %d\n", a, b)
 
 # Safe wrapper: zero variadic arguments (only the fixed format string).
 fn plain(string text) i32:
-    return Result.Ok(libc.printf("%s\n", text))
+    return libc.printf("%s\n", text)
 
 fn main() i32:
-    let i32 r1 = say("answer", 42).realise(0)
-    let i32 r2 = pair(1, 2).realise(0)
-    let i32 r3 = plain("just text").realise(0)
+    let i32 r1 = say("answer", 42)
+    let i32 r2 = pair(1, 2)
+    let i32 r3 = plain("just text")
     if (r1 > 0 and r2 > 0 and r3 > 0):
         println("wrappers ok")
-    return Result.Ok(0)
+    return 0

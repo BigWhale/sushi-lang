@@ -15,4 +15,4 @@ struct box:
     i32 n
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

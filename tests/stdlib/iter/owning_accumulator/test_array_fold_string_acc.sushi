@@ -7,9 +7,9 @@ use <collections/iter>
 
 fn run() i32:
     let i32[] ns = from([1, 2, 3])
-    let string s = ns.fold("<", |string acc, i32 x| acc.concat("{x}"))??
+    let string s = ns.fold("<", |string acc, i32 x| acc.concat("{x}"))
     println(s)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run().realise(1))
+    return run()

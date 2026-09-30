@@ -7,4 +7,4 @@ fn main() i32:
     println("before")
     a.debug()
     println("after")
-    return Result.Ok(0)
+    return 0

@@ -5,11 +5,10 @@
 use <collections/strings>
 
 fn look(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn show(string t) ~:
-    println("value {look(nom t)??}")
-    return Result.Ok(~)
+    println("value {look(nom t)}")
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

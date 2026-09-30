@@ -27,8 +27,8 @@ fn main() i32:
         Result.Ok(nom w) -> w.write("alpha\n\ngamma\n\n")
         Result.Err(_) ->
             println("open failed")
-            return Result.Ok(1)
+            return 1
 
     println("{dump('lines_blank_midfile.txt').realise(-1)}")
     remove("lines_blank_midfile.txt").realise(0)
-    return Result.Ok(0)
+    return 0

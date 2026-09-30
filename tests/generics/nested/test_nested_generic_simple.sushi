@@ -10,6 +10,6 @@ fn main() i32:
     # Use the outer variable to avoid warning
     if (outer.is_ok()):
         # Successfully compiled nested generics!
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

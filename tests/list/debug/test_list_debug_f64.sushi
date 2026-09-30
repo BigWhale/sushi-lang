@@ -9,4 +9,4 @@ fn main() i32:
     println("=== List@(f64) Debug ===")
     doubles.debug()
 
-    return Result.Ok(0)
+    return 0

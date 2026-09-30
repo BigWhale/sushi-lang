@@ -13,4 +13,4 @@ struct B:
 
 fn main() i32:
     println("unreachable")
-    return Result.Ok(0)
+    return 0

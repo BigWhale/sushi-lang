@@ -11,12 +11,12 @@ public enum Sign:
 public const i32 SIZE = 3
 
 public fn origin() Vec:
-    return Result.Ok(Vec(1, 2))
+    return Vec(1, 2)
 
 public fn sign_of(i32 n) Sign:
     if (n < 0):
-        return Result.Ok(Sign.Minus)
-    return Result.Ok(Sign.Plus)
+        return Sign.Minus
+    return Sign.Plus
 
 struct Hidden:
     i32 n

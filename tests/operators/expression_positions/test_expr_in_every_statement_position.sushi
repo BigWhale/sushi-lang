@@ -14,7 +14,7 @@ struct Box:
     i32 n
 
 fn twice(i32 n) i32:
-    return Result.Ok(n * 2)
+    return n * 2
 
 # An extension body returns bare, so the multiplication stands at the return.
 extend i32 tripled() i32:
@@ -22,17 +22,17 @@ extend i32 tripled() i32:
 
 fn shout(i32 n) i32:
     println("arm {n}")
-    return Result.Ok(n)
+    return n
 
 fn tag_of(i32 n) i32:
     match n + 1:
-        4 -> return Result.Ok(40)
-        5 -> shout(twice(20)??)?? + 1
-        _ -> return Result.Ok(0)
-    return Result.Ok(-1)
+        4 -> return 40
+        5 -> shout(twice(20)) + 1
+        _ -> return 0
+    return -1
 
 fn seen(peek i32 n) i32:
-    return Result.Ok(n + 100)
+    return n + 100
 
 fn main() i32:
     print("{BASE}\n")
@@ -87,20 +87,20 @@ fn main() i32:
     let i32[] cells = from([sum + 1, 2, 3])
     println(cells[1 + 1])
 
-    println(twice(sum + 1).realise(0))
+    println(twice(sum + 1))
 
     let Box b = Box(n: sum * 2)
     println(b.n)
 
     let fn(i32) -> i32 bump = |i32 x| x + 1
-    println(bump(4).realise(0))
+    println(bump(4))
 
-    println(seen(peek masked).realise(0))
+    println(seen(peek masked))
 
     println(sum.tripled())
 
-    println(tag_of(3).realise(0))
-    println(tag_of(4).realise(0))
+    println(tag_of(3))
+    println(tag_of(4))
 
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

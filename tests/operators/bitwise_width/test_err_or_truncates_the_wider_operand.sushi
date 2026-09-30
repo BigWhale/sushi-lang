@@ -7,4 +7,4 @@ fn main() i32:
     let u32 wide = 0x1FF
     let u8 merged = low | wide
     println("{merged}")
-    return Result.Ok(0)
+    return 0

@@ -26,8 +26,8 @@ fn main() i32:
         Result.Ok(nom w) -> w.write("alpha\nomega")
         Result.Err(_) ->
             println("open failed")
-            return Result.Ok(1)
+            return 1
 
     println("{dump('lines_no_trailing.txt').realise(-1)}")
     remove("lines_no_trailing.txt").realise(0)
-    return Result.Ok(0)
+    return 0

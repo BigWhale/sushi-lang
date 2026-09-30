@@ -9,32 +9,32 @@ enum Color:
 
 fn find_color(string name) Maybe@(Color):
     if (name == "red"):
-        return Result.Ok(Maybe.Some(Color.Red()))
+        return Maybe.Some(Color.Red())
     if (name == "green"):
-        return Result.Ok(Maybe.Some(Color.Green()))
+        return Maybe.Some(Color.Green())
     if (name == "blue"):
-        return Result.Ok(Maybe.Some(Color.Blue()))
-    return Result.Ok(Maybe.None())
+        return Maybe.Some(Color.Blue())
+    return Maybe.None()
 
 fn main() i32:
-    let Maybe@(Color) c1 = find_color("red").realise(Maybe.None())
+    let Maybe@(Color) c1 = find_color("red")
     match c1:
         Maybe.Some(Color.Red) ->
             println("Found red")
         Maybe.Some(_) ->
             println("FAIL: wrong color")
-            return Result.Ok(1)
+            return 1
         Maybe.None ->
             println("FAIL: red not found")
-            return Result.Ok(1)
+            return 1
 
-    let Maybe@(Color) c2 = find_color("purple").realise(Maybe.None())
+    let Maybe@(Color) c2 = find_color("purple")
     match c2:
         Maybe.None ->
             println("Purple not found")
         Maybe.Some(_) ->
             println("FAIL: purple should not exist")
-            return Result.Ok(1)
+            return 1
 
     println("Maybe@(Color): all passed")
-    return Result.Ok(0)
+    return 0

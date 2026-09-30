@@ -12,4 +12,4 @@ extend Box echo@(U)(U v) U:
 fn main() i32:
     let Box b = Box(0)
     println("{b.echo(7)} {b.echo(2.5)}")
-    return Result.Ok(0)
+    return 0

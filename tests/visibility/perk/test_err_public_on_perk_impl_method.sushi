@@ -16,4 +16,4 @@ extend Crate with Loud:
 fn main() i32:
     let Crate c = Crate(7)
     println(c.shout())
-    return Result.Ok(0)
+    return 0

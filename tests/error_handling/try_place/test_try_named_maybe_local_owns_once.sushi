@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
-fn run() string:
+fn run() string | StdError:
     let string word = "Harmless"
     let Maybe@(string) m = Maybe.Some("Mostly {word}")
     let string got = m??
@@ -13,4 +13,4 @@ fn main() i32:
     match run():
         Result.Ok(s) -> println(s)
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

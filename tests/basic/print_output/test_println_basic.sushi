@@ -5,4 +5,4 @@ fn main() i32:
     print("World")
     println("!")
     println("This is a new line")
-    return Result.Ok(0)
+    return 0

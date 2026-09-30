@@ -7,4 +7,4 @@ use "helpers/geo" as geo
 fn main() i32:
     let i32[geo.SIZE] slots = [0, 0, 0]
     println("{slots[0]}")
-    return Result.Ok(0)
+    return 0

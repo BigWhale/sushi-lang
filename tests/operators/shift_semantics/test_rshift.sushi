@@ -27,7 +27,7 @@ fn main() i32:
     if (result_signed == -2 and result_unsigned == 62 as u32 and
         complex_signed == -2 and complex_unsigned == 62 as u32):
         println("All right shift tests passed!")
-        return Result.Ok(0)
+        return 0
 
     println("Right shift test FAILED")
-    return Result.Ok(1)
+    return 1

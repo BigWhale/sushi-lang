@@ -6,9 +6,9 @@
 
 fn apply@(T)(T v) T:
     let fn(T) -> T f = |T x| x
-    return Result.Ok(f(v)??)
+    return f(v)
 
 fn main() i32:
-    let i32 r = apply@(i32)(3).realise(0)
+    let i32 r = apply@(i32)(3)
     println("{r}")
-    return Result.Ok(0)
+    return 0

@@ -7,4 +7,4 @@ extend i32 count(HashMap@(i32[], string) m) i32:
     return m.len()
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

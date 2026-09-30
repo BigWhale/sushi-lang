@@ -7,9 +7,9 @@ struct Box@(T):
     T v
 
 extend Box@(T) run() i32:
-    return c.tick(4).realise(0)
+    return c.tick(4)
 
 fn main() i32:
     let Box@(bool) b = Box(true)
     println(b.run())
-    return Result.Ok(0)
+    return 0

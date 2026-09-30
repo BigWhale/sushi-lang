@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: UTF-8 reverse (caf
 use <collections/strings>
 
-fn test_reverse_ascii() ~:
+fn test_reverse_ascii() ~ | StdError:
     let string original = "hello"
     let string reversed = original.reverse()
 
@@ -13,7 +13,7 @@ fn test_reverse_ascii() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_empty() ~:
+fn test_reverse_empty() ~ | StdError:
     let string original = ""
     let string reversed = original.reverse()
 
@@ -24,7 +24,7 @@ fn test_reverse_empty() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_single_char() ~:
+fn test_reverse_single_char() ~ | StdError:
     let string original = "a"
     let string reversed = original.reverse()
 
@@ -35,7 +35,7 @@ fn test_reverse_single_char() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_utf8() ~:
+fn test_reverse_utf8() ~ | StdError:
     let string original = "café"
     let string reversed = original.reverse()
 
@@ -46,7 +46,7 @@ fn test_reverse_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_utf8_complex() ~:
+fn test_reverse_utf8_complex() ~ | StdError:
     let string original = "Hello 世界"
     let string reversed = original.reverse()
 
@@ -57,7 +57,7 @@ fn test_reverse_utf8_complex() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_palindrome() ~:
+fn test_reverse_palindrome() ~ | StdError:
     let string original = "racecar"
     let string reversed = original.reverse()
 
@@ -68,7 +68,7 @@ fn test_reverse_palindrome() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_numbers() ~:
+fn test_reverse_numbers() ~ | StdError:
     let string original = "12345"
     let string reversed = original.reverse()
 
@@ -79,7 +79,7 @@ fn test_reverse_numbers() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_special_chars() ~:
+fn test_reverse_special_chars() ~ | StdError:
     let string original = "a!b@c#"
     let string reversed = original.reverse()
 
@@ -90,7 +90,7 @@ fn test_reverse_special_chars() ~:
 
     return Result.Ok(~)
 
-fn test_reverse_emoji() ~:
+fn test_reverse_emoji() ~ | StdError:
     let string original = "Hi👋"
     let string reversed = original.reverse()
 
@@ -121,4 +121,4 @@ fn main() i32:
     if (test_reverse_emoji().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

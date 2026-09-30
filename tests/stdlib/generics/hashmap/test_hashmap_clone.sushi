@@ -14,7 +14,7 @@
 # EXPECT_NO_LEAKS: true
 use <collections/hashmap>
 
-fn run() i32:
+fn run() i32 | StdError:
     let HashMap@(i32, string) a = HashMap.new()
     # Interpolated ON PURPOSE: interpolation builds a heap buffer at runtime and the map owns
     # it, so a shallow clone would double-free. A bare literal owns nothing and would pass
@@ -36,4 +36,4 @@ fn run() i32:
 
 fn main() i32:
     let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    return rc

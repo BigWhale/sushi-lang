@@ -12,17 +12,17 @@ fn shadowed() i32:
     let i32[3] PRIMES = [7, 8, 9]
     PRIMES[0] := 11
     println("shadowed: {PRIMES[0]}")
-    return Result.Ok(PRIMES[0])
+    return PRIMES[0]
 
 fn main() i32:
     let i32[3] copy = PRIMES
     copy[0] := 99
     println("copy: {copy[0]} {copy[1]} {copy[2]}")
 
-    let i32 s = shadowed().realise(0)
+    let i32 s = shadowed()
     if (s != 11):
-        return Result.Ok(1)
+        return 1
 
     println("constant intact: {PRIMES[0]}")
 
-    return Result.Ok(0)
+    return 0

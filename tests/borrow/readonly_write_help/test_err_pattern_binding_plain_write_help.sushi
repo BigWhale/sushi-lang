@@ -12,4 +12,4 @@ fn main() i32:
     match s:
         Slot.Held(items) -> items.push(3)
         Slot.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

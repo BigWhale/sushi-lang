@@ -27,20 +27,20 @@ fn main() i32:
             println("PASS: MathError.DivisionByZero works")
         _ ->
             println("FAIL: DivisionByZero pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match large_multiply(2000000, 3000000):
         Result.Err(MathError.Overflow) ->
             println("PASS: MathError.Overflow works")
         _ ->
             println("FAIL: Overflow pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match sqrt_check(-5):
         Result.Err(MathError.InvalidInput) ->
             println("PASS: MathError.InvalidInput works")
         _ ->
             println("FAIL: InvalidInput pattern failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

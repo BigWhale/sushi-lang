@@ -10,4 +10,4 @@ fn main() i32:
             let File copy = f.clone()
             println("{copy.fd}")
         Result.Err(_) -> println("no")
-    return Result.Ok(0)
+    return 0

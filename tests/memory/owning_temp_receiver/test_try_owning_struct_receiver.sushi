@@ -11,11 +11,11 @@ struct Row:
     i32 weight
 
 fn make(i32 n) Row:
-    return Result.Ok(Row("row {n}", n))
+    return Row("row {n}", n)
 
 fn weigh(i32 n) i32:
-    return Result.Ok(make(n)??.weight)
+    return make(n).weight
 
 fn main() i32:
-    println(weigh(4).realise(0))
-    return Result.Ok(0)
+    println(weigh(4))
+    return 0

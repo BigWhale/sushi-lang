@@ -8,11 +8,11 @@ extend fn(i32) -> i32 seven() i32:
     return self(1).realise(7)
 
 fn twice(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
     let fn(i32) -> i32 f = twice
     println("{f.seven()}")
     let i32 again = f.seven()
     println(again)
-    return Result.Ok(0)
+    return 0

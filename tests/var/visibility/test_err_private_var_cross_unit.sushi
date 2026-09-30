@@ -6,4 +6,4 @@ use "helpers/state"
 
 fn main() i32:
     println("{hidden}")
-    return Result.Ok(0)
+    return 0

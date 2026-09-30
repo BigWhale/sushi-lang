@@ -15,4 +15,4 @@ fn main() i32:
     let i32[] b = from([9])
     b := a
     println("n={b.len()}")
-    return Result.Ok(0)
+    return 0

@@ -18,28 +18,28 @@ struct Counter:
     i32 n
 
 fn triple(i32 x) i32:
-    return Result.Ok(x * 3)
+    return x * 3
 
 extend Counter tripled() i32:
-    return triple(self.n).realise(0)
+    return triple(self.n)
 
 fn secret() i32:
-    return Result.Ok(8)
+    return 8
 
 public fn exposed() i32:
-    return Result.Ok(secret()??)
+    return secret()
 
 fn same@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let Counter c = Counter(2)
     println(c.tripled())
     let i32[WIDTH] cells = [1, 2, 3]
     println(cells[2])
-    println(exposed().realise(0))
-    let i32 side = square_of(3).realise(Square(0)).side
-    println(same(nom side).realise(0).doubled())
+    println(exposed())
+    let i32 side = square_of(3).side
+    println(same(nom side).doubled())
     println(m.abs(-5))
     println("abc".starts_with("a"))
-    return Result.Ok(0)
+    return 0

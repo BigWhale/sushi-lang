@@ -17,4 +17,4 @@ fn main() i32:
     match head:
         Maybe.Some(r) -> println("first ok = {r.is_ok()}")
         Maybe.None() -> println("first ok = missing")
-    return Result.Ok(0)
+    return 0

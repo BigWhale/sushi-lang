@@ -19,4 +19,4 @@ extend Holder with Source:
         return Result.Ok(self.n)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

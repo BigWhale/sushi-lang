@@ -7,12 +7,12 @@
 # the propagation path a no-op (else a garbage owned byte would free a wild pointer).
 use <collections/strings>
 
-fn check(string s) string:
+fn check(string s) string | StdError:
     if (s == "boom"):
         return Result.Err(StdError.Error)
     return Result.Ok("ok:{s}")
 
-fn proc() string:
+fn proc() string | StdError:
     let string c0 = check("good")??
     println(c0)
     let string c1 = check("boom")??
@@ -22,4 +22,4 @@ fn proc() string:
 fn main() i32:
     let string o = proc().realise("failed")
     println(o)
-    return Result.Ok(0)
+    return 0

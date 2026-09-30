@@ -7,18 +7,18 @@ struct Tally:
     i32 count
 
 fn bump(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1
 
 public fn lib_bump(i32 n) i32:
-    return Result.Ok(bump(n)?? * 10)
+    return bump(n) * 10
 
 public fn lib_tally(i32 n) i32:
     let Tally t = Tally(n)
-    return Result.Ok(t.count + 100)
+    return t.count + 100
 
 const i32 SCRATCH = 4096
 
 public const i32 LIB_SHOWN = 9
 
 public fn lib_scratch() i32:
-    return Result.Ok(SCRATCH + 4)
+    return SCRATCH + 4

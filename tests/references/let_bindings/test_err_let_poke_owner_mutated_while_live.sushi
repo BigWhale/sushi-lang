@@ -11,4 +11,4 @@ fn main() i32:
     o := Own.alloc(Holder(2))
     h.n := 3
     println("{o.get().n}")
-    return Result.Ok(0)
+    return 0

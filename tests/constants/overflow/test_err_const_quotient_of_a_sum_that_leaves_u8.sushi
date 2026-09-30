@@ -6,4 +6,4 @@ const u8 HALVED = (200 + 100) / 2
 
 fn main() i32:
     println(HALVED)
-    return Result.Ok(0)
+    return 0

@@ -3,4 +3,4 @@
 use "helpers/noise"
 
 public fn loudness@(T: Loud)(T x) i32:
-    return Result.Ok(x.volume())
+    return x.volume()

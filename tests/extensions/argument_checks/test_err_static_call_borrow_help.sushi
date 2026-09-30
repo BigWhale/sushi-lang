@@ -13,4 +13,4 @@ fn main() i32:
     let string t = "hi"
     let Tag g = Tag.of(t)
     println("{g.n}")
-    return Result.Ok(0)
+    return 0

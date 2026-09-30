@@ -12,4 +12,4 @@ use <collections/strings> as s
 fn main() i32:
     let string text = "mostly"
     println(text.upper())
-    return Result.Ok(0)
+    return 0

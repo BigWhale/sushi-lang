@@ -15,4 +15,4 @@ fn main() i32:
     map.destroy()
 
     println("HashMap.destroy() completed successfully!")
-    return Result.Ok(0)
+    return 0

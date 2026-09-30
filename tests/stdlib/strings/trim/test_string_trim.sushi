@@ -53,4 +53,4 @@ fn main() i32:
     let string r8 = s8.trim()
     println(r8)  # Expected: café
 
-    return Result.Ok(0)
+    return 0

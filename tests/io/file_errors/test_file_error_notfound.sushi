@@ -12,14 +12,14 @@ fn main() i32:
         Result.Ok(nom f) ->
             stderr.write("Error: should not have succeeded!\n")
             f.close()
-            return Result.Err(StdError.Error)
+            return 1
         Result.Err(err) ->
             # We have the IoError enum value, now match on it
             match err:
                 IoError.NotFound ->
                     println("Error: File not found - nonexistent_file_12345.txt")
                     println("Handled file error successfully")
-                    return Result.Ok(0)
+                    return 0
                 _ ->
                     stderr.write("Error: unexpected error type\n")
-                    return Result.Err(StdError.Error)
+                    return 1

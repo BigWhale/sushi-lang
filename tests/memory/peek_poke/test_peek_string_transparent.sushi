@@ -24,22 +24,18 @@ struct Crew:
 
 fn greet(peek string name) ~:
     println("hi {name}")
-    return Result.Ok(~)
 
 fn inner(peek string s) ~:
     println("inner {s}")
-    return Result.Ok(~)
 
 fn forward(peek string s) ~:
     inner(peek s)
-    return Result.Ok(~)
 
 fn show_field(peek Crew c) ~:
     println("field={c.name}")
-    return Result.Ok(~)
 
 fn hashes_equal(peek string a, string b) bool:
-    return Result.Ok(a.hash() == b.hash())
+    return a.hash() == b.hash()
 
 fn main() i32:
     let string v = "Ford"
@@ -52,5 +48,5 @@ fn main() i32:
     let Crew c = Crew("Ford")
     show_field(peek c)
 
-    println("hash_matches={hashes_equal(peek v, 'Ford').realise(false)}")
-    return Result.Ok(0)
+    println("hash_matches={hashes_equal(peek v, 'Ford')}")
+    return 0

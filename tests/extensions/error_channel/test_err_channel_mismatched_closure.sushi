@@ -6,11 +6,11 @@ enum MyError:
     Nope
 
 extend i32 apply_checked(fn(i32) -> i32 f) i32 | MyError:
-    let i32 r = f(self)??
+    let i32 r = f(self)
     return Result.Ok(r)
 
 fn main() i32:
     let i32 five = 5
     let i32 r = five.apply_checked(|i32 x| x + 1).realise(0)
     println("{r}")
-    return Result.Ok(0)
+    return 0

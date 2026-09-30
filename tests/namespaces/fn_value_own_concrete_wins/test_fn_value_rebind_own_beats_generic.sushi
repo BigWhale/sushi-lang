@@ -5,14 +5,14 @@ use "helpers/pick_any"
 use <collections/strings>
 
 fn pick(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn one(string s) i32:
-    return Result.Ok(s.len() - s.len() + 1)
+    return s.len() - s.len() + 1
 
 fn main() i32:
     let fn(string) -> i32 f = one
-    println(f("abcde").realise(0))
+    println(f("abcde"))
     f := pick
-    println(f("abcde").realise(0))
-    return Result.Ok(0)
+    println(f("abcde"))
+    return 0

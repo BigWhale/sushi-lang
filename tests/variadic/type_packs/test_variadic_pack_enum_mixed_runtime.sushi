@@ -25,8 +25,7 @@ extend string with Display:
 fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
-    return Result.Ok(~)
 
 fn main() i32:
     show_all(Color.Red(), 7, "hi")
-    return Result.Ok(0)
+    return 0

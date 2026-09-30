@@ -16,4 +16,4 @@ extend Box@(i32) hash() u64:
 fn main() i32:
     let Box@(i32) b = Box(7)
     println(b.hash())
-    return Result.Ok(0)
+    return 0

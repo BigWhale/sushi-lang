@@ -23,15 +23,15 @@ extend i32 with Picker:
         return self + m.realise(1)
 
 fn plain_pick(Maybe@(i32) m) i32:
-    return Result.Ok(m.realise(0))
+    return m.realise(0)
 
 fn run_test() i32:
     println(1.pick(Maybe.Some(41)))
     println(1.pick(Maybe.None()))
     println(1.choose(Maybe.Some(42)))
     println(2.sum_pair(Pair(4, 6)))
-    println(plain_pick(Maybe.Some(41))??)
-    return Result.Ok(0)
+    println(plain_pick(Maybe.Some(41)))
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

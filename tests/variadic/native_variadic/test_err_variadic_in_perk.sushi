@@ -4,4 +4,4 @@ perk Loggable:
     fn log(...i32 values) i32
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

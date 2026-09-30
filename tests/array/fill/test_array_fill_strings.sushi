@@ -1,4 +1,4 @@
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test fill() with strings - Don't Panic!
     let string[] towels = from(["dirty", "wet", "lost"])
     towels.fill("clean")
@@ -15,4 +15,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

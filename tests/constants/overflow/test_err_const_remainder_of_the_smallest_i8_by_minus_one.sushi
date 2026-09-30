@@ -8,4 +8,4 @@ const i8 LEFT = SMALLEST % -1
 
 fn main() i32:
     println(LEFT)
-    return Result.Ok(0)
+    return 0

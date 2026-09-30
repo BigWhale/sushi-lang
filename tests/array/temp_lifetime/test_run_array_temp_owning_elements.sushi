@@ -7,13 +7,13 @@
 fn give() string[]:
     let string a = "ford{1}"
     let string b = "arthur{2}"
-    return Result.Ok(from([a, b]))
+    return from([a, b])
 
-fn run_test() i32:
-    println(give()??[0])
-    println(give()??.get(0)??)
-    println(give()??.len())
+fn run_test() i32 | StdError:
+    println(give()[0])
+    println(give().get(0)??)
+    println(give().len())
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test().realise(9)

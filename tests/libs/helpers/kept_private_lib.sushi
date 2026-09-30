@@ -7,10 +7,10 @@
 # CE3005.
 
 public fn double_it(i32 n) i32:
-    return Result.Ok(scale(n, 2)??)
+    return scale(n, 2)
 
 fn scale(i32 n, i32 by) i32:
-    return Result.Ok(n * by)
+    return n * by
 
 fn convert@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x

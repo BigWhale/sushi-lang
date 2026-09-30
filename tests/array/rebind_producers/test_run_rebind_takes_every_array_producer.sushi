@@ -11,7 +11,7 @@ struct Holder:
     i32[] items
 
 fn make() i32[]:
-    return Result.Ok(from([7, 8, 9]))
+    return from([7, 8, 9])
 
 fn main() i32:
     let string text = "hello"
@@ -28,8 +28,8 @@ fn main() i32:
     let i32[] view = from([0])
     view := h.items.clone()
     let i32[] made = from([0])
-    made := make().realise(from([]))
+    made := make()
     let i32[] part = from([0])
     part := lit.s(1, 3)
     println("{bytes.len()} {words.len()} {nums.len()} {lit.len()} {view.len()} {made.len()} {part.len()}")
-    return Result.Ok(0)
+    return 0

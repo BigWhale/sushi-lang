@@ -5,8 +5,8 @@
 use "helpers/user"
 
 fn shout@(T: Loud)(T x) i32:
-    return Result.Ok(loudness(x).realise(0))
+    return loudness(x)
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

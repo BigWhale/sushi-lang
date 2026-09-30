@@ -12,11 +12,11 @@ use <collections/strings>
 
 fn eat(nom string owned) i32:
     println("owned: {owned}")
-    return Result.Ok(owned.len() as i32)
+    return owned.len() as i32
 
 fn main() i32:
     let string base = "Ford"
     let string s = "{base} Prefect"
     let fn(nom string) -> i32 g = eat
-    println("len: {g(nom s).realise(-1)}")
-    return Result.Ok(0)
+    println("len: {g(nom s)}")
+    return 0

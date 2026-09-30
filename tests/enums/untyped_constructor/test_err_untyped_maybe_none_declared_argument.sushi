@@ -3,8 +3,8 @@
 # EXPECT_ERROR_CODES_EXACT: CE2006
 
 fn f(i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    println(f(Maybe.None()).realise(0))
-    return Result.Ok(0)
+    println(f(Maybe.None()))
+    return 0

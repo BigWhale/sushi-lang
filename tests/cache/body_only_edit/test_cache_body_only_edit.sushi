@@ -7,5 +7,5 @@
 use "answers"
 
 fn main() i32:
-    println("{answer().realise(0)}")
-    return Result.Ok(0)
+    println("{answer()}")
+    return 0

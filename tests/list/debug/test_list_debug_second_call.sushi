@@ -9,4 +9,4 @@ fn main() i32:
     let List@(string) b = List.new()
     b.push("two")
     b.debug()
-    return Result.Ok(0)
+    return 0

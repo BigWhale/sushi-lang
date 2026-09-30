@@ -5,5 +5,5 @@ use "helpers/const_left"
 use "helpers/const_right"
 
 fn main() i32:
-    println("{left_scratch().realise(0)} {left_double().realise(0)} {right_scratch().realise(0)} {right_double().realise(0)}")
-    return Result.Ok(0)
+    println("{left_scratch()} {left_double()} {right_scratch()} {right_double()}")
+    return 0

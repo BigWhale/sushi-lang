@@ -8,14 +8,12 @@ var i32 counter = 10
 
 fn bump(poke i32 n) ~:
     n := n + 1
-    return Result.Ok(~)
 
 fn show(peek i32 n) ~:
     println("{n}")
-    return Result.Ok(~)
 
 fn main() i32:
     show(peek counter)
     bump(poke counter)
     show(peek counter)
-    return Result.Ok(0)
+    return 0

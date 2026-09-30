@@ -8,10 +8,10 @@ enum Pair@(T, U):
     Left(T)
     Right(U)
 
-fn create_int_string_pair(nom i32 x, nom string y) Pair@(i32, string):
+fn create_int_string_pair(nom i32 x, nom string y) Pair@(i32, string) | StdError:
     return Result.Ok(Pair.Both(x, y))
 
-fn create_float_int_pair(nom f64 x, nom i32 y) Pair@(f64, i32):
+fn create_float_int_pair(nom f64 x, nom i32 y) Pair@(f64, i32) | StdError:
     return Result.Ok(Pair.Both(x, y))
 
 fn main() i32:
@@ -49,4 +49,4 @@ fn main() i32:
             Pair.Right(b) ->
                 println("Test 3: Right {b}")
 
-    return Result.Ok(0)
+    return 0

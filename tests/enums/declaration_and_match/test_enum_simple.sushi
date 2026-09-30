@@ -5,12 +5,12 @@ enum Color:
     Green
     Blue
 
-fn test_color() Color:
+fn test_color() Color | StdError:
     return Result.Ok(Color.Red())
 
 fn main() i32:
     let Result@(Color, StdError) result = test_color()
     match result.realise(Color.Blue()):
-        Color.Red -> return Result.Ok(0)
-        Color.Green -> return Result.Ok(1)
-        Color.Blue -> return Result.Ok(2)
+        Color.Red -> return 0
+        Color.Green -> return 1
+        Color.Blue -> return 2

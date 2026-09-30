@@ -10,9 +10,9 @@ fn run() i32:
     xs.push(2)
     xs.push(3)
     xs.push(4)
-    let List@(i32) big = filter(xs, |i32 x| x > threshold)??
-    return Result.Ok(big.len())
+    let List@(i32) big = filter(xs, |i32 x| x > threshold)
+    return big.len()
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

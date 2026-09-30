@@ -16,4 +16,4 @@ fn main() i32:
     let u64 high = wide << 63
     println("{high}")
 
-    return Result.Ok(0)
+    return 0

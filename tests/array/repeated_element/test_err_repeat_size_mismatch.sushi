@@ -7,4 +7,4 @@ const i32[288] ZFIXED_LIT = [8;144, 9;111, 7;24, 8;8]
 
 fn main() i32:
     println(ZFIXED_LIT[0])
-    return Result.Ok(0)
+    return 0

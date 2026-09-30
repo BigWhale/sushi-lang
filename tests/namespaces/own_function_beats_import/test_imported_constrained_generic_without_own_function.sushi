@@ -11,5 +11,5 @@ extend Seven with Pk:
         return self.n
 
 fn main() i32:
-    println(pick(Seven(7)).realise(0))
-    return Result.Ok(0)
+    println(pick(Seven(7)))
+    return 0

@@ -21,4 +21,4 @@ fn main() i32:
     let List@(Buf) dst = List.new()
     dst.push(h.inner)
     println("dst={dst.len()} src={h.inner.data.len()}")
-    return Result.Ok(0)
+    return 0

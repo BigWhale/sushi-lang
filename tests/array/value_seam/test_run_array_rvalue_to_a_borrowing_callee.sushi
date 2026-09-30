@@ -14,7 +14,7 @@ fn main() i32:
     let i32 fd = fd_open("array_value_seam_probe.txt", 3, 420).realise(-1)
     if (fd < 0):
         println("open failed")
-        return Result.Ok(1)
+        return 1
 
     # The rvalue goes straight in: no local to bind it to, and no copy.
     let i32 wrote = fd_pwrite(fd, 0 as i64, 'Hello'.to_bytes()).realise(-1)
@@ -29,4 +29,4 @@ fn main() i32:
     println("parts {parts}")
 
     fd_close(fd).realise(-1)
-    return Result.Ok(0)
+    return 0

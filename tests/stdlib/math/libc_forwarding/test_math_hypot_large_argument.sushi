@@ -5,4 +5,4 @@ use <math>
 
 fn main() i32:
     println("{hypot(1e200, 1e200)}")
-    return Result.Ok(0)
+    return 0

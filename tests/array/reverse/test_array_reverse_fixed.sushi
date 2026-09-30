@@ -5,12 +5,12 @@ fn main() i32:
 
     # Verify order is reversed
     if (guide_entries[0] != "Harmless"):
-        return Result.Err(StdError.Error)
+        return 1
     if (guide_entries[1] != "Mostly"):
-        return Result.Err(StdError.Error)
+        return 1
     if (guide_entries[2] != "Poetry"):
-        return Result.Err(StdError.Error)
+        return 1
     if (guide_entries[3] != "Vogon"):
-        return Result.Err(StdError.Error)
+        return 1
 
-    return Result.Ok(0)
+    return 0

@@ -6,4 +6,4 @@ fn main() i32:
     let u32 b = 7
     let u32 m = max(b, -1)
     println("{m}")
-    return Result.Ok(0)
+    return 0

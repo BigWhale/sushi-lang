@@ -10,10 +10,10 @@ extend Handle with Drop:
         println("drop {self.id}")
 
 fn twice@(T)(peek T x) T:
-    return Result.Ok(x.clone())
+    return x.clone()
 
 fn main() i32:
     let Handle h = Handle(1)
-    let Handle t = twice(peek h)??
+    let Handle t = twice(peek h)
     println("{t.id}")
-    return Result.Ok(0)
+    return 0

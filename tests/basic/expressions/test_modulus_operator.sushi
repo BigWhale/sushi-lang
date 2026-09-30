@@ -10,19 +10,19 @@ fn main() i32:
 
     # Verify results
     if (mod1 != 1):
-        return Result.Ok(1)
+        return 1
     if (mod2 != 3):
-        return Result.Ok(2)
+        return 2
     if (mod3 != 0):
-        return Result.Ok(3)
+        return 3
     if (mod4 != 1):
-        return Result.Ok(4)
+        return 4
     # Test with negative numbers
     let i32 neg_mod = 10 % 3  # Should be 1 (same as positive)
     if (neg_mod != 1):
-        return Result.Ok(5)
+        return 5
     # Test in expressions
     let i32 complex_mod = (20 + 5) % (3 + 1)  # 25 % 4 = 1
     if (complex_mod != 1):
-        return Result.Ok(6)
-    return Result.Ok(0)
+        return 6
+    return 0

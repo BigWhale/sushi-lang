@@ -2,7 +2,7 @@
 # be consumed. It used to compile and double-free; after the rebind went through the
 # ownership seam it was an internal error.
 # EXPECT_ERROR_CODE: CE2411
-fn f(poke string a, poke string b) ~:
+fn f(poke string a, poke string b) ~ | StdError:
     a := b
     return Result.Ok(~)
 
@@ -12,4 +12,4 @@ fn main() i32:
     let Result@(~, StdError) r = f(poke x, poke y)
     if (r.is_ok()):
         println(x)
-    return Result.Ok(0)
+    return 0

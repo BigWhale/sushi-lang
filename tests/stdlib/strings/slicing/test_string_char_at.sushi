@@ -61,4 +61,4 @@ fn main() i32:
     println(char10.len())  # Expected: 1
     println(char10.size())  # Expected: 4
 
-    return Result.Ok(0)
+    return 0

@@ -5,7 +5,7 @@
 # (The item type must equal the outer type here: the typecheck pass has a separate defect where
 # the item TYPE also leaks past the loop -- filed on its own.)
 # EXPECT_ERROR_CODE: CW1002
-fn eat(string s) i32:
+fn eat(string s) i32 | StdError:
     println("ate {s}")
     return Result.Ok(1)
 
@@ -17,4 +17,4 @@ fn main() i32:
     match eat(p):
         Result.Ok(n) -> println(n)
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

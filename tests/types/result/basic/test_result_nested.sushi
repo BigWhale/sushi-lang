@@ -25,12 +25,12 @@ fn main() i32:
                         println("PASS: Nested Result works")
                     else:
                         println("FAIL: Wrong value in nested Result")
-                        return Result.Ok(1)
+                        return 1
                 Result.Err(_) ->
                     println("FAIL: Inner Result is Err")
-                    return Result.Ok(1)
+                    return 1
         Result.Err(_) ->
             println("FAIL: Outer Result is Err")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

@@ -4,4 +4,4 @@
 fn main() i32:
     let i32 bad = 1__0
     println("{bad}")
-    return Result.Ok(0)
+    return 0

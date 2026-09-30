@@ -28,4 +28,4 @@ fn main() i32:
     )
     println(p2.address.city)
 
-    return Result.Ok(0)
+    return 0

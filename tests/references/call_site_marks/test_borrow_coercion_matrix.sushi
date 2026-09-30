@@ -17,17 +17,17 @@ struct Box:
     i32 n
 
 fn read_only(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 # A `poke` parameter forwarded into a `peek` parameter: the borrow is re-created at the
 # use site, and the downgrade happens there.
 fn forward(poke i32 v) i32:
-    return Result.Ok(read_only(peek v)??)
+    return read_only(peek v)
 
 # Type-argument inference binds T through a `peek` parameter, and the argument may be a
 # `poke` borrow -- the coercion has to survive unification.
 fn peek_generic@(T)(peek T x) T:
-    return Result.Ok(x)
+    return x
 
 # An extension-method parameter takes the same coercion as a plain one.
 extend Box add(peek i32 x) i32:
@@ -35,26 +35,26 @@ extend Box add(peek i32 x) i32:
 
 fn through_method(poke i32 v) i32:
     let Box b = Box(10)
-    return Result.Ok(b.add(peek v))
+    return b.add(peek v)
 
 fn run_test() i32:
     let i32 n = 41
 
     # 1. The call-site downgrade: a `poke` borrow given to a `peek` parameter.
-    println("direct: {read_only(poke n)??}")
+    println("direct: {read_only(poke n)}")
 
     # 2. Through a `poke` parameter, re-borrowed as `peek`.
-    println("forwarded: {forward(poke n)??}")
+    println("forwarded: {forward(poke n)}")
 
     # 3. Through generic inference.
     let i32 seven = 7
-    println("generic: {peek_generic(poke seven)??}")
+    println("generic: {peek_generic(poke seven)}")
 
     # 4. Into an extension method's parameter.
     let i32 five = 5
-    println("method: {through_method(poke five)??}")
-    return Result.Ok(0)
+    println("method: {through_method(poke five)}")
+    return 0
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

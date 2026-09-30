@@ -6,4 +6,4 @@ use <math>
 fn main() i32:
     let f64 a = max("a", "b")
     println("{a}")
-    return Result.Ok(0)
+    return 0

@@ -6,11 +6,11 @@ use "helpers/moods"
 
 fn name_of(Mood m) string:
     match m:
-        Mood.Calm -> return Result.Ok("calm")
-        Mood.Cross -> return Result.Ok("cross")
+        Mood.Calm -> return "calm"
+        Mood.Cross -> return "cross"
 
 fn main() i32:
-    let string n = name_of(Mood.Calm).realise("none")
-    let bool hidden = is_hidden().realise(false)
+    let string n = name_of(Mood.Calm)
+    let bool hidden = is_hidden()
     println("{n} {hidden}")
-    return Result.Ok(0)
+    return 0

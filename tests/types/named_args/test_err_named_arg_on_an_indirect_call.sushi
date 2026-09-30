@@ -2,10 +2,10 @@
 # EXPECT_ERROR_CODE: CE6104
 
 fn diff(i32 a, i32 b) i32:
-    return Result.Ok(a - b)
+    return a - b
 
 fn main() i32:
     let fn(i32, i32) -> i32 f = diff
-    let i32 d = f(b: 1, a: 9).realise(0)
+    let i32 d = f(b: 1, a: 9)
     println("{d}")
-    return Result.Ok(0)
+    return 0

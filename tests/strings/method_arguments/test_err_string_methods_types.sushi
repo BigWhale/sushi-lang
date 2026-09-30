@@ -8,4 +8,4 @@ fn main() i32:
   # Test concat() with wrong type (should fail)
   let string result = text.concat(42)
 
-  return Result.Ok(0)
+  return 0

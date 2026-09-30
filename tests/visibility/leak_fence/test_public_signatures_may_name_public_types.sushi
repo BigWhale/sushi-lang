@@ -17,13 +17,13 @@ extend Point with Loud:
         return self.x
 
 public fn origin() Point:
-    return Result.Ok(Point(0))
+    return Point(0)
 
 public fn loudest@(T: Loud)(T thing) i32:
-    return Result.Ok(thing.shout())
+    return thing.shout()
 
 fn main() i32:
-    let Box b = Box(origin().realise(Point(9)))
+    let Box b = Box(origin())
     let Point three = Point(3)
-    println("{b.at.x} {loudest(three).realise(0)}")
-    return Result.Ok(0)
+    println("{b.at.x} {loudest(three)}")
+    return 0

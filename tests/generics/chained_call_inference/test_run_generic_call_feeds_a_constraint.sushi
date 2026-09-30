@@ -19,11 +19,11 @@ extend Crate heavier() Crate:
 
 fn make@(T)(nom T seed) Crate:
     println("seeded {seed}")
-    return Result.Ok(Crate(7))
+    return Crate(7)
 
 fn total@(C: Countable)(C c) i32:
-    return Result.Ok(c.count())
+    return c.count()
 
 fn main() i32:
-    println("{total(make(nom 1).realise(Crate(0)).heavier()).realise(-1)}")
-    return Result.Ok(0)
+    println("{total(make(nom 1).heavier())}")
+    return 0

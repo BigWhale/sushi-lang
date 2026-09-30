@@ -5,4 +5,4 @@ use <io/fs>
 
 fn main() i32:
     println(stdout.is_terminal(1))
-    return Result.Ok(0)
+    return 0

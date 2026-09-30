@@ -13,5 +13,5 @@ fn main() i32:
     let Cell c = Cell.Empty
     match c:
         Cell.Empty -> println("empty")
-    println("{boxed(nom 7).realise(0)}")
-    return Result.Ok(0)
+    println("{boxed(nom 7)}")
+    return 0

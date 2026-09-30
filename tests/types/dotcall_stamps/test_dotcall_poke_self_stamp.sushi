@@ -15,4 +15,4 @@ fn main() i32:
     c.bump()
     c.bump()
     println("{c.n}")
-    return Result.Ok(0)
+    return 0

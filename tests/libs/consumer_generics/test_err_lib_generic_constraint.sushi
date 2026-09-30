@@ -13,10 +13,10 @@ struct Widget:
 fn run_test() Widget:
     let Widget a = Widget(1)
     let Widget b = Widget(2)
-    let Widget m = max_of(a, b)??
-    return Result.Ok(m)
+    let Widget m = max_of(a, b)
+    return m
 
 fn main() i32:
-    let Widget w = run_test().realise(Widget(0))
+    let Widget w = run_test()
     println(w.id)
-    return Result.Ok(0)
+    return 0

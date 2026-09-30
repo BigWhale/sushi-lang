@@ -53,4 +53,4 @@ fn main() i32:
         Result.Ok(_) -> println("toobig=OK")
         Result.Err(_) -> println("toobig=ERR")
 
-    return Result.Ok(0)
+    return 0

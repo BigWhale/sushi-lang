@@ -14,7 +14,6 @@ fn get_five_values() ~:
 
     println("  {v1}, {v2}, {v3}, {v4}, {v5}")
 
-    return Result.Ok(~)
 
 fn main() i32:
     println("=== Random Seeding Test ===")
@@ -40,4 +39,4 @@ fn main() i32:
 
     println("")
     println("=== Seeding Test Complete ===")
-    return Result.Ok(0)
+    return 0

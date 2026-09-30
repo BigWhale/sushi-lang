@@ -77,4 +77,4 @@ fn main() i32:
     let string left10 = s10.sleft(5)
     println(left10.size())  # Expected: 0
 
-    return Result.Ok(0)
+    return 0

@@ -11,19 +11,19 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("ERROR: could not create test file")
-            return Result.Ok(1)
+            return 1
 
     if (not is_file("/tmp/sushi_r108_isfile.txt")):
         println("ERROR: Should detect regular file")
-        return Result.Ok(1)
+        return 1
 
     if (is_file("/tmp")):
         println("ERROR: Should not detect directory as file")
-        return Result.Ok(1)
+        return 1
 
     if (is_file("/tmp/nonexistent_12345.txt")):
         println("ERROR: Should return false for non-existent path")
-        return Result.Ok(1)
+        return 1
 
     println("OK: is_file() works correctly")
-    return Result.Ok(0)
+    return 0

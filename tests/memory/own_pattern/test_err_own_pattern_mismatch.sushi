@@ -6,7 +6,7 @@ enum Container:
 fn test(Container c) i32:
     match c:
         Container.Box(Own(value)) ->  # ERROR: Box contains i32, not Own@(i32)
-            return Result.Ok(value)
+            return value
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

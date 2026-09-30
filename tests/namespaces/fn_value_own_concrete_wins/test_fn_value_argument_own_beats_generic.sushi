@@ -5,11 +5,11 @@ use "helpers/pick_any"
 use <collections/strings>
 
 fn pick(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn apply(fn(string) -> i32 f) i32:
-    return Result.Ok(f("abcd").realise(0))
+    return f("abcd")
 
 fn main() i32:
-    println(apply(pick).realise(0))
-    return Result.Ok(0)
+    println(apply(pick))
+    return 0

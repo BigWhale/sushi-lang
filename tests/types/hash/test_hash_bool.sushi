@@ -27,4 +27,4 @@ fn main() i32:
     else:
         println("✗ Same boolean values produce different hash")
 
-    return Result.Ok(0)
+    return 0

@@ -5,10 +5,10 @@ use "helpers/twin_c"
 
 fn twin@(T)(nom T x) T:
     println("m twin")
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    let i32 a = twin(nom 7).realise(0)
-    let i32 b = twin_c_use().realise(0)
+    let i32 a = twin(nom 7)
+    let i32 b = twin_c_use()
     println("{a} {b}")
-    return Result.Ok(0)
+    return 0

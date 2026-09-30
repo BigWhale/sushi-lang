@@ -14,5 +14,5 @@ struct Cell@(T):
 fn main() i32:
     let Cell@(i32) c = Cell("x", 4)
     println("{c.mine}")
-    println("{boxed(nom 7).realise(0)}")
-    return Result.Ok(0)
+    println("{boxed(nom 7)}")
+    return 0

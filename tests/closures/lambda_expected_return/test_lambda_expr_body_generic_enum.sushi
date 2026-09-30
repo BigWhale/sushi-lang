@@ -5,13 +5,13 @@
 # EXPECT_NO_LEAKS: true
 fn show() i32:
     let fn(i32) -> Maybe@(string) f = |i32 n| Maybe.Some("towel {n}")
-    let Maybe@(string) some = f(42)??
+    let Maybe@(string) some = f(42)
     println(some.realise("none"))
 
     let fn() -> Maybe@(string) g = |~| Maybe.None
-    let Maybe@(string) none = g()??
+    let Maybe@(string) none = g()
     println(none.realise("none"))
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(show().realise(1))
+    return show()

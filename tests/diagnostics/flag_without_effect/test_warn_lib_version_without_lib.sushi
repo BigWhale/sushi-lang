@@ -4,4 +4,4 @@
 # EXPECT_STDERR_CONTAINS: "'--lib-version' has no effect without --lib"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

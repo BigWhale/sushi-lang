@@ -13,4 +13,4 @@ extend i32 lift(poke self) ~:
 fn main() i32:
     SCRATCH.lift()
     println("{SCRATCH}")
-    return Result.Ok(0)
+    return 0

@@ -10,7 +10,7 @@ public enum Sign:
 public const i32 SIZE = 4
 
 public fn twice(i32 n) i32:
-    return Result.Ok(n * 2)
+    return n * 2
 
 public perk Loud:
     fn volume() i32

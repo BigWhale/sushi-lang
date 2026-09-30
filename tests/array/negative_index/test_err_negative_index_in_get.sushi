@@ -1,8 +1,13 @@
 # EXPECT_ERROR_CODE: CE2056
 # '.get(-1)' had the same guard, and the same dead branch behind it (#450).
 
-fn main() i32:
+fn run() i32 | StdError:
     let i32[3] numbers = [10, 20, 30]
     let i32 before = numbers.get(-1)??
     println("{before}")
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1

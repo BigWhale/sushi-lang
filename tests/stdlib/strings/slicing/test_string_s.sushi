@@ -88,4 +88,4 @@ fn main() i32:
     let string slice12 = s12.s(0, 2)
     println(slice12.len())  # Expected: 2 (2 emojis)
 
-    return Result.Ok(0)
+    return 0

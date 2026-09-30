@@ -5,4 +5,4 @@ const i32[3] PRIMES = [2, 3, 5]
 
 fn main() i32:
     PRIMES.reverse()
-    return Result.Ok(0)
+    return 0

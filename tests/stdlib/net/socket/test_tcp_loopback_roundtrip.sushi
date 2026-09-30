@@ -17,25 +17,25 @@ fn main() i32:
     let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
     if (lfd < 0):
         println("listen failed")
-        return Result.Ok(1)
+        return 1
     sock_set_recv_timeout(lfd, 5000).realise(-1)
 
     let i32 port = sock_local_port(lfd).realise(-1)
     if (port <= 0):
         println("local_port failed")
-        return Result.Ok(1)
+        return 1
 
     let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
     if (cfd < 0):
         println("connect failed")
-        return Result.Ok(1)
+        return 1
     sock_set_recv_timeout(cfd, 5000).realise(-1)
     sock_set_send_timeout(cfd, 5000).realise(-1)
 
     let i32 afd = sock_tcp_accept(lfd).realise(-1)
     if (afd < 0):
         println("accept failed")
-        return Result.Ok(1)
+        return 1
     sock_set_recv_timeout(afd, 5000).realise(-1)
     sock_set_send_timeout(afd, 5000).realise(-1)
     println("accepted")
@@ -69,4 +69,4 @@ fn main() i32:
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 
-    return Result.Ok(0)
+    return 0

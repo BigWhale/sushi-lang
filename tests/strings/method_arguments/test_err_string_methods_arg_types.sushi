@@ -28,4 +28,4 @@ fn main() i32:
   print(text.ends_with(42))   # CE2006: expected string, got i32
   print(text.ends_with(flag)) # CE2006: expected string, got bool
 
-  return Result.Ok(0)
+  return 0

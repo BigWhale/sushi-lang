@@ -11,4 +11,4 @@ fn test_func() i32 | ErrorA:
     return Result.Err(ErrorB.Error)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

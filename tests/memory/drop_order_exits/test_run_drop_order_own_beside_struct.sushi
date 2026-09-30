@@ -18,8 +18,8 @@ fn run(bool go) i32:
         let Own@(Res) p = Own.alloc(Res("own-2"))
         println("inner {s.name} {p.get().name}")
     println("outer {r.name} {o.get().name}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 v = run(true).realise(1)
-    return Result.Ok(v)
+    let i32 v = run(true)
+    return v

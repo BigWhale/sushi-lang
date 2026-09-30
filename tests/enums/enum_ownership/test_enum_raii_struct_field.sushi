@@ -15,29 +15,29 @@ fn describe(Shape s) string:
     match s:
         Shape.Box(r) ->
             let i32 area = r.w * r.h
-            return Result.Ok("Box area={area}")
+            return "Box area={area}"
         Shape.Point(x, y) ->
-            return Result.Ok("Point ({x},{y})")
+            return "Point ({x},{y})"
         Shape.Empty ->
-            return Result.Ok("Empty")
+            return "Empty"
 
 fn make_shape() string:
     let Rect r = Rect(5, 3)
     let Shape s = Shape.Box(r)
-    let string desc = describe(s).realise("error")
+    let string desc = describe(s)
     # s (and the Rect inside) leaves scope here
-    return Result.Ok(desc)
+    return desc
 
 fn main() i32:
-    let string d1 = make_shape().realise("error")
-    let string d2 = describe(Shape.Point(2, 7)).realise("error")
+    let string d1 = make_shape()
+    let string d2 = describe(Shape.Point(2, 7))
 
     println("{d1}")
     println("{d2}")
 
     if (d1 != "Box area=15"):
-        return Result.Ok(1)
+        return 1
     if (d2 != "Point (2,7)"):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

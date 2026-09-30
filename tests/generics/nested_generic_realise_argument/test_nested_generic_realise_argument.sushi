@@ -13,14 +13,14 @@ extend Box@(string) with Show:
         return self.v.clone()
 
 fn wrap@(T)(nom T x) Box@(T):
-    return Result.Ok(Box(x))
+    return Box(x)
 
 fn show_it@(S: Show)(S s) string:
-    return Result.Ok(s.show())
+    return s.show()
 
 fn ident@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    println(ident(nom show_it(wrap(nom "towel").realise(Box("none"))).realise("?")).realise(""))
-    return Result.Ok(0)
+    println(ident(nom show_it(wrap(nom "towel"))))
+    return 0

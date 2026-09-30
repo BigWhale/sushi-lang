@@ -12,7 +12,7 @@ fn main() i32:
     let Outer o = Outer(Inner(3), 1)
     let peek Outer r = o
     println("{o.weight} {r.weight_two()} {o.inner.depth}")
-    return Result.Ok(0)
+    return 0
 
 extend Outer weight_two() i32:
     return self.weight + 1

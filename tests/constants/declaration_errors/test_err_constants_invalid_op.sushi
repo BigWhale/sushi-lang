@@ -6,4 +6,4 @@ const f64 FLOAT_VAL = 3.14
 const i32 INVALID_BITWISE = FLOAT_VAL & 0xFF
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

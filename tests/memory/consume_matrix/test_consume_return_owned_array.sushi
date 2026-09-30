@@ -8,20 +8,19 @@
 # that stopped moving entirely -- leaking, or double-freeing on the way out -- would go
 # unnoticed. `.len()` on the destination proves the buffer survived the transfer.
 #
-# The read-back sits in a helper because `??` in main is CW2511 and tests should not use
-# it; the helper is not part of what this file asserts.
+# The read-back sits in a helper; the helper is not part of what this file asserts.
 # EXPECT_STDOUT_EXACT: "n=3\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
 fn make() i32[]:
     let i32[] a = from([1, 2, 3])
-    return Result.Ok(a)
+    return a
 
 fn make_len() i32:
-    let i32[] b = make()??
-    return Result.Ok(b.len())
+    let i32[] b = make()
+    return b.len()
 
 fn main() i32:
-    println("n={make_len().realise(-1)}")
-    return Result.Ok(0)
+    println("n={make_len()}")
+    return 0

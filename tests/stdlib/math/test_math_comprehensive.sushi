@@ -73,4 +73,4 @@ fn main() i32:
 
     println("=== All Tests Completed Successfully ===")
 
-    return Result.Ok(0)
+    return 0

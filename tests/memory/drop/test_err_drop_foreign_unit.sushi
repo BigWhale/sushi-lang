@@ -11,4 +11,4 @@ extend Gadget with Drop:
 fn main() i32:
     let Gadget g = Gadget(1)
     println("{g.id}")
-    return Result.Ok(0)
+    return 0

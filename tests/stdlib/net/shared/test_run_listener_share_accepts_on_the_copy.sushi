@@ -11,7 +11,7 @@ fn main() i32:
     let i32 port = server.local_port().realise(0)
     if (port == 0):
         println("no port")
-        return Result.Ok(1)
+        return 1
 
     match server.share():
         Result.Ok(twin) ->
@@ -27,4 +27,4 @@ fn main() i32:
                 Result.Err(_) -> println("connect failed")
         Result.Err(_) -> println("share failed")
 
-    return Result.Ok(0)
+    return 0

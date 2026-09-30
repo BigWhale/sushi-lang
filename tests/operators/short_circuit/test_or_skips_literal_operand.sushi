@@ -14,4 +14,4 @@ fn main() i32:
     if (r):
         println("true")
 
-    return Result.Ok(0)
+    return 0

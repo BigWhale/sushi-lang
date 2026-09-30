@@ -8,7 +8,7 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn grow(poke Shape s) ~:
+fn grow(poke Shape s) ~ | StdError:
     match s:
         Shape.Poly(poke p) ->
             p.push(9)
@@ -22,4 +22,4 @@ fn main() i32:
         match s:
             Shape.Poly(peek q) -> println(q.len())
             Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

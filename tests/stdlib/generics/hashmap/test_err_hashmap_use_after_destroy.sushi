@@ -10,4 +10,4 @@ fn main() i32:
     # ERROR CE2406: use of destroyed variable 'map'
     println(map.len())
 
-    return Result.Ok(0)
+    return 0

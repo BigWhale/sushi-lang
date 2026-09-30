@@ -15,4 +15,4 @@ extend Holder Green() i32:
 fn main() i32:
     let Holder Color = Holder(7)
     println(Color.Green())
-    return Result.Ok(0)
+    return 0

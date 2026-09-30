@@ -31,38 +31,38 @@ fn main() i32:
         Result.Err(HttpError.BadRequest) ->
             error_count := error_count + 1
         _ ->
-            return Result.Ok(1)
+            return 1
 
     match handle_request(401):
         Result.Err(HttpError.Unauthorized) ->
             error_count := error_count + 1
         _ ->
-            return Result.Ok(1)
+            return 1
 
     match handle_request(403):
         Result.Err(HttpError.Forbidden) ->
             error_count := error_count + 1
         _ ->
-            return Result.Ok(1)
+            return 1
 
     match handle_request(404):
         Result.Err(HttpError.NotFound) ->
             error_count := error_count + 1
         _ ->
-            return Result.Ok(1)
+            return 1
 
     match handle_request(500):
         Result.Err(HttpError.InternalServerError) ->
             error_count := error_count + 1
         _ ->
-            return Result.Ok(1)
+            return 1
 
     match handle_request(200):
         Result.Ok(msg) ->
             if (msg == "Success" and error_count == 5):
                 println("PASS: Multiple error variants work")
-                return Result.Ok(0)
+                return 0
             else:
-                return Result.Ok(1)
+                return 1
         _ ->
-            return Result.Ok(1)
+            return 1

@@ -4,10 +4,10 @@
 # This test verifies that the new borrow syntax is correctly parsed
 # EXPECT_NO_LEAKS: true
 
-fn read_value(peek i32 x) i32:
+fn read_value(peek i32 x) i32 | StdError:
     return Result.Ok(x)
 
-fn modify_value(poke i32 x) ~:
+fn modify_value(poke i32 x) ~ | StdError:
     x := x + 1
     return Result.Ok(~)
 
@@ -22,6 +22,6 @@ fn main() i32:
     let Result@(~, StdError) mod_result = modify_value(poke num)
     if (mod_result.is_ok()):
         println(num)
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

@@ -22,4 +22,4 @@ fn main() i32:
     # Same variant with different values should have different hashes
     # Different variants should have different hashes
     println("All enum data variant hashes computed!")
-    return Result.Ok(0)
+    return 0

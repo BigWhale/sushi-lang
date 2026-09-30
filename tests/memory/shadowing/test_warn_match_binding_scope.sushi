@@ -10,7 +10,7 @@ enum Shape:
     Poly(i32[])
     Empty
 
-fn eat(i32[] a) i32:
+fn eat(i32[] a) i32 | StdError:
     return Result.Ok(a.len())
 
 fn main() i32:
@@ -26,4 +26,4 @@ fn main() i32:
     match eat(p):
         Result.Ok(n) -> println(n)
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

@@ -20,8 +20,8 @@ fn main() i32:
     let i32 len = colors.len()
     if (len != 2):
         println("FAIL: expected 2 got {len}")
-        return Result.Ok(1)
+        return 1
 
     colors.destroy()
     println("List enum: passed")
-    return Result.Ok(0)
+    return 0

@@ -15,4 +15,4 @@ fn main() i32:
     println(val.realise(0))
 
     map.free()
-    return Result.Ok(0)
+    return 0

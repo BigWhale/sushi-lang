@@ -22,4 +22,4 @@ struct Tree:
 fn main() i32:
     let Tree root = Tree(1, List.new())
     println("v={root.value} n={root.kids.len()}")
-    return Result.Ok(0)
+    return 0

@@ -8,16 +8,16 @@
 
 fn lookup(i32 k) Maybe@(i32):
     if (k > 0):
-        return Result.Ok(Maybe.Some(k * 10))
-    return Result.Ok(Maybe.None())
+        return Maybe.Some(k * 10)
+    return Maybe.None()
 
 fn run_it() i32:
-    match lookup(5)??:
+    match lookup(5):
         Maybe.Some(x) -> println("some {x}")
         Maybe.None() -> println("none")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 code = run_it().realise(1)
+    let i32 code = run_it()
     println("done {code}")
-    return Result.Ok(0)
+    return 0

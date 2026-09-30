@@ -5,10 +5,10 @@
 fn zero_all(peek i32[] xs) i32:
     foreach(poke r in xs.iter()):
         r := 0
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     let i32[] a = from([1])
-    let i32 t = zero_all(peek a).realise(0)
+    let i32 t = zero_all(peek a)
     println(t)
-    return Result.Ok(0)
+    return 0

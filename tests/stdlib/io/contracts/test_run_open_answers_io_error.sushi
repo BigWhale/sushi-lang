@@ -21,4 +21,4 @@ fn main() i32:
                 IoError.IsDirectory -> println("is a directory")
                 _ -> println("wrong variant")
 
-    return Result.Ok(0)
+    return 0

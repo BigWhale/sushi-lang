@@ -4,6 +4,6 @@
 use "helpers/named_geo" as geo
 
 fn main() i32:
-    let i32 d = geo.diff(b: 1, a: 9).realise(0)
+    let i32 d = geo.diff(b: 1, a: 9)
     println("{d}")
-    return Result.Ok(0)
+    return 0

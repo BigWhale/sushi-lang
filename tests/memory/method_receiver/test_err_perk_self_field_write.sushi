@@ -21,4 +21,4 @@ fn main() i32:
     let Counter c = Counter(7)
     let i32 x = c.reset()
     println("n: {c.n} x: {x}")
-    return Result.Ok(0)
+    return 0

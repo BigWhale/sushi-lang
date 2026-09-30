@@ -15,5 +15,5 @@ fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
 fn main() i32:
     match emit(poke stdout, "Mostly Harmless"):
         Result.Ok(_) -> ~
-        Result.Err(_) -> return Result.Ok(1)
-    return Result.Ok(0)
+        Result.Err(_) -> return 1
+    return 0

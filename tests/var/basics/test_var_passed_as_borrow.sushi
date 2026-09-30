@@ -9,16 +9,15 @@ fn total(i32[] xs) i32:
     let i32 sum = 0
     foreach(x in xs.iter()):
         sum := sum + x
-    return Result.Ok(sum)
+    return sum
 
 fn grow(poke i32[] xs, i32 n) ~:
     xs.push(n)
-    return Result.Ok(~)
 
 fn main() i32:
     grow(poke table, 1)
     grow(poke table, 2)
-    println("{total(table).realise(0)}")
+    println("{total(table)}")
     grow(poke table, 3)
-    println("{total(table).realise(0)}")
-    return Result.Ok(0)
+    println("{total(table)}")
+    return 0

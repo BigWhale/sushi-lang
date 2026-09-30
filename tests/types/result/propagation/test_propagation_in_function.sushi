@@ -27,21 +27,21 @@ fn main() i32:
     match validate_file("missing"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten NotFound")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyFileError.NotFound) ->
             println("PASS: First propagation works")
         Result.Err(_) ->
             println("FAIL: Wrong error on first propagation")
-            return Result.Ok(1)
+            return 1
 
     match validate_file("forbidden"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten PermissionDenied")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyFileError.PermissionDenied) ->
             println("PASS: Second propagation works")
         Result.Err(_) ->
             println("FAIL: Wrong error on second propagation")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

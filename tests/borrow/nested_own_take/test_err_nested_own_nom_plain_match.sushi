@@ -19,4 +19,4 @@ fn main() i32:
         Outer.Full(Own(Inner.Nil)) -> println("nil")
         Outer.Empty -> println("empty")
     println(kept)
-    return Result.Ok(0)
+    return 0

@@ -8,4 +8,4 @@ fn main() i32:
     foreach(i32 x in arr.iter()):
         sum := sum + x
     print(sum)
-    return Result.Ok(0)
+    return 0

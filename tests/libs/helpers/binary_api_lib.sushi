@@ -23,28 +23,28 @@ extend Crate with Weigh:
 
 public fn heavier@(T: Weigh)(nom T a, nom T b) T:
     if (a.weigh() > b.weigh()):
-        return Result.Ok(a)
-    return Result.Ok(b)
+        return a
+    return b
 
 public enum Opt@(T):
     Nope
     Yep(T)
 
 public fn wrap_opt@(T)(nom T v) Opt@(T):
-    return Result.Ok(Opt.Yep(v))
+    return Opt.Yep(v)
 
 public perk Display:
     fn display() string
 
-public fn show_all@(...Ts: Display)(...Ts args) ~:
+public fn show_all@(...Ts: Display)(...Ts args) ~ | StdError:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)
 
 fn kept(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1
 
 public fn describe(Crate c, Mood m) string:
     match m:
-        Mood.Calm -> return Result.Ok("{c.label} calm {kept(c.weight).realise(0)}")
-        Mood.Loud(n) -> return Result.Ok("{c.label} loud {n}")
+        Mood.Calm -> return "{c.label} calm {kept(c.weight)}"
+        Mood.Loud(n) -> return "{c.label} loud {n}"

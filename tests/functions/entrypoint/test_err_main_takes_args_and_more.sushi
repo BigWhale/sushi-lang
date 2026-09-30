@@ -3,4 +3,4 @@
 # EXPECT_ERROR_CODE: CE0138
 fn main(string[] args, i32 x) i32:
     println("n {args.len()} x {x}")
-    return Result.Ok(0)
+    return 0

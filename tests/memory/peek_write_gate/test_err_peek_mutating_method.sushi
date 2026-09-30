@@ -3,14 +3,13 @@
 # EXPECT_ERROR_CODE: CE2408
 fn grow(peek i32[] a) ~:
     a.push(9)
-    return Result.Ok(~)
 
 fn run_test() i32:
     let i32[] xs = from([1, 2, 3])
     grow(peek xs)
     println(xs.len())
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

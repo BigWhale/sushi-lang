@@ -9,4 +9,4 @@ extend Cage@(T) static empty() Cage@(T):
 
 fn main() i32:
     println("{Cage.empty().items.len()}")
-    return Result.Ok(0)
+    return 0

@@ -6,4 +6,4 @@ fn main() i32:
   let i32 y = 10
   let i32 z = 15
   print("{x} + {y} + {z} = {x + y + z}")
-  return Result.Ok(0)
+  return 0

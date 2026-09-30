@@ -27,4 +27,4 @@ fn main() i32:
         Result.Ok(n) -> println("{n}")
         Result.Err(_) -> println("caught")
 
-    return Result.Ok(0)
+    return 0

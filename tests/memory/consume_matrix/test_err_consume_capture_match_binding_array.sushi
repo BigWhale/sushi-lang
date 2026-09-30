@@ -16,6 +16,6 @@ fn main() i32:
     match s:
         Shape.Poly(p) ->
             let fn(i32) -> i32 f = |i32 n| n + p.len()
-            println("f={f(0).realise(-1)}")
+            println("f={f(0)}")
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

@@ -12,4 +12,4 @@ fn main() i32:
     match x.say():
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

@@ -13,7 +13,6 @@ fn report(string label, Result@(ProcessOutput, ProcessError) r) ~:
         Result.Err(ProcessError.SpawnFailed) -> println("{label} spawnfailed")
         Result.Err(ProcessError.SignalReceived) -> println("{label} signal")
         Result.Err(_) -> println("{label} err")
-    return Result.Ok(~)
 
 fn main() i32:
     # run() is variadic: trailing args are collected into the argv (no `from([...])`).
@@ -36,4 +35,4 @@ fn main() i32:
         Result.Ok(out) -> println("big ok {out.stdout_text.len()}")
         Result.Err(_) -> println("big err")
 
-    return Result.Ok(0)
+    return 0

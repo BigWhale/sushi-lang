@@ -13,4 +13,4 @@ fn main() i32:
     c.push(from([1, 3]))
     println("same={a.hash() == b.hash()}")
     println("different={a.hash() == c.hash()}")
-    return Result.Ok(0)
+    return 0

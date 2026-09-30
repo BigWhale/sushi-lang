@@ -19,4 +19,4 @@ fn main() i32:
             q := p
             println("q={q.len()}")
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

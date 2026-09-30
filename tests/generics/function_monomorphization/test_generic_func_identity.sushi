@@ -2,36 +2,36 @@
 # This is the most basic test of generic function body substitution
 
 fn identity@(T)(nom T value) T:
-    return Result.Ok(value)
+    return value
 
 fn run_test() i32:
     # Test with various primitive types
-    let i32 num = identity(nom 42)??
+    let i32 num = identity(nom 42)
     if (num != 42):
-        return Result.Ok(1)
+        return 1
 
-    let i64 big = identity(nom 1000 as i64)??
+    let i64 big = identity(nom 1000 as i64)
     if (big != 1000 as i64):
-        return Result.Ok(2)
+        return 2
 
-    let i8 small = identity(nom 10 as i8)??
+    let i8 small = identity(nom 10 as i8)
     if (small != 10 as i8):
-        return Result.Ok(3)
+        return 3
 
-    let u32 unsigned = identity(nom 999 as u32)??
+    let u32 unsigned = identity(nom 999 as u32)
     if (unsigned != 999 as u32):
-        return Result.Ok(4)
+        return 4
 
     # String test - just verify monomorphization happens
-    if (identity(nom "Mostly Harmless")?? == ""):
-        return Result.Ok(10)
+    if (identity(nom "Mostly Harmless") == ""):
+        return 10
 
-    let f64 pi = identity(nom 3.14)??
+    let f64 pi = identity(nom 3.14)
     if (pi < 3.13 or pi > 3.15):
-        return Result.Ok(5)
+        return 5
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

@@ -4,7 +4,7 @@ enum Status:
     Success(i32)
     Failure(i32)
 
-fn process(Status r) i32:
+fn process(Status r) i32 | StdError:
     match r:
         # Error: Success has 1 field but we try to bind 2 variables
         Status.Success(a, b) ->
@@ -14,4 +14,4 @@ fn process(Status r) i32:
 
 fn main() i32:
     let Status r = Status.Success(42)
-    return Result.Ok(process(r))
+    return process(r)

@@ -6,4 +6,4 @@ const i32 DEPTH = 4
 use "helpers/geo"
 
 fn main() i32:
-    return Result.Ok(DEPTH)
+    return DEPTH

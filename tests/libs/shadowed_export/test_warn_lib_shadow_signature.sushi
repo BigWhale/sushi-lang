@@ -7,8 +7,8 @@
 use <lib/override_lib>
 
 fn get_value(i32 n) i32:
-    return Result.Ok(n + 7)
+    return n + 7
 
 fn main() i32:
-    println("{get_value(1).realise(0)}")
-    return Result.Ok(0)
+    println("{get_value(1)}")
+    return 0

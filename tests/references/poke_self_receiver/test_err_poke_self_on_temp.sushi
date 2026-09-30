@@ -11,4 +11,4 @@ extend Counter bump(poke self) ~:
 
 fn main() i32:
     Counter(9).bump()
-    return Result.Ok(0)
+    return 0

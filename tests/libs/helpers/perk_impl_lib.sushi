@@ -12,5 +12,5 @@ extend i32 with Doubler:
 
 public fn pick_bigger@(T: Doubler)(T a, T b) T:
     if (a.doubled() > b.doubled()):
-        return Result.Ok(a)
-    return Result.Ok(b)
+        return a
+    return b

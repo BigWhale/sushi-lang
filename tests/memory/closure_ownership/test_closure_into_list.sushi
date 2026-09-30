@@ -16,4 +16,4 @@ fn main() i32:
     let List@(fn(i32) -> i32) fs = List.new()
     fs.push(f)
     println("n={fs.len()}")
-    return Result.Ok(0)
+    return 0

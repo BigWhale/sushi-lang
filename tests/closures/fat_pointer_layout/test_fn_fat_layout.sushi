@@ -12,10 +12,10 @@
 # a borrow is how this test keeps using `o` twice.
 # EXPECT_STDOUT_EXACT: "7\n30\n"
 fn add_one(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn triple(i32 x) i32:
-    return Result.Ok(x * 3)
+    return x * 3
 
 struct Ops:
     fn(i32) -> i32 a
@@ -23,14 +23,14 @@ struct Ops:
 
 fn call_a(peek Ops o, i32 v) i32:
     let fn(i32) -> i32 f = o.a
-    return Result.Ok(f(v)??)
+    return f(v)
 
 fn call_b(peek Ops o, i32 v) i32:
     let fn(i32) -> i32 g = o.b
-    return Result.Ok(g(v)??)
+    return g(v)
 
 fn main() i32:
     let Ops o = Ops(add_one, triple)
-    println(call_a(peek o, 6).realise(0))
-    println(call_b(peek o, 10).realise(0))
-    return Result.Ok(0)
+    println(call_a(peek o, 6))
+    println(call_b(peek o, 10))
+    return 0

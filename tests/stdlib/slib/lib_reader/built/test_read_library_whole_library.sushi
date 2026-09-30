@@ -17,4 +17,4 @@ fn main() i32:
             println("{name} {kind} {library.sizes.source > 0} {library.sizes.bitcode}")
         Result.Err(_) ->
             println("a fault")
-    return Result.Ok(0)
+    return 0

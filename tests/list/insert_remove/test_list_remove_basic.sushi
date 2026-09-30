@@ -15,53 +15,53 @@ fn main() i32:
         Maybe.Some(val) ->
             if (val != 30):
                 println("ERROR: Removed value should be 30, got {val}")
-                return Result.Ok(1)
+                return 1
             println("Removed 30 successfully")
         Maybe.None() ->
             println("ERROR: Remove should succeed")
-            return Result.Ok(2)
+            return 2
 
     # Verify length decreased
     if (nums.len() != 4):
         println("ERROR: Length should be 4, got {nums.len()}")
-        return Result.Ok(3)
+        return 3
 
     # Verify elements shifted correctly
     match nums.get(0):
         Maybe.Some(val) ->
             if (val != 10):
                 println("ERROR: nums[0] should be 10, got {val}")
-                return Result.Ok(4)
+                return 4
         Maybe.None() ->
             println("ERROR: Missing element at index 0")
-            return Result.Ok(5)
+            return 5
 
     match nums.get(1):
         Maybe.Some(val) ->
             if (val != 20):
                 println("ERROR: nums[1] should be 20, got {val}")
-                return Result.Ok(6)
+                return 6
         Maybe.None() ->
             println("ERROR: Missing element at index 1")
-            return Result.Ok(7)
+            return 7
 
     match nums.get(2):
         Maybe.Some(val) ->
             if (val != 40):
                 println("ERROR: nums[2] should be 40 (shifted), got {val}")
-                return Result.Ok(8)
+                return 8
         Maybe.None() ->
             println("ERROR: Missing element at index 2")
-            return Result.Ok(9)
+            return 9
 
     match nums.get(3):
         Maybe.Some(val) ->
             if (val != 50):
                 println("ERROR: nums[3] should be 50 (shifted), got {val}")
-                return Result.Ok(10)
+                return 10
         Maybe.None() ->
             println("ERROR: Missing element at index 3")
-            return Result.Ok(11)
+            return 11
 
     println("Basic remove test passed!")
-    return Result.Ok(0)
+    return 0

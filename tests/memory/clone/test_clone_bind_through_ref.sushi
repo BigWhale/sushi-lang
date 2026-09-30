@@ -6,9 +6,8 @@
 # EXPECT_NO_LEAKS
 fn eat(i32[] a) ~:
     println("ate {a.len()}")
-    return Result.Ok(~)
 
-fn f(peek i32[] a) ~:
+fn f(peek i32[] a) ~ | StdError:
     let i32[] b = a.clone()
     b.push(9)
     eat(b)
@@ -19,4 +18,4 @@ fn main() i32:
     let Result@(~, StdError) r = f(peek arr)
     if (r.is_ok()):
         println("after: {arr.len()}")
-    return Result.Ok(0)
+    return 0

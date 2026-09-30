@@ -11,4 +11,4 @@ fn main() i32:
     println("{lo}")
     println("{max(3, b)}")
     println("{min(b, 3)}")
-    return Result.Ok(0)
+    return 0

@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "400000058000true2004true0000003345"
 # Test complex dynamic array scenarios
-fn run_test() i32:
+fn run_test() i32 | StdError:
   # Test basic operations with multiple arrays
   let i32[] numbers = from([10, 20, 30, 40])
   print(numbers.len())      # Should print 4
@@ -56,4 +56,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

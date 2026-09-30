@@ -11,4 +11,4 @@ fn main() i32:
     println(GREETING)
     println(ALIAS)
     println(SECOND_ALIAS)
-    return Result.Ok(0)
+    return 0

@@ -15,4 +15,4 @@ fn main() i32:
         Result.Err(_) ->
             println("error")
 
-    return Result.Ok(0)
+    return 0

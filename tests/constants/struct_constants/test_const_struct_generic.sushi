@@ -12,4 +12,4 @@ const Pair@(i32, bool) P = Pair(3, true)
 
 fn main() i32:
     println("{P.first} {P.second}")
-    return Result.Ok(0)
+    return 0

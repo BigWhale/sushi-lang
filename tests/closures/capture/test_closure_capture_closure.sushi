@@ -6,9 +6,9 @@ fn run() i32:
     let i32 n = 10
     let fn(i32) -> i32 g = |i32 x| x + n
     let fn(i32) -> i32 h = |i32 y|:
-        return Result.Ok(g(y)?? + 1)
-    return Result.Ok(h(5)??)
+        return g(y) + 1
+    return h(5)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

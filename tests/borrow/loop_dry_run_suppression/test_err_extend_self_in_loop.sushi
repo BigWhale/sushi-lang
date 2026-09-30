@@ -13,4 +13,4 @@ fn main() i32:
         xs.extend(xs)
         n := n + 1
     println(xs.len())
-    return Result.Ok(0)
+    return 0

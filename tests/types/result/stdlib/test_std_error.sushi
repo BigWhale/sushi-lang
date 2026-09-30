@@ -16,19 +16,19 @@ fn main() i32:
                 println("PASS: StdError with Ok works")
             else:
                 println("FAIL: Wrong value")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error for valid input")
-            return Result.Ok(1)
+            return 1
 
     match simple_operation(-1):
         Result.Ok(_) ->
             println("FAIL: Should have gotten StdError")
-            return Result.Ok(1)
+            return 1
         Result.Err(StdError.Error) ->
             println("PASS: StdError.Error works")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

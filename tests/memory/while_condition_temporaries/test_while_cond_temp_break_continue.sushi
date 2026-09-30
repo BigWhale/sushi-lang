@@ -14,4 +14,4 @@ fn main() i32:
         if (i == 4):
             break
     println(i)
-    return Result.Ok(0)
+    return 0

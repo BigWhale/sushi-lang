@@ -8,4 +8,4 @@ const i32 SIZE = sh.SIZE * 2
 
 fn main() i32:
     println("{SIZE} {sh.SIZE}")
-    return Result.Ok(0)
+    return 0

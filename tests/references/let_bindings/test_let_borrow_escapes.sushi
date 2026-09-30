@@ -20,4 +20,4 @@ fn main() i32:
     let i32[] c = h.items.clone()
     c.push(11)
     println("clone: {c.len()} owner: {h.items.len()}")
-    return Result.Ok(0)
+    return 0

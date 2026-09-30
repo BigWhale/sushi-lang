@@ -4,14 +4,14 @@
 use <time>
 
 fn copy@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn setenv@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let i64 t = now().realise(0 as i64)
     println(t > (0 as i64))
-    println(copy(7).realise(0))
-    println(setenv(8).realise(0))
-    return Result.Ok(0)
+    println(copy(7))
+    println(setenv(8))
+    return 0

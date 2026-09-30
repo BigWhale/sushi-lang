@@ -6,7 +6,6 @@
 
 fn print_array(poke i32[] arr) ~:
     println(arr.len())
-    return Result.Ok(~)
 
 fn main() i32:
     let i32[] numbers = from([1, 2, 3, 4, 5])
@@ -17,4 +16,4 @@ fn main() i32:
     # Array is still valid after borrow
     println(numbers.len())
 
-    return Result.Ok(0)
+    return 0

@@ -15,4 +15,4 @@ fn main() i32:
             n := 99
             println("local: {n}")
         Num.Nothing -> println("nothing")
-    return Result.Ok(0)
+    return 0

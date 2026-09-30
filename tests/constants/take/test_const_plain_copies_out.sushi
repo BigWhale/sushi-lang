@@ -8,14 +8,13 @@ const i32 LIMIT = 10
 
 fn eats(nom i32 n) ~:
     println("{n}")
-    return Result.Ok(~)
 
 fn plus_one(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1
 
 fn main() i32:
     eats(nom LIMIT)
     let i32 mine = LIMIT
-    let i32 more = plus_one(LIMIT).realise(0)
+    let i32 more = plus_one(LIMIT)
     println("{mine} {more}")
-    return Result.Ok(0)
+    return 0

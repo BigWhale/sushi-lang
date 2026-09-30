@@ -15,11 +15,11 @@ fn main() i32:
             if (val == 42):
                 println("Test 1 passed: Maybe@(Result@(i32))")
             else:
-                return Result.Ok(1)
+                return 1
         else:
-            return Result.Ok(2)
+            return 2
     else:
-        return Result.Ok(3)
+        return 3
 
     # Test 2: Result@(Maybe@(string)) with literal constructor
     # "Mostly Harmless" - Earth's entry in the Guide
@@ -31,11 +31,11 @@ fn main() i32:
             if (val == "Mostly Harmless"):
                 println("Test 2 passed: Result@(Maybe@(string))")
             else:
-                return Result.Ok(4)
+                return 4
         else:
-            return Result.Ok(5)
+            return 5
     else:
-        return Result.Ok(6)
+        return 6
 
     # Test 3: Triple nesting Maybe@(Maybe@(Maybe@(i32)))
     # Deep Thought computed for 7.5 million years
@@ -49,13 +49,13 @@ fn main() i32:
                 if (val == 42):
                     println("Test 3 passed: Triple nested Maybe")
                 else:
-                    return Result.Ok(7)
+                    return 7
             else:
-                return Result.Ok(8)
+                return 8
         else:
-            return Result.Ok(9)
+            return 9
     else:
-        return Result.Ok(10)
+        return 10
 
     println("All tests passed!")
-    return Result.Ok(0)
+    return 0

@@ -10,15 +10,15 @@ fn write_one(string path) bool:
         Result.Ok(nom f) ->
             f.write("x")
             f.close()
-            return Result.Ok(true)
+            return true
         Result.Err(_) ->
-            return Result.Ok(false)
+            return false
 
 fn has(string[] xs, string want) bool:
     foreach(x in xs.iter()):
         if (x == want):
-            return Result.Ok(true)
-    return Result.Ok(false)
+            return true
+    return false
 
 fn main() i32:
     let string root = "/tmp/sushi_fs_tree"
@@ -26,19 +26,19 @@ fn main() i32:
         Result.Ok(_) -> println("made")
         Result.Err(_) ->
             println("mkdir_all failed")
-            return Result.Ok(1)
-    if (not write_one("/tmp/sushi_fs_tree/a/f1.txt").realise(false)):
-        return Result.Ok(1)
-    if (not write_one("/tmp/sushi_fs_tree/a/b/f2.txt").realise(false)):
-        return Result.Ok(1)
+            return 1
+    if (not write_one("/tmp/sushi_fs_tree/a/f1.txt")):
+        return 1
+    if (not write_one("/tmp/sushi_fs_tree/a/b/f2.txt")):
+        return 1
 
     match walk(root):
         Result.Ok(files) ->
             println("found: {files.len()}")
             let string want1 = "/tmp/sushi_fs_tree/a/f1.txt"
             let string want2 = "/tmp/sushi_fs_tree/a/b/f2.txt"
-            let bool h1 = has(files, want1).realise(false)
-            let bool h2 = has(files, want2).realise(false)
+            let bool h1 = has(files, want1)
+            let bool h2 = has(files, want2)
             println("has f1: {h1}")
             println("has f2: {h2}")
         Result.Err(_) ->
@@ -49,4 +49,4 @@ fn main() i32:
             let bool gone = not exists(root)
             println("gone: {gone}")
         Result.Err(_) -> println("remove_all failed")
-    return Result.Ok(0)
+    return 0

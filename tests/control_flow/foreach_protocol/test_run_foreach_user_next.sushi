@@ -21,4 +21,4 @@ fn main() i32:
     foreach(n in c):
         println(n)
     println("done")
-    return Result.Ok(0)
+    return 0

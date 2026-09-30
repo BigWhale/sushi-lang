@@ -5,4 +5,4 @@ use <collections/hashmap>
 
 fn main() i32:
     let Maybe@(HashMap@(i32[], string)) m = Maybe.None
-    return Result.Ok(0)
+    return 0

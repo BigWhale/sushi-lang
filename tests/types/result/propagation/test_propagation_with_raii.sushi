@@ -20,10 +20,10 @@ fn main() i32:
     match process_data():
         Result.Ok(_) ->
             println("FAIL: Should have propagated error")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyError.Error) ->
             println("PASS: Error propagated with RAII cleanup")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             println("FAIL: Wrong error")
-            return Result.Ok(1)
+            return 1

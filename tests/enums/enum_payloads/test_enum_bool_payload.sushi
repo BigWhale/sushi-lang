@@ -10,24 +10,24 @@ fn describe_toggle(Toggle t) string:
     match t:
         Toggle.On(flag) ->
             if (flag):
-                return Result.Ok("on with true")
-            return Result.Ok("on with false")
+                return "on with true"
+            return "on with false"
         Toggle.Off ->
-            return Result.Ok("off")
+            return "off"
 
 fn main() i32:
     let Toggle t1 = Toggle.On(true)
-    let string s1 = describe_toggle(t1).realise("error")
+    let string s1 = describe_toggle(t1)
 
     let Toggle t2 = Toggle.Off()
-    let string s2 = describe_toggle(t2).realise("error")
+    let string s2 = describe_toggle(t2)
 
     println("{s1}")
     println("{s2}")
 
     if (s1 != "on with true"):
-        return Result.Ok(1)
+        return 1
     if (s2 != "off"):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

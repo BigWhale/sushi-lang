@@ -13,4 +13,4 @@ extend Pair@(i32, U) with Drop:
 fn main() i32:
     let Pair@(i32, string) p = Pair(1, "towel")
     println("{p.second}")
-    return Result.Ok(0)
+    return 0

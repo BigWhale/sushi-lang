@@ -11,4 +11,4 @@ fn main() i32:
     let Box b = Box.Held(3)
     match b:
         Box.Held(Other.Alpha) -> println("a")
-    return Result.Ok(0)
+    return 0

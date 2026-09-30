@@ -25,4 +25,4 @@ fn main() i32:
                 println("wrong: an answer was not loopback")
         Result.Err(_) -> println("resolve failed")
 
-    return Result.Ok(0)
+    return 0

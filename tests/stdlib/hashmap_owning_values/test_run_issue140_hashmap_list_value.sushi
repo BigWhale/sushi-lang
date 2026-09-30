@@ -17,11 +17,11 @@ fn make_list() List@(i32):
     let List@(i32) xs = List.new()
     xs.push(42)
     xs.push(43)
-    return Result.Ok(xs)
+    return xs
 
 fn run() i32:
     let HashMap@(i32, List@(i32)) map = HashMap.new()
-    map.insert(5, make_list()??)
+    map.insert(5, make_list())
     let i32 out = -2
     match map.get(5):
         Maybe.Some(lst) ->
@@ -33,8 +33,8 @@ fn run() i32:
         Maybe.None ->
             out := -2
     map.free()
-    return Result.Ok(out)
+    return out
 
 fn main() i32:
-    println(run().realise(0))
-    return Result.Ok(0)
+    println(run())
+    return 0

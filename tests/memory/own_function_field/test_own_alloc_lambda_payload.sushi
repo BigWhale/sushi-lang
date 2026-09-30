@@ -6,5 +6,5 @@
 fn main() i32:
     let Own@(fn(i32) -> i32) o1 = Own.alloc(|i32 x| x * 2)
     let fn(i32) -> i32 g = o1.get()
-    println("{g(4).realise(0)}")
-    return Result.Ok(0)
+    println("{g(4)}")
+    return 0

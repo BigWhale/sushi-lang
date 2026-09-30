@@ -29,4 +29,4 @@ fn main() i32:
         Result.Ok(line) -> println("read {line}")
         Result.Err(_) -> println("read failed")
     remove("file_struct_drop.txt").realise(0)
-    return Result.Ok(0)
+    return 0

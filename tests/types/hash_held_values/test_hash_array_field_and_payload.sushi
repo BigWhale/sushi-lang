@@ -32,4 +32,4 @@ fn main() i32:
     let Grid g2 = Grid(rows2)
     let Grid g3 = Grid(rows3)
     println("held={g1.hash() == g2.hash()} {g1.hash() == g3.hash()}")
-    return Result.Ok(0)
+    return 0

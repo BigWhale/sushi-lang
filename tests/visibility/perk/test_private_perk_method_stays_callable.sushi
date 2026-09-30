@@ -10,6 +10,6 @@ use <lib/private_perk_lib>
 fn main() i32:
     let Muffler m = Muffler(3)
     let string direct = m.hush()
-    let string through = hush_of(peek m).realise("none")
+    let string through = hush_of(peek m)
     println("{direct} {through}")
-    return Result.Ok(0)
+    return 0

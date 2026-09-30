@@ -5,7 +5,7 @@
 
 use <encoding/msgpack>
 
-fn lookup(MsgValue m, string key) ~:
+fn lookup(MsgValue m, string key) ~ | StdError:
     let Maybe@(MsgValue) found = map_get(m, key)??
     match found:
         Maybe.Some(v) ->
@@ -15,7 +15,7 @@ fn lookup(MsgValue m, string key) ~:
             println("{key} missing")
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     match decode(buf):
         Result.Ok(m) ->
@@ -28,4 +28,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

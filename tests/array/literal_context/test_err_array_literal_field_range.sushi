@@ -7,4 +7,4 @@ struct Row:
 fn main() i32:
     let Row r = Row([300, 1])
     println(r.xs[0])
-    return Result.Ok(0)
+    return 0

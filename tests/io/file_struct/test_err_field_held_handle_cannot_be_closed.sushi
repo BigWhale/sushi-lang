@@ -17,4 +17,4 @@ fn main() i32:
     match shut("field_held_handle.txt"):
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

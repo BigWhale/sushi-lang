@@ -24,4 +24,4 @@ fn main() i32:
     m.insert(1, h.inner)
     println("m={m.len()} src={h.inner.data.len()}")
     m.free()
-    return Result.Ok(0)
+    return 0

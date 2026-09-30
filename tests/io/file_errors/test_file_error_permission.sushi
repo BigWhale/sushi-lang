@@ -14,7 +14,7 @@ fn main() i32:
             f.writeln("Test content")
             f.close()
             println("Permission test completed")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             stderr.write("Error: could not open file for writing\n")
-            return Result.Err(StdError.Error)
+            return 1

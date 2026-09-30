@@ -12,4 +12,4 @@ fn main() i32:
         if (x == 1):
             l.push(5)
     println(l.len())
-    return Result.Ok(0)
+    return 0

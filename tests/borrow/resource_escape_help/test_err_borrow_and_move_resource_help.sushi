@@ -6,14 +6,14 @@
 use <io/fs>
 
 fn both(peek File a, nom File b) ~:
-    return Result.Ok(~)
+    return ~
 
-fn go() ~:
+fn go() ~ | StdError:
     let File f = stdout.share().realise(stdout)
-    both(peek f, nom f)??
+    both(peek f, nom f)
     return Result.Ok(~)
 
 fn main() i32:
     if (go().is_err()):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0

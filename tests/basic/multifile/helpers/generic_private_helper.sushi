@@ -2,7 +2,7 @@
 # generic across units exactly as it gates a concrete function (#467).
 
 fn private_generic@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 public fn public_generic@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x

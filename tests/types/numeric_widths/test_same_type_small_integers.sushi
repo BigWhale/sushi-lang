@@ -26,6 +26,6 @@ fn main() i32:
   if (eq and gt and lt and sum == (15 as i8) and diff == (5 as i8)
       and prod == (50 as i8) and quot == (2 as i8) and rem == (0 as i8)):
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 
-  return Result.Ok(1)
+  return 1

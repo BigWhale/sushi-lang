@@ -8,12 +8,12 @@ enum Wrap@(T):
     Zero
 
 fn first@(U)(Maybe@(U) m, U fallback) U:
-    return Result.Ok(m.realise(fallback))
+    return m.realise(fallback)
 
 fn main() i32:
     let Maybe@(i32) m = Maybe.Some(42)
     let Wrap@(i32) w = Wrap.One(m)
     match w:
-        Wrap.One(v) -> println(first(v, 0).realise(-1))
+        Wrap.One(v) -> println(first(v, 0))
         Wrap.Zero -> println(0)
-    return Result.Ok(0)
+    return 0

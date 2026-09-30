@@ -1,0 +1,11 @@
+# A ?? inside a lambda inside main() belongs to the LAMBDA's channel (#403). The
+# lambda's type writes `| StdError`, so the `??` is legal although main is bare.
+# EXPECT_STDOUT_EXACT: "5\n"
+fn get() i32 | StdError:
+    return Result.Ok(4)
+
+fn main() i32:
+    let fn(i32) -> i32 | StdError f = |i32 x| get()?? + x
+    let i32 v = f(1).realise(0)
+    println("{v}")
+    return 0

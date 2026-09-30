@@ -11,4 +11,4 @@ fn main() i32:
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close_socket failed")
     println("slot {slot}")
-    return Result.Ok(0)
+    return 0

@@ -20,6 +20,6 @@ fn main() i32:
     println("picked: {fixed[1]} {fixed[3]}")
 
     if (fixed[0] != 0 or fixed[2] != 0):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

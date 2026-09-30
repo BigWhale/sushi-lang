@@ -15,10 +15,10 @@ fn main() i32:
     match returns_err():
         Result.Ok(_) ->
             println("FAIL: Got Ok instead of Err")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyError.ErrorA) ->
             println("PASS: Err construction works")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1

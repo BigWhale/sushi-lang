@@ -6,7 +6,7 @@
 
 use <encoding/msgpack>
 
-fn check(u8[] buf) ~:
+fn check(u8[] buf) ~ | StdError:
     match decode(buf):
         Result.Ok(v) ->
             println(show(v)??)
@@ -22,7 +22,7 @@ fn check(u8[] buf) ~:
                     println("Trailing({p})")
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let u8[] b_fixarr = from([0x92, 0x01, 0x02])
     check(b_fixarr)??
     let u8[] b_empty_arr = from([0x90])
@@ -51,4 +51,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

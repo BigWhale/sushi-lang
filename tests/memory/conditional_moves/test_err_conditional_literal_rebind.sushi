@@ -7,7 +7,6 @@
 # EXPECT_ERROR_CODE: CE2405
 fn eat(nom string s) ~:
     println("ate {s}")
-    return Result.Ok(~)
 
 fn run_test(bool flag) i32:
     let string a = "owned-{1}"
@@ -15,8 +14,8 @@ fn run_test(bool flag) i32:
         a := "hi"
     eat(nom a)
     println("after: {a}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    println(run_test(false).realise(-1))
-    return Result.Ok(0)
+    println(run_test(false))
+    return 0

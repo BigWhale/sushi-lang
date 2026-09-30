@@ -8,4 +8,4 @@ fn g@(T)(T v) i32 | Absent:
 fn main() i32:
     let i32 r = g(1).realise(0)
     println(r)
-    return Result.Ok(0)
+    return 0

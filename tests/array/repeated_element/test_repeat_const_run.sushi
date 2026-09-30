@@ -8,4 +8,4 @@ fn main() i32:
     println(ZCLEN_ZERO[0])
     println(ZCLEN_ZERO[9])
     println(ZCLEN_ZERO[18])
-    return Result.Ok(0)
+    return 0

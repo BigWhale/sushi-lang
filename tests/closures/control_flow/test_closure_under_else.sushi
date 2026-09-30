@@ -4,12 +4,12 @@
 fn pick(bool b) i32:
     let i32 base = 3
     if (b):
-        return Result.Ok(0)
+        return 0
     else:
         let fn(i32) -> i32 f = |i32 x| x + base
-        return Result.Ok(f(4).realise(0))
+        return f(4)
 
 fn main() i32:
-    let i32 v = pick(false).realise(0)
+    let i32 v = pick(false)
     println("{v}")
-    return Result.Ok(0)
+    return 0

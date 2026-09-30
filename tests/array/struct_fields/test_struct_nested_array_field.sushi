@@ -10,7 +10,7 @@ struct Outer:
     Inner data
     string name
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Create nested struct with dynamic array in inner struct
     let Outer o = Outer(Inner(new(), "inner"), "outer")
 
@@ -33,4 +33,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

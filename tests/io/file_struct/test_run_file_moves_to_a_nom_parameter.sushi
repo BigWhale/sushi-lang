@@ -22,4 +22,4 @@ fn main() i32:
                 Result.Err(_) -> println("callee failed")
         Result.Err(_) -> println("open failed")
     remove("file_struct_move.txt").realise(0)
-    return Result.Ok(0)
+    return 0

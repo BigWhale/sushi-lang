@@ -42,10 +42,10 @@ extend Crate with Weighable:
         return self.weight
 
 fn describe(peek Crate c) i32:
-    return Result.Ok(c.weight + SCRATCH)
+    return c.weight + SCRATCH
 
 fn main() i32:
     let Crate c = Crate.empty()
-    let i32 w = describe(peek c).realise(0)
+    let i32 w = describe(peek c)
     println("Mostly Harmless {w} {LIMIT} {counter} {total}")
-    return Result.Ok(0)
+    return 0

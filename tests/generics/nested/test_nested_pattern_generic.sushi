@@ -19,8 +19,8 @@ fn main() i32:
         Result.Err(_) ->
             println("Error")
 
-    return Result.Ok(0)
+    return 0
 
-fn test_return_type() Either@(i32, string):
+fn test_return_type() Either@(i32, string) | StdError:
     # Return the Answer to the Ultimate Question
     return Result.Ok(Either.Left(42))

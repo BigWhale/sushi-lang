@@ -10,9 +10,9 @@ Doubles a number.
 - Returns: Twice `n`.
 :##
 fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
+    return n * 2
 
 fn main() i32:
-    let i32 d = doubled(21).realise(0)
+    let i32 d = doubled(21)
     println("{d}")
-    return Result.Ok(0)
+    return 0

@@ -13,29 +13,28 @@ fn show(u8[] blob) ~:
             println("UNEXPECTED OK len={out.len()}")
         Result.Err(e) ->
             println("{e.text()}")
-    return Result.Ok(~)
 
 fn run_test() i32:
     # BTYPE 3 is reserved
     let u8[] bad_btype = from([0x07])
-    show(bad_btype)??
+    show(bad_btype)
 
     # a stored block whose NLEN is not the complement of LEN
     let u8[] bad_nlen = from([0x01, 0x05, 0x00, 0x00, 0x00, 0x68, 0x65, 0x6c, 0x6f, 0x6f])
-    show(bad_nlen)??
+    show(bad_nlen)
 
     # a stored block that promises 5 payload bytes and carries 2
     let u8[] short_stored = from([0x01, 0x05, 0x00, 0xfa, 0xff, 0x68, 0x65])
-    show(short_stored)??
+    show(short_stored)
 
     # a fixed block whose first symbol is a match, with no output to copy from
     let u8[] bad_dist = from([0x03, 0x02])
-    show(bad_dist)??
+    show(bad_dist)
 
     # length symbol 286 has a code in the fixed alphabet but no meaning.
     # Real zlib rejects this stream too, with "invalid literal/length code".
     let u8[] bad_lensym = from([0x1b, 0x03])
-    show(bad_lensym)??
+    show(bad_lensym)
 
     # a valid fixed stream cut in half
     let u8[] truncated = from([
@@ -43,13 +42,13 @@ fn run_test() i32:
         0xca, 0x2f, 0xcf, 0x53, 0x48, 0xcb, 0xaf, 0x50, 0xc8, 0x2a, 0xcd, 0x2d,
         0x28
     ])
-    show(truncated)??
+    show(truncated)
 
     # no input at all
     let u8[] nothing = new()
-    show(nothing)??
-    return Result.Ok(0)
+    show(nothing)
+    return 0
 
 fn main() i32:
-    let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    let i32 r = run_test()
+    return r

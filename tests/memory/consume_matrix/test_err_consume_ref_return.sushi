@@ -1,7 +1,7 @@
 # The RETURN sink with a reference source: handing the caller's borrowed value to
 # ITS caller would give it a second owner.
 # EXPECT_ERROR_CODE: CE2411
-fn f(poke i32[] a) i32[]:
+fn f(poke i32[] a) i32[] | StdError:
     return Result.Ok(a)
 
 fn main() i32:
@@ -9,4 +9,4 @@ fn main() i32:
     let Result@(i32[], StdError) r = f(poke arr)
     if (r.is_ok()):
         println("after")
-    return Result.Ok(0)
+    return 0

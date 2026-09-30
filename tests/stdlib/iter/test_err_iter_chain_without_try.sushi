@@ -6,9 +6,9 @@ use <collections/iter>
 fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
-    let List@(i32) ys = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2)??
-    return Result.Ok(ys.len())
+    let List@(i32) ys = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2)
+    return ys.len()
 
 fn main() i32:
-    println("{run().realise(-1)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

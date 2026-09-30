@@ -8,4 +8,4 @@ fn main() i32:
     # This should trigger CE2035 error - arrays cannot be interpolated
     println("Array: {arr}")
 
-    return Result.Ok(0)
+    return 0

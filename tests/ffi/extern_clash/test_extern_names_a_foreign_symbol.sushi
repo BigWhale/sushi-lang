@@ -9,4 +9,4 @@ unsafe external "C" as libc because "the ordinary case: a symbol libc defines":
 fn main() i32:
     let string s = "abcd"
     println("{libc.strlen(s)}")
-    return Result.Ok(0)
+    return 0

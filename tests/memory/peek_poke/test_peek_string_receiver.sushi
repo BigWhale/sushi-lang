@@ -33,9 +33,8 @@ fn info(peek string s) ~:
     println("len={s.len()} upper={loud} trim=[{tight}]")
     println("has={s.contains('or')} idx={s.find('or').realise(-1)}")
     println("empty={s.is_empty()}")
-    return Result.Ok(~)
 
 fn main() i32:
     let string v = "  Ford  "
     info(peek v)
-    return Result.Ok(0)
+    return 0

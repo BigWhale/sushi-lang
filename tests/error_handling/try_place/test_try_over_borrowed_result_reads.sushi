@@ -6,16 +6,16 @@
 # EXPECT_NO_LEAKS: true
 use <collections/strings>
 
-fn make() string:
+fn make() string | StdError:
     let string base = "Mostly"
     return Result.Ok(base.concat(" Harmless"))
 
-fn show(Result@(string, StdError) r) ~:
+fn show(Result@(string, StdError) r) ~ | StdError:
     let string s = r??
     println(s)
     return Result.Ok(~)
 
-fn run() ~:
+fn run() ~ | StdError:
     let Result@(string, StdError) r = make()
     show(r)??
     show(r)??
@@ -23,5 +23,5 @@ fn run() ~:
 
 fn main() i32:
     match run():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

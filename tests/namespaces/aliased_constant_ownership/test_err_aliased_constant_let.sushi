@@ -6,4 +6,4 @@ use "helpers/libc5" as c
 fn main() i32:
     let string s = c.GREETING
     println(s)
-    return Result.Ok(0)
+    return 0

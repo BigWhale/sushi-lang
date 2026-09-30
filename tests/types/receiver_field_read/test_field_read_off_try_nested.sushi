@@ -12,11 +12,11 @@ struct Outer:
     Inner inner
 
 fn make() Outer:
-    return Result.Ok(Outer(Inner(9)))
+    return Outer(Inner(9))
 
 fn read_x() i32:
-    return Result.Ok(make()??.inner.x)
+    return make().inner.x
 
 fn main() i32:
-    println("{read_x().realise(0)}")
-    return Result.Ok(0)
+    println("{read_x()}")
+    return 0

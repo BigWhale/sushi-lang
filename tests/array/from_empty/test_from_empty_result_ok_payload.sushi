@@ -5,8 +5,8 @@
 # EXPECT_NO_LEAKS: true
 
 fn make() u8[]:
-    return Result.Ok(from([]))
+    return from([])
 
 fn main() i32:
-    println("{make().realise(from([1])).len()}")
-    return Result.Ok(0)
+    println("{make().len()}")
+    return 0

@@ -4,17 +4,17 @@
 use "helpers/ecopy_cst"
 
 fn plain(i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 struct Crate:
     i32 w
 
 extend Crate pick@(U)(U u) i32:
     println(u)
-    return plain(4).realise(0)
+    return plain(4)
 
 fn main() i32:
     let Crate c = Crate(1)
     println(c.pick(true))
-    println(tick(1).realise(0))
-    return Result.Ok(0)
+    println(tick(1))
+    return 0

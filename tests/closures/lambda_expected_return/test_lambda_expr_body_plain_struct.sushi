@@ -7,6 +7,6 @@ struct Point:
 
 fn main() i32:
     let fn(i32) -> Point f = |i32 n| Point(n * 2)
-    let Point p = f(21).realise(Point(0))
+    let Point p = f(21)
     println("{p.x}")
-    return Result.Ok(0)
+    return 0

@@ -25,7 +25,7 @@ fn main() i32:
         Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("open failed")
-            return Result.Ok(1)
+            return 1
 
     let string a = close_the_copy("share_close_probe.txt").realise("failed")
     println("copy closed, original reads: {a}")
@@ -33,4 +33,4 @@ fn main() i32:
     println("original closed, copy reads: {b}")
 
     remove("share_close_probe.txt").realise(0)
-    return Result.Ok(0)
+    return 0

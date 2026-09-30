@@ -5,8 +5,8 @@ use "helpers/libc5" as c
 
 fn take(nom string s) i32:
     println(s)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    println(take(nom c.GREETING).realise(0))
-    return Result.Ok(0)
+    println(take(nom c.GREETING))
+    return 0

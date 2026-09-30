@@ -14,4 +14,4 @@ fn main() i32:
     match m:
         Maybe.Some(f) -> println("{f(21).realise(0)}")
         Maybe.None -> println("none")
-    return Result.Ok(0)
+    return 0

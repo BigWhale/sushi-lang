@@ -4,12 +4,12 @@
 use "helpers/libinner" as l
 
 fn apply_c(fn(i32) -> i32 f) i32:
-    return Result.Ok(f(4).realise(0))
+    return f(4)
 
 fn inner@(U)(U u) i32:
     println(u)
-    return Result.Ok(apply_c(l.gen).realise(0))
+    return apply_c(l.gen)
 
 fn main() i32:
-    println(inner("one").realise(0))
-    return Result.Ok(0)
+    println(inner("one"))
+    return 0

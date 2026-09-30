@@ -12,4 +12,4 @@ fn main() i32:
     let Outer o = Outer(i)
     let u64 h = o.hash()  # Should fail with nested error path
     println("Hash: {h}")
-    return Result.Ok(0)
+    return 0

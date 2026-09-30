@@ -9,4 +9,4 @@ fn main() i32:
     println(extension(".bashrc").realise("?"))
     println(extension("no_ext").realise("?"))
     println(extension("dir.d/plain").realise("?"))
-    return Result.Ok(0)
+    return 0

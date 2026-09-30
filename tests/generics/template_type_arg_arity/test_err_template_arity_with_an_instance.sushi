@@ -11,4 +11,4 @@ struct Wrap@(T):
 
 fn main() i32:
     let Wrap@(i32) w = Wrap(Box(1, 2))
-    return Result.Ok(0)
+    return 0

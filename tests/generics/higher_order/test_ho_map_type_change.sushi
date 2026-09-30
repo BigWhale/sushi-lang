@@ -5,8 +5,8 @@
 fn map@(T, U)(List@(T) xs, fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in xs.iter()):
-        out.push(f(x)??)
-    return Result.Ok(out)
+        out.push(f(x))
+    return out
 
 fn run() i32:
     let i32 pivot = 0
@@ -14,13 +14,13 @@ fn run() i32:
     xs.push(-1)
     xs.push(5)
     xs.push(-3)
-    let List@(bool) signs = map(xs, |i32 x| x > pivot)??
+    let List@(bool) signs = map(xs, |i32 x| x > pivot)
     let i32 count = 0
     foreach(b in signs.iter()):
         if (b):
             count := count + 1
-    return Result.Ok(count)
+    return count
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

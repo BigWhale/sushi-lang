@@ -12,9 +12,9 @@ struct Outer:
     Inner inner
 
 fn twice(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
     let Outer o = Outer(1, Inner(twice))
     println("{o.hash()}")
-    return Result.Ok(0)
+    return 0

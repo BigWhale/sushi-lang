@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Count: 1\nCount: 2\nCount: 3\nDone!\n"
 
-fn try_increment(i32 current) i32:
+fn try_increment(i32 current) i32 | StdError:
     if (current >= 3):
         return Result.Err(StdError.Error)
     return Result.Ok(current + 1)
@@ -13,4 +13,4 @@ fn main() i32:
         println("Count: {count}")
 
     println("Done!")
-    return Result.Ok(0)
+    return 0

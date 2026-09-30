@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Success: 100\nOther case\n"
 
-fn returns_value(i32 x) i32:
+fn returns_value(i32 x) i32 | StdError:
     if (x > 0):
         return Result.Ok(x)
     return Result.Err(StdError.Error)
@@ -18,4 +18,4 @@ fn main() i32:
         _ ->
             println("Other case")
 
-    return Result.Ok(0)
+    return 0

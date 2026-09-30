@@ -3,4 +3,4 @@
 use "helpers/greet_right"
 
 public fn bridged() i32:
-    return Result.Ok(greet()?? * 10)
+    return greet() * 10

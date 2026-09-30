@@ -8,4 +8,4 @@ var HashMap@(i32, i32) cache = HashMap.new()
 
 fn main() i32:
     println("{cache.len()}")
-    return Result.Ok(0)
+    return 0

@@ -18,16 +18,16 @@ public perk Loud:
 public const i32 SIZE = 3
 
 public fn origin() Vec:
-    return Result.Ok(Vec(1, 2))
+    return Vec(1, 2)
 
 public fn boxed(i32 item) Box@(i32):
-    return Result.Ok(Box(item))
+    return Box(item)
 
 public fn nothing@(T)() Maybe@(T):
-    return Result.Ok(Maybe.None())
+    return Maybe.None()
 
 public fn twice(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 struct Hidden:
     i32 n

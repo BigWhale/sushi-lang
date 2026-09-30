@@ -10,11 +10,11 @@
 use <lib/doc_lib>
 
 fn run_test() i32:
-    let i32 bigger = pick_bigger(3, 5)??
-    return Result.Ok(add_answer(bigger)??)
+    let i32 bigger = pick_bigger(3, 5)
+    return add_answer(bigger)
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
+    let i32 result = run_test()
     let Box@(i32) held = Box(7)
     println("{result} {held.value}")
-    return Result.Ok(0)
+    return 0

@@ -14,4 +14,4 @@ fn main() i32:
         Result.Ok(_) -> println("ok")
         Result.Err(Why.First) -> println("first")
         Result.Err(Why.Second) -> println("second")
-    return Result.Ok(0)
+    return 0

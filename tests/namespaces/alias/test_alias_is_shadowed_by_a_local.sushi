@@ -7,9 +7,9 @@ struct Point:
     i32 x
 
 fn depth() i32:
-    return Result.Ok(geo.MAX_DEPTH)
+    return geo.MAX_DEPTH
 
 fn main() i32:
     let Point geo = Point(3)
-    println("{geo.x} {depth().realise(0)}")
-    return Result.Ok(0)
+    println("{geo.x} {depth()}")
+    return 0

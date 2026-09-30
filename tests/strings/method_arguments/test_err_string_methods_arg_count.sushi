@@ -44,4 +44,4 @@ fn main() i32:
   # tright() expects 0 arguments
   print(text.tright("arg"))  # CE2009: expected 0, got 1
 
-  return Result.Ok(0)
+  return 0

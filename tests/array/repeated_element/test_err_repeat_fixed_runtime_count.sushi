@@ -6,4 +6,4 @@ fn main() i32:
     let i32 n = 4
     let i32[4] t = [7; n + 0]
     println(t[0])
-    return Result.Ok(0)
+    return 0

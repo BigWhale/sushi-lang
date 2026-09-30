@@ -4,4 +4,4 @@
 # EXPECT_STDERR_CONTAINS: "'--docs' has no effect without --lib-info"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

@@ -4,7 +4,7 @@ public struct Square:
     i32 side
 
 public fn square_of(i32 side) Square:
-    return Result.Ok(Square(side))
+    return Square(side)
 
 extend i32 doubled() i32:
     return self * 2

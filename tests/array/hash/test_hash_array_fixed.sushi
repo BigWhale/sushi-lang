@@ -42,4 +42,4 @@ fn main() i32:
     # Note: String arrays not yet fully implemented
     # TODO: Fix string array hashing
 
-    return Result.Ok(0)
+    return 0

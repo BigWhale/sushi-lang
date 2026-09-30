@@ -20,4 +20,4 @@ fn main() i32:
                 NetError.InvalidAddress -> println("no v6 in a v4 literal")
                 _ -> println("wrong: some other variant")
 
-    return Result.Ok(0)
+    return 0

@@ -8,4 +8,4 @@ fn main() i32:
         let Own@(i32) o = Own.alloc(x * 10)
         println(o.get())
     println("done")
-    return Result.Ok(0)
+    return 0

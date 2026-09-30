@@ -12,4 +12,4 @@ fn main() i32:
     foreach(v in xs.iter()):
         println(v)
     xs.free()
-    return Result.Ok(0)
+    return 0

@@ -18,4 +18,4 @@ fn main() i32:
     let Maybe@(string) m = Maybe.Some("a{k}")
     let string s = m.expect("payload missing")
     println("s={s}")
-    return Result.Ok(0)
+    return 0

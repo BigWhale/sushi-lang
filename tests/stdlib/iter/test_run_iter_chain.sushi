@@ -10,9 +10,9 @@ fn run() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let i32 total = xs.map(|i32 x| x * 2)??.filter(|i32 x| x > 2)??.fold(0, |i32 acc, i32 x| acc + x)??
-    return Result.Ok(total)
+    let i32 total = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2).fold(0, |i32 acc, i32 x| acc + x)
+    return total
 
 fn main() i32:
-    println("{run().realise(-1)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

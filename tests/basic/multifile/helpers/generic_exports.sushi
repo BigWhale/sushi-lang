@@ -2,12 +2,12 @@
 # public symbols carry type_params used to ICE (",".join over BoundedTypeParam
 # objects), so incremental builds of generic-exporting units were broken.
 public fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 public fn pick_larger_hash@(T: Hashable)(T a, T b) T:
     if (a.hash() >= b.hash()):
-        return Result.Ok(a)
-    return Result.Ok(b)
+        return a
+    return b
 
 struct Wrap@(T):
     T inner
@@ -17,8 +17,8 @@ enum Slot@(T):
     Empty
 
 public fn helper_val() i32:
-    let Wrap@(i32) w = Wrap(identity(21)??)
+    let Wrap@(i32) w = Wrap(identity(21))
     let Slot@(i32) s = Slot.Filled(w.inner)
     match s:
-        Slot.Filled(v) -> return Result.Ok(pick_larger_hash(v * 2, v * 2)??)
-        Slot.Empty -> return Result.Ok(0)
+        Slot.Filled(v) -> return pick_larger_hash(v * 2, v * 2)
+        Slot.Empty -> return 0

@@ -26,7 +26,7 @@ fn main() i32:
             out.close()
         Result.Err(_) ->
             println("write failed")
-            return Result.Ok(1)
+            return 1
 
     match open("fd_gate_probe.txt", FileMode.Read()):
         Result.Ok(nom input) ->
@@ -34,6 +34,6 @@ fn main() i32:
             input.close()
         Result.Err(_) ->
             println("read failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

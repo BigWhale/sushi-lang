@@ -20,20 +20,20 @@ fn main() i32:
             println("PASS: Chained method calls on Ok work")
         else:
             println("FAIL: Wrong value")
-            return Result.Ok(1)
+            return 1
     else:
         println("FAIL: Wrong Ok status")
-        return Result.Ok(1)
+        return 1
 
     let Result@(i32, MyError) r2 = get_result(false)
     if (r2.is_err() and not r2.is_ok()):
         let i32 value = r2.realise(99)
         if (value == 99):
             println("PASS: Chained method calls on Err work")
-            return Result.Ok(0)
+            return 0
         else:
             println("FAIL: Wrong default value")
-            return Result.Ok(1)
+            return 1
     else:
         println("FAIL: Wrong Err status")
-        return Result.Ok(1)
+        return 1

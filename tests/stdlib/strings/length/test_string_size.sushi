@@ -25,4 +25,4 @@ fn main() i32:
     let string s4 = "你好"
     println(s4.size())  # Should print: 6 (2 chars, each 3 bytes)
 
-    return Result.Ok(0)
+    return 0

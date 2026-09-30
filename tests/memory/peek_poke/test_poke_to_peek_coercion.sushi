@@ -4,7 +4,7 @@
 # poke T can be passed where peek T is expected
 # EXPECT_NO_LEAKS: true
 
-fn read_value(peek i32 x) i32:
+fn read_value(peek i32 x) i32 | StdError:
     return Result.Ok(x)
 
 fn main() i32:
@@ -18,6 +18,6 @@ fn main() i32:
     let i32 val = result.realise(0)
 
     if (val == 42):
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

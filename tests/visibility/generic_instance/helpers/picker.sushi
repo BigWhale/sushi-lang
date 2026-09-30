@@ -1,2 +1,2 @@
 public fn picked@(T)(T value) T:
-    return Result.Ok(value)
+    return value

@@ -9,4 +9,4 @@ const i32 SCRATCH = 1
 
 public fn rival_sum() i32:
     GUARD := GUARD + SCRATCH
-    return Result.Ok(GUARD)
+    return GUARD

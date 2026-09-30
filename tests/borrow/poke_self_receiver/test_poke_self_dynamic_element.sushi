@@ -26,4 +26,4 @@ fn main() i32:
     tags[1].bump()
     foreach(t in tags.iter()):
         println("{t.name} {t.n}")
-    return Result.Ok(0)
+    return 0
