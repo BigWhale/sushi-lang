@@ -1,0 +1,11 @@
+# A bare clock call yields an i64, so a ?? on it has nothing to unwrap.
+# EXPECT_ERROR_CODE: CE2507
+
+use <time>
+
+fn stamp() i64 | StdError:
+    let i64 t = now()??
+    return Result.Ok(t)
+
+fn main() i32:
+    return 0

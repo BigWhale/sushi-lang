@@ -63,6 +63,9 @@ All notable changes to Sushi Lang will be documented in this file.
   `basename`, `dirname`, `extension`, `normalize` and the msgpack `map_index`,
   `map_get`, `map_get_str`, `map_get_bool` and `show`: drop the `??` or `.realise` after
   each call.
+- **`now()` and `monotonic_ns()` of `<time>` are bare and answer `i64`.** Neither
+  could fail: drop the `.realise(0)` after each call, and a `match` over the call becomes a
+  plain binding.
 - **The `.slib` format changed.** Every function, helper and method record states
   `has_channel`; the templates schema is 8 and the container version is 5. Rebuild every
   library: an older one is refused (CE3512, CE3509).

@@ -1,0 +1,11 @@
+# now() and monotonic_ns() cannot fail, so each call yields its i64 with no Result.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+use <time>
+
+fn main() i32:
+    let i64 t = now()
+    let i64 m = monotonic_ns()
+    println(t > 1_700_000_000)
+    println(m > 0)
+    return 0

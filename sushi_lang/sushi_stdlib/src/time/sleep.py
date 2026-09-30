@@ -25,7 +25,7 @@ def generate_nanosleep(module: ir.Module) -> None:
     libc_nanosleep = _platform_time.declare_nanosleep(module)
 
     # Define OUR function signature: sushi_nanosleep(i64 seconds, i64 nanoseconds) -> i32
-    # Note: Wrapping in Result happens at semantic level
+    # The call site in the backend builds the Result from the status
     # We use sushi_ prefix to avoid name collision with the external C function
     func_type = ir.FunctionType(i32, [i64, i64])
     func = ir.Function(module, func_type, name="sushi_nanosleep")

@@ -40,10 +40,10 @@ def cstr() -> Param:
 class BareOk:
     """The generated function answers the Ok payload BARE; the call site builds the Result.
 
-    `failure` names the error variant a NEGATIVE value stands for. None means the call
-    cannot fail, and the call site always answers `Result.Ok`.
+    `failure` names the error variant a NEGATIVE value stands for. A call that cannot
+    fail has no Result, so its row is bare.
     """
-    failure: Optional[str] = None
+    failure: str
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,9 @@ class Signature:
             if self.bare is None:
                 raise ValueError("a signature answers either a Result or a bare type")
             return self.bare
-        return GenericTypeRef("Result", (self.ok, UnknownType(self.error or "StdError")))
+        if self.error is None:
+            raise ValueError("a Result signature names its error enum")
+        return GenericTypeRef("Result", (self.ok, UnknownType(self.error)))
 
 
 def params_of(*types: Union[SushiType, Param]) -> Tuple[Param, ...]:

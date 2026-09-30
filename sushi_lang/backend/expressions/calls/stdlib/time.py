@@ -1,8 +1,8 @@
 """Call emission for the <time> module functions.
 
 Every function is emitted from its row in `TIME_SIGNATURES` through the one signature
-seam (#827). The generated functions answer a bare value, and the row's `bare_ok` says
-how the call site builds the Result (`status_result.py`).
+seam (#827). The generated functions answer a bare value. The clocks are bare, and a
+sleep row's `bare_ok` says how the call site builds the Result (`status_result.py`).
 """
 from __future__ import annotations
 
