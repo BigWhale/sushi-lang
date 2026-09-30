@@ -10,9 +10,9 @@ This document is normative for three things:
 2. The syntax and the semantics of a repeated element in an array literal.
 3. The condition that must be true before a constant function goes in.
 
-Read `docs/language-reference.md` for the constant rules that hold today.
+Read `docs/language-reference.md` for the constant rules that hold.
 
-## 1. What the compiler does today
+## 1. What the compiler does
 
 `semantics/const_eval.py` is an expression walker. `evaluate` decides every `Expr` kind
 through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binary and a
@@ -55,8 +55,7 @@ type substitutor moves types only.
 ## 2. Ruling 1: an overflow is a diagnostic, not a wrap
 
 **Implemented.** CE2077 is registered, the evaluator computes at the width, and the
-typecheck pass asks the same question of a fold in a body. The measured cost of the
-breaking change: no test in the suite needed a change.
+typecheck pass asks the same question of a fold in a body.
 
 ### The problem the rule solves
 
@@ -130,9 +129,9 @@ instruction traps. A compile-time report is therefore the only correct answer fo
 | `<<` | the bits that leave the width are lost. `200 << 1` on a `u8` is 144 |
 | `>>` | arithmetic on a signed type, logical on an unsigned type |
 
-The shift **count** keeps the rule it has. A count the compiler can read must be 0 to
-width-1, which is CE2512. A computed count past the width stays defined and unchecked. This
-is Go's rule, and this document does not change it.
+The shift **count** has its own rule. A count the compiler can read must be 0 to
+width-1, which is CE2512. A computed count past the width is defined and unchecked. This
+is Go's rule.
 
 ### Where the rule applies
 
@@ -140,7 +139,7 @@ The rule applies to an expression whose value the compiler reads. That is a cons
 fold of literals in a body. Both must give the same answer, because a reader expects one
 meaning for one expression.
 
-Run time does not change. Two locals still wrap, because no check is inserted there:
+At run time, two locals wrap, because the compiler inserts no check there:
 
 <!-- docs-sweep: skip (fragment, and the first line is what this ruling rejects) -->
 ```sushi
@@ -179,9 +178,9 @@ by its source. The smallest signed value `% -1` is CE2077.
 
 ## 3. Ruling 2: an array literal takes a repeated element
 
-**Implemented.** The grammar takes one new level, the AST carries the run rather than
-expanding it, and one seam (`semantics/array_runs.py`) reads every count. Two questions
-this section did not answer came up while it went in, and section 3.1 rules on them.
+**Implemented.** The grammar has one level for it, the AST carries the run rather than
+expanding it, and one seam (`semantics/array_runs.py`) reads every count. Section 3.1 rules
+on two more questions.
 
 ### The syntax
 
@@ -218,7 +217,7 @@ array_element: expr (";" expr)?
   CE2017.
 - A repeated element is legal in **every array literal**: a `const` initializer, a fixed
   local, and the literal inside `from(...)`.
-- The **expanded count** must match the declared size. A mismatch stays CE2011.
+- The **expanded count** must match the declared size. A mismatch is CE2011.
 - The value is evaluated **once**, and the compiler makes N copies of the result.
 
 ### What the back end must do
@@ -269,29 +268,19 @@ the same-unit limit on a fixed array size (CE2099) does not apply to a count.
 
 ### What this closes
 
-**Adopted.** `compression/zlib` was rewritten onto this ruling, and the measurement below is
-what the rewrite acted on. The measurement is a record: its line numbers are from the zlib
-source BEFORE the rewrite, and the "Before" column is what the rewrite replaced.
+**Adopted.** `compression/zlib` is the real client of a long table in the repository, and
+every table it builds at run time is a run of one value. Each one is a repeated element:
 
-`compression/zlib` was the only real client of a long table in the repository, and every table
-it built at run time was a run of one value:
-
-| Site | Before | How often |
+| Site | Literal | How often |
 |---|---|---|
-| `zlib.sushi:164-179` `fixed_lit` | 288 entries by `push`, in four runs | each fixed block |
-| `zlib.sushi:183-189` `fixed_dist` | 30 entries of `5` by `push` | each fixed block |
-| `zlib.sushi:253-263` `inflate_clen` | 19 zeros by `push` | each dynamic block |
-| `zlib.sushi:94-99` `huff_build` | `count[16]` and `offs[16]` zeroed by `push` | each Huffman code |
-| `zlib.sushi:482`, fill at `:487-497` `deflate_fixed` | 32768 entries of `-1` by `push`, 128 KiB | each `deflate` call |
+| `fixed_lit` | `from([8;144, 9;112, 7;24, 8;8])`, 288 entries in four runs | each fixed block |
+| `fixed_dist` | `from([5; 30])` | each fixed block |
+| `inflate_clen` | `from([0; 19])` | each dynamic block |
+| `huff_build` | `count` and `offs`, each `from([0; 16])` | each Huffman code |
+| `deflate_fixed` | `from([-1; 32768])`, 128 KiB | each `deflate` call |
 
-`inflate_fixed` (`zlib.sushi:245-249`) calls the first two, and the block loop
-(`zlib.sushi:623-635`) reaches it once for every fixed block in the stream. So a stream of
-*k* fixed blocks pays about 700 bounds-checked appends *k* times, for two tables that the
-format fixes and never changes.
-
-The five tables that zlib does spell out (`zlib.sushi:23-45`) are 19 to 30 entries each. They
-are the largest constant arrays in the repository. RFC 1951 specifies them, so they are
-written values and not computed ones. This ruling does not change them.
+The tables that zlib spells out are 19 to 30 entries each. RFC 1951 specifies them, so they
+are written values and not computed ones.
 
 ### What this does not close
 
@@ -302,11 +291,10 @@ written values and not computed ones. This ruling does not change them.
 
 These two are the evidence that Ruling 3 waits for.
 
-**One item left this list during the rewrite.** The ENCODER's two lookups -- a length to its
+**The encoder's lookups are not on this list.** The ENCODER's two lookups -- a length to its
 length code, a distance to its distance code -- read as computed tables, and they are not:
 each is a step function whose value is constant over a run, so a repeated element writes it
-directly. `len_index` walked 29 base entries backwards for every match it emitted and now
-reads one slot of a 256-entry table written in 29 runs. `dist_index` does the same through
+directly. `len_index` reads one slot of a 256-entry table written in 29 runs. `dist_index` does the same through
 the range split zlib's own encoder uses, because one direct table would need 32768 slots.
 
 The lesson generalizes, and it is worth stating before Ruling 3 opens: **a table is a run
@@ -331,10 +319,9 @@ When one of these arrives, the cost is already known. Record it here so the deci
 - **Nothing puts a value into a body.** `unroll_expands` is a statement rewrite, it needs a
   variadic pack, and it gives no index. A constant function needs an environment, and that is
   new machinery.
-- **Every function wraps its return in `Result`.** A constant function cannot, because a
-  compile-time value carries no run-time error. It needs the rule an extension already
-  follows: a bare `return`, and no `??` in the body. CE2091 and CE0131 are the codes that
-  hold that rule for an extension.
+- **A constant function is bare.** A compile-time value carries no run-time error, so a
+  constant function has no `| E` channel. It follows the rule of every bare function: a bare
+  `return`, and no `??` in the body. CE2091 and CE0131 are the codes that hold that rule.
 - **A constant has a closed set of shapes.** A number, a bool, a string, a fixed array, a
   struct construction and an enum variant, each built from constant parts. So a constant
   function returns one of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`)
@@ -412,10 +399,3 @@ That keeps a table, but it does not compute one at compile time: the table is no
 `.rodata`, and each program pays for the build when it runs. `compression/zlib` does not use
 it: `fixed_lit` builds its `ZHuff` for each block, and the value goes from call to call as a
 `peek` parameter.
-
-## History
-
-- #441 asked which constants cannot be computed. #451 answered it: two divergences fixed,
-  four gaps closed, and one language feature split out.
-- #446 carries the language feature. This document rules on it.
-- #447 carries interpolation in a constant. Ruling 1 removes the blocker that #447 states, and the feature landed on it: the evaluator renders a hole exactly as the run-time formatter does.

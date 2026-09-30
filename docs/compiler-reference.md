@@ -837,9 +837,6 @@ let i32 x = 100 / 0
 
 ### Warnings
 
-CW2511 (`??` in `main()`) is retired. `main` is bare now, so a `??` in `main` is the error
-CE0131.
-
 #### CW2001: Unused Result Value
 
 ```sushi

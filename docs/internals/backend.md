@@ -35,8 +35,6 @@ constants and unit variables, the function declarations, and then the function b
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
 `string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
 code. The Sushi `main` is bare (`CE0106` refuses a channel), so its value IS the exit code.
-Until the bare-function change, `main` answered a Result, and the wrapper turned an Err into
-exit code 1.
 
 ## Type system
 

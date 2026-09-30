@@ -98,9 +98,8 @@ with no diagnostic.
 
 **The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family
-(`tests/unit/test_method_family_dispatch_is_one.py`). So the order cannot decide an answer,
-which is why the two orders never diverged in practice. The one thing the order still
-decides is where the PERK rung sits: the ladder asks the perk implementation between the two
+(`tests/unit/test_method_family_dispatch_is_one.py`). So the order cannot decide an answer.
+The one thing the order decides is where the PERK rung sits: the ladder asks the perk implementation between the two
 halves of the table, and each row's `beats_perk` says which side it is on.
 
 ## Why extensions lose
@@ -119,10 +118,9 @@ own members first:
 
 Sushi's auto-derived `hash`/`clone` are the `#[derive]` analogue, and **Sushi has no opt-out
 from derivation**. So a colliding extension is not merely lower-priority, it is unreachable by
-construction -- which meets the project's own bar for erroring rather than warning, recorded in
-the `CW3505` deletion note (`internals/errors/warnings.py`): *if the situation cannot possibly
-do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs extension) and
-`CE0101` (duplicate extension method) are already hard errors for strictly milder collisions.
+construction -- which meets the project's own bar for erroring rather than warning: *if the situation
+cannot possibly do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs
+extension) and `CE0101` (duplicate extension method) are hard errors for strictly milder collisions.
 
 ## Why perks win
 
@@ -234,19 +232,19 @@ allow it and pay for a formal specificity ordering.
 **The escape** is a perk implementation on the concrete target, which already outranks
 extension methods in the ladder above and already scopes correctly.
 
-## The UFCS epic's additions (the ladder is untouched)
+## Array targets, method type parameters and the error channel
 
-Three extension capabilities joined without moving any rung. An **array target**
+Three extension capabilities sit outside the ladder and move no rung. An **array target**
 resolves like any other concrete type, and `extend T[]` instantiates per element type
 at the CALL SITE (`$array` templates; ruling 3). A **method-level type parameter**
 (`name@(U)`) is solved from the arguments and never enters the ExtensionTable — the
 template answers by unification, and the copy's symbol carries the solved arguments.
 An **error channel** (`| E`) changes what a resolved call YIELDS (the interned
-`Result@(T, E)`), not how it resolves. The one new resolution-adjacent diagnostic is
+`Result@(T, E)`), not how it resolves. The one resolution-adjacent diagnostic is
 **CE2515**, a FALLBACK where CE2008 would fire: the method is missing on a
 Result/Maybe receiver and present on its payload type, which is an unhandled channel,
-not a typo. Resolution still runs first — a method found on the wrapper itself
-(`.realise`) is rung 1 as always. The decision record is
+not a typo. Resolution runs first — a method found on the wrapper itself
+(`.realise`) is rung 1. The decision record is
 [ufcs-combinators.md](ufcs-combinators.md).
 
 ## The static method: a name behind the TYPE's dot
@@ -291,7 +289,7 @@ a method named `static` are not writable.
 | visibility | none of its own -- as visible as its target type | the same |
 | in a perk | **never** -- a perk has no `Self` (CE4014) | that is what a perk contracts |
 
-Everything in the right column that is not about the receiver is unchanged. A static's
+Everything in the right column that is not about the receiver is the same for a static. A static's
 parameters BORROW unless marked `nom`; its owning return is the caller's; its `| E`
 channel spells `Result.Ok(...)` and `Result.Err(...)` as a free function does. The one thing it lacks is a receiver,
 and the two positions that could name one are one fault with one code:
@@ -372,7 +370,7 @@ either member.
 
 `List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`, `f64.from_bits` and
 `f32.from_bits` are static methods on their types -- one rule, not two. They are NAMED
-in one table (`semantics/statics.py:BUILTIN_STATICS`) and each is still emitted by its
+in one table (`semantics/statics.py:BUILTIN_STATICS`) and each is emitted by its
 container's own narrow handler, because a container static has no `ExtendDef` to resolve
 and so has nothing yet to converge onto. The general path DEFERS to that table rather
 than refusing what it cannot find. The narrow handlers stay until a test proves that the
@@ -386,8 +384,8 @@ general path covers them.
 | does this bare name in a TARGET's argument position name a declared thing (a type, or a perk) | `semantics/generics/extension_targets.py:DeclaredTypeNamer` -- the type half is `names_a_type`, the perk half is the classifier's own rule; the extension path, the perk-implementation path and the array path all hand it to the classifier. Gate: `tests/unit/test_declared_type_predicate_is_one.py` |
 | which type does this receiver name, and does it declare that static | `passes/types/calls/statics.py` -- the validation half and the inference half both read it |
 | instance or static (they share one table) | ONE filter at the end of `resolve_extension_method`; `resolve_method(..., static=True)` skips the perk rung outright |
-| what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a new kind, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
-| the alias fold | `fold_namespaced_static`, unchanged in shape: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` |
+| what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a kind of its own, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
+| the alias fold | `fold_namespaced_static`: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` |
 
 The refusal for a type whose dot holds no such member is **CE2102**. The fault is the
 POSITION, not the name: the scope pass lets a type name through in a receiver position and
@@ -407,8 +405,8 @@ leaves the answer to the pass that has the method tables.
 | **Go, Zig** | no term -- a package or namespace function | `bufio.NewReader(f)` |
 
 Sushi says **static method**, which is what most of that table says.
-`docs/design/unit-storage.md` reserves the word: `var` took unit-level
-storage precisely so that "static" could keep meaning a function called on a type name.
+`docs/design/unit-storage.md` reserves the word: `var` names unit-level
+storage, so that "static" means only a function called on a type name.
 Sushi has no static STORAGE.
 
 Java's statics *hide* rather than override, a long-standing confusion. It cannot occur
@@ -461,7 +459,7 @@ different error types are all the same mismatch. **CE0133** is the relational
 diagnostic -- the primary at the implementation, a note at the contract method.
 
 A perk method has no `Self` type, so a contract cannot say "returns another one of me".
-That is the one thing a perk still cannot express, and it is why `.share()` is written
+That is the one thing a perk cannot express, and it is why `.share()` is written
 on each handle rather than on a contract.
 
 **Where the rule lives.** The classification is decided ONCE, in the collect pass

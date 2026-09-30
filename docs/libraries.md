@@ -445,16 +445,14 @@ confusing error deep inside library source you never wrote.
 The escape is `--ignore-compiler-version`, for an author testing a library forward against a
 new compiler. It is build-wide and obviously temporary, on purpose.
 
-### The format versions — a library built before the bare-function change
+### The format versions
 
-The file itself carries two more versions: the container version (now `5`) and the templates
-schema version (now `8`). Both changed with the bare-function change
-(`docs/design/error-channel.md`): a signature without `| E` is bare now, and no longer means
-`| StdError`. Every function, helper and method record in the manifest states `has_channel`,
-and the field is required. A library built before the change is refused, and never read as
-bare: its container version is **CE3509**, and the templates schema of a binary or hybrid
-library is **CE3512**. Rebuild the library with the current compiler.
-`docs/library-format.md` carries the rows.
+The file itself carries two more versions: the container version (`5`) and the templates
+schema version (`8`). A signature without `| E` is bare (`docs/design/error-channel.md`).
+Every function, helper and method record in the manifest states `has_channel`, and the field
+is required. A library of another version is refused: its container version is **CE3509**,
+and the templates schema of a binary or hybrid library is **CE3512**. Rebuild the library
+with the current compiler. `docs/library-format.md` carries the rows.
 
 ## Symbol Resolution
 

@@ -1,6 +1,6 @@
 # Unit-level storage: the `var` declaration
 
-**Status: DECIDED** (issue #546, ruled 2026-09-02; built 2026-09-03). A `var` is one storage
+**Status: DECIDED** (#546). A `var` is one storage
 per program, in the data segment, with an address.
 
 ## The rule
@@ -91,7 +91,7 @@ position a constant fails there -- a `poke`/`peek` of it, a `poke` foreach over 
 into it, and the same through an alias -- and it passes the CE1002 gate on a rebind
 target. The typecheck pass's CE2096 gate (a write into a constant) asks the record's
 `is_var` and lets a `var` through -- behind an alias too, so `geo.count := 3` writes and
-`geo.SIZE := 3` is still refused.
+`geo.SIZE := 3` is refused.
 
 Every one of those readers asks the SCOPED lookup, never `ConstantTable.by_name`. The
 flat view holds one record per NAME over the whole program and is first-wins, so it
@@ -117,7 +117,7 @@ a value. A `var` is ONE storage, so:
 - a consumer of a BINARY library declares it under the manifest's `link_symbol`, and the
   library's bitcode carries the definition.
 
-The reads and writes reach it through the seams that already existed for a constant:
+The reads and writes reach it through the seams a constant uses:
 `resolve_name_slot` answers the global where it answered a local's slot, and
 `namespaced_storage` (backend/expressions/names.py) is the ONE reader of an alias that
 reaches storage -- a rebind, a `poke`, a field write and a mutating method all ask it.
@@ -152,9 +152,3 @@ with its `link_symbol`, and the consumer declares it.
   CE2400** so a constant could satisfy a `poke self` contract: both were the routes the
   ruling did not take. A buffered-direction contract for `lines()`, `read_line()`
   and `fill()` is a separate, later question.
-
-## History
-
-- 2026-09-02: ruled on #546 (route 2); the keyword cross-check chose `var`; the four
-  design items (initializer, borrow class, manifest, alias) ruled the same day.
-- 2026-09-03: built. CE2436 added; the console handles became `public var`.

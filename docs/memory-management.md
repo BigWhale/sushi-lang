@@ -293,8 +293,8 @@ binds `x` as a borrow of `w`, not an independent copy -- see
 
 ### Taking a Field Out
 
-A field read is a borrow, and that left one thing unspellable: handing a handle back **out** of the
-value that holds it. `nom` marks the take:
+A field read is a borrow, so a read cannot hand a handle back **out** of the value that holds it.
+A take does this, and `nom` marks it:
 
 ```sushi
 use <io/fs>
@@ -694,7 +694,7 @@ fn add_one(peek i32 x) i32:
 
 fn main() i32:
     # ERROR CE2404: cannot borrow '(5 + 3)': expression has no stable address
-    # let i32 x = add_one(peek (5 + 3)).realise(0)
+    # let i32 x = add_one(peek (5 + 3))
 
     let i32 temp = 5 + 3          # OK: a variable has an address
     let i32 x = add_one(peek temp)
@@ -751,7 +751,7 @@ fn main() i32:
 
 **A `let` may also declare a reference *type***: `let poke T x = <place>` binds a
 pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
-mutation path a bare `Own@(T)` local had none of -- and `let peek T x = <place>` is the
+mutation path into the payload of a bare `Own@(T)` local -- and `let peek T x = <place>` is the
 read-only twin. The binding is block-scoped and freezes its owner exactly as the implicit
 borrow above does (`CE2412`); one `poke` binding of an owner at a time (`CE2403`), a `peek`
 beside a live `poke` is `CE2407`, a write through a `peek` binding is `CE2408`, and

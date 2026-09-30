@@ -1,11 +1,9 @@
 # Move-by-Value Unification for Owning Composites
 
-*Design doc, 2026-07-19. Status: **the record of the move-by-value decision** (implemented 2026-07-20).
-Two later designs changed the rules that this document set, and they are the authority today:
-`docs/design/ownership-conventions.md` (Phase 9, 2026-08-14: one ownership predicate, a `string`
-moves, a read through an owner borrows) and `docs/design/borrow-model.md` (2026-08-16: an
-unmarked parameter BORROWS, and only `nom` consumes at a call). The body below states the rules
-as they are today.
+*Design doc. Status: **implemented**. This document states the move-by-value rule. The normative
+rules are in `docs/design/ownership-conventions.md` (one ownership predicate, a `string` moves, a
+read through an owner borrows) and `docs/design/borrow-model.md` (an unmarked parameter BORROWS,
+and only `nom` consumes at a call).
 Companion to `docs/memory-management.md` (user-facing rules) and
 `docs/design/string-representation.md` (the fat-pointer decision).*
 
@@ -13,16 +11,15 @@ Companion to `docs/memory-management.md` (user-facing rules) and
 
 ## 1. Decision
 
-**Owning user structs and owning enums switched from copy-by-value to move-by-value**, unifying
-them with `T[]`, `List@(T)`, `Own@(T)`, and capturing closures. The rules today:
+**Owning user structs and owning enums move by value**, the same as `T[]`, `List@(T)`, `Own@(T)`,
+and capturing closures. The rules:
 
 - Every value that *owns a resource* **moves** at an ownership sink: a rebind (`let W b = a`), a
   construction field, an array-literal element, a `return`, a closure capture, a container
   insert, and a `nom` argument (`take(nom a)`). Reusing the source is **CE2405**
   (use-after-move).
 - An UNMARKED call argument is not a sink. It is a **borrow** (`borrow-model.md`): `look(a)`
-  lends `a`, the callee frees nothing, and `a` stays usable. The 2026-07 decision made an
-  unmarked argument a move; borrow-by-default replaced that rule.
+  lends `a`, the callee frees nothing, and `a` stays usable.
 - `.clone()` is the **single, explicit** way to copy an owning value. It is auto-derived for
   structs and enums. It is REFUSED on a type that declares a resource (`Drop`) or holds one:
   CE2431, and the escape is `.share()` where the type offers it.

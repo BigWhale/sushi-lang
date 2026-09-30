@@ -91,9 +91,6 @@ A function with a channel that returns a function type writes the explicit form,
 that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare function that returns a
 function type with a channel.
 
-Until the bare-function change (`docs/design/error-channel.md`), a function type with no `| E` had
-the implicit error type `StdError`, and every call through a function value yielded a `Result`.
-
 A bare function is the exception, not the default style. Use it only when the function is total
 over its inputs and will stay so (a combinator argument, a pure arithmetic helper). Write a
 channel for everything that can fail, or can gain a failure later. A public function keeps a
@@ -156,9 +153,8 @@ let fn() -> i32 inc = |~| n + 1
   call yields (and `if (f(x))` is CE2516, as for any call).
   - *Corollary for a channel lambda:* the expression body is wrapped in `Ok`, so a fallible call in
     the body must be unwrapped with `??` **at its point of use** — a `Result` left in body position
-    is wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. Until the bare-function
-    change every lambda had a channel, and `compose`'s body was `f(g(x)??)??`. `compose` is bare
-    now and its body is `f(g(x))`.
+    is wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. `compose` is bare, so its body
+    is `f(g(x))`.
 - **Block-body lambdas are a `let`-RHS-only form.** The grammar does not reach `lambda_block` from
   general `expr`, since it ends in a dedent with no trailing token, so `|x|: <block>` used directly
   as a call argument is a parse error — bind it to a `let` first.
@@ -190,8 +186,7 @@ rule is `lambda_param: NOM? type NAME`), and a value built from a function decla
 
 ### Representation — the four-word fat pointer
 
-A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr }` (32 bytes,
-widened from three words / 24 bytes on 2026-08-14 — see below):
+A function value lowers to `{ i8* fn_ptr, i8* env_ptr, i8* drop_ptr, i8* clone_ptr }` (32 bytes):
 
 | Field | Non-capturing value | Capturing closure |
 |-------|---------------------|-------------------|
@@ -200,8 +195,8 @@ widened from three words / 24 bytes on 2026-08-14 — see below):
 | `drop_ptr`  | `null` | address of a type-erased env destructor |
 | `clone_ptr` | `null` | address of a type-erased env cloner: allocates a fresh environment record and deep-copies each captured field into it |
 
-`clone_ptr` was added when `.clone()` became total over every type in the language
-(`docs/design/move-semantics.md` §4) — a function value was the one remaining type without one.
+`clone_ptr` exists because `.clone()` is total over every type in the language
+(`docs/design/move-semantics.md` §4), and a function value is one of those types.
 `build_closure_value` (`backend/runtime/closures.py`) assembles all four fields; a non-capturing
 value's `clone_ptr` is `null`, so `.clone()`-ing a bare `fn` reference is a runtime-guarded no-op
 that hands back an equivalent fat value, exactly like `drop_ptr`'s guarded free.
@@ -315,7 +310,7 @@ for the captured variable's provenance and type class, not a closures-specific r
 
 The capture machinery, in dependency order:
 
-- **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 24-byte lowering).
+- **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 32-byte lowering).
 - **T1.1** — lambda grammar/AST (`lambda_expr`, `lambda_block`, `Lambda` node).
 - **T1.2** — capture analysis (free-name recording in the scope pass).
 - **T1.3** — type-checking + capture legality, including CE2094 for borrow capture.
@@ -425,8 +420,7 @@ fn main() i32:
   one; owned-element combinators are deferred (Part II §2).
 - **Two call forms:** the free function `map(xs, f)` and the method form `xs.map(f)` (Gap B, Part
   II §1). The method form is an extension with a method-level type parameter
-  (`extend List@(T) map@(U)`, `extend T[] map@(U)`). It is bare since the bare-function change
-  (it declared `| StdError` before), and it answers a `List@(U)` for a `List@(T)` and for a `T[]`
+  (`extend List@(T) map@(U)`, `extend T[] map@(U)`). It is bare, and it answers a `List@(U)` for a `List@(T)` and for a `T[]`
   receiver alike. Every combinator takes a bare function and yields the value, so a call takes no
   `??`.
 - **Function argument must be a typed-param lambda or a function reference** — a bare-param lambda
@@ -440,8 +434,8 @@ fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
 ```
 
 `compose`'s returned lambda **captures** `f` and `g` (both function values, one of them possibly a
-closure) and **calls** them in its body — the capture-and-call case that was CE2094-blocked before
-T2.4 (§7). Both parameters are `nom`: a capture CONSUMES what it captures, and a borrow parameter
+closure) and **calls** them in its body — the capture-and-call case of
+§7. Both parameters are `nom`: a capture CONSUMES what it captures, and a borrow parameter
 cannot be consumed (CE2411 for each of `f` and `g`). The caller hands the values over, so the call
 is `compose(nom inc, nom dbl)`. The lambda parameter is a bare `|x|`, and the expected return type
 `fn(T) -> V` supplies its type; `|T x|` works too (Part II §5).
@@ -467,7 +461,7 @@ Test coverage: `tests/stdlib/iter/combinators/test_iter_module_map.sushi`, `test
 
 ## 7. Call-through arbitrary expressions (T2.4)
 
-`Call.callee` is widened from `Name` to any `Expr`. Calling through an arbitrary expression that
+`Call.callee` is any `Expr`, not only a `Name`. Calling through an arbitrary expression that
 evaluates to a function value works, and it reuses the fat-pointer indirect-call path unchanged:
 
 - **A captured closure read back in a lifted lambda body** — `env.f(x)` — is exactly what makes
@@ -535,7 +529,7 @@ This is an **expected-type-driven** rule, not a general lift of CE2093: the inst
 the instantiation wherever an expected `FunctionType` meets a generic-fn name -- a `let`, an
 argument, a rebind, a `return`, a struct field, an enum payload, a `.realise()` default -- by unifying the signature against the expected type; the type pass then solves the
 type args, rewrites the `Name` to the mangled concrete name, and infers the concrete `FunctionType`.
-The backend is unchanged — the mangled monomorphized function materializes as an ordinary fn value.
+The backend needs no special case — the mangled monomorphized function materializes as an ordinary fn value.
 
 A generic-fn reference **into a higher-order function** works the same way. With a concrete
 parameter type the bare argument is enough (`take(identity)` against `fn(i32) -> i32`). A GENERIC
@@ -595,7 +589,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | Sizing (32 bytes, four words) | `backend/types/core/sizing.py` |
 | Lambda grammar / `atom` | `grammar.lark` (`lambda_param`, the lambda alternatives of `atom`, `lambda_block`) |
 | `Lambda` node / `FuncDef` shape | `semantics/ast.py` |
-| `Call.callee` widened to `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
+| `Call.callee` over any `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
 | Capture analysis | `semantics/passes/scope.py` |
 | Lambda type-check, CE2094, bare-param inference | `semantics/passes/types/visitor.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
@@ -625,70 +619,23 @@ after the `typecheck` pass and before the `borrow` pass.
 
 # Part II — Deferred
 
-## 1. UFCS method form `xs.map(f)` — Gap B — SUPERSEDED
+## 1. UFCS method form `xs.map(f)` — Gap B — SHIPPED
 
-Gap B SHIPPED with the UFCS epic: `extend List@(T) map@(U)(fn(T) -> U f) List@(U)` is
-expressible, inferred at the call site, and monomorphized per (receiver, method,
-margs). The decision record is [ufcs-combinators.md](ufcs-combinators.md). The
-analysis that follows is a historical record and does not describe the tree.
+`extend List@(T) map@(U)(fn(T) -> U f) List@(U)` is expressible, inferred at the call site, and
+monomorphized per (receiver, method, margs). The decision record is
+[ufcs-combinators.md](ufcs-combinators.md).
 
-<details>
-<summary>The original Gap B analysis (historical)</summary>
-
-`extend List@(T) map@(U)(fn(T)->U f) List@(U)` cannot be expressed today. A *same-type* combinator
-(`extend List@(T) map(fn(T)->T f) List@(T)`) already works (Gap D closed this half); only a
-*type-changing* method — one that needs its own method-level type parameter `@(U)` — is blocked.
-Four pieces are missing:
-
-1. **Grammar** (`grammar.lark:36`): `extend_def` is `NAME "(" [parameters] ")" type ...` — no
-   `[type_params]` slot after the method name (contrast `function_def` at `:45`, which has one).
-   `xs.map(f)` (inference-only call, no explicit `@(U)` — Sushi has no method type-arg syntax) already
-   *parses*; only the **definition** needs the slot. `@(` after a method NAME in `extend_suffix` is
-   unambiguous, so this is low-risk, but still needs the LALR acceptance-gate (run the grammar
-   through the parser generator, as with the lambda `|`).
-2. **AST/collect**: `ExtendDef` (`ast.py:135`) has no `type_params` field; collect
-   (`semantics/passes/collect/functions.py:748`) derives extension type params from the *receiver's*
-   `target_type.type_args` **only** (stored on `GenericExtensionMethod.type_params`). Needs a
-   method-param field distinct from the receiver params, unioned for body type-resolution.
-3. **Call-site inference**: method calls (`semantics/passes/types/calls/methods.py:234-255`) are
-   receiver-driven — concrete type args come entirely from the receiver type; there is **no**
-   argument unification. The free-function unifier
-   (`semantics/passes/types/calls/generics.py:_unify_types_for_inference`, extended for `fn(T)->U`
-   in §5's Gap C) would need to be reused for method calls to solve `U` from the `f` argument.
-4. **Monomorphization**: `monomorphize_all_extension_methods` (`semantics/generics/extensions.py`)
-   is eager/receiver-driven, keyed on `struct_instantiations` with a strict `zip` of
-   `generic_method.type_params` against the receiver's `type_args` (CE0096 on count mismatch).
-   Method params need a call-site-driven instantiation dimension combining receiver args **and**
-   independently-inferred method args.
-
-**Options:**
-
-- **(A) Do nothing — free-function form (current default).** `map(xs, f)` works today, including
-  type-changing (`i32 -> bool`) and capturing closures. The method form is pure UFCS sugar. Zero
-  cost; this is what `collections/iter` documents and ships.
-- **(B) Same-type-only method combinators.** Ship `extend List@(T)` methods whose result type is `T`
-  (in-place-style map, filter, fold-to-`T`). Works **today** on the back of Gap D, no Gap B needed.
-  Real subset; type-changing map/fold still fall back to free functions.
-- **(C) Implement Gap B.** Medium-large. Reuses the higher-order inference (Gap C) and substitution
-  (Gap A) machinery from §5; the crux is bridging the eager receiver-driven extension monomorphizer
-  to a call-site-driven one for method params. Unlocks the full ergonomic `xs.map(f)`.
-
-Recommendation unchanged: pursue (A)/(B) for the parity payoff (already done); defer (C) until a
-concrete consumer wants the fluent method form.
-
-**Constraints on List extension methods worth knowing (from the Gap D fix):**
+**Constraints on List extension methods:**
 
 - **Builtin names cannot be shadowed.** The backend dispatcher checks List provider methods
   (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List@(T) push()` is
   unreachable. Only non-builtin names route to the extension path. This is not specific to `List` --
-  it is the general precedence rule, now enforced as **CE2097** across every built-in family. See
+  it is the general precedence rule, and **CE2097** enforces it across every built-in family. See
   [method-resolution.md](method-resolution.md) for the full chain and the perk override route.
 - **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i32, i32, T*}`
   layout and is passed by pointer, but `self` is declared by value; the dispatch site loads the
   header to reconcile (safe because extension bodies never register `self` for cleanup, so the
   shared buffer is not double-freed).
-
-</details>
 
 ## 2. Owned-element combinators — partly closed
 

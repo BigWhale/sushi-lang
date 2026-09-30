@@ -195,7 +195,6 @@ value:
       expand(c in cells):
           line := "{line}[{c.show()}]"
       println(line)
-      return Result.Ok(~)
   ```
 
 - Early `return` and the `??` propagation operator work inside `expand`; any owned per-element
