@@ -11,7 +11,7 @@ modules.
 use <net/handle>
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 ```
 
 [`<net/tcp>`](tcp.md) and [`<net/udp>`](udp.md) re-export this module (`public use`), so
@@ -40,7 +40,7 @@ fn main() i32:
     match close_socket(poke slot):
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close_socket failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See also

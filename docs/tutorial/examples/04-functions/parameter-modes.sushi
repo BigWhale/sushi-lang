@@ -1,18 +1,16 @@
 fn count(string[] crew) i32:
-    return Result.Ok(crew.len())
+    return crew.len()
 
 fn add_one(poke i32 counter) ~:
     counter := counter + 1
-    return Result.Ok(~)
 
 fn board(nom string[] crew) ~:
     foreach(name in crew.iter()):
         println("Boarding: {name}")
-    return Result.Ok(~)
 
 fn main() i32:
     let string[] crew = from(["Arthur", "Ford"])
-    println("Crew size: {count(crew).realise(0)}")
+    println("Crew size: {count(crew)}")
     println("Still ours: {crew.len()}")
 
     let i32 jumps = 0
@@ -21,4 +19,4 @@ fn main() i32:
     println("Jumps: {jumps}")
 
     board(nom crew)
-    return Result.Ok(0)
+    return 0

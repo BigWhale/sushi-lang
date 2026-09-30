@@ -89,7 +89,7 @@ fn make_tea(u8 strength) ~:
     ##:
     A block inside a body documents the function that encloses it.
     :##
-    return Result.Ok(~)
+    return ~
 ```
 
 The block holds prose. Whitespace inside it never reaches the parser, so the text may be

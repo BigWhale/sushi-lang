@@ -29,10 +29,10 @@ Join two path segments with a single separator. An absolute child replaces the b
 use <io/path>
 
 fn main() i32:
-    println(join("src", "main.sushi").realise("?"))   # src/main.sushi
-    println(join("src/", "main.sushi").realise("?"))  # src/main.sushi
-    println(join("src", "/etc/hosts").realise("?"))   # /etc/hosts
-    return Result.Ok(0)
+    println(join("src", "main.sushi"))   # src/main.sushi
+    println(join("src/", "main.sushi"))  # src/main.sushi
+    println(join("src", "/etc/hosts"))   # /etc/hosts
+    return 0
 ```
 
 ### `basename(string path) string`
@@ -43,9 +43,9 @@ The part after the last separator. A path with a trailing separator has an empty
 use <io/path>
 
 fn main() i32:
-    println(basename("/a/b.txt").realise("?"))  # b.txt
-    println(basename("a/").realise("?"))        # (empty)
-    return Result.Ok(0)
+    println(basename("/a/b.txt"))  # b.txt
+    println(basename("a/"))        # (empty)
+    return 0
 ```
 
 ### `dirname(string path) string`
@@ -56,9 +56,9 @@ The part before the last separator, trailing separators stripped. A path with no
 use <io/path>
 
 fn main() i32:
-    println(dirname("/a/b.txt").realise("?"))  # /a
-    println(dirname("/").realise("?"))         # /
-    return Result.Ok(0)
+    println(dirname("/a/b.txt"))  # /a
+    println(dirname("/"))         # /
+    return 0
 ```
 
 ### `extension(string path) string`
@@ -69,9 +69,9 @@ The extension of the last component, without the leading dot. The leading dot of
 use <io/path>
 
 fn main() i32:
-    println(extension("archive.tar.gz").realise("?"))  # gz
-    println(extension(".bashrc").realise("?"))         # (empty)
-    return Result.Ok(0)
+    println(extension("archive.tar.gz"))  # gz
+    println(extension(".bashrc"))         # (empty)
+    return 0
 ```
 
 ### `normalize(string path) string`
@@ -82,9 +82,9 @@ Normalize a path lexically: doubled separators collapse, `.` components vanish, 
 use <io/path>
 
 fn main() i32:
-    println(normalize("/a/./b/../c").realise("?"))  # /a/c
-    println(normalize("a//b").realise("?"))         # a/b
-    return Result.Ok(0)
+    println(normalize("/a/./b/../c"))  # /a/c
+    println(normalize("a//b"))         # a/b
+    return 0
 ```
 
 ## See also

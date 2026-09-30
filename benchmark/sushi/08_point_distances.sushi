@@ -20,4 +20,4 @@ fn main() i32:
             total := total + sqrt(dx * dx + dy * dy)
             j := j + 1
     println(total as i64)
-    return Result.Ok(0)
+    return 0

@@ -5,4 +5,4 @@ fn main() i32:
     foreach(i in 0..50000):
         s := s.concat("{i},")
     println(s.size())
-    return Result.Ok(0)
+    return 0

@@ -52,7 +52,7 @@ fn main() i32:
     println("Int: {int_box.value}")
     println("String: {str_box.value}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Multiple Type Parameters
@@ -69,7 +69,7 @@ fn main() i32:
     println("First: {p1.first}, Second: {p1.second}")
     println("Flag: {p2.first}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Generic Struct with Arrays and Containers
@@ -97,7 +97,7 @@ fn main() i32:
     shelf.items.push(42)
     println("Shelf: {shelf.items.len()}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Generic Enums
@@ -124,7 +124,7 @@ fn main() i32:
         Option.Some(v) -> println("Text: {v}")
         Option.None() -> println("No text")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Where a Constructor Gets Its Type
@@ -151,7 +151,7 @@ fn main() i32:
         Tree.Leaf(v) -> println("Leaf {v}")
         Tree.Empty -> println("Empty")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Recursive Generic Enums
@@ -166,18 +166,18 @@ enum Tree@(T):
 
 fn count@(T)(Tree@(T) t) i32:
     match t:
-        Tree.Leaf(_) -> return Result.Ok(1)
+        Tree.Leaf(_) -> return 1
         Tree.Node(l, r) ->
-            let i32 a = count(l.get())??
-            let i32 b = count(r.get())??
-            return Result.Ok(a + b)
+            let i32 a = count(l.get())
+            let i32 b = count(r.get())
+            return a + b
 
 fn main() i32:
     let Tree@(i32) left = Tree.Leaf(1)
     let Tree@(i32) right = Tree.Leaf(2)
     let Tree@(i32) root = Tree.Node(Own.alloc(left), Own.alloc(right))
-    println("Leaves: {count(root).realise(0)}")
-    return Result.Ok(0)
+    println("Leaves: {count(root)}")
+    return 0
 ```
 
 ### Built-in Generic Enums
@@ -189,7 +189,7 @@ Sushi has two built-in generic enums.
 `Result@(i32, MathError)`:
 
 ```sushi
-fn divide(i32 a, i32 b) i32:  # returns Result@(i32, StdError)
+fn divide(i32 a, i32 b) i32 | StdError:  # returns Result@(i32, StdError)
     if (b == 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / b)
@@ -200,8 +200,8 @@ fn divide(i32 a, i32 b) i32:  # returns Result@(i32, StdError)
 fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
-            return Result.Ok(Maybe.Some(n))
-    return Result.Ok(Maybe.None())
+            return Maybe.Some(n)
+    return Maybe.None()
 ```
 
 See [Error Handling](error-handling.md) for both types.
@@ -212,15 +212,15 @@ See [Error Handling](error-handling.md) for both types.
 
 ```sushi
 fn identity@(T)(nom T value) T:
-    return Result.Ok(value)
+    return value
 
 fn main() i32:
-    let i32 x = identity(nom 42).realise(0)          # T inferred as i32
-    let string s = identity(nom "Ford").realise("")  # T inferred as string
+    let i32 x = identity(nom 42)          # T inferred as i32
+    let string s = identity(nom "Ford")  # T inferred as string
 
     println("x={x}, s={s}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 !!! note
@@ -243,14 +243,14 @@ struct Pair@(T, U):
     U second
 
 fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
-    return Result.Ok(Pair(first: first, second: second))
+    return Pair(first: first, second: second)
 
 fn main() i32:
     # T=i32, U=string inferred from arguments
-    let Pair@(i32, string) p = make_pair(nom 42, nom "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(nom 42, nom "answer")
     println("Pair: {p.first}, {p.second}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Type Inference
@@ -267,36 +267,36 @@ struct Pair@(A, B):
     B right
 
 fn first@(T)(T[] xs) T:
-    return Result.Ok(xs[0])
+    return xs[0]
 
 fn left_of@(A, B)(peek Pair@(A, B) p) A:
-    return Result.Ok(p.left)
+    return p.left
 
 fn apply@(T, U)(T x, fn(T) -> U f) U:
-    return Result.Ok(f(x)??)
+    return f(x)
 
 fn singleton@(T)(nom T x) List@(T):
     let List@(T) l = List.new()
     l.push(x)
-    return Result.Ok(l)
+    return l
 
-fn first_of@(T)(List@(T) l) T:
+fn first_of@(T)(List@(T) l) T | StdError:
     return Result.Ok(l.get(0)??)
 
-fn round_trip@(T)(nom T x) T:
-    return Result.Ok(first_of(singleton(nom x)??)??)
+fn round_trip@(T)(nom T x) T | StdError:
+    return Result.Ok(first_of(singleton(nom x))??)
 
 fn main() i32:
     let i32[] xs = from([5, 6])
     let Pair@(i32, string) p = Pair(left: 9, right: "nine")
 
-    let i32 a = first(xs).realise(0)                         # T from i32[]
-    let i32 b = left_of(peek p).realise(0)                   # A, B from peek Pair@(A, B)
-    let string c = apply(3, |i32 n| "n={n}").realise("")     # T from 3, U from the lambda
+    let i32 a = first(xs)                         # T from i32[]
+    let i32 b = left_of(peek p)                   # A, B from peek Pair@(A, B)
+    let string c = apply(3, |i32 n| "n={n}")     # T from 3, U from the lambda
     let i32 d = round_trip(nom 11).realise(0)                # nested generic calls
 
     println("{a} {b} {c} {d}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A lambda argument must declare its parameter types (`|i32 n| ...`). A bare-parameter lambda
@@ -314,16 +314,16 @@ give it:
 
 ```sushi
 fn identity@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 fn empty_list@(T)() List@(T):
-    return Result.Ok(List.new())
+    return List.new()
 
 fn main() i32:
-    let i32 a = identity@(i32)(nom 42).realise(0)
-    let List@(string) names = empty_list@(string)().realise(List.new())
+    let i32 a = identity@(i32)(nom 42)
+    let List@(string) names = empty_list@(string)()
     println("{a} {names.len()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The rules:
@@ -343,21 +343,21 @@ expected type selects the instantiation:
 
 ```sushi
 fn same@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn apply(fn(i32) -> i32 f, i32 x) i32:
-    return Result.Ok(f(x)??)
+    return f(x)
 
 fn twice@(T)(fn(T) -> T f, T x) T:
-    return Result.Ok(f(f(x)??)??)
+    return f(f(x))
 
 fn main() i32:
     let fn(i32) -> i32 g = same           # selects same@(i32)
-    let i32 a = g(41).realise(-1)
-    let i32 b = apply(same, 3).realise(-1)
-    let i32 c = twice(same, 7).realise(-1)   # T comes from 7
+    let i32 a = g(41)
+    let i32 b = apply(same, 3)
+    let i32 c = twice(same, 7)   # T comes from 7
     println("{a} {b} {c}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The parameter modes are part of a function type. `identity@(T)(nom T x)` has the type
@@ -384,7 +384,7 @@ derived `hash()` satisfies it, and the implementation below REPLACES the derived
 
 ```sushi
 fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 struct Point:
     i32 x
@@ -396,10 +396,10 @@ extend Point with Hashable:
 
 fn main() i32:
     let Point p = Point(x: 10, y: 20)
-    let u64 h = compute_hash(p).realise(0 as u64)  # T=Point inferred, Hashable verified
+    let u64 h = compute_hash(p)  # T=Point inferred, Hashable verified
 
     println("Hash: {h}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Multiple Constraints
@@ -425,12 +425,11 @@ fn process@(T: Hashable + Displayable)(T item) ~:
     let u64 h = item.hash()
     let string s = item.display()
     println("Hash: {h}, Display: {s}")
-    return Result.Ok(~)
 
 fn main() i32:
     let Tag t = Tag(id: 7)
     process(t)
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Constraints on Structs and Enums
@@ -452,7 +451,7 @@ fn main() i32:
     match s:
         Slot.Full(v) -> println("{k.key} {v}")
         Slot.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0
 ```
 
 For more information on perks, see the [Perks documentation](perks.md).
@@ -482,7 +481,7 @@ fn main() i32:
     else:
         println("Odd")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### String Extensions
@@ -507,7 +506,7 @@ fn main() i32:
     println("Don't Panic".shout())     # Don't Panic!!!
     println("Ha".echo(3))              # HaHaHa
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Generic Targets
@@ -548,7 +547,7 @@ fn main() i32:
     l.push(1)
     println("{o.is_has()} {l.doubled_len()}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 A **concrete** type argument in the target is a constraint, not a parameter name. So
@@ -569,7 +568,7 @@ fn main() i32:
     let Box@(i32) a = Box(value: 1)
     let Box@(string) b = Box(value: "one")
     println("{a.tag()} {b.tag()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A template and a concrete target for the same method name overlap, and the compiler refuses
@@ -606,7 +605,7 @@ fn main() i32:
     s.push(nom 1)
     s.push(nom 2)
     println("Top: {s.pop().realise(0)}, left: {s.size()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Method-Level Type Parameters
@@ -621,13 +620,13 @@ struct Box@(T):
     T value
 
 extend Box@(T) map@(U)(fn(T) -> U f) Box@(U) | StdError:
-    return Result.Ok(Box(value: f(self.value)??))
+    return Result.Ok(Box(value: f(self.value)))
 
 fn main() i32:
     let Box@(i32) b = Box(value: 20)
     let Box@(string) s = b.map(|i32 x| "n={x}").realise(Box(value: ""))
     println(s.value)
-    return Result.Ok(0)
+    return 0
 ```
 
 `<collections/iter>` ships `.map`, `.filter` and `.fold` on `List@(T)` and `T[]` in this
@@ -654,7 +653,7 @@ fn main() i32:
     let string[] ws = from(["a", "b"])
     let string w = ws.second().realise("")
     println("{xs.second().realise(0)} {w} {xs.total()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The body returns `self.get(1).clone()`, because `self.get(1)` is a borrow and a `string`
@@ -678,14 +677,13 @@ extend Box@(T) with Show:
 
 fn render@(S: Show)(S thing) ~:
     println(thing.show())
-    return Result.Ok(~)
 
 fn main() i32:
     let Box@(i32) b = Box(value: 3)
     let Box@(string) c = Box(value: "hi")
     render(b)
     render(c)
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler checks the header of a template implementation one time, on the written
@@ -719,7 +717,7 @@ fn main() i32:
     match both():
         Result.Ok(v) -> println("Sum {v}")
         Result.Err(ParseError.Bad(code)) -> println("Bad {code}")
-    return Result.Ok(0)
+    return 0
 ```
 
 An extension method on a generic target can declare `| E` too. Its body then spells both
@@ -746,11 +744,10 @@ extend string with Show:
 fn show_all@(...Ts: Show)(...Ts items) ~:
     expand(it in items):
         println(it.show())
-    return Result.Ok(~)
 
 fn main() i32:
     show_all(42, "Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 See [Variadics](variadics.md) for the full rules.
@@ -765,7 +762,7 @@ A function that returns `Maybe@(i32)` really returns `Result@(Maybe@(i32), StdEr
 match the outer `Result` and then the inner `Maybe`:
 
 ```sushi
-fn parse_optional(string s) Maybe@(i32):
+fn parse_optional(string s) Maybe@(i32) | StdError:
     if (s == "42"):
         return Result.Ok(Maybe.Some(42))
     return Result.Ok(Maybe.None())
@@ -778,7 +775,7 @@ fn main() i32:
                 Maybe.None() -> println("No value")
         Result.Err(_) -> println("Parse error")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Three Levels
@@ -797,7 +794,7 @@ fn main() i32:
                 Maybe.None() -> println("Level 2 None")
         Maybe.None() -> println("Level 1 None")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Collections of Generics
@@ -825,7 +822,7 @@ fn main() i32:
     println("Groups: {groups.len()}")
     groups.free()
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Monomorphization
@@ -851,7 +848,7 @@ fn main() i32:
     println(b1.describe())  # Specialized describe() for Box@(i32)
     println(b2.describe())  # Specialized describe() for Box@(string)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler generates a distinct specialization for each instantiation, with no runtime
@@ -865,17 +862,17 @@ The compiler finds the necessary instantiations from the program: a call, a writ
 ```sushi
 fn largest@(T)(T a, T b) T:
     if (a > b):
-        return Result.Ok(a)
-    return Result.Ok(b)
+        return a
+    return b
 
 fn main() i32:
     # Compiler generates largest() for i32 and for f64
-    let i32 mi = largest(3, 9).realise(0)
-    let f64 mf = largest(2.5, 1.5).realise(0.0)
+    let i32 mi = largest(3, 9)
+    let f64 mf = largest(2.5, 1.5)
 
     println("{mi} {mf}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Each Instance Is Checked
@@ -889,11 +886,11 @@ instance:
 use <collections/strings>
 
 fn size@(T)(T x) i32:
-    return Result.Ok(x.len())
+    return x.len()
 
 fn main() i32:
-    println(size("four").realise(0))
-    return Result.Ok(0)
+    println(size("four"))
+    return 0
 ```
 
 Write a constraint when a body needs a method, so that the requirement is part of the
@@ -943,14 +940,13 @@ extend Robot with Describable:
         return "Robot {self.name}"
 
 fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
-    return Result.Ok(Pair(first: first, second: second))
+    return Pair(first: first, second: second)
 
 fn announce@(T: Describable)(T item) ~:
     println(item.describe())
-    return Result.Ok(~)
 
 fn main() i32:
-    let Pair@(i32, string) p = make_pair(nom 42, nom "answer").realise(Pair(first: 0, second: ""))
+    let Pair@(i32, string) p = make_pair(nom 42, nom "answer")
     println("Pair: {p.first}, {p.second}")
 
     let Robot marvin = Robot(name: "Marvin")
@@ -962,7 +958,7 @@ fn main() i32:
     pairs.push(Pair(first: 2, second: "two"))
     println("Stored pairs: {pairs.len()}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Best Practices
@@ -986,7 +982,7 @@ struct Box@(T):
 # Document with concrete types
 # Example: make_pair(nom 42, nom "answer") returns Pair@(i32, string)
 fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
-    return Result.Ok(Pair(first: first, second: second))
+    return Pair(first: first, second: second)
 ```
 
 ### 3. Write the Constraint That the Body Needs

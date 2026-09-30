@@ -20,7 +20,7 @@ fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 ```
 
 That's perfect when every argument is an `i32`. But what if you want to accept an `i32`, a
@@ -152,7 +152,6 @@ public perk Display:
 public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
-    return Result.Ok(~)
 ```
 
 and a program that `use`s the library monomorphizes it at *its own* call sites, supplying

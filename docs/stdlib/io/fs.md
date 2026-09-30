@@ -113,7 +113,7 @@ fn main() i32:
             println("size {st.size}, modified {st.mtime}")
         Result.Err(_) -> println("no such path")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `walk(string path) string[] | FileError`
@@ -130,7 +130,7 @@ fn main() i32:
                 println(p)
         Result.Err(_) -> println("walk failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `mkdir_all(string path, i32 dir_mode) ~ | FileError`
@@ -145,7 +145,7 @@ fn main() i32:
         Result.Ok(_) -> println("tree is there")
         Result.Err(_) -> println("cannot build the tree")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `remove_all(string path) ~ | FileError`
@@ -165,7 +165,7 @@ fn main() i32:
         Result.Ok(_) -> println("cache cleared")
         Result.Err(_) -> println("something is still in use")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Extension methods
@@ -191,7 +191,7 @@ use <io/fs>
 fn main() i32:
     println("append is intent {FileMode.Append().intent()}")
     println("the end is whence {SeekFrom.End().whence()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See also

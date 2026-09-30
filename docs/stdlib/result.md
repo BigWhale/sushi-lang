@@ -23,7 +23,7 @@ The error type `E` must be an enum. Any other type is CE2084.
 
 ```sushi
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 # Actually returns Result@(i32, StdError)
 ```
 
@@ -186,7 +186,7 @@ Create a success result containing a value.
 
 ```sushi
 fn get_answer() i32:
-    return Result.Ok(42)
+    return 42
 ```
 
 ### `Result.Err(error)`
@@ -313,9 +313,14 @@ Using `??` in the `main()` function generates a compiler warning and is highly d
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
-fn main() i32:
+fn run() i32 | StdError:
     let i32 x = risky()??  # warning CW2511
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1
 ```
 
 Instead, use explicit error handling:
@@ -326,10 +331,10 @@ fn main() i32:
     match risky():
         Result.Ok(x) ->
             println("Got: {x}")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             println("Failed")
-            return Result.Ok(1)
+            return 1
 ```
 
 ## Pattern Matching

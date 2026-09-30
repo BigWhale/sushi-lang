@@ -1,17 +1,17 @@
 fn describe@(T)(T x) string:
-    return Result.Ok("<{x}>")
+    return "<{x}>"
 
 fn call_with_42(fn(i32) -> string f) string:
-    return Result.Ok(f(42)??)
+    return f(42)
 
 fn run@(T)(fn(T) -> string f, T x) string:
-    return Result.Ok(f(x)??)
+    return f(x)
 
 fn main() i32:
     let fn(string) -> string g = describe
-    println("a let gives T = string: {g('towel').realise('')}")
+    println("a let gives T = string: {g('towel')}")
 
-    println("a parameter gives T = i32: {call_with_42(describe).realise('')}")
+    println("a parameter gives T = i32: {call_with_42(describe)}")
 
-    println("a generic callee gives T = f64: {run(describe, 2.5).realise('')}")
-    return Result.Ok(0)
+    println("a generic callee gives T = f64: {run(describe, 2.5)}")
+    return 0

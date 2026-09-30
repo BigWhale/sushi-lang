@@ -51,7 +51,7 @@ fn main() i32:
     let i32 c = min(10, 20)     # 10 (i32)
     let f64 d = max(1.5, 2.5)   # 2.5 (f64)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -77,7 +77,7 @@ fn main() i32:
     let f64 root = sqrt(16.0)        # 4.0
     let f64 result = pow(2.0, 3.0)   # 8.0
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -95,7 +95,7 @@ fn main() i32:
     let f64 c = round(3.5)    # 4.0  (nearest, ties away from zero)
     let f64 d = trunc(3.9)    # 3.0  (toward zero)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -118,7 +118,7 @@ fn main() i32:
     let f64 c = cos(angle)   # ~0.707
     let f64 t = tan(angle)   # ~1.0
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -137,7 +137,7 @@ fn main() i32:
     let f64 c = atan(1.0)         # PI/4
     let f64 d = atan2(1.0, 1.0)   # PI/4 (y/x with quadrant)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -158,7 +158,7 @@ fn main() i32:
     let f64 c = cosh(x)   # ~1.543
     let f64 t = tanh(x)   # ~0.762
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -176,7 +176,7 @@ fn main() i32:
     let f64 log2_8 = log2(8.0)      # 3.0
     let f64 log_100 = log10(100.0)  # 2.0
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -195,7 +195,7 @@ fn main() i32:
     let f64 e_squared = exp(2.0)   # ~7.389 (e^2)
     let f64 two_cubed = exp2(3.0)  # 8.0 (2^3)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Functions:**
@@ -211,7 +211,7 @@ fn main() i32:
     let f64 h = hypot(3.0, 4.0)   # 5.0 (classic 3-4-5 triangle)
     let f64 dist = hypot(6.0, 8.0)  # 10.0
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Function:**
@@ -235,13 +235,13 @@ use <math>
 fn distance(f64 x1, f64 y1, f64 x2, f64 y2) f64:
     let f64 dx = x2 - x1
     let f64 dy = y2 - y1
-    return Result.Ok(hypot(dx, dy))
+    return hypot(dx, dy)
 
 fn main() i32:
-    let f64 d = distance(0.0, 0.0, 3.0, 4.0).realise(0.0)
+    let f64 d = distance(0.0, 0.0, 3.0, 4.0)
     println("Distance: {d}")   # Distance: 5
 
-    return Result.Ok(0)
+    return 0
 ```
 
 !!! note

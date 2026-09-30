@@ -48,7 +48,7 @@ fn main() i32:
             println("{u.scheme} {u.host} {u.port_or_default().realise(0)} {u.path}")
         Result.Err(e) -> println("{e.text()}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 Two decisions worth knowing:

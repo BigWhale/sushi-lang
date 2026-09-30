@@ -12,7 +12,7 @@ Doubles a number.
 - Returns: Twice `n`.
 - Example: a plain fence is compiled and run, and a non-zero exit is a failure.
 ```sushi
-let i32 d = doubled(21)??
+let i32 d = doubled(21)
 println("{d}")
 ```
 :##
@@ -26,7 +26,7 @@ Adds up every number below a bound.
 - Returns: The sum.
 - Example: a `no_run` fence is compiled and never run, because the loop is long.
 ```sushi no_run
-let i32 total = summed(100_000_000)??
+let i32 total = summed(100_000_000)
 println("{total}")
 ```
 :##

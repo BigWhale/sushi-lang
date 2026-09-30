@@ -27,8 +27,8 @@ fn count_lines(string path) i32 | IoError:
 fn main() i32:
     match write_log("/tmp/guide_log.txt"):
         Result.Ok(_) -> println("log written")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
     match count_lines("/tmp/guide_log.txt"):
         Result.Ok(n) -> println("{n} lines")
-        Result.Err(_) -> return Result.Ok(1)
-    return Result.Ok(0)
+        Result.Err(_) -> return 1
+    return 0

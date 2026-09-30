@@ -52,7 +52,7 @@ struct Container:
 # ============================================================================
 
 # Function with multiple parameters and return type
-fn calculate(i32 a, i32 b, string operation) i32:
+fn calculate(i32 a, i32 b, string operation) i32 | StdError:
     if (operation == "add"):
         return Ok(a + b)
     elif (operation == "subtract"):
@@ -61,14 +61,14 @@ fn calculate(i32 a, i32 b, string operation) i32:
         return Ok(0)
 
 # Blank type function (side effects only)
-fn print_header(string title) ~:
+fn print_header(string title) ~ | StdError:
     println("==================================================")
     println(title)
     println("==================================================")
     return Ok(~)
 
 # Public function
-public fn api_function(string input) string:
+public fn api_function(string input) string | StdError:
     return Ok("Processed: {input}")
 
 # ============================================================================
@@ -92,7 +92,7 @@ extend i32 squared() i32:
 # 8. TYPE ANNOTATIONS
 # ============================================================================
 
-fn type_showcase() ~:
+fn type_showcase() ~ | StdError:
     # Signed integers
     let i8 tiny = 127 as i8
     let i16 small = 32767 as i16
@@ -137,7 +137,7 @@ fn type_showcase() ~:
 # 9. OPERATORS
 # ============================================================================
 
-fn operators_demo(i32 x, i32 y) ~:
+fn operators_demo(i32 x, i32 y) ~ | StdError:
     # Arithmetic operators
     let i32 sum = x + y
     let i32 diff = x - y
@@ -179,7 +179,7 @@ fn operators_demo(i32 x, i32 y) ~:
 # 10. CONTROL FLOW
 # ============================================================================
 
-fn control_flow_demo(i32 value) ~:
+fn control_flow_demo(i32 value) ~ | StdError:
     # If-elif-else
     if (value > 0):
         println("Positive")
@@ -209,7 +209,7 @@ fn control_flow_demo(i32 value) ~:
 # 11. ARRAYS AND METHODS
 # ============================================================================
 
-fn array_methods_demo() ~:
+fn array_methods_demo() ~ | StdError:
     # Dynamic array operations
     let i32[] arr = new()
     arr.push(10)
@@ -240,7 +240,7 @@ fn array_methods_demo() ~:
 # 12. I/O OPERATIONS
 # ============================================================================
 
-fn io_demo() ~:
+fn io_demo() ~ | StdError:
     # Print statements
     print("Hello")
     println("World")
@@ -265,12 +265,12 @@ fn io_demo() ~:
 # 13. RESULT TYPE AND ERROR HANDLING
 # ============================================================================
 
-fn divide(i32 a, i32 b) i32:
+fn divide(i32 a, i32 b) i32 | StdError:
     if (b == 0):
         return Err()
     return Ok(a / b)
 
-fn result_handling_demo() ~:
+fn result_handling_demo() ~ | StdError:
     let i32 result = divide(10, 2)
     println("Result: {result}")
 
@@ -283,7 +283,7 @@ fn result_handling_demo() ~:
 # 14. STRUCT CONSTRUCTORS AND METHODS
 # ============================================================================
 
-fn struct_demo() ~:
+fn struct_demo() ~ | StdError:
     # Struct constructor
     let Point p1 = Point(5, 10)
 
@@ -309,7 +309,7 @@ fn struct_demo() ~:
 # 15. ENUM VARIANTS
 # ============================================================================
 
-fn enum_demo() ~:
+fn enum_demo() ~ | StdError:
     let Status success = Status.Success(100)
     let Status failure = Status.Failure("Error message")
     let Status pending = Status.Pending
@@ -324,7 +324,7 @@ fn enum_demo() ~:
 # 16. FUNCTION CALLS AND METHOD CHAINING
 # ============================================================================
 
-fn chaining_demo() ~:
+fn chaining_demo() ~ | StdError:
     # Function calls
     let i32 result = calculate(10, 20, "add")
     print_header("Results")

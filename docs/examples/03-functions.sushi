@@ -19,7 +19,7 @@
 fn calculate_answer(i32 a, i32 b) i32:
     let i32 result = a * b
     # Must explicitly wrap return value in Result.Ok()
-    return Result.Ok(result)
+    return result
 
 # Function with no return value uses the blank type (~).
 # The blank type represents "nothing" or "void".
@@ -27,12 +27,11 @@ fn calculate_answer(i32 a, i32 b) i32:
 fn greet(string name) ~:
     println("Hello, {name}! Welcome aboard the Heart of Gold.")
     # Blank functions return Result.Ok(~) to indicate success
-    return Result.Ok(~)
 
 # Function demonstrating explicit error handling.
 # Can return Result.Err(error_value) to indicate failure.
 # Caller must handle both success and error cases.
-fn divide_pangalactic(i32 numerator, i32 denominator) i32:
+fn divide_pangalactic(i32 numerator, i32 denominator) i32 | StdError:
     # Check for error conditions and return Result.Err(error_value)
     if (denominator == 0):
         println("Error: Can't divide by zero gargle blasters!")
@@ -45,7 +44,7 @@ fn main() i32:
     # Call functions and unwrap results immediately with .realise().
     # .realise(default) unwraps Ok(value) or returns the default if Err.
     # This is safe when you're confident the function will succeed.
-    let i32 answer = calculate_answer(6, 7).realise(0)
+    let i32 answer = calculate_answer(6, 7)
     println("Calculated answer: {answer}")
 
     # Call blank-returning functions.
@@ -77,4 +76,4 @@ fn main() i32:
         # The else branch executes when Result is Err
         println("As expected, division by zero failed")
 
-    return Result.Ok(0)
+    return 0

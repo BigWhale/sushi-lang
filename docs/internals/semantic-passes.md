@@ -110,7 +110,7 @@ struct Pair@(T, U):   # Register generic struct
     U second
 
 fn add(i32 a, i32 b) i32:  # Register signature
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 **Output**, in `SymbolTables` (`semantics/tables.py`):
@@ -194,7 +194,7 @@ Adds two numbers.
 - Parameter q: CE7001 -- there is no parameter called q.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 Eight errors and one warning, all of them always on. `check_docs` is the entry point:
@@ -591,13 +591,13 @@ extend Pair@(T, U) swapped() Pair@(U, T):
     return Pair(self.second.clone(), self.first.clone())
 
 fn first_of@(T, U)(Pair@(T, U) p) T:
-    return Result.Ok(p.first.clone())
+    return p.first.clone()
 
 fn main() i32:
     let Pair@(i32, string) p = Pair(42, "Mostly Harmless")
     let Pair@(string, i32) q = p.swapped()
-    println("{q.first} {q.second} {first_of(p).realise(0)}")
-    return Result.Ok(0)
+    println("{q.first} {q.second} {first_of(p)}")
+    return 0
 ```
 
 **What the program asks for:** the struct instances `Pair@(i32, string)` and
@@ -871,10 +871,10 @@ fn example() i32:
         x := y + 3         # OK: x is in an outer scope
 
     println(y)             # CE1001: use of undeclared identifier 'y'
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    return Result.Ok(example().realise(0))
+    return example()
 ```
 
 ## The `typecheck` pass: type validation
@@ -942,12 +942,12 @@ each block, at the first dead statement, with a note at the statement that ends 
 ```sushi
 fn sign(i32 x) i32:        # CE0107: the path with x == 0 has no return
     if (x > 0):
-        return Result.Ok(1)
+        return 1
     elif (x < 0):
-        return Result.Ok(-1)
+        return -1
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
     println("never")       # CE0140: unreachable statement
 ```
 
@@ -1063,14 +1063,14 @@ the call:
 
 ```sushi
 fn borrow(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let i32 num = 42
-    let i32 got = borrow(peek num).realise(0)
+    let i32 got = borrow(peek num)
     num := 50              # OK: the borrow ended with the call
     println("{num} {got}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A `let` that reads through an owner is a borrow for the rest of its block. A change to
@@ -1086,7 +1086,7 @@ fn main() i32:
     let i32[] view = w.items
     w.items.push(4)        # CE2412: cannot mutate 'w' while 'view' borrows from it
     println(view.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 3. **A borrow needs a stable address**
@@ -1137,11 +1137,9 @@ struct Wrapper:
 
 fn look(i32[] xs) ~:
     println("{xs.len()}")
-    return Result.Ok(~)
 
 fn take(nom i32[] xs) ~:
     println("{xs.len()}")
-    return Result.Ok(~)
 
 fn main() i32:
     let Wrapper w = Wrapper(items: from([1, 2, 3]))
@@ -1150,7 +1148,7 @@ fn main() i32:
     look(borrowed)                # OK: a plain parameter is a borrow too
     take(nom borrowed.clone())    # OK: the callee takes an independent copy
     take(nom borrowed)            # CE2411: cannot consume 'borrowed': another owner keeps this value
-    return Result.Ok(0)
+    return 0
 ```
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`

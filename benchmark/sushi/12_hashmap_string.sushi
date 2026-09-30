@@ -10,4 +10,4 @@ fn main() i32:
         if (m.contains_key("key{i * 3}")):
             total := total + 1
     println("{m.len()} {total}")
-    return Result.Ok(0)
+    return 0

@@ -11,4 +11,4 @@ fn main() i32:
     println("Zaphod < arthur: {'Zaphod' < 'arthur'}")
     println("Ford < Fordo: {'Ford' < 'Fordo'}")
 
-    return Result.Ok(0)
+    return 0

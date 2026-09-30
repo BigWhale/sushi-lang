@@ -81,4 +81,4 @@ fn main() i32:
     let string s2 = 'single quotes'
     println("s1: {s1}, s2: {s2}")
 
-    return Result.Ok(0)
+    return 0

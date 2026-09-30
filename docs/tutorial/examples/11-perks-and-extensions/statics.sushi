@@ -15,4 +15,4 @@ fn main() i32:
     let Vec start = Vec.origin()
     let Vec point = Vec.at(3, 4)
     println("from ({start.x}, {start.y}) the distance squared is {point.length_squared()}")
-    return Result.Ok(0)
+    return 0

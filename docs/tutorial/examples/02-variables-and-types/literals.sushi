@@ -19,4 +19,4 @@ fn main() i32:
     println("grouped decimal 1_000_000: {million}")
     println("grouped float 3.141_592: {pi}")
 
-    return Result.Ok(0)
+    return 0

@@ -34,4 +34,4 @@ fn main() i32:
         Shape.Rectangle(w, h) ->
             println("A rectangle {w} by {h}.")
 
-    return Result.Ok(0)
+    return 0

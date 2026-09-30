@@ -103,4 +103,4 @@ fn main() i32:
     println("4. Cannot mix positional and named (all-or-nothing)")
     println("5. Zero runtime cost (resolved at compile-time)")
 
-    return Result.Ok(0)
+    return 0

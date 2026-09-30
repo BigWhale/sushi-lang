@@ -65,5 +65,5 @@ fn main() i32:
     println("Remaining crew: {ages.len()}")
 
     # HashMap automatically cleans up when it goes out of scope (RAII)
-    return Result.Ok(0)
+    return 0
 

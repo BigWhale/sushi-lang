@@ -528,7 +528,7 @@ extend string say_it() string:
 
 fn make_tag() string:
     let string s = "tag-{1}"
-    return Result.Ok(s.say_it())
+    return s.say_it()
 ```
 
 The backend clears the owned bit of a method's `string` parameter on entry, so a method body

@@ -18,7 +18,7 @@ extend Stack@(T) size() i32:
 extend Stack@(T) mapped@(U)(fn(T) -> U f) Stack@(U) | StdError:
     let Stack@(U) out = Stack.new()
     foreach(x in self.items.iter()):
-        out.push(nom f(x)??)
+        out.push(nom f(x))
     return Result.Ok(out)
 
 fn main() i32:
@@ -38,4 +38,4 @@ fn main() i32:
             Maybe.Some(n) -> println("a name of {n} bytes")
             Maybe.None() -> println("the stack is empty")
 
-    return Result.Ok(0)
+    return 0

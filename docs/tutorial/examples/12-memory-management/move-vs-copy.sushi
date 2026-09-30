@@ -30,4 +30,4 @@ fn main() i32:
     # `source` moved out and cannot be used again.
     println("dest length after move: {dest.len()}")
 
-    return Result.Ok(0)
+    return 0

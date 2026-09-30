@@ -228,7 +228,7 @@ extend Handler with Hashable:
 fn main() i32:
     let HashMap@(Handler, i32) m = HashMap.new()    # CE2055: no equality test
     m.free()
-    return Result.Ok(0)
+    return 0
 ```
 
 To find such a value by a key, use a field that has equality as the key (here the
@@ -246,10 +246,10 @@ fn main() i32:
     let Handler h = Handler(|i32 x| x + 1, 7)
     m.insert(h.id, h)
     match m.get(7):
-        Maybe.Some(found) -> println("{found.run(41).realise(0)}")
+        Maybe.Some(found) -> println("{found.run(41)}")
         Maybe.None -> println("none")
     m.free()
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Hash Function
@@ -324,5 +324,5 @@ fn main() i32:
     println("Total entries: {scores.len()}")
     scores.debug()
 
-    return Result.Ok(0)
+    return 0
 ```

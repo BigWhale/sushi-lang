@@ -3,9 +3,8 @@ fn log_all(string prefix, ...i32 values) ~:
     println("{prefix} ({values.len()} values):")
     foreach(v in values.iter()):
         println("  {v}")
-    return Result.Ok(~)
 
 fn main() i32:
     log_all("readings", 10, 20, 30)
     log_all("empty")
-    return Result.Ok(0)
+    return 0

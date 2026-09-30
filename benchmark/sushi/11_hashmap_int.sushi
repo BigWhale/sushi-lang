@@ -11,4 +11,4 @@ fn main() i32:
             Maybe.Some(v) -> total := total + (v as i64)
             Maybe.None() -> total := total + 0
     println("{m.len()} {total}")
-    return Result.Ok(0)
+    return 0

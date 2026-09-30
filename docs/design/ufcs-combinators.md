@@ -11,7 +11,7 @@ Sushi, shipped in the stdlib, on a general language feature users can also write
 extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
-        out.push(f(x)??)
+        out.push(f(x))
     return Result.Ok(out)   # both constructors are spelled (ruling 6, as reversed)
 ```
 

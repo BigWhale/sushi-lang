@@ -9,4 +9,4 @@ fn main() i32:
         let i32 roll = rand_range(1, 7)
         println("roll {n}: d6 -> {roll}")
 
-    return Result.Ok(0)
+    return 0

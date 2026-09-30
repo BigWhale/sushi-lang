@@ -11,7 +11,7 @@ A MessagePack decoder, written in Sushi: `decode`, the map readers (`map_index`,
 use <encoding/msgpack>
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Overview
@@ -63,17 +63,17 @@ Decode the whole buffer as one value. Trailing bytes after the root value give
 ```sushi
 use <encoding/msgpack>
 
-fn show_or_err(u8[] buf) string:
+fn show_or_err(u8[] buf) string | StdError:
     match decode(buf):
         Result.Ok(v) ->
-            return Result.Ok(show(v)??)
+            return Result.Ok(show(v))
         Result.Err(_) ->
             return Result.Ok("decode error")
 
 fn main() i32:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     println(show_or_err(buf).realise("error"))    # {"a":1,"b":[2]}
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `map_get(MsgValue m, string key) -> Maybe@(MsgValue) | StdError`
@@ -86,11 +86,11 @@ subtree, borrow it through `map_index`. A missing key, a non-string key match, o
 ```sushi
 use <encoding/msgpack>
 
-fn lookup(MsgValue m, string key) string:
-    let Maybe@(MsgValue) found = map_get(m, key)??
+fn lookup(MsgValue m, string key) string | StdError:
+    let Maybe@(MsgValue) found = map_get(m, key)
     match found:
         Maybe.Some(v) ->
-            return Result.Ok(show(v)??)
+            return Result.Ok(show(v))
         Maybe.None() ->
             return Result.Ok("missing")
 
@@ -101,7 +101,7 @@ fn main() i32:
             println(lookup(m, "k").realise("error"))    # 42
         Result.Err(_) ->
             println("decode error")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `map_index(MsgValue m, string key) -> Maybe@(i32) | StdError`
@@ -113,10 +113,10 @@ position to borrow the value in place, inside a `MsgValue.Map(keys, vals)` arm.
 ```sushi
 use <encoding/msgpack>
 
-fn count_items(MsgValue m, string key) i32:
+fn count_items(MsgValue m, string key) i32 | StdError:
     match m:
         MsgValue.Map(_, vals) ->
-            match map_index(m, key)??:
+            match map_index(m, key):
                 Maybe.Some(i) ->
                     match vals[i]:
                         MsgValue.Arr(items) -> return Result.Ok(items.len())
@@ -132,7 +132,7 @@ fn main() i32:
             println(count_items(m, "a").realise(0 - 1))    # 2
         Result.Err(_) ->
             println("decode error")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `map_get_str(MsgValue m, string key) -> Maybe@(string) | StdError`
@@ -145,9 +145,9 @@ value of a different kind, or a non-map argument gives `Maybe.None`.
 ```sushi
 use <encoding/msgpack>
 
-fn describe(MsgValue m) string:
-    let string name = map_get_str(m, "name")??.realise("")
-    let bool on = map_get_bool(m, "on")??.realise(false)
+fn describe(MsgValue m) string | StdError:
+    let string name = map_get_str(m, "name").realise("")
+    let bool on = map_get_bool(m, "on").realise(false)
     return Result.Ok("{name} {on}")
 
 fn main() i32:
@@ -158,7 +158,7 @@ fn main() i32:
             println(describe(m).realise("error"))    # ok true
         Result.Err(_) ->
             println("decode error")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `show(MsgValue v) -> string | StdError`
@@ -184,10 +184,10 @@ Floats render through `.to_bits()` so the output never depends on float formatti
 ```sushi
 use <encoding/msgpack>
 
-fn classify(u8[] buf) string:
+fn classify(u8[] buf) string | StdError:
     match decode(buf):
         Result.Ok(v) ->
-            return Result.Ok(show(v)??)
+            return Result.Ok(show(v))
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->
@@ -202,7 +202,7 @@ fn classify(u8[] buf) string:
 fn main() i32:
     let u8[] truncated = from([0xa5, 0x68])
     println(classify(truncated).realise("error"))    # input ended in the value at byte 1
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Limitations

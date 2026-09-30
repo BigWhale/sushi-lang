@@ -7,6 +7,6 @@ fn main() i32:
     ages.push(42)
     ages.push(200)
     # Everyone gains `crew` years while stuck on the Heart of Gold.
-    let List@(i32) older = map(ages, |i32 a| a + crew).realise(List.new())
+    let List@(i32) older = map(ages, |i32 a| a + crew)
     println(older.get(1).realise(-1))
-    return Result.Ok(0)
+    return 0

@@ -16,4 +16,4 @@ fn main() i32:
     arthur.age := 31
     println("A birthday later, {arthur.name} is {arthur.age}.")
 
-    return Result.Ok(0)
+    return 0

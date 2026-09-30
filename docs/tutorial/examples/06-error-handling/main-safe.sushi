@@ -1,4 +1,4 @@
-fn risky(bool ok) i32:
+fn risky(bool ok) i32 | StdError:
     if (ok):
         return Result.Ok(7)
     return Result.Err(StdError.Error)
@@ -22,4 +22,4 @@ fn main() i32:
     else:
         println("if err")
 
-    return Result.Ok(0)
+    return 0

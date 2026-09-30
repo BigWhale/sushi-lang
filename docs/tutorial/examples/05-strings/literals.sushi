@@ -12,4 +12,4 @@ fn main() i32:
     println('a quote inside singles: can\'t')
     println("a quote inside doubles: \"quoted\"")
 
-    return Result.Ok(0)
+    return 0

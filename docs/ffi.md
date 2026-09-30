@@ -199,12 +199,12 @@ unsafe external "C" as libc because "string length via libc strlen":
 
 # Safe wrapper - normal Sushi, upholds all four guarantees again.
 fn length(string s) i64:
-    return Result.Ok(libc.strlen(s))
+    return libc.strlen(s)
 
 fn main() i32:
-    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    let i64 n = length("Mostly Harmless")
     println("len = {n}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The boundary is sharp: **raw, exempt, namespaced foreign calls inside
@@ -216,7 +216,6 @@ A wrapper that restores RAII for a foreign handle looks like:
 ```sushi
 fn close_handle(ptr h) ~:
     libc.free(h)            # guarantee 2 (RAII) restored by hand
-    return Result.Ok(~)
 ```
 
 A wrapper may also *return* the handle it acquired - `ptr` flows through the
@@ -224,7 +223,7 @@ implicit `Result` wrapping (and through `Maybe@(ptr)`) like any other value:
 
 <!-- docs-sweep: skip (uses the unsafe external block declared earlier on the page) -->
 ```sushi
-fn grab() ptr:
+fn grab() ptr | StdError:
     let ptr p = libc.malloc(8 as i64)
     return Result.Ok(p)
 
@@ -232,7 +231,7 @@ fn main() i32:
     match grab():
         Result.Ok(p) -> libc.free(p)
         Result.Err(_) -> println("alloc failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 Holding a `ptr` is the safe half of the FFI contract (it cannot be dereferenced
@@ -263,17 +262,16 @@ struct Buffer:
     i64 size
 
 fn open_buffer(i64 n) Buffer:
-    return Result.Ok(Buffer(libc.malloc(n), n))
+    return Buffer(libc.malloc(n), n)
 
 fn close_buffer(Buffer b) ~:
     libc.free(b.raw)
-    return Result.Ok(~)
 
 public fn scratch_size(i64 n) i64:
-    let Buffer b = open_buffer(n)??
+    let Buffer b = open_buffer(n)
     let i64 size = b.size
-    close_buffer(b)??
-    return Result.Ok(size)
+    close_buffer(b)
+    return size
 ```
 
 `Buffer`, `open_buffer` and `close_buffer` are private, so their `ptr` is

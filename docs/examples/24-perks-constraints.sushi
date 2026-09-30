@@ -33,11 +33,10 @@ extend Ship with Describable:
 # value can be used by many calls with no copies.
 fn print_description@(T: Describable)(peek T item) ~:
     println(item.describe())
-    return Result.Ok(~)
 
 # Another generic function
 fn get_description@(T: Describable)(peek T item) string:
-    return Result.Ok(item.describe())
+    return item.describe()
 
 fn main() i32:
     println("=== Generic Constraints Example ===")
@@ -57,9 +56,9 @@ fn main() i32:
 
     println("")
     println("3. Getting description as string:")
-    let string desc1 = get_description(peek marvin).realise("")
-    let string desc2 = get_description(peek hog).realise("")
+    let string desc1 = get_description(peek marvin)
+    let string desc2 = get_description(peek hog)
     println("Desc 1: {desc1}")
     println("Desc 2: {desc2}")
 
-    return Result.Ok(0)
+    return 0

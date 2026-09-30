@@ -3,5 +3,5 @@
 fn main() i32:
     let i32 n = 5
     let fn(i32) -> i32 f = |i32 x| x + n
-    println(f(10).realise(0))    # 15
-    return Result.Ok(0)
+    println(f(10))    # 15
+    return 0

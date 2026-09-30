@@ -14,4 +14,4 @@ fn main() i32:
     println("second number: {numbers.second().realise(0)}")
     println("second name: {names.second().realise('nobody')}")
     println("sum: {numbers.sum()}")
-    return Result.Ok(0)
+    return 0

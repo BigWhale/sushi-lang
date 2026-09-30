@@ -7,9 +7,9 @@ unsafe external "C" as libc because "string length via libc strlen":
 # into a Result. The `string` argument is marshalled to a C char* and freed at
 # scope exit, so there is no leak.
 fn length(string s) i64:
-    return Result.Ok(libc.strlen(s))
+    return libc.strlen(s)
 
 fn main() i32:
-    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    let i64 n = length("Mostly Harmless")
     println("len = {n}")
-    return Result.Ok(0)
+    return 0

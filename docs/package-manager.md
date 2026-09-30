@@ -450,7 +450,7 @@ use <lib/mathutils>
 fn main() i32:
     let i32 result = add(10, 20).realise(0)
     println("{result}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Package Directory Structure

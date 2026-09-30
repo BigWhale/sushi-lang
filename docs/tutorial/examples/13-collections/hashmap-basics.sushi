@@ -39,4 +39,4 @@ fn main() i32:
     ages.free()
     println("Entries after free: {ages.len()}")
 
-    return Result.Ok(0)
+    return 0

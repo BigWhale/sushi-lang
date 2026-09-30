@@ -65,7 +65,7 @@ fn main() i32:
     A block that is first in a body documents the function around it.
     :##
     println("{ANSWER}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The unit block is the first item in the **file**, which puts it above the `use` lines. A
@@ -117,7 +117,7 @@ unsafe external "C" as libc because "read the length of a C string":
 fn main() i32:
     let Point p = Point(1, 2)
     println(p.name())
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Attachment
@@ -138,7 +138,7 @@ const i32 ANSWER = 42
 
 fn main() i32:
     println("{ANSWER}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A block that attaches to nothing, and is not the first item in its file, warns. A block
@@ -160,7 +160,7 @@ fn main() i32:
 
         This line stays indented, because its indent is more than the common one.
     :##
-    return Result.Ok(0)
+    return 0
 ```
 
 The indent of the **opening line** is not free. A block is one token, so the compiler

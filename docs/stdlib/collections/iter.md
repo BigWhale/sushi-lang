@@ -57,12 +57,12 @@ fn doubled_sum() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let i32 total = xs.map(|i32 x| x * 2)??.fold(0, |i32 acc, i32 x| acc + x)??
-    return Result.Ok(total)
+    let i32 total = xs.map(|i32 x| x * 2).fold(0, |i32 acc, i32 x| acc + x)
+    return total
 
 fn main() i32:
-    println("{doubled_sum().realise(-1)}")
-    return Result.Ok(0)
+    println("{doubled_sum()}")
+    return 0
 ```
 
 ### `xs.filter(fn(T) -> bool pred) -> List@(T) | StdError`
@@ -96,9 +96,9 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let List@(i32) ys = map(xs, |i32 x| x * factor).realise(List.new())
+    let List@(i32) ys = map(xs, |i32 x| x * factor)
     println(ys.get(2).realise(-1))    # 30
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T) | StdError`
@@ -115,9 +115,9 @@ fn main() i32:
     xs.push(2)
     xs.push(3)
     xs.push(4)
-    let List@(i32) big = filter(xs, |i32 x| x > threshold).realise(List.new())
+    let List@(i32) big = filter(xs, |i32 x| x > threshold)
     println(big.len())    # 2
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U | StdError`
@@ -132,9 +132,9 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let i32 total = fold(xs, 100, |i32 acc, i32 x| acc + x).realise(-1)
+    let i32 total = fold(xs, 100, |i32 acc, i32 x| acc + x)
     println(total)    # 106
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) -> fn(T) -> V`
@@ -151,15 +151,15 @@ over one list works.
 use <collections/iter>
 
 fn inc(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn dbl(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
-    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl).realise(dbl)
-    println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
-    return Result.Ok(0)
+    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl)
+    println(incthendouble(10))    # dbl(inc(10)) = 22
+    return 0
 ```
 
 ## See also

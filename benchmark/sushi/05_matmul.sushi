@@ -16,4 +16,4 @@ fn main() i32:
     foreach(i in 0..n * n):
         total := total + c[i]
     println(total as i64)
-    return Result.Ok(0)
+    return 0

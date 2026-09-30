@@ -128,14 +128,14 @@ value to the callee, write `nom` on the parameter and again at the call site:
 
 ```sushi
 fn eat(nom i32[] items) i32:
-    return Result.Ok(items.len())
+    return items.len()
     # items is freed here -- this function is the owner now
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
-    println(eat(nom data).realise(-1))
+    println(eat(nom data))
     # println(data.len())   # CE2405: data was handed over
-    return Result.Ok(0)
+    return 0
 ```
 
 The marker is at **both** ends, or at neither. When you read `f(s)`, you know that `s` is
@@ -259,12 +259,11 @@ fn swap(poke i32 a, poke i32 b) ~:
     let i32 t = a
     a := b
     b := t
-    return Result.Ok(~)
 
 fn main() i32:
     let i32 num = 42
     swap(poke num, poke num)   # two poke borrows of num at once
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler refuses it with **CE2403: 'num' already has an active poke borrow (only one

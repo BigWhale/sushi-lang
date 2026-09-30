@@ -13,7 +13,7 @@ extend Towel with Drop:
         libc.free(self.raw)
         println("towel freed, {self.size} bytes returned")
 
-fn issue_towel(i64 n) Towel:
+fn issue_towel(i64 n) Towel | StdError:
     return Result.Ok(Towel(libc.malloc(n), n))
 
 fn main() i32:
@@ -21,4 +21,4 @@ fn main() i32:
         Result.Ok(t) -> println("holding a towel of {t.size} bytes")
         Result.Err(_) -> println("no towel today")
     println("end of main")
-    return Result.Ok(0)
+    return 0

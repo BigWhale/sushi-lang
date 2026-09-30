@@ -25,15 +25,15 @@ locals of the function that holds it:
 
 ```sushi
 fn make_adder(i32 n) fn(i32) -> i32:
-    return Result.Ok(|i32 x| x + n)     # captures n by value
+    return |i32 x| x + n     # captures n by value
 
 fn use_adder() i32:
-    let fn(i32) -> i32 add5 = make_adder(5)??
-    return Result.Ok(add5(10)??)        # 15
+    let fn(i32) -> i32 add5 = make_adder(5)
+    return add5(10)        # 15
 
 fn main() i32:
-    println(use_adder().realise(0))
-    return Result.Ok(0)
+    println(use_adder())
+    return 0
 ```
 
 A closure is a `fn(...)`-typed value, the same as a bare function reference. It has the same
@@ -68,12 +68,12 @@ Parameters use the Sushi `type name` form (`|i32 x, string s|`). A **bare-name**
 
 ```sushi
 fn apply(fn(i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(v)??)
+    return f(v)
 
 fn main() i32:
     let i32 scale = 3
-    println(apply(|x| x * scale, 7).realise(0))   # x : i32 inferred from apply's signature -> 21
-    return Result.Ok(0)
+    println(apply(|x| x * scale, 7))   # x : i32 inferred from apply's signature -> 21
+    return 0
 ```
 
 A call through a closure gives a `Result@(T, E)`, the same as a `fn`. Use `??`, `.realise()` or a
@@ -101,8 +101,8 @@ fn main() i32:
     let i32 a = 3
     let i32 b = 4
     let fn(i32) -> i32 f = |x| x + a + b
-    println(f(10).realise(0))    # 17 -- both a and b captured
-    return Result.Ok(0)
+    println(f(10))    # 17 -- both a and b captured
+    return 0
 ```
 
 A value that owns a resource is captured **by move**. This includes a `string` that owns heap
@@ -114,8 +114,8 @@ environment becomes the only owner, and it frees the value when the closure is f
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
     let fn() -> i32 f = |~| nums.len()   # moves nums into f's environment
-    println(f().realise(0))              # 3
-    return Result.Ok(0)
+    println(f())              # 3
+    return 0
 ```
 
 The compiler refuses two shapes with **CE2094**:

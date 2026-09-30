@@ -74,7 +74,6 @@ fn assess_situation(i32 fuel, i32 crew_count, ShipStatus ship) ~:
         println("Fuel: Critical! Need refuel immediately")
 
     # Return blank type wrapped in Result
-    return Result.Ok(~)
 
 fn main() i32:
     # Test Scenario 1: Ideal conditions
@@ -113,4 +112,4 @@ fn main() i32:
     println("=== Scenario 4: Critical ===")
     assess_situation(10, 2, ShipStatus.Destroyed())
 
-    return Result.Ok(0)
+    return 0

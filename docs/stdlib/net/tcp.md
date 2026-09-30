@@ -39,12 +39,12 @@ use <net/tcp>
 
 fn serve(nom TcpStream client) ~:
     println("serving: {client.is_open()}")
-    return Result.Ok(~)          # client closes here
+    return ~          # client closes here
 
 fn main() i32:
     let TcpListener server = listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     println("{server.local_port().realise(0) > 0}")
-    return Result.Ok(0)          # server closes here
+    return 0          # server closes here
 ```
 
 `close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
@@ -79,7 +79,7 @@ fn main() i32:
     match server.share():
         Result.Ok(twin) -> println("two listeners: {twin.is_open() and server.is_open()}")
         Result.Err(_) -> println("no second listener")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `s.send_all(u8[] data) ~ | NetError` and `s.recv_exact(i32 count) u8[] | NetError`
@@ -117,8 +117,8 @@ fn exchange() ~ | NetError:
 
 fn main() i32:
     match exchange():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### `s.send(u8[] data) i32 | NetError`
