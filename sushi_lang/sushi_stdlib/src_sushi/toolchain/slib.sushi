@@ -498,7 +498,7 @@ fn record_fault(MsgValue rec, string kind, string where) Maybe@(string):
             let string name = row.key.clone()
             if (where != ""):
                 name := "{where}.{row.key}"
-            match map_index(rec, row.key).realise(Maybe.None()):
+            match map_index(rec, row.key):
                 Maybe.Some(at) ->
                     match rec:
                         MsgValue.Map(_, vals) ->
@@ -526,7 +526,7 @@ fn is_required(MsgValue rec, Presence presence) bool:
         Presence.Optional() ->
             return false
         Presence.RequiredWhen(flag) ->
-            return map_get_bool(rec, flag).realise(Maybe.None()).realise(false)
+            return map_get_bool(rec, flag).realise(false)
 
 ##:
 Finds why a value does not have a schema type.

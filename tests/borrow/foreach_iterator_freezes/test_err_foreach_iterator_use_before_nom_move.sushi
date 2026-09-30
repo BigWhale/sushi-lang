@@ -2,7 +2,7 @@
 # because of the move that came round the loop. The iterator reports that move
 # (CE2412), and the use is not reported as well (#995).
 # EXPECT_ERROR_CODES_EXACT: CE2412
-# EXPECT_STDERR_CONTAINS: 15:17: error [CE2412]
+# EXPECT_STDERR_CONTAINS: 14:17: error [CE2412]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

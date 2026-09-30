@@ -16,5 +16,5 @@ fn main() i32:
     println(h.f(1))
     let Op o = Op.Apply(gen)
     match o:
-        Op.Apply(g) -> println(g("x").realise(0))
+        Op.Apply(g) -> println(g("x"))
     return 0

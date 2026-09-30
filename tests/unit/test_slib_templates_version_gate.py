@@ -47,7 +47,7 @@ def test_a_version_6_binary_library_is_refused():
 
 def test_the_current_schema_passes():
     _check_library_templates_version(_metadata("binary", TEMPLATES_SCHEMA_VERSION), "new.slib")
-    assert TEMPLATES_SCHEMA_VERSION == 7
+    assert TEMPLATES_SCHEMA_VERSION == 8
 
 
 def test_a_source_library_is_never_gated():

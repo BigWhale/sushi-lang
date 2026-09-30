@@ -6,10 +6,10 @@
 use <encoding/msgpack>
 
 fn lookup(MsgValue m, string key) ~ | StdError:
-    let Maybe@(MsgValue) found = map_get(m, key)??
+    let Maybe@(MsgValue) found = map_get(m, key)
     match found:
         Maybe.Some(v) ->
-            let string shown = show(v)??
+            let string shown = show(v)
             println("{key}={shown}")
         Maybe.None() ->
             println("{key} missing")

@@ -10,7 +10,7 @@ fn doubled_sum() i32 | StdError:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let i32 total = xs.map(|i32 x| x * 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+    let i32 total = xs.map(|i32 x| x * 2).fold(0, |i32 acc, i32 x| acc + x)
     return Result.Ok(total)
 
 fn main() i32:

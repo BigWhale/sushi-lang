@@ -12,7 +12,7 @@ fn main() i32:
     m.insert("add", add)
     println("{m.len()}")
     match m.get("add"):
-        Maybe.Some(f) -> println("{f(2, 3).realise(0)}")
+        Maybe.Some(f) -> println("{f(2, 3)}")
         Maybe.None -> println("none")
     m.free()
     return 0

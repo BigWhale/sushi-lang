@@ -19,10 +19,10 @@ fn g3@(T)(T x) i32:
 fn main() i32:
     println(l.apply(g1))
     let l.Holder h = l.Holder(g2)
-    println(h.f(1).realise(0))
+    println(h.f(1))
     let l.Op o = l.Op.Apply(g3)
     match o:
-        l.Op.Apply(g) -> println(g(1).realise(0))
+        l.Op.Apply(g) -> println(g(1))
     let l.Holder k = l.Holder(l.gen)
-    println(k.f(1).realise(0))
+    println(k.f(1))
     return 0

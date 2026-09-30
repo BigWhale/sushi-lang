@@ -361,7 +361,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 generic_call_result_type)
             substituted = generic_call_result_type(self.type_validator, node, generic_func)
             if substituted is not None:
-                return self._materialize_wrapper(substituted)
+                # A bare generic answers its substituted return, which may still be a
+                # spelling (`Crate`); a receiver chained on it needs the named type.
+                from sushi_lang.semantics.passes.types.utils import resolve_declared_type
+                return resolve_declared_type(self.type_validator,
+                                             self._materialize_wrapper(substituted))
 
         from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
         if function_name == ERRNO_FUNCTION:

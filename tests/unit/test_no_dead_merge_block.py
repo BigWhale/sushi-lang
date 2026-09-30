@@ -58,7 +58,7 @@ def test_the_detector_sees_a_dead_block():
 
 def test_the_default_return_is_an_internal_error():
     helpers = FunctionHelpers(SimpleNamespace())  # type: ignore[arg-type]
-    fn = SimpleNamespace(name="sign", ret=object())
+    fn = SimpleNamespace(name="sign", ret=None, err_type=None, resolved_result=None)
     with pytest.raises(InternalCompilerError) as caught:
-        helpers.emit_default_return(fn)  # type: ignore[arg-type]
+        helpers.emit_fall_off(fn)  # type: ignore[arg-type]
     assert caught.value.code == "CE0015"

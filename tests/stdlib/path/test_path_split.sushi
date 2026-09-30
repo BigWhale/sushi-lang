@@ -8,8 +8,8 @@ fn main() i32:
     println(basename("/a/b.txt"))
     println(basename("a/"))
     println(basename("file"))
-    println(dirname("/a/b.txt").realise("?"))
-    println(dirname("a/b").realise("?"))
-    println(dirname("/").realise("?"))
-    println(dirname("file").realise("?"))
+    println(dirname("/a/b.txt"))
+    println(dirname("a/b"))
+    println(dirname("/"))
+    println(dirname("file"))
     return 0

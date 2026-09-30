@@ -4,15 +4,15 @@
 perk Tagged:
     fn tagit() i32
 
-fn tag(i32 n) i32:
-    return n
+fn tag(i32 n) i32 | StdError:
+    return Result.Ok(n)
 
 struct P:
     i32 n
 
 extend P with Tagged:
     fn tagit() i32:
-        return tag(self.n)
+        return tag(self.n)??
 
 fn main() i32:
     let P p = P(4)

@@ -2,8 +2,8 @@
 # container after the move in the SAME round is a use after move of its own, and it is
 # still CE2405 (#995).
 # EXPECT_ERROR_CODES_EXACT: CE2412, CE2405
-# EXPECT_STDERR_CONTAINS: 16:17: error [CE2412]
-# EXPECT_STDERR_CONTAINS: 17:17: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 15:17: error [CE2412]
+# EXPECT_STDERR_CONTAINS: 16:17: error [CE2405]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

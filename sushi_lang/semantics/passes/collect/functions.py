@@ -830,8 +830,8 @@ class FunctionCollector:
         """
         from sushi_lang.semantics.channel import has_channel
         if is_explicit_result_type(ret_ty) and fn.err_type is not None:
-            err_type_name = getattr(fn.err_type, "name", str(fn.err_type))
-            er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
+            from sushi_lang.semantics.generics.type_display import display_type
+            er.emit(self.r, ERR.CE2085, ret_span, err_type=display_type(fn.err_type))
         if not has_channel(fn) and fn.body is not None:
             reject_try_in_body(self.r, fn.body, f"function '{fn.name}'")
 

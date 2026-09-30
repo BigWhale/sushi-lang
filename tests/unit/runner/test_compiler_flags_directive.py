@@ -19,7 +19,7 @@ from test_metadata import parse_test_metadata
 
 def _fixture(tmp_path: Path, header: str, name: str = "test_flags.sushi") -> Path:
     path = tmp_path / name
-    path.write_text(header + "\nfn main() i32:\n    return Result.Ok(0)\n",
+    path.write_text(header + "\nfn main() i32:\n    return 0\n",
                     encoding="utf-8")
     return path
 
@@ -67,5 +67,5 @@ def test_a_directive_below_the_header_block_is_not_read(tmp_path):
     """Every directive lives in the LEADING comment block, and this one is no different."""
     path = tmp_path / "test_flags.sushi"
     path.write_text("fn main() i32:\n    # COMPILER_FLAGS: --warn-missing-docs\n"
-                    "    return Result.Ok(0)\n", encoding="utf-8")
+                    "    return 0\n", encoding="utf-8")
     assert parse_test_metadata(path).compiler_flags == []

@@ -17,4 +17,4 @@ unsafe external "C" as libc because "the leak is the point; this fixture must le
 fn main() i32:
     libc.malloc(4096 as i64)
     println("leak fixture ran")
-    return Result.Ok(0)
+    return 0

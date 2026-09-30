@@ -12,8 +12,8 @@ use <toolchain/slib>
 fn main() i32:
     match read_library("demo.slib"):
         Result.Ok(library) ->
-            let string name = map_get_str(library.metadata, "library_name").realise(Maybe.None()).realise("?")
-            let string kind = map_get_str(library.metadata, "kind").realise(Maybe.None()).realise("?")
+            let string name = map_get_str(library.metadata, "library_name").realise("?")
+            let string kind = map_get_str(library.metadata, "kind").realise("?")
             println("{name} {kind} {library.sizes.source > 0} {library.sizes.bitcode}")
         Result.Err(_) ->
             println("a fault")

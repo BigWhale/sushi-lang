@@ -19,21 +19,21 @@ import enhanced_test_runner
 from run_tests import SPELLING_GATE_ENV, build_leakcheck
 from test_metadata import parse_test_metadata
 
-PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return Result.Ok(0)\n'
-EXITS_3 = "fn main() i32:\n    return Result.Ok(3)\n"
-EXITS_0 = "fn main() i32:\n    return Result.Ok(0)\n"
+PRINTS = 'fn main() i32:\n    println("Mostly Harmless")\n    return 0\n'
+EXITS_3 = "fn main() i32:\n    return 3\n"
+EXITS_0 = "fn main() i32:\n    return 0\n"
 WRITES_STDERR = (
     "use <io/fs>\n\n"
     "fn main() i32:\n"
     '    match stderr.write("Mostly Harmless\\n"):\n'
-    "        Result.Ok(_) -> return Result.Ok(0)\n"
-    "        Result.Err(_) -> return Result.Ok(4)\n"
+    "        Result.Ok(_) -> return 0\n"
+    "        Result.Err(_) -> return 4\n"
 )
-WARNS = "fn main() i32:\n    let i32 x = 1\n    return Result.Ok(0)\n"
-UNDECLARED = "fn main() i32:\n    println(y)\n    return Result.Ok(0)\n"
+WARNS = "fn main() i32:\n    let i32 x = 1\n    return 0\n"
+UNDECLARED = "fn main() i32:\n    println(y)\n    return 0\n"
 # Three diagnostics: CW1001, CE1001 and CE2002.
-THREE_CODES = "fn main() i32:\n    let i32 x = y<3\n    return Result.Ok(0)\n"
-UNDOCUMENTED = "fn helper() i32:\n    return Result.Ok(1)\n\n" + EXITS_0
+THREE_CODES = "fn main() i32:\n    let i32 x = y<3\n    return 0\n"
+UNDOCUMENTED = "fn helper() i32:\n    return 1\n\n" + EXITS_0
 # The unit name is user text, and the spelling gate reads `a<b` as an interned type name.
 TRIPS_THE_SPELLING_GATE = 'use "a<b"\n\n' + EXITS_0
 

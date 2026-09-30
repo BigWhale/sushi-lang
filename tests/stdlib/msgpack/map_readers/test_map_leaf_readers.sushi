@@ -8,19 +8,19 @@
 use <encoding/msgpack>
 
 fn show_index(MsgValue m, string key) ~ | StdError:
-    match map_index(m, key)??:
+    match map_index(m, key):
         Maybe.Some(i) -> println("index {key}={i}")
         Maybe.None() -> println("index {key}=none")
     return Result.Ok(~)
 
 fn show_str(MsgValue m, string key) ~ | StdError:
-    match map_get_str(m, key)??:
+    match map_get_str(m, key):
         Maybe.Some(s) -> println("str {key}={s}")
         Maybe.None() -> println("str {key}=none")
     return Result.Ok(~)
 
 fn show_bool(MsgValue m, string key) ~ | StdError:
-    match map_get_bool(m, key)??:
+    match map_get_bool(m, key):
         Maybe.Some(b) -> println("bool {key}={b}")
         Maybe.None() -> println("bool {key}=none")
     return Result.Ok(~)
@@ -40,13 +40,13 @@ fn check_map(MsgValue m) ~ | StdError:
     return Result.Ok(~)
 
 fn check_scalar(MsgValue v) ~ | StdError:
-    match map_index(v, "s")??:
+    match map_index(v, "s"):
         Maybe.Some(_) -> println("scalar index=some")
         Maybe.None() -> println("scalar index=none")
-    match map_get_str(v, "s")??:
+    match map_get_str(v, "s"):
         Maybe.Some(_) -> println("scalar str=some")
         Maybe.None() -> println("scalar str=none")
-    match map_get_bool(v, "s")??:
+    match map_get_bool(v, "s"):
         Maybe.Some(_) -> println("scalar bool=some")
         Maybe.None() -> println("scalar bool=none")
     return Result.Ok(~)

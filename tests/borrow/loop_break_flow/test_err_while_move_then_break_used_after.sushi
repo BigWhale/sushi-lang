@@ -1,7 +1,7 @@
 # The facts of a `break` path reach the code after the loop: a move, a `break`, then a
 # use after the loop is CE2405 at the use (#993).
 # EXPECT_ERROR_CODES_EXACT: CE2405
-# EXPECT_STDERR_CONTAINS: 18:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 17:13: error [CE2405]
 
 fn eat(nom i32[] a) ~:
     println(a.len())

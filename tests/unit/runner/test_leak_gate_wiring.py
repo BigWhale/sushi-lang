@@ -70,7 +70,7 @@ def test_check_leaks_runs_without_any_leak_flag(tmp_path, monkeypatch):
         "\n"
         "fn main() i32:\n"
         '    println("Mostly Harmless")\n'
-        "    return Result.Ok(0)\n",
+        "    return 0\n",
         encoding="utf-8",
     )
 

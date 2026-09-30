@@ -28,7 +28,7 @@ def channel_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
     writes `| E` or returns an explicit `Result@(T, E)` (docs/design/error-channel.md).
     A spelled Result return arrives as the resolve pass's stamp (#857).
     """
-    from sushi_lang.semantics.channel import declared_return
+    from sushi_lang.semantics.channel import declared_return, spells_result
     from sushi_lang.semantics.generics.results import is_result_enum, signature_result_arms
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
@@ -36,6 +36,10 @@ def channel_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
     if is_result_enum(stamped):
         return stamped
     ret = declared_return(fn)
+    if hasattr(fn, "resolved_result") and spells_result(ret) and not is_result_enum(ret):
+        # A function's spelled return is interned by the resolve pass, never here (#857).
+        raise_internal_error(
+            "CE0015", message=f"{fn.name}: a spelled Result return reached the backend unstamped")
     if is_result_enum(ret):
         return ret
     arms = signature_result_arms(ret, getattr(fn, "err_type", None))

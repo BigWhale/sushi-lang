@@ -27,7 +27,7 @@ BAD_HEADERS = [
 
 def _write(tmp_path: Path, header: str) -> Path:
     path = tmp_path / "test_probe.sushi"
-    path.write_text(header + "\nfn main() i32:\n    return Result.Ok(0)\n", encoding="utf-8")
+    path.write_text(header + "\nfn main() i32:\n    return 0\n", encoding="utf-8")
     return path
 
 

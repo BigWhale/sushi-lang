@@ -308,7 +308,7 @@ Decodes one whole buffer as exactly one value.
 ```sushi
 let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
 match decode(buf):
-    Result.Ok(v) -> println(show(v)??)
+    Result.Ok(v) -> println(show(v))
     Result.Err(_) -> println("decode error")
 ```
 :##
@@ -343,15 +343,15 @@ a copy of it.
 - Returns: The position of the key, or `Maybe.None()` when the key is absent or `m` is not
   a map.
 :##
-public fn map_index(MsgValue m, string key) Maybe@(i32) | StdError:
+public fn map_index(MsgValue m, string key) Maybe@(i32):
     match m:
         MsgValue.Map(keys, _) ->
             foreach(i in 0..keys.len()):
                 if (is_key(keys[i], key)):
-                    return Result.Ok(Maybe.Some(i))
-            return Result.Ok(Maybe.None())
+                    return Maybe.Some(i)
+            return Maybe.None()
         _ ->
-            return Result.Ok(Maybe.None())
+            return Maybe.None()
 
 ##:
 The value under a string key, as a deep copy. The tree does not change.
@@ -363,14 +363,14 @@ without a copy, use `map_index`.
 - Parameter key: The string key to find.
 - Returns: A copy of the value, or `Maybe.None()` when the key is absent or `m` is not a map.
 :##
-public fn map_get(MsgValue m, string key) Maybe@(MsgValue) | StdError:
+public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
         MsgValue.Map(_, vals) ->
-            match map_index(m, key)??:
-                Maybe.Some(i) -> return Result.Ok(Maybe.Some(vals[i].clone()))
-                Maybe.None() -> return Result.Ok(Maybe.None())
+            match map_index(m, key):
+                Maybe.Some(i) -> return Maybe.Some(vals[i].clone())
+                Maybe.None() -> return Maybe.None()
         _ ->
-            return Result.Ok(Maybe.None())
+            return Maybe.None()
 
 ##:
 The string under a string key. Only the string is copied, never the map.
@@ -380,17 +380,17 @@ The string under a string key. Only the string is copied, never the map.
 - Returns: The `Str` payload, or `Maybe.None()` when the key is absent, its value is not a
   `Str`, or `m` is not a map.
 :##
-public fn map_get_str(MsgValue m, string key) Maybe@(string) | StdError:
+public fn map_get_str(MsgValue m, string key) Maybe@(string):
     match m:
         MsgValue.Map(_, vals) ->
-            match map_index(m, key)??:
+            match map_index(m, key):
                 Maybe.Some(i) ->
                     match vals[i]:
-                        MsgValue.Str(s) -> return Result.Ok(Maybe.Some(s.clone()))
-                        _ -> return Result.Ok(Maybe.None())
-                Maybe.None() -> return Result.Ok(Maybe.None())
+                        MsgValue.Str(s) -> return Maybe.Some(s.clone())
+                        _ -> return Maybe.None()
+                Maybe.None() -> return Maybe.None()
         _ ->
-            return Result.Ok(Maybe.None())
+            return Maybe.None()
 
 ##:
 The bool under a string key.
@@ -400,17 +400,17 @@ The bool under a string key.
 - Returns: The `Bool` payload, or `Maybe.None()` when the key is absent, its value is not a
   `Bool`, or `m` is not a map.
 :##
-public fn map_get_bool(MsgValue m, string key) Maybe@(bool) | StdError:
+public fn map_get_bool(MsgValue m, string key) Maybe@(bool):
     match m:
         MsgValue.Map(_, vals) ->
-            match map_index(m, key)??:
+            match map_index(m, key):
                 Maybe.Some(i) ->
                     match vals[i]:
-                        MsgValue.Bool(b) -> return Result.Ok(Maybe.Some(b))
-                        _ -> return Result.Ok(Maybe.None())
-                Maybe.None() -> return Result.Ok(Maybe.None())
+                        MsgValue.Bool(b) -> return Maybe.Some(b)
+                        _ -> return Maybe.None()
+                Maybe.None() -> return Maybe.None()
         _ ->
-            return Result.Ok(Maybe.None())
+            return Maybe.None()
 
 ##:
 Writes a value on one line. The output is the same on each run.
@@ -421,41 +421,41 @@ A string shows between double quotes, with no escapes.
 - Parameter v: The value to show.
 - Returns: The text.
 :##
-public fn show(MsgValue v) string | StdError:
+public fn show(MsgValue v) string:
     match v:
         MsgValue.Nil() ->
-            return Result.Ok("nil")
+            return "nil"
         MsgValue.Bool(b) ->
             if (b):
-                return Result.Ok("true")
-            return Result.Ok("false")
+                return "true"
+            return "false"
         MsgValue.Int(n) ->
-            return Result.Ok("{n}")
+            return "{n}"
         MsgValue.UInt(n) ->
-            return Result.Ok("{n}u")
+            return "{n}u"
         MsgValue.Float(x) ->
-            return Result.Ok("f64({x.to_bits()})")
+            return "f64({x.to_bits()})"
         MsgValue.Str(s) ->
-            return Result.Ok("\"{s}\"")
+            return "\"{s}\""
         MsgValue.Bin(bytes) ->
             let string[] bin_parts = from([])
             foreach(b in bytes.iter()):
                 bin_parts.push("{b}")
             let string bin_body = ",".join(bin_parts)
-            return Result.Ok("bin({bin_body})")
+            return "bin({bin_body})"
         MsgValue.Arr(items) ->
             let string[] arr_parts = from([])
             foreach(item in items.iter()):
-                arr_parts.push(show(item)??)
+                arr_parts.push(show(item))
             let string arr_body = ",".join(arr_parts)
-            return Result.Ok("[{arr_body}]")
+            return "[{arr_body}]"
         MsgValue.Map(keys, vals) ->
             let string open_brace = '{'
             let string close_brace = '}'
             let string[] map_parts = from([])
             foreach(k in 0..keys.len()):
-                let string ks = show(keys[k])??
-                let string vs = show(vals[k])??
+                let string ks = show(keys[k])
+                let string vs = show(vals[k])
                 map_parts.push("{ks}:{vs}")
             let string map_body = ",".join(map_parts)
-            return Result.Ok("{open_brace}{map_body}{close_brace}")
+            return "{open_brace}{map_body}{close_brace}"
