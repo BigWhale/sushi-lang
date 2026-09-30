@@ -1,0 +1,4 @@
+# `main` has no error channel: `| StdError` on it is refused (CE0106).
+# EXPECT_ERROR_CODES_EXACT: CE0106
+fn main() i32 | StdError:
+    return Result.Ok(0)

@@ -1,0 +1,12 @@
+# A SOURCE library's bare `double` yields the value, so `??` on its call is refused at
+# the consumer (CE2507).
+# BUILD_LIB: bare_src_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2507
+use <lib/bare_src_lib>
+
+fn run() i32 | StdError:
+    return Result.Ok(double(4)??)
+
+fn main() i32:
+    println(run().realise(0))
+    return 0

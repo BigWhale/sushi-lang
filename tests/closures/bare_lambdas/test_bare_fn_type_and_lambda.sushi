@@ -1,0 +1,15 @@
+# A function type without `| E` is bare. A lambda of that type answers the value, and
+# the call through the value yields it with no Result to unwrap. A block body returns
+# the value with a bare `return`.
+# EXPECT_STDOUT_EXACT: "11\n20\n"
+# EXPECT_STDERR_EMPTY: true
+fn apply(fn(i32) -> i32 f, i32 x) i32:
+    return f(x)
+
+fn main() i32:
+    let fn(i32) -> i32 inc = |i32 x| x + 1
+    let fn(i32) -> i32 dbl = |i32 x|:
+        return x * 2
+    println(apply(inc, 10))
+    println(dbl(10))
+    return 0

@@ -1,0 +1,9 @@
+# The call of a bare function yields the value, not a Result, so `.realise(...)` on it
+# names a method the value does not have (CE2008).
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn answer() i32:
+    return 42
+
+fn main() i32:
+    println(answer().realise(0))
+    return 0

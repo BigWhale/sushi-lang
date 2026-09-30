@@ -1,0 +1,11 @@
+# A generic function without `| E` is bare too, in every instance.
+# EXPECT_STDOUT_EXACT: "7 towel\n"
+# EXPECT_STDERR_EMPTY: true
+fn first@(T)(nom T a, nom T b) T:
+    return a
+
+fn main() i32:
+    let i32 n = first(7, 8)
+    let string s = first("towel", "fish")
+    println("{n} {s}")
+    return 0

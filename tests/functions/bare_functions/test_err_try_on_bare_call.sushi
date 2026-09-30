@@ -1,0 +1,12 @@
+# The call of a bare function yields the value, not a Result, so `??` on it is refused
+# (CE2507).
+# EXPECT_ERROR_CODES_EXACT: CE2507
+fn answer() i32:
+    return 42
+
+fn run() i32 | StdError:
+    return Result.Ok(answer()??)
+
+fn main() i32:
+    println(run().realise(0))
+    return 0

@@ -1,0 +1,7 @@
+# A bare block lambda returns its value: `return Result.Ok(...)` is refused (CE2091).
+# EXPECT_ERROR_CODES_EXACT: CE2091
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 v|:
+        return Result.Ok(v + 1)
+    println(f(1))
+    return 0

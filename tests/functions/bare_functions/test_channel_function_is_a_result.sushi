@@ -1,0 +1,17 @@
+# A function that writes `| E` has a channel: the call yields `Result@(T, E)`, and the
+# body spells both constructors.
+# EXPECT_STDOUT_EXACT: "ok 3\nerr\n"
+fn parse(i32 x) i32 | StdError:
+    if (x < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x)
+
+fn main() i32:
+    let Result@(i32, StdError) a = parse(3)
+    match a:
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("err")
+    match parse(-1):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("err")
+    return 0

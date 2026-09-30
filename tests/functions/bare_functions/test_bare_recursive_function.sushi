@@ -1,0 +1,10 @@
+# A bare function calls itself with no unwrap.
+# EXPECT_STDOUT_EXACT: "120\n"
+fn factorial(i32 n) i32:
+    if (n <= 1):
+        return 1
+    return n * factorial(n - 1)
+
+fn main() i32:
+    println(factorial(5))
+    return 0
