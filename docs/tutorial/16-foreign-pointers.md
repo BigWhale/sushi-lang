@@ -99,7 +99,7 @@ The boundary has four more tools, and the [FFI guide](../ffi.md) shows each one:
 - **A C global.** `var i32 optind = "optind"` in the block declares a C global variable.
   `libc.optind` reads it, and a write is `CE5016`.
 - **A link name that is a constant.** `fn stat(string p, ptr buf) i32 = STAT_SYMBOL` takes
-  the symbol from `<sys/platform>`, because `stat` has another name on macOS x86_64.
+  the symbol from `<sys/platform>`, because a platform can give `stat` another name.
 
 ## What a `ptr` refuses to do
 

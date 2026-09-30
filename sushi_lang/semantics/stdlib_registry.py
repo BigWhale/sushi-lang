@@ -22,7 +22,7 @@ _SRC_SUSHI_ROOT = Path(__file__).resolve().parent.parent / "sushi_stdlib" / "src
 PLATFORM_SOURCE_MODULES: Dict[str, Dict[str, Path]] = {
     "sys/platform": {
         key: _SRC_SUSHI_ROOT / "_platform" / f"{key}.sushi"
-        for key in ("darwin_arm64", "darwin_x86_64", "linux_x86_64")
+        for key in ("darwin_arm64", "linux_x86_64")
     },
 }
 

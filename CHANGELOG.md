@@ -22,7 +22,7 @@ All notable changes to Sushi Lang will be documented in this file.
 - **`<sys/platform>`** holds the platform constants for Sushi source: the `open` flags,
   the `stat`, `dirent`, `timeval` and `addrinfo` layouts, the clock ids, the socket
   options, the errno numbers and the `stat` link names. The compiler selects one file per
-  host (macOS arm64, macOS x86_64, Linux x86_64); another host is `CE3021`. The link name
+  host (macOS arm64, Linux x86_64); another host is `CE3021`. The link name
   of an extern may be a string constant (`= STAT_SYMBOL`); another type is `CE5015`.
 - **`var T name = "symbol"` in an `unsafe external` block** declares a read-only C global
   (`libc.environ`). A write is `CE5016`.
@@ -32,6 +32,9 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A temporary string given to an `unsafe external` function is freed.** The marshalled
+  `char*` was freed at scope exit, but the Sushi string it was copied from had no owner,
+  so `libc.strlen("{n}")` leaked it.
 - **`<collections/iter>` takes an owning element and an owning accumulator.** The free
   `filter` over a `List@(string)` was CE2411, and every `fold` with a `string` accumulator
   was CE2426 and CE2411. Both diagnostics pointed into the stdlib source. `filter` now

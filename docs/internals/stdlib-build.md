@@ -197,8 +197,7 @@ compile-time function metadata). `compiler/loader.py` is unrelated — it handle
 
 A source module may have one file per platform and architecture (#1089). The first one
 is `<sys/platform>`. `PLATFORM_SOURCE_MODULES` (`semantics/stdlib_registry.py`) maps the
-module name to a file for each host key (`darwin_arm64`, `darwin_x86_64`,
-`linux_x86_64`), and `platform_key()` spells the host from Python's `platform` module.
+module name to a file for each host key (`darwin_arm64`, `linux_x86_64`), and `platform_key()` spells the host from Python's `platform` module.
 `SOURCE_STDLIB_MODULES` holds the host's file under the module name, so every other
 reader (the injector, the namespaces pass, the doc-block gate and the dead-code gate)
 sees an ordinary source module. On a host with no file the name stays known, and the
@@ -209,8 +208,9 @@ compilation: a platform file holds `public const` declarations only, and a modul
 needs a value writes `use <sys/platform>` and names the constant. A symbol that differs
 per platform is a `public const string` too, because the link name after `=` in an
 `unsafe external` declaration accepts a string constant (`docs/ffi.md`, "Link-name
-separation"). `docs/stdlib/platform.md` lists what the files hold and how the probe makes
-them.
+separation"). `docs/stdlib/platform.md` lists what the files hold, how the probe makes
+them, and how the fixtures under `tests/stdlib/platform/` test each value against the
+host's C library.
 
 ## Adding a New Stdlib Module
 

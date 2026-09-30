@@ -1,0 +1,31 @@
+# The `dirent.d_name` offset and the `readdir` link name of `<sys/platform>` are right for
+# this host (#1089): a walk of the fixture's directory finds the file beside it.
+# RUN_IN_FIXTURE_DIR
+# EXPECT_STDOUT_EXACT: "DIRENT_NAME_OFFSET: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "walking a directory":
+    fn opendir(string path) Maybe@(ptr) = "opendir"
+    fn readdir(ptr dir) Maybe@(ptr) = READDIR_SYMBOL
+    fn closedir(ptr dir) i32 = "closedir"
+
+fn finds(ptr dir, string wanted) bool:
+    while (true):
+        match libc.readdir(dir):
+            Maybe.Some(entry) ->
+                if (entry.to_string(DIRENT_NAME_OFFSET) == wanted):
+                    return Result.Ok(true)
+            Maybe.None -> return Result.Ok(false)
+    return Result.Ok(false)
+
+fn main() i32:
+    match libc.opendir("."):
+        Maybe.Some(dir) ->
+            let bool found = finds(dir, "towel.txt").realise(false)
+            let i32 closed = libc.closedir(dir)
+            return Result.Ok(expect_true("DIRENT_NAME_OFFSET", found and closed == 0).realise(1))
+        Maybe.None -> println("opendir failed")
+    return Result.Ok(1)

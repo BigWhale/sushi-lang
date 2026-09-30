@@ -1,28 +1,23 @@
-"""The `<sys/platform>` files agree with each other and with the host (#1089).
+"""The `<sys/platform>` files declare one and the same set of names (#1089).
 
 A per-platform module is one bundled file per platform and architecture, and a module
 that imports it names a constant without knowing which file the compiler picked. So
-every file declares the same names, of the same types, in the same order. The values
-come from `tests/platform_probe/probe.c`, and the host's file must be exactly what the
-probe prints when it is compiled on the host: a value copied by hand, or a probe edit
-with no new file, fails here on the platform it is wrong for.
+every file declares the same names, of the same types, in the same order. This reads the
+files as text and nothing else.
 
-This reads the files as text and compiles C. It starts no Sushi compiler.
+The VALUES are not checked here. The fixtures under `tests/stdlib/platform/` ask C for
+them on each CI platform, and `tests/platform_probe/compare.py` compares the host's file
+with the probe by hand.
 """
 from __future__ import annotations
 
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from sushi_lang.semantics.stdlib_registry import (
-    PLATFORM_SOURCE_MODULES, platform_key, platform_source)
+from sushi_lang.semantics.stdlib_registry import PLATFORM_SOURCE_MODULES
 
-ROOT = Path(__file__).resolve().parents[2]
-PROBE = ROOT / "tests" / "platform_probe" / "probe.c"
 DECLARATION = re.compile(r"^public const (\w+) (\w+) = ", re.MULTILINE)
 FILES = PLATFORM_SOURCE_MODULES["sys/platform"]
 
@@ -53,17 +48,3 @@ def test_every_constant_has_a_doc_block(key):
                     if line.startswith("public const ")
                     and not lines[index - 1].rstrip().endswith(":##")]
     assert not undocumented, f"{key}: no doc block above {undocumented}"
-
-
-def test_the_host_file_is_what_the_probe_prints(tmp_path):
-    source = platform_source("sys/platform")
-    assert source is not None, f"no <sys/platform> file for the host {platform_key()}"
-    compiler = shutil.which("cc")
-    assert compiler is not None, "the platform probe needs a C compiler, `cc`"
-    binary = tmp_path / "probe"
-    subprocess.run([compiler, str(PROBE), "-o", str(binary)], check=True)
-    printed = subprocess.run([str(binary)], check=True, capture_output=True,
-                             text=True).stdout
-    assert printed == source.read_text(encoding="utf-8"), (
-        f"{source.name} is not what the probe prints on {platform_key()}; "
-        f"regenerate it: cc {PROBE.relative_to(ROOT)} -o probe && ./probe > {source}")

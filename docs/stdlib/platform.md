@@ -208,11 +208,11 @@ the bundled file for the host:
 | Host | File |
 |---|---|
 | macOS on Apple Silicon | `src_sushi/_platform/darwin_arm64.sushi` |
-| macOS on x86_64 | `src_sushi/_platform/darwin_x86_64.sushi` |
 | Linux on x86_64 | `src_sushi/_platform/linux_x86_64.sushi` |
 
-Any other host is `CE3021`. Linux on aarch64 has no file, because Linux ships and is
-tested as x86_64 only.
+Any other host is `CE3021`. A file exists only for a platform that a CI job tests, so
+that its values are checked against that platform's C library. macOS on x86_64 and
+Linux on aarch64 have no file.
 
 Each file holds `public const` declarations and nothing else, and every file declares the
 same names of the same types in the same order:
@@ -220,7 +220,8 @@ same names of the same types in the same order:
 - the `open` flags (`O_RDONLY` ... `O_APPEND`) and the `lseek` whences;
 - the `struct stat` size, the offsets and widths of `st_mode`, `st_size`, the times, the
   file type bits (`S_IFMT`, `S_IFREG`, ...), and `dirent.d_name`;
-- the link names of `stat`, `lstat` and `readdir` (`stat$INODE64` on macOS x86_64);
+- the link names of `stat`, `lstat` and `readdir` (the same on both files today; a
+  platform with another name, such as `stat$INODE64` on macOS x86_64, gets its own);
 - the clock ids, and the `timespec` and `timeval` layouts;
 - the socket constants: families, types, levels, options, the `addrinfo` and `sockaddr`
   offsets, and the SIGPIPE pair (`SO_NOSIGPIPE`, `MSG_NOSIGNAL`, 0 where a platform has
@@ -247,12 +248,30 @@ fn main() i32:
 **Where the values come from.** `tests/platform_probe/probe.c` prints a whole platform
 file, with `offsetof`, `sizeof` and the C headers of the host it is compiled on. To make
 or refresh a file, compile the probe on that host: `cc tests/platform_probe/probe.c -o
-probe && ./probe > sushi_lang/sushi_stdlib/src_sushi/_platform/<host>.sushi`. The macOS
-x86_64 file is made with `cc -arch x86_64` (Rosetta runs it), and the Linux file in the
-`linux/amd64` container. `tests/unit/test_platform_files.py` compiles the probe on the
-host of the test run and requires the host's file to be exactly what it prints, and it
-requires the three files to declare the same names. So the macOS CI checks the macOS
-arm64 file and the Linux CI checks the Linux file.
+probe && ./probe > sushi_lang/sushi_stdlib/src_sushi/_platform/<host>.sushi`. The Linux
+file is made in the `linux/amd64` container.
+
+**How the values are tested.** Three checks, each for another fault:
+
+- **The fixtures ask C.** `tests/stdlib/platform/` causes each behaviour a constant
+  names and compares the answer with the constant: `open` with the flags, `lseek` with
+  the whences, both clocks, each file and socket errno caused on purpose, `stat` and
+  `lstat` of a file, a directory and a link, a `readdir` walk, the `addrinfo` and
+  `sockaddr` fields of a numeric `getaddrinfo`, and each socket option set and read back.
+  They run in the Linux CI and in the macOS CI, so each platform checks its own file
+  against its own C library. A value that is wrong for the host fails them.
+- **The files agree.** `tests/unit/test_platform_files.py` reads the files as text: each
+  declares the same names of the same types in the same order, each with a doc block.
+- **The probe, by hand.** `python tests/platform_probe/compare.py` compiles the probe on
+  the host and compares its `name = value` pairs with the host's file. It finds drift (a
+  hand edit, a probe edit with no new file). Like `tests/docs_sweep.py`, it is not a CI
+  job.
+
+A few values have no fixture, because no test can cause them on every machine:
+`EINTR`, `EIO`, `EPERM`, `EACCES` (a CI container runs as root), `ENFILE`, `EMFILE`,
+`ENOSPC`, `EPIPE`, `EINPROGRESS`, `ENETDOWN`, `ENETUNREACH`, `ENETRESET`,
+`ECONNABORTED`, `ECONNRESET`, `ETIMEDOUT`, `EHOSTUNREACH` and `EAI_SYSTEM`. The probe
+and the compare script are their only check.
 
 ## Platform-Organized Build Outputs
 

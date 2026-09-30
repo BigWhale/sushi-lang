@@ -108,18 +108,21 @@ maps `sys/platform` to `src_sushi/_platform/<os>_<arch>.sushi`, and
 `SOURCE_STDLIB_MODULES` holds the host's file, so every other reader sees an ordinary
 source module. Another host is `CE3021`.
 
-- **Three files.** `darwin_arm64`, `darwin_x86_64` and `linux_x86_64`. Linux on aarch64
-  has no file, because Linux ships and is tested as x86_64 only (ruled 2026-08-29).
+- **Two files.** `darwin_arm64` and `linux_x86_64`, the two platforms a CI job tests. A
+  file for a platform with no CI job has no check against its C library, so macOS
+  x86_64 and Linux aarch64 have none (ruled 2026-09-30 and 2026-08-29).
 - **Constants only.** A platform file holds `public const` declarations, and every file
   declares the same names of the same types in the same order.
-- **The probe is the source of every value.** `tests/platform_probe/probe.c` prints a
-  whole file from `offsetof`, `sizeof` and the host's headers.
-  `tests/unit/test_platform_files.py` compiles the probe on the host of the test run and
-  requires the host's file to be exactly its output, so each CI platform checks its own
-  file. A pytest test that compiles C starts no Sushi compiler, so it keeps the pytest
-  rule.
-- **A link name may be a constant.** `stat$INODE64` on macOS x86_64 is a symbol that
-  differs per platform. So the link name after `=` accepts a string constant, bare or
+- **The probe makes the values; the fixtures test them.** `tests/platform_probe/probe.c`
+  prints a whole file from `offsetof`, `sizeof` and the host's headers. A check against
+  the probe is circular: it finds drift and not a wrong probe. So the test is
+  `tests/stdlib/platform/`, whose fixtures cause each behaviour a constant names (an
+  `open` flag, a clock, an errno, a `stat` field, an `addrinfo` offset, a socket option)
+  and compare C's answer with the constant, in the Linux CI and in the macOS CI. The
+  probe comparison is by hand (`tests/platform_probe/compare.py`, ruled 2026-09-30), and
+  pytest checks only that the files declare the same names.
+- **A link name may be a constant.** A symbol can differ per platform (`stat$INODE64` on
+  macOS x86_64, which has no file today). So the link name after `=` accepts a string constant, bare or
   behind an alias (`= STAT_SYMBOL`, `= platform.STAT_SYMBOL`). `fold_link_names`
   (`passes/types/externals.py`) folds it in the declaring unit in the `ffi-clash` step,
   where every unit's constants and aliases exist, and before `CE5013` and `CE5001` read

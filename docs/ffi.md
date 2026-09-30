@@ -56,7 +56,8 @@ anything; the linker resolves the symbol after `=`. This is what lets you bind
 
 The link name is a string literal, or a string constant when the symbol differs per
 platform: `= STAT_SYMBOL` or `= platform.STAT_SYMBOL`, where `<sys/platform>` declares
-`stat$INODE64` on macOS x86_64 and `stat` elsewhere. The constant is folded in the unit
+the link names of `stat`, `lstat` and `readdir` for the host (a platform can name them
+another way, as macOS x86_64 does with `stat$INODE64`). The constant is folded in the unit
 that declares the block, and every rule below reads the folded name. A constant of another
 type is `CE5015`, and a name that is no constant is `CE1001`.
 

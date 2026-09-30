@@ -1,9 +1,9 @@
 /*
  * The platform probe for <sys/platform> (#1089).
  *
- * It prints the whole platform file for the host it was compiled for, and
- * tests/unit/test_platform_files.py compares that text with the bundled file
- * byte for byte. To make a file: cc probe.c -o probe && ./probe > <file>.
+ * It prints the whole platform file for the host it was compiled for. To make
+ * a file: cc probe.c -o probe && ./probe > <file>. To check a file by hand:
+ * python tests/platform_probe/compare.py (it compares the values, not the text).
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -19,15 +19,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#if defined(__APPLE__) && defined(__x86_64__)
-#define PLATFORM "darwin_x86_64"
-#define INODE64 "$INODE64"
-#elif defined(__APPLE__) && defined(__aarch64__)
+#if defined(__APPLE__) && defined(__aarch64__)
 #define PLATFORM "darwin_arm64"
-#define INODE64 ""
 #elif defined(__linux__) && defined(__x86_64__)
 #define PLATFORM "linux_x86_64"
-#define INODE64 ""
 #else
 #error "no <sys/platform> file for this host"
 #endif
@@ -91,9 +86,9 @@ int main(void) {
     num("S_IFDIR", S_IFDIR, "File type: a directory.");
     num("S_IFLNK", S_IFLNK, "File type: a symbolic link.");
     num("S_IFCHR", S_IFCHR, "File type: a character device.");
-    sym("STAT_SYMBOL", "stat" INODE64, "The link name of `stat` with the 64-bit inode layout.");
-    sym("LSTAT_SYMBOL", "lstat" INODE64, "The link name of `lstat` with the 64-bit inode layout.");
-    sym("READDIR_SYMBOL", "readdir" INODE64, "The link name of `readdir` with the 64-bit inode layout.");
+    sym("STAT_SYMBOL", "stat", "The link name of `stat` with the 64-bit inode layout.");
+    sym("LSTAT_SYMBOL", "lstat", "The link name of `lstat` with the 64-bit inode layout.");
+    sym("READDIR_SYMBOL", "readdir", "The link name of `readdir` with the 64-bit inode layout.");
     num("DIRENT_NAME_OFFSET", offsetof(struct dirent, d_name), "The byte offset of `d_name` in `struct dirent`.");
 
     section("Clocks");
