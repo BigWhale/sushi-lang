@@ -8,4 +8,4 @@ unsafe external "C" as libc because "reading the process id":
 
 fn main() i32:
     println("pid positive: {libc.pid() > 0}")
-    return Result.Ok(0)
+    return 0

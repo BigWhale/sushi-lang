@@ -13,14 +13,14 @@ unsafe external "C" as libc because "reading file metadata":
 
 fn file_mode(ptr buf) i32:
     if (ST_MODE_BYTES == 2):
-        return Result.Ok(buf.load_u16(ST_MODE_OFFSET) as i32)
-    return Result.Ok(buf.load_i32(ST_MODE_OFFSET))
+        return buf.load_u16(ST_MODE_OFFSET) as i32
+    return buf.load_i32(ST_MODE_OFFSET)
 
 fn main() i32:
     let ptr buf = libc.malloc(STAT_SIZE as i64)
     let i32 rc = libc.stat("/dev/null", buf)
-    let i32 mode = file_mode(buf).realise(0)
+    let i32 mode = file_mode(buf)
     println("stat: {rc}")
     println("character device: {(mode & S_IFMT) == S_IFCHR}")
     libc.free(buf)
-    return Result.Ok(0)
+    return 0

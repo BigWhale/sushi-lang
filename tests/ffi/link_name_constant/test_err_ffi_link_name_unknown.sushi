@@ -4,4 +4,4 @@ unsafe external "C" as libc because "probe":
     fn pid() i32 = NO_SUCH_SYMBOL
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

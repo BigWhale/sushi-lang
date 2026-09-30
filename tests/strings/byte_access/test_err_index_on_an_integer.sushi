@@ -4,4 +4,4 @@
 fn main() i32:
     let i32 n = 42
     let i32 d = n[0]
-    return Result.Ok(d)
+    return d

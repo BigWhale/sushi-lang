@@ -7,4 +7,4 @@ const i32 NOT_FOUND = platform.ENOENT
 
 fn main() i32:
     println(NOT_FOUND)
-    return Result.Ok(0)
+    return 0

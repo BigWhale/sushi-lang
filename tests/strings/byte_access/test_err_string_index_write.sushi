@@ -3,4 +3,4 @@
 fn main() i32:
     let string s = "Mostly Harmless"
     s[0] := 1
-    return Result.Ok(0)
+    return 0

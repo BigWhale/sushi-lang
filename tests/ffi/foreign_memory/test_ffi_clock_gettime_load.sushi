@@ -14,4 +14,4 @@ fn main() i32:
     let i64 sec = ts.load_i64(0)
     println("seconds after the epoch: {sec > 1000000000}")
     libc.free(ts)
-    return Result.Ok(rc)
+    return rc

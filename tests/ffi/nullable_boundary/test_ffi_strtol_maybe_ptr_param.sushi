@@ -9,4 +9,4 @@ unsafe external "C" as libc because "parsing an integer with strtol":
 fn main() i32:
     let i64 n = libc.strtol("42", Maybe.None, 10)
     println(n)
-    return Result.Ok(0)
+    return 0

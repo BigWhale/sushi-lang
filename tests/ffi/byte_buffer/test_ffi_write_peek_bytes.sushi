@@ -11,4 +11,4 @@ fn main() i32:
     let u8[] buf = "Mostly Harmless\n".to_bytes()
     let i64 sent = libc.write(1, peek buf, buf.len() as i64)
     println("{buf.len()}")
-    return Result.Ok((sent - 16) as i32)
+    return (sent - 16) as i32

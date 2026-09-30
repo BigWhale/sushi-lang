@@ -7,7 +7,7 @@ unsafe external "C" as libc because "probe":
     fn twice() i32 = HELPER
 
 fn helper() i32:
-    return Result.Ok(2)
+    return 2
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

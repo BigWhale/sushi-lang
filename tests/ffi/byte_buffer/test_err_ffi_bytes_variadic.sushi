@@ -8,4 +8,4 @@ unsafe external "C" as libc because "probe":
 fn main() i32:
     let u8[] buf = "x".to_bytes()
     let i32 n = libc.printf("%s\n", buf)
-    return Result.Ok(n)
+    return n

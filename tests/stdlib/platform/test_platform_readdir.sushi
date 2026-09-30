@@ -17,15 +17,15 @@ fn finds(ptr dir, string wanted) bool:
         match libc.readdir(dir):
             Maybe.Some(entry) ->
                 if (entry.to_string(DIRENT_NAME_OFFSET) == wanted):
-                    return Result.Ok(true)
-            Maybe.None -> return Result.Ok(false)
-    return Result.Ok(false)
+                    return true
+            Maybe.None -> return false
+    return false
 
 fn main() i32:
     match libc.opendir("."):
         Maybe.Some(dir) ->
-            let bool found = finds(dir, "towel.txt").realise(false)
+            let bool found = finds(dir, "towel.txt")
             let i32 closed = libc.closedir(dir)
-            return Result.Ok(expect_true("DIRENT_NAME_OFFSET", found and closed == 0).realise(1))
+            return expect_true("DIRENT_NAME_OFFSET", found and closed == 0)
         Maybe.None -> println("opendir failed")
-    return Result.Ok(1)
+    return 1

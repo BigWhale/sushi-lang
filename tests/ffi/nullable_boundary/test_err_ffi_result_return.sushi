@@ -4,4 +4,4 @@ unsafe external "C" as libc because "probe":
     fn malloc(i64 n) Result@(ptr, StdError) = "malloc"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

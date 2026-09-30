@@ -10,4 +10,4 @@ unsafe external "C" as libc because "opening a C stream":
 fn main() i32:
     let ptr f = libc.fopen("/sushi/no/such/file", "r")
     println("closed {libc.fclose(f)}")
-    return Result.Ok(0)
+    return 0

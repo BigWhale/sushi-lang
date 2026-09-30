@@ -11,10 +11,10 @@ fn show(string label, string key) i32:
     match libc.getenv(key):
         Maybe.Some(v) -> println("{label}: {v}")
         Maybe.None -> println("{label}: none")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 a = show("missing", "SUSHI_NO_SUCH_KEY_42").realise(1)
+    let i32 a = show("missing", "SUSHI_NO_SUCH_KEY_42")
     let i32 b = libc.setenv("SUSHI_FFI_NULLABLE_KEY", "Mostly Harmless", 1)
-    let i32 c = show("set", "SUSHI_FFI_NULLABLE_KEY").realise(1)
-    return Result.Ok(a + b + c)
+    let i32 c = show("set", "SUSHI_FFI_NULLABLE_KEY")
+    return a + b + c

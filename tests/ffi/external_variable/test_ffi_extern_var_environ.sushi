@@ -9,4 +9,4 @@ fn main() i32:
     match libc.environ:
         Maybe.Some(_) -> println("environ: some")
         Maybe.None -> println("environ: none")
-    return Result.Ok(0)
+    return 0

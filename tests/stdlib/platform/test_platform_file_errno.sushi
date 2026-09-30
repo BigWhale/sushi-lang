@@ -19,45 +19,45 @@ unsafe external "C" as libc because "causing each file errno on purpose":
 fn failed(string label, i64 rc, i32 code, i32 want) i32:
     if (rc != -1):
         println("{label}: the call did not fail, it answered {rc}")
-        return Result.Ok(1)
-    return Result.Ok(expect(label, code as i64, want as i64).realise(1))
+        return 1
+    return expect(label, code as i64, want as i64)
 
 fn main() i32:
     let i32 missing = libc.open("no_such_file.txt", O_RDONLY)
     let i32 e1 = errno()
-    let i32 f1 = failed("ENOENT", missing as i64, e1, ENOENT).realise(1)
+    let i32 f1 = failed("ENOENT", missing as i64, e1, ENOENT)
 
     let i32 again = libc.mkdir(".", 0o755)
     let i32 e2 = errno()
-    let i32 f2 = failed("EEXIST", again as i64, e2, EEXIST).realise(1)
+    let i32 f2 = failed("EEXIST", again as i64, e2, EEXIST)
 
     let i32 dir = libc.open(".", O_WRONLY)
     let i32 e3 = errno()
-    let i32 f3 = failed("EISDIR", dir as i64, e3, EISDIR).realise(1)
+    let i32 f3 = failed("EISDIR", dir as i64, e3, EISDIR)
 
     let i32 under = libc.open("towel.txt/inner", O_RDONLY)
     let i32 e4 = errno()
-    let i32 f4 = failed("ENOTDIR", under as i64, e4, ENOTDIR).realise(1)
+    let i32 f4 = failed("ENOTDIR", under as i64, e4, ENOTDIR)
 
     let i32 bad = libc.close(-1)
     let i32 e5 = errno()
-    let i32 f5 = failed("EBADF", bad as i64, e5, EBADF).realise(1)
+    let i32 f5 = failed("EBADF", bad as i64, e5, EBADF)
 
     let i32 towel = libc.open("towel.txt", O_RDONLY)
     let i64 nowhere = libc.lseek(towel, 0, 99)
     let i32 e6 = errno()
-    let i32 f6 = failed("EINVAL", nowhere, e6, EINVAL).realise(1)
+    let i32 f6 = failed("EINVAL", nowhere, e6, EINVAL)
     let i32 closed = libc.close(towel)
 
     let i32 long = libc.open("a".repeat(300), O_RDONLY)
     let i32 e7 = errno()
-    let i32 f7 = failed("ENAMETOOLONG", long as i64, e7, ENAMETOOLONG).realise(1)
+    let i32 f7 = failed("ENAMETOOLONG", long as i64, e7, ENAMETOOLONG)
 
     let i32 l1 = libc.symlink("loop_b", "loop_a")
     let i32 l2 = libc.symlink("loop_a", "loop_b")
     let i32 loop = libc.open("loop_a", O_RDONLY)
     let i32 e8 = errno()
-    let i32 f8 = failed("ELOOP", loop as i64, e8, ELOOP).realise(1)
+    let i32 f8 = failed("ELOOP", loop as i64, e8, ELOOP)
     let i32 u1 = libc.unlink("loop_a")
     let i32 u2 = libc.unlink("loop_b")
-    return Result.Ok(f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + closed + l1 + l2 + u1 + u2)
+    return f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + closed + l1 + l2 + u1 + u2

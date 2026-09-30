@@ -5,4 +5,4 @@ use "helpers/getopt_state"
 
 fn main() i32:
     println(libc.optind)
-    return Result.Ok(0)
+    return 0

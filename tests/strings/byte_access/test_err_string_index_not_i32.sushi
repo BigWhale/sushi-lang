@@ -4,4 +4,4 @@ fn main() i32:
     let string s = "Mostly"
     let i64 at = 0
     let u8 b = s[at]
-    return Result.Ok(b as i32)
+    return b as i32

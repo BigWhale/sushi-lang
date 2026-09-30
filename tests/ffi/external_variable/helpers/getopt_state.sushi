@@ -3,4 +3,4 @@ unsafe external "C" as libc because "reading getopt state":
     var i32 optind = "optind"
 
 public fn first_index() i32:
-    return Result.Ok(libc.optind)
+    return libc.optind

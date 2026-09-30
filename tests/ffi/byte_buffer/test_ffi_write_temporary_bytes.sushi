@@ -10,4 +10,4 @@ unsafe external "C" as libc because "writing bytes to a descriptor":
 
 fn main() i32:
     let i64 sent = libc.write(1, "Mostly Harmless\n".to_bytes(), 16)
-    return Result.Ok((sent - 16) as i32)
+    return (sent - 16) as i32

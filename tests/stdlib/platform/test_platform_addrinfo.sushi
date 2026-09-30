@@ -16,22 +16,22 @@ unsafe external "C" as libc because "checking the address layouts against the ho
 
 fn family_of(ptr sockaddr) i32:
     if (SOCKADDR_FAMILY_BYTES == 1):
-        return Result.Ok(sockaddr.load_u8(SOCKADDR_FAMILY_OFFSET) as i32)
-    return Result.Ok(sockaddr.load_u16(SOCKADDR_FAMILY_OFFSET) as i32)
+        return sockaddr.load_u8(SOCKADDR_FAMILY_OFFSET) as i32
+    return sockaddr.load_u16(SOCKADDR_FAMILY_OFFSET) as i32
 
 fn port_of(ptr sockaddr) i32:
     let i32 high = sockaddr.load_u8(SOCKADDR_PORT_OFFSET) as i32
     let i32 low = sockaddr.load_u8(SOCKADDR_PORT_OFFSET + 1) as i32
-    return Result.Ok(high * 256 + low)
+    return high * 256 + low
 
 fn numeric_host(ptr sockaddr, u32 length, i32 size) string:
     let u8[] host = from([0; size])
     let i32 rc = libc.getnameinfo(sockaddr, length, poke host, size as u32, Maybe.None, 0, NI_NUMERICHOST)
     if (rc != 0):
-        return Result.Ok("getnameinfo failed")
+        return "getnameinfo failed"
     let i32 end = host.index_of(0 as u8).realise(size)
     host.truncate(end)
-    return Result.Ok(host.to_string())
+    return host.to_string()
 
 fn resolve(Maybe@(string) node, i32 family, i32 flags) Maybe@(ptr):
     let ptr hints = libc.calloc(1, ADDRINFO_SIZE as i64)
@@ -44,61 +44,61 @@ fn resolve(Maybe@(string) node, i32 family, i32 flags) Maybe@(ptr):
     libc.free(slot)
     libc.free(hints)
     if (rc != 0):
-        return Result.Ok(Maybe.None)
-    return Result.Ok(found)
+        return Maybe.None
+    return found
 
 fn check_v4(ptr ai) i32:
-    let i32 f1 = expect("v4 AF_INET", ai.load_i32(AI_FAMILY_OFFSET) as i64, AF_INET as i64).realise(1)
-    let i32 f2 = expect("v4 SOCK_STREAM", ai.load_i32(AI_SOCKTYPE_OFFSET) as i64, SOCK_STREAM as i64).realise(1)
-    let i32 f3 = expect("v4 IPPROTO_TCP", ai.load_i32(AI_PROTOCOL_OFFSET) as i64, IPPROTO_TCP as i64).realise(1)
-    let i32 f4 = expect("v4 SOCKADDR_IN_SIZE", ai.load_u32(AI_ADDRLEN_OFFSET) as i64, SOCKADDR_IN_SIZE as i64).realise(1)
-    let i32 f5 = expect_true("v4 no canonical name", ai.load_ptr(AI_CANONNAME_OFFSET).is_none()).realise(1)
-    let i32 f6 = expect_true("v4 one entry", ai.load_ptr(AI_NEXT_OFFSET).is_none()).realise(1)
+    let i32 f1 = expect("v4 AF_INET", ai.load_i32(AI_FAMILY_OFFSET) as i64, AF_INET as i64)
+    let i32 f2 = expect("v4 SOCK_STREAM", ai.load_i32(AI_SOCKTYPE_OFFSET) as i64, SOCK_STREAM as i64)
+    let i32 f3 = expect("v4 IPPROTO_TCP", ai.load_i32(AI_PROTOCOL_OFFSET) as i64, IPPROTO_TCP as i64)
+    let i32 f4 = expect("v4 SOCKADDR_IN_SIZE", ai.load_u32(AI_ADDRLEN_OFFSET) as i64, SOCKADDR_IN_SIZE as i64)
+    let i32 f5 = expect_true("v4 no canonical name", ai.load_ptr(AI_CANONNAME_OFFSET).is_none())
+    let i32 f6 = expect_true("v4 one entry", ai.load_ptr(AI_NEXT_OFFSET).is_none())
     match ai.load_ptr(AI_ADDR_OFFSET):
         Maybe.Some(sa) ->
-            let i32 f7 = expect("v4 family in the sockaddr", family_of(sa).realise(0) as i64, AF_INET as i64).realise(1)
-            let i32 f8 = expect("v4 port", port_of(sa).realise(0) as i64, 80).realise(1)
-            let string host = numeric_host(sa, SOCKADDR_IN_SIZE as u32, NI_MAXHOST).realise("")
-            let i32 f9 = expect_true("v4 NI_NUMERICHOST", host == "127.0.0.1").realise(1)
-            return Result.Ok(f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9)
+            let i32 f7 = expect("v4 family in the sockaddr", family_of(sa) as i64, AF_INET as i64)
+            let i32 f8 = expect("v4 port", port_of(sa) as i64, 80)
+            let string host = numeric_host(sa, SOCKADDR_IN_SIZE as u32, NI_MAXHOST)
+            let i32 f9 = expect_true("v4 NI_NUMERICHOST", host == "127.0.0.1")
+            return f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9
         Maybe.None -> println("v4: no ai_addr")
-    return Result.Ok(1)
+    return 1
 
 fn check_v6(ptr ai) i32:
-    let i32 f1 = expect("v6 AF_INET6", ai.load_i32(AI_FAMILY_OFFSET) as i64, AF_INET6 as i64).realise(1)
-    let i32 f2 = expect("v6 SOCKADDR_IN6_SIZE", ai.load_u32(AI_ADDRLEN_OFFSET) as i64, SOCKADDR_IN6_SIZE as i64).realise(1)
+    let i32 f1 = expect("v6 AF_INET6", ai.load_i32(AI_FAMILY_OFFSET) as i64, AF_INET6 as i64)
+    let i32 f2 = expect("v6 SOCKADDR_IN6_SIZE", ai.load_u32(AI_ADDRLEN_OFFSET) as i64, SOCKADDR_IN6_SIZE as i64)
     match ai.load_ptr(AI_ADDR_OFFSET):
         Maybe.Some(sa) ->
-            let i32 f3 = expect("v6 family in the sockaddr", family_of(sa).realise(0) as i64, AF_INET6 as i64).realise(1)
-            let string host = numeric_host(sa, SOCKADDR_IN6_SIZE as u32, INET6_ADDRSTRLEN).realise("")
-            let i32 f4 = expect_true("v6 INET6_ADDRSTRLEN", host == "::1").realise(1)
-            return Result.Ok(f1 + f2 + f3 + f4)
+            let i32 f3 = expect("v6 family in the sockaddr", family_of(sa) as i64, AF_INET6 as i64)
+            let string host = numeric_host(sa, SOCKADDR_IN6_SIZE as u32, INET6_ADDRSTRLEN)
+            let i32 f4 = expect_true("v6 INET6_ADDRSTRLEN", host == "::1")
+            return f1 + f2 + f3 + f4
         Maybe.None -> println("v6: no ai_addr")
-    return Result.Ok(1)
+    return 1
 
 fn check_passive(ptr ai) i32:
     match ai.load_ptr(AI_ADDR_OFFSET):
         Maybe.Some(sa) ->
-            let string host = numeric_host(sa, SOCKADDR_IN_SIZE as u32, NI_MAXHOST).realise("")
-            return Result.Ok(expect_true("AI_PASSIVE", host == "0.0.0.0").realise(1))
+            let string host = numeric_host(sa, SOCKADDR_IN_SIZE as u32, NI_MAXHOST)
+            return expect_true("AI_PASSIVE", host == "0.0.0.0")
         Maybe.None -> println("passive: no ai_addr")
-    return Result.Ok(1)
+    return 1
 
 fn main() i32:
     let i32 failures = 0
-    match resolve(Maybe.Some("127.0.0.1"), AF_INET, AI_NUMERICHOST).realise(Maybe.None):
+    match resolve(Maybe.Some("127.0.0.1"), AF_INET, AI_NUMERICHOST):
         Maybe.Some(ai) ->
-            failures := failures + check_v4(ai).realise(1)
+            failures := failures + check_v4(ai)
             libc.freeaddrinfo(ai)
         Maybe.None -> failures := failures + 1
-    match resolve(Maybe.Some("::1"), AF_INET6, AI_NUMERICHOST).realise(Maybe.None):
+    match resolve(Maybe.Some("::1"), AF_INET6, AI_NUMERICHOST):
         Maybe.Some(ai) ->
-            failures := failures + check_v6(ai).realise(1)
+            failures := failures + check_v6(ai)
             libc.freeaddrinfo(ai)
         Maybe.None -> failures := failures + 1
-    match resolve(Maybe.None, AF_INET, AI_PASSIVE).realise(Maybe.None):
+    match resolve(Maybe.None, AF_INET, AI_PASSIVE):
         Maybe.Some(ai) ->
-            failures := failures + check_passive(ai).realise(1)
+            failures := failures + check_passive(ai)
             libc.freeaddrinfo(ai)
         Maybe.None -> failures := failures + 1
-    return Result.Ok(failures)
+    return failures

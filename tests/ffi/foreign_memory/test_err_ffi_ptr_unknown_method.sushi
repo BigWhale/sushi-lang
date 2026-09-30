@@ -6,4 +6,4 @@ unsafe external "C" as libc because "probe":
 fn main() i32:
     let ptr p = libc.malloc(8)
     let i32 v = p.load_int(0)
-    return Result.Ok(v)
+    return v

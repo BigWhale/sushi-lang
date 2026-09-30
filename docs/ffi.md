@@ -133,7 +133,7 @@ fn main() i32:
         Maybe.Some(v) -> println("set: {v}")
         Maybe.None -> println("not set")
     println(libc.strtol("42", Maybe.None, 10))
-    return Result.Ok(0)
+    return 0
 ```
 
 A plain `string` or `ptr` return is the declaration "C never answers NULL here". The
@@ -331,7 +331,7 @@ fn main() i32:
         Result.Ok(_) -> println("removed")
         Result.Err(RemoveError.Missing) -> println("missing")
         Result.Err(RemoveError.Other(code)) -> println("errno {code}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Three rules apply:
@@ -460,7 +460,7 @@ fn main() i32:
     let i64 nanos = ts.load_i64(8)
     println("{seconds}.{nanos}")
     libc.free(ts)
-    return Result.Ok(rc)
+    return rc
 ```
 
 Every access is unaligned-safe (`align 1`): a byte offset says nothing about
@@ -489,7 +489,7 @@ fn main() i32:
     match libc.environ:
         Maybe.Some(_) -> println("the process has an environment")
         Maybe.None -> println("no environment")
-    return Result.Ok(0)
+    return 0
 ```
 
 - **The type** is a number, `bool`, `ptr` or `Maybe@(ptr)`, and anything else is

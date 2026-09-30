@@ -15,4 +15,4 @@ fn main() i32:
     println(text.to_string(0))
     println(text.to_string(7))
     libc.free(text)
-    return Result.Ok(0)
+    return 0

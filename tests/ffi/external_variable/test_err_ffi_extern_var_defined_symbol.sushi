@@ -4,4 +4,4 @@ unsafe external "C" as libc because "probe":
     var i32 x = "main"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

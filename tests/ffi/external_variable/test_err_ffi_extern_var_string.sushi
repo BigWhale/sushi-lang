@@ -5,4 +5,4 @@ unsafe external "C" as libc because "probe":
     var string s = "environ"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

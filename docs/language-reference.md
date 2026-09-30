@@ -774,7 +774,7 @@ fn main() i32:
     let u8[] b = from([77, 111, 115, 116, 108, 121])
     let string word = string.from_bytes(nom b)
     println("{first} {word}")                 # 77 Mostly
-    return Result.Ok(0)
+    return 0
 ```
 
 An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` and

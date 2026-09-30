@@ -242,7 +242,7 @@ fn main() i32:
     let i64 size = buf.load_i64(ST_SIZE_OFFSET)
     println("stat: {rc}, size: {size}")
     libc.free(buf)
-    return Result.Ok(0)
+    return 0
 ```
 
 **Where the values come from.** `tests/platform_probe/probe.c` prints a whole platform

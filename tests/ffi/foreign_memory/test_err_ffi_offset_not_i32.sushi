@@ -7,4 +7,4 @@ fn main() i32:
     let ptr p = libc.malloc(8)
     let i64 off = 4
     let i32 v = p.load_i32(off)
-    return Result.Ok(v)
+    return v

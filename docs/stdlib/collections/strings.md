@@ -429,7 +429,7 @@ extend string upper_ascii() string:
 
 fn main() i32:
     println("Mostly Harmless".upper_ascii())   # MOSTLY HARMLESS
-    return Result.Ok(0)
+    return 0
 ```
 
 `upper_ascii` allocates once and copies once, as the built-in `upper()` does; written
