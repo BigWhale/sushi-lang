@@ -245,7 +245,9 @@ class FunctionMonomorphizer:
             generic.err_type, substitution
         ) if getattr(generic, "err_type", None) else None
 
+        from sushi_lang.semantics.channel import has_channel
         concrete_func = copy.copy(generic)
+        concrete_func.written_channel = has_channel(generic)
         concrete_func.name = mangled_name
         concrete_func.params = concrete_params
         concrete_func.ret = concrete_ret

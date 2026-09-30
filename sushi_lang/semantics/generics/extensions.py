@@ -32,8 +32,10 @@ def substitute_signature(decl, substitution: Dict[str, Type], substitutor: "Type
     def sub(ty: Optional[Type]) -> Optional[Type]:
         return substitute_type_params(ty, substitution) if ty is not None else None
 
+    from sushi_lang.semantics.channel import has_channel
     return replace(
         decl,
+        written_channel=has_channel(decl),
         params=[substituted_param(param, sub(param.ty)) for param in decl.params],
         ret=sub(decl.ret),
         err_type=sub(decl.err_type),

@@ -110,7 +110,7 @@ def validate_error_channel(self, ret, err_type, span) -> None:
         self.err.emit(er.ERR.CE2086, span, type_name=display_type(err_arm))
 
 
-def _enter_body(self, name: str, kind: str, ret, err_type, err_span) -> None:
+def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> None:
     """The state every body validates under: a function, a method and a lifted lambda.
 
     `channel_result` is the interned Result the body answers, or None for a BARE body
@@ -121,7 +121,7 @@ def _enter_body(self, name: str, kind: str, ret, err_type, err_span) -> None:
     self.body_name = callable_text(name, kind)
     self.body_return_type = ret
     validate_error_channel(self, ret, err_type, err_span)
-    self.channel_result = channel_result(self, ret, err_type)
+    self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
     self.variable_types = {}
     self.destroyed_arrays = [set()]
 
@@ -154,7 +154,7 @@ def validate_function(self, func: FuncDef) -> None:
     # clears what a transplanted or copied one set.
     self.reporter.enter_body(func)
     kind = "lambda" if is_lifted_lambda(func) else "function"
-    _enter_body(self, func.name, kind, func.ret, func.err_type,
+    _enter_body(self, func, func.name, kind, func.ret, func.err_type,
                 func.err_span or func.ret_span)
 
     validate_and_register_parameters(self, func.params)
@@ -231,7 +231,7 @@ def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.
     self.reporter.enter_body(method)
-    _enter_body(self, method.name, "method", method.ret, method.err_type,
+    _enter_body(self, method, method.name, "method", method.ret, method.err_type,
                 method.err_span or method.name_span)
 
     _register_self(self, target_type, getattr(method, "self_mode", None))

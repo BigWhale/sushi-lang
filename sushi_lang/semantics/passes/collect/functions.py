@@ -228,6 +228,8 @@ class GenericFuncDef:
                                                  # carries one: this pass shares ONE reporter across units
     resolved_result: Optional[Type] = None       # An instance's spelled Result return, interned
                                                  # by the resolve pass, as on `FuncDef` (#857)
+    written_channel: Optional[bool] = None       # On an instance: the template's written
+                                                 # channel, as on `FuncDef`
 
 
 class Redeclaration(Enum):

@@ -32,7 +32,14 @@ def declared_return(sig: Any) -> Optional[Type]:
 
 
 def has_channel(sig: Any) -> bool:
-    """Whether the callable answers a Result: it writes `| E`, or it returns `Result@(T, E)`."""
+    """Whether the callable answers a Result: it writes `| E`, or it returns `Result@(T, E)`.
+
+    A copy (a monomorphized instance, a lifted lambda) answers what its template WROTE:
+    `fn id@(T)(nom T x) T` stays bare when `T` is a Result.
+    """
+    written = getattr(sig, "written_channel", None)
+    if written is not None:
+        return written
     if getattr(sig, "err_type", None) is not None:
         return True
     from sushi_lang.semantics.typesys import FunctionType

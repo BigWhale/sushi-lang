@@ -1,0 +1,15 @@
+# A bare perk contract and an implementation that returns an explicit `Result@(T, E)`
+# disagree on the channel: CE0133, relational, not a CE4004.
+# EXPECT_ERROR_CODES_EXACT: CE0133
+perk Shape:
+    fn area() i32
+
+struct Sq:
+    i32 s
+
+extend Sq with Shape:
+    fn area() Result@(i32, StdError):
+        return Result.Ok(self.s * self.s)
+
+fn main() i32:
+    return 0

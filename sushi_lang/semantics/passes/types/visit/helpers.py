@@ -41,10 +41,11 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     """Compute (and, by default, cache on the node) the FunctionType of a lambda literal."""
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.typesys import FunctionType
-    if stamp and getattr(lam, "resolved_type", None) is not None:
-        return lam.resolved_type
-
     expected = getattr(lam, "expected_type", None)
+    cached = getattr(lam, "resolved_type", None)
+    if stamp and cached is not None and not _channel_arrived_later(lam, cached, expected):
+        return cached
+
     saved = dict(type_validator.variable_types)
 
     param_types = []
@@ -95,6 +96,15 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     if stamp:
         lam.resolved_type = ft
     return ft
+
+
+def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
+    """A lambda typed before its position said its type: a generic argument is typed to
+    solve the call, and the solved parameter type comes after. An unannotated lambda
+    takes its channel from that expected type, so the cached answer is read again."""
+    from sushi_lang.semantics.typesys import FunctionType
+    return (isinstance(expected, FunctionType) and lam.err_type is None and lam.ret is None
+            and cached.err_type != expected.err_type)
 
 
 def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:

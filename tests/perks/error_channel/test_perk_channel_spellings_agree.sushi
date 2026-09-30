@@ -1,0 +1,17 @@
+# `T | E` is sugar for `Result@(T, E)`: a contract in one spelling and an implementation
+# in the other agree.
+# EXPECT_STDOUT_EXACT: "9\n"
+perk Shape:
+    fn area() Result@(i32, StdError)
+
+struct Sq:
+    i32 s
+
+extend Sq with Shape:
+    fn area() i32 | StdError:
+        return Result.Ok(self.s * self.s)
+
+fn main() i32:
+    let Sq q = Sq(3)
+    println(q.area().realise(-1))
+    return 0

@@ -213,6 +213,9 @@ def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType
         ret=ok_type,
         body=body,
         err_type=err_type,
+        # A lambda's channel is its type's `| E` and nothing else: a Result it answers
+        # as a value (`fn(i32) -> Result@(i32, E)`) is a bare return.
+        written_channel=err_type is not None,
         name_span=lam.loc,
         loc=lam.loc,
     )
