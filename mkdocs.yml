@@ -161,6 +161,7 @@ nav:
       - "Error Channel (design)": design/error-channel.md
       - "Iteration (design)": design/iteration.md
       - "Unit Storage (design)": design/unit-storage.md
+      - "Derived Contracts (design)": design/derived-contracts.md
       - "Array Representation (design)": design/array-representation.md
       - "Compile-Time Evaluation (design)": design/compile-time-evaluation.md
       - "Documentation Blocks (design)": design/documentation.md

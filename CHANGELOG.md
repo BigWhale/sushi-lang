@@ -30,6 +30,39 @@ All notable changes to Sushi Lang will be documented in this file.
   **`string.from_bytes(nom b)`** makes a string that takes the array's buffer with no
   copy. A write through `s[i]` is `CE2113`.
 
+- **`Eq`, `Ord` and `Display` are predefined perks.** They sit beside `Drop` and
+  `Hashable`: `fn eq(Self other) bool`, `fn compare(Self other) i32` and
+  `fn to_str() string`. They need no import, and a declaration of one of the names is
+  `CE4001`. A user perk still has no `Self`: an implementation writes its own type where
+  the contract says `Self` (`extend Point with Eq: fn eq(Point other) bool:`; a generic
+  target writes `Box@(T)`). A mismatch is `CE4004`, and its help prints the contract with
+  the target filled in. `@(T: Eq)`, `@(T: Ord)` and `@(T: Display)` are constraints; `bool`
+  satisfies `Eq` and `Display`, and not `Ord`.
+- **`==`, `!=`, `<`, `<=`, `>` and `>=` work on a struct and an enum.** The compiler
+  derives the equality and the order from what the type holds. A struct compares its
+  fields in declaration order. An enum compares the variant in declaration order, then
+  the payload. `Maybe` and `Result` take `==` and `<`, so `Maybe.Some(1) < Maybe.None`.
+  An array, a `List@(T)` and an `Own@(T)` compare when a type holds them. A float that a
+  type holds uses a total rule (`-0.0 == 0.0`, every NaN equals every NaN, a NaN orders
+  last), so `compare` is zero exactly when `==` is true. A type that holds a function
+  value, a `ptr` or a `HashMap@(K, V)` has none, and a note names the field. An
+  `extend T with Eq` or `Ord` implementation overrides the rule in every position.
+- **A struct and an enum print.** An interpolation hole, `print` and `println` take them
+  through a derived `Display`: `Point(x: 1, y: 2)`, `Box(value: 1)`, `Shape.Circle(5)`,
+  `Colour.Red`. A string that a type holds is quoted. An array and a `List@(T)` print as
+  `[1, 2, 3]`. `extend T with Display` overrides the text.
+- **`a.eq(b)`, `a.compare(b)` and `x.to_str()`** exist on every struct and enum, and `eq`
+  and `compare` on every primitive, `bool` included. A wrong argument type is `CE2006`.
+- **`CE2115`: `print` and `println` refuse a value with no string form.** That is a
+  top-level `Maybe`, a top-level array, and a type that holds a function value, a `ptr` or
+  a `HashMap@(K, V)`.
+- **`CE4015`: two perks cannot give one type the same method name.** The error has a note
+  at the first perk. A derived method is not a home, so a type can derive `compare` from
+  `Ord` and still implement a user perk that provides `compare`.
+- **A `List@(T)` is a `HashMap` key**, and so is a type with an `Eq` override and a
+  `Hashable` override, even when it holds a function value. `0.0` and `-0.0` are one key,
+  and a NaN key can be found again.
+
 ### Fixed
 
 - **A temporary string given to an `unsafe external` function is freed.** The marshalled
@@ -45,6 +78,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **`CE2514` and `CE2035` carry a note.** When a type holds something with no equality, no
+  order or no string form, a note names the field: `no derived Eq: field 'f' -> a function
+  value`. `CE2055` reads the `Eq` contract, and `contains` and `index_of` read it too
+  (`CE2100`).
+- **The hash of a NaN is one value.** `f64.hash()` and `f32.hash()` hash every NaN alike.
+  The hash of a NaN changed.
+- **A binary `.slib` ships its implementations of `Hashable`, `Eq`, `Ord` and `Display`.**
+  A consumer's derived methods read them.
+- **`println` of a value with no string form is `CE2115`.** It was the internal error
+  `CE0017`.
 - **An index on a value that is not an array or a string is `CE2114`.** It was `CE2002`,
   whose text described an assignment the program did not write.
 - **The `ptr` guarantee note of `CW5001`** no longer says that a returned `ptr` may be

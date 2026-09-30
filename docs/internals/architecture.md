@@ -197,7 +197,7 @@ tables below are a map; each module's docstring holds the full rule.
 | The HashMap key rules (`reject_unusable_key`) | `semantics/generics/hashmap.py` |
 | The unit of a generic instance | `semantics/generics/synthesis.py` |
 | A stdlib function's signature row (`stdlib_signature`) | `semantics/stdlib_registry.py` |
-| The perks the compiler predefines (`Drop`, `Hashable`) | `semantics/passes/collect/perks.py` |
+| The perks the compiler predefines (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) | `semantics/passes/collect/perks.py` |
 | Compile-time integer operations | `semantics/const_eval.py` |
 | One walk over a type; one walk over the AST nodes | `semantics/type_walk.py`, `semantics/ast_walk.py` |
 | A condition, an arithmetic operand, a comparison operand | `semantics/passes/types/expressions.py` |

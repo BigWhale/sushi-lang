@@ -131,7 +131,9 @@ empty.first().is_none()                  # true
 ### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
 
 A linear search with the `==` the language defines, so the element type must have
-equality: the numeric types, `bool`, or `string` (a struct or enum element is CE2100).
+equality: the numeric types, `bool`, `string`, or a struct or an enum with a derived or
+implemented `Eq`. A closure element, or a struct that holds one, is CE2100. An `Eq`
+implementation on the element is the override, and the search reads it.
 `.index_of()` answers the FIRST match, left to right. The needle is a borrow.
 
 ```sushi

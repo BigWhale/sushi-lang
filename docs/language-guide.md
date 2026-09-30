@@ -764,8 +764,9 @@ fn main() i32:
 - **Automatic resizing**: Grows at 0.75 load factor to maintain performance
 - **Power-of-two capacity**: Allows fast modulo using bitwise AND operations
 - **Auto-derived hashing**: a key needs a hash AND an equality test. A primitive, a `string`,
-  and a struct or enum built from them are keys. A `List@(T)` has a hash but no equality, so it
-  is not a key (`CE2055`)
+  and a struct or enum built from them are keys, and so is a `List@(T)` of a key type. The
+  equality is the predefined `Eq`; a type with no equality (a function value, a `ptr`) is not a
+  key unless it implements `Eq` (`CE2055`)
 
 **HashMap methods**: `.new()`, `.insert(key, value)`, `.get(key)`, `.remove(key)`, `.contains_key(key)`, `.len()`, `.keys()`, `.values()`, `.entries()`, `.debug()`, `.free()`
 

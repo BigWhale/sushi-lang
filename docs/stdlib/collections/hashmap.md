@@ -190,14 +190,21 @@ Supported types:
 - **string**
 - **Structs** (each field has a hash and an equality test)
 - **Enums** (each payload has a hash and an equality test)
+- **`List@(T)`** of a key type, and a struct that holds one.
 
-- **`List@(T)` and `Own@(T)`** have a hash of what they hold, but no equality test, so
-  neither is a key today
+The equality test is the predefined perk `Eq`: an `extend K with Eq` implementation, or else
+the equality that the compiler derives from what the key holds. A `Hashable` override and
+an `Eq` override are two separate contracts. They are read in every position a key is used.
+A float that a key holds uses the total rule: `0.0` and `-0.0` are one key, and a NaN key
+can be found again. The hash of every NaN is the same.
 
 **Not supported:**
 
-- A dynamic array (`i32[]`, `string[]`): **CE2058**. A dynamic array has no equality test.
-- `List@(T)`, `Own@(T)` and any other type with no equality test: **CE2055**.
+- A dynamic array (`i32[]`, `string[]`): **CE2058**. A dynamic array has no equality test
+  at the top level. Use a fixed array, or a `List@(T)`.
+- A type with no equality test: **CE2055**. That is a function value, a `ptr`, a
+  `HashMap@(K, V)`, and a type that holds one, unless the type implements `Eq`.
+  A note names the field.
 - A `HashMap@(K, V)` itself. A map has no hash of its own: its buckets carry a state for
   each slot and the slot order is not the entry order, so a hash over them would answer
   two values for one set of entries.
@@ -208,10 +215,9 @@ The compiler checks the key type at every written `HashMap@(K, V)` type.
 
 Hashing and equality are two contracts. `extend T with Hashable` REPLACES the hash of
 `T` everywhere, and it makes a type hashable that the compiler cannot hash (for example,
-a struct with a function-typed field). It does NOT give `T` an equality test. The map
-compares two keys field by field, and a function value, a `ptr`, a `List@(T)` and an
-`Own@(T)` have no equality. Thus a type that holds one of them is not a key, with or
-without an override (**CE2055**):
+a struct with a function-typed field). It does NOT give `T` an equality test. A function
+value and a `ptr` have no equality. Thus a type that holds one of them is not a key with
+a `Hashable` override alone (**CE2055**, and #936):
 
 <!-- docs-sweep: error CE2055 -->
 ```sushi
@@ -231,7 +237,32 @@ fn main() i32:
     return 0
 ```
 
-To find such a value by a key, use a field that has equality as the key (here the
+An `Eq` implementation beside the `Hashable` one makes the type a key:
+
+```sushi
+use <collections/hashmap>
+
+struct Handler:
+    fn(i32) -> i32 run
+    i32 id
+
+extend Handler with Hashable:
+    fn hash() u64:
+        return self.id as u64
+
+extend Handler with Eq:
+    fn eq(Handler other) bool:
+        return self.id == other.id
+
+fn main() i32:
+    let HashMap@(Handler, i32) m = HashMap.new()
+    m.insert(Handler(|i32 x| x + 1, 7), 1)
+    println(m.contains_key(Handler(|i32 x| x, 7)))
+    m.free()
+    return 0
+```
+
+Another way is to use a field that has equality as the key (here the
 `i32 id`), and keep the full value in the map as the value:
 
 ```sushi
@@ -256,7 +287,7 @@ fn main() i32:
 
 The hash function is auto-derived for all types:
 
-- **Primitives**: FxHash for integers, FNV-1a for strings, normalized floats
+- **Primitives**: FxHash for integers, FNV-1a for strings, normalized floats (every NaN hashes alike, and `0.0` and `-0.0` hash alike)
 - **Composites**: FNV-1a combining field/element hashes
 - **Limitation**: An element type with no hash (today, `ptr`) has no derived hash
 

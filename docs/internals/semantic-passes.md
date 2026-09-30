@@ -26,7 +26,7 @@ each named for the stage it runs.
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
 | `finite-types` | reject a type that contains itself by value (CE2095) | `semantics/passes/finite_types.py` |
-| `derive` | auto-derive `hash()` and `clone()` | `semantics/passes/derive.py` |
+| `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
 | `shadowing` | reject an extension method that collides with a built-in (CE2097) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
 | `scope` | scope and variable analysis | `semantics/passes/scope.py` |
@@ -113,10 +113,13 @@ matches no unit and adds no edge, because it has no unit to compile.
 The order also serves the two rules that read the perk table when an implementation is
 collected -- the perk exists (`CE4003`), and its marker lets this unit implement it
 (`CE4011`). A perk declared next door is in the table when the implementing unit is reached.
-Two perks are in the table before any unit is collected: `Drop` and `Hashable`, the
-compiler's own (`register_predefined_perks`). The constraint check reads `Hashable`
-through the derive pass's predicate, `hashability_of`, so no implementation table
-entry stands for a derived hash.
+Five perks are in the table before any unit is collected: `Drop`, `Hashable`, `Eq`, `Ord`
+and `Display`, the compiler's own (`register_predefined_perks`). The contracts of `Eq` and
+`Ord` hold a receiver placeholder (`ReceiverType`) where a user perk cannot write `Self`;
+only this function builds it. The constraint check reads `Hashable` through the derive
+pass's predicate, `hashability_of`, and `Eq`, `Ord` and `Display` through the contract
+walk (`operand_contract`), so no implementation table entry stands for a derived hash or
+a derived contract.
 
 ### Example
 
@@ -737,6 +740,18 @@ from the new roots finds every new cycle and repeats none.
 
 Derive `.hash() -> u64` and `.clone()` for each type that can have them. The rules for
 `hash()` are below.
+
+**The pass does not register `Eq`, `Ord` or `Display`.** The compiler derives those three
+predefined perks too, but it answers them at the call, not from a table this pass fills.
+`semantics/generics/contracts.py` holds the walk. `contract_of` applies the HELD rule (what
+a field or a payload may be), and `operand_contract` applies the TOP-LEVEL rule (what an
+operator, a constraint or a hole may take). The typecheck pass asks them for `==`, `<`, an
+interpolation hole, `print`, `println`, the methods `eq`, `compare` and `to_str`, the
+constraints `@(T: Eq)`, `@(T: Ord)` and `@(T: Display)`, and the HashMap key rule. It
+stamps the answer on the AST (`BinaryOp.operand_type`, `InterpolatedString.display_types`,
+`Print`/`PrintLn.display_type`), so the backend never re-derives it. `contract_walk.py` holds
+the walk mechanics that `hashing.py` shares. An `extend T with Eq` implementation is read
+first and wins. See [Derived contracts](../design/derived-contracts.md).
 
 ### Algorithm
 

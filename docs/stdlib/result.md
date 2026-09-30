@@ -266,7 +266,11 @@ match error:
         println("No error")
 ```
 
-An enum value cannot go into an interpolation hole (CE2035). Match on it to print it.
+An enum value goes into an interpolation hole through the predefined perk `Display`: it
+prints as `Enum.Variant`. A `Result` and a `Maybe` do not go into a hole at
+the top level (CE2035), and `println` refuses them (CE2037 for a `Result`, CE2115 for a
+`Maybe`). Match on the value to print it, or use `.realise(default)`. A struct or an enum
+that HOLDS a `Result` or a `Maybe` prints it, for example `Result.Ok(1)` and `Maybe.None`.
 
 ### `.expect(message: string) -> T`
 
