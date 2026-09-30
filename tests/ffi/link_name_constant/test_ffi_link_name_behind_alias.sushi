@@ -1,0 +1,17 @@
+# A link name may be an imported constant behind an alias (#1089).
+# EXPECT_STDOUT_EXACT: "stat: 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform> as platform
+
+unsafe external "C" as libc because "reading file metadata":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = platform.STAT_SYMBOL
+
+fn main() i32:
+    let ptr buf = libc.malloc(platform.STAT_SIZE as i64)
+    let i32 rc = libc.stat("/dev/null", buf)
+    println("stat: {rc}")
+    libc.free(buf)
+    return Result.Ok(0)

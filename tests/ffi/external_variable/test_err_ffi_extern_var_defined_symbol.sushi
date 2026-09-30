@@ -1,0 +1,7 @@
+# An external variable names a FOREIGN symbol (#1090); one this build defines is CE5013.
+# EXPECT_ERROR_CODE: CE5013
+unsafe external "C" as libc because "probe":
+    var i32 x = "main"
+
+fn main() i32:
+    return Result.Ok(0)

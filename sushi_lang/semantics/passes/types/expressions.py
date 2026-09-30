@@ -54,6 +54,11 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
                        expected=display_type(first_element_type), got=display_type(element_type))
 
 
+def is_indexable(ty) -> bool:
+    """An array, or a string: `s[i]` reads its byte at offset i in place (#1091)."""
+    return isinstance(ty, (ArrayType, DynamicArrayType)) or ty == BuiltinType.STRING
+
+
 def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None:
     """Validate array indexing - array must be array type, index must be int."""
     validator.validate_expression(expr.array)
@@ -61,9 +66,9 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
     reject_non_i32(validator, expr.index, validator.validate_expression(expr.index))
 
     array_type = validator.infer_expression_type(expr.array)
-    if array_type is not None and not isinstance(array_type, (ArrayType, DynamicArrayType)):
-        er.emit(validator.reporter, er.ERR.CE2002, expr.array.loc,
-               got=display_type(array_type), expected="array type")
+    if array_type is not None and not is_indexable(array_type):
+        er.emit(validator.reporter, er.ERR.CE2114, expr.array.loc,
+                type=display_type(array_type))
 
     if isinstance(array_type, ArrayType):
         validate_constant_array_index(expr.index, array_type.size, validator.reporter)

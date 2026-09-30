@@ -1,0 +1,7 @@
+# A link name that names no constant is refused (#1089).
+# EXPECT_ERROR_CODE: CE1001
+unsafe external "C" as libc because "probe":
+    fn pid() i32 = NO_SUCH_SYMBOL
+
+fn main() i32:
+    return Result.Ok(0)

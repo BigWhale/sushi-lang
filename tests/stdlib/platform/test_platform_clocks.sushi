@@ -1,0 +1,24 @@
+# The clock ids and the `struct timespec` size of `<sys/platform>` are right for this
+# host (#1089): `clock_gettime` accepts both clocks and fills a `TIMESPEC_SIZE` buffer.
+# EXPECT_STDOUT_EXACT: "CLOCK_REALTIME: ok\nCLOCK_MONOTONIC: ok\nTIMESPEC_SIZE: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "checking the clock ids against the host":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn clock_gettime(i32 id, ptr ts) i32 = "clock_gettime"
+
+fn main() i32:
+    let ptr ts = libc.malloc(TIMESPEC_SIZE as i64)
+    let i32 wall = libc.clock_gettime(CLOCK_REALTIME, ts)
+    let i64 wall_seconds = ts.load_i64(0)
+    let i32 f1 = expect_true("CLOCK_REALTIME", wall == 0 and wall_seconds > 1000000000).realise(1)
+    let i32 steady = libc.clock_gettime(CLOCK_MONOTONIC, ts)
+    let i64 nanos = ts.load_i64(8)
+    let i32 f2 = expect_true("CLOCK_MONOTONIC", steady == 0).realise(1)
+    let i32 f3 = expect_true("TIMESPEC_SIZE", TIMESPEC_SIZE == 16 and nanos >= 0 and nanos < 1000000000).realise(1)
+    libc.free(ts)
+    return Result.Ok(f1 + f2 + f3)

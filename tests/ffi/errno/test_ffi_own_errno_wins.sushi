@@ -1,0 +1,11 @@
+# A unit's own `fn errno` wins over the built-in (#1087), in a unit with no block too:
+# a declaration beats every name the compiler provides.
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn errno() i32:
+    return Result.Ok(7)
+
+fn main() i32:
+    let i32 code = errno().realise(0)
+    println(code)
+    return Result.Ok(0)

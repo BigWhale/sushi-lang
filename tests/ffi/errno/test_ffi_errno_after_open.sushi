@@ -1,0 +1,13 @@
+# `errno()` reads the calling thread's errno (#1087). `open` of a missing path answers
+# -1, and the cause is ENOENT, which is 2 on macOS and on Linux.
+# EXPECT_STDOUT_EXACT: "open: -1\nerrno: 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "opening a file descriptor":
+    fn open(string path, i32 flags, ...) i32 = "open"
+
+fn main() i32:
+    let i32 fd = libc.open("/sushi/no/such/file", 0)
+    let i32 code = errno()
+    println("open: {fd}")
+    println("errno: {code}")
+    return Result.Ok(0)

@@ -1,0 +1,13 @@
+# A plain `ptr` return asserts non-null too (#1085): the null pointer of `fopen` fails
+# at the call and never reaches Sushi as a value.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2025"
+unsafe external "C" as libc because "opening a C stream":
+    fn fopen(string path, string mode) ptr = "fopen"
+    fn fclose(ptr stream) i32 = "fclose"
+
+fn main() i32:
+    let ptr f = libc.fopen("/sushi/no/such/file", "r")
+    println("closed {libc.fclose(f)}")
+    return Result.Ok(0)

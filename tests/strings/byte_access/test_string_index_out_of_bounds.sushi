@@ -1,0 +1,11 @@
+# A byte read past the end is RE2020, as `arr[i]` is (#1091).
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020"
+use <collections/strings>
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let u8 past = s[s.size()]
+    println(past)
+    return Result.Ok(0)

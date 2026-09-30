@@ -324,6 +324,13 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
     elif isinstance(stmt.target, MemberAccess):
         validator.validate_expression(stmt.target)
 
+        # An external variable is read-only from Sushi (#1090).
+        if stmt.target.external_var_ref is not None:
+            er.emit(validator.reporter, er.ERR.CE5016, stmt.target.loc,
+                    name=".".join(stmt.target.external_var_ref))
+            validator.validate_expression(stmt.value)
+            return
+
         # A field of a constant is .rodata like any other part of it (CE2096).
         from .arrays import reject_write_to_constant
         if reject_write_to_constant(stmt.target, "assign to a field of",
@@ -341,6 +348,12 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
         # question, so validating the target answers both (CE2002, CE2012), and the
         # inference stamps `inferred_element_type` for the backend to read.
         validator.validate_expression(stmt.target)
+
+        # A string is immutable: `s[i]` reads a byte and never writes one (#1091).
+        if validator.infer_expression_type(stmt.target.array) == BuiltinType.STRING:
+            er.emit(validator.reporter, er.ERR.CE2113, stmt.target.loc)
+            validator.validate_expression(stmt.value)
+            return
 
         # A constant lives in .rodata: the store is undefined behaviour, not a
         # diagnostic, so it must never be emitted (CE2096).

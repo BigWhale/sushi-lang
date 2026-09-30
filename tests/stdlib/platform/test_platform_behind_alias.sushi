@@ -1,0 +1,10 @@
+# A platform constant behind an alias (#1089), folded into a constant of this unit.
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <sys/platform> as platform
+
+const i32 NOT_FOUND = platform.ENOENT
+
+fn main() i32:
+    println(NOT_FOUND)
+    return Result.Ok(0)

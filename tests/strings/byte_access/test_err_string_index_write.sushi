@@ -1,0 +1,6 @@
+# A string is immutable (#1091): `s[i]` is a read, and a write through it is refused.
+# EXPECT_ERROR_CODE: CE2113
+fn main() i32:
+    let string s = "Mostly Harmless"
+    s[0] := 1
+    return Result.Ok(0)

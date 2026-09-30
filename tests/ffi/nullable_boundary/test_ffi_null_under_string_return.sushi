@@ -1,0 +1,12 @@
+# A plain `string` return asserts non-null (#1085). The `getenv` of a missing key
+# answers a null pointer, and the call ends with a runtime error, not a crash in `strlen`.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2025"
+unsafe external "C" as libc because "reading the process environment":
+    fn getenv(string key) string = "getenv"
+
+fn main() i32:
+    let string v = libc.getenv("SUSHI_NO_SUCH_KEY_42")
+    println("got {v}")
+    return Result.Ok(0)

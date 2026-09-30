@@ -1,0 +1,6 @@
+# `errno()` is callable only in a unit that declares an `unsafe external` block
+# (#1087): a unit with no danger zone has no errno to read.
+# EXPECT_ERROR_CODE: CE5014
+fn main() i32:
+    let i32 code = errno()
+    return Result.Ok(code)

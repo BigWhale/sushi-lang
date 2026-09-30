@@ -388,6 +388,20 @@ class ExternalDecl(Node):
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    # A link name written as a string constant (#1089). `link_name` is empty until the
+    # `ffi-clash` step folds it.
+    link_expr: Optional["Expr"] = None
+
+@dataclass(slots=True)
+class ExternalVar(Node):
+    """A C global variable inside an unsafe external block (#1090). Read-only from Sushi."""
+    name: str                    # Sushi-visible name (e.g., "environ")
+    ty: Optional[Type]           # A number, bool, ptr or Maybe@(ptr)
+    link_name: str               # C link symbol; empty until a `link_expr` is folded
+    name_span: Optional[Span] = None
+    type_span: Optional[Span] = None
+    doc: Optional[DocBlock] = None
+    link_expr: Optional["Expr"] = None
 
 @dataclass(slots=True)
 class ExternalBlock(Node):
@@ -399,6 +413,7 @@ class ExternalBlock(Node):
     abi_span: Optional[Span] = None
     namespace_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
+    variables: List[ExternalVar] = field(default_factory=list)
 
 @dataclass(slots=True)
 class Block(Node):
@@ -633,6 +648,7 @@ class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
     inferred_element_type: Optional["Type"] = None  # Element type inferred by the typecheck pass.
+    reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
                                             # The backend reads the typecheck pass's stamp rather than
                                             # re-deriving; with none, `rows[0].hash()` died
                                             # as CE0019 (#286). Siblings:
@@ -804,6 +820,8 @@ class MemberAccess(Node):
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
+    # `libc.environ`: the (namespace, name) of an external variable (#1090).
+    external_var_ref: Optional[Tuple[str, str]] = None
     resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
     expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
     member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
@@ -904,7 +922,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "Block", "Param",
+    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",

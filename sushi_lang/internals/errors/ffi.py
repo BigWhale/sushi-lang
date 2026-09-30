@@ -19,7 +19,7 @@ _add(ErrorMessage("CE5002", Severity.ERROR,
 
 _add(ErrorMessage("CE5003", Severity.ERROR,
     "external signature uses non-C-ABI type '{type}'",
-    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void). Result/Maybe, structs, arrays, references, and user types cannot cross the C ABI boundary."))
+    Category.FFI, "External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL (#1085): a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A PARAMETER may also be a byte buffer, `u8[]`, `peek u8[]` or `poke u8[]`, which crosses as the pointer to its first byte (#1088); a `u8[]` return is refused, because C cannot answer a Sushi array. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, any other array (`i32[]`, a fixed `u8[N]`), a reference and a user type cannot cross the C ABI boundary."))
 
 _add(ErrorMessage("CE5004", Severity.ERROR,
     "variadic external '{name}' requires at least one fixed parameter",
@@ -47,15 +47,27 @@ _add(ErrorMessage("CE5009", Severity.ERROR,
 
 _add(ErrorMessage("CE5010", Severity.ERROR,
     "foreign `ptr` cannot be used with operator '{op}'",
-    Category.FFI, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. If null-checking is ever needed it will arrive as an `is_null(ptr)` intrinsic, never as `==`."))
+    Category.FFI, "A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. There is nothing to test for null either: a null is never a Sushi value. A C function that may answer NULL is declared `Maybe@(ptr)` and its NULL arrives as `Maybe.None`, while a plain `ptr` return asserts non-null and a NULL there is RE2025 at the call (#1085). The `is_null(ptr)` intrinsic this text promised before is replaced by that rule."))
 
 _add(ErrorMessage("CE5011", Severity.ERROR,
-    "foreign `ptr` has no methods (attempted '.{method}()')",
-    Category.FFI, "A `ptr` is an opaque handle with no hash, no string form, and no methods. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct."))
+    "foreign `ptr` has no method '.{method}()'",
+    Category.FFI, "A `ptr` has one closed set of methods, the foreign-memory methods (#1086): `load_<width>(off)` and `store_<width>(off, v)` for each integer and float width, `load_ptr(off)` (a `Maybe@(ptr)`), `store_ptr(off, q)`, `offset(n)` and `to_string(off)`, each at a byte offset. It has nothing else: no hash, no string form, no extension method. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct. Before #1086 a `ptr` had no method at all, and this text said so."))
 
 _add(ErrorMessage("CE5013", Severity.ERROR,
     "external link-name '{symbol}' names a symbol this program defines",
     Category.FFI, "An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name UNIFY -- the declaration then enters the program's own body with no ABI check, which is how a library-PRIVATE body could be run from code that may not call it, returning garbage read out of the wrong register (#470). Where the compiler already held a declaration of the name, the same program was an internal error (`DuplicatedNameError`) instead of a diagnostic. Rename the link-name, or call the Sushi function directly. The rule reads every symbol this build defines: the function and constant tables, the linked libraries, and the symbols the standard library GENERATES -- those last are in no semantic table, so the compiler reads the manifest the stdlib build writes beside its bitcode, plus a small reserved set for the ones the backend emits inline. Before that, a generated name built clean and died with a bus error at run time (#472). A generated name is refused whether this program links the unit or not. CE5001 is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match."))
+
+_add(ErrorMessage("CE5014", Severity.ERROR,
+    "`errno()` is read in a unit with no `unsafe external` block",
+    Category.FFI, "`errno()` answers the calling thread's `errno`, the cause a failed C call leaves behind (#1087). Only a C call can leave one, and only a unit that declares an `unsafe external` block can make a C call, so the built-in has the same confinement as the `ptr` type (CE5009): no danger zone, no errno. A unit's own `fn errno` is an ordinary declaration and wins over the built-in anywhere. Read `errno()` directly after the failed call and before any `close`, `free` or other C call, because those can overwrite it."))
+
+_add(ErrorMessage("CE5015", Severity.ERROR,
+    "the link name of external '{name}' is a constant of type {type}, not a string",
+    Category.FFI, "The link name after `=` in an `unsafe external` declaration is a string literal or a string constant (#1089): `= \"stat\"`, `= STAT_SYMBOL`, or `= platform.STAT_SYMBOL`. A constant is the form for a symbol that differs per platform, such as `stat$INODE64` on macOS x86_64, and `<sys/platform>` holds those names. The constant is folded in the unit that declares the block, and CE5013 and CE5001 read the folded name. A constant of another type names no symbol."))
+
+_add(ErrorMessage("CE5016", Severity.ERROR,
+    "external variable '{name}' is read-only",
+    Category.FFI, "A `var` in an `unsafe external` block declares a C global variable (#1090), and Sushi reads it: each read loads the global at that moment. A write to a C global (`libc.optind := 1`) is refused, because nothing yet says who else reads the global or when. A write can come later with `poke` semantics. Call a C function that sets the global, or keep the value in a Sushi variable."))
 
 _add(ErrorMessage("CE5012", Severity.ERROR,
     "foreign `ptr` cannot be a type argument of '{base}'",

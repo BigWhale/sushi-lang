@@ -1,0 +1,7 @@
+# Only a `u8[]` crosses the boundary for now (#1088); another element type stays CE5003.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn qsort_ints(i32[] xs, i64 n) ~ = "qsort_ints"
+
+fn main() i32:
+    return Result.Ok(0)

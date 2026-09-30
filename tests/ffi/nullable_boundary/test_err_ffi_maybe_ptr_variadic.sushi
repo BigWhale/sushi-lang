@@ -1,0 +1,10 @@
+# A nullable pointer is a declared parameter only (#1085): a trailing variadic argument
+# has no declared type to marshal a `Maybe` by, so it stays CE5005.
+# EXPECT_ERROR_CODE: CE5005
+unsafe external "C" as libc because "probe":
+    fn printf(string fmt, ...) i32 = "printf"
+
+fn main() i32:
+    let Maybe@(ptr) p = Maybe.None
+    let i32 n = libc.printf("%p\n", p)
+    return Result.Ok(n)

@@ -125,6 +125,10 @@ class ExpressionEmitter:
                 return calls.emit_method_call(self.codegen, expr, to_i1, is_dotcall=True)
 
             case MemberAccess():
+                if expr.external_var_ref is not None:
+                    from sushi_lang.backend.expressions.calls.foreign import (
+                        emit_external_variable)
+                    return emit_external_variable(self.codegen, expr)
                 enum_type = bare_variant_enum(self.codegen, expr)
                 if enum_type is not None:
                     from sushi_lang.backend.expressions import enums

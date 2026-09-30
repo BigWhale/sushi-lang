@@ -1,0 +1,9 @@
+# A link name is a string constant (#1089); an integer constant is refused.
+# EXPECT_ERROR_CODE: CE5015
+const i32 NOT_A_SYMBOL = 7
+
+unsafe external "C" as libc because "probe":
+    fn pid() i32 = NOT_A_SYMBOL
+
+fn main() i32:
+    return Result.Ok(0)

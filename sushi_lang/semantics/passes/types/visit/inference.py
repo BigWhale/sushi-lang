@@ -368,6 +368,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             if substituted is not None:
                 return self._materialize_wrapper(substituted)
 
+        from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
+        if function_name == ERRNO_FUNCTION:
+            return BuiltinType.I32
+
         # The registry is the single source of truth the backend reads too, so reading it
         # here keeps the two from drifting. The hardcoded copies this replaced had gone
         # stale: they looked up a one-arg "Result<i32>" that is never registered.

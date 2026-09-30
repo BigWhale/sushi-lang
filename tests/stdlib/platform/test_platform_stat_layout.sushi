@@ -1,0 +1,42 @@
+# The `struct stat` layout, the file type bits and the link names of `<sys/platform>` are
+# right for this host (#1089): a file, a directory and a symbolic link read back their
+# own type, and the file its size and times.
+# RUN_IN_FIXTURE_DIR
+# EXPECT_STDOUT_EXACT: "S_IFREG: ok\nST_SIZE_OFFSET: ok\nST_MTIME_OFFSET: ok\nST_CTIME_OFFSET: ok\nS_IFDIR: ok\nS_IFLNK: ok\nstat through a link: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "reading file metadata":
+    fn calloc(i64 count, i64 size) ptr = "calloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = STAT_SYMBOL
+    fn lstat(string path, ptr buf) i32 = LSTAT_SYMBOL
+    fn symlink(string target, string path) i32 = "symlink"
+    fn unlink(string path) i32 = "unlink"
+
+fn file_type(ptr buf) i32:
+    if (ST_MODE_BYTES == 2):
+        return Result.Ok((buf.load_u16(ST_MODE_OFFSET) as i32) & S_IFMT)
+    return Result.Ok(buf.load_i32(ST_MODE_OFFSET) & S_IFMT)
+
+fn main() i32:
+    let ptr buf = libc.calloc(1, STAT_SIZE as i64)
+    let i32 r1 = libc.stat("towel.txt", buf)
+    let i32 f1 = expect("S_IFREG", file_type(buf).realise(0) as i64, S_IFREG as i64).realise(1)
+    let i32 f2 = expect("ST_SIZE_OFFSET", buf.load_i64(ST_SIZE_OFFSET), 15).realise(1)
+    let i32 f3 = expect_true("ST_MTIME_OFFSET", buf.load_i64(ST_MTIME_OFFSET) > 1000000000).realise(1)
+    let i32 f4 = expect_true("ST_CTIME_OFFSET", buf.load_i64(ST_CTIME_OFFSET) > 1000000000).realise(1)
+
+    let i32 r2 = libc.stat(".", buf)
+    let i32 f5 = expect("S_IFDIR", file_type(buf).realise(0) as i64, S_IFDIR as i64).realise(1)
+
+    let i32 made = libc.symlink("towel.txt", "towel_link")
+    let i32 r3 = libc.lstat("towel_link", buf)
+    let i32 f6 = expect("S_IFLNK", file_type(buf).realise(0) as i64, S_IFLNK as i64).realise(1)
+    let i32 r4 = libc.stat("towel_link", buf)
+    let i32 f7 = expect_true("stat through a link", file_type(buf).realise(0) == S_IFREG and buf.load_i64(ST_SIZE_OFFSET) == 15).realise(1)
+    let i32 gone = libc.unlink("towel_link")
+    libc.free(buf)
+    return Result.Ok(f1 + f2 + f3 + f4 + f5 + f6 + f7 + r1 + r2 + r3 + r4 + made + gone)

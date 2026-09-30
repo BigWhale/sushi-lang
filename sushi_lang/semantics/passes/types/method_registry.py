@@ -45,9 +45,12 @@ from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.foreign_memory import (
+    FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
 
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, StructType)
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
+    StructType)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -438,6 +441,17 @@ class FunctionMethodInferrer:
         return function_method_return_type(self.method_name, self.receiver_type)
 
 
+@dataclass
+class ForeignPtrMethodInferrer:
+    """Type inferrer for the foreign-memory methods on a `ptr` (#1086)."""
+    method_name: str
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        return foreign_ptr_return_type(self.method_name, self.validator.enum_table,
+                                       self.validator.struct_table.by_name)
+
+
 # The family table. Written in the order the VALIDATION half reads: the families that
 # answer before a perk implementation, then the ones that answer after it. The claims are
 # disjoint, so the order changes no answer; stating ONE order in both layers is the point
@@ -526,6 +540,12 @@ def _answers_function(receiver_type, method_name, derived_methods):
             and is_builtin_function_method(method_name))
 
 
+def _answers_foreign_ptr(receiver_type, method_name, derived_methods):
+    # No perk can name a `ptr`, so which side of the perk the family stands on decides
+    # nothing; it is written with the other families that answer first.
+    return isinstance(receiver_type, ForeignPtrType) and method_name in FOREIGN_PTR_METHODS
+
+
 def _answers_primitive(receiver_type, method_name, derived_methods):
     # Every primitive INCLUDING string. `has_primitive_method` answers for the (receiver,
     # name) pair and not for the name alone: `to_bits` exists on f32 and f64 and nowhere
@@ -555,6 +575,10 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, answers=_answers_list, arity=LIST_METHOD_ARITY,
     infer=lambda rt, name, v: ListMethodInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
+    arity=FOREIGN_PTR_METHOD_ARITY,
+    infer=lambda rt, name, v: ForeignPtrMethodInferrer(name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_hash", beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))

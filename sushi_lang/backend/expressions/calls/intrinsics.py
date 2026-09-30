@@ -250,8 +250,10 @@ def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall]
 
 def try_emit_primitive_static(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                               to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit f64.from_bits(u64) / f32.from_bits(u32) static reinterpret."""
+    """A static on a primitive type name: `f64.from_bits`, `f32.from_bits`, `string.from_bytes`."""
     receiver = expr.receiver
+    if isinstance(receiver, Name) and receiver.id == "string" and expr.method == "from_bytes":
+        return _emit_string_from_bytes(codegen, expr)
     if not (isinstance(receiver, Name) and receiver.id in ("f64", "f32")
             and expr.method == "from_bits"):
         return None
@@ -263,6 +265,33 @@ def try_emit_primitive_static(codegen: 'LLVMCodegen', expr: Union[MethodCall, Do
     arg_value = codegen.expressions.emit_expr(expr.args[0])
     float_ll = ir.DoubleType() if receiver.id == "f64" else ir.FloatType()
     return builder.bitcast(arg_value, float_ll, name="from_bits")
+
+
+def _emit_string_from_bytes(codegen: 'LLVMCodegen', expr) -> ir.Value:
+    """`string.from_bytes(nom b)` (#1091): the array's buffer becomes the string's.
+
+    No byte is copied. The array is spent, so its scope exit frees nothing, and the
+    string owns the buffer (`owned` is 1) and frees it as a string does.
+    """
+    from sushi_lang.backend.ownership import ConsumingUse, consume
+    from sushi_lang.backend.types.arrays.addressing import as_array_address
+    from sushi_lang.backend.gep_utils import gep_dynamic_array_data, gep_dynamic_array_len
+    from sushi_lang.semantics.typesys import DynamicArrayType
+
+    if len(expr.args) != 1:
+        raise_internal_error("CE0078", got=len(expr.args))
+    builder = require_builder(codegen)
+    arg = expr.args[0]
+    value = codegen.expressions.emit_expr(arg)
+    value = consume(codegen, arg, value, DynamicArrayType(BuiltinType.U8),
+                    ConsumingUse.CALL_ARG)
+    address = as_array_address(codegen, value)
+    data = builder.load(gep_dynamic_array_data(codegen, address), name="from_bytes_data")
+    size = builder.load(gep_dynamic_array_len(codegen, address), name="from_bytes_size")
+    string = ir.Constant(codegen.types.string_struct, ir.Undefined)
+    string = builder.insert_value(string, data, 0)
+    string = builder.insert_value(string, size, 1)
+    return builder.insert_value(string, ir.Constant(codegen.i8, 1), 2, name="from_bytes")
 
 
 def try_emit_primitive_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

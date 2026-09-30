@@ -228,7 +228,9 @@ external would be a CE2507 error.
     The guiding rule is *"FFI is not Sushi."* Keep the `unsafe external` block thin, and
     immediately wrap each foreign call in an ordinary Sushi function that folds the raw
     value back into a `Result`. After that wrapper, all four guarantees — borrow checking,
-    RAII, `Result`/`Maybe`, and bounds/null safety — are back in force for callers.
+    RAII, `Result`/`Maybe`, and bounds safety — are back in force for callers. A NULL
+    never reaches Sushi as a value: a C function that can answer one is declared
+    `Maybe@(string)` or `Maybe@(ptr)`, and its NULL arrives as `Maybe.None`.
 
 The unsafe block is also the *only* place a bare `...` variadic is allowed, which is how
 you bind C's variadic functions like `printf`:
@@ -245,8 +247,8 @@ printf reported 12 bytes written
 ```
 
 The story continues in [Chapter 16](16-foreign-pointers.md), which covers the `ptr` type —
-the opaque handle C functions like `malloc` return — and the fences that keep it inside the
-unsafe realm. The full FFI guide, including all diagnostic codes and the C
+the opaque handle C functions like `malloc` return — how to read the memory behind it, and
+the fences that keep it inside the unsafe realm. The full FFI guide, including all diagnostic codes and the C
 argument-promotion rules, lives in [the FFI documentation](../ffi.md).
 
 ## Building a library

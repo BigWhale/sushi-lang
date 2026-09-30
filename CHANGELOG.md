@@ -4,8 +4,37 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **A nullable C pointer is a `Maybe` at the FFI boundary.** `Maybe@(string)` and
+  `Maybe@(ptr)` in an extern parameter or return mean "may be NULL": a NULL return answers
+  `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A plain `string` or `ptr`
+  return asserts non-null, and a NULL there stops the program with `RE2025` at the call.
+  It was a crash in `strlen` or in the next C call before.
+- **A `ptr` reads and writes foreign memory.** `p.load_i64(off)`, `p.store_i32(off, v)`
+  and the other widths, `p.load_ptr(off)` (a `Maybe@(ptr)`), `p.store_ptr(off, q)`,
+  `p.offset(n)` and `p.to_string(off)`, at a byte offset. Every other method stays
+  `CE5011`.
+- **`errno()`** answers the calling thread's `errno` in a unit that declares an
+  `unsafe external` block. Elsewhere it is `CE5014`.
+- **A `u8[]` extern parameter crosses as its data pointer**, bare, `peek` or `poke`, so
+  `read`, `write`, `recv` and `send` take a Sushi byte array.
+- **`<sys/platform>`** holds the platform constants for Sushi source: the `open` flags,
+  the `stat`, `dirent`, `timeval` and `addrinfo` layouts, the clock ids, the socket
+  options, the errno numbers and the `stat` link names. The compiler selects one file per
+  host (macOS arm64, Linux x86_64); another host is `CE3021`. The link name
+  of an extern may be a string constant (`= STAT_SYMBOL`); another type is `CE5015`.
+- **`var T name = "symbol"` in an `unsafe external` block** declares a read-only C global
+  (`libc.environ`). A write is `CE5016`.
+- **`s[i]` reads a string's byte in place**, bounds-checked like `arr[i]`, and
+  **`string.from_bytes(nom b)`** makes a string that takes the array's buffer with no
+  copy. A write through `s[i]` is `CE2113`.
+
 ### Fixed
 
+- **A temporary string given to an `unsafe external` function is freed.** The marshalled
+  `char*` was freed at scope exit, but the Sushi string it was copied from had no owner,
+  so `libc.strlen("{n}")` leaked it.
 - **`<collections/iter>` takes an owning element and an owning accumulator.** The free
   `filter` over a `List@(string)` was CE2411, and every `fold` with a `string` accumulator
   was CE2426 and CE2411. Both diagnostics pointed into the stdlib source. `filter` now
@@ -15,6 +44,11 @@ All notable changes to Sushi Lang will be documented in this file.
   now gives the offset of the read that could not complete.
 
 ### Changed
+
+- **An index on a value that is not an array or a string is `CE2114`.** It was `CE2002`,
+  whose text described an assignment the program did not write.
+- **The `ptr` guarantee note of `CW5001`** no longer says that a returned `ptr` may be
+  null.
 
 - **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
   `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`

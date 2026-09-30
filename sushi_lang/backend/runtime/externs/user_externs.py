@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
+from sushi_lang.semantics.ffi_boundary import is_byte_buffer, nullable_payload
 from sushi_lang.semantics.typesys import BuiltinType
 
 if TYPE_CHECKING:
@@ -13,7 +14,8 @@ if TYPE_CHECKING:
 
 def _abi_param_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
     """Lower a parameter type to its C-ABI LLVM type."""
-    if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+    if (ty == BuiltinType.STRING or nullable_payload(ty) is not None
+            or is_byte_buffer(ty)):
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)
 
@@ -24,7 +26,7 @@ def _abi_return_type(codegen: 'LLVMCodegen', ty) -> ir.Type:
         return ir.VoidType()
     if isinstance(ty, BuiltinType) and ty == BuiltinType.BLANK:
         return ir.VoidType()
-    if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
+    if ty == BuiltinType.STRING or nullable_payload(ty) is not None:
         return ir.PointerType(codegen.i8)
     return codegen.types.ll_type(ty)
 
@@ -44,6 +46,20 @@ def declare_user_externs(codegen: 'LLVMCodegen', external_table: 'ExternalTable'
             llvm_fn = _declare_one(codegen, sig)
             codegen.external_funcs[(namespace, name)] = llvm_fn
             codegen.external_sigs[(namespace, name)] = sig
+
+    codegen.external_vars = {}
+    for namespace, variables in external_table.variables.items():
+        for name, var in variables.items():
+            codegen.external_vars[(namespace, name)] = (_declare_variable(codegen, var), var)
+
+
+def _declare_variable(codegen: 'LLVMCodegen', var) -> ir.GlobalVariable:
+    """Declare (or reuse) a C global variable (#1090): no initializer, so `external`."""
+    existing = codegen.module.globals.get(var.link_name)
+    if isinstance(existing, ir.GlobalVariable):
+        return existing
+    return ir.GlobalVariable(codegen.module, _abi_return_type(codegen, var.ty),
+                             name=var.link_name)
 
 
 def _declare_one(codegen: 'LLVMCodegen', sig: 'ExternalSig') -> ir.Function:

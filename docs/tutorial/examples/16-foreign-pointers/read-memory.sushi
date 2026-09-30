@@ -1,0 +1,18 @@
+# Foreign memory through a `ptr`: C fills a buffer, and Sushi reads it at byte offsets.
+unsafe external "C" as libc because "a scratch buffer from the C heap":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn strdup(string s) ptr = "strdup"
+
+fn main() i32:
+    let ptr cells = libc.malloc(16)
+    cells.store_i64(0, 42)
+    cells.offset(8).store_i64(0, 7)
+    println("{cells.load_i64(0)} and {cells.load_i64(8)}")
+    libc.free(cells)
+
+    let ptr text = libc.strdup("Mostly Harmless")
+    println(text.to_string(0))
+    println(text.to_string(7))
+    libc.free(text)
+    return Result.Ok(0)

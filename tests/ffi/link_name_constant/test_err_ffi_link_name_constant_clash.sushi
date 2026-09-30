@@ -1,0 +1,13 @@
+# CE5013 reads the folded link name (#1089): a constant that spells a symbol this
+# program defines is refused as the literal is.
+# EXPECT_ERROR_CODE: CE5013
+const string HELPER = "helper"
+
+unsafe external "C" as libc because "probe":
+    fn twice() i32 = HELPER
+
+fn helper() i32:
+    return Result.Ok(2)
+
+fn main() i32:
+    return Result.Ok(0)

@@ -1,0 +1,17 @@
+# `offset` answers the address `p + n`, for a walk over an array of structs (#1086).
+# EXPECT_STDOUT_EXACT: "11 22\n22\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a scratch buffer from the C heap":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(16)
+    p.store_i64(0, 11)
+    p.offset(8).store_i64(0, 22)
+    println("{p.load_i64(0)} {p.load_i64(8)}")
+    let ptr second = p.offset(8)
+    println(second.load_i64(0))
+    libc.free(p)
+    return Result.Ok(0)

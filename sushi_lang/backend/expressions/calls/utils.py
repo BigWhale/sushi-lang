@@ -291,7 +291,10 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
         from sushi_lang.backend.expressions.structs import try_infer_struct_type
         # `Sign.Plus.hash()`: a bare variant is a value of its enum, not a field.
         semantic_type = bare_variant_enum(codegen, receiver)
-        if semantic_type is None:
+        if receiver.external_var_ref is not None:
+            # `libc.environ.load_ptr(0)`: a C global has its declared type (#1090).
+            semantic_type = codegen.external_vars[receiver.external_var_ref][1].ty
+        elif semantic_type is None:
             struct_type = try_infer_struct_type(codegen, receiver.receiver)
             if struct_type is not None:
                 semantic_type = struct_type.get_field_type(receiver.member)

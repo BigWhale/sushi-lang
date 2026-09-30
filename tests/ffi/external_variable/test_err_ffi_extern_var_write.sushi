@@ -1,0 +1,8 @@
+# An external variable is read-only from Sushi (#1090).
+# EXPECT_ERROR_CODE: CE5016
+unsafe external "C" as libc because "probe":
+    var i32 optind = "optind"
+
+fn main() i32:
+    libc.optind := 1
+    return Result.Ok(0)

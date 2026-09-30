@@ -1,0 +1,7 @@
+# A fixed array `u8[N]` does not cross the boundary (#1088); only a dynamic `u8[]` does.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn write(i32 fd, u8[16] buf, i64 n) i64 = "write"
+
+fn main() i32:
+    return Result.Ok(0)

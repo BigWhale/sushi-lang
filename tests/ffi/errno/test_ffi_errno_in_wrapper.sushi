@@ -1,0 +1,25 @@
+# The safe-wrapper pattern over `errno()` (#1087): the wrapper reads errno directly
+# after the failed call and maps it to an error variant.
+# EXPECT_STDOUT_EXACT: "missing\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "removing a file":
+    fn unlink(string path) i32 = "unlink"
+
+enum RemoveError:
+    Missing
+    Other(i32)
+
+fn remove(string path) ~ | RemoveError:
+    if (libc.unlink(path) == -1):
+        let i32 code = errno()
+        if (code == 2):
+            return Result.Err(RemoveError.Missing)
+        return Result.Err(RemoveError.Other(code))
+    return Result.Ok(~)
+
+fn main() i32:
+    match remove("/sushi/no/such/file"):
+        Result.Ok(_) -> println("removed")
+        Result.Err(RemoveError.Missing) -> println("missing")
+        Result.Err(RemoveError.Other(code)) -> println("errno {code}")
+    return Result.Ok(0)

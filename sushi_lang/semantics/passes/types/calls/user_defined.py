@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
+from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
 from sushi_lang.semantics.name_ladder import call_constructs_struct
 from ..visibility import (name_is_contested, out_of_scope_help, type_name_is_contested,
                           reject_ambiguous_name, reject_private_call,
@@ -169,6 +170,10 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             validate_stdlib_function(validator, call, stdlib_func)
             return
 
+    if func_sig is None and function_name == ERRNO_FUNCTION:
+        validate_errno_call(validator, call)
+        return
+
     if func_sig is None:
         call.callee_unresolved = True
         # A name a library declares and keeps. It resolves to nothing here BECAUSE the
@@ -218,6 +223,17 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     validate_call_arguments(validator, function_name, func_sig, call.args,
                             call.callee.loc)
+
+
+def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:
+    """`errno()`: no argument, and a unit that declares an `unsafe external` block."""
+    if not check_arguments(validator, ERRNO_FUNCTION, (), call.args, call.callee.loc,
+                           mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                           stop_on_arity=True):
+        return
+    if not unit_declares_external_block(validator.external_table,
+                                        validator.current_unit_name):
+        er.emit(validator.reporter, er.ERR.CE5014, call.callee.loc)
 
 
 def validate_call_arguments(validator: 'TypeValidator', function_name: str, func_sig,

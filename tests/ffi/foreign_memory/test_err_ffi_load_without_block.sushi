@@ -1,0 +1,8 @@
+# A `ptr` method needs a `ptr`, and a unit with no `unsafe external` block cannot name
+# one (#1086): the gate is CE5009.
+# EXPECT_ERROR_CODE: CE5009
+fn first(ptr p) i32:
+    return Result.Ok(p.load_i32(0))
+
+fn main() i32:
+    return Result.Ok(0)

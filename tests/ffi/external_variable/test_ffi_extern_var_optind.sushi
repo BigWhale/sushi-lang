@@ -1,0 +1,10 @@
+# `var <type> <name> = "<symbol>"` in an `unsafe external` block declares a C global
+# (#1090), and `libc.optind` loads it. `optind` is 1 before any `getopt` call.
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "reading getopt state":
+    var i32 optind = "optind"
+
+fn main() i32:
+    println(libc.optind)
+    return Result.Ok(0)

@@ -1,0 +1,26 @@
+# A store and a load of each width round trip through foreign memory (#1086). Each value
+# is its type's edge, so a wrong width or a wrong sign extension shows.
+# EXPECT_STDOUT_EXACT: "-128 -32768 -2147483648 -9223372036854775808\n255 65535 4294967295 18446744073709551615\n1.5 2.25\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "a scratch buffer from the C heap":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let ptr p = libc.malloc(64)
+    p.store_i8(0, -128)
+    p.store_i16(2, -32768)
+    p.store_i32(4, -2147483648)
+    p.store_i64(8, -9223372036854775808)
+    p.store_u8(16, 255)
+    p.store_u16(18, 65535)
+    p.store_u32(20, 4294967295)
+    p.store_u64(24, 18446744073709551615)
+    p.store_f32(32, 1.5)
+    p.store_f64(40, 2.25)
+    println("{p.load_i8(0)} {p.load_i16(2)} {p.load_i32(4)} {p.load_i64(8)}")
+    println("{p.load_u8(16)} {p.load_u16(18)} {p.load_u32(20)} {p.load_u64(24)}")
+    println("{p.load_f32(32)} {p.load_f64(40)}")
+    libc.free(p)
+    return Result.Ok(0)

@@ -1,0 +1,8 @@
+# A C function cannot take ownership of a Sushi array (#1088): `nom` on an extern
+# parameter is refused, as it is for every FFI parameter.
+# EXPECT_ERROR_CODE: CE2428
+unsafe external "C" as libc because "probe":
+    fn write(i32 fd, nom u8[] buf, i64 n) i64 = "write"
+
+fn main() i32:
+    return Result.Ok(0)

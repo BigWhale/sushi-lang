@@ -1,0 +1,7 @@
+# Only an array and a string are indexable (#1091); the diagnostic names the receiver.
+# EXPECT_ERROR_CODE: CE2114
+# EXPECT_STDERR_CONTAINS: "i32"
+fn main() i32:
+    let i32 n = 42
+    let i32 d = n[0]
+    return Result.Ok(d)

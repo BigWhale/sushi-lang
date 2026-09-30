@@ -1,0 +1,11 @@
+# The link name after `=` may be a string constant (#1089): here one of this unit.
+# EXPECT_STDOUT_EXACT: "pid positive: true\n"
+# EXPECT_RUNTIME_EXIT: 0
+const string PID_SYMBOL = "getpid"
+
+unsafe external "C" as libc because "reading the process id":
+    fn pid() i32 = PID_SYMBOL
+
+fn main() i32:
+    println("pid positive: {libc.pid() > 0}")
+    return Result.Ok(0)

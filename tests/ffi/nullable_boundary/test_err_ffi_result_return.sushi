@@ -1,0 +1,7 @@
+# A `Result` is not a C value (#1085): only the two nullable `Maybe` forms are admitted.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn malloc(i64 n) Result@(ptr, StdError) = "malloc"
+
+fn main() i32:
+    return Result.Ok(0)

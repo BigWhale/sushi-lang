@@ -1,0 +1,7 @@
+# C cannot answer a Sushi array (#1088); a `ptr` plus a copy is the route.
+# EXPECT_ERROR_CODE: CE5003
+unsafe external "C" as libc because "probe":
+    fn malloc(i64 n) u8[] = "malloc"
+
+fn main() i32:
+    return Result.Ok(0)

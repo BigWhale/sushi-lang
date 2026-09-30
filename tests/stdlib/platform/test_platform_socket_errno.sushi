@@ -1,0 +1,137 @@
+# The socket errno numbers and `SHUT_RDWR` of `<sys/platform>` are right for this host
+# (#1089): each failure is caused on purpose on the loopback interface, and `errno()` is
+# compared with the constant.
+# EXPECT_STDOUT_EXACT: "ECONNREFUSED: ok\nENOTCONN: ok\nSHUT_RDWR: ok\nEAFNOSUPPORT: ok\nEPROTONOSUPPORT: ok\nSOCKADDR_STORAGE_SIZE: ok\nEADDRINUSE: ok\nEADDRNOTAVAIL: ok\nEDESTADDRREQ: ok\nEMSGSIZE: ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform>
+use "helpers/check"
+
+unsafe external "C" as libc because "causing each socket errno on purpose":
+    fn calloc(i64 count, i64 size) ptr = "calloc"
+    fn free(ptr p) ~ = "free"
+    fn getaddrinfo(string node, string service, ptr hints, ptr res) i32 = "getaddrinfo"
+    fn freeaddrinfo(ptr ai) ~ = "freeaddrinfo"
+    fn socket(i32 domain, i32 kind, i32 protocol) i32 = "socket"
+    fn connect(i32 s, ptr addr, u32 length) i32 = "connect"
+    fn bind(i32 s, ptr addr, u32 length) i32 = "bind"
+    fn listen(i32 s, i32 backlog) i32 = "listen"
+    fn getsockname(i32 s, ptr addr, ptr length) i32 = "getsockname"
+    fn getpeername(i32 s, ptr addr, ptr length) i32 = "getpeername"
+    fn shutdown(i32 s, i32 how) i32 = "shutdown"
+    fn send(i32 s, u8[] buf, i64 n, i32 flags) i64 = "send"
+    fn sendto(i32 s, u8[] buf, i64 n, i32 flags, ptr addr, u32 length) i64 = "sendto"
+    fn close(i32 s) i32 = "close"
+
+fn failed(string label, i64 rc, i32 code, i32 want) i32:
+    if (rc != -1):
+        println("{label}: the call did not fail, it answered {rc}")
+        return Result.Ok(1)
+    return Result.Ok(expect(label, code as i64, want as i64).realise(1))
+
+fn resolve(string node, string service, i32 kind) ptr:
+    let ptr hints = libc.calloc(1, ADDRINFO_SIZE as i64)
+    hints.store_i32(AI_FLAGS_OFFSET, AI_NUMERICHOST)
+    hints.store_i32(AI_FAMILY_OFFSET, AF_INET)
+    hints.store_i32(AI_SOCKTYPE_OFFSET, kind)
+    let ptr slot = libc.calloc(1, 8)
+    let i32 rc = libc.getaddrinfo(node, service, hints, slot)
+    let Maybe@(ptr) found = slot.load_ptr(0)
+    libc.free(slot)
+    libc.free(hints)
+    match found:
+        Maybe.Some(ai) ->
+            if (rc == 0):
+                return Result.Ok(ai)
+        Maybe.None -> println("getaddrinfo {node}:{service} failed")
+    return Result.Err(StdError.Error)
+
+fn address(ptr ai) ptr:
+    match ai.load_ptr(AI_ADDR_OFFSET):
+        Maybe.Some(sa) -> return Result.Ok(sa)
+        Maybe.None -> println("no ai_addr")
+    return Result.Err(StdError.Error)
+
+fn stream_errors() i32:
+    let ptr closed_port = resolve("127.0.0.1", "1", SOCK_STREAM)??
+    let ptr target = address(closed_port)??
+    let i32 s = libc.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let i32 refused = libc.connect(s, target, SOCKADDR_IN_SIZE as u32)
+    let i32 e1 = errno()
+    let i32 f1 = failed("ECONNREFUSED", refused as i64, e1, ECONNREFUSED).realise(1)
+    libc.freeaddrinfo(closed_port)
+    let i32 c1 = libc.close(s)
+
+    let i32 t = libc.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let ptr peer = libc.calloc(1, SOCKADDR_STORAGE_SIZE as i64)
+    let ptr length = libc.calloc(1, 4)
+    length.store_u32(0, SOCKADDR_STORAGE_SIZE as u32)
+    let i32 alone = libc.getpeername(t, peer, length)
+    let i32 e2 = errno()
+    let i32 f2 = failed("ENOTCONN", alone as i64, e2, ENOTCONN).realise(1)
+    let i32 down = libc.shutdown(t, SHUT_RDWR)
+    let i32 e3 = errno()
+    let i32 f3 = failed("SHUT_RDWR", down as i64, e3, ENOTCONN).realise(1)
+    libc.free(peer)
+    libc.free(length)
+    let i32 c2 = libc.close(t)
+    return Result.Ok(f1 + f2 + f3 + c1 + c2)
+
+fn creation_errors() i32:
+    let i32 family = libc.socket(12345, SOCK_STREAM, 0)
+    let i32 e1 = errno()
+    let i32 f1 = failed("EAFNOSUPPORT", family as i64, e1, EAFNOSUPPORT).realise(1)
+    let i32 protocol = libc.socket(AF_INET, SOCK_STREAM, 200)
+    let i32 e2 = errno()
+    let i32 f2 = failed("EPROTONOSUPPORT", protocol as i64, e2, EPROTONOSUPPORT).realise(1)
+    return Result.Ok(f1 + f2)
+
+fn bind_errors() i32:
+    let ptr any_port = resolve("127.0.0.1", "0", SOCK_STREAM)??
+    let ptr loopback = address(any_port)??
+    let i32 first = libc.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let i32 b1 = libc.bind(first, loopback, SOCKADDR_IN_SIZE as u32)
+    let i32 l1 = libc.listen(first, 1)
+    let ptr bound = libc.calloc(1, SOCKADDR_STORAGE_SIZE as i64)
+    let ptr length = libc.calloc(1, 4)
+    length.store_u32(0, SOCKADDR_STORAGE_SIZE as u32)
+    let i32 named = libc.getsockname(first, bound, length)
+    let i32 f1 = expect_true("SOCKADDR_STORAGE_SIZE", b1 == 0 and l1 == 0 and named == 0 and length.load_u32(0) == SOCKADDR_IN_SIZE as u32).realise(1)
+    let i32 second = libc.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let i32 b2 = libc.bind(second, bound, SOCKADDR_IN_SIZE as u32)
+    let i32 e2 = errno()
+    let i32 f2 = failed("EADDRINUSE", b2 as i64, e2, EADDRINUSE).realise(1)
+    libc.freeaddrinfo(any_port)
+    libc.free(bound)
+    libc.free(length)
+
+    let ptr foreign = resolve("192.0.2.1", "0", SOCK_STREAM)??
+    let ptr test_net = address(foreign)??
+    let i32 third = libc.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let i32 b3 = libc.bind(third, test_net, SOCKADDR_IN_SIZE as u32)
+    let i32 e3 = errno()
+    let i32 f3 = failed("EADDRNOTAVAIL", b3 as i64, e3, EADDRNOTAVAIL).realise(1)
+    libc.freeaddrinfo(foreign)
+    let i32 closed = libc.close(first) + libc.close(second) + libc.close(third)
+    return Result.Ok(f1 + f2 + f3 + closed)
+
+fn datagram_errors() i32:
+    let i32 u = libc.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+    let i64 nowhere = libc.send(u, from([0 as u8]), 1, 0)
+    let i32 e1 = errno()
+    let i32 f1 = failed("EDESTADDRREQ", nowhere, e1, EDESTADDRREQ).realise(1)
+    let ptr discard = resolve("127.0.0.1", "9", SOCK_DGRAM)??
+    let ptr sink = address(discard)??
+    let i64 huge = libc.sendto(u, from([0 as u8; 70000]), 70000, 0, sink, SOCKADDR_IN_SIZE as u32)
+    let i32 e2 = errno()
+    let i32 f2 = failed("EMSGSIZE", huge, e2, EMSGSIZE).realise(1)
+    libc.freeaddrinfo(discard)
+    let i32 c = libc.close(u)
+    return Result.Ok(f1 + f2 + c)
+
+fn main() i32:
+    let i32 a = stream_errors().realise(1)
+    let i32 b = creation_errors().realise(1)
+    let i32 c = bind_errors().realise(1)
+    let i32 d = datagram_errors().realise(1)
+    return Result.Ok(a + b + c + d)

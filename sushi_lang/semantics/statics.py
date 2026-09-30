@@ -56,6 +56,7 @@ BUILTIN_STATICS: dict[str, frozenset[str]] = {
     "Own": frozenset({"alloc"}),
     "f64": frozenset({"from_bits"}),
     "f32": frozenset({"from_bits"}),
+    "string": frozenset({"from_bytes"}),
 }
 
 

@@ -1,0 +1,12 @@
+# A pointer global that may be null is declared `Maybe@(ptr)` (#1090), and the read
+# tests it: the environment of a normal process is `Maybe.Some`.
+# EXPECT_STDOUT_EXACT: "environ: some\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "reading the process environment":
+    var Maybe@(ptr) environ = "environ"
+
+fn main() i32:
+    match libc.environ:
+        Maybe.Some(_) -> println("environ: some")
+        Maybe.None -> println("environ: none")
+    return Result.Ok(0)

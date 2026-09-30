@@ -36,8 +36,6 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
 
     if producer == "extern":
         validator._resolve_external_call(node)
-        for arg in node.args:
-            validator.validate_expression(arg)
         validate_external_call_args(validator, node)
         return
 
@@ -153,6 +151,9 @@ def infer_namespaced_member(validator: 'TypeValidator',
                             node: 'MemberAccess') -> Optional[Type]:
     """The type of `<namespace>.<name>` read as a value -- a constant or a function."""
     binding = validator.resolve_namespaced(node.receiver, node.member)
+    if binding is not None and binding.kind == "extern variable":
+        node.external_var_ref = (binding.provider.origin, node.member)
+        return binding.record.ty
     if binding is not None and binding.provider.namespace_kind == "unit":
         if binding.kind == "function":
             return _infer_namespaced_function_value(validator, node, binding)

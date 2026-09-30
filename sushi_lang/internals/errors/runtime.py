@@ -43,3 +43,13 @@ _add(ErrorMessage("RE2023", Severity.ERROR,
 # hazard by construction rather than by a guard that has to fire, and matches `string.s` and
 # `string.ss`, which have always clamped. A count of zero was already data rather than an
 # error, so a negative one reaching the same answer needed no rule of its own.
+
+# A foreign return declared non-null (#1085)
+_add(ErrorMessage("RE2025", Severity.ERROR,
+    "a foreign call returned a null pointer where its declaration says non-null",
+    Category.RUNTIME, "An `unsafe external` function declared to return a plain `string` or "
+    "`ptr` answered NULL. Null is never a Sushi value, so a plain pointer type asserts that C "
+    "cannot answer one, and the call stops the program instead of passing the null on to "
+    "`strlen` or to the next C call. Declare the return `Maybe@(string)` or `Maybe@(ptr)` when "
+    "C can answer NULL: the call then answers `Maybe.None` (docs/ffi.md, \"Null at the "
+    "boundary\")."))

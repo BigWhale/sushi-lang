@@ -1,0 +1,20 @@
+# An external variable and the foreign-memory methods together (#1090): the first
+# entry of `environ` is a NUL-terminated `KEY=value` string.
+# EXPECT_STDOUT_EXACT: "first entry has a key: true\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+unsafe external "C" as libc because "reading the process environment":
+    var ptr environ = "environ"
+
+fn report(string entry) ~:
+    let bool keyed = entry.contains("=")
+    println("first entry has a key: {keyed}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match libc.environ.load_ptr(0):
+        Maybe.Some(entry) -> report(entry.to_string(0))
+        Maybe.None -> println("empty environment")
+    return Result.Ok(0)

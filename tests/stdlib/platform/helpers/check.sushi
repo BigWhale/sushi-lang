@@ -1,0 +1,15 @@
+# The report of the platform fixtures: one line per check, and a count of failures.
+
+public fn expect(string label, i64 got, i64 want) i32:
+    if (got == want):
+        println("{label}: ok")
+        return Result.Ok(0)
+    println("{label}: got {got}, want {want}")
+    return Result.Ok(1)
+
+public fn expect_true(string label, bool held) i32:
+    if (held):
+        println("{label}: ok")
+        return Result.Ok(0)
+    println("{label}: FAILED")
+    return Result.Ok(1)

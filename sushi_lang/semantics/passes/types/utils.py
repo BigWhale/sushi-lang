@@ -7,7 +7,7 @@ from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType
+from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType, ForeignPtrType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
     reject_private_kept, reject_private_type)
@@ -382,7 +382,7 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
             continue
 
-        if isinstance(param.ty, (BuiltinType, StructType, EnumType)):
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType)):
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             resolved_type = resolve_declared_type(validator, param.ty)

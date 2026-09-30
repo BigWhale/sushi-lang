@@ -447,6 +447,18 @@ def _reject_unreachable_receiver(validator: 'TypeValidator', call: MethodCall,
                               root.loc, mode=mode.value)
 
 
+def _validate_foreign_ptr_call(validator: 'TypeValidator', call: MethodCall,
+                               receiver_type) -> None:
+    """CE5011: a `ptr` has the closed set of foreign-memory methods and nothing else.
+
+    No hash, no string form, no extension (#1086). Wrap the handle in a struct and extend
+    the struct instead.
+    """
+    if not METHOD_TYPE_REGISTRY.validate_method(validator, call, receiver_type,
+                                                beats_perk=True):
+        er.emit(validator.reporter, er.ERR.CE5011, call.loc, method=call.method)
+
+
 def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     """The method-call ladder: a built-in family, a perk implementation, an extension.
 
@@ -465,10 +477,8 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     validator.validate_expression(call.receiver)
     receiver_type = validator.infer_expression_type(call.receiver)
 
-    # CE5011: a foreign ptr is an opaque handle - no methods (no hash, no
-    # string form, nothing). Wrap it in a struct and extend the struct instead.
     if isinstance(receiver_type, ForeignPtrType):
-        er.emit(validator.reporter, er.ERR.CE5011, call.loc, method=call.method)
+        _validate_foreign_ptr_call(validator, call, receiver_type)
         return
 
     if receiver_type is None:
@@ -749,6 +759,15 @@ def _validate_list_family(validator: 'TypeValidator', call: MethodCall,
                           receiver_type) -> None:
     from sushi_lang.semantics.generics.list import validate_list_method_with_validator
     validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
+
+
+@METHOD_TYPE_REGISTRY.validator("foreign_ptr")
+def _validate_foreign_ptr_family(validator: 'TypeValidator', call: MethodCall,
+                                 receiver_type) -> None:
+    from sushi_lang.semantics.foreign_memory import FOREIGN_PTR_METHODS
+    check_arguments(validator, f"ptr.{call.method}", FOREIGN_PTR_METHODS[call.method].params,
+                    call.args, call.loc, mismatch_code=er.ERR.CE2006,
+                    arity_code=er.ERR.CE2009)
 
 
 @METHOD_TYPE_REGISTRY.validator("derived_hash")

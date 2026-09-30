@@ -1,0 +1,12 @@
+# `s[i]` reads the byte at offset i in place (#1091): a `u8`, with no copy.
+# EXPECT_STDOUT_EXACT: "77 115\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let u8 first = s[0]
+    let u8 last = s[s.size() - 1]
+    println("{first} {last}")
+    return Result.Ok(0)

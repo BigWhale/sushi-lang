@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import MethodCall, Name
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.param_modes import ParamMode
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
 from .enums import validate_enum_constructor
 from ..propagation import holds_declared_type
 
@@ -40,7 +41,7 @@ class DotCallKind(Enum):
     """Which rung of the ladder answered the node."""
 
     NAMESPACE = auto()
-    FROM_BITS = auto()
+    PRIMITIVE_STATIC = auto()
     STATIC = auto()
     ENUM = auto()
     FN_FIELD = auto()
@@ -85,15 +86,18 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
     if report:
         _reject_call_site_type_args(validator, node)
 
-    # f64.from_bits(bits) / f32.from_bits(bits): the static bit-reinterpret constructor.
-    # The receiver is a primitive float type NAME, not a value, so it answers before the
-    # receiver is measured as an expression.
-    float_type = _from_bits_type(node)
-    if float_type is not None:
-        node.inferred_return_type = float_type
+    # A static on a primitive type NAME: `f64.from_bits(bits)`, `f32.from_bits(bits)`,
+    # `string.from_bytes(nom b)`. The receiver is a type, not a value, so it answers
+    # before the receiver is measured as an expression.
+    static = PRIMITIVE_STATICS.get(_primitive_static_key(node))
+    if static is not None:
+        node.inferred_return_type = static.returns
+        if static.consumes:
+            node.callee_param_modes = (ParamMode.NOM,)
+            node.callee_param_names = [static.param_name]
         if report:
-            _validate_from_bits_args(validator, node, float_type)
-        return DotCallTarget(DotCallKind.FROM_BITS, type=float_type)
+            _validate_primitive_static_args(validator, node, static)
+        return DotCallTarget(DotCallKind.PRIMITIVE_STATIC, type=static.returns)
 
     # The receiver is deliberately NOT validated here: every path either has no receiver
     # (an enum constructor's is a type NAME) or validates it itself. Doing it here as well
@@ -219,24 +223,38 @@ def _fn_field_type(validator: 'TypeValidator', node: 'DotCall') -> Optional[Type
     return resolve_fn_field_call(validator, node)
 
 
-def _from_bits_type(node: 'DotCall') -> Optional[Type]:
-    """The float type `f64.from_bits` / `f32.from_bits` yields, or None for anything else."""
-    if not (isinstance(node.receiver, Name) and node.method == "from_bits"):
+@dataclass(frozen=True)
+class PrimitiveStatic:
+    """A static on a primitive type name: its one parameter, and what it answers."""
+    param: Type
+    param_name: str
+    returns: Type
+    consumes: bool = False
+
+
+#: The statics a primitive type name holds, by (type name, method). The backend emits
+#: each in `intrinsics.try_emit_primitive_static`.
+PRIMITIVE_STATICS: dict[tuple[str, str], PrimitiveStatic] = {
+    ("f64", "from_bits"): PrimitiveStatic(BuiltinType.U64, "bits", BuiltinType.F64),
+    ("f32", "from_bits"): PrimitiveStatic(BuiltinType.U32, "bits", BuiltinType.F32),
+    # The array's buffer BECOMES the string's, with no copy (#1091).
+    ("string", "from_bytes"): PrimitiveStatic(DynamicArrayType(BuiltinType.U8), "bytes",
+                                              BuiltinType.STRING, consumes=True),
+}
+
+
+def _primitive_static_key(node: 'DotCall') -> Optional[tuple[str, str]]:
+    if not isinstance(node.receiver, Name):
         return None
-    if node.receiver.id == "f64":
-        return BuiltinType.F64
-    if node.receiver.id == "f32":
-        return BuiltinType.F32
-    return None
+    return (node.receiver.id, node.method)
 
 
-def _validate_from_bits_args(validator: 'TypeValidator', node: 'DotCall',
-                             float_type: Type) -> None:
-    """Measure `f64.from_bits(u64)` / `f32.from_bits(u32)` against the width it reads."""
+def _validate_primitive_static_args(validator: 'TypeValidator', node: 'DotCall',
+                                    static: PrimitiveStatic) -> None:
+    """Measure the one argument of a primitive static against its parameter."""
     from sushi_lang.semantics.passes.types.arguments import check_arguments
 
-    expected = BuiltinType.U64 if float_type == BuiltinType.F64 else BuiltinType.U32
-    check_arguments(validator, f"{node.receiver.id}.from_bits", [expected],
+    check_arguments(validator, f"{node.receiver.id}.{node.method}", [static.param],
                     node.args, node.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
                     stop_on_arity=True)
