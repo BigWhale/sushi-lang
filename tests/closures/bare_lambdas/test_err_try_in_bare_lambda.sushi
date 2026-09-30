@@ -1,0 +1,10 @@
+# A lambda whose type has no `| E` is bare, so a `??` in its body is refused (CE0131).
+# The compiler never infers a channel from the body.
+# EXPECT_ERROR_CODES_EXACT: CE0131
+fn parse(i32 x) i32 | StdError:
+    return Result.Ok(x)
+
+fn main() i32:
+    let fn(i32) -> i32 f = |i32 v| parse(v)?? + 1
+    println(f(1))
+    return 0

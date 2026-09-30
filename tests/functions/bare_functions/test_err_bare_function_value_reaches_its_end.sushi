@@ -1,0 +1,10 @@
+# A bare function that answers a value still must not reach the end of its body with
+# no `return` (CE0107). Only a `~` function may.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+fn pick(bool b) i32:
+    if (b):
+        return 1
+
+fn main() i32:
+    println(pick(true))
+    return 0

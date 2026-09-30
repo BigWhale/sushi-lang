@@ -1,0 +1,22 @@
+##: A library with one bare function and one function with a channel. :##
+
+##:
+Doubles a number.
+
+- Parameter x: The number.
+- Returns: Two times `x`.
+:##
+public fn double(i32 x) i32:
+    return x * 2
+
+##:
+Refuses a negative number.
+
+- Parameter x: The number.
+- Returns: `x`, when it is not negative.
+- Errors: `StdError.Error` for a negative number.
+:##
+public fn checked(i32 x) i32 | StdError:
+    if (x < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x)

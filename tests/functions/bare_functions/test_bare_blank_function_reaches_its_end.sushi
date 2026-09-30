@@ -1,0 +1,14 @@
+# A bare `~` function may reach the end of its body: there is no Result to return. An
+# early `return ~` leaves it at once.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nearly\n"
+# EXPECT_STDERR_EMPTY: true
+fn say(bool early) ~:
+    if (early):
+        println("early")
+        return ~
+    println("Mostly Harmless")
+
+fn main() i32:
+    say(false)
+    say(true)
+    return 0
