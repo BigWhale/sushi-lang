@@ -102,8 +102,8 @@ prints as `::ffff:a.b.c.d`.
 :##
 extend IpAddr text() string:
     match self:
-        IpAddr.V4(bits) -> return v4_text(bits).realise("")
-        IpAddr.V6(high, low) -> return v6_text(high, low).realise("")
+        IpAddr.V4(bits) -> return v4_text(bits)
+        IpAddr.V6(high, low) -> return v6_text(high, low)
 
 ##:
 Whether the address is of the IPv4 family.
@@ -186,7 +186,7 @@ The IPv4 half of a v4-mapped address, as an address of its own.
 - Returns: The IPv4 address the low 32 bits spell.
 :##
 fn mapped_v4(u64 low) IpAddr:
-    return Result.Ok(IpAddr.V4((low & 4_294_967_295) as u32))
+    return IpAddr.V4((low & 4_294_967_295) as u32)
 
 ##:
 Reads one octet of a dotted quad.
@@ -347,7 +347,7 @@ fn v4_text(u32 bits) string:
     let u32 b = (bits >> 16) & 255
     let u32 c = (bits >> 8) & 255
     let u32 d = bits & 255
-    return Result.Ok("{a}.{b}.{c}.{d}")
+    return "{a}.{b}.{c}.{d}"
 
 ##:
 Unpacks a V6 payload into its eight groups.
@@ -364,7 +364,7 @@ fn v6_groups(u64 high, u64 low) u16[]:
     foreach(i in 0..4):
         let u64 shift = ((3 - i) * 16) as u64
         groups.push(((low >> shift) & 65_535) as u16)
-    return Result.Ok(groups)
+    return groups
 
 ##:
 Renders a V6 payload as RFC 5952 text.
@@ -376,11 +376,11 @@ Renders a V6 payload as RFC 5952 text.
 fn v6_text(u64 high, u64 low) string:
     let IpAddr whole = IpAddr.V6(high, low)
     if (whole.is_v4_mapped()):
-        let IpAddr inner = mapped_v4(low)??
+        let IpAddr inner = mapped_v4(low)
         let string quad = inner.text()
-        return Result.Ok("::ffff:{quad}")
+        return "::ffff:{quad}"
 
-    let u16[] groups = v6_groups(high, low)??
+    let u16[] groups = v6_groups(high, low)
 
     # The longest run of zero groups, leftmost on a tie. A run of one is left
     # alone: RFC 5952 forbids compressing it, because `::` there is no shorter.
@@ -404,19 +404,19 @@ fn v6_text(u64 high, u64 low) string:
     if (best_start < 0):
         let string[] all = from([])
         foreach(i in 0..8):
-            all.push(hex_text(groups[i])??)
-        return Result.Ok(":".join(all))
+            all.push(hex_text(groups[i]))
+        return ":".join(all)
 
     let string[] before = from([])
     foreach(i in 0..best_start):
-        before.push(hex_text(groups[i])??)
+        before.push(hex_text(groups[i]))
     let string[] after = from([])
     foreach(i in (best_start + best_len)..8):
-        after.push(hex_text(groups[i])??)
+        after.push(hex_text(groups[i]))
 
     let string head = ":".join(before)
     let string tail = ":".join(after)
-    return Result.Ok("{head}::{tail}")
+    return "{head}::{tail}"
 
 ##:
 Renders one group in lowercase hex, with no leading zero.
@@ -426,7 +426,7 @@ Renders one group in lowercase hex, with no leading zero.
 :##
 fn hex_text(u16 group) string:
     if (group == 0):
-        return Result.Ok("0")
+        return "0"
     let string digits = "0123456789abcdef"
     let string[] out = from([])
     let bool started = false
@@ -436,4 +436,4 @@ fn hex_text(u16 group) string:
         if (nibble != 0 or started):
             started := true
             out.push(digits.char_at(nibble))
-    return Result.Ok("".join(out))
+    return "".join(out)

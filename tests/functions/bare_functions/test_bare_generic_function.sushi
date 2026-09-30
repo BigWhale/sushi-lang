@@ -1,11 +1,13 @@
 # A generic function without `| E` is bare too, in every instance.
-# EXPECT_STDOUT_EXACT: "7 towel\n"
+# EXPECT_STDOUT_EXACT: "7 fish\n"
 # EXPECT_STDERR_EMPTY: true
-fn first@(T)(nom T a, nom T b) T:
-    return a
+fn pick@(T)(bool left, nom T a, nom T b) T:
+    if (left):
+        return a
+    return b
 
 fn main() i32:
-    let i32 n = first(7, 8)
-    let string s = first("towel", "fish")
+    let i32 n = pick(true, nom 7, nom 8)
+    let string s = pick(false, nom "towel", nom "fish")
     println("{n} {s}")
     return 0

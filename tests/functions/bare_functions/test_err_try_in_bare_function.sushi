@@ -1,7 +1,7 @@
 # A bare function has no error channel, so a `??` in its body has nothing to propagate
 # into (CE0131). Handle the Result in the body, or write `| E` in the signature.
 # EXPECT_ERROR_CODES_EXACT: CE0131
-# EXPECT_STDERR_CONTAINS: 11:13: error [CE0131]
+# EXPECT_STDERR_CONTAINS: 11:12: error [CE0131]
 fn parse(i32 x) i32 | StdError:
     if (x < 0):
         return Result.Err(StdError.Error)
