@@ -84,6 +84,10 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
     rhs = codegen.expressions.emit_expr(expr.right)
     op = expr.op
 
+    if expr.operand_type is not None:
+        i1v = _emit_contract_comparison(codegen, expr, lhs, rhs)
+        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
     if (codegen.types.is_string_type(lhs.type) and
         codegen.types.is_string_type(rhs.type)):
         _own_string_operands(codegen, expr, lhs, rhs)
@@ -111,6 +115,28 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
     else:
         i1v = codegen.builder.icmp_signed(op, lhs, rhs)
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
+
+def _emit_contract_comparison(codegen: 'LLVMCodegen', expr: BinaryOp,
+                              lhs: ir.Value, rhs: ir.Value) -> ir.Value:
+    """A struct or an enum operand: `==`/`!=` read `Eq`, the order operators `Ord`.
+
+    The typecheck pass stamped the operand type, and the comparison only reads each
+    operand, so a temporary that owns something gets an owner and is freed with it.
+    """
+    from sushi_lang.backend.types.contracts import (
+        emit_value_compare, emit_value_eq, load_operand)
+    from .memory import own_temporary
+    ty = expr.operand_type
+    lhs = load_operand(codegen, lhs, ty)
+    rhs = load_operand(codegen, rhs, ty)
+    own_temporary(codegen, expr.left, lhs, ty)
+    own_temporary(codegen, expr.right, rhs, ty)
+    if expr.op in ("==", "!="):
+        equal = emit_value_eq(codegen, lhs, rhs, ty)
+        return equal if expr.op == "==" else codegen.builder.not_(equal)
+    order = emit_value_compare(codegen, lhs, rhs, ty)
+    return codegen.builder.icmp_signed(expr.op, order, ir.Constant(order.type, 0))
 
 
 def _own_string_operands(codegen: 'LLVMCodegen', expr: BinaryOp,

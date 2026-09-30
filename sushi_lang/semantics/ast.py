@@ -673,6 +673,9 @@ class BinaryOp(Node):
     op: BinOp
     left: "Expr"
     right: "Expr"
+    # The struct or enum a comparison compares, stamped by the typecheck pass when the
+    # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
+    operand_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Spread(Node):

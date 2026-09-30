@@ -94,6 +94,8 @@ class ExpressionValidator(RecursiveVisitor):
         # BEFORE validation, so the range check reads the sibling's type and not the
         # i32 default (#826); again after it, for a sibling only validation can type.
         self._context_type_operand_from_sibling(node, self._infer_leaving_no_trace)
+        if node.op in COMPARISON_OPS:
+            self._type_enum_operand_from_sibling(node)
         self.type_validator.validate_expression(node.left)
         self.type_validator.validate_expression(node.right)
         self._context_type_operand_from_sibling(
@@ -156,6 +158,23 @@ class ExpressionValidator(RecursiveVisitor):
                 return tv.infer_expression_type(expr)
         finally:
             tv.reporter = reporter
+
+    def _type_enum_operand_from_sibling(self, node: BinaryOp) -> None:
+        """`m == Maybe.None`: a bare variant takes its enum from the other operand.
+
+        The variant spells no type argument, so it has the type of its position, as
+        in a `let`; for a comparison that position is the other operand.
+        """
+        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+        from sushi_lang.semantics.typesys import EnumType, deref_type
+        left = deref_type(self._infer_leaving_no_trace(node.left))
+        right = deref_type(self._infer_leaving_no_trace(node.right))
+        if left == right:
+            return
+        if isinstance(left, EnumType):
+            propagate_types_to_value(self.type_validator, node.right, left)
+        elif isinstance(right, EnumType):
+            propagate_types_to_value(self.type_validator, node.left, right)
 
     def _context_type_operand_from_sibling(
             self, node: BinaryOp, infer: Callable[[Expr], Optional[Type]]) -> None:

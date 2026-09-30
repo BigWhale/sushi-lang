@@ -223,6 +223,43 @@ def try_emit_struct_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
                                   exclude_containers=True)
 
 
+def try_emit_contract_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                             receiver_value: ir.Value, receiver_type: ir.Type,
+                             semantic_type, to_i1: bool) -> Optional[ir.Value]:
+    """`a.eq(b)`, `a.compare(b)` and `a.to_str()`: the derived contract methods.
+
+    An implementation of the contract answered the call at the perk rung already, so
+    what reaches here is the derived method of a struct or an enum, or a primitive's
+    `eq` / `compare`. Both operands only READ, so a temporary gets an owner.
+    """
+    from sushi_lang.semantics.generics.contracts import (
+        DISPLAY, EQ, METHOD_CONTRACT, is_contract_receiver)
+    contract = METHOD_CONTRACT.get(expr.method)
+    if contract is None or semantic_type is None:
+        return None
+
+    from sushi_lang.backend.destructors import resolve_named_type
+    from sushi_lang.semantics.typesys import BuiltinType, deref_type
+    ty = resolve_named_type(codegen, deref_type(semantic_type))
+    if contract == DISPLAY:
+        return None
+    if not isinstance(ty, BuiltinType) and not is_contract_receiver(ty):
+        return None
+
+    from sushi_lang.backend.expressions.memory import own_temporary
+    from sushi_lang.backend.types import contracts
+    receiver = (contracts.load_operand(codegen, receiver_value, ty)
+                if isinstance(receiver_type, ir.PointerType) else receiver_value)
+    own_temporary(codegen, expr.receiver, receiver, ty)
+    argument = contracts.load_operand(
+        codegen, codegen.expressions.emit_expr(expr.args[0]), ty)
+    own_temporary(codegen, expr.args[0], argument, ty)
+    if contract == EQ:
+        equal = contracts.emit_value_eq(codegen, receiver, argument, ty)
+        return equal if to_i1 else codegen.builder.zext(equal, codegen.i8)
+    return contracts.emit_value_compare(codegen, receiver, argument, ty)
+
+
 def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                             receiver_value: ir.Value, receiver_type: ir.Type,
                             semantic_type, to_i1: bool) -> Optional[ir.Value]:

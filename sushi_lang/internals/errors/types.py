@@ -226,10 +226,11 @@ _add(ErrorMessage("CE2055", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' does not support equality comparison",
     Category.TYPE,
     "HashMap keys must support equality comparison (==). This is required for collision "
-    "resolution. The probe compares two keys field by field, and a function value, a "
-    "`ptr`, a `List@(T)` and an `Own@(T)` have no equality. A `Hashable` override gives "
-    "a hash only; it does not make a type comparable, so a type that holds one of these "
-    "is not a key with or without an override (ruling on #936)."))
+    "resolution. The probe compares two keys through the `Eq` contract: an `extend K with "
+    "Eq` implementation, else the equality the compiler derives from what the key holds. "
+    "A function value, a `ptr` and a `HashMap` have no equality, and neither does a type "
+    "that holds one. A `Hashable` override gives a hash only; it does not make a type "
+    "comparable (ruling on #936), so a key needs both halves: implement `Eq` beside it."))
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
@@ -375,7 +376,7 @@ _add(ErrorMessage("CE2098", Severity.ERROR,
 
 _add(ErrorMessage("CE2100", Severity.ERROR,
     "'{method}' needs an element type with equality: '{element}' has none",
-    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and equality is a CLOSED set: the numeric types, bool, and string (CE2514 is the operator half of the same rule). A struct, an enum, an array or a closure element has no '==', so a search over it has no meaning the compiler could supply. Write the loop by hand and compare what identifies an element -- a field, or a match on the variant -- or search an array of that identifying part instead."))
+    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and the element type must be one that '==' accepts (CE2514 is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead."))
 
 _add(ErrorMessage("CE2101", Severity.ERROR,
     "invalid element '{element}' in an array extension target",

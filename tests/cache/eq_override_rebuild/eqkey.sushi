@@ -1,0 +1,3 @@
+public struct Key:
+    i32 id
+    i32 noise

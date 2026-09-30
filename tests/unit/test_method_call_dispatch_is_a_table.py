@@ -29,7 +29,7 @@ def _function_source(module, name: str) -> str:
 
 def test_the_two_handler_tables_exist_and_hold_callables():
     assert len(dispatcher.PRE_RECEIVER_HANDLERS) == 10
-    assert len(dispatcher.RECEIVER_HANDLERS) == 10
+    assert len(dispatcher.RECEIVER_HANDLERS) == 11
     for handler in (*dispatcher.PRE_RECEIVER_HANDLERS, *dispatcher.RECEIVER_HANDLERS):
         assert callable(handler)
 

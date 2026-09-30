@@ -1,0 +1,21 @@
+# `@(T: Eq)` accepts a type with a derived equality and a primitive, and the body can
+# call `eq` and use `==`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\ntrue\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn same@(T: Eq)(T a, T b) bool:
+    return a.eq(b)
+
+fn same_op@(T: Eq)(T a, T b) bool:
+    return a == b
+
+fn main() i32:
+    println(same(Point(1, 2), Point(1, 2)))
+    println(same(Point(1, 2), Point(2, 2)))
+    println(same(3, 3))
+    println(same_op("a", "a"))
+    return 0

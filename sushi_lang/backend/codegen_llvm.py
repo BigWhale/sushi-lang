@@ -172,6 +172,9 @@ class LLVMCodegen:
         self._dtor_funcs: Dict[str, ir.Function] = {}
         self._clone_inprogress: list[str] = []
         self._clone_funcs: Dict[str, ir.Function] = {}
+        # The out-of-line functions of the derived contracts (`Eq`, `Ord`, `Display`),
+        # by symbol. Per module, for the lifecycle caches' reason.
+        self._contract_funcs: Dict[str, ir.Function] = {}
 
     def namespaces_of(self, unit_name: Optional[str]):
         """The namespace table of `unit_name`, or None for a unit the analyser never saw."""
@@ -294,6 +297,7 @@ class LLVMCodegen:
         saved_clone_funcs = self._clone_funcs
         saved_dtor_inprogress = self._dtor_inprogress
         saved_clone_inprogress = self._clone_inprogress
+        saved_contract_funcs = self._contract_funcs
 
         # Same context as every other module of this compilation -- the type cache persists
         # across units, so this module must be able to declare the identified struct types
@@ -309,6 +313,7 @@ class LLVMCodegen:
         self._clone_funcs = {}
         self._dtor_inprogress = []
         self._clone_inprogress = []
+        self._contract_funcs = {}
         self.string_manager = StringConstantManager(self)
 
         self.runtime = LLVMRuntime(self)
@@ -358,6 +363,7 @@ class LLVMCodegen:
         self._clone_funcs = saved_clone_funcs
         self._dtor_inprogress = saved_dtor_inprogress
         self._clone_inprogress = saved_clone_inprogress
+        self._contract_funcs = saved_contract_funcs
         self.string_manager = StringConstantManager(self)
         self.runtime = LLVMRuntime(self)
 

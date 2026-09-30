@@ -1,0 +1,21 @@
+# A `List@(T)` key hashes what it holds and compares element by element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "one-two\n1\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/hashmap>
+
+fn pair(i32 a, i32 b) List@(i32):
+    let List@(i32) l = List.new()
+    l.push(a)
+    l.push(b)
+    return l
+
+fn main() i32:
+    let HashMap@(List@(i32), string) names = HashMap.new()
+    names.insert(pair(1, 2), "one-two")
+    names.insert(pair(1, 2), "one-two")
+    println(names.get(pair(1, 2)).realise("none"))
+    println(names.len())
+    names.free()
+    return 0

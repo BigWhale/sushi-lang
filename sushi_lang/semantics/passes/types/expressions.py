@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
-from sushi_lang.semantics.typesys import BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType
+from sushi_lang.semantics.typesys import (
+    BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, deref_type)
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
 from sushi_lang.semantics.type_predicates import (
@@ -283,11 +284,6 @@ def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
 
 _EQUALITY_OPS = ("==", "!=")
 
-# The non-numeric types each operator group accepts. A numeric pair never reaches
-# these sets: it belongs to CE2510, which says which two widths met. Both sets are
-# closed, so a type kind nobody thought about is a diagnostic and not a crash.
-_EQUALITY_NON_NUMERIC = frozenset({BuiltinType.BOOL, BuiltinType.STRING})
-_ORDER_NON_NUMERIC = frozenset({BuiltinType.STRING})
 
 # Arithmetic accepts no non-numeric type at all, so its set needs no name. The
 # operators it covers do: the unary minus arrives as '-' and not as 'neg'.
@@ -363,14 +359,24 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
     er.emit(validator.reporter, er.ERR.CE0112, expr.right.loc)
 
 
-def has_builtin_equality(ty: 'Type') -> bool:
-    """Can two values of `ty` meet `==`? THE closed equality set, in one place.
+def comparison_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
+                        contract: str) -> 'tuple[bool, Optional[str]]':
+    """Can two values of `ty` meet the operators of `contract` (`Eq` or `Ord`)?
 
-    `reject_uncomparable_operands` below reads the sets directly for the operators;
-    the array search methods (`contains`, `index_of`) ask through this predicate, so
-    the two rules cannot drift apart (CE2100 cites CE2514 for a reason).
+    THE rule, in one place: the operators, the array search methods (`contains`,
+    `index_of`) and the method call all ask it, so they cannot drift apart (CE2100
+    cites CE2514 for a reason). A primitive keeps its closed set; a struct or an enum
+    asks the derived contract, with the compilation's override.
     """
-    return is_numeric_type(ty) or ty in _EQUALITY_NON_NUMERIC
+    from sushi_lang.semantics.generics.contracts import operand_contract, override_of
+    return operand_contract(ty, contract,
+                            overridden=override_of(validator.derived_methods, contract))
+
+
+def has_equality(validator: 'TypeValidator', ty: 'Type') -> bool:
+    """Can two values of `ty` meet `==`?"""
+    from sushi_lang.semantics.generics.contracts import EQ
+    return comparison_contract(validator, ty, EQ)[0]
 
 
 def _comparison_escape(ty: 'Type') -> Optional[str]:
@@ -411,13 +417,19 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
                 right_type=display_type(right_type), op=expr.op)
         return
 
-    permitted = (_EQUALITY_NON_NUMERIC if expr.op in _EQUALITY_OPS
-                 else _ORDER_NON_NUMERIC)
-    if left_type in permitted:
+    from sushi_lang.semantics.generics.contracts import EQ, ORD
+    contract = EQ if expr.op in _EQUALITY_OPS else ORD
+    permitted, reason = comparison_contract(validator, left_type, contract)
+    if permitted:
+        operand = deref_type(left_type)
+        if not isinstance(operand, BuiltinType):
+            expr.operand_type = operand
         return
 
     builder = er.emit_with(validator.reporter, er.ERR.CE2514, expr.loc,
                            op=expr.op, type_name=display_type(left_type))
+    if reason is not None:
+        builder = builder.note(f"no derived {contract}: {reason}")
     escape = _comparison_escape(left_type)
     if escape is not None:
         builder = builder.help(escape)

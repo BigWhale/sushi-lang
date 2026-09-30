@@ -768,6 +768,19 @@ def _validate_derived_method(validator: 'TypeValidator', call: MethodCall,
     """
 
 
+@METHOD_TYPE_REGISTRY.validator("contract")
+def _validate_contract_method(validator: 'TypeValidator', call: MethodCall,
+                              receiver_type) -> None:
+    """`a.eq(b)` and `a.compare(b)` take one value of the receiver's type; `to_str`
+    takes none, and the registry checked the count against the family's row."""
+    from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
+    from sushi_lang.semantics.typesys import deref_type
+    params = [deref_type(receiver_type)] * CONTRACT_METHOD_ARITY[call.method]
+    check_arguments(validator, f"{display_type(receiver_type)}.{call.method}", params,
+                    call.args, call.loc, mismatch_code=er.ERR.CE2006,
+                    arity_code=er.ERR.CE2009)
+
+
 @METHOD_TYPE_REGISTRY.validator("function")
 def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
                               receiver_type) -> None:

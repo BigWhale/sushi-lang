@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import ConstantValue
 
 
-TRUE_I1 = ir.Constant(ir.IntType(1), 1)
-
 ZERO_I8 = ir.Constant(ir.IntType(INT8_BIT_WIDTH), 0)
 
 ZERO_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 0)
