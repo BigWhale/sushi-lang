@@ -73,7 +73,7 @@ fn assess_situation(i32 fuel, i32 crew_count, ShipStatus ship) ~:
         # All other checks are irrelevant without fuel
         println("Fuel: Critical! Need refuel immediately")
 
-    # Return blank type wrapped in Result
+    # A bare ~ function can reach its end with no return
 
 fn main() i32:
     # Test Scenario 1: Ideal conditions

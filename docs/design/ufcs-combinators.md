@@ -4,19 +4,37 @@ Status: SHIPPED (the UFCS epic, 2026-08-30). This is the decision record. The se
 rulings here are David's (2026-08-29 and 2026-08-30) and are settled. Ruling 6 was
 REVERSED on 2026-09-25 (#848): a channel body spells its success.
 
+Update (2026-09-30): the bare-function change (`docs/design/error-channel.md`) made the
+combinators bare. `map`, `filter`, `fold` and `compose` take bare functions and yield the
+value, so a call needs no `??`. Ruling 1 (the channel is opt-in) is now the rule for EVERY
+callable: a free function, an extension or perk method, a lambda and a function type. The
+rulings below stay as the record of the decision; where the change made one of them
+stale, a note says so.
+
 The headline: the `<collections/iter>` combinators exist in method form, written in
 Sushi, shipped in the stdlib, on a general language feature users can also write:
 
 ```sushi
-extend List@(T) map@(U)(fn(T) -> U f) List@(U) | StdError:
+extend List@(T) map@(U)(fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x))
-    return Result.Ok(out)   # both constructors are spelled (ruling 6, as reversed)
+    return out              # bare: no `| E`, so the body returns the value
 ```
 
-Call site: `xs.map(|i32 x| x * 2)??`. Targets: `List@(T)` and `T[]`. The free
+Call site: `xs.map(|i32 x| x * 2)`. Targets: `List@(T)` and `T[]`. The free
 functions stay.
+
+A bare combinator is correct here because it is total over its inputs: it cannot fail
+unless its function argument fails, and a bare function argument cannot. A bare function
+is the exception, not the default style. Write a channel (`| E`) for a function that does
+I/O, parses, allocates on a size it is given, or can gain a failure later. A public
+function keeps a channel when there is any doubt, because a channel added later changes
+the signature and breaks every caller and every binary `.slib`. The compiler does not
+enforce this. `docs/design/error-channel.md` carries the rule.
+
+Until the bare-function change, the combinators declared `| StdError`, the body ended
+`return Result.Ok(out)`, and the call site was `xs.map(|i32 x| x * 2)??`.
 
 ## The concept
 
@@ -33,6 +51,10 @@ call. It also removes a built-in privilege: the built-in methods return
 The default stays the bare return. Only a method that declares `| E` gets the Result
 ABI, `??` in the body, and the channel at the call. Bare-return extensions keep CE0131
 (no `??`) and CE2091 (no Result constructors) byte for byte.
+
+Since the bare-function change this ruling holds for every callable. A free function, a
+lambda and a function type have a channel only when they write `| E` (or an explicit
+`Result@(T, E)`). There is no default error type.
 
 ### 2. Name claim: accepted
 
@@ -84,7 +106,9 @@ channel body has the free function's rule and the free function's code:
   function hears for the same fault.
 
 A BARE body (no `| E`) is unchanged: it returns the value itself and refuses both
-constructors (CE2091). CW2511 for `??` in `main()` stays.
+constructors (CE2091). The first text of this ruling said "CW2511 for `??` in `main()`
+stays". The bare-function change retired CW2511: `main` is bare, so a `??` in it is
+CE0131.
 
 The first ruling (2026-08-30) wrapped a bare success into `Ok` at the return seam, so
 that the success stayed as light as a bare method's. It was reversed because a silent
@@ -184,8 +208,10 @@ each kept element, and `fold` clones `init` once, so an owning accumulator works
 
 **Parked open questions**, recorded and not expanded here:
 
-- **(a) A bare opt-out for free functions.** The remaining asymmetry: a function
-  cannot be infallible. A method chooses its channel; a function cannot decline one.
+- **(a) A bare opt-out for free functions — SHIPPED.** The asymmetry was that a function
+  could not be infallible: a method chose its channel, and a function could not decline
+  one. The bare-function change closed it: a function without `| E` is bare
+  (`docs/design/error-channel.md`).
 - **(b) The perk-method channel — SHIPPED.** A perk method declares `| E` exactly as an
   extension method does. The contract and the implementation
   declare it in the same shape and must agree, and CE0133 is the relational

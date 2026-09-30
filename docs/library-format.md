@@ -80,9 +80,9 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 ### Version
 
-4-byte unsigned integer (little-endian). Current version: `4`.
+4-byte unsigned integer (little-endian). Current version: `5`.
 
-Used for forward compatibility checks. A reader accepts version 4 only; anything else is
+Used for forward compatibility checks. A reader accepts version 5 only; anything else is
 **CE3509**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
 so an older `.slib` is rejected rather than read with a guess.
 
@@ -94,6 +94,10 @@ so an older `.slib` is rejected rather than read with a guess.
   `KIND`, and a length-prefixed source section joined the container between the metadata and
   the bitcode. The manifest gained `library_version`, `requires_compiler`, `kind` and
   `units`.
+- **Version 5** came with the bare-function change (`docs/design/error-channel.md`): a
+  signature without `| E` is bare, and no longer means `| StdError`. The bitcode of a
+  version-4 library answers a `Result` from every such function, so a reader refuses the
+  file (CE3509) and does not call it with the wrong ABI. Rebuild the library.
 
 ### Flags
 
@@ -120,7 +124,7 @@ before it unpacks any MessagePack.
 ### Reserved Fields
 
 16 bytes of reserved space (SPARE_3 and SPARE_4) for future extensions, such as checksums
-or additional section offsets. Both must be zero in version 4.
+or additional section offsets. Both must be zero in version 5.
 
 ### Metadata Section
 
@@ -206,14 +210,19 @@ is the authority, and the index is a cache of it.
     # symbol's `doc.params`. So does a private or closure-path record: a private symbol
     # is not part of the documented API.
 
-    # A SIGNATURE is three keys, built by one function (`signature_record`) so the
+    # A SIGNATURE is four keys, built by one function (`signature_record`) so the
     # concrete record, the generic record and the closure record cannot drift apart.
-    # `error_type` is absent when the declaration does not spell one: the default is
-    # StdError, and a record that named the default would claim the author wrote it.
+    # `has_channel` is REQUIRED on every function, helper and method record (templates
+    # schema 8): a reader never guesses a channel from an absent key. It is true when
+    # the declaration writes `| E` or returns an explicit `Result@(T, E)`, and false
+    # when the callable is bare (`docs/design/error-channel.md`). There is no default
+    # error type. `error_type` is present only when the declaration writes `| E`; an
+    # explicit `Result@(T, E)` return carries its arms in `return_type`.
     #
     #   SIG = {
     #       "params": [{"name": str, "type": str, "mode": str}],
     #       "return_type": str,
+    #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str          # If the declaration says `| E`
     #   }
     #
@@ -347,7 +356,7 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 7,                  # Templates schema version. 5: every
+        "version": 8,                  # Templates schema version. 5: every
                                        #   closure record is one per (unit, name),
                                        #   and a source-shipped template carries
                                        #   `bindings`. A binary .slib with an older
@@ -360,7 +369,11 @@ is the authority, and the index is a cache of it.
                                        #   7: every perk method record carries
                                        #   its signature and receiver mode, on the
                                        #   contract and on both kinds of
-                                       #   implementation. The one constant is
+                                       #   implementation. 8: every function,
+                                       #   helper and method record states
+                                       #   `has_channel`, because a signature
+                                       #   without `| E` is bare and no longer
+                                       #   means `| StdError`. The one constant is
                                        #   `TEMPLATES_SCHEMA_VERSION` in
                                        #   `backend/library_format.py`
 
@@ -550,11 +563,11 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | CE3505 | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | CE3506 | Source section truncated |
 | CE3508 | Invalid magic bytes (not a valid `.slib` file) |
-| CE3509 | Unsupported format version |
+| CE3509 | Unsupported format version (a container other than version 5, for example a library built before the bare-function change) |
 | CE3510 | Metadata section truncated |
 | CE3511 | Bitcode section truncated |
 | CE3507 | The bitcode of a binary or hybrid library does not link |
-| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, or the templates schema is older than version 7 |
+| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, or a binary or hybrid library's templates schema is not version 8 (a library built before the bare-function change) |
 | CE3513 | File exceeds maximum size (1GB) |
 | CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | CE3516 | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
@@ -651,7 +664,7 @@ without keeping either blob.
 ### Writing
 
 1. Write 16-byte magic
-2. Write 4-byte version (4)
+2. Write 4-byte version (5)
 3. Write 4-byte flags (0), then 4-byte kind
 4. Write 16 bytes of zeros (reserved)
 5. Serialize metadata to MessagePack

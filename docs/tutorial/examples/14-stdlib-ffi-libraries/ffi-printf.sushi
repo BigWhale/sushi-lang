@@ -3,7 +3,7 @@
 unsafe external "C" as libc because "formatted output via libc printf":
     fn printf(string fmt, ...) i32 = "printf"
 
-# Safe wrappers fold the raw i32 return back into Sushi's Result world.
+# A safe wrapper, bare here: it passes the raw i32 byte count on unchanged.
 fn say(string label, i32 value) i32:
     return libc.printf("%s = %d\n", label, value)
 

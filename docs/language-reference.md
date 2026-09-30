@@ -221,21 +221,28 @@ and use the name.
 ### Function Types
 
 A function type describes a first-class function value (a bare function pointer). The return
-type is mandatory; the optional `| E` names the error type (defaults to `StdError`).
+type is mandatory. The optional `| E` gives the function type an error channel. Without it,
+the function type is bare. The channel is part of the type, so the two forms do not convert
+(`CE2002`).
 
 ```sushi
-fn(i32) -> i32                 # takes i32, returns i32 (error type StdError)
+fn(i32) -> i32 | MathError     # takes i32, a call returns Result@(i32, MathError)
+fn(i32) -> i32                 # bare: a call returns i32
 fn(i32, string) -> bool        # two parameters
 fn() -> ~                      # no parameters, blank return
-fn(i32) -> i32 | MathError     # explicit custom error type
 ```
+
+A function with a channel that returns a function type writes the explicit form,
+`fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type
+belongs to that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare function
+that returns a function type with a channel.
 
 Reference a plain top-level function by name to get a value of that type, then store, pass, or
 call through it:
 
 ```sushi
-let fn(i32) -> i32 f = add_one     # `add_one` used as a value
-let i32 r = f(41)??                # call through it -> Result, like a direct call
+let fn(i32) -> i32 f = add_one     # `add_one` used as a value; it is bare
+let i32 r = f(41)                  # call through it, like a direct call
 ```
 
 Function types are invariant (arity, parameters, return, and error type must match exactly).
@@ -363,25 +370,42 @@ fn function_name(param1_type param1_name, param2_type param2_name) return_type:
 **Example:**
 
 ```sushi
+use <collections/strings>
+
+fn parse_age(string text) i32 | StdError:
+    if (text.is_empty()):
+        return Result.Err(StdError.Error)
+    return Result.Ok(text.len())
+
 fn add(i32 a, i32 b) i32:
     return a + b
 
 fn greet(string name) ~:
-    println("Hello, {name}!")
+    println("Mostly Harmless, {name}!")
 ```
 
 ### Return Types
 
-Every function returns a `Result@(T, E)`. The declaration has three forms:
+A function has an error channel only when its signature writes one. The declaration has
+three forms:
 
-| declared return | the function returns |
+| declared return | the call returns |
 |---|---|
-| `fn f() T` | `Result@(T, StdError)` |
 | `fn f() T \| E` | `Result@(T, E)` |
 | `fn f() Result@(T, E)` | `Result@(T, E)`, not wrapped again |
+| `fn f() T` | `T`: the function is BARE |
 
 The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
-The error type `E` is an enum.
+The error type `E` is an enum. There is no default error type: until the bare-function
+change, `fn f() T` returned an implicit `Result@(T, StdError)`, and that default is removed.
+
+**A bare function is the exception.** Use it seldom: only when the function is total over
+its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join),
+and a channel would only force a dead `.realise` or `??` on every caller. Write a channel
+for everything else. A public function keeps a channel when there is any doubt, because a
+channel added later changes the signature and breaks every caller and every binary `.slib`.
+The compiler does not enforce this. The decision record is
+[The error channel is opt-in](design/error-channel.md).
 
 ```sushi
 use <math>
@@ -402,18 +426,24 @@ fn main() i32:
     return 0
 ```
 
-A body returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a bare value:
-a bare `return value` is `CE2030`. `MathError` has its home in `<math>`, and `StdError` is
-global.
+A body with a channel returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a
+bare value: a bare `return value` is `CE2030`. A BARE body returns the value itself:
+`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`. `MathError` has its
+home in `<math>`, and `StdError` is global.
 
 The caller takes the value out of the `Result` in one of three ways: `??` returns the error
 from the calling function at once, `.realise(default)` gives the default for an error, and
 `match` reads each arm. `??` needs the same error type in the caller. It also works on a
-`Maybe@(T)`. In `main`, `??` is `CW2511`; use `match` or `.realise()` there. The full
-guide is [Error Handling](error-handling.md).
+`Maybe@(T)`. The call of a bare function returns the value, so `??` on it is `CE2507` and
+`.realise` on it is `CE2008`.
 
-The body must return on every code path, and a `~` function is no exception: it ends with
-`return Result.Ok(~)`. A body that can reach its end is `CE0107`.
+`main` is bare. It returns the exit code (`return 0`), and a `| E` on it is `CE0106`. A `??`
+in `main` is `CE0131`; use `match` or `.realise()` there. The full guide is
+[Error Handling](error-handling.md).
+
+The body must return on every code path. A `~` function with a channel ends with
+`return Result.Ok(~)`; a bare `~` function can reach its end. Any other body that can
+reach its end is `CE0107`.
 
 A statement that can never run is an error too, `CE0140`: a statement after a `return`,
 after an `if` with an `else` whose every arm returns, after a `match` whose every arm
@@ -1057,14 +1087,14 @@ enum payload, a rebind, a struct field, and the default of a `.realise()`:
 
 ```sushi
 fn count(i32[] xs) i32:
-    return Result.Ok(xs.len())
+    return xs.len()
 
-fn mk(bool good) i32[]:
+fn mk(bool good) i32[] | StdError:
     if (not good):
         return Result.Ok(new())
     return Result.Ok(from([1, 2, 3]))
 
-let i32 none = count(new())??
+let i32 none = count(new())
 let i32[] taken = mk(false).realise(new())
 ```
 
@@ -1421,9 +1451,10 @@ bare `self` is a read-only borrow, `peek self` is a read-only pointer, `poke sel
 through to the caller's value, and `nom self` consumes the receiver. A write through a
 receiver that is not `poke self` is `CE2421`.
 
-**The bare return.** A method with no `| E` returns its value bare: `return value`, and a
-`~` method may end with no `return`. `return Result.Ok(...)` there is `CE2091`, and `??`
-there is `CE0131`, because the method has no error channel to return an error through.
+**The bare return.** A method with no `| E` is bare, as a function with no `| E` is. It
+returns its value bare: `return value`, and a `~` method may end with no `return`.
+`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`, because the method
+has no error channel to return an error through.
 
 **The error channel.** A method may declare `| E` after its return type. Its call then
 gives a `Result@(T, E)`, `??` is legal in the body, and the body spells both constructors
@@ -1646,8 +1677,12 @@ The guides are [Memory Management](memory-management.md) and
 ## Closures
 
 A lambda is a value of a function type. `|params| expr` has one expression, `|params|:`
-starts a block body, and `|~|` takes no parameters. A block body returns with
-`return Result.Ok(...)`, as a function does.
+starts a block body, and `|~|` takes no parameters. A lambda has a channel only when its
+TYPE says `| E`: the annotation on the lambda (`|i32 x| -> i32 | E: ...`) or the expected
+type (a parameter, a `let`, a field). The compiler never infers a channel from the body. A
+block body of a bare lambda returns the value (`return x`); a block body with a channel
+writes `return Result.Ok(...)`, as a function does. A bare lambda is the exception, as a
+bare function is ([The error channel is opt-in](design/error-channel.md)).
 
 ```sushi
 fn main() i32:
@@ -1773,9 +1808,9 @@ never what `math` imported.
 ```sushi
 # deep.sushi                    # mid.sushi              # top.sushi
 public fn deep_value() i32:     use "deep"               use "mid"
-    return Result.Ok(7)                                  fn main() i32:
+    return 7                                             fn main() i32:
                                                              # CE2008 here
-                                                             let i32 a = deep_value()??
+                                                             let i32 a = deep_value()
 ```
 
 `top` adds `use "deep"`. The refusal is the ordinary "no such name" -- `CE2008` for a
@@ -1806,9 +1841,9 @@ ordinary `use` for the unit that writes it.
 # geometry.sushi          # shapes.sushi                 # main.sushi
 public struct Vec:        public use "geometry"         use "shapes"
     i32 x                 public fn area(Vec v) i32:    fn main() i32:
-    i32 y                     return Result.Ok(v.x*v.y)     let Vec v = Vec(2, 3)
-                                                             println("{area(v).realise(0)}")
-                                                             return Result.Ok(0)
+    i32 y                     return v.x * v.y              let Vec v = Vec(2, 3)
+                                                             println("{area(v)}")
+                                                             return 0
 ```
 
 `main` writes `Vec` with one import, because `shapes` hands it on. `use "shapes" as sh`

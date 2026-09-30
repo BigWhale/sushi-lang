@@ -1,5 +1,6 @@
-# A function that succeeds returns Result.Ok(value).
-# A function that fails returns Result.Err(error).
+# A function that can fail writes an error channel (`| StdError`).
+# On success it returns Result.Ok(value).
+# On failure it returns Result.Err(error).
 fn halve(i32 n) i32 | StdError:
     if (n % 2 != 0):
         return Result.Err(StdError.Error)

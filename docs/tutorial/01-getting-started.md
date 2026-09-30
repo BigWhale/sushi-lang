@@ -83,30 +83,28 @@ fn main() i32:
   `println("Hello, galaxy! 42")` works fine.
 
 ```sushi
-    return Result.Ok(0)
+    return 0
 ```
 
-This is the first place Sushi diverges sharply from Python or Java, so it's worth pausing.
+- `return 0` ends `main` and gives the value `0` back. `main` returns the exit code of the
+  program, and `0` means success.
 
-In Sushi, functions don't just return a value — they return a value **or** an error,
-wrapped in a type called `Result`. `Result.Ok(0)` means "this succeeded, and the value is
-`0`". (The alternative is `Result.Err(...)`, for failure.) Because `main` returned
-`Result.Ok(0)`, the program exits with code `0`: success.
+`main` is a **bare** function: it returns its value directly. Most other functions that
+you write do not. A function that can fail writes an **error channel** in its signature,
+for example `fn load() i32 | IoError:`. Such a function returns `Result.Ok(value)` on
+success and `Result.Err(error)` on failure, and the caller must handle both.
+[Chapter 4](04-functions.md) shows the two forms, and [Chapter 6](06-error-handling.md)
+is about errors.
 
-You don't need to fully understand `Result` yet — [Chapter 6](06-error-handling.md) is
-devoted to it. For now, just remember the shape: **a function that succeeds with value `v`
-returns `Result.Ok(v)`.**
-
-!!! note "Why wrap everything in `Result`?"
-    Making success and failure explicit in the type system is what lets the Sushi compiler
-    guarantee you've handled errors. Languages that let you ignore errors (a forgotten
-    exception, an unchecked return code) are where a lot of real-world bugs hide. We'll see
-    how ergonomic this becomes once the `??` operator enters the picture.
+!!! note "Why an error channel?"
+    The error channel puts failure in the type system. The compiler then makes sure that
+    each caller handles the error. Languages that let you ignore errors (a forgotten
+    exception, an unchecked return code) are where a lot of real-world bugs hide.
 
 ## Exit codes
 
 The integer `main` returns becomes the process exit code. Try changing the program to
-`return Result.Ok(42)`, recompile, run it, and then check the code your shell saw:
+`return 42`, recompile, run it, and then check the code your shell saw:
 
 ```bash
 ./mostly-harmless
@@ -122,7 +120,7 @@ problem.
 - Sushi compiles source to a native binary with `./sushic file.sushi`.
 - Every program has an entry point: `fn main() i32:`.
 - `println` prints a line; strings are UTF-8 and use double quotes.
-- Functions return `Result.Ok(value)` on success — and `main`'s integer becomes the exit
-  code.
+- `main` is bare and returns the exit code (`return 0`). A function that can fail writes
+  an error channel (`| E`) and returns `Result.Ok(value)` or `Result.Err(error)`.
 
 Next up: storing and naming data. On to [Variables & Types](02-variables-and-types.md).

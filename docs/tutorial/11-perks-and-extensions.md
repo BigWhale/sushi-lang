@@ -29,6 +29,11 @@ Some things to know:
   [An error channel](#an-error-channel) shows how to add one.
 - You can call `something.method()` in a string interpolation: see `{six.squared()}`.
 
+The rule is the same for a free function (chapter 4): a callable has an error channel only
+when its signature writes `| E`. A bare method is the exception. Use it only when the method
+is total over its inputs and will stay so, like `squared`. Write a channel for a method that
+can fail, now or later. [The error channel](../design/error-channel.md) gives the rule.
+
 Output:
 
 ```

@@ -32,7 +32,12 @@ Perks provide a way to:
   (CE0131). Handle a Result in the body with `match` or `.realise(default)`, or declare
   `| E` on the contract and on every implementation (see
   [Error Channels on Perk Methods](#error-channels-on-perk-methods)). A `??` inside a
-  lambda in the body is legal, because the lambda has its own Result channel
+  lambda in the body is legal when the lambda's type writes `| E`, because the lambda then
+  has its own Result channel
+- The rule is the one for every callable, a free function included: a channel exists only
+  when the signature writes `| E`. A bare function is the exception, and a contract method
+  that can fail, or can gain a failure later, declares `| E`. See
+  [The error channel is opt-in](design/error-channel.md)
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing). The one exception is
   the predefined `Hashable`, which every type with a derived `hash()` satisfies

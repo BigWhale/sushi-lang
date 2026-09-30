@@ -38,7 +38,7 @@ fn main() i32:
     println("======================")
 
     # Use functions from mathlib.sushi (imported as source)
-    # .realise(default) safely unwraps Result.Ok or returns default on error
+    # add and multiply are bare (no `| E`), so each call returns the i32 directly
     let i32 sum = add(10, 20)
     println("add(10, 20) = {sum}")
 

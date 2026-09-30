@@ -499,8 +499,9 @@ target's its BASE type's. The collect pass drives the use-site rule once per uni
 `signature_constraints()`, the same walk the leak rule reads, so the four kinds that carry
 a type parameter meet one call.
 
-The implicit `Result` wrap needs no special case. `fn origin() Point` becomes
-`Result@(Point, StdError)`, but the fence runs on `func.ret` before the wrap.
+The error channel needs no special case. `fn origin() Point | E` answers
+`Result@(Point, E)`, but the fence runs on the written `func.ret`, and on the error arm as a
+position of its own. A bare `fn origin() Point` has no wrap at all.
 
 CE6103 joined them, in the syntax family, for the marker Ruling 2 refuses: a perk
 implementation method cannot say `public`.

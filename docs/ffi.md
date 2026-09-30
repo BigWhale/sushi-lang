@@ -96,11 +96,13 @@ Sushi is and stays a **null-free** language. There is no `null` literal. You can
 pass and return a `ptr`, but you cannot test it for null. If a real need
 arises, it will become an `is_null(ptr) -> bool` intrinsic, never a `null` literal.
 
-### Return types and the Result-exemption
+### Return types: an external function is bare
 
-Sushi's universal rule is that **every `fn` implicitly returns `Result@(T, E)`**.
-External functions are the **single exception**: a C function returns a raw value
-with no error channel and cannot construct a Sushi `Result` across the ABI.
+A Sushi function has an error channel only when its signature writes `| E` (see
+[The error channel is opt-in](design/error-channel.md)). An external function is always
+bare: a C function returns a raw value with no error channel and cannot construct a Sushi
+`Result` across the ABI. Until the bare-function change every Sushi function returned an
+implicit `Result@(T, StdError)`, and an external function was the one exception.
 
 ```sushi
 fn strlen(string s) i64 = "strlen"   # returns raw i64, NOT Result@(i64, StdError)
@@ -110,8 +112,7 @@ fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result@(~)
 
 Because `libc.strlen(s)` yields a plain `i64`, you **cannot** apply `??` or
 `.realise()` to it - it is not a `Result`/`Maybe`. Attempting `libc.strlen(s)??`
-is a clean type error (**`CE2507`**). This is not an ad-hoc carve-out: externals
-live in a separate list and never reach the implicit-Result wrapping at all.
+is a clean type error (**`CE2507`**), as it is on the call of any bare function.
 
 ### String auto-marshalling (and the no-leak contract)
 
@@ -190,8 +191,9 @@ coloring.
 ## The safe-wrapper pattern
 
 The four guarantees are restored in a hand-written wrapper. The wrapper is
-ordinary Sushi (so it *does* follow the implicit-`Result` rule), and it marshals
-data, folds C sentinels into `Result`, and manages pointer lifetimes:
+ordinary Sushi (so it follows the error-channel rule of every function), and it
+marshals data, folds C sentinels into `Result`, and manages pointer lifetimes. A wrapper
+that can fail writes `| E`. A wrapper over a total C function, as below, can be bare:
 
 ```sushi
 unsafe external "C" as libc because "string length via libc strlen":
@@ -218,8 +220,8 @@ fn close_handle(ptr h) ~:
     libc.free(h)            # guarantee 2 (RAII) restored by hand
 ```
 
-A wrapper may also *return* the handle it acquired - `ptr` flows through the
-implicit `Result` wrapping (and through `Maybe@(ptr)`) like any other value:
+A wrapper may also *return* the handle it acquired - `ptr` flows through a
+`Result` (and through `Maybe@(ptr)`) like any other value:
 
 <!-- docs-sweep: skip (uses the unsafe external block declared earlier on the page) -->
 ```sushi

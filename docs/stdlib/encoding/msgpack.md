@@ -21,7 +21,14 @@ fn main() i32:
 source module with concrete (non-generic) public functions.
 
 `decode` reads one whole buffer as exactly one MessagePack value and returns a
-`MsgValue` tree. Decode errors are values, not exits.
+`MsgValue` tree. Decode errors are values, not exits: `decode` writes the `MpError`
+channel, so a call gives `Result@(MsgValue, MpError)`.
+
+The map readers and `show` are **bare**: they have no error channel, and a call gives the
+value itself. A missing key is `Maybe.None`, not an error. Do not write `??` on a call of
+one of them. A bare function is the exception in Sushi; these functions are bare because
+each one is total over its input and will stay so. [The error
+channel](../../design/error-channel.md) gives the rule.
 
 ## Types
 
@@ -76,7 +83,7 @@ fn main() i32:
     return 0
 ```
 
-### `map_get(MsgValue m, string key) -> Maybe@(MsgValue) | StdError`
+### `map_get(MsgValue m, string key) -> Maybe@(MsgValue)`
 
 Scan a `Map` in wire order for a string key. The found value comes back as a clone, so
 the tree stays intact. To read a string or a bool, use a typed leaf reader; to walk a
@@ -104,7 +111,7 @@ fn main() i32:
     return 0
 ```
 
-### `map_index(MsgValue m, string key) -> Maybe@(i32) | StdError`
+### `map_index(MsgValue m, string key) -> Maybe@(i32)`
 
 The position of a string key in a `Map`, in wire order; the first key that matches wins.
 A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the
@@ -135,9 +142,9 @@ fn main() i32:
     return 0
 ```
 
-### `map_get_str(MsgValue m, string key) -> Maybe@(string) | StdError`
+### `map_get_str(MsgValue m, string key) -> Maybe@(string)`
 
-### `map_get_bool(MsgValue m, string key) -> Maybe@(bool) | StdError`
+### `map_get_bool(MsgValue m, string key) -> Maybe@(bool)`
 
 The typed leaf readers. Each one copies only the leaf, never the map. A missing key, a
 value of a different kind, or a non-map argument gives `Maybe.None`.
@@ -161,7 +168,7 @@ fn main() i32:
     return 0
 ```
 
-### `show(MsgValue v) -> string | StdError`
+### `show(MsgValue v) -> string`
 
 Render a value on one line, deterministically:
 

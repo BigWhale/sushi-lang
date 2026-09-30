@@ -131,8 +131,11 @@ above the first member, so one `pending` flag covers the owner and its members.
   once.
 - **A signature.** `render_signature` is the one renderer for a concrete and a generic
   function, and for a perk method, so a generic function prints its parameters and its
-  `- Parameter` tags like a concrete one (R46). The default error type is `StdError`, and a signature that takes it
-  does not say so. Thus a record with no `error_type` prints no error arm (R49).
+  `- Parameter` tags like a concrete one (R46). A record with no `error_type` prints no error
+  arm (R49): the function is bare, or it spells its `Result@(T, E)` in `return_type`. Until
+  the bare-function change (`docs/design/error-channel.md`) the default error type was
+  `StdError`, and an absent `error_type` meant that default. Now there is no default, and
+  every record states `has_channel`.
 - **A parameter mode.** `nom` is the one mode that a type cannot spell, so it comes from the
   `mode` field of the record. `peek` and `poke` are already part of the type string. The
   receiver mode of a perk method is a field of the record too, and it prints first, where

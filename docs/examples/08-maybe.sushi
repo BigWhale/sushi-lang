@@ -10,8 +10,9 @@
 # - Utility methods: .is_some(), .is_none(), .realise(default), .expect(msg)
 # - Nested Result@(Maybe@(T), E) handling with explicit pattern matching
 #
-# Note: All functions return Result@(T, E), so we use match statements to
-# unwrap the Result layer before working with the Maybe@(T) value.
+# Note: find_crew_member writes the channel `| StdError`, so its call returns
+# Result@(Maybe@(i32), StdError). We use match statements to unwrap the
+# Result layer before working with the Maybe@(T) value.
 
 # crew is only read -- borrow it peek so the caller keeps it across searches.
 fn find_crew_member(peek string[] crew, string name) Maybe@(i32) | StdError:

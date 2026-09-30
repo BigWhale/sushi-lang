@@ -50,9 +50,10 @@ the doc block can check it against the declaration standing next to it:
 - A `- Parameter q:` that names no parameter of this function is wrong, and the compiler
   knows it is wrong.
 - A `- Errors:` can be required of a function that declares its own error type. Rust and Go
-  have no equivalent check, because neither has a declared error type. Note the limit: every
-  function has an error arm — `| E` when written, `StdError` when not — so what §6 checks is
-  that the tag is present and not what the prose says.
+  have no equivalent check, because neither has a declared error type. Note the limit: what
+  §6 checks is that the tag is present and not what the prose says. Until the bare-function
+  change every function had an error arm — `| E` when written, `StdError` when not. Now a
+  function without `| E` is bare and has no error arm (`docs/design/error-channel.md`).
 - `slib-info` prints the parameter **mode** — `nom`, `peek`, `poke` — beside each
   documented parameter, with nothing supplied by the author. The mode is in the manifest
   (R5 in §8 records the ruling).
@@ -230,9 +231,9 @@ that says something else.
 
 ### Returns describes T
 
-`- Returns:` describes **T**, not the `Result@(T, E)` that wraps it. The wrapper is
-implicit in every signature in the language, and restating it on every function would be
-noise.
+`- Returns:` describes **T**, not the `Result@(T, E)` that wraps it. A function with a
+channel writes its `| E` in the signature, and a bare function has no wrapper, so restating
+the wrapper on every function would be noise.
 
 A function returning `~` needs no `- Returns:` at all. `slib-info` renders "Returns
 nothing." for it, and the phase-5 lint does not ask for one.
@@ -790,7 +791,8 @@ for a later phase.
 
 `docs/design/libraries.md` is BUILT at container version 4, and `docs/library-format.md`
 carries the v4 schema. The container is settled, so this section specifies the field and the
-records that hold it.
+records that hold it. (The bare-function change later moved the container to version 5 and the templates
+schema to 8; the doc fields did not change.)
 
 ### Docs live in the manifest
 
@@ -1344,6 +1346,12 @@ The record gains an optional `error_type`, absent when the declaration does not 
 the default is `StdError`, and a record that named the default would claim the author wrote
 it. An added optional key does not move the container version (§8).
 
+Superseded in part by the bare-function change (`docs/design/error-channel.md`). There is
+no default error type now: a function without `| E` is bare. So an absent `error_type` no
+longer tells a bare function from one with a channel, and every function, helper and method
+record states a required `has_channel`. That is templates schema 8 and container version 5,
+and a library written before the change is refused (CE3512, CE3509).
+
 **R50 — the doc blocks are opt-in, behind `--docs`.** Ruled by David on 2026-08-26.
 Measured on a realistic library -- 40 documented functions, 8 structs, 16 fields -- the
 report is 428 lines, ten terminal screens, of which the signature lines are one and a half.
@@ -1378,8 +1386,8 @@ println("{d}")
 ```
 ~~~
 
-and compiled as a program, with the import injected, the body indented into
-`fn main() i32:`, and `return Result.Ok(0)` appended.
+and compiled as a program, with the import injected, the body indented into a helper with
+a `| StdError` channel, and a `main` that matches on its result (R19).
 
 A snippet that declares its own `main` is compiled verbatim. One rule, and it covers the
 whole-program case for free.
@@ -1525,22 +1533,24 @@ per unit, not once per example.
 use "<unit>"
 <the snippet's own use lines>
 
-fn doc_example_<n>() ~:
+fn doc_example_<n>() ~ | StdError:
     <the snippet, indented four spaces, blank lines left blank>
     return Result.Ok(~)
 
 fn main() i32:
     match doc_example_<n>():
         Result.Ok(_) ->
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 ```
 
-A body with `??` directly inside `fn main()` warns CW2511 on every such example. That
-warning exists to discourage `??` in `main`, so a harness that writes the discouraged form
-on the author's behalf teaches it. Measured: the helper form warns nothing, and an example
-whose `??` fails still exits 1. The name carries the block index, so it cannot collide with
+The helper writes `| StdError` because a snippet can hold a `??`, and a `??` needs a
+channel to propagate into. `main` is bare, so a `??` directly inside it is CE0131, and the
+snippet cannot go into `main` itself. An example whose `??` fails still exits 1. (The first
+text of this ruling said that a body with `??` directly inside `main` warns CW2511, and
+that the harness must not teach the discouraged form. The bare-function change retired
+CW2511, and made the helper form necessary, not only better.) The name carries the block index, so it cannot collide with
 a symbol in the imported unit.
 
 A snippet that declares its own `fn main(` is compiled verbatim, with the import injected

@@ -4,8 +4,8 @@
 # - Declaring an external C function in an `unsafe external "C" as <ns>` block
 # - The `because "<reason>"` clause that silences the CW5001 warning
 # - Calling the foreign function via the namespace prefix (libc.strlen)
-# - The Result-exemption: externals return a RAW C value, never Result@(T, E)
-# - The safe-wrapper pattern that folds the raw value back into Sushi's Result
+# - An external function is bare: it returns a RAW C value, never Result@(T, E)
+# - The safe-wrapper pattern that contains the raw call in ordinary Sushi
 # - Automatic, no-leak `string` -> C `char*` marshalling at the boundary
 #
 # FFI is the escape hatch for bootstrapping toward self-hosting (calling libc).
@@ -18,9 +18,11 @@
 unsafe external "C" as libc because "string length via libc strlen":
     fn strlen(string s) i64 = "strlen"
 
-# Safe wrapper - this is ORDINARY Sushi. It follows the implicit-Result rule, so
-# it returns Result@(i64, StdError). Inside, libc.strlen(s) yields a raw i64 (the boundary
-# exception); we fold it back into the Sushi world with Result.Ok(...).
+# Safe wrapper - this is ORDINARY Sushi. It follows the error-channel rule of every
+# function: it writes no `| E`, so it is bare and returns i64. strlen is total, so
+# a channel would only force a dead .realise() on every caller. A wrapper that can
+# fail (a C sentinel for an error) writes `| E` and folds the sentinel into
+# Result.Err(...).
 #
 # The `string` argument is marshalled to a C char* for the call and the copy is
 # freed automatically at scope exit - no leak.
@@ -28,8 +30,8 @@ fn length(string s) i64:
     return libc.strlen(s)
 
 fn main() i32:
-    # Call the safe wrapper like any normal Sushi function. .realise(default)
-    # unwraps the Result; the foreign-ness is fully contained behind length().
+    # Call the safe wrapper like any normal Sushi function. It is bare, so the
+    # call returns the i64; the foreign-ness is fully contained behind length().
     let i64 n = length("Mostly Harmless")
     println("len = {n}")
     return 0

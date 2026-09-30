@@ -32,8 +32,10 @@ Three things to notice:
   returns an `i32`" — the same shape as `add_one`'s signature.
 - **`apply(fn(i32) -> i32 op, i32 v)`** takes a function *as a parameter*. Inside, `op(v)` calls
   through it.
-- Calling through a function value returns a `Result` just like calling the function directly, so
-  the familiar `??` works on `op(v)`.
+- Calling through a function value gives what a direct call gives. `fn(i32) -> i32` is a
+  **bare** function type, so `op(v)` gives an `i32`, and `apply` returns it with
+  `return op(v)`. A function type has an error channel only when it writes `| E` (see
+  below).
 
 !!! note "A plain reference vs. a closure"
     A plain function reference like `add_one` above carries no captured variables. It points to
@@ -84,8 +86,8 @@ local first: `let fn(i32) -> i32 f = op.run`.)
 
 ## The error type travels with the function
 
-A function type can spell out a custom error type, just like a declaration does with `| E`. That
-error type is part of the type, so it propagates correctly through an indirect call:
+A function type can write an error channel, just like a declaration does with `| E`. The
+channel is part of the type, so it propagates correctly through an indirect call:
 
 ```sushi
 --8<-- "docs/tutorial/examples/17-first-class-functions/custom-error.sushi"
@@ -100,18 +102,31 @@ Output:
 
 `fn(i32, i32) -> i32 | DivError` says the function can fail with a `DivError`. Inside `run`, the
 `op(x, y)??` propagates that error out, and the caller turns it into a default with `.realise(-1)`.
-Omit the `| E` and the error type is the implicit `StdError`, exactly as for a normal `fn`.
+Omit the `| E` and the function type is bare: the call gives the value, and `??` on it is
+**CE2507**, exactly as for a normal `fn`. A bare type and a type with a channel do not
+convert: `fn(i32) -> i32` and `fn(i32) -> i32 | E` are different types (**CE2002**).
+
+The functions in this chapter are bare because they are total: `add_one` cannot fail. A
+bare function is the exception. Write a channel for a function that can fail, now or later.
+[The error channel](../design/error-channel.md) gives the rule.
+
+A function with a channel that returns a function type writes the explicit form,
+`fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type
+belongs to that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare
+function that returns a function type with a channel.
 
 ## Calling through any expression
 
 A function value doesn't have to sit in a plain variable to be called. You can call through any
-expression that produces one — a `List` element or a parenthesized expression:
+expression that produces one — a `List` element or a parenthesized expression. (This
+fragment is the body of a function with a channel, because `??` unwraps the `Maybe` that
+`.get(0)` gives.)
 
 ```sushi
 let List@(fn(i32) -> i32) table = List.new()
 table.push(add_one)
-let i32 a = table.get(0)??(41)??      # call the retrieved function value
-let i32 b = (table.get(0)??)(41)??    # same, parenthesized
+let i32 a = table.get(0)??(41)      # call the retrieved function value
+let i32 b = (table.get(0)??)(41)    # same, parenthesized
 ```
 
 ## Referencing a generic function
@@ -121,14 +136,14 @@ type chooses the instantiation:
 
 ```sushi
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn apply(fn(i32) -> i32 op, i32 v) i32:
-    return Result.Ok(op(v)??)
+    return op(v)
 
 let fn(i32) -> i32 g = identity      # identity@(i32), chosen by the annotation
-let i32 n = g(41)??                  # 41
-let i32 m = apply(identity, 42)??    # the parameter type chooses identity@(i32)
+let i32 n = g(41)                    # 41
+let i32 m = apply(identity, 42)      # the parameter type chooses identity@(i32)
 ```
 
 This works in every position that states the function type: a typed `let`, a rebind, an
@@ -151,9 +166,9 @@ identifier.
 ## What you learned
 
 - A **function value** is a function's name used without `()` — its type is a **function type**
-  `fn(params) -> return [| Error]`.
+  `fn(params) -> return [| Error]`. Without `| Error` the type is bare.
 - You can **store** function values (variables, struct fields, `List@(fn(...))`), **pass** them as
-  arguments, and **call through** them; an indirect call returns a `Result` just like a direct one.
+  arguments, and **call through** them; an indirect call gives what a direct one gives.
 - A plain function reference has **no captured state**: no allocation and no cleanup. Sushi
   also has **closures** (capturing lambda literals) — see the next chapter.
 - Call a function-valued **struct field** directly (`obj.field(x)`); a same-named method would win.
@@ -161,7 +176,7 @@ identifier.
 - Reference a **generic function** as a value in any position that states the function type
   (`let fn(i32) -> i32 g = identity`, `apply(identity, 42)`); a position with no function
   type is **CE2093**.
-- The **error type is part of the function type** and propagates through `??`.
+- The **error channel is part of the function type** and propagates through `??`.
 - A call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
 
 That's functions-as-data. Next, [Chapter 18 (Closures)](18-closures.md) adds the capturing lambda

@@ -53,15 +53,19 @@ rules differ between x86-64 SysV, AArch64 and Windows x64. Apple removed App Sto
 bitcode submission in Xcode 14 for the same reason. For our purposes bitcode is as
 platform-bound as an object file.
 
-## 2. The container (VERSION 4)
+## 2. The container (VERSION 4, now 5)
 
 `sushi_lang/backend/library_format.py` defines `LibraryFormat`, a flat binary
 container — no LLVM in it, no linking logic, just framing. Version 4 claims two of the
-reserved fields, so the fixed 52-byte header does not change size:
+reserved fields, so the fixed 52-byte header does not change size. Version 5 changed no
+framing. It came with the bare-function change (`docs/design/error-channel.md`): a
+signature without `| E` is bare now, and the bitcode of a version-4 library answers a
+`Result` from every such function, so a version-4 file is refused (CE3509) rather than
+called with the wrong ABI:
 
 ```
 MAGIC (16B) 🍣SUSHILIB🍣
-VERSION       (u32 LE) = 4
+VERSION       (u32 LE) = 5
 FLAGS         (u32 LE)   was SPARE_1; bit 0 = source section compressed
 KIND          (u32 LE)   was SPARE_2; 1 = source, 2 = binary, 3 = hybrid
 SPARE_3       (u64 LE)   zero
@@ -83,7 +87,7 @@ Integrity is checked strictly in order, one code per failure mode, all in
 `sushi_lang/internals/errors/library.py`:
 
 - **CE3508** — bad magic (not a `.slib` at all)
-- **CE3509** — version mismatch. The reader accepts `VERSION == 4` only. There is no
+- **CE3509** — version mismatch. The reader accepts `VERSION == 5` only. There is no
   backward-compat shim and none is needed: Sushi has no users in the wild, so an
   older `.slib` is rejected, not upgraded.
 - **CE3510** / **CE3506** / **CE3511** — the metadata, source or bitcode section is
@@ -381,7 +385,7 @@ consumer states that library for itself, and one that does not hears CE2008 at t
 -- the same answer a source library's re-export of one gives.
 
 The `templates` section carries its own `"version"` (`TEMPLATES_SCHEMA_VERSION`,
-`7`, in `backend/library_format.py`), which revs independently of the container as the
+`8`, in `backend/library_format.py`), which revs independently of the container as the
 cross-library-generics feature grows:
 
 1. generic function templates (source slices)
@@ -401,17 +405,22 @@ cross-library-generics feature grows:
    the consumer as a manifest record no unit walk sees, so the consumer interns
    `Box<i32>` from that record.
 7. + every perk method record carries its signature and receiver mode.
+8. + every function, helper and method record states `has_channel` (required). A
+   signature without `| E` is bare since the bare-function change, and no longer means
+   `| StdError`, so an absent `error_type` cannot tell the two apart. A binary or hybrid
+   library with an older schema is refused (CE3512); a source library recompiles from
+   its units and reads none of this.
 
 ### 5.1 Concrete functions
 
 A non-generic `public fn` becomes a `public_functions` record: `name`, `params`
-(`name`+`type` strings), `return_type` and, when the declaration spells `| E`,
-`error_type` (all strings — types are serialized via `str(ty)` and re-parsed with
+(`name`+`type` strings), `return_type`, `has_channel` (a bool, required) and, when the
+declaration spells `| E`, `error_type` (all strings — types are serialized via `str(ty)` and re-parsed with
 `parse_type_string` at the consumer, not pickled). The consumer reads the record in ONE
 place, `LibraryRegistry._parse_functions`, and the typecheck pass and the backend derive
 the call's `Result` from that signature through one function, `signature_result_arms`:
 the spelled channel is the Err arm, an explicit `Result@(T, E)` return is not wrapped
-again. Two checks gate the
+again, and a signature with neither is bare: the call yields the value. Two checks gate the
 record, both raising and aborting the `.slib` write (no partial artifact):
 
 - **CE0116** — a native `...T` variadic function cannot appear here. The registry

@@ -8,9 +8,10 @@
 # - Difference between storing Result@(T, E) vs unwrapping immediately
 # - Chaining result checks and handling
 #
-# Every function in Sushi implicitly returns Result@(T, E). This enables
-# explicit, type-safe error handling without exceptions. Functions must
-# handle all error paths and return Result.Ok() or Result.Err(error_value).
+# A function that can fail writes the error channel `| E`, and its call
+# returns Result@(T, E). This enables explicit, type-safe error handling
+# without exceptions. Such a function handles all error paths and returns
+# Result.Ok() or Result.Err(error_value). There is no default error type.
 
 # Function demonstrating multiple error conditions.
 # Shows validation at multiple stages before performing computation.

@@ -245,7 +245,7 @@ fn read_blob(poke File f, u64 mlen, u64 left) MsgValue | SlibError:
 ##:
 Reads the lengths of the two payload sections, and steps over the source section.
 
-A version-4 container has a length-prefixed source section between the metadata and
+A container (version 4 and later) has a length-prefixed source section between the metadata and
 the bitcode. Thus the reader steps over the source section to get to the bitcode
 length. The source length is compared with what is left of the file, and the bitcode
 length is not.

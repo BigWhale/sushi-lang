@@ -118,7 +118,7 @@ export SUSHI_LIB_PATH=.                   # Set library path
 ```sushi
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Documentation
@@ -160,11 +160,15 @@ fn main() i32:
 
 ### Explicit Error Handling
 
-Every function returns a `Result@(T, E)`. A function that declares only `T` returns
-`Result@(T, StdError)`:
+A function that can fail writes its error channel `| E`, and its call returns a
+`Result@(T, E)`. A function with no `| E` is bare: it returns the value itself. A bare
+function is the exception: use it only for a function that is total over its inputs and
+will stay so. A public function keeps a channel when there is any doubt, because a
+channel added later breaks every caller. See
+[the error channel design](https://bigwhale.github.io/sushi-lang/design/error-channel/).
 
 ```sushi
-fn divide(i32 a, i32 b) i32:
+fn divide(i32 a, i32 b) i32 | StdError:
     if (b == 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / b)
@@ -172,7 +176,7 @@ fn divide(i32 a, i32 b) i32:
 fn main() i32:
     let i32 result = divide(10, 2).realise(0)
     println("Result: {result}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Error Propagation
@@ -204,7 +208,6 @@ fn check(Status s) ~:
         Status.Idle() -> println("Idle")
         Status.Working(progress) -> println("Progress: {progress}%")
         Status.Done() -> println("Completed")
-    return Result.Ok(~)
 ```
 
 ### Generic Types
@@ -219,7 +222,7 @@ struct Pair@(T, U):
 fn main() i32:
     let Pair@(i32, string) p = Pair(first: 42, second: "answer")
     println("{p.second}: {p.first}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Memory Safety
@@ -230,10 +233,9 @@ marked mode is written at both ends:
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
-    return Result.Ok(~)
 
 fn eat(nom i32[] items) i32:
-    return Result.Ok(items.len())   # items is freed here
+    return items.len()              # items is freed here
 
 fn main() i32:
     let i32 count = 0
@@ -241,9 +243,9 @@ fn main() i32:
     println("Count: {count}")       # 1
 
     let i32[] data = from([1, 2, 3])
-    println(eat(nom data).realise(-1))
+    println(eat(nom data))
     # println(data.len())           # CE2405: data was handed over
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Perks (Traits/Interfaces)
@@ -264,13 +266,13 @@ extend Rect with Shape:
 
 # Generic function with perk constraint
 fn total_area@(T: Shape)(T value) i32:
-    return Result.Ok(value.area())
+    return value.area()
 
 fn main() i32:
     let Rect r = Rect(4, 5)
-    let i32 a = total_area(r).realise(0)  # T is inferred as Rect
+    let i32 a = total_area(r)             # T is inferred as Rect
     println("Area: {a}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Variadic Generics (Parameter Packs)
@@ -292,12 +294,11 @@ extend string with Display:
 fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):          # compile-time unrolled, not a runtime loop
         println(a.display())
-    return Result.Ok(~)
 
 fn main() i32:
     print_all(42, "hi")         # monomorphizes per (arity, type-tuple)
     print_all()                 # arity-0: expand body runs 0 times
-    return Result.Ok(0)
+    return 0
 ```
 
 See [the variadics design doc](https://bigwhale.github.io/sushi-lang/design/variadics/) for the full design and its limits.

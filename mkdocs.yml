@@ -158,6 +158,7 @@ nav:
       - "Visibility (design)": design/visibility.md
       - "Unit Namespaces (design)": design/unit-namespaces.md
       - "UFCS Combinators (design)": design/ufcs-combinators.md
+      - "Error Channel (design)": design/error-channel.md
       - "Iteration (design)": design/iteration.md
       - "Unit Storage (design)": design/unit-storage.md
       - "Array Representation (design)": design/array-representation.md

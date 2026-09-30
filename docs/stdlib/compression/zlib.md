@@ -133,10 +133,14 @@ fn main() i32:
 # 3 bytes: abc
 ```
 
-### `adler32(u8[] data) -> u32 | StdError`
+### `adler32(u8[] data) -> u32`
 
 The RFC 1950 checksum: two running sums modulo 65521, packed with the high sum first. An
-empty input gives 1. It cannot fail, so `.realise(0)` is the natural way to take the value.
+empty input gives 1. It is **bare**: it has no error channel, and a call gives the `u32`
+itself, so there is no `??` and no `.realise(...)`. A bare function is the exception in
+Sushi; a checksum is total over its input and stays so, which is the case the bare form is
+for. The other functions of this module can fail and write the `ZError` channel. [The error
+channel](../../design/error-channel.md) gives the rule.
 
 ```sushi
 use <compression/zlib>

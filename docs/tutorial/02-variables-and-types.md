@@ -146,9 +146,10 @@ typing does not convert a value.
 
 Some functions exist only for their side effects — they print something and have no
 meaningful value to hand back. Their return type is the **blank type**, written `~`, which
-is Sushi's equivalent of `void` in C or Java, or returning `None` in Python. Even a blank
-function ends with `return Result.Ok(~)`: it still reports success, it just has nothing
-useful to carry.
+is Sushi's equivalent of `void` in C or Java, or returning `None` in Python. A bare blank
+function can reach the end of its body with no `return`. A blank function with an error
+channel (`fn f() ~ | E:`) ends with `return Result.Ok(~)`: it reports success, with no
+useful value to carry.
 
 ## Block scope
 

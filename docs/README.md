@@ -90,9 +90,16 @@ nori remove my-package                     # Remove a package
 ```sushi
 use <io/fs>
 
-# A function that declares T returns Result@(T, StdError)
+# A function that can fail writes its error channel: the call returns Result@(i32, StdError)
+fn half(i32 a) i32 | StdError:
+    if (a % 2 != 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(a / 2)
+
+# A function with no `| E` is bare: the call returns i32. Use it seldom
+# (see design/error-channel.md)
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 # Error propagation: one channel from the open to the read
 fn read_file() string | IoError:
