@@ -161,6 +161,7 @@ class LibraryRegistry:
 
         A record states its channel twice: `has_channel`, and the `error_type` and
         `return_type` it implies. A record whose two answers disagree is damaged, CE3512.
+        That the field is there at all is `check_manifest`'s rule, not this reader's.
         """
         from sushi_lang.internals.diagnostics import SushiError
         from sushi_lang.semantics.channel import has_channel
@@ -212,8 +213,8 @@ class LibraryRegistry:
                 err_type=err_type,
                 link_symbol=func_info.get("link_symbol"),
             )
-            stated = func_info["has_channel"]
-            if stated != has_channel(result[func_name]):
+            stated = func_info.get("has_channel")
+            if stated is not None and stated != has_channel(result[func_name]):
                 raise SushiError(
                     "CE3512", path=str(lib_path),
                     reason=f"function '{func_name}' states has_channel {str(stated).lower()}, "
