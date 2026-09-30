@@ -1,0 +1,14 @@
+# A BINARY library ships a perk implementation whose method takes `poke self`. The
+# consumer declares the method from the shipped implementation, and the declaration
+# must carry the receiver mode: the library body writes through a pointer, so a
+# receiver passed by value is a crash.
+# BUILD_LIB_BINARY: perk_poke_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "42\n"
+use <lib/perk_poke_bin_lib>
+
+fn main() i32:
+    let Tally t = Tally(40)
+    t.add(1)
+    t.add(1)
+    println(t.n)
+    return 0
