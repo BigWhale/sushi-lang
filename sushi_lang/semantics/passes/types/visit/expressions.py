@@ -387,6 +387,7 @@ class ExpressionValidator(RecursiveVisitor):
         """
         from sushi_lang.semantics.generics.contracts import DISPLAY
         from sushi_lang.semantics.passes.types.expressions import top_level_contract
+        from sushi_lang.semantics.passes.types.utils import names_no_type
         from sushi_lang.semantics.typesys import deref_type
         stamps = []
         for part in node.parts:
@@ -395,7 +396,8 @@ class ExpressionValidator(RecursiveVisitor):
                 continue
             self.visit(part)
             part_type = self.type_validator.infer_expression_type(part)
-            if part_type is None or is_string_convertible(part_type):
+            if (part_type is None or is_string_convertible(part_type)
+                    or names_no_type(self.type_validator, deref_type(part_type))):
                 continue
             printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY)
             if printable:

@@ -104,7 +104,8 @@ class StatementValidator(RecursiveVisitor):
         from sushi_lang.semantics.generics.contracts import DISPLAY
         from sushi_lang.semantics.passes.types.expressions import top_level_contract
         from sushi_lang.semantics.type_predicates import is_string_convertible
-        from sushi_lang.semantics.typesys import EnumType, deref_type
+        from sushi_lang.semantics.passes.types.utils import names_no_type
+        from sushi_lang.semantics.typesys import BuiltinType, EnumType, deref_type
 
         value = node.value
         self.type_validator.validate_expression(value)
@@ -115,7 +116,11 @@ class StatementValidator(RecursiveVisitor):
         if isinstance(expr_type, EnumType) and is_instance_of(expr_type, "Result"):
             er.emit(self.type_validator.reporter, er.ERR.CE2037, value.loc)
             return
-        if is_string_convertible(deref_type(expr_type)):
+        # `~` prints as it always has, and a type that did not resolve is reported where
+        # it is written.
+        shown = deref_type(expr_type)
+        if (is_string_convertible(shown) or shown == BuiltinType.BLANK
+                or names_no_type(self.type_validator, shown)):
             return
         printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY)
         if printable:
