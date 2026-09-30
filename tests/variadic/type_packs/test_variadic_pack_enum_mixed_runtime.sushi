@@ -1,28 +1,28 @@
 # E2 (#71): mixed pack args -- an enum-constructor DotCall alongside primitive
 # args. Flat key ('show_all', (Color, i32, string)); per-element display dispatch.
 # EXPECT_STDOUT_EXACT: "red\n7\nhi\n"
-perk Display:
+perk Render:
     fn display() string
 
 enum Color:
     Red()
     Green()
 
-extend Color with Display:
+extend Color with Render:
     fn display() string:
         match self:
             Color.Red() -> return "red"
             Color.Green() -> return "green"
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "7"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

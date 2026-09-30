@@ -1,22 +1,22 @@
 # P1-T7b: heterogeneous parameter pack expanded with expand(...).
 # Each element's display() runs in declaration order; per-element typed.
 # EXPECT_STDOUT_EXACT: "int:42\nhi\nyes\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int:42"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-extend bool with Display:
+extend bool with Render:
     fn display() string:
         return "yes"
 
-fn print_all@(...Ts: Display)(...Ts args) ~:
+fn print_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

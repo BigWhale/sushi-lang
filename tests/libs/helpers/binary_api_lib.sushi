@@ -33,10 +33,10 @@ public enum Opt@(T):
 public fn wrap_opt@(T)(nom T v) Opt@(T):
     return Opt.Yep(v)
 
-public perk Display:
+public perk Render:
     fn display() string
 
-public fn show_all@(...Ts: Display)(...Ts args) ~ | StdError:
+public fn show_all@(...Ts: Render)(...Ts args) ~ | StdError:
     expand(a in args):
         println(a.display())
     return Result.Ok(~)

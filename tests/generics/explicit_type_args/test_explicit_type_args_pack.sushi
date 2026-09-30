@@ -1,18 +1,18 @@
 # EXPECT_STDOUT_EXACT: "int:42\nhi\n"
 # EXPECT_RUNTIME_EXIT: 0
 # Explicit type args on a variadic-generic (type pack) function: show_all@(i32, string)(...).
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int:42"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

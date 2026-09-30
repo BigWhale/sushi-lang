@@ -2,18 +2,18 @@
 # is CE0140, reported once, however many copies the expansion makes (#854).
 # EXPECT_ERROR_CODE: CE0140
 # EXPECT_STDERR_CONTAINS: test_err_dead_inside_expand_body.sushi:19:9
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-fn show_first@(...Ts: Display)(...Ts args) ~:
+fn show_first@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         return ~
         println(a.display())

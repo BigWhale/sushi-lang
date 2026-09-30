@@ -2,20 +2,20 @@
 # parse to DotCalls (pre-lowering enum constructors); the instantiate pass must infer their
 # enum type so the pack instantiation ('show_all', (Color, Color)) registers.
 # EXPECT_STDOUT_EXACT: "red\ngreen\n"
-perk Display:
+perk Render:
     fn display() string
 
 enum Color:
     Red()
     Green()
 
-extend Color with Display:
+extend Color with Render:
     fn display() string:
         match self:
             Color.Red() -> return "red"
             Color.Green() -> return "green"
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

@@ -1,14 +1,14 @@
 # P1-T7b: arity-0 pack. expand(...) produces zero body copies; the surrounding
 # fixed prints prove the function ran and the expand body executed 0 times.
 # EXPECT_STDOUT_EXACT: "start\nend\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn print_all@(...Ts: Display)(...Ts args) ~:
+fn print_all@(...Ts: Render)(...Ts args) ~:
     println("start")
     expand(a in args):
         println(a.display())

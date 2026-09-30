@@ -225,10 +225,10 @@ at **its own** call sites:
 
 ```sushi
 # in the library (built with `sushic --lib`)
-public perk Display:
+public perk Render:
     fn display() string
 
-public fn show_all@(...Ts: Display)(...Ts args) ~:
+public fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 ```
@@ -238,11 +238,11 @@ public fn show_all@(...Ts: Display)(...Ts args) ~:
 # in a consumer program
 use <lib/format_lib>
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "i:{self}"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return "s:{self}"
 
@@ -251,9 +251,9 @@ fn main() i32:
     return 0
 ```
 
-The library ships the `public perk Display` **definition** so the consumer need not redeclare it.
+The library ships the `public perk Render` **definition** so the consumer need not redeclare it.
 The perk must be `public`: a private perk in the constraint of a public function is **CE3010**. The
-consumer still supplies its own `extend <type> with Display` implementation for each type it
+consumer still supplies its own `extend <type> with Render` implementation for each type it
 instantiates the pack with. See the [Libraries guide](libraries.md) for the full template mechanism.
 
 > Native `...T` cannot cross a library boundary (it is a single concrete runtime function with an

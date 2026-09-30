@@ -1,10 +1,10 @@
 # tests/perks/perk_declaration/test_perk_basic_parse.sushi
 # Basic perk definition parsing test
 
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "42"
 

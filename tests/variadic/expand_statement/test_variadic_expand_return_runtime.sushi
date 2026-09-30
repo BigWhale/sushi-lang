@@ -3,18 +3,18 @@
 # once on the early-return path. Output proves the body ran before returning.
 # EXPECT_STDOUT_EXACT: "int:1\n"
 # EXPECT_RUNTIME_EXIT: 0
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int:1"
 
-extend string with Display:
+extend string with Render:
     fn display() string:
         return self.clone()
 
-fn print_first@(...Ts: Display)(...Ts args) ~:
+fn print_first@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
         return ~

@@ -1,10 +1,10 @@
 # Phase 3 producer: a printf-like variadic-generic (parameter-pack) public
-# function. The library ships the `Display` perk definition plus the
-# `show_all<...Ts: Display>` pack template; the consumer supplies the per-type
-# `Display` implementations for the types it instantiates the pack with.
-public perk Display:
+# function. The library ships the `Render` perk definition plus the
+# `show_all<...Ts: Render>` pack template; the consumer supplies the per-type
+# `Render` implementations for the types it instantiates the pack with.
+public perk Render:
     fn display() string
 
-public fn show_all@(...Ts: Display)(...Ts args) ~:
+public fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())

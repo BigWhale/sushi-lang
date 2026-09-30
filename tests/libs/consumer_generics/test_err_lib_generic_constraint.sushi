@@ -1,5 +1,5 @@
-# Consumer instantiates the library's constrained generic max_of<T: Ord> at a
-# type that does not implement Ord. The constraint is re-checked relative to the
+# Consumer instantiates the library's constrained generic max_of<T: Greater> at a
+# type that does not implement Greater. The constraint is re-checked relative to the
 # consumer's perk impls (it declares none for Widget), so monomorphization must
 # reject this with CE4006. Proves consumer-relative constraint re-checking of a
 # registered library template.

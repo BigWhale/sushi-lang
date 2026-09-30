@@ -1,6 +1,6 @@
-# C1 (P2-5 Phase 3): the library's constrained generic max_of<T: Ord> is
+# C1 (P2-5 Phase 3): the library's constrained generic max_of<T: Greater> is
 # instantiated at TWO types (i32 and i64) in one consumer, each with its own
-# consumer-supplied Ord implementation. Removing either extend block makes the
+# consumer-supplied Greater implementation. Removing either extend block makes the
 # corresponding instantiation fail CE4006, so both witnesses are exercised.
 # The i64 values exceed i32 range on purpose (issue #84 regression witness).
 # EXPECT_RUNTIME_EXIT: 0
@@ -9,14 +9,14 @@
 
 use <lib/generics_lib>
 
-# The Ord perk definition ships with the library; the consumer supplies one
+# The Greater perk definition ships with the library; the consumer supplies one
 # implementation per instantiation type. The perk signature is fixed at
 # gt(i32 other), so the i64 impl casts before comparing.
-extend i32 with Ord:
+extend i32 with Greater:
     fn gt(i32 other) bool:
         return self > other
 
-extend i64 with Ord:
+extend i64 with Greater:
     fn gt(i32 other) bool:
         return self > (other as i64)
 
