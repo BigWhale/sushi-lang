@@ -24,10 +24,28 @@ RESERVED_EXTERNS: dict[str, tuple] = {
     "malloc":  ((BuiltinType.I64,), ForeignPtrType(), False),
     "free":    ((ForeignPtrType(),), BuiltinType.BLANK, False),
     "exit":    ((BuiltinType.I32,), BuiltinType.BLANK, False),
+    "realloc": ((ForeignPtrType(), BuiltinType.I64), ForeignPtrType(), False),
+    # `backend/runtime/externs/libc_stdio.py`. A `FILE*` is a `ptr`.
+    "fprintf": ((ForeignPtrType(), BuiltinType.STRING), BuiltinType.I32, True),
+    "fwrite":  ((ForeignPtrType(), BuiltinType.I64, BuiltinType.I64, ForeignPtrType()),
+                BuiltinType.I64, False),
+    "setvbuf": ((ForeignPtrType(), BuiltinType.STRING, BuiltinType.I32, BuiltinType.I64),
+                BuiltinType.I32, False),
+    # `backend/runtime/externs/libc_ctype.py`: int f(int c).
+    **{symbol: ((BuiltinType.I32,), BuiltinType.I32, False)
+       for symbol in ("toupper", "tolower", "isspace", "isdigit", "isalnum")},
     # `errno()` (#1087) declares the platform's location function as a pointer answer.
     **{symbol: ((), ForeignPtrType(), False) for symbol in ERRNO_LOCATION_SYMBOLS.values()},
 }
 
+
+# C link-name -> type for the C globals that the compiler declares itself: the stdio
+# handles of `backend/runtime/externs/libc_stdio.py`, for each platform. A `FILE*` is a
+# `ptr`, and a user external variable of one of these names must be a `ptr` too.
+RESERVED_EXTERN_VARIABLES: dict[str, ForeignPtrType] = {
+    symbol: ForeignPtrType()
+    for symbol in ("stdin", "stdout", "stderr", "__stdinp", "__stdoutp", "__stderrp")
+}
 
 # The generated symbols that live in NO bitcode file: the backend emits them inline
 # into the module it compiles, so the stdlib symbol manifest cannot report them.

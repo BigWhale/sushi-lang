@@ -81,9 +81,10 @@ one unit or in two, agree only when each parameter, the return and `var_arg` hav
 type. `i32` against `u32` is `CE5001` (`int` and `unsigned int`), and so is a fixed signature
 against a `var_arg` one. Two spellings of one C type agree: `string` and `Maybe@(string)`
 are `char*`, `ptr` and `Maybe@(ptr)` are `void*`, and a link name written as a constant is
-the name it folds to. The built-ins that the compiler declares itself (`malloc`, `free`,
-`exit`, `strlen`, `strcmp`, `memcmp`, `printf`, `sprintf`, the errno location function) are
-the first declaration of their names, so `fn malloc(i32 n) ptr = "malloc"` is `CE5001` too.
+the name it folds to. The built-ins that the compiler declares itself (`malloc`, `realloc`,
+`free`, `exit`, `strlen`, `strcmp`, `memcmp`, `printf`, `sprintf`, `fprintf`, `fwrite`,
+`setvbuf`, the five ctype functions, the errno location function, and the stdio handle
+variables) are the first declaration of their names, so `fn malloc(i32 n) ptr = "malloc"` is `CE5001` too.
 External variables follow the same rule.
 
 ## Types at the boundary

@@ -128,7 +128,9 @@ class SemanticAnalyzer:
             libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
             ffi-clash     link-name constants, then an extern    _check_ffi_clash                  passes/types/externals.py
-                          naming a defined symbol
+                          naming a defined symbol, then two                                        passes/collect/externals.py
+                          declarations of one C symbol with
+                          other C types (CE5001)
             entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
             instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
             monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
