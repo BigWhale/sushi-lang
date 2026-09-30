@@ -1,0 +1,18 @@
+# A method is never variadic (CE0115). A native `...T` in a perk IMPLEMENTATION
+# method compiled, and the call stopped at run time with a double free (#1100).
+# EXPECT_ERROR_CODE: CE0115
+
+perk Adder:
+    fn add_all(i32[] xs) i32
+
+extend i32 with Adder:
+    fn add_all(...i32 xs) i32:
+        let i32 t = self
+        foreach(x in xs.iter()):
+            t := t + x
+        return t
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    println(5.add_all(a))
+    return 0
