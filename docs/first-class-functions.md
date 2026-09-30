@@ -174,8 +174,7 @@ fn run(fn(i32, i32) -> i32 | DivError op, i32 x, i32 y) i32 | DivError:
 ```
 
 A function whose type omits `| E` is bare, exactly like an ordinary `fn f() T` declaration. There
-is no default error type. Until the bare-function change, a function type with no `| E` had the
-implicit `StdError` error type.
+is no default error type.
 
 A bare function is the exception, not the default style. Use it only when the function is total
 over its inputs and will stay so, for example a pure arithmetic helper. Write a channel for a

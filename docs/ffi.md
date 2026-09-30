@@ -101,8 +101,7 @@ arises, it will become an `is_null(ptr) -> bool` intrinsic, never a `null` liter
 A Sushi function has an error channel only when its signature writes `| E` (see
 [The error channel is opt-in](design/error-channel.md)). An external function is always
 bare: a C function returns a raw value with no error channel and cannot construct a Sushi
-`Result` across the ABI. Until the bare-function change every Sushi function returned an
-implicit `Result@(T, StdError)`, and an external function was the one exception.
+`Result` across the ABI.
 
 ```sushi
 fn strlen(string s) i64 = "strlen"   # returns raw i64, NOT Result@(i64, StdError)

@@ -553,8 +553,8 @@ second descriptor over the same terminal, and dropping the writer closes that on
 `File(fd: STDOUT_FD, owned: false)` is the other spelling: a fresh handle that closes
 nothing.
 
-Note what changes with the buffer: ordering against `stderr` is no longer free, because
-`stderr` still writes immediately while the buffered `stdout` waits for its drain. That
+Note what the buffer costs: ordering against `stderr` is not free, because
+`stderr` writes immediately while the buffered `stdout` waits for its drain. That
 is the trade a buffer always makes, and it is why the handles do not make it for you.
 
 ## Unicode Support

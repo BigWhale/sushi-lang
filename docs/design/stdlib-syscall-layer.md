@@ -8,8 +8,8 @@ authority on WHAT is emitted; this page is the authority on WHY.
 
 Every `File` method goes to a descriptor through `read(2)`, `write(2)`, `lseek(2)` and
 their positional twins. Nothing goes through libc stdio. `fopen` and `fgets` buffer, and a
-`File.write()` through `write(2)` beside a buffered `printf` put the console output out of
-order (ruling R12). There is one route to a descriptor now.
+`File.write()` through `write(2)` beside a buffered `printf` puts the console output out of
+order (ruling R12). Thus there is one route to a descriptor.
 
 The descriptor layer of `<io/files>` has two halves:
 

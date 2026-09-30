@@ -68,9 +68,8 @@ fn main() i32:
   function returns a raw value, so `libc.strlen(s)` yields a plain `i64`. See
   [Foreign Function Interface](ffi.md).
 
-Until the bare-function change, every free function that wrote no `| E` returned an
-implicit `Result@(T, StdError)`. That default is removed. The decision record is
-[The error channel is opt-in](design/error-channel.md).
+A function that writes no `| E` has no error channel, and there is no default error type.
+The decision record is [The error channel is opt-in](design/error-channel.md).
 
 ### A Bare Function Is the Exception
 
@@ -705,9 +704,6 @@ fn main() i32:
     return 0
 ```
 
-CW2511, the warning that discouraged a `??` in `main`, is retired. Until the bare-function
-change, `main` had an error channel, and an `Err` from `main` exited 1 and printed nothing.
-
 ### A Total Helper Can Be Bare
 
 A private helper that cannot fail, and will not gain a failure, can be bare. The caller
@@ -945,7 +941,7 @@ Common error codes related to error handling:
 - **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
 - **CW2001**: Unused `Result@(T, E)` value (warning)
 
-CW2511 (`??` in `main()`) is retired: `main` is bare, so a `??` there is CE0131.
+`main` is bare, so a `??` in `main()` is CE0131.
 
 ---
 

@@ -396,8 +396,8 @@ three forms:
 | `fn f() T` | `T`: the function is BARE |
 
 The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
-The error type `E` is an enum. There is no default error type: until the bare-function
-change, `fn f() T` returned an implicit `Result@(T, StdError)`, and that default is removed.
+The error type `E` is an enum. There is no default error type: `fn f() T` is bare and
+returns `T`.
 
 **A bare function is the exception.** Use it seldom: only when the function is total over
 its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join),
@@ -640,8 +640,8 @@ on a `u8` is 144, and `~0` on a `u32` is 4294967295.
 An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
 44. A wider type is the other answer.
 
-**Run time does not change.** Only an expression the compiler reads is checked, so two
-locals still wrap:
+**Run time is not checked.** Only an expression the compiler reads is checked, so two
+locals wrap:
 
 ```sushi
 fn main() i32:
@@ -1297,7 +1297,7 @@ fn main() i32:
 ### Binding Modes
 
 A payload binding carries a MODE, and the three are the ones a parameter has. The bare
-form is the common case and is unchanged.
+form is the common case.
 
 | pattern | the binding is | write through it | rebind the name | may be given away |
 |---|---|---|---|---|
@@ -1507,7 +1507,7 @@ fn main() i32:
 A name behind a type's dot is a **member** of that type: a variant, or a static method,
 never both. A local of the same name wins over the type.
 
-Everything but the receiver is unchanged. The parameters take the ordinary four modes
+Everything but the receiver is as on an instance method. The parameters take the ordinary four modes
 and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
 the error channel exactly as on an instance method; and the declaration carries no
 visibility marker, because a static is as visible as its target type.
@@ -2328,7 +2328,7 @@ fn main() i32:
 ```
 
 Only a name the compiler knows to be a struct starts a constant construction, so an
-ordinary call is refused as it always was -- flat, and inside a field argument:
+ordinary call is refused -- flat, and inside a field argument:
 
 ```sushi
 const Handle BAD = Handle(pick())                # CE0108: function calls forbidden
@@ -2522,7 +2522,7 @@ fn redirect(nom File f) ~:
 Nothing destroys a unit variable at exit. The process ends and the operating system
 reclaims the pages; a variable that holds heap at that moment is not freed first.
 
-A fixed array's size still wants an integer CONSTANT: a variable has a run-time value,
+A fixed array's size needs an integer CONSTANT: a variable has a run-time value,
 so `i32[N]` with `var i32 N = 3` is **CE2099**.
 
 ---

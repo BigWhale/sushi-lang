@@ -1,8 +1,6 @@
 # Ownership Conventions: One Authority for Every Consuming Use
 
-*Design doc, 2026-07-30. Status: **implemented** (Phase 9, 2026-08-14). Supersedes the ad-hoc
-"ownership sink" handling described in `docs/design/move-semantics.md` §3 — that document is the
-record of the earlier decision and cross-links back here. The shipped seam lives in `sushi_lang/semantics/ownership.py`
+*Design doc. Status: **implemented**. The seam lives in `sushi_lang/semantics/ownership.py`
 (the rule, `classify()`) and `sushi_lang/backend/ownership.py` (`consume`/`bind`/`copy_out`/
 `relinquish`/`relinquish_temp`, the only module allowed to move-mark a value —
 `tests/unit/test_consuming_use_coverage.py` is the no-bypass gate).*
@@ -495,11 +493,11 @@ struct field, an enum payload): dropping it would be error recovery that reports
 error at every construction of the type. The report already stops the compile before codegen,
 which is what the internal errors needed protecting from.
 
-## 8.6 Method receivers and method parameters (decided 2026-08-15)
+## 8.6 Method receivers and method parameters
 
-> **SUPERSEDED by `docs/design/borrow-model.md`** (ruled 2026-08-16). An unmarked parameter
+> **The parameter modes are in `docs/design/borrow-model.md`.** An unmarked parameter
 > is a borrow in every kind of callable, and a consume is spelled `nom` at both ends. Read
-> that document for what the modes are. This section keeps what a borrow parameter may not
+> that document for what the modes are. This section states what a borrow parameter may not
 > do, and that applies to the parameters of every callable, `self` included: a write through
 > one is CE2421 (the receiver) or CE2422 (any other parameter), and consuming one is CE2411
 > with `.clone()` as the escape.

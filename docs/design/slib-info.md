@@ -7,8 +7,8 @@ in `sushi_lang/compiler/lib_info.py`) when there is no tool. The delegation cont
 `toolchain/README.md`. The report and its rules (R38 to R49) are in
 `docs/design/documentation.md`.
 
-This page holds the design records that were `#` comments in the tool source. The doc
-blocks in the source say what each declaration does. This page says why.
+This page holds the design records of the tool source. The doc blocks in the source say
+what each declaration does. This page says why.
 
 ## 1. The two halves print one report
 
@@ -132,10 +132,9 @@ above the first member, so one `pending` flag covers the owner and its members.
 - **A signature.** `render_signature` is the one renderer for a concrete and a generic
   function, and for a perk method, so a generic function prints its parameters and its
   `- Parameter` tags like a concrete one (R46). A record with no `error_type` prints no error
-  arm (R49): the function is bare, or it spells its `Result@(T, E)` in `return_type`. Until
-  the bare-function change (`docs/design/error-channel.md`) the default error type was
-  `StdError`, and an absent `error_type` meant that default. Now there is no default, and
-  every record states `has_channel`.
+  arm (R49): the function is bare, or it spells its `Result@(T, E)` in `return_type`. There
+  is no default error type (`docs/design/error-channel.md`), and each record states
+  `has_channel`.
 - **A parameter mode.** `nom` is the one mode that a type cannot spell, so it comes from the
   `mode` field of the record. `peek` and `poke` are already part of the type string. The
   receiver mode of a perk method is a field of the record too, and it prints first, where

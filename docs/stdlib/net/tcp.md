@@ -47,7 +47,7 @@ fn main() i32:
     return 0          # server closes here
 ```
 
-`close()` stays, for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
+`close()` is for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
 
 ## Constructors
 

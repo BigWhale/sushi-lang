@@ -22,8 +22,8 @@ fn main() i32:
 library (see [Library Format](../../library-format.md)). The metadata comes back as a
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
 reads the length of a payload section, never the payload. A container of another version
-is `SlibError.BadVersion`: a library written before the bare-function change is version 4,
-and its records do not say which callables are bare, so the reader refuses it.
+is `SlibError.BadVersion`. A version-4 library is refused, because its records do not say
+which callables are bare.
 
 The module imports `<io/fs>`, `<encoding/msgpack>` and `<collections/strings>`. It
 re-exports `<io/error>` (`public use`), so

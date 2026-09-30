@@ -31,7 +31,7 @@ fn double(i32 x) i32:                    # bare: the call yields i32
 - A body that answers a value, or a Result, ends in a `return` on every path (CE0107). A
   bare `~` body answers nothing and may reach its end.
 - `main` is bare. It returns the exit code (`return 0`), and `| E` on it is CE0106. A `??`
-  in `main` is CE0131; CW2511, the warning that discouraged it, is retired.
+  in `main` is CE0131.
 - A lambda has a channel only when its TYPE says `| E`. The type comes from the
   annotation on the lambda (`|i32 x| -> i32 | E: ...`) or from the expected type (a
   parameter, a `let`, a field). The compiler never infers a channel from the body. An
@@ -46,8 +46,8 @@ fn double(i32 x) i32:                    # bare: the call yields i32
   function that returns a function type with a channel.
 - The combinators of `<collections/iter>` (`map`, `filter`, `fold`, `compose`) are bare:
   they take bare functions and yield the value.
-- Perk contracts do not change: a contract method was already bare or had a channel, and
-  CE0133 checks that an implementation agrees.
+- A perk contract method is bare or has a channel. CE0133 checks that an implementation
+  agrees.
 
 ## A bare function is the exception
 
@@ -69,11 +69,10 @@ can trap exactly as a function with a channel can, and a channel does not catch 
 
 ## Why
 
-Before this change every free function answered `Result@(T, StdError)` when its signature
-wrote nothing, while an extension method without `| E` was bare. One field meant two
-things: `err_type` of None was "bare" on a method and "StdError" on a function. A total
-function made every caller write a dead `??` or `.realise(0)`, and `main` had an error
-channel that exited 1 and printed nothing.
+One rule for every callable gives one field one meaning: `err_type` of None is "bare" on
+a function and on a method alike. A default error type makes every caller of a total
+function write a dead `??` or `.realise(0)`, and it gives `main` an error channel that
+exits 1 and prints nothing.
 
 The precedent is the same in the languages Sushi takes its error model from: a Rust `fn`
 returns `T` unless it writes `Result<T, E>`; a Swift function throws only when it writes
@@ -82,7 +81,7 @@ function returns `Result` only when its type says so.
 
 ## Rejected options
 
-- **A marker for the bare form, with the old default kept** (`fn f() u32 | never`). It
+- **A marker for the bare form, with a default error type** (`fn f() u32 | never`). It
   keeps the default that forces the dead unwrap, and adds a second spelling.
 - **An uninhabited error type** (Swift `throws(Never)`, Rust `Infallible`). A Result that
   cannot fail still has the Result ABI and still needs an unwrap at every call.
@@ -96,6 +95,6 @@ asks it: the collect pass (CE0131, CE2085), the typecheck pass (the body state, 
 return rule, the `??` channel, CE0107, what a call yields), the lift pass (the desugar of
 an expression lambda), and the backend (`channel_result_of`, which declares a callable
 with its channel Result, its bare return, or void). The `.slib` manifest states
-`has_channel` for every function, helper and method record; the templates schema is 8
-and the container version is 5, so a library written before the change is refused
-(CE3512, CE3509) and never read as bare.
+`has_channel` for every function, helper and method record. The templates schema is 8
+and the container version is 5. A library with an older schema or container version is
+refused (CE3512, CE3509) and never read as bare.

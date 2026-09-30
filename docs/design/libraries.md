@@ -1,15 +1,6 @@
 # Design: `.slib` Libraries — source-first distribution
 
-**Status: BUILT.** Every phase has landed; this document describes code that runs today.
-
-| Phase | Content | State |
-|---|---|---|
-| 1 | This document | BUILT |
-| 2 | Container VERSION 4, manifest fields, a `semver` module under `sushi_lang/internals/`, CE3503/CE3505/CE3506 | BUILT |
-| 3 | `--lib-kind source` writes the source section; the platform gate becomes kind-conditional | BUILT |
-| 4 | The consumer compiles library source as ordinary units; `--lib-kind` defaults to `source` | BUILT |
-| 5 | `slib-info` and the `sushic` fallback report the v4 fields | BUILT |
-| 6 | User-facing docs | BUILT |
+**Status: BUILT.** This document describes the code that runs today.
 
 Written for a compiler contributor. The user-facing guide is
 [`docs/libraries.md`](../libraries.md), and the on-disk byte format is specified in
@@ -27,21 +18,20 @@ build at the consumer. Apple ships a bundle of per-platform binary slices
 binary libraries, and they win by not shipping machine code at all. No AOT-compiled
 language ships a portable binary library, because none exists.
 
-Sushi had already crossed half of this line before the decision was made. A generic
-cannot be pre-compiled, because monomorphization needs the consumer's concrete type
-arguments, so generics have always travelled as **re-parsable Sushi source text**.
-The compiler also already compiles whole `.sushi` files that arrive as text:
+A generic cannot be pre-compiled, because monomorphization needs the consumer's
+concrete type arguments, so a generic travels as **re-parsable Sushi source text** in
+every kind. The compiler also compiles whole `.sushi` files that arrive as text:
 `_inject_source_stdlib_units` (`compiler/pipeline.py`) parses every module that
 `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`) names -- `collections/iter`,
 the `io/*` and `net/*` modules, `encoding/msgpack`, `toolchain/slib` and others -- and
-puts them in the unit table as ordinary units. Source libraries generalize a mechanism that already works.
+puts them in the unit table as ordinary units. Source libraries use the same mechanism.
 
 **Binary distribution stays available as an opt-in** (`--lib-kind binary`), and keeps
-today's per-declaration behaviour exactly: concrete bodies as bitcode, generics as
+the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
 a foreign platform (CE3504); a source `.slib` is not.
 
-Note that a binary `.slib` does **not** hide a library's generics. It never has. Their
+Note that a binary `.slib` does **not** hide a library's generics. Their
 source text is in the manifest, because that is the only way a generic can cross a
 boundary at all.
 
@@ -53,21 +43,19 @@ rules differ between x86-64 SysV, AArch64 and Windows x64. Apple removed App Sto
 bitcode submission in Xcode 14 for the same reason. For our purposes bitcode is as
 platform-bound as an object file.
 
-## 2. The container (VERSION 4, now 5)
+## 2. The container (VERSION 5)
 
 `sushi_lang/backend/library_format.py` defines `LibraryFormat`, a flat binary
-container — no LLVM in it, no linking logic, just framing. Version 4 claims two of the
-reserved fields, so the fixed 52-byte header does not change size. Version 5 changed no
-framing. It came with the bare-function change (`docs/design/error-channel.md`): a
-signature without `| E` is bare now, and the bitcode of a version-4 library answers a
-`Result` from every such function, so a version-4 file is refused (CE3509) rather than
-called with the wrong ABI:
+container — no LLVM in it, no linking logic, just framing. The fixed header is 52 bytes.
+A signature without `| E` is bare (`docs/design/error-channel.md`), and the bitcode of a
+version-5 library follows that ABI. A file of any other version is refused (CE3509), so
+no function is called with the wrong ABI:
 
 ```
 MAGIC (16B) 🍣SUSHILIB🍣
 VERSION       (u32 LE) = 5
-FLAGS         (u32 LE)   was SPARE_1; bit 0 = source section compressed
-KIND          (u32 LE)   was SPARE_2; 1 = source, 2 = binary, 3 = hybrid
+FLAGS         (u32 LE)   bit 0 = source section compressed
+KIND          (u32 LE)   1 = source, 2 = binary, 3 = hybrid
 SPARE_3       (u64 LE)   zero
 SPARE_4       (u64 LE)   zero
 METADATA_LENGTH (u64 LE) | METADATA_BLOB (msgpack dict)
@@ -110,17 +98,13 @@ file (**CE3516**).
 `FLAGS` bit 0 is reserved for source-section compression and is **always written as
 zero** today. **Compression is planned** (ruled 2026-08-25). The self-hosted reader
 (`sushi_stdlib/src_sushi/toolchain/slib.sushi` plus `encoding/msgpack`) needs an
-inflate written in Sushi, and `compression/zlib.sushi` is in the stdlib. One reason to
-wait still holds for the source section — Nori archives are already `tar.gz`
-(`packager/archive.py`), so distribution is compressed regardless.
+inflate written in Sushi, and `compression/zlib.sushi` is in the stdlib. For the source
+section there is a reason to wait: Nori archives are `tar.gz` (`packager/archive.py`),
+so distribution is compressed regardless.
 
-What moved the decision is the **metadata blob**, not the source section. An earlier
-draft of this section said the blob is never compressed, because it is the index and
-every reader must be able to take it cheaply. That reasoning is about the cost of
-reading it, and it argued for keeping the index SMALL — which turned into an argument
-for carrying less in it. The index is where doc text lives
-(`docs/design/documentation.md` section 8, R8), and a library must not carry thinner
-documentation to keep a number down.
+The reason to compress is the **metadata blob**, not the source section. The index is
+where doc text lives (`docs/design/documentation.md` section 8, R8), and a library must
+not carry thinner documentation to keep the index small.
 
 So the blob is uncompressed today and is not meant to stay that way. Whoever takes it
 owns three things: the flag, a read side in both readers, and a rule for when an index
@@ -182,16 +166,15 @@ unit list, and it prints only the lines the kind can answer for: no `Platform` a
 
 ### 4.2 Consumption
 
-`_inject_source_stdlib_units` (`compiler/pipeline.py`) is generalized into one shared
-unit injector, used by both the bundled source stdlib and source libraries. It already
-does the work: read text, `parse_to_ast`, build a `Unit`, and loop until no new `use`
+One shared unit injector in `compiler/pipeline.py` serves both the bundled source
+stdlib and source libraries. It does the work: read text, `parse_to_ast`, build a `Unit`, and loop until no new `use`
 appears.
 
 Three rules make this sound:
 
 - **Namespacing.** A library unit enters `unit_manager.units` as
   `lib/<library_name>/<unit>`, so it can never collide with a consumer unit name.
-- **Privacy is the existing unit mechanism.** `semantics/units.py` already gates
+- **Privacy is the existing unit mechanism.** `semantics/units.py` gates
   exports on `func.is_public`. Library privates stay private with no new machinery.
 - **The registry is skipped.** For `kind = "source"`, nothing in
   `semantics/library_registration.py` runs. A library unit is an ordinary unit, so the
@@ -230,7 +213,7 @@ Three consequences follow, and they are the point of the design:
    own shipped bodies call. Namespaced units remove the shared namespace.
 3. **CE3504 cannot fire.** Nothing in a source library is platform-bound.
 
-`_check_library_platform` becomes conditional on `kind != "source"`. That single
+`_check_library_platform` is conditional on `kind != "source"`. That single
 condition is the whole cross-platform fix.
 
 ### 4.3 Caching
@@ -238,7 +221,7 @@ condition is the whole cross-platform fix.
 Library units are ordinary units, so `__sushi_cache__` caches one `.o` for each of
 them, keyed as any other unit is. The first build pays; later builds do not.
 
-`compute_lib_fingerprint` (`compiler/fingerprint.py`) already invalidates every
+`compute_lib_fingerprint` (`compiler/fingerprint.py`) invalidates every
 consumer unit when a `.slib` changes. That is correct, and it rebuilds more than it
 must: a consumer unit that does not use the library is rebuilt too.
 
@@ -290,7 +273,7 @@ check at `--lib`; this is the position of C++ and Zig, where a template body is 
 at its instantiation. The consequence is that a template's warning reaches nobody when
 the author never instantiates it: the consumer drops it by the rule above.
 
-### 4.5 Where CE5007 went
+### 4.5 Why CE5007 does not fire on the source path
 
 The binary path needs CE5007 because an export-closure private shares the consumer's
 flat namespace, so a consumer symbol of the same name would silently change what the
@@ -329,8 +312,7 @@ genuinely portable FFI-heavy libraries. It is out of scope here.
 
 ## 5. The binary path (opt-in)
 
-Everything in this section is **what the compiler does today**, and it is unchanged by
-the source-first decision. It applies when `kind` is `binary` or `hybrid`.
+This section applies when `kind` is `binary` or `hybrid`.
 
 A binary `.slib` is **bitcode plus a manifest**. Concrete symbols (plain functions,
 concrete structs/enums, concrete perk-impl method bodies) are already machine code in
@@ -351,7 +333,7 @@ symbol, without the consumer writing any glue.
 `use <io/fs>` injects the bundled module as an ordinary compilation unit, and a
 `use <lib/other>` over a source library injects its units the same way, so both reach
 the manifest generator beside the library's own files. `own_units` filters them out of
-every index -- one predicate, `Unit.provenance`, the field that already answers "did
+every index -- one predicate, `Unit.provenance`, the field that also answers "did
 the author write this unit" for a `public use` record. So a consumer that imports
 `<io/fs>` for itself does not read a second definition of each name.
 
@@ -360,7 +342,7 @@ The bitcode is the other half, and the answer there is different: a compiled lib
 nothing of the module still links. That copy is a second definition for a consumer that
 does import the module. It is weakened rather than dropped -- `weak_odr` on every
 definition a foreign unit contributed and on every symbol a stdlib `.bc` brought in
-(`backend/library_linkage.py`), which is the same answer the perk-impl seam already
+(`backend/library_linkage.py`), which is the same answer the perk-impl seam
 takes. `ld` then keeps one copy and a consumer's own
 strong definition wins. The monolithic consumer path needs no weakening, because
 `TwoPhaseLinker` resolves a duplicate by symbol source; the per-unit incremental path
@@ -385,15 +367,15 @@ consumer states that library for itself, and one that does not hears CE2008 at t
 -- the same answer a source library's re-export of one gives.
 
 The `templates` section carries its own `"version"` (`TEMPLATES_SCHEMA_VERSION`,
-`8`, in `backend/library_format.py`), which revs independently of the container as the
-cross-library-generics feature grows:
+`8`, in `backend/library_format.py`), which is independent of the container version.
+The section holds:
 
-1. generic function templates (source slices)
-2. + generic struct/enum templates
-3. + concrete perk-impl shipping
-4. + the export closure: private-symbol shipping and `closure_summary`
-5. + every closure record keyed by its unit, and a source-shipped template's `bindings`
-6. + every public perk, and generic-target perk implementations as templates.
+- generic function templates (source slices)
+- generic struct/enum templates
+- concrete perk-impl records
+- the export closure: private-symbol records and `closure_summary`
+- every closure record keyed by its unit, and a source-shipped template's `bindings`
+- every public perk, and generic-target perk implementations as templates.
    `extend Box@(T) with Show` names no instantiation, so it cannot be a concrete
    record: it ships as source in `generic_perk_impls`, the consumer files it through
    the collect pass's own perk collector under the producer's unit, and
@@ -404,12 +386,11 @@ cross-library-generics feature grows:
    signature is read for instantiations too -- `fn make_box(i32 v) Box@(i32)` reaches
    the consumer as a manifest record no unit walk sees, so the consumer interns
    `Box<i32>` from that record.
-7. + every perk method record carries its signature and receiver mode.
-8. + every function, helper and method record states `has_channel` (required). A
-   signature without `| E` is bare since the bare-function change, and no longer means
-   `| StdError`, so an absent `error_type` cannot tell the two apart. A binary or hybrid
-   library with an older schema is refused (CE3512); a source library recompiles from
-   its units and reads none of this.
+- the signature and the receiver mode of every perk method record.
+- `has_channel` (required) on every function, helper and method record. A signature
+   without `| E` is bare, and there is no default error type, so the flag states the
+   channel. A binary or hybrid library with a different schema version is refused
+   (CE3512); a source library recompiles from its units and reads none of this.
 
 ### 5.1 Concrete functions
 
@@ -485,7 +466,7 @@ body, what text the caret marks, and why it is being compiled here:
 
 | field | value |
 |---|---|
-| `filename` | `<template:<library>:<name>>`, the same shape the throwaway reporter already used |
+| `filename` | `<template:<library>:<name>>`, the same shape the throwaway reporter uses |
 | `source` | the record's `source` slice, so the caret marks the template's own line |
 | `provenance` | `'<library>' <version> ships this template; it is monomorphized here because of \`use <lib/<library>>\`` |
 
@@ -514,7 +495,7 @@ site through the same path as §5.2. `tests/libs/helpers/format_lib.sushi` +
 `show_all@(...Ts: Display)`; the consumer supplies `Display` impls for `i32`/`string`
 and calls with zero and two arguments.
 
-### 5.4 Concrete perk implementations (C4a)
+### 5.4 Concrete perk implementations
 
 A library's own `extend <ConcreteType> with <Perk>:` block, for a perk one of its
 exported generics constrains on, ships as a `perk_impls` record: `type`, `perk`,
@@ -557,11 +538,9 @@ own units are collected (perk-impl collection validates against CE4003, so a con
 implementing a library-shipped perk needs the contract present at collection time, not
 after).
 
-### 5.5 The export closure of private dependencies (C4b/C5)
+### 5.5 The export closure of private dependencies
 
-Before C5, an exported generic whose body called a library-private helper simply
-failed to build the library (CE5006 on every private reference — the old, wide reading
-of that code). C5 makes ordinary private-helper references shippable instead:
+An exported generic whose body calls a library-private helper ships that helper with it.
 `LibraryManifestGenerator._compute_export_closure()` walks every exported generic's
 body (`_scan_referenced_symbols` for call/name/constructor references,
 `_scan_referenced_type_names` for `UnknownType`/`GenericTypeRef` names in field/variant
@@ -591,7 +570,7 @@ Three private kinds ship, each a different way:
   transitive references. A PRIVATE type that a shipped body names ships in the closure
   as source.
 
-Only two reference shapes still abort the export with **CE5006**, attributed to the
+Only two reference shapes abort the export with **CE5006**, attributed to the
 exported generic at the root of the dependency chain (not the private helper itself —
 the generic is what the consumer sees fail): a reference into an `unsafe external`
 namespace (foreign bindings cannot be re-declared at a consumer that never saw the
@@ -656,12 +635,10 @@ matter:
 
 - **`nom` cannot be spelled in a type at all.** It is a property of the parameter, not
   of the value, so there is nowhere in `"string"` to put it.
-- **`peek` / `poke` could be, and that is exactly how they were lost.** The manifest
-  always serialized `"peek string"` correctly, because `str(ReferenceType)` produces it
-  — but `parse_type_string` had no reference arm, so the consumer read back
+- **`peek` / `poke` can be spelled in a type**, as `"peek string"`, because
+  `str(ReferenceType)` produces it. `parse_type_string` has a reference arm, so the
+  consumer reads the spelling back as a reference type. A parser with no such arm reads
   `UnknownType("peek string")`: a type that names nothing, with the mode silently gone.
-  A library could therefore *write* a borrow and never have one *read*. The parser
-  learned the two words alongside the field.
 
 `tests/unit/test_lib_param_modes.py` is the gate: it builds a library declaring one
 function per mode, asserts what the manifest records, asserts what the consumer reads
@@ -701,8 +678,8 @@ LLVM-level merge and no `SymbolResolver` on this path — "local wins" instead f
 of the **system linker's own weak-symbol semantics**: a library perk-impl method
 carries `weak_odr` in its own object file (§5.4), so a consumer's ordinary (strong)
 definition of the same symbol is what the platform linker picks, with no Sushi-side
-logic involved at all. This is exactly why `weak_odr` had to be used instead of
-`linkonce_odr` for perk-impl bodies — `linkonce_odr` symbols never even survive as
+logic involved at all. This is why a perk-impl body uses `weak_odr` and not
+`linkonce_odr` — `linkonce_odr` symbols never even survive as
 *declarations* other object files can override; the point of `weak_odr` is to be a
 retained-but-overridable definition that a plain `cc` link resolves correctly.
 
@@ -719,7 +696,7 @@ as the consumer's own units are.
 - **Generic-target perk impls** (`extend Box@(T) with SomePerk:`) do not ship as
   CONCRETE perk impls: the concrete list skips them
   (`isinstance(impl.target_type, GenericTypeRef)` in `library_manifest.py`). They ship as
-  TEMPLATES instead (`_generic_perk_impl_templates`, since templates version 6), and the
+  TEMPLATES instead (`_generic_perk_impl_templates`), and the
   consumer instantiates them like any other template.
 - **v1 native `...T` variadics** as public functions — CE0116, §5.1.
 - **Transitive library dependencies** — if library A's source itself does `use <lib/b>`,
@@ -732,8 +709,7 @@ Two version fields, with two different jobs.
 
 ### 6.1 `library_version`
 
-The library's own version, `major.minor.patch`. A `.slib` has never recorded one:
-`library_name` comes from the output filename and nothing states a version at all.
+The library's own version, `major.minor.patch`.
 
 Source of the value, in order:
 
@@ -774,7 +750,7 @@ write — exactly the diagnostic problem §4.4 exists to avoid.
 
 ### 6.3 Version comparison
 
-A new `semver` module under `sushi_lang/internals/`: `Version` (parse, compare, order) and a constraint
+The `semver` module under `sushi_lang/internals/`: `Version` (parse, compare, order) and a constraint
 matcher covering exact, `~X.Y`, caret and comparator ranges.
 
 It lives in `internals` rather than `packager` because the compiler needs it on the
@@ -805,7 +781,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | Public native `...T` variadic function | **CE0116** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
 | Platform mismatch (**binary**) | **CE3504** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
 | An `unsafe external "C"` link-name == a symbol this build defines | **CE5013** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
-| Container version is not 4 | **CE3509** | no backward-compat shim; there are no users in the wild |
+| Container version is not 5 | **CE3509** | no backward-compat shim; there are no users in the wild |
 | `requires_compiler` not satisfied | **CE3503** | see §6.2; the escape is `--ignore-compiler-version` |
 | No `library_version` available at build time | **CE3505** | see §6.1 |
 | Call site's `nom` marker disagrees with the shipped signature | **CE2427** | the same rule as within a unit: a consume is visible at both ends or at neither (§5.6) |
@@ -829,12 +805,12 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `sushi_lang/backend/symbol_resolver.py` | `SymbolResolver._choose_definition` — the `MAIN > LIBRARY > STDLIB > RUNTIME` priority table used only by `TwoPhaseLinker`. |
 | `sushi_lang/compiler/fingerprint.py` | `compute_lib_fingerprint` — content hash of a `.slib`, used to cache its compiled object and to invalidate consumers. |
 | `sushi_lang/internals/errors/library.py` | CE35xx: the container/link/version family. |
-| `sushi_lang/internals/errors/ffi.py` | CE50xx: CE5002/CE5006/CE5007/CE5008 — the export-safety family, despite living in the "ffi" module (historical: `ptr`-confinement was the first reason a symbol could be un-shippable). |
+| `sushi_lang/internals/errors/ffi.py` | CE50xx: CE5002/CE5006/CE5007/CE5008 — the export-safety family, in the "ffi" module because `ptr` confinement is one reason a symbol cannot ship. |
 
-## 9. Measured during the phase-6 doc pass
+## 9. Producer checks on every kind
 
-Three things the code does that this document said it did not. All measured at 0.11.1
-against a `--lib-kind source` build.
+The manifest producer runs for every kind, so some of its checks reach a
+`--lib-kind source` build too.
 
 **`templates` is written for every kind.** `generate()` always builds the section, and
 `_extract_templates` always runs. On the source path it is redundant, because the same

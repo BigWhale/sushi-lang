@@ -2,37 +2,24 @@
 
 **Status: DECIDED.** Ruled 2026-08-16.
 
-This document is the normative spec for how a value crosses a call boundary. It supersedes
-`docs/design/borrowing.md` sections 1 to 5, and `docs/design/ownership-conventions.md`
-section 8.6.
+This document is the normative spec for how a value crosses a call boundary. Where
+`docs/design/borrowing.md` sections 1 to 5 or `docs/design/ownership-conventions.md`
+section 8.6 state a mode rule, this document wins.
 
 `docs/design/ownership-conventions.md` stays normative for everything else about ownership:
 the two type classes, the three provenances, the 3x2 table, and the twelve consuming
-positions. This document changes only one of those twelve — the call argument — and it
-changes it from "always a consume" to "whatever the callee declares".
+positions. This document owns one of those positions, the call argument: the callee's
+declaration decides whether it consumes.
 
 ## 1. The rule
 
 **A parameter mode is a property of the declaration. It is not a property of the callee's
 implementation.**
 
-Before this ruling the compiler read the convention off the body. Six kinds of callee gave
-four different answers, and two of them disagreed with each other:
-
-| callee kind | did the body free its parameters? |
-|---|---|
-| user function | yes |
-| extension or perk method | no |
-| user FFI extern | not applicable |
-| stdlib, generated IR | no |
-| stdlib, written in Sushi | yes |
-| `.slib` concrete function | yes |
-
-The last two rows are the same language feature with opposite behaviour, so the meaning of
-a stdlib call changed as a module moved from generated IR to Sushi source. The stdlib row
-also made the two halves of the compiler disagree: the borrow checker marked every call
-argument moved, and the backend did not. That is a false `CE2405` at every stdlib call site
-that passes an owning value.
+The compiler does not read the convention off the callee's body. A convention read off the
+body gives different answers for different callee kinds: a stdlib function written in Sushi
+and one in generated IR would treat the same call differently, and the borrow checker and
+the backend could disagree about whether an argument moved.
 
 One declared mode per parameter removes the question. Every callee kind reads its modes
 from the same place.
@@ -62,9 +49,8 @@ does not pass the value.
 | caller may use it after | yes | no — CE2405 | yes | yes |
 | how many at once | many | one | many | one, exclusive |
 
-`peek` and `poke` keep their meaning from `docs/design/borrowing.md`. They lose the `&`.
-The `&` was the only overlap between the borrow vocabulary and bitwise-and, and a borrow
-mode is not an address-of operator.
+`peek` and `poke` have the meaning that `docs/design/borrowing.md` gives them. A borrow
+mode has no `&`: a borrow mode is not an address-of operator, and `&` is bitwise-and.
 
 ## 3. Mark a marked mode at both ends
 
@@ -82,21 +68,21 @@ The symmetry gives two things:
 
 - **A consume stays visible at the call site.** Without the marker, `f(s)` would not show
   whether `s` survived the call. A reader would have to open the callee.
-- **Stdlib and library call sites do not change.** `chdir(p)` already passes the default
-  mode.
+- **A stdlib or library call site is unmarked for the default mode.** `chdir(p)` passes
+  the default mode.
 
 A mismatch between the two ends is a diagnostic, not a coercion:
 
 - a `nom` marker at a borrow parameter, or a missing `nom` marker at a `nom` parameter, is
   **CE2427**;
-- a missing or wrong `peek` / `poke` marker is **CE2006**, as it is today — a reference
-  parameter has a `ReferenceType`, so the mismatch is already an argument type mismatch.
+- a missing or wrong `peek` / `poke` marker is **CE2006** — a reference
+  parameter has a `ReferenceType`, so the mismatch is an argument type mismatch.
 
 `poke T` coerces to `peek T` at a call site, and nowhere else (section 7).
 
-## 4. The representation does not change
+## 4. The representation
 
-This is what makes the flip cheap. A by-value `string` parameter lowers to `{i8*, i32, i8}`
+A by-value `string` parameter lowers to `{i8*, i32, i8}`
 and is passed into a fresh alloca. **The 16-byte descriptor is copied. The `data` pointer
 aliases the caller's buffer.** Two descriptors, one buffer.
 
@@ -137,9 +123,9 @@ frees. The damage appears later, and somewhere else.
 | FFI extern | not applicable — **CE2428** on `nom` | no |
 
 The last three rows are the ones that are not function calls in the surface language, and
-they are unchanged by this ruling:
+each has its own rule:
 
-- **A constructor still consumes.** A struct or enum field takes ownership, so
+- **A constructor consumes.** A struct or enum field takes ownership, so
   `Person(name)` moves `name`. The borrow checker sees a constructor and a function call as
   the same `Call` node, so the mode lookup applies to the function call only.
 - **A container insert is its own consuming use.** It is not a call argument.
@@ -232,7 +218,7 @@ The mode codes:
 | **CE2435** | a use after a CONSUMING RECEIVER, naming the method that took the value |
 
 **CE2435 against CE2405.** A `nom` argument is a real move and its marker is visible at
-the call site, so it keeps CE2405. A receiver's mode is DECLARATION-only — `f.close()`
+the call site, so it reads CE2405. A receiver's mode is DECLARATION-only — `f.close()`
 carries no marker at all — so the diagnostic has to carry what the syntax cannot, and it
 names the method. One code covers every consuming receiver: `close()` releases a
 descriptor and hands nothing on, while `into_inner()` hands the value onward, and the
@@ -261,9 +247,9 @@ read-only kinds (`borrowing.md` §5).
 
 ## 10. What this makes possible
 
-The immediate reason for the ruling was the stdlib question: "who frees a `string` that a
-program gives to a stdlib function?". The answer is in the signature, so the question
-does not have to be re-asked as each stdlib module moves from generated IR to Sushi source.
+The stdlib question, "who frees a `string` that a program gives to a stdlib function?",
+has its answer in the signature. The answer does not depend on whether the module is
+generated IR or Sushi source.
 
 Two more follow:
 
@@ -274,7 +260,7 @@ Two more follow:
 
 ## 10b. The other boundary: a pattern binding
 
-**Added 2026-08-30.** A call is not the only place a value crosses
+A call is not the only place a value crosses
 into a new name. A `match` arm binds a payload, and the binding needs a way to take
 ownership of what it binds, for `List@(T)` and `T[]` as much as for a handle.
 
@@ -329,10 +315,9 @@ is allowed, never whether the place has an address.
 
 ## 10c. The third boundary: a field take
 
-**Added 2026-09-02.** A field read is a borrow, which left one shape with
-no spelling at all: handing a handle back OUT of the value that holds it. A struct that
-owns a `File` could never give it away, so `close()` on a field-held handle was CE2411
-with no escape -- and R26 promised `into_inner()` as that escape.
+A field read is a borrow. The field take is the one spelling that hands a handle back
+OUT of the value that holds it, for example the `File` that a struct owns. `into_inner()`
+(R26) uses it.
 
 `nom` marks the take, in the two positions a taken value can go to:
 
@@ -348,7 +333,7 @@ Four conditions, each of them load-bearing:
 
 | condition | why |
 |---|---|
-| the marker is written | an unmarked field read stays the borrow it has always been, so nothing existing changes meaning |
+| the marker is written | an unmarked field read is a borrow |
 | ONE step off a bare NAME | there is a local to spend, and no intermediate field is read through. `nom a.b.c` is CE2411 |
 | the name is a local this function OWNS | a `peek`/`poke` parameter, a `let`-borrow or a match binding names storage the caller keeps, so a take out of one is CE2411 |
 | the field OWNS something | a field that owns nothing has nothing to hand over, so the marker is an ordinary copy there and the receiver is untouched |
@@ -369,7 +354,7 @@ agree with, so CE2427's both-ends rule has no field-take twin either.
 
 ## 10d. The fourth boundary: `??` over a place
 
-**Added 2026-09-02.** The unwrap moves the payload out of its wrapper, so `??` is a
+The unwrap moves the payload out of its wrapper, so `??` is a
 consuming position too -- `ConsumingUse.TRY`. Over a call the Result is a temporary,
 nothing else frees it, and the payload lands in the position that takes it. Over a NAMED
 wrapper, `let string got = r??` gives `got` the buffer, so `r` must not free it too.
@@ -401,14 +386,13 @@ usual one, `.clone()`.
 iteration OWNS -- the payload of a fresh `Maybe@(T)` nobody else frees. So the generated
 `??` spends the item like any owned local, the body may also hand a protocol item away
 (`eat(nom item)`), and a move of it does not travel the loop's back edge because the next
-iteration holds a new value. Before this ruling the backend registered no owner for the
-item under a binder, a special case that hid the general defect.
+iteration holds a new value.
 
 ## 11. Not designed
 
 - **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
   heap cell with nothing to free it.
-- **A consuming variadic** (`nom ...T`). Rejected today.
+- **A consuming variadic** (`nom ...T`). It is rejected.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
   be returned or stored (CE2415, CE2416, CE2417, CE2419).
 - **Mode inference at a call site.** The marker is written, never deduced. A deduced marker

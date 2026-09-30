@@ -196,9 +196,9 @@ something different.
 
 ### Returns describes T
 
-`- Returns:` describes **T**, and not the `Result@(T, E)` that wraps it. The wrapper is
-implicit in every signature in the language, and to restate it on every function would be
-noise.
+`- Returns:` describes **T**, and not the `Result@(T, E)` that a function with a channel
+returns. The signature already states the channel, and to restate it on every function
+would be noise.
 
 A function that returns `~` needs no `- Returns:` at all.
 
@@ -241,7 +241,7 @@ let i32 d = doubled(21)??
 println("{d}")
 ```
 :##
-public fn doubled(i32 n) i32:
+public fn doubled(i32 n) i32 | StdError:
     return Result.Ok(n * 2)
 ~~~
 
@@ -329,7 +329,7 @@ Adds two numbers.
 - Parameter q: There is no parameter called q.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 ### CE7002 — one parameter is documented twice
@@ -363,7 +363,7 @@ These two tags are singletons: a declaration has one success value and one error
 fn probe() i32:
     let i32 n = 7
     ##: This block is not the first item in the body. :##
-    return Result.Ok(n)
+    return n
 ```
 
 ### CE7006 — a declaration is documented twice
@@ -372,7 +372,7 @@ fn probe() i32:
 ##: Documents the function from above. :##
 fn probe() i32:
     ##: And documents the same function from inside its body. :##
-    return Result.Ok(7)
+    return 7
 ```
 
 ### CE7007 — an `- Example:` tag introduces no fenced block
@@ -387,7 +387,7 @@ Adds two numbers.
 - Example: there is no fenced block after this tag.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 ### CE7008 — a fence inside a block is never closed
@@ -471,8 +471,8 @@ CW7005, because the declaration names its own error type and no `- Errors:` says
 is raised. Delete the whole block and both go away, replaced by one CW7002. (The enum and its
 variant have no block, so each of them draws its own CW7002.)
 
-A callable that returns `~` is never asked for `- Returns:`, and a function on the
-implicit `StdError` arm is never asked for `- Errors:`. A `self` receiver is never asked
+A callable that returns `~` is never asked for `- Returns:`, and a function that writes no
+`| E` is never asked for `- Errors:`. A `self` receiver is never asked
 for either: it is not a parameter by the time the compiler reads one.
 
 ### CW7006 has no caret
@@ -561,7 +561,7 @@ dim. Prose is left alone. `--color=always|never|auto` decides, then `NO_COLOR`, 
 | a fence under `- Example:` | indented and dim | indented |
 
 Everything else -- a link, a table, a heading, a blockquote, a nested list, raw HTML --
-prints exactly as it was written, which is what every construct did before any of this.
+prints exactly as it was written.
 
 A captured report keeps every mark, so nothing piped into a file loses information and
 `` `spin_up` `` still reads as a symbol rather than prose.
@@ -576,7 +576,7 @@ prose is what makes a report long and a reader asking what a library exports usu
 the surface and not the manual.
 
 Parameters print in the order the signature declares them, and not in the order the block
-documents them. A symbol with no block prints as it always did: no blank line, and no
+documents them. A symbol with no block prints as a bare line: no blank line, and no
 placeholder.
 
 A unit block prints under its unit name in the `Units` section. One thing is carried and not

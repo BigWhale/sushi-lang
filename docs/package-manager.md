@@ -448,7 +448,7 @@ After installing a package containing `mathutils.slib`:
 use <lib/mathutils>
 
 fn main() i32:
-    let i32 result = add(10, 20).realise(0)
+    let i32 result = add(10, 20)
     println("{result}")
     return 0
 ```
@@ -532,10 +532,10 @@ mkdir build                  # sushic does not create the -o directory (CE3019)
 # 1. Write your library
 cat > mathlib.sushi << 'EOF'
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 public fn multiply(i32 a, i32 b) i32:
-    return Result.Ok(a * b)
+    return a * b
 EOF
 
 # 2. Compile to .slib (--lib-version, because there is no nori.toml yet)

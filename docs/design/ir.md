@@ -41,8 +41,8 @@ Every number in this section was measured in the tree on 2026-08-29.
 | Substrate for the 18 semantic passes | Adequate, and it strains |
 | Input to code generation | Wrong tool |
 
-Job 3 was never chosen. `parser -> AST -> emit` is the natural first shape of a compiler.
-It works until the language grows ownership. Sushi passed that point.
+Job 3 is not a choice. `parser -> AST -> emit` is the natural first shape of a compiler,
+and it works until the language has ownership. Sushi has ownership.
 
 ### 1.2 There is already an IR. It is implicit.
 
@@ -56,13 +56,10 @@ them back. The full set (census of 2026-08-29, run by turning on `slots=True`): 
 
 This is an intermediate representation grown in place: a field per fact, scattered
 across node classes, written by one pass and read by the backend, with no owner and no
-completeness check. Before the census, most of these were declared on ONE class and
-written onto ANOTHER — `callee_fn_type` declared on `Call` and stamped on `MethodCall`
-and `DotCall`, `expected_type` declared on `Lambda` and stamped on `Name` — because an
-open object cannot tell a declared field from a typo, so the other classes worked by
-accident.
+completeness check. An open object cannot tell a declared field from a typo, so a field
+declared on one class can be written onto another and work by accident.
 
-Today every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is
+Every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is
 declared on every class that takes it, and `tests/unit/test_ast_nodes_are_slotted.py`
 keeps it that way. That CONTAINS the channel — a stray write raises at the site that
 wrote it. It does not give any fact an owner, a single writer, or a completeness check.
@@ -456,9 +453,8 @@ reason a stamp went wrong:
 
 This is exactly Rust's shape: HIR plus `TypeckResults`, consumed together by MIR
 building — method resolutions and field indices live inside `TypeckResults` there too.
-The census of 1.2 is the concrete case: the `callee_*` analysis set was declared on ONE
-call class and written onto the other two for years, and nothing noticed.
-Fields-on-nodes drift toward exactly that; one owned table cannot.
+Fields-on-nodes drift toward a fact declared on one class and written onto its siblings
+(1.2); one owned table cannot.
 
 One more consequence of ruling Q2: the side tables are PER `ShirBody`. Each
 instantiation of a generic-target extension gets its own body and its own tables, so

@@ -4,8 +4,7 @@
 implemented and belongs to `docs/design/type-identity.md`.
 
 Each unit has its own scope. A `use` brings the public names of one unit into that scope,
-and `as` puts them behind a dot instead. The appendix is the dated record of what the
-compiler did before this design and of how the work was delivered.
+and `as` puts them behind a dot instead.
 
 It is normative for nine things:
 
@@ -46,12 +45,12 @@ scope.
 
 ## 2. Ruling 1: `as` is the gate
 
-`use` gains an optional `as NAME` clause. The clause decides where the imported names
+`use` takes an optional `as NAME` clause. The clause decides where the imported names
 land, and nothing else.
 
 | Form | What it binds |
 |---|---|
-| `use "math"` | every name `math` brings enters this unit's flat scope — unchanged |
+| `use "math"` | every name `math` brings enters this unit's flat scope |
 | `use "math" as my_math` | every name `math` brings is reachable as `my_math.<name>`, and **nothing enters the flat scope** |
 
 <!-- docs-sweep: skip (two units; the sweep compiles one block) -->
@@ -78,7 +77,7 @@ use "math"                              # flat
 use <math> as std_math                  # behind a dot
 
 fn run() i32 | StdError:
-    let f64 a = sin(0.0)??              # the unit next door -- unambiguous now
+    let f64 a = sin(0.0)??              # the unit next door -- unambiguous
     let f64 b = std_math.sin(0.0)       # the standard library
     return Result.Ok(0)
 
@@ -88,7 +87,8 @@ fn main() i32:
         Result.Err(_) -> return 1
 ```
 
-The alias is what makes this program expressible (Appendix A.1.3).
+The alias is what makes this program expressible: two flat imports that both bring `sin`
+are `CE3012` at the call (section 8).
 
 **The `as` clause is optional.** The flat form is not deprecated and gets no warning. It is the right form for a
 program's own units, and the qualified form is the right form when two units disagree
@@ -101,7 +101,7 @@ The alias is a single `NAME`. It is not a path, it is not dotted, and it may not
 use_stmt: USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWLINE
 ```
 
-`AS` is already a token, already used after an import path (`external_block`, `grammar.lark:29`)
+`AS` is a token, used after an import path (`external_block`, `grammar.lark:29`)
 and in `cast`. Nothing else follows a `use` path, so the clause is unambiguous in LALR.
 
 ### 2.1 Where a `use` may stand, and what it reaches
@@ -137,9 +137,9 @@ A namespace is a binding from a name to a set of declarations. Two things produc
 The alias is mandatory where the namespace is the fence and optional where it is
 convenience. An `unsafe external` block has no unqualified form because `libc.printf` is
 part of what makes the `ptr` quarantine readable. A unit import has one because the flat
-form is what Sushi has always had.
+form is the right form for a program's own units (section 2).
 
-Everything else is shared, and becomes one seam:
+Everything else is shared, and is one seam:
 
 ```
 semantics/namespaces.py
@@ -156,22 +156,19 @@ semantics/namespaces.py
     ExternalNamespace(external_table, ns)      # an unsafe external block
     UnitNamespace(symbol_tables)               # a user unit, a source library unit,
                                                # a source stdlib module
-    StdlibNamespace(module_path, func_table)   # a registry module -- already (module, name)
+    StdlibNamespace(module_path, func_table)   # a registry module, keyed by (module, name)
     GenericNamespace(name)                     # an activated built-in, e.g. HashMap
 ```
 
-`ExternalTable.by_namespace` becomes one provider behind the table rather than a thing a
-pass reads directly, and `_resolve_external_call` becomes `resolve_namespaced`, which
-answers for every kind. The refactor's whole content is that `lookup` returns a
-kind-tagged `Binding` instead of an `ExternalSig`: an FFI namespace holds one kind, a unit
-namespace holds five, and the resolution rule cannot tell them apart.
+`ExternalTable.by_namespace` is one provider behind the table rather than a thing a
+pass reads directly, and `resolve_namespaced` answers for every kind. `lookup` returns a
+kind-tagged `Binding`: an FFI namespace holds one kind, a unit namespace holds five, and
+the resolution rule cannot tell them apart.
 
-**Two readers move, not one.** The `typecheck` pass is the obvious one. The `scope` pass
-has its own copy — `_is_external_namespace` (`passes/scope.py:119`) asks
-`external_table.is_namespace(name) and not self._is_bound_local(name)`, which is section
-8's local-wins rule written a second time. Both become calls to the one seam, and the
-duplicated shadowing rule is the reason the seam is worth building rather than widening
-`ExternalTable` in place.
+**Two readers ask the seam, not one.** The `typecheck` pass is the obvious one. The `scope`
+pass asks it too: `_is_namespace` (`passes/scope.py`) is true when a name names a namespace
+here and no local shadows it, which is section 8's local-wins rule. Both passes call the
+one seam, so the shadowing rule is written once.
 
 ### 3.1 A binding holds a provider, and never a path
 
@@ -196,8 +193,8 @@ built from the written path works for every user unit and breaks the moment a li
 imports its sibling. **An alias survives packaging because it was never bound to a name that
 packaging could change.**
 
-A provider cannot be constructed before the unit it reads has been collected. That is not a
-new constraint: it is the collect order of section 6.2, dependencies before dependents. The
+A provider cannot be constructed before the unit it reads has been collected. That is
+the collect order of section 6.2, dependencies before dependents. The
 two rulings lean on each other by design.
 
 `origin` is carried beside the provider rather than derived from it, and it is for
@@ -211,10 +208,10 @@ site with `CE3005`, which points at the declaration and says it has no `public`.
 them out of the namespace instead would turn "not yours" into "no such name", which is the
 worse diagnostic and the one `CE3005` exists to avoid.
 
-### 3.2 The table is built by a new pass, and it goes after `libraries`
+### 3.2 The table is built by its own pass, and it goes after `libraries`
 
 A namespace binding needs two things that different steps produce, so the position is
-forced rather than chosen. The pass is named **`namespaces`**, and the order becomes:
+forced rather than chosen. The pass is named **`namespaces`**, and the order is:
 
 ```
 collect -> docs -> externs -> libraries -> namespaces -> ffi-clash -> entrypoint -> ...
@@ -239,11 +236,11 @@ Nothing between `collect` and `libraries` resolves a name that could be qualifie
 walks declarations and matches doc blocks to them; `externs` validates C-ABI types, which
 are a closed set with no user type in it. `ffi-clash` is the first step that asks whether a
 name is already taken, and it is the first that has to ask it of ONE unit, which is why the
-new pass goes immediately before it.
+pass goes immediately before it.
 
 **The per-unit scope.** `FunctionTable`, `ConstantTable` and `VisibilityTable` carry a unit
 key inside the one shared collector, and the scope of a unit is built from the `use`
-statements of that unit. Appendix A.1.2 records the flat tables that this replaced.
+statements of that unit.
 
 ## 4. Ruling 3: a namespace holds exactly what its `use` brings into scope
 
@@ -316,7 +313,7 @@ no marker: it is as visible as its target type (`visibility.md` Ruling 2). So a 
 consist entirely of extensions, export **nothing nameable**, and still be the reason a
 program works:
 
-<!-- docs-sweep: skip (two units; behaviour this epic did not change) -->
+<!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
 # extonly.sushi -- zero public declarations     # main.sushi
 extend i32 squared() i32:                       use "extonly"
@@ -343,7 +340,7 @@ written in front of it. One rule covers every position:
 > it does for an unqualified name, except that it consults one unit rather than the
 > unit's flat scope.
 
-That is one change per written-name position, and the positions are already enumerated,
+That is one rule per written-name position, and the positions are enumerated,
 because each one is a place where source text becomes a table key:
 
 | Position | Node that carries the written name | Qualified form |
@@ -357,16 +354,16 @@ because each one is a place where source text becomes a table key:
 | A perk in a constraint | `perk_constraint_list` | `@(T: my_math.Loud)` |
 | A static call on a gated type | `DotCall(receiver=MemberAccess)` | `hm.HashMap.new()` — the same three-segment shape as the enum row, folded by `fold_namespaced_static` when the member names the TYPE the namespace holds |
 
-**The AST change is one optional field.** Every node above grows `namespace: Optional[str]`,
+**The AST carries one optional field.** Every node above has `namespace: Optional[str]`,
 and the resolver maps `(namespace, name)` to a table key. In phase 1 that key is the bare
-name; in phase 2 it is a qualified one (section 7). The same AST serves both, and the
-resolver is the only thing that changes between them.
+name; in phase 2 it would be a qualified one (section 7). The same AST serves both, and the
+resolver is the only thing that would change between them.
 
 The enum row is the one that reads as a three-deep chain, and it is not: `my_math.Sign.Plus`
 parses as `DotCall(receiver=MemberAccess(Name("my_math"), "Sign"), method="Plus")`, the
-alias folds into `Sign`, and what is left is the `EnumConstructor` path the compiler
-already takes. The `DotCall` ladder (`resolve_dotcall`, `passes/types/calls/dotcall.py`)
-gains no rung: the namespace check is the rung `_resolve_external_call` already occupies.
+alias folds into `Sign`, and what is left is the ordinary `EnumConstructor` path. The `DotCall` ladder
+(`resolve_dotcall`, `passes/types/calls/dotcall.py`) has no extra rung for it: the namespace
+check is the one namespace rung.
 
 One phase runs BEFORE the fold: propagation, which stamps a GENERIC enum's constructor
 with the instantiation its position declares. It reads the enum's name through the alias
@@ -376,7 +373,7 @@ bare `my_math.Slot.Empty` takes the same reading.
 
 ### 5.1 The grammar
 
-Two rules gain a qualifier, both unambiguous because a `.` cannot mean anything else in
+Two rules carry a qualifier, both unambiguous because a `.` cannot mean anything else in
 either position:
 
 ```
@@ -389,7 +386,7 @@ perk_constraint: NAME ["." NAME]
 The perk rule is a split as well as a qualifier: `perk_constraint` is the rule that holds
 the second segment.
 
-**No expression position needs grammar.** `my_math.sin(0.0)` already parses as a `DotCall`,
+**No expression position needs grammar.** `my_math.sin(0.0)` parses as a `DotCall`,
 `my_math.MAX_DEPTH` as a `MemberAccess`, and `my_math.Sign.Plus` as a `DotCall` over a
 `MemberAccess`. All three reach the namespace resolver.
 
@@ -409,35 +406,24 @@ fn main() i32:
 
 LALR reduces `.empty_list` to `member_access` and not to `method_call`, because the token
 after it is `AT` and not `(`. The chain therefore arrives as
-`maybe_call: atom(it) member_access(.empty_list) call(@(i32) ())`, and what refuses it is
-`CE6102`, raised in the AST builder (`ast_builder/expressions/chains.py:84-89`) whenever a
-`type_list` rides a call whose accumulated callee is not a bare `Name`. Omitting the
-argument instead is CE2060, so if the builder refused it, **aliasing a unit would make its
-return-type-only generics uncallable.**
+`maybe_call: atom(it) member_access(.empty_list) call(@(i32) ())`. Omitting the argument is
+CE2060, so if the builder refused a `type_list` on a call whose callee is not a bare `Name`,
+**aliasing a unit would make its return-type-only generics uncallable.**
 
 So `DotCall` carries `type_args` (`semantics/ast.py`), and `CE6102` is raised in the
 typecheck pass (`_reject_call_site_type_args`, `passes/types/calls/dotcall.py`) when the
 receiver is a VALUE. It cannot be a `SyntaxDiagnostic`: the builder cannot know whether a
 receiver `Name` is a bound alias, and only a pass that has the `NamespaceTable` can.
 
-The rule behind CE6102 is unharmed. Section 5's folding turns `it.empty_list@(i32)()` into
+The rule behind CE6102 holds. Section 5's folding turns `it.empty_list@(i32)()` into
 `empty_list@(i32)()` resolved against one unit, which is a direct call to a named free
-function — exactly what CE6102 permits. It was the builder in the way, not the rule.
+function — exactly what CE6102 permits.
 
-### 5.2 A pattern is a written-name position, and its grammar is one segment short
+### 5.2 A pattern is a written-name position, and its grammar takes the qualifier
 
 A `match` arm is not an expression, and it does not reach the constructor path. It has its
-own production, and that production counts to exactly two:
-
-```
-pattern: NAME "." NAME ["(" [pattern_list] ")"]
-pattern_item: pattern | NAME | wildcard_pattern | own_pattern
-            | BORROW_MODE NAME -> ref_binding
-```
-
-`Sign.Plus` fits. `my_math.Sign.Plus` does not, and `pattern_item` offers no way in for a
-nested one either. Without a third segment an aliased unit's enums are **write-only**: you
-can construct one and never take it apart.
+own production. Without a third segment in it, an aliased unit's enums would be
+**write-only**: you could construct one and never take it apart.
 
 <!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
@@ -446,16 +432,15 @@ use "geometry" as geo
 fn main() i32:
     let geo.Sign s = geo.Sign.Plus      # constructing: Ruling 4 covers it
     match s:
-        geo.Sign.Plus -> println("+")   # matching: no grammar exists for this
+        geo.Sign.Plus -> println("+")   # matching: the qualified pattern
         geo.Sign.Minus -> println("-")
     return 0
 ```
 
 This is not a corner. A `match` is how Sushi consumes an enum — exhaustiveness-checked,
 with a payload binding required — so an enum you cannot match is an enum you cannot use.
-`Result` and `Maybe` hide the hole rather than filling it: both are built-ins, both are
-always in scope, and neither is ever written qualified, so the common `match` compiles and
-the gap only appears on a user enum from an aliased unit.
+`Result` and `Maybe` do not show the need: both are built-ins, both are always in scope,
+and neither is ever written qualified. The need is on a user enum from an aliased unit.
 
 The grammar takes the qualifier the same way every other position does:
 
@@ -463,25 +448,25 @@ The grammar takes the qualifier the same way every other position does:
 pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 ```
 
-Nesting needs nothing further: `pattern_item` already admits a `pattern`, so
-`Shape.Wrap(geo.Sign.Plus)` works once the production above does. The resolution rule does
-not move — section 5's folding strips the leading segment and the arm resolves against one
+Nesting needs nothing further: `pattern_item` admits a `pattern`, so
+`Shape.Wrap(geo.Sign.Plus)` works through the production above. The resolution rule is the
+same — section 5's folding strips the leading segment and the arm resolves against one
 unit, so exhaustiveness, payload binding and the literal-arm rules (CE2074 / CE2075 /
-CE2076) all read what they read today.
+CE2076) read what they read for an unqualified arm.
 
 A qualifier that names nothing is refused as **a name that does not exist**, and the code
 depends on the position. In an expression a leading `NAME .` may be a value, so an unbound
 qualifier falls through to the ordinary rules and answers `CE2008` or `CE1001`. In a type
 position it cannot be anything else, and the answer is `CE2001`, with a help line that
 names the import which would bring the name. `CE3012` is the AMBIGUITY code and answers a
-different question -- too many candidates, not none. No new code is needed either way.
+different question -- too many candidates, not none.
 
 ### 5.3 One position cannot be qualified
 
 An array size may not be qualified. `i32[my_math.SIZE]` is refused. A fixed array's size is
 read while the unit's own AST is built (that is also why a constant next door is a
 value and not a size), and an alias is bound long after that. The
-diagnostic is the existing `CE2099`.
+diagnostic is `CE2099`.
 
 ### 5.4 A constant declaration is two written-name positions
 
@@ -582,8 +567,8 @@ Sushi unit path, being relative to the importing file, cannot be.
 So the cost of this ruling is real: a consumer inherits the type-declaring dependencies of
 everything it imports, on every `let`, unless a unit re-exports them. Two things lift it:
 re-export, which is decided and built (`public use`, section 8.1), and `let` inference,
-which `CE2007` marks the exact site of and which does not exist. Phase 1 paid the cost
-rather than growing a third mechanism to avoid it.
+which `CE2007` marks the exact site of and which does not exist. Phase 1 accepts the cost
+rather than a third mechanism to avoid it.
 
 ### 6.2 Collection order: dependencies before dependents
 
@@ -595,7 +580,7 @@ collected before every unit that imports it, and a perk declared in another unit
 table when the implementing unit is reached. `Unit.is_entry` names the entry unit; no
 position reads it from the order.
 
-A `struct`, an `enum` and a `perk` are still one per program (section 7), so a duplicate of
+A `struct`, an `enum` and a `perk` are one per program (section 7), so a duplicate of
 one names the declaration that was collected first.
 
 ## 7. Ruling 6: a namespace is a resolution path, not a type identity
@@ -653,7 +638,7 @@ unqualified name, and it is short:
 
 | Order | Candidate |
 |---|---|
-| 1 | a local variable or a parameter — the existing scope rules, unchanged |
+| 1 | a local variable or a parameter — the ordinary scope rules |
 | 2 | a declaration of this unit |
 | 3 | a name a flat `use` of this unit brought in — one candidate resolves, two or more is `CE3012` |
 
@@ -718,8 +703,7 @@ brings a struct `box`, and the struct is `sh.box(...)` behind the alias
 Two TYPES of one name in two units stay refused, because a type is one per program
 (`type-identity.md`).
 
-Row 2 beating row 3 is the rule the compiler already follows and the linker already agrees
-with: a private function has internal linkage, so the consumer's call binds to the
+Row 2 beating row 3 is also the rule the linker follows: a private function has internal linkage, so the consumer's call binds to the
 consumer's definition (`visibility.md` decision 10). It warns — `CW3002` — because
 shadowing an export is rarely intended and the reader of the call site cannot see which
 declaration answers. `as` is what makes the choice explicit, and `CW3002`'s `doc` string
@@ -729,7 +713,7 @@ The table is keyed by unit, so no declaration displaces another: row 2 is a look
 asking unit, and row 3 is a lookup in what it imported.
 
 A built-in's precedence is not in this ladder. `docs/design/method-resolution.md` owns that
-rule and this document does not move it.
+rule and this document does not restate it.
 
 **An extension on a foreign type collides globally, and a namespace cannot fix it.** An
 extension is not a namespace member (Ruling 3), because a method is found on the receiver's
@@ -747,7 +731,7 @@ extend geo.Vec length() f64:        extend geo.Vec length() f64:
 **Orphan extensions stay legal** — `extend i32 squared()` from any unit is idiomatic Sushi,
 and the combinators of `<collections/iter>` (`.map`, `.filter`, `.fold` on `List@(T)` and
 `T[]`) have exactly this shape. **A duplicate is a hard
-error**, which is what the compiler already does: two units extending `i32` with `tag()`
+error**: two units extending `i32` with `tag()`
 gives `CE0101: duplicate function 'extension method 'tag' for 'i32''`.
 
 Refusing here rather than at the call is deliberate, and it is the one place this document
@@ -804,14 +788,11 @@ implementation is the sanctioned override and wins over a shipped one
 shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
 function for both consumers: the CW3003 emitter in the pipeline and the manifest extractor.
 
-Cost when measured: `sushi_stdlib/src_sushi` and `toolchain/src` held **zero** extensions
-between them, and `tests/libs` holds 11 — eight on a builtin, three on a type the consumer
-declares. The source stdlib now holds many extensions and perk implementations: the
-combinators in `src_sushi/collections/iter.sushi` are on builtin generic targets
-(`List@(T)`, `T[]`), and the `io/*` and `net/*` modules extend the types that each module
-declares. A bundled stdlib module is not a `--lib` build, so CW3003's scope is
-untouched. It still fires nowhere in real library code, which
-is what a warning aimed at a future hazard should do.
+The source stdlib holds many extensions and perk implementations: the combinators in
+`src_sushi/collections/iter.sushi` are on builtin generic targets (`List@(T)`, `T[]`), and
+the `io/*` and `net/*` modules extend the types that each module declares. A bundled stdlib
+module is not a `--lib` build, so CW3003 does not apply to it. CW3003 fires nowhere in real
+library code, which is what a warning aimed at a future hazard should do.
 
 **The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
 so the hazard is readable before it is hit: the manifest carries them as
@@ -828,8 +809,8 @@ measured and refused. Sushi buys namespaced NAMES and keeps prefixed METHODS, an
 a type you do not own stays a feature with a price attached.
 
 **An alias is local.** It is written in one unit and is not visible in any other, not even
-one that imports the aliasing unit. Nothing about it is exported, so `.slib` production and
-the library manifest do not change. A library unit's own alias is a different question and
+one that imports the aliasing unit. Nothing about it is exported, so neither `.slib` production nor
+the library manifest carries it. A library unit's own alias is a different question and
 section 3.1 answers it: the binding holds a provider, so the unit rename that packaging
 performs cannot reach it.
 
@@ -875,7 +856,7 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
 4. The predefined enums stay synthesized and homed (Ruling 3). A module makes a home
    reachable by re-exporting it -- `public use <io/error>` in `<io/contracts>` -- and the
    stamp machinery (`homed_enums`, `UnitScope.holds_home`, `reject_out_of_scope_type`)
-   is read through the re-export unchanged. A registry (Python) module has no `use`
+   is read through the re-export. A registry (Python) module has no `use`
    statement to write, so it declares its re-exports in a `REEXPORTS` tuple beside its
    functions (`StdlibModule.reexports`); `<io/files>` hands on `<io/error>` that way. A
    `public use` that hands on nothing public warns (CW3005), as an empty alias does (CW3004).
@@ -909,7 +890,7 @@ re-export in written order, then theirs. A binding a re-export answers carries t
 re-export's provider, so a call through `sh.origin` routes to the unit that declares
 `origin`. The flat scope reads the SAME walk: `_scope_of` puts every reached unit, module
 and generic into `UnitScope`, so the dot and the bare name cannot disagree. The
-`namespaces` pass does not move -- a provider still needs only what `collect` and
+`namespaces` pass stays where section 3.2 puts it -- a provider needs only what `collect` and
 `libraries` produce, and a unit's own AST, which it has. A COMPILED library's unit has no
 AST, so `_binary_reexports` reads the manifest record in its place and composes the same
 way, with the same chain and the same visited set.
@@ -931,7 +912,7 @@ until asked for.
 ## 9. What the back end needs
 
 Nothing, for the syntax. Rulings 1 to 4 are front-end resolution, and the back end is
-handed a resolved callee exactly as it is today.
+handed a resolved callee.
 
 One thing, for coexistence. Every symbol carries its unit, because two units may declare
 one name. Two units each declaring `sine` need mangling by unit — and for **private** declarations as
@@ -946,12 +927,12 @@ The scheme: `<unit>$<name>`, with every `/` in the unit name replaced by `$`, so
 `mangle_unit_symbol` (`sushi_lang/semantics/unit_symbols.py`), read by the back end when
 it declares and by the `.slib` producer when it records. `$` is legal in an LLVM
 identifier and lies outside the alphabet of every existing symbol component, so the
-generic mangler's structural invariant (D) is untouched
+generic mangler's structural invariant (D) holds
 (`semantics/generics/name_mangling.py:11`).
 
 Four things are exempt, and each for its own reason:
 
-- **`main`.** The linker needs the name, and the `entrypoint` pass already guarantees one
+- **`main`.** The linker needs the name, and the `entrypoint` pass guarantees one
   program declares one.
 - **An FFI `link_name`.** It names a C symbol that somebody else compiled.
 - **A lifted lambda.** Its name already carries the per-unit lifter's counter.
@@ -1018,7 +999,7 @@ This document owns these codes:
 
 Reused rather than duplicated:
 
-| Existing code | Now also answers |
+| Code | Also answers |
 |---|---|
 | `CE3005` | `my_math.helper` where `helper` is private to `math`. The two-seam rule (section 3) routes it here |
 | `CE2008` | `my_math.nope()` where `math` declares no `nope` at all. `NamespaceTable.members` supplies the "did you mean" help line |
@@ -1027,15 +1008,14 @@ Reused rather than duplicated:
 | `CE2007` | load-bearing. It is why section 6.1 needs an escape: a `let` cannot infer, so a type that cannot be named cannot be bound |
 | `CE6102` | "Explicit type arguments only on a direct call to a named free function" reads the RECEIVER, not the parse shape, so a qualified call may carry them (section 5.1) |
 
-The code changes of the epic (record, 2026-08-29), retired or narrowed:
+Four more codes, and the scope each one has in this design:
 
-| Code | Change |
+| Code | Scope |
 |---|---|
-| `CE3003` | retired. It refused a whole program for a collision that may never be written |
-| `CE3011` | narrowed to what phase 2 has to lift: a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written -- and that was measured under both import forms. The FUNCTION arm retired in phase 1, and a library's private CONSTANT went with it: the constant table is keyed by unit too, so each declaration takes its own global |
-| `CW3001` | narrowed to a repeat with the same alias, or none (section 6) |
-| `CE0101` | kept for a duplicate extension on a foreign type, with new TEXT: relational, naming both units, blaming neither (section 8). Retired for a cross-unit private function, which phase 1 makes legal (section 7), a library's private function included. A GENERIC function coexists the same way: its table carries the two views, and its instance takes its declaring unit's symbol prefix, so CE0101 is a one-unit duplicate for every callable kind |
-| `CE0105` | retired cross-unit with `CE0101`, and for the same reason: two units may each declare a private constant once the table is keyed by unit (section 7). Kept whole within one unit, and against a library's PUBLIC constant, which the consumer can see and read |
+| `CE3011` | a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written. A function or a constant of that name coexists: the tables are keyed by unit, so each declaration takes its own global |
+| `CW3001` | a repeat with the same alias, or with none (section 6) |
+| `CE0101` | a duplicate extension on a foreign type, relational, naming both units and blaming neither (section 8); and a duplicate callable in ONE unit. A private function in each of two units coexists (section 7), a library's private function and a GENERIC function included: its table carries the two views, and its instance takes its declaring unit's symbol prefix |
+| `CE0105` | a duplicate constant in one unit, or against a library's PUBLIC constant, which the consumer can see and read. A private constant in each of two units coexists (section 7) |
 
 ## 11. What this does not decide
 
@@ -1053,7 +1033,7 @@ is one flat set of names bound to one alias.
 **Coherence.** Section 8 rules that an orphan extension is legal and a duplicate is a hard
 error. It does not rule on OWNERSHIP — whether a unit should be allowed to extend a type it
 did not declare at all, which is Rust's orphan rule and Go's package rule. That question
-predates this document (`extend i32 squared()` from any unit works today) and it sharpens
+is wider than this document (`extend i32 squared()` from any unit works) and it sharpens
 under phase 2, where two units may extend two different types that share a name. It belongs
 with `docs/design/method-resolution.md`.
 
@@ -1063,174 +1043,3 @@ would land.
 
 **Per-alias visibility.** An alias is local to its unit (section 8) and carries no marker.
 Whether an alias could ever be exported is the same question as re-export.
-
-## Appendix: the record of the epic
-
-This appendix is a record. It tells what the compiler did before this design and how the
-work was delivered. No program in it describes the compiler of today.
-
-### A.1 What the compiler did before the epic (measured 2026-08-27)
-
-#### A.1.1 The four refusals
-
-| Case | Before the epic |
-|---|---|
-| `use "math" as my_math` | `CE6001: unexpected token 'as'`. The rule is `use_stmt: USE (stdlib_import \| lib_import \| user_import)` (`sushi_lang/grammar.lark:7`) — no alias clause exists |
-| Two units, each with `public fn sine` | `CE3003: duplicate public symbol 'sine' found in units: liba, libb`, with a note at each declaration that claims the name (`semantics/units.py:242`). **The program cannot be compiled**, and no escape exists |
-| Two units, each with a private `fn helper` | `CE0101: duplicate function 'helper'`, with a note at the other declaration — a name neither unit exports, refused anyway. Section 7 retires this row in phase 1 |
-| Two units, each with a private `const SCRATCH` | `CE0105: duplicate constant 'SCRATCH'`, the same shape. Section 7 retires this row with the one above |
-| Two units, each with `struct Node` | `CE0004: duplicate struct 'Node'` |
-
-The first two rows are aliasing problems and the last three are not. Rows three and four
-are one table holding one declaration per name, which section 7 rekeys. The last row is
-narrower than either: a `StructType` compares and hashes on its name alone
-(`semantics/typesys.py:75`), so one name **is** one type for the whole program. There is
-nothing to alias there — it is the identity that would have to change.
-
-Every duplicate in the table rendered relationally then — `CE3003`, `CE0101`, `CE0105` and
-`CE0004` each carry a note at the declaration they contest. That is the visibility epic's
-work (`visibility.md` section 9), and it is the shape the replacements in section 10 have
-to keep.
-
-Privacy does not help. A private declaration still occupies the one namespace — that is
-`visibility.md` section 1's deciding fact — so making a declaration private frees no name.
-`CE3011` was the interim rule that followed from it: a consumer may not declare a name
-that a library or a bundled stdlib module already declares, because in one namespace the
-library's own bodies would then call the consumer's function. Phase 1 narrowed it to a
-TYPE, and its `doc` string now names `docs/design/type-identity.md` as the design that
-would lift the rest.
-
-#### A.1.2 The namespace was flat and transitive
-
-Three units. `top` imports `mid`, `mid` imports `deep`, and `top` never mentions `deep`:
-
-<!-- docs-sweep: skip (records what the epic replaced; the program no longer compiles) -->
-```sushi
-# deep.sushi                      # mid.sushi              # top.sushi
-public fn deep_value() i32:       use "deep"               use "mid"
-    return Result.Ok(7)                                    fn main() i32:
-                                                               let i32 a = deep_value()??
-```
-
-It compiles, links and prints `7`, and the reason is worth getting right because phase 1
-replaces the thing that causes it. The flat scope is made twice over. `CollectorPass` is
-**one instance for the whole program** (`semantics/semantic_analyzer.py:147`): its tables
-are instance fields, so `_collect` returns a `SymbolTables` wrapping the same cumulative
-table objects on every call (`passes/collect/__init__.py:222-236`).
-`SymbolTableMerger.merge_all` (`semantics/symbol_merger.py:17`) then folds that one table
-into a single `global_tables` once per unit, which is what
-`validator.func_table.by_name` reads at the call site
-(`passes/types/calls/user_defined.py:171`). A `use` statement then did not decide what
-this unit could see. It decided what got compiled.
-
-> The merger itself is gone since #672: the collect pass fills one set of tables and the
-> analyzer takes them, so there is no second set to fold into. Every mention of
-> `semantics/symbol_merger.py` below reads the tree as it stood when this record was
-> written.
-
-It is NOT `build_global_symbol_table` (`semantics/units.py:219`), which is easy to blame
-and does nothing of the sort. It fills `UnitManager.global_symbols`, and that dict is
-**write-only**: its one reader, `find_symbol` (`:268`), has no callers anywhere in the tree
-or the tests. The function's whole live effect is to raise `CE3003`. Section 10 retires
-that code, so the function, the dict and `find_symbol` retire with it — a deletion, not a
-replacement.
-
-#### A.1.3 The standard library won over your own function, and then crashed
-
-`check_stdlib_function` (`passes/types/calls/user_defined.py:306`) searches a hard-coded
-list of module paths and returns the first hit. It runs at line 166. The user function
-table is not consulted until line 171.
-
-<!-- docs-sweep: skip (records what the epic replaced: it crashed the compiler) -->
-```sushi
-use <math>
-
-fn sin(f64 x) f64:
-    return 999.0
-```
-
-```
-error [CE0000]: internal compiler error: TypeError: Can't index at [0] in double.
-```
-
-The stdlib signature answers the call and the user's body is emitted for it. The one flat
-namespace has a fixed-priority search order, and that order is spelled as a Python list
-literal. Nothing tells the user their function was passed over.
-
-#### A.1.4 A namespace already existed, for one kind of symbol
-
-The FFI boundary solved this years ago:
-
-<!-- docs-sweep: skip (an extern block with no body to link) -->
-```sushi
-unsafe external "C" as libc because "the platform's own printf":
-    fn printf(string fmt) i32 = "printf"
-```
-
-`libc.printf(...)` resolves through a real namespace, and the machinery is already the
-shape a unit namespace needs:
-
-| Piece | Where |
-|---|---|
-| `ExternalTable.by_namespace: Dict[str, Dict[str, ExternalSig]]`, with `is_namespace(ns)` and `lookup(ns, name)` | `passes/collect/externals.py:33`, `:36`, `:40` |
-| `_resolve_external_call` — a `DotCall` whose receiver is a `Name` that is a registered namespace **and not a local variable** | `passes/types/__init__.py:145` |
-| The grammar's `AS NAME` clause | `grammar.lark:29` |
-
-Two properties carry over unchanged. A local variable shadows a namespace, so `libc` as a
-variable name is not stolen by the FFI block. And the namespace is bound by the
-*declaration*, not derived from a file name, so the author chooses the word.
-
-The standard library is namespace-shaped too, in a second place:
-`FunctionTable._stdlib_functions` is keyed by `(module_path, name)`
-(`passes/collect/functions.py:206`). `stdlib_by_name()` is the function that throws the
-module away.
-
-### A.2 Delivery (2026-08-29)
-
-**Phase 1 — the alias, the scope, and the tractable half.** Rulings 1 to 5, and Ruling 6's
-phase-1 row: a `struct`, an `enum` and a `perk` are reachable through a namespace, and are
-still one per program. Adds `semantics/namespaces.py` and the `namespaces` pass that fills
-it (section 3.2), the `as` clause, the qualified forms of two grammar rules, the optional
-`namespace` field on the nodes of section 5's table, a per-unit scope in place of
-`merge_all`'s fold, unit keys on `FunctionTable` and `ConstantTable`, the collect-order
-reversal of section 6.2, and the mangling of section 9.
-
-Five things are deletions rather than rewrites, and they are the phase's cheapest half:
-`build_global_symbol_table` with its write-only `global_symbols` and `find_symbol`
-(A.1.2), `_replace_shadowed_functions` (section 8), `_library_units_first` and the
-`collect_perk_definitions` pre-sweep (section 6.2, one each), and `active_generics.py`
-whole (section 4.3.1).
-
-What it buys: the A.1.3 crash becomes two working calls; two libraries may both
-export `sine`; a unit's scope is what its `use` statements say it is; and a name's origin is
-readable at the call. It closed the two items that issue #487 left (A.3).
-
-What it moves: the three cross-unit test batches of section 7, and the `visibility.md` edit
-(A.3), which was phase 1's last commit.
-
-**Phase 2 — types coexist.** Qualified interned names, so two units may each declare
-`struct Node`. Owned by `docs/design/type-identity.md`. Phase 1's AST and resolver are
-already shaped for it: only the key the resolver produces changes. It ends with its own
-`visibility.md` edit.
-
-**Not gated on either phase.** `CW3003` (section 8) needs the target type's declaring unit
-and the `--lib` flag, neither of which this document introduces. It can ship on its own, and
-it is the cheapest thing here: a predicate, a code, and a test batch.
-
-### A.3 Carried over, and the edit of `visibility.md`
-
-The visibility work left three limits (issue #487). PR #488 closed one and recorded two for
-this epic. Phase 1 closed both:
-
-- **A shadowed call read the winner's parameter modes.** A source library that called its
-  own `fn eat(string s)` was measured against a consumer's `fn eat(nom string s)`, and the
-  errors (`CE2427`, `CE2405`) pointed into the library. Both readers of a callee's modes --
-  the borrow pass and the back end -- now ask with a unit (section 9.1).
-- **Collection ran dependents before dependencies.** Two ordinary units could not implement
-  each other's perks (`CE4003: unknown perk`). The order is reversed (section 6.2), and the
-  two hand-patches that stood in for it (`_library_units_first` and the
-  `collect_perk_definitions` pre-sweep) were deleted.
-
-Each phase ended by editing `visibility.md` to record its drift, and the phase 1 edit is
-made: `visibility.md` narrows its deciding fact to types, and its section 9 holds the
-table of present answers.

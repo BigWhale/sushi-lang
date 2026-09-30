@@ -86,9 +86,7 @@ Result". Every reader asks it: the `collect` pass (`CE0131`, `CE2085`), the `typ
 pass (the body state, the return rule, the `??` channel, `CE0107`, what a call yields),
 the `lift` pass (the desugar of an expression lambda: `return e` when bare,
 `return Result.Ok(e)` with a channel), and the backend. Do not test `err_type` directly:
-an explicit `Result@(T, E)` return has a channel and no `err_type`. Until the bare-function
-change, a free function with no `| E` answered an implicit `Result@(T, StdError)`, and
-only a method could be bare.
+an explicit `Result@(T, E)` return has a channel and no `err_type`.
 
 ### Source order decides the holder of a name in one unit
 
@@ -155,8 +153,7 @@ Two facts it has to carry beyond the marker. **A name with no record is public**
 compiler synthesizes types nothing declared (a monomorphized instance, a lifted closure
 environment, `FileMode`), and none of them can carry a source marker. And the table
 remembers the LOSER of every contested name, because a unit that declared a name must
-never be shown its own code measured against somebody else's declaration -- which is what
-"cannot call private function 'helper'" said to the unit that wrote `helper` itself.
+never be shown its own code measured against somebody else's declaration.
 
 The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
 bare constant read, the type funnel for a named type, the collect pass itself for a
@@ -440,8 +437,7 @@ The ONE home of main's rule. It checks four things, in this order:
 2. a library carries none -- `CE3501`;
 3. `main` returns a BARE integer type (i8-i64, u8-u64), the exit code -- `CE0106`. A
    `| E` on `main`, or a `Result@(T, E)` return, is `CE0106` too, and a `??` in its body
-   is `CE0131` from the `collect` pass (the retired `CW2511` warned about it before the
-   bare-function change);
+   is `CE0131` from the `collect` pass;
 4. `main` takes no parameters or exactly one `string[] args` -- `CE0138`. The answer
    sets `main_expects_args` for the back end.
 
@@ -990,8 +986,7 @@ fieldless kind answers the empty list, and everything else answers None.
 
 None means the position is not this rule's. A namespace member, a bare enum variant,
 an unresolved name, a generic reference and a receiver the pass could not type all
-belong elsewhere, and a false `CE2106` there would be worse than the internal error it
-replaces.
+belong elsewhere, and a false `CE2106` there would be worse than the `CE0029` backstop.
 
 An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
 `CE2106`. An enum carries variants, and
@@ -1125,7 +1120,7 @@ fn func(peek i32 x) i32:
 
 # OK: borrow a variable
 let i32 temp = 5 + 3
-let i32 x = func(peek temp).realise(0)
+let i32 x = func(peek temp)
 ```
 
 4. **Use after a move, use after a destroy**

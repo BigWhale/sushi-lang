@@ -51,7 +51,7 @@ and deep-copied.
 
 ## Why not make `ll_type` a pointer instead
 
-That was rejected. The descriptor is already a fat pointer; a second indirection would change
+That is rejected. The descriptor is already a fat pointer; a second indirection would change
 the ABI of every struct with an array field and every `T[]` parameter, and it would re-open
 the question of who owns the pointee — a question the descriptor answers by being owned
 wherever it is stored.
@@ -96,8 +96,8 @@ An array literal element may fill more than one slot: `value; count` repeats one
 only in a `from()` literal -- a fixed array's length is part of its TYPE, and a constant's
 evaluator needs the values.
 
-That removes the last compile-time integer from the fill. `EmittedRun` carries an `ir.Value`
-count and no start; `fill_runs` threads a **cursor** instead:
+So the fill holds no compile-time integer. `EmittedRun` carries an `ir.Value` count and no
+start; `fill_runs` threads a **cursor** instead:
 
 ```python
 cursor = ir.Constant(i32, 0)

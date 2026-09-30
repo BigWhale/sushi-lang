@@ -1293,7 +1293,7 @@ Declare the constant in your own unit and name it bare.
 
 An alias behaves like any other name in the unit. A local variable of the same name
 shadows it, one name cannot hold two namespaces, and the alias is yours alone -- a unit
-that imports yours never sees it. Privacy is unchanged: `geo.helper` where `helper` is
+that imports yours never sees it. Privacy holds behind the dot: `geo.helper` where `helper` is
 private to `geometry` is an error that says so, not one that says the name does not
 exist.
 
