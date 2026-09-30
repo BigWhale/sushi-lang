@@ -81,8 +81,8 @@ Gives the `Str` value under a string key.
 - Parameter key: The key to find.
 - Returns: The string, or `""` when the key is absent or its value is not a `Str`.
 :##
-fn get_str(MsgValue m, string key) string | StdError:
-    return Result.Ok(map_get_str(m, key).realise(""))
+fn get_str(MsgValue m, string key) string:
+    return map_get_str(m, key).realise("")
 
 ##:
 Gives the `Bool` value under a string key.
@@ -91,8 +91,8 @@ Gives the `Bool` value under a string key.
 - Parameter key: The key to find.
 - Returns: The bool, or false when the key is absent or its value is not a `Bool`.
 :##
-fn get_bool(MsgValue m, string key) bool | StdError:
-    return Result.Ok(map_get_bool(m, key).realise(false))
+fn get_bool(MsgValue m, string key) bool:
+    return map_get_bool(m, key).realise(false)
 
 ##:
 Gives the number of elements of an `Arr` value.
@@ -114,14 +114,14 @@ Gives the number of elements of the `Arr` value under a string key.
 - Parameter key: The key to find.
 - Returns: The count, or 0 when the key is absent.
 :##
-fn len_at(MsgValue m, string key) i32 | StdError:
+fn len_at(MsgValue m, string key) i32:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key):
-                Maybe.Some(at) -> return Result.Ok(len(vals[at]))
-                Maybe.None() -> return Result.Ok(0)
+                Maybe.Some(at) -> return len(vals[at])
+                Maybe.None() -> return 0
         _ ->
-            return Result.Ok(0)
+            return 0
 
 ##:
 Joins the `Str` elements of an `Arr` value with a separator.
@@ -148,14 +148,14 @@ Joins the `Str` elements of the `Arr` value under a string key with a separator.
 - Parameter sep: The text between two elements.
 - Returns: The joined text, or `""` when the key is absent.
 :##
-fn join_at(MsgValue m, string key, string sep) string | StdError:
+fn join_at(MsgValue m, string key, string sep) string:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key):
-                Maybe.Some(at) -> return Result.Ok(join_strs(vals[at], sep))
-                Maybe.None() -> return Result.Ok("")
+                Maybe.Some(at) -> return join_strs(vals[at], sep)
+                Maybe.None() -> return ""
         _ ->
-            return Result.Ok("")
+            return ""
 
 ##:
 Tells if a value is `Nil`.
@@ -313,12 +313,12 @@ The lines after the first have a hanging indent past the opener.
 - Parameter o: The options of the run.
 :##
 fn print_lines(string indent, string text, string opener, i32 opener_width,
-               Opts o) ~ | StdError:
+               Opts o) ~:
     let string pad = " ".repeat(opener_width)
     let string hang = "{indent}{pad}"
     let string[] lines = text.split("\n")
     foreach(i in 0..lines.len()):
-        let string raw = lines.get(i)??
+        let string raw = lines[i]
         if (raw == ""):
             println("")
         else:
@@ -327,7 +327,6 @@ fn print_lines(string indent, string text, string opener, i32 opener_width,
                 println("{indent}{opener}{line}")
             else:
                 println("{hang}{line}")
-    return Result.Ok(~)
 
 ##:
 Prints one doc record: the summary, the body, the tags and the examples.
@@ -338,37 +337,37 @@ Prints one doc record: the summary, the body, the tags and the examples.
 - Parameter o: The options of the run.
 - Returns: True when the record printed something.
 :##
-fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool | StdError:
+fn print_doc_record(MsgValue doc, MsgValue owner, string indent, Opts o) bool:
     if (not o.docs):
-        return Result.Ok(false)
+        return false
     if (is_nil(doc)):
-        return Result.Ok(false)
+        return false
     let bool printed = false
-    let string summary = get_str(doc, "summary")??
-    let string body = get_str(doc, "body")??
+    let string summary = get_str(doc, "summary")
+    let string body = get_str(doc, "body")
     if (summary != ""):
-        print_lines(indent, summary, "", 0, o)??
+        print_lines(indent, summary, "", 0, o)
         printed := true
     if (body != ""):
         if (printed):
             println("")
-        print_lines(indent, body, "", 0, o)??
+        print_lines(indent, body, "", 0, o)
         printed := true
-    printed := print_param_tags_at(owner, doc, indent, printed, o)??
-    let string returns = get_str(doc, "returns")??
+    printed := print_param_tags_at(owner, doc, indent, printed, o)
+    let string returns = get_str(doc, "returns")
     if (returns != ""):
         if (printed):
             println("")
-        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len(), o)??
+        print_lines(indent, returns, "- {o.blue}Returns{o.reset}: ", "- Returns: ".len(), o)
         printed := true
-    let string errors = get_str(doc, "errors")??
+    let string errors = get_str(doc, "errors")
     if (errors != ""):
         if (printed):
             println("")
-        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len(), o)??
+        print_lines(indent, errors, "- {o.blue}Errors{o.reset}: ", "- Errors: ".len(), o)
         printed := true
-    printed := print_examples_at(doc, indent, printed, o)??
-    return Result.Ok(printed)
+    printed := print_examples_at(doc, indent, printed, o)
+    return printed
 
 ##:
 Prints the `- Parameter` tags of a doc record, in the order of the parameters of the
@@ -382,15 +381,15 @@ owner.
 - Returns: True when a part is above the next part.
 :##
 fn print_param_tags_at(MsgValue owner, MsgValue doc, string indent, bool printed,
-                       Opts o) bool | StdError:
+                       Opts o) bool:
     match owner:
         MsgValue.Map(_, vals) ->
             match map_index(owner, "params"):
                 Maybe.Some(at) ->
-                    return Result.Ok(print_param_tags(vals[at], doc, indent, printed, o)??)
-                Maybe.None() -> return Result.Ok(printed)
+                    return print_param_tags(vals[at], doc, indent, printed, o)
+                Maybe.None() -> return printed
         _ ->
-            return Result.Ok(printed)
+            return printed
 
 ##:
 Prints a `- Parameter` tag for each declared parameter that the doc record documents.
@@ -403,24 +402,24 @@ Prints a `- Parameter` tag for each declared parameter that the doc record docum
 - Returns: True when a part is above the next part.
 :##
 fn print_param_tags(MsgValue declared, MsgValue doc, string indent, bool printed,
-                    Opts o) bool | StdError:
+                    Opts o) bool:
     match declared:
         MsgValue.Arr(params) ->
             let bool p = printed
             foreach(param in params.iter()):
-                let string pn = get_str(param, "name")??
-                let string ptext = param_text(doc, pn)??
+                let string pn = get_str(param, "name")
+                let string ptext = param_text(doc, pn)
                 if (ptext != ""):
                     if (p):
                         println("")
                     # The width is the PLAIN opener's, so it cannot drift from what prints.
                     let string pplain = "- Parameter {pn}: "
                     let string popener = "- {o.blue}Parameter{o.reset} {o.cyan}{pn}{o.reset}: "
-                    print_lines(indent, ptext, popener, pplain.len(), o)??
+                    print_lines(indent, ptext, popener, pplain.len(), o)
                     p := true
-            return Result.Ok(p)
+            return p
         _ ->
-            return Result.Ok(printed)
+            return printed
 
 ##:
 Gives the text of one `- Parameter` tag.
@@ -429,14 +428,14 @@ Gives the text of one `- Parameter` tag.
 - Parameter name: The name of the parameter.
 - Returns: The text, or `""` when the record does not document the parameter.
 :##
-fn param_text(MsgValue doc, string name) string | StdError:
+fn param_text(MsgValue doc, string name) string:
     match doc:
         MsgValue.Map(_, vals) ->
             match map_index(doc, "params"):
-                Maybe.Some(at) -> return Result.Ok(get_str(vals[at], name)??)
-                Maybe.None() -> return Result.Ok("")
+                Maybe.Some(at) -> return get_str(vals[at], name)
+                Maybe.None() -> return ""
         _ ->
-            return Result.Ok("")
+            return ""
 
 ##:
 Prints the examples of a doc record.
@@ -447,14 +446,14 @@ Prints the examples of a doc record.
 - Parameter o: The options of the run.
 - Returns: True when a part is above the next part.
 :##
-fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool | StdError:
+fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool:
     match doc:
         MsgValue.Map(_, vals) ->
             match map_index(doc, "examples"):
-                Maybe.Some(at) -> return Result.Ok(print_examples(vals[at], indent, printed, o)??)
-                Maybe.None() -> return Result.Ok(printed)
+                Maybe.Some(at) -> return print_examples(vals[at], indent, printed, o)
+                Maybe.None() -> return printed
         _ ->
-            return Result.Ok(printed)
+            return printed
 
 ##:
 Prints each example: its caption, then its code.
@@ -465,24 +464,24 @@ Prints each example: its caption, then its code.
 - Parameter o: The options of the run.
 - Returns: True when a part is above the next part.
 :##
-fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool | StdError:
+fn print_examples(MsgValue examples, string indent, bool printed, Opts o) bool:
     match examples:
         MsgValue.Arr(items) ->
             let bool p = printed
             foreach(ex in items.iter()):
                 if (p):
                     println("")
-                let string caption = get_str(ex, "caption")??
+                let string caption = get_str(ex, "caption")
                 if (caption == ""):
                     println("{indent}- {o.blue}Example{o.reset}:")
                 else:
                     print_lines(indent, caption, "- {o.blue}Example{o.reset}: ",
-                                "- Example: ".len(), o)??
-                print_code(indent, get_str(ex, "code")??, o)
+                                "- Example: ".len(), o)
+                print_code(indent, get_str(ex, "code"), o)
                 p := true
-            return Result.Ok(p)
+            return p
         _ ->
-            return Result.Ok(printed)
+            return printed
 
 ##:
 Prints the code of an example, dim and indented four spaces past its tag.
@@ -507,8 +506,8 @@ Prints the doc record of one manifest record, when it has one.
 - Parameter o: The options of the run.
 - Returns: True when something printed.
 :##
-fn print_doc(MsgValue owner, string indent, Opts o) bool | StdError:
-    return Result.Ok(print_doc_at(owner, "doc", owner, indent, o)??)
+fn print_doc(MsgValue owner, string indent, Opts o) bool:
+    return print_doc_at(owner, "doc", owner, indent, o)
 
 ##:
 Prints the doc record under a string key of a map.
@@ -520,15 +519,15 @@ Prints the doc record under a string key of a map.
 - Parameter o: The options of the run.
 - Returns: True when something printed.
 :##
-fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) bool | StdError:
+fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) bool:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key):
                 Maybe.Some(at) ->
-                    return Result.Ok(print_doc_record(vals[at], owner, indent, o)??)
-                Maybe.None() -> return Result.Ok(false)
+                    return print_doc_record(vals[at], owner, indent, o)
+                Maybe.None() -> return false
         _ ->
-            return Result.Ok(false)
+            return false
 
 ##:
 Prints the blank line before a record, when the record before it printed a block.
@@ -547,17 +546,17 @@ Writes the parameter list of a function record, with the receiver mode first.
 - Parameter f: The function record.
 - Returns: The parameter list.
 :##
-fn render_params(MsgValue f) string | StdError:
-    let string head = get_str(f, "self_mode")??
+fn render_params(MsgValue f) string:
+    let string head = get_str(f, "self_mode")
     if (head != ""):
         head := "{head} self"
     match f:
         MsgValue.Map(_, vals) ->
             match map_index(f, "params"):
-                Maybe.Some(at) -> return Result.Ok(render_param_list(vals[at], nom head)??)
-                Maybe.None() -> return Result.Ok(head)
+                Maybe.Some(at) -> return render_param_list(vals[at], nom head)
+                Maybe.None() -> return head
         _ ->
-            return Result.Ok(head)
+            return head
 
 ##:
 Writes each parameter of a `params` array after the receiver text.
@@ -566,23 +565,23 @@ Writes each parameter of a `params` array after the receiver text.
 - Parameter out: The receiver text, or `""`.
 - Returns: The parameter list.
 :##
-fn render_param_list(MsgValue ps, nom string out) string | StdError:
+fn render_param_list(MsgValue ps, nom string out) string:
     match ps:
         MsgValue.Arr(items) ->
             let string[] parts = from([])
             if (out != ""):
                 parts.push(out)
             foreach(p in items.iter()):
-                let string t = to_surface(get_str(p, "type")??)
-                let string pn = get_str(p, "name")??
-                let string declared = get_str(p, "mode")??
+                let string t = to_surface(get_str(p, "type"))
+                let string pn = get_str(p, "name")
+                let string declared = get_str(p, "mode")
                 let string mode = ""
                 if (declared == "nom"):
                     mode := "nom "
                 parts.push("{mode}{t} {pn}")
-            return Result.Ok(", ".join(parts))
+            return ", ".join(parts)
         _ ->
-            return Result.Ok(out)
+            return out
 
 ##:
 Writes the signature of one function record, concrete or generic.
@@ -591,17 +590,17 @@ Writes the signature of one function record, concrete or generic.
 - Parameter o: The options of the run.
 - Returns: The signature.
 :##
-fn render_signature(MsgValue f, Opts o) string | StdError:
-    let string bare = get_str(f, "name")??
+fn render_signature(MsgValue f, Opts o) string:
+    let string bare = get_str(f, "name")
     let string name = "{o.bold}{bare}{o.reset}"
-    let string generic = render_type_params(f)??
-    let string params = render_params(f)??
-    let string ret = to_surface(get_str(f, "return_type")??)
-    let string err = get_str(f, "error_type")??
+    let string generic = render_type_params(f)
+    let string params = render_params(f)
+    let string ret = to_surface(get_str(f, "return_type"))
+    let string err = get_str(f, "error_type")
     if (err == ""):
-        return Result.Ok("fn {name}{generic}({params}) {ret}")
+        return "fn {name}{generic}({params}) {ret}"
     let string serr = to_surface(err)
-    return Result.Ok("fn {name}{generic}({params}) {ret} | {serr}")
+    return "fn {name}{generic}({params}) {ret} | {serr}"
 
 ##:
 Prints one section of function records.
@@ -611,15 +610,14 @@ Prints one section of function records.
 - Parameter title: The title of the section.
 - Parameter o: The options of the run.
 :##
-fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~ | StdError:
+fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key):
-                Maybe.Some(at) -> print_signatures(vals[at], title, o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_signatures(vals[at], title, o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each function record of an array, with its doc record.
@@ -628,21 +626,20 @@ Prints each function record of an array, with its doc record.
 - Parameter title: The title of the section.
 - Parameter o: The options of the run.
 :##
-fn print_signatures(MsgValue funcs, string title, Opts o) ~ | StdError:
+fn print_signatures(MsgValue funcs, string title, Opts o) ~:
     if (not section(title, len(funcs), o)):
-        return Result.Ok(~)
+        return ~
     match funcs:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(f in items.iter()):
                 pending := open_record(pending)
-                let string sig = render_signature(f, o)??
+                let string sig = render_signature(f, o)
                 println("  {sig}")
-                pending := print_doc(f, "    ", o)??
+                pending := print_doc(f, "    ", o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Writes the `@(...)` type parameters of a generic record.
@@ -650,14 +647,14 @@ Writes the `@(...)` type parameters of a generic record.
 - Parameter gf: The generic record.
 - Returns: The text, or `""` when there are none.
 :##
-fn render_type_params(MsgValue gf) string | StdError:
+fn render_type_params(MsgValue gf) string:
     match gf:
         MsgValue.Map(_, vals) ->
             match map_index(gf, "type_params"):
-                Maybe.Some(at) -> return Result.Ok(render_type_param_list(vals[at])??)
-                Maybe.None() -> return Result.Ok("")
+                Maybe.Some(at) -> return render_type_param_list(vals[at])
+                Maybe.None() -> return ""
         _ ->
-            return Result.Ok("")
+            return ""
 
 ##:
 Writes a `type_params` array as `@(...)`, with the constraints.
@@ -665,15 +662,15 @@ Writes a `type_params` array as `@(...)`, with the constraints.
 - Parameter tps: The `type_params` array.
 - Returns: The text, or `""` for an empty array.
 :##
-fn render_type_param_list(MsgValue tps) string | StdError:
+fn render_type_param_list(MsgValue tps) string:
     match tps:
         MsgValue.Arr(items) ->
             if (items.len() == 0):
-                return Result.Ok("")
+                return ""
             let string[] parts = from([])
             foreach(tp in items.iter()):
-                let string tname = get_str(tp, "name")??
-                let string cs = join_at(tp, "constraints", " + ")??
+                let string tname = get_str(tp, "name")
+                let string cs = join_at(tp, "constraints", " + ")
                 let string one = ""
                 if (cs == ""):
                     one := "{tname}"
@@ -681,9 +678,9 @@ fn render_type_param_list(MsgValue tps) string | StdError:
                     one := "{tname}: {cs}"
                 parts.push(one)
             let string body = ", ".join(parts)
-            return Result.Ok("@({body})")
+            return "@({body})"
         _ ->
-            return Result.Ok("")
+            return ""
 
 ##:
 Prints one section of constant or variable records.
@@ -694,15 +691,14 @@ Prints one section of constant or variable records.
 - Parameter keyword: The keyword at the start of each line.
 - Parameter o: The options of the run.
 :##
-fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts o) ~ | StdError:
+fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts o) ~:
     match m:
         MsgValue.Map(_, vals) ->
             match map_index(m, key):
-                Maybe.Some(at) -> print_bindings(vals[at], title, keyword, o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_bindings(vals[at], title, keyword, o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each constant or variable record of an array, with its doc record.
@@ -712,22 +708,21 @@ Prints each constant or variable record of an array, with its doc record.
 - Parameter keyword: The keyword at the start of each line.
 - Parameter o: The options of the run.
 :##
-fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~ | StdError:
+fn print_bindings(MsgValue list, string title, string keyword, Opts o) ~:
     if (not section(title, len(list), o)):
-        return Result.Ok(~)
+        return ~
     match list:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(c in items.iter()):
                 pending := open_record(pending)
-                let string t = to_surface(get_str(c, "type")??)
-                let string name = get_str(c, "name")??
+                let string t = to_surface(get_str(c, "type"))
+                let string name = get_str(c, "name")
                 println("  {keyword} {t} {name}")
-                pending := print_doc(c, "    ", o)??
+                pending := print_doc(c, "    ", o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Writes the `@(T, U)` suffix of a generic struct or enum record.
@@ -735,13 +730,13 @@ Writes the `@(T, U)` suffix of a generic struct or enum record.
 - Parameter rec: The struct or enum record.
 - Returns: The suffix, or `""`.
 :##
-fn render_named_type_params(MsgValue rec) string | StdError:
-    if (not get_bool(rec, "is_generic")??):
-        return Result.Ok("")
-    if (len_at(rec, "type_params")?? == 0):
-        return Result.Ok("")
-    let string body = join_at(rec, "type_params", ", ")??
-    return Result.Ok("@({body})")
+fn render_named_type_params(MsgValue rec) string:
+    if (not get_bool(rec, "is_generic")):
+        return ""
+    if (len_at(rec, "type_params") == 0):
+        return ""
+    let string body = join_at(rec, "type_params", ", ")
+    return "@({body})"
 
 ##:
 Prints the section of public structs.
@@ -749,15 +744,14 @@ Prints the section of public structs.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_structs(MsgValue meta, Opts o) ~ | StdError:
+fn print_structs(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "structs"):
-                Maybe.Some(at) -> print_struct_list(vals[at], o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_struct_list(vals[at], o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each struct record, with its doc record and its fields.
@@ -765,23 +759,22 @@ Prints each struct record, with its doc record and its fields.
 - Parameter structs: The array of struct records.
 - Parameter o: The options of the run.
 :##
-fn print_struct_list(MsgValue structs, Opts o) ~ | StdError:
+fn print_struct_list(MsgValue structs, Opts o) ~:
     if (not section("Public Structs", len(structs), o)):
-        return Result.Ok(~)
+        return ~
     match structs:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(s in items.iter()):
                 pending := open_record(pending)
-                let string name = get_str(s, "name")??
-                let string generic = render_named_type_params(s)??
+                let string name = get_str(s, "name")
+                let string generic = render_named_type_params(s)
                 println("  struct {name}{generic}:")
-                pending := print_doc(s, "    ", o)??
-                pending := print_fields_at(s, pending, o)??
+                pending := print_doc(s, "    ", o)
+                pending := print_fields_at(s, pending, o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the fields of a struct record.
@@ -791,14 +784,14 @@ Prints the fields of a struct record.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_fields_at(MsgValue s, bool pending, Opts o) bool | StdError:
+fn print_fields_at(MsgValue s, bool pending, Opts o) bool:
     match s:
         MsgValue.Map(_, vals) ->
             match map_index(s, "fields"):
-                Maybe.Some(at) -> return Result.Ok(print_fields(vals[at], pending, o)??)
-                Maybe.None() -> return Result.Ok(pending)
+                Maybe.Some(at) -> return print_fields(vals[at], pending, o)
+                Maybe.None() -> return pending
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints each field record, with its doc record.
@@ -808,19 +801,19 @@ Prints each field record, with its doc record.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_fields(MsgValue fields, bool pending, Opts o) bool | StdError:
+fn print_fields(MsgValue fields, bool pending, Opts o) bool:
     match fields:
         MsgValue.Arr(items) ->
             let bool p = pending
             foreach(fld in items.iter()):
                 p := open_record(p)
-                let string ft = to_surface(get_str(fld, "type")??)
-                let string fname = get_str(fld, "name")??
+                let string ft = to_surface(get_str(fld, "type"))
+                let string fname = get_str(fld, "name")
                 println("    {ft} {fname}")
-                p := print_doc(fld, "      ", o)??
-            return Result.Ok(p)
+                p := print_doc(fld, "      ", o)
+            return p
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints the section of public enums.
@@ -828,15 +821,14 @@ Prints the section of public enums.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_enums(MsgValue meta, Opts o) ~ | StdError:
+fn print_enums(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "enums"):
-                Maybe.Some(at) -> print_enum_list(vals[at], o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_enum_list(vals[at], o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each enum record, with its doc record and its variants.
@@ -844,23 +836,22 @@ Prints each enum record, with its doc record and its variants.
 - Parameter enums: The array of enum records.
 - Parameter o: The options of the run.
 :##
-fn print_enum_list(MsgValue enums, Opts o) ~ | StdError:
+fn print_enum_list(MsgValue enums, Opts o) ~:
     if (not section("Public Enums", len(enums), o)):
-        return Result.Ok(~)
+        return ~
     match enums:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(e in items.iter()):
                 pending := open_record(pending)
-                let string name = get_str(e, "name")??
-                let string generic = render_named_type_params(e)??
+                let string name = get_str(e, "name")
+                let string generic = render_named_type_params(e)
                 println("  enum {name}{generic}:")
-                pending := print_doc(e, "    ", o)??
-                pending := print_variants_at(e, pending, o)??
+                pending := print_doc(e, "    ", o)
+                pending := print_variants_at(e, pending, o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the variants of an enum record.
@@ -870,14 +861,14 @@ Prints the variants of an enum record.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_variants_at(MsgValue e, bool pending, Opts o) bool | StdError:
+fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
     match e:
         MsgValue.Map(_, vals) ->
             match map_index(e, "variants"):
-                Maybe.Some(at) -> return Result.Ok(print_variants(vals[at], pending, o)??)
-                Maybe.None() -> return Result.Ok(pending)
+                Maybe.Some(at) -> return print_variants(vals[at], pending, o)
+                Maybe.None() -> return pending
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Writes the payload types of a variant record, each in the `@(...)` spelling.
@@ -885,7 +876,7 @@ Writes the payload types of a variant record, each in the `@(...)` spelling.
 - Parameter v: The variant record.
 - Returns: The types joined with `", "`, or `""` when the record has none.
 :##
-fn render_data_types(MsgValue v) string | StdError:
+fn render_data_types(MsgValue v) string:
     match v:
         MsgValue.Map(_, vals) ->
             match map_index(v, "data_types"):
@@ -895,12 +886,12 @@ fn render_data_types(MsgValue v) string | StdError:
                             let string[] parts = from([])
                             foreach(t in types.iter()):
                                 parts.push(to_surface(str(t)))
-                            return Result.Ok(", ".join(parts))
+                            return ", ".join(parts)
                         _ ->
-                            return Result.Ok("")
-                Maybe.None() -> return Result.Ok("")
+                            return ""
+                Maybe.None() -> return ""
         _ ->
-            return Result.Ok("")
+            return ""
 
 ##:
 Prints each variant record, with its doc record.
@@ -910,22 +901,22 @@ Prints each variant record, with its doc record.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_variants(MsgValue variants, bool pending, Opts o) bool | StdError:
+fn print_variants(MsgValue variants, bool pending, Opts o) bool:
     match variants:
         MsgValue.Arr(items) ->
             let bool p = pending
             foreach(v in items.iter()):
                 p := open_record(p)
-                let string vname = get_str(v, "name")??
-                if (get_bool(v, "has_data")??):
-                    let string dt = render_data_types(v)??
+                let string vname = get_str(v, "name")
+                if (get_bool(v, "has_data")):
+                    let string dt = render_data_types(v)
                     println("    {vname}({dt})")
                 else:
                     println("    {vname}")
-                p := print_doc(v, "      ", o)??
-            return Result.Ok(p)
+                p := print_doc(v, "      ", o)
+            return p
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints one section of generic structs or of generic enums.
@@ -937,15 +928,14 @@ Prints one section of generic structs or of generic enums.
 - Parameter o: The options of the run.
 :##
 fn print_generic_named(MsgValue templates, string key, string title, string keyword,
-                       Opts o) ~ | StdError:
+                       Opts o) ~:
     match templates:
         MsgValue.Map(_, vals) ->
             match map_index(templates, key):
-                Maybe.Some(at) -> print_generic_named_list(vals[at], title, keyword, o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_generic_named_list(vals[at], title, keyword, o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each generic struct or enum record, with its doc record.
@@ -955,22 +945,21 @@ Prints each generic struct or enum record, with its doc record.
 - Parameter keyword: The keyword at the start of each line.
 - Parameter o: The options of the run.
 :##
-fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o) ~ | StdError:
+fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o) ~:
     if (not section(title, len(list), o)):
-        return Result.Ok(~)
+        return ~
     match list:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(r in items.iter()):
                 pending := open_record(pending)
-                let string name = get_str(r, "name")??
-                let string generic = render_type_params(r)??
+                let string name = get_str(r, "name")
+                let string generic = render_type_params(r)
                 println("  {keyword} {name}{generic}:")
-                pending := print_doc(r, "    ", o)??
+                pending := print_doc(r, "    ", o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the method records of a perk or of an implementation.
@@ -980,14 +969,14 @@ Prints the method records of a perk or of an implementation.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_methods(MsgValue owner, bool pending, Opts o) bool | StdError:
+fn print_methods(MsgValue owner, bool pending, Opts o) bool:
     match owner:
         MsgValue.Map(_, vals) ->
             match map_index(owner, "methods"):
-                Maybe.Some(at) -> return Result.Ok(print_method_list(vals[at], pending, o)??)
-                Maybe.None() -> return Result.Ok(pending)
+                Maybe.Some(at) -> return print_method_list(vals[at], pending, o)
+                Maybe.None() -> return pending
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints each method record, with its doc record.
@@ -997,18 +986,18 @@ Prints each method record, with its doc record.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_method_list(MsgValue methods, bool pending, Opts o) bool | StdError:
+fn print_method_list(MsgValue methods, bool pending, Opts o) bool:
     match methods:
         MsgValue.Arr(items) ->
             let bool p = pending
             foreach(m in items.iter()):
                 p := open_record(p)
-                let string sig = render_signature(m, o)??
+                let string sig = render_signature(m, o)
                 println("    {sig}")
-                p := print_doc(m, "      ", o)??
-            return Result.Ok(p)
+                p := print_doc(m, "      ", o)
+            return p
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints the section of perks.
@@ -1016,15 +1005,14 @@ Prints the section of perks.
 - Parameter templates: The `templates` map, or `Nil` when the library has none.
 - Parameter o: The options of the run.
 :##
-fn print_perks(MsgValue templates, Opts o) ~ | StdError:
+fn print_perks(MsgValue templates, Opts o) ~:
     match templates:
         MsgValue.Map(_, vals) ->
             match map_index(templates, "perks"):
-                Maybe.Some(at) -> print_perk_list(vals[at], o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_perk_list(vals[at], o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each perk record, with its doc record and its methods.
@@ -1032,22 +1020,21 @@ Prints each perk record, with its doc record and its methods.
 - Parameter perks: The array of perk records.
 - Parameter o: The options of the run.
 :##
-fn print_perk_list(MsgValue perks, Opts o) ~ | StdError:
+fn print_perk_list(MsgValue perks, Opts o) ~:
     if (not section("Perks", len(perks), o)):
-        return Result.Ok(~)
+        return ~
     match perks:
         MsgValue.Arr(items) ->
             let bool pending = false
             foreach(r in items.iter()):
                 pending := open_record(pending)
-                let string name = get_str(r, "name")??
+                let string name = get_str(r, "name")
                 println("  perk {name}:")
-                pending := print_doc(r, "    ", o)??
-                pending := print_methods(r, pending, o)??
+                pending := print_doc(r, "    ", o)
+                pending := print_methods(r, pending, o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Writes the target of an implementation record, for example `Box@(T)`.
@@ -1055,12 +1042,12 @@ Writes the target of an implementation record, for example `Box@(T)`.
 - Parameter r: The implementation record.
 - Returns: The target.
 :##
-fn render_impl_target(MsgValue r) string | StdError:
-    let string target = to_surface(get_str(r, "type")??)
-    if (len_at(r, "type_args")?? == 0):
-        return Result.Ok(target)
-    let string body = join_at(r, "type_args", ", ")??
-    return Result.Ok("{target}@({body})")
+fn render_impl_target(MsgValue r) string:
+    let string target = to_surface(get_str(r, "type"))
+    if (len_at(r, "type_args") == 0):
+        return target
+    let string body = join_at(r, "type_args", ", ")
+    return "{target}@({body})"
 
 ##:
 Prints one array of implementation records.
@@ -1071,14 +1058,14 @@ Prints one array of implementation records.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool | StdError:
+fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool:
     match templates:
         MsgValue.Map(_, vals) ->
             match map_index(templates, key):
-                Maybe.Some(at) -> return Result.Ok(print_impl_records(vals[at], pending, o)??)
-                Maybe.None() -> return Result.Ok(pending)
+                Maybe.Some(at) -> return print_impl_records(vals[at], pending, o)
+                Maybe.None() -> return pending
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints each implementation record, with its doc record and its methods.
@@ -1088,20 +1075,20 @@ Prints each implementation record, with its doc record and its methods.
 - Parameter o: The options of the run.
 - Returns: True when the last record printed a block.
 :##
-fn print_impl_records(MsgValue impls, bool pending, Opts o) bool | StdError:
+fn print_impl_records(MsgValue impls, bool pending, Opts o) bool:
     match impls:
         MsgValue.Arr(items) ->
             let bool p = pending
             foreach(r in items.iter()):
                 p := open_record(p)
-                let string target = render_impl_target(r)??
-                let string contract = get_str(r, "perk")??
+                let string target = render_impl_target(r)
+                let string contract = get_str(r, "perk")
                 println("  extend {target} with {contract}:")
-                p := print_doc(r, "    ", o)??
-                p := print_methods(r, p, o)??
-            return Result.Ok(p)
+                p := print_doc(r, "    ", o)
+                p := print_methods(r, p, o)
+            return p
         _ ->
-            return Result.Ok(pending)
+            return pending
 
 ##:
 Prints the concrete and the generic-target implementations of perks, in one section.
@@ -1109,16 +1096,15 @@ Prints the concrete and the generic-target implementations of perks, in one sect
 - Parameter templates: The `templates` map, or `Nil` when the library has none.
 - Parameter o: The options of the run.
 :##
-fn print_perk_impls(MsgValue templates, Opts o) ~ | StdError:
-    let i32 concrete_n = len_at(templates, "perk_impls")??
-    let i32 generic_n = len_at(templates, "generic_perk_impls")??
+fn print_perk_impls(MsgValue templates, Opts o) ~:
+    let i32 concrete_n = len_at(templates, "perk_impls")
+    let i32 generic_n = len_at(templates, "generic_perk_impls")
     if (not section("Perk Implementations", concrete_n + generic_n, o)):
-        return Result.Ok(~)
+        return ~
     let bool pending = false
-    pending := print_impls_at(templates, "perk_impls", pending, o)??
-    pending := print_impls_at(templates, "generic_perk_impls", pending, o)??
+    pending := print_impls_at(templates, "perk_impls", pending, o)
+    pending := print_impls_at(templates, "generic_perk_impls", pending, o)
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the section of the types that the library extends and does not declare.
@@ -1126,15 +1112,14 @@ Prints the section of the types that the library extends and does not declare.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_foreign_extensions(MsgValue meta, Opts o) ~ | StdError:
+fn print_foreign_extensions(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "foreign_extensions"):
-                Maybe.Some(at) -> print_foreign_list(vals[at], o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_foreign_list(vals[at], o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each foreign extension record.
@@ -1142,19 +1127,18 @@ Prints each foreign extension record.
 - Parameter claims: The array of foreign extension records.
 - Parameter o: The options of the run.
 :##
-fn print_foreign_list(MsgValue claims, Opts o) ~ | StdError:
+fn print_foreign_list(MsgValue claims, Opts o) ~:
     if (not section("Foreign Extensions", len(claims), o)):
-        return Result.Ok(~)
+        return ~
     match claims:
         MsgValue.Arr(items) ->
             foreach(c in items.iter()):
-                let string target = to_surface(get_str(c, "type")??)
-                let string method = get_str(c, "method")??
+                let string target = to_surface(get_str(c, "type"))
+                let string method = get_str(c, "method")
                 println("  extend {target} {method}")
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the section of the units that the library holds.
@@ -1162,15 +1146,14 @@ Prints the section of the units that the library holds.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_units(MsgValue meta, Opts o) ~ | StdError:
+fn print_units(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "units"):
-                Maybe.Some(at) -> print_unit_list(vals[at], meta, o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_unit_list(vals[at], meta, o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each unit name, with its doc record.
@@ -1179,9 +1162,9 @@ Prints each unit name, with its doc record.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~ | StdError:
+fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~:
     if (not section("Units", len(units), o)):
-        return Result.Ok(~)
+        return ~
     match units:
         MsgValue.Arr(items) ->
             let bool pending = false
@@ -1189,11 +1172,10 @@ fn print_unit_list(MsgValue units, MsgValue meta, Opts o) ~ | StdError:
                 pending := open_record(pending)
                 let string name = str(u)
                 println("  {name}")
-                pending := print_unit_doc(meta, name, o)??
+                pending := print_unit_doc(meta, name, o)
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the doc record of one unit from the `unit_docs` map.
@@ -1203,15 +1185,15 @@ Prints the doc record of one unit from the `unit_docs` map.
 - Parameter o: The options of the run.
 - Returns: True when something printed.
 :##
-fn print_unit_doc(MsgValue meta, string name, Opts o) bool | StdError:
+fn print_unit_doc(MsgValue meta, string name, Opts o) bool:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "unit_docs"):
                 Maybe.Some(at) ->
-                    return Result.Ok(print_doc_at(vals[at], name, MsgValue.Nil(), "    ", o)??)
-                Maybe.None() -> return Result.Ok(false)
+                    return print_doc_at(vals[at], name, MsgValue.Nil(), "    ", o)
+                Maybe.None() -> return false
         _ ->
-            return Result.Ok(false)
+            return false
 
 ##:
 Prints the section of re-exports.
@@ -1219,15 +1201,14 @@ Prints the section of re-exports.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_reexports(MsgValue meta, Opts o) ~ | StdError:
+fn print_reexports(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "reexports"):
-                Maybe.Some(at) -> print_reexport_list(vals[at], o)??
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.Some(at) -> print_reexport_list(vals[at], o)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each re-export record as the `public use` statement that made it.
@@ -1235,23 +1216,22 @@ Prints each re-export record as the `public use` statement that made it.
 - Parameter records: The array of re-export records.
 - Parameter o: The options of the run.
 :##
-fn print_reexport_list(MsgValue records, Opts o) ~ | StdError:
+fn print_reexport_list(MsgValue records, Opts o) ~:
     if (not section("Re-exports", len(records), o)):
-        return Result.Ok(~)
+        return ~
     match records:
         MsgValue.Arr(items) ->
             foreach(r in items.iter()):
-                let string unit = get_str(r, "unit")??
-                let string path = get_str(r, "path")??
-                let string kind = get_str(r, "kind")??
+                let string unit = get_str(r, "unit")
+                let string path = get_str(r, "path")
+                let string kind = get_str(r, "kind")
                 let string target = "<{path}>"
                 if (kind == "unit"):
                     target := "\"{path}\""
                 println("  {unit}: public use {target}")
         _ ->
-            return Result.Ok(~)
+            return ~
     println("")
-    return Result.Ok(~)
 
 ##:
 Prints the section of dependencies.
@@ -1259,15 +1239,14 @@ Prints the section of dependencies.
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_dependencies(MsgValue meta, Opts o) ~ | StdError:
+fn print_dependencies(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "dependencies"):
                 Maybe.Some(at) -> print_dependency_list(vals[at], o)
-                Maybe.None() -> return Result.Ok(~)
+                Maybe.None() -> return ~
         _ ->
-            return Result.Ok(~)
-    return Result.Ok(~)
+            return ~
 
 ##:
 Prints each dependency.
@@ -1294,19 +1273,18 @@ Prints each declaration section, in the order of the report.
 - Parameter templates: The `templates` map, or `Nil` when the library has none.
 - Parameter o: The options of the run.
 :##
-fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~ | StdError:
-    print_signatures_at(meta, "public_functions", "Public Functions", o)??
-    print_signatures_at(templates, "generic_functions", "Generic Functions", o)??
-    print_bindings_at(meta, "public_constants", "Public Constants", "const", o)??
-    print_bindings_at(meta, "public_variables", "Public Variables", "var", o)??
-    print_structs(meta, o)??
-    print_generic_named(templates, "generic_structs", "Generic Structs", "struct", o)??
-    print_enums(meta, o)??
-    print_generic_named(templates, "generic_enums", "Generic Enums", "enum", o)??
-    print_perks(templates, o)??
-    print_perk_impls(templates, o)??
-    print_foreign_extensions(meta, o)??
-    return Result.Ok(~)
+fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
+    print_signatures_at(meta, "public_functions", "Public Functions", o)
+    print_signatures_at(templates, "generic_functions", "Generic Functions", o)
+    print_bindings_at(meta, "public_constants", "Public Constants", "const", o)
+    print_bindings_at(meta, "public_variables", "Public Variables", "var", o)
+    print_structs(meta, o)
+    print_generic_named(templates, "generic_structs", "Generic Structs", "struct", o)
+    print_enums(meta, o)
+    print_generic_named(templates, "generic_enums", "Generic Enums", "enum", o)
+    print_perks(templates, o)
+    print_perk_impls(templates, o)
+    print_foreign_extensions(meta, o)
 
 ##:
 Prints each declaration section, with the `templates` map when the library has one.
@@ -1314,15 +1292,14 @@ Prints each declaration section, with the `templates` map when the library has o
 - Parameter meta: The metadata map.
 - Parameter o: The options of the run.
 :##
-fn print_declarations_at(MsgValue meta, Opts o) ~ | StdError:
+fn print_declarations_at(MsgValue meta, Opts o) ~:
     match meta:
         MsgValue.Map(_, vals) ->
             match map_index(meta, "templates"):
-                Maybe.Some(at) -> print_declarations(meta, vals[at], o)??
-                Maybe.None() -> print_declarations(meta, MsgValue.Nil(), o)??
+                Maybe.Some(at) -> print_declarations(meta, vals[at], o)
+                Maybe.None() -> print_declarations(meta, MsgValue.Nil(), o)
         _ ->
-            print_declarations(meta, MsgValue.Nil(), o)??
-    return Result.Ok(~)
+            print_declarations(meta, MsgValue.Nil(), o)
 
 ##:
 Writes an integer with comma separators, as the Python `{n:,}` does.
@@ -1351,15 +1328,15 @@ A field that the kind of the library makes meaningless does not print.
 - Parameter sizes: The lengths of the payload sections.
 - Parameter o: The options of the run.
 :##
-fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~ | StdError:
-    let string libname = get_str(meta, "library_name")??
-    let string libver = get_str(meta, "library_version")??
-    let string kind = get_str(meta, "kind")??
-    let string plat = get_str(meta, "platform")??
-    let string comp = get_str(meta, "compiler_version")??
-    let string req = get_str(meta, "requires_compiler")??
-    let string at = get_str(meta, "compiled_at")??
-    let string proto = get_str(meta, "sushi_lib_version")??
+fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~:
+    let string libname = get_str(meta, "library_name")
+    let string libver = get_str(meta, "library_version")
+    let string kind = get_str(meta, "kind")
+    let string plat = get_str(meta, "platform")
+    let string comp = get_str(meta, "compiler_version")
+    let string req = get_str(meta, "requires_compiler")
+    let string at = get_str(meta, "compiled_at")
+    let string proto = get_str(meta, "sushi_lib_version")
     println("Library: {libname}")
     println("Version: {libver}")
     println("Kind: {kind}")
@@ -1371,17 +1348,16 @@ fn print_report(MsgValue meta, SlibSizes sizes, Opts o) ~ | StdError:
     println("Compiled: {at}")
     println("Protocol: {proto}")
     println("")
-    print_units(meta, o)??
-    print_reexports(meta, o)??
-    print_declarations_at(meta, o)??
-    print_dependencies(meta, o)??
+    print_units(meta, o)
+    print_reexports(meta, o)
+    print_declarations_at(meta, o)
+    print_dependencies(meta, o)
     if (kind != "binary"):
         let string src = group_thousands(sizes.source)
         println("Source: {o.dim}{src}{o.reset} bytes")
     if (kind != "source"):
         let string bc = group_thousands(sizes.bitcode)
         println("Bitcode: {o.dim}{bc}{o.reset} bytes")
-    return Result.Ok(~)
 
 ##:
 Gives the words for an I/O error. The Python fallback gives the same words.
@@ -1476,14 +1452,14 @@ Reads a library and prints its report.
 - Parameter o: The options of the run.
 - Returns: The exit code: 0 for a report, 2 for a read error.
 :##
-fn report(string path, Opts o) i32 | StdError:
+fn report(string path, Opts o) i32:
     match read_library(path):
         Result.Ok(library) ->
-            print_report(library.metadata, library.sizes, o)??
-            return Result.Ok(0)
+            print_report(library.metadata, library.sizes, o)
+            return 0
         Result.Err(e) ->
             print_fault(path, e)
-            return Result.Ok(2)
+            return 2
 
 ##:
 Tells if an environment variable is set. An empty value is set.
@@ -1540,48 +1516,44 @@ each other word.
 - Parameter args: The command line. The first element is the name of the program.
 - Returns: The exit code: 0 for a report or the help, 2 for a usage error or a read error.
 :##
-fn run_tool(peek string[] args) i32 | StdError:
+fn run_tool(peek string[] args) i32:
     let string path = ""
     let bool show_docs = false
     let string colour = "auto"
     let i32 n = args.len()
     let i32 i = 1
     while (i < n):
-        let string a = args.get(i)??
+        let string a = args[i]
         if (a == "-h" or a == "--help"):
             print_help()
-            return Result.Ok(0)
+            return 0
         if (a == "--docs"):
             show_docs := true
         elif (a.starts_with("--color=")):
             colour := a.s(8, a.len())
             if (colour != "always" and colour != "never" and colour != "auto"):
                 print_usage_error("--color takes always, never or auto: {a}")
-                return Result.Ok(2)
+                return 2
         elif (a.starts_with("-")):
             print_usage_error("unknown option: {a}")
-            return Result.Ok(2)
+            return 2
         else:
             if (path != ""):
                 print_usage_error("more than one file named: {a}")
-                return Result.Ok(2)
+                return 2
             path := a.clone()
         i := i + 1
 
     if (path == ""):
         stderr.write("{USAGE}\n")
-        return Result.Ok(2)
+        return 2
     if (not path.ends_with(".slib")):
         print_diagnostic("CE3516", "'{path}' is not a library file: the name of a .slib file ends in .slib")
-        return Result.Ok(2)
+        return 2
     let Opts o = make_opts(show_docs, want_colour(colour))
-    return Result.Ok(report(path, o)??)
+    return report(path, o)
 
 fn main(string[] args) i32:
     if (args.len() > 0):
-        match run_tool(peek args):
-            Result.Ok(r) -> return r
-            Result.Err(_) ->
-                stderr.write("<command line>: error [CE0000]: internal compiler error: the slib-info tool stopped on an unexpected StdError.\n")
-                return 2
+        return run_tool(peek args)
     return 2
