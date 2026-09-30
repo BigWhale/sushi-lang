@@ -4,10 +4,10 @@
 use <time>
 
 fn main() i32:
-    let i64 a = monotonic_ns().realise(0)
+    let i64 a = monotonic_ns()
     let i64 pause = 5
     msleep(pause).realise(0)
-    let i64 b = monotonic_ns().realise(0)
+    let i64 b = monotonic_ns()
     if (a > 0 and b > a):
         println("monotonic advances")
     else:

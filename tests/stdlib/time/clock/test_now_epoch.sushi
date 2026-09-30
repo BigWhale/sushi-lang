@@ -4,11 +4,9 @@
 use <time>
 
 fn main() i32:
-    match now():
-        Result.Ok(t) ->
-            if (t > 1_700_000_000):
-                println("now is sane")
-            else:
-                println("now is before 2023: {t}")
-        Result.Err(_) -> println("now failed")
+    let i64 t = now()
+    if (t > 1_700_000_000):
+        println("now is sane")
+    else:
+        println("now is before 2023: {t}")
     return 0

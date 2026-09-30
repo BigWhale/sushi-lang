@@ -22,7 +22,7 @@ The time module provides sleep functions with various granularities and two cloc
 - `now()` - Read the unix clock, in seconds
 - `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-Every function in the module has the `StdError` error channel. The sleep functions return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64, StdError)`.
+The sleep functions have the `StdError` error channel. They return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions cannot fail, so they are bare and return `i64`.
 
 A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
 examples use `match` or `.realise(...)` in `main`. `main` is bare, so `??` in `main` is
@@ -127,7 +127,7 @@ fn main() i32:
 - Remaining microseconds if interrupted by signal
 - `Result.Err(StdError.Error)` if the duration is not valid
 
-### `now() -> Result@(i64, StdError)`
+### `now() -> i64`
 
 Read the wall clock as unix time: whole seconds since 1970-01-01 00:00:00 UTC.
 
@@ -135,7 +135,7 @@ Read the wall clock as unix time: whole seconds since 1970-01-01 00:00:00 UTC.
 use <time>
 
 fn main() i32:
-    let i64 t = now().realise(0)
+    let i64 t = now()
     println("unix time: {t}")
     return 0
 ```
@@ -144,7 +144,7 @@ fn main() i32:
 - The wall clock can jump (NTP adjustment, manual change). Do not measure durations with it; use `monotonic_ns()`.
 - The value is UTC. Civil date conversion is a separate concern.
 
-### `monotonic_ns() -> Result@(i64, StdError)`
+### `monotonic_ns() -> i64`
 
 Read the monotonic clock, in nanoseconds. The clock never goes backward and is independent of the wall clock. Only the difference between two reads has meaning; the zero point is unspecified (boot time on most systems).
 
@@ -152,9 +152,9 @@ Read the monotonic clock, in nanoseconds. The clock never goes backward and is i
 use <time>
 
 fn main() i32:
-    let i64 start = monotonic_ns().realise(0)
+    let i64 start = monotonic_ns()
     msleep(50).realise(0)
-    let i64 elapsed_ms = (monotonic_ns().realise(0) - start) / 1_000_000
+    let i64 elapsed_ms = (monotonic_ns() - start) / 1_000_000
     println("slept for about {elapsed_ms} ms")
     return 0
 ```

@@ -315,7 +315,7 @@ Clocks:
 - `now()` - Wall-clock time, in seconds since the Unix epoch (`i64`)
 - `monotonic_ns()` - A monotonic clock in nanoseconds (`i64`), for intervals
 
-Each `<time>` function answers `Result@(..., StdError)`.
+Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and answer a bare `i64`.
 
 ### Random (`use <random>`)
 

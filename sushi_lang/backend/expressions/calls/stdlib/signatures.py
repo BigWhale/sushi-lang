@@ -151,14 +151,10 @@ def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str
 
 def _result_from_bare_ok(codegen: 'LLVMCodegen', sig: Signature, value: ir.Value) -> ir.Value:
     """The Result a `bare_ok` row answers, built from the bare value (`status_result.py`)."""
-    from sushi_lang.backend.expressions.calls.stdlib.status_result import (
-        ok_result, status_result,
-    )
+    from sushi_lang.backend.expressions.calls.stdlib.status_result import status_result
 
     if sig.bare_ok is None or sig.ok is None or sig.error is None:
         raise_internal_error("CE0024", type="stdlib signature", method=str(sig))
-    if sig.bare_ok.failure is None:
-        return ok_result(codegen, value, sig.ok, sig.error)
     return status_result(codegen, value, sig.ok, sig.error, sig.bare_ok.failure)
 
 

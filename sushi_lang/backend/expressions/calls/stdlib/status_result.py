@@ -27,12 +27,6 @@ def _interned_result(codegen: 'LLVMCodegen', ok_type: Type, error_enum: str):
     return result_enum, err_type
 
 
-def ok_result(codegen: 'LLVMCodegen', value: ir.Value, ok_type: Type, error_enum: str) -> ir.Value:
-    """`Result.Ok(value)` for a call that cannot fail."""
-    result_enum, _ = _interned_result(codegen, ok_type, error_enum)
-    return build_ok_variant(codegen, result_enum, value)
-
-
 def status_result(codegen: 'LLVMCodegen', status: ir.Value, ok_type: Type,
                   error_enum: str, error_variant: str) -> ir.Value:
     """`Result.Err(error_enum.error_variant)` for a negative status, else `Result.Ok(status)`."""

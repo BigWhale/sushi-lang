@@ -1,4 +1,4 @@
-# A real `use <time>` call to `now()` still answers the stdlib Result, beside user
+# A real `use <time>` call to `now()` still answers the stdlib i64, beside user
 # generics that carry the names of other stdlib functions.
 # EXPECT_STDOUT_EXACT: true\n7\n8\n
 use <time>
@@ -10,7 +10,7 @@ fn setenv@(T)(T x) T:
     return x
 
 fn main() i32:
-    let i64 t = now().realise(0 as i64)
+    let i64 t = now()
     println(t > (0 as i64))
     println(copy(7))
     println(setenv(8))

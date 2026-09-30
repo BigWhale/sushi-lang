@@ -124,7 +124,6 @@ Reads an unsigned value of a given width as a two's complement value.
 - Parameter v: The unsigned value.
 - Parameter nbytes: The width in bytes: 1, 2, 4 or 8.
 - Returns: The signed value.
-- Errors: None.
 :##
 fn signed(u64 v, i32 nbytes) i64:
     if (nbytes == 8):
