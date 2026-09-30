@@ -36,7 +36,7 @@ struct Node:
 
 # Builds a doubly-linked list in an arena
 # Returns a List@(Node) where nodes link to each other via indices
-fn build_list(i32[] values) List@(Node):
+fn build_list(i32[] values) List@(Node) | StdError:
     let List@(Node) nodes = List.new()
     let i32 len = values.len()
 
@@ -87,7 +87,6 @@ fn print_forward(peek List@(Node) nodes, i32 start_idx) ~:
                 break
 
     println("]")
-    return Result.Ok(~)
 
 # Prints the list backward from a given start index
 # nodes is only read -- borrow it peek so the caller keeps the list.
@@ -113,7 +112,6 @@ fn print_backward(peek List@(Node) nodes, i32 start_idx) ~:
                 break
 
     println("]")
-    return Result.Ok(~)
 
 # Calculates the sum of all values in the list
 # nodes is only read -- borrow it peek so the caller keeps the list.
@@ -132,7 +130,7 @@ fn sum_list(peek List@(Node) nodes, i32 start_idx) i32:
             Maybe.None() ->
                 break
 
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
     println("=== Doubly Linked List (Arena-Based) ===")
@@ -158,7 +156,7 @@ fn main() i32:
         println("")
 
         # Calculate sum
-        let i32 sum1 = sum_list(peek list_final, 0).realise(0)
+        let i32 sum1 = sum_list(peek list_final, 0)
         println("Sum: {sum1}")
         println("")
     else:
@@ -180,7 +178,7 @@ fn main() i32:
         print_forward(peek second_final, 0)
         print_backward(peek second_final, second_final.len() - 1)
 
-        let i32 sum2 = sum_list(peek second_final, 0).realise(0)
+        let i32 sum2 = sum_list(peek second_final, 0)
         println("Sum: {sum2}")
         println("")
 
@@ -208,4 +206,4 @@ fn main() i32:
     println("- Trees with parent pointers")
     println("- Graphs with bidirectional edges")
 
-    return Result.Ok(0)
+    return 0

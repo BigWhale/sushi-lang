@@ -19,4 +19,4 @@ fn main() i32:
     let string label = c.into_label()
     println("the label was {label}")
 
-    return Result.Ok(0)
+    return 0

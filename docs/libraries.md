@@ -107,15 +107,15 @@ default for all of them. A `public var` is storage that a consumer can read and 
 
 # This function can be called from programs that use this library
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 # This function is internal to the library
 fn helper(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 public fn double_add(i32 a, i32 b) i32:
-    let i32 sum = add(a, b)??
-    return Result.Ok(helper(sum)??)
+    let i32 sum = add(a, b)
+    return helper(sum)
 
 # Storage that a consumer can read and write
 public var i32 calls = 0
@@ -157,7 +157,7 @@ struct Cursor:                      # a decoder detail; not in the manifest
     i32 at
 
 public fn make_point(i32 x, i32 y) Point:
-    return Result.Ok(Point(x, y))
+    return Point(x, y)
 ```
 
 Three consequences worth knowing:
@@ -190,7 +190,7 @@ use <lib/mathutils>
 fn main() i32:
     let i32 result = add(10, 20).realise(0)
     println("10 + 20 = {result}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler will:
@@ -210,7 +210,7 @@ use <lib/utils>
 
 fn main() i32:
     # Functions from both libraries are available
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Library Search Path
@@ -493,13 +493,13 @@ is API you have to keep; everything you leave unmarked you can change:
 public const i32 SCALE = 2
 
 public fn calculate(i32 x) i32:
-    return Result.Ok(internal_helper(x)??)
+    return internal_helper(x)
 
 struct Work:
     i32 at
 
 fn internal_helper(i32 x) i32:
-    return Result.Ok(x * SCALE)
+    return x * SCALE
 ```
 
 `zlib` is the example the rule is for: 38 functions and 13 types and constants, of which 6
@@ -572,10 +572,10 @@ fn main() i32:
     let i32 r1 = add(1, 2).realise(-1)
     if (r1 != 3):
         println("FAIL: add(1, 2) = {r1}, expected 3")
-        return Result.Ok(1)
+        return 1
 
     println("All tests passed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Limitations

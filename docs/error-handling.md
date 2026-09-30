@@ -48,7 +48,7 @@ All functions implicitly return `Result@(T, E)` where:
 
 ```sushi
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 # Actually returns Result@(i32, StdError)
 ```
 
@@ -147,7 +147,7 @@ fn main() i32:
     let i32 x = divide(10, 2).realise(0)   # x = 5
     let i32 y = divide(10, 0).realise(-1)  # y = -1 (error case)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key points:**
@@ -204,7 +204,7 @@ fn main() i32:
     # println("{pts.get(0).x}")        # CE2106 -- 'Maybe@(Point)' has no field 'x'
     let Point first = pts.get(0).realise(Point(0, 0))
     println("{first.x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 #### Using Pattern Matching
@@ -273,7 +273,7 @@ See [Result@(T, E) API Reference](stdlib/result.md) for complete method document
 ### Compiler Enforcement
 
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -290,7 +290,7 @@ fn main() i32:
     # WARNING CW2001: Unused Result@(T, E) value
     # get_value()  # Must handle result
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Maybe@(T)
@@ -360,12 +360,12 @@ match find_value():
 fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
-            return Result.Ok(Maybe.Some(n))
-    return Result.Ok(Maybe.None())
+            return Maybe.Some(n)
+    return Maybe.None()
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8, 9])
-    let Maybe@(i32) result = find_first_even(data).realise(Maybe.None())
+    let Maybe@(i32) result = find_first_even(data)
 
     match result:
         Maybe.Some(value) ->
@@ -373,7 +373,7 @@ fn main() i32:
         Maybe.None() ->
             println("No even numbers")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Result vs Maybe
@@ -417,7 +417,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Could not read the config")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Error Propagation
@@ -473,7 +473,7 @@ For `Maybe@(T)`:
 ### Chaining Operations
 
 ```sushi
-fn process() i32:
+fn process() i32 | StdError:
     let i32 step1 = calculate()??
     let i32 step2 = validate(step1)??
     let i32 step3 = transform(step2)??
@@ -487,7 +487,7 @@ Stops at first error and returns immediately.
 The `??` operator automatically cleans up resources on error:
 
 ```sushi
-fn process_with_cleanup(bool succeed) i32:
+fn process_with_cleanup(bool succeed) i32 | StdError:
     let i32[] data = from([1, 2, 3])
 
     # If might_fail() returns Err:
@@ -515,11 +515,11 @@ something -- a string, an array, a handle, in EITHER arm -- the `??` spends the 
 ```sushi
 use <collections/strings>
 
-fn make() string:
+fn make() string | StdError:
     let string base = "Mostly"
     return Result.Ok(base.concat(" Harmless"))
 
-fn run() string:
+fn run() string | StdError:
     let Result@(string, StdError) r = make()
     let string got = r??          # `r` is spent here; `got` owns the buffer
     return Result.Ok(got)         # a mention of `r` after this line is CE2405
@@ -528,7 +528,7 @@ fn main() i32:
     match run():
         Result.Ok(s) -> println(s)
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0
 ```
 
 A `Result` that owns nothing (`Result@(i32, StdError)`) is copied out of, and the local
@@ -556,8 +556,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 It is the same `??`, in one more position: the error types must match exactly (CE2511),
@@ -582,8 +582,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
@@ -593,7 +593,7 @@ A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE251
 ```sushi
 use <collections/strings>
 
-fn find_and_parse(string text) i32:
+fn find_and_parse(string text) i32 | StdError:
     # If find() returns None, ?? propagates as Err
     let i32 pos = text.find("x")??
     return Result.Ok(pos * 2)
@@ -607,7 +607,7 @@ fn main() i32:
     let i32 result2 = find_and_parse("hello world").realise(-1)
     println("Not found: {result2}")  # Not found: -1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Compile-Time Safety
@@ -653,7 +653,7 @@ fn main() i32:
         Result.Err(e) ->
             println("Error occurred")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### An Infallible Helper Shares Its Caller's Error Channel
@@ -682,7 +682,7 @@ fn main() i32:
     match first_byte(bytes):
         Result.Ok(v) -> println("{v}")
         Result.Err(_) -> println("error")
-    return Result.Ok(0)
+    return 0
 ```
 
 The cost is one word per signature, and `<encoding/msgpack>` pays it throughout: its
@@ -719,7 +719,7 @@ extend i32 quarter_checked() i32 | OddError:
 fn main() i32:
     println(12.quarter_checked().realise(-1))    # 3
     println(6.quarter_checked().realise(-1))     # 3 is odd: -1
-    return Result.Ok(0)
+    return 0
 ```
 
 A method chain stops at a channel that is still unhandled. `n.half_checked().squared()` is
@@ -746,7 +746,7 @@ match text.find("x"):
 ### 2. Early Return on Error
 
 ```sushi
-fn validate_input(i32 x) i32:
+fn validate_input(i32 x) i32 | StdError:
     if (x < 0):
         return Result.Err(StdError.Error())
     if (x > 100):
@@ -769,7 +769,7 @@ fn read_input() string | IoError:
     let File f = open("input.txt", FileMode.Read())??
     return Result.Ok(f.read_all()??)
 
-fn process_pipeline() string:
+fn process_pipeline() string | StdError:
     let string raw = ""
     match read_input():
         Result.Ok(text) -> raw := text.clone()          # the one conversion point
@@ -786,12 +786,12 @@ fn process_pipeline() string:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
-fn low_level() i32:
+fn low_level() i32 | StdError:
     # Just propagate
     let i32 x = risky_operation()??
     return Result.Ok(x)
 
-fn mid_level() i32:
+fn mid_level() i32 | StdError:
     # Just propagate
     let i32 y = low_level()??
     return Result.Ok(y * 2)
@@ -805,9 +805,9 @@ fn main() i32:
         println("Success: {value}")
     else:
         println("Pipeline failed")
-        return Result.Err(StdError.Error())
+        return 1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 5. Result@(Maybe@(T), E) for Three States
@@ -815,7 +815,7 @@ fn main() i32:
 ```sushi
 use <collections/hashmap>
 
-fn lookup(HashMap@(string, i32) map, string key, bool corrupted) Maybe@(i32):
+fn lookup(HashMap@(string, i32) map, string key, bool corrupted) Maybe@(i32) | StdError:
     # Three possible states:
     # 1. Found value: Ok(Some(value))
     # 2. Key not found: Ok(None)  - not an error
@@ -832,7 +832,7 @@ fn main() i32:
         Result.Ok(Maybe.None) -> println("No such key")
         Result.Err(_) -> println("The map is damaged")
     map.free()
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 6. Avoid Silent Failures
@@ -841,10 +841,10 @@ fn main() i32:
 ```sushi
 # Bad: Silently returns default
 fn get_config() string:
-    return Result.Ok(load().realise("default"))
+    return load().realise("default")
 
 # Good: Caller decides how to handle
-fn load_config() string:
+fn load_config() string | StdError:
     let string data = load()??  # Forward the loaded value
     return Result.Ok(data)
 
@@ -856,7 +856,7 @@ fn main() i32:
     else:
         println("Using default config")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Error Codes

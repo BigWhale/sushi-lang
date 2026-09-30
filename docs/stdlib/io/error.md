@@ -106,7 +106,7 @@ fn main() i32:
         Result.Err(IoError.NotFound) -> println("no such file")
         Result.Err(IoError.PermissionDenied) -> println("not allowed")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See also

@@ -22,4 +22,4 @@ fn main() i32:
         Maybe.None() ->
             println("'Panic' not found")
 
-    return Result.Ok(0)
+    return 0

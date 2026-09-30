@@ -23,6 +23,7 @@ The script is deleted when the migration is complete.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -821,6 +822,15 @@ def rewrite_main(edits: Edits, corpus: Corpus, u: Unit, main: Function, bare: se
 # ----------------------------------------------------------------------------------
 
 
+FENCE = re.compile(r"^```sushi[^\n]*\n(.*?)^```", re.M | re.S)
+
+
+def markdown_pages() -> list[Path]:
+    out = subprocess.run(["git", "ls-files", "docs"], cwd=ROOT, capture_output=True,
+                         text=True, check=True).stdout.split()
+    return [(ROOT / p).resolve() for p in out if p.endswith(".md")]
+
+
 def tracked_fixtures() -> list[Path]:
     root = CORPORA[MODE["corpus"]].split("**")[0]
     out = [p for p in subprocess.run(["git", "ls-files", root], cwd=ROOT, capture_output=True,
@@ -844,6 +854,15 @@ def main() -> int:
     for p in tracked_fixtures():
         units[p] = Unit(path=p, rel=str(p.relative_to(ROOT)),
                         src=p.read_bytes().decode("utf-8", errors="surrogateescape"))
+    fences: dict[Path, tuple[Path, int, int]] = {}
+    if MODE["corpus"] == "docs":
+        for md in markdown_pages():
+            text = md.read_text(encoding="utf-8")
+            for i, m in enumerate(FENCE.finditer(text)):
+                key = Path(f"{md}::fence{i}")
+                fences[key] = (md, m.start(1), m.end(1))
+                units[key] = Unit(path=key, rel=f"{md.relative_to(ROOT)}::fence{i}",
+                                  src=m.group(1))
     for u in units.values():
         parse_unit(u)
         if u.tree is not None:
@@ -866,6 +885,7 @@ def main() -> int:
     bare = decide(corpus)
 
     changed = 0
+    spliced: dict[Path, list] = {}
     report: list[str] = []
     for u in sorted(units.values(), key=lambda x: x.rel):
         if args.only and args.only not in u.rel:
@@ -885,8 +905,16 @@ def main() -> int:
             report.append(f"{u.rel}: {n}")
         if new is not None:
             changed += 1
-            if args.write:
+            if u.path in fences:
+                spliced.setdefault(fences[u.path][0], []).append((fences[u.path], new))
+            elif args.write:
                 u.path.write_bytes(new.encode("utf-8", errors="surrogateescape"))
+    if args.write:
+        for md, parts in spliced.items():
+            text = md.read_text(encoding="utf-8")
+            for (_, start, end), new in sorted(parts, key=lambda x: -x[0][1]):
+                text = text[:start] + new + text[end:]
+            md.write_text(text, encoding="utf-8")
     implicit = [f for u in units.values() for f in u.functions.values() if f.implicit]
     summary = (f"units {len(units)}, changed {changed}, implicit functions {len(implicit)}, "
                f"bare {len(bare)}, channel-mode units "

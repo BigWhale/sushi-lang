@@ -59,10 +59,15 @@ land, and nothing else.
 use "math" as my_math
 use <math> as std_math
 
-fn main() i32:
+fn run() i32 | StdError:
     let f64 a = my_math.sin(0.0)??      # the unit next door
     let f64 b = std_math.sin(0.0)       # the standard library
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1
 ```
 
 The two forms compose, because each `use` statement contributes what it says and no more:
@@ -72,10 +77,15 @@ The two forms compose, because each `use` statement contributes what it says and
 use "math"                              # flat
 use <math> as std_math                  # behind a dot
 
-fn main() i32:
+fn run() i32 | StdError:
     let f64 a = sin(0.0)??              # the unit next door -- unambiguous now
     let f64 b = std_math.sin(0.0)       # the standard library
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1
 ```
 
 The alias is what makes this program expressible (Appendix A.1.3).
@@ -393,8 +403,8 @@ it from:
 use <collections/iter> as it
 
 fn main() i32:
-    let List@(i32) a = it.empty_list@(i32)()??
-    return Result.Ok(0)
+    let List@(i32) a = it.empty_list@(i32)()
+    return 0
 ```
 
 LALR reduces `.empty_list` to `member_access` and not to `method_call`, because the token
@@ -438,7 +448,7 @@ fn main() i32:
     match s:
         geo.Sign.Plus -> println("+")   # matching: no grammar exists for this
         geo.Sign.Minus -> println("-")
-    return Result.Ok(0)
+    return 0
 ```
 
 This is not a corner. A `match` is how Sushi consumes an enum — exhaustiveness-checked,
@@ -1136,7 +1146,7 @@ table is not consulted until line 171.
 use <math>
 
 fn sin(f64 x) f64:
-    return Result.Ok(999.0)
+    return 999.0
 ```
 
 ```

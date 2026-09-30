@@ -22,4 +22,4 @@ fn main() i32:
     let string full = "{first} {last}"
     println(full)
 
-    return Result.Ok(0)
+    return 0

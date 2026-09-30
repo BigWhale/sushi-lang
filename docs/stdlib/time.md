@@ -42,7 +42,7 @@ fn main() i32:
         Result.Ok(_) -> println("Done!")
         Result.Err(_) -> println("Sleep failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Parameters:**
@@ -66,7 +66,7 @@ fn main() i32:
         Result.Ok(_) -> println("Done!")
         Result.Err(_) -> println("Sleep failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Parameters:**
@@ -90,7 +90,7 @@ fn main() i32:
         Result.Ok(_) -> println("Done!")
         Result.Err(_) -> println("Sleep failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Parameters:**
@@ -114,7 +114,7 @@ fn main() i32:
         Result.Ok(_) -> println("Done!")
         Result.Err(_) -> println("Sleep failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Parameters:**
@@ -136,7 +136,7 @@ use <time>
 fn main() i32:
     let i64 t = now().realise(0)
     println("unix time: {t}")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Notes:**
@@ -155,7 +155,7 @@ fn main() i32:
     msleep(50).realise(0)
     let i64 elapsed_ms = (monotonic_ns().realise(0) - start) / 1_000_000
     println("slept for about {elapsed_ms} ms")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Notes:**

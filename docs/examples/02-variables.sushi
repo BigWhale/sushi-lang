@@ -49,4 +49,4 @@ fn main() i32:
     println("Improbability factor: {improbability}")
     println("Important advice: {advice}")
 
-    return Result.Ok(0)
+    return 0

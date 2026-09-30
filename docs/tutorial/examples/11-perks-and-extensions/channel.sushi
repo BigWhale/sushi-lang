@@ -18,4 +18,4 @@ fn main() i32:
         Result.Ok(q) -> println("a quarter of 42 is {q}")
         Result.Err(HalfError.Odd(n)) -> println("stopped at the odd number {n}")
 
-    return Result.Ok(0)
+    return 0

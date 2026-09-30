@@ -11,13 +11,13 @@ fn load() Cargo:
     let List@(string) crates = List.new()
     crates.push("towel")
     crates.push("peanuts")
-    return Result.Ok(Cargo.Crates(crates))
+    return Cargo.Crates(crates)
 
 fn ship(nom List@(string) crates) i32:
-    return Result.Ok(crates.len())
+    return crates.len()
 
 fn main() i32:
-    let Cargo cargo = load().realise(Cargo.Empty)
+    let Cargo cargo = load()
 
     match cargo:
         Cargo.Crates(crates) -> println("{crates.len()} crates on board")
@@ -28,7 +28,7 @@ fn main() i32:
         Cargo.Empty -> println("nothing to add to")
 
     match nom cargo:
-        Cargo.Crates(nom crates) -> println("shipped {ship(nom crates).realise(0)} crates")
+        Cargo.Crates(nom crates) -> println("shipped {ship(nom crates)} crates")
         Cargo.Empty -> println("nothing to ship")
 
-    return Result.Ok(0)
+    return 0

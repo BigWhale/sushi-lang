@@ -60,7 +60,7 @@ Use `??` to unwrap a `Some`. On a `None`, `??` returns early from the enclosing 
 with an `Err`:
 
 ```sushi
-fn double_first(i32[] arr) i32:
+fn double_first(i32[] arr) i32 | StdError:
     let i32 first = arr.get(0)??
     return Result.Ok(first * 2)
 ```

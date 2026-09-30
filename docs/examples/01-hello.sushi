@@ -22,4 +22,4 @@ fn main() i32:
     # All functions must explicitly return Result.Ok(value) or Result.Err(error).
     # For main(), returning Ok(0) indicates successful program execution.
     # Non-zero values indicate errors (following Unix convention).
-    return Result.Ok(0)
+    return 0

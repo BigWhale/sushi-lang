@@ -214,7 +214,6 @@ A `poke` parameter, a `nom` parameter and a `poke self` receiver are all writabl
 ```sushi
 fn set_first(poke i32[] numbers, i32 value) ~:
     numbers[0] := value        # reaches the caller's array
-    return Result.Ok(~)
 ```
 
 ### `.fill(T value) -> ~`
@@ -556,5 +555,5 @@ fn main() i32:
     # Cleanup
     dynamic.free()
 
-    return Result.Ok(0)
+    return 0
 ```

@@ -269,7 +269,7 @@ extend MyStruct with Loud:          # ERROR: Loud is private to 'unit'
 fn main() i32:
     let Box my_box = Box(7)
     my_box.shout()                  # WORKS: Box is public, so its methods are
-    return Result.Ok(0)
+    return 0
 ```
 
 `.shout()` is callable from `main.sushi`, and `Loud` is not nameable there. **The perk is
@@ -309,13 +309,13 @@ extend MyStruct with Loud:          # WORKS: Loud is public, so another unit may
 
 fn loudest@(T: Loud)(peek T a, peek T b) i32:   # WORKS: Loud may be named in a constraint
     if (a.shout() > b.shout()):
-        return Result.Ok(a.shout())
-    return Result.Ok(b.shout())
+        return a.shout()
+    return b.shout()
 
 fn main() i32:
     let Box my_box = Box(7)
     my_box.shout()                  # WORKS -- unchanged by the perk's visibility
-    return Result.Ok(0)
+    return 0
 ```
 
 Two things changed, and one did not:
@@ -424,16 +424,16 @@ public struct Box:                  # public
     Point at                        # ERROR: a public struct with a private field type
 
 public fn origin() Point:           # ERROR: leaks Point
-    return Result.Ok(Point(0))
+    return Point(0)
 
 public fn many() List@(Point):      # ERROR: leaks Point through a type argument
-    return Result.Ok(List.new())
+    return List.new()
 
 extend Box where() Point:           # ERROR: Box is public, so this is; Point is not
     return self.at
 
 public fn loudest@(T: Loud)(T x) ~:  # ERROR: names a private perk in a constraint
-    return Result.Ok(~)
+    return ~
 ```
 
 One predicate, `first_private_name` (`semantics/type_predicates.py`), is the twin of

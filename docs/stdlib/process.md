@@ -47,7 +47,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to get current directory")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Error propagation:**
@@ -61,7 +61,7 @@ fn show_cwd() i32 | ProcessError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(show_cwd().realise(1))
+    return show_cwd().realise(1)
 ```
 
 ### chdir
@@ -94,7 +94,7 @@ fn main() i32:
         Result.Err(_) ->
             println("chdir returned error")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Navigating directories:**
@@ -121,7 +121,7 @@ fn navigate() i32 | ProcessError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(navigate().realise(1))
+    return navigate().realise(1)
 ```
 
 ### exit
@@ -151,7 +151,7 @@ fn main() i32:
         exit(1)
 
     println("This line is never reached")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Exit codes convention:**
@@ -172,7 +172,7 @@ fn main() i32:
         exit(EXIT_CONFIG_ERROR)
 
     # Normal execution continues...
-    return Result.Ok(EXIT_SUCCESS)
+    return EXIT_SUCCESS
 ```
 
 ### getpid
@@ -194,7 +194,7 @@ use <sys/process>
 fn main() i32:
     let i32 pid = getpid()
     println("Process ID: {pid}")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Logging with PID:**
@@ -205,13 +205,12 @@ use <sys/process>
 fn log_message(string message) ~:
     let i32 pid = getpid()
     println("[PID {pid}] {message}")
-    return Result.Ok(~)
 
 fn main() i32:
     log_message("Application starting")
     log_message("Processing data")
     log_message("Application finished")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### getuid
@@ -239,7 +238,7 @@ fn main() i32:
     else:
         println("Running as unprivileged user")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Permission checking:**
@@ -262,7 +261,7 @@ fn main() i32:
     println("Running with root privileges")
     # Perform privileged operations...
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### run
@@ -314,7 +313,7 @@ fn main() i32:
         Result.Err(_) ->
             println("spawn error")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Driving a toolchain (reading a child's diagnostics):**
@@ -365,7 +364,7 @@ fn main() i32:
     let string safe_cwd = getcwd().realise("/unknown")
     println("Safe CWD: {safe_cwd}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Never-failing functions
@@ -381,7 +380,7 @@ fn main() i32:
     let i32 uid = getuid()
 
     println("PID: {pid}, UID: {uid}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Never-returning functions
@@ -396,7 +395,7 @@ fn main() i32:
         exit(1)
         # Compiler knows this is unreachable
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Platform-Specific Behavior
@@ -436,7 +435,7 @@ fn with_directory(string path, fn() -> i32 operation) i32 | ProcessError:
     chdir(path)??
 
     # Call through the operation function value, unwrapping its result
-    let i32 result = operation().realise(-1)
+    let i32 result = operation()
 
     # Restore the original directory
     chdir(original)??
@@ -445,7 +444,7 @@ fn with_directory(string path, fn() -> i32 operation) i32 | ProcessError:
 
 fn process_files() i32:
     println("Processing files in current directory")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     match with_directory("/tmp", process_files):
@@ -454,7 +453,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Operation failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Process Information
@@ -472,11 +471,10 @@ fn print_process_info() ~:
     println("  UID: {uid}")
     println("  CWD: {cwd}")
 
-    return Result.Ok(~)
 
 fn main() i32:
     print_process_info()
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Graceful Exit
@@ -486,13 +484,12 @@ use <sys/process>
 
 fn cleanup() ~:
     println("Cleaning up resources...")
-    return Result.Ok(~)
 
 fn graceful_exit(i32 code) ~:
-    cleanup()??
+    cleanup()
     println("Exiting with code {code}")
     exit(code)
-    return Result.Ok(~)  # Never reached
+    return ~  # Never reached
 
 fn main() i32:
     let bool error = false
@@ -501,7 +498,7 @@ fn main() i32:
         graceful_exit(1)
 
     println("Normal execution")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Security Considerations
@@ -532,7 +529,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Invalid directory")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Privilege Checks
@@ -554,7 +551,7 @@ fn require_non_root() Result@(i32, StdError):
 fn main() i32:
     require_non_root().realise(1)
     println("Running as unprivileged user")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Exit Code Convention
@@ -577,7 +574,7 @@ const i32 EXIT_CONFIG = 78      # Configuration error
 fn main() i32:
     # Use appropriate exit codes
     exit(EXIT_CONFIG)
-    return Result.Ok(0)  # Never reached
+    return 0  # Never reached
 ```
 
 ## Example: Simple File Processor
@@ -632,7 +629,7 @@ fn main() i32:
         exit(1)
 
     println("All directories processed successfully")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See Also

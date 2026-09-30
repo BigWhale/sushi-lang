@@ -16,4 +16,4 @@ fn main() i32:
             j := j + 1
         i := i + 1
     println("{a[0]} {a[n / 2]} {a[n - 1]}")
-    return Result.Ok(0)
+    return 0

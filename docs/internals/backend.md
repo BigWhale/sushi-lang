@@ -476,7 +476,7 @@ hash of one held value is `emit_value_hash` (`backend/types/value_hash.py`).
 fn main() i32:
     let i32 x = 42
     println("Answer: {x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A print writes to the descriptor with `write(2)` through `emit_console_write`, the ONE

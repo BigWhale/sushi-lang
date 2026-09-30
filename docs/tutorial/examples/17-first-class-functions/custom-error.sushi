@@ -16,4 +16,4 @@ fn main() i32:
     let fn(i32, i32) -> i32 | DivError f = safe_div
     println(run(f, 84, 2).realise(-1))    # 42
     println(run(f, 1, 0).realise(-1))     # -1  (DivByZero -> realise default)
-    return Result.Ok(0)
+    return 0

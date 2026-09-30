@@ -136,8 +136,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 The `nom` in `BufReader.new(nom f, 8192)` gives the file `f` to the reader: after this

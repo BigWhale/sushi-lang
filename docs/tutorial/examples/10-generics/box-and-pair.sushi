@@ -18,4 +18,4 @@ fn main() i32:
     println("{named.first} is {named.second}")
     println("{reordered.first} is still {reordered.second}")
 
-    return Result.Ok(0)
+    return 0

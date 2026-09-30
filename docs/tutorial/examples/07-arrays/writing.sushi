@@ -17,4 +17,4 @@ fn main() i32:
     crew[1] := crew[3].clone()
     println("Index 1 is now {crew[1]}, and index 3 is still {crew[3]}.")
 
-    return Result.Ok(0)
+    return 0

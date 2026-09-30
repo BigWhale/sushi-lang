@@ -22,4 +22,4 @@ fn main() i32:
     else:
         println("The jump failed: out of fuel.")
 
-    return Result.Ok(0)
+    return 0

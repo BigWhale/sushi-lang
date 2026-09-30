@@ -20,4 +20,4 @@ fn main() i32:
     println("Original length: {scores.len()}")
     println("Backup length:   {backup.len()}")
 
-    return Result.Ok(0)
+    return 0

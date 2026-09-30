@@ -35,7 +35,7 @@ fn main() i32:
                 println("{a.text()}")
         Result.Err(_) -> println("no answer")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `resolve_first(string host, bool want_v4) IpAddr | NetError`

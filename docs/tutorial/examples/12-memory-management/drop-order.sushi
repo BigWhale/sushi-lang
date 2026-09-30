@@ -13,4 +13,4 @@ fn main() i32:
     let Towel arthur = Towel("Arthur")
     let Towel ford = Towel("Ford")
     println("{arthur.owner} and {ford.owner} have towels")
-    return Result.Ok(0)
+    return 0

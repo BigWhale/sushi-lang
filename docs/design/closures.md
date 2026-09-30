@@ -30,21 +30,21 @@ environment record that the value owns, frees via `drop_ptr`, and duplicates via
 use <collections/iter>
 
 fn make_adder(i32 n) fn(i32) -> i32:
-    return Result.Ok(|i32 x| x + n)      # captures n by value; escapes upward (returned)
+    return |i32 x| x + n      # captures n by value; escapes upward (returned)
 
-fn demo() ~:
-    let fn(i32) -> i32 add5 = make_adder(5)??
-    println(add5(10)??)                  # 15
+fn demo() ~ | StdError:
+    let fn(i32) -> i32 add5 = make_adder(5)
+    println(add5(10))                  # 15
 
     let i32 scale = 3
-    let List@(i32) out = from([1, 2, 3]).map(|i32 x| x * scale)??   # captures scale
+    let List@(i32) out = from([1, 2, 3]).map(|i32 x| x * scale)   # captures scale
     println(out.len())                   # 3
     return Result.Ok(~)
 
 fn main() i32:
     match demo():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ---
@@ -58,16 +58,16 @@ passed as an argument, and called through:
 
 ```sushi
 fn add_one(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn apply(fn(i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(v)??)      # call through the parameter
+    return f(v)      # call through the parameter
 
 fn main() i32:
     let fn(i32) -> i32 g = add_one    # reference a named function
-    let i32 r = apply(g, 41)??        # pass it, call through it -> 42
+    let i32 r = apply(g, 41)        # pass it, call through it -> 42
     println(r)
-    return Result.Ok(0)
+    return 0
 ```
 
 A function type mirrors the function-declaration return/error syntax:
@@ -372,9 +372,9 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let List@(i32) ys = map(xs, |i32 x| x * factor).realise(List.new())
+    let List@(i32) ys = map(xs, |i32 x| x * factor)
     println(ys.get(2).realise(-1))    # 30
-    return Result.Ok(0)
+    return 0
 ```
 
 **This is the first bundled-Sushi-source stdlib module** — a real pattern, not a one-off:
@@ -411,7 +411,7 @@ fn main() i32:
 
 ```sushi
 fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
-    return Result.Ok(|x| f(g(x)??)??)
+    return |x| f(g(x))
 ```
 
 `compose`'s returned lambda **captures** `f` and `g` (both function values, one of them possibly a
@@ -425,15 +425,15 @@ is `compose(nom inc, nom dbl)`. The lambda parameter is a bare `|x|`, and the ex
 use <collections/iter>
 
 fn inc(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn dbl(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
-    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl).realise(dbl)
-    println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
-    return Result.Ok(0)
+    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl)
+    println(incthendouble(10))    # dbl(inc(10)) = 22
+    return 0
 ```
 
 Test coverage: `tests/stdlib/iter/combinators/test_iter_module_map.sushi`, `test_iter_module_filter.sushi`,
@@ -482,8 +482,8 @@ fn run() i32:
     let i32 n = 10
     let fn(i32) -> i32 g = |i32 x| x + n
     let fn(i32) -> i32 h = |i32 y|:
-        return Result.Ok(g(y)?? + 1)
-    return Result.Ok(h(5)??)          # g(5) = 15, h(5) = 16
+        return g(y) + 1
+    return h(5)          # g(5) = 15, h(5) = 16
 ```
 
 A type mismatch on this path is a front-end **CE2002** diagnostic.
@@ -499,11 +499,11 @@ is present**:
 
 ```sushi
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn run() i32:
     let fn(i32) -> i32 g = identity   # the annotation drives the instantiation identity@(i32)
-    return Result.Ok(g(41)?? + 1)     # 42
+    return g(41) + 1     # 42
 ```
 
 This is an **expected-type-driven** rule, not a general lift of CE2093: the instantiate pass collects
@@ -526,15 +526,15 @@ local first:
 use <collections/iter>
 
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn run() i32:
     let fn(i32) -> i32 id = identity   # fixes the instantiation
     let List@(i32) xs = List.new()
     xs.push(5)
     xs.push(7)
-    let List@(i32) ys = map(xs, id)??
-    return Result.Ok(ys.get(1).realise(-1))   # 7
+    let List@(i32) ys = map(xs, id)
+    return ys.get(1).realise(-1)   # 7
 ```
 
 What still stays CE2093 is covered once, in Part II §4.
@@ -707,15 +707,15 @@ answer never depends on another call in the program:
 
 ```sushi
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn take(fn(i32) -> i32 f) i32:
-    return Result.Ok(f(1).realise(0))
+    return f(1)
 
 fn main() i32:
-    let i32 r = take(identity).realise(0)      # T = i32 from the parameter type
+    let i32 r = take(identity)      # T = i32 from the parameter type
     println(r)
-    return Result.Ok(0)
+    return 0
 ```
 
 A generic callee is solved from its other arguments first, and the value then from the

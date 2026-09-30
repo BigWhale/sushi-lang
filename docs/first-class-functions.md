@@ -29,16 +29,16 @@ APIs, dispatch tables, and visitor-style code.
 
 ```sushi
 fn add_one(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn apply(fn(i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(v)??)
+    return f(v)
 
 fn main() i32:
     let fn(i32) -> i32 g = add_one     # reference a function by name
-    let i32 out = apply(g, 41).realise(0)   # pass it, call through it -> 42
+    let i32 out = apply(g, 41)   # pass it, call through it -> 42
     println(out)
-    return Result.Ok(0)
+    return 0
 ```
 
 A plain function reference like `add_one` above captures nothing. It points to a function
@@ -68,11 +68,11 @@ position, with no call parentheses:
 
 ```sushi
 fn double(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
     let fn(i32) -> i32 f = double    # `double` here is a value, not a call
-    return Result.Ok(0)
+    return 0
 ```
 
 These functions can be values:
@@ -92,16 +92,16 @@ cannot be values.
 
 ```sushi
 fn identity@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 fn apply(fn(nom i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(nom v)??)
+    return f(nom v)
 
 fn main() i32:
     let fn(nom i32) -> i32 g = identity    # T = i32, from the annotation
-    println(g(nom 4).realise(0))           # 4
-    println(apply(identity, 2).realise(0)) # 2, T = i32 from the parameter
-    return Result.Ok(0)
+    println(g(nom 4))           # 4
+    println(apply(identity, 2)) # 2, T = i32 from the parameter
+    return 0
 ```
 
 ## Calling through a function value
@@ -112,9 +112,9 @@ Call a function value the same as a named function: `f(args)`. Every Sushi funct
 
 ```sushi
 fn run_twice(fn(i32) -> i32 f, i32 v) i32:
-    let i32 once = f(v)??
-    let i32 twice = f(once)??
-    return Result.Ok(twice)
+    let i32 once = f(v)
+    let i32 twice = f(once)
+    return twice
 ```
 
 ## Functions in data structures
@@ -128,7 +128,7 @@ struct Handler:
     fn(i32) -> i32 op
 
 fn run(Handler h, i32 v) i32:
-    return Result.Ok(h.op(v)??)    # call through the field
+    return h.op(v)    # call through the field
 ```
 
 ### Lists (dispatch tables)
@@ -137,7 +137,7 @@ fn run(Handler h, i32 v) i32:
 iterate:
 
 ```sushi
-fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
+fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32 | StdError:
     let i32 acc = v
     foreach(f in ops.iter()):
         acc := f(acc)??
@@ -162,7 +162,7 @@ fn safe_div(i32 a, i32 b) i32 | DivError:
     return Result.Ok(a / b)
 
 fn run(fn(i32, i32) -> i32 | DivError op, i32 x, i32 y) i32 | DivError:
-    return Result.Ok(op(x, y)??)    # propagates DivError out of the indirect call
+    return Result.Ok(op(x, y))    # propagates DivError out of the indirect call
 ```
 
 A function whose type omits `| E` has the implicit `StdError` error type, exactly like an

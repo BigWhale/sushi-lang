@@ -72,4 +72,4 @@ fn main() i32:
     else:
         println("'{message2}' is not long")
 
-    return Result.Ok(0)
+    return 0

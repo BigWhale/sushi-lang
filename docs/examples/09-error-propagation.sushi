@@ -15,16 +15,16 @@
 
 fn get_answer() i32:
     # Simple function that always succeeds
-    return Result.Ok(42)
+    return 42
 
-fn might_fail(bool succeed) i32:
+fn might_fail(bool succeed) i32 | StdError:
     # Conditionally returns success or failure based on parameter
     if (succeed):
         return Result.Ok(100)
 
     return Result.Err(StdError.Error)
 
-fn calculate_with_propagation(bool succeed) i32:
+fn calculate_with_propagation(bool succeed) i32 | StdError:
     # Demonstrates ?? operator chaining multiple fallible operations
     # If might_fail returns Err, ?? propagates it immediately and
     # this function returns that Result.Err(...) without executing further code
@@ -32,7 +32,7 @@ fn calculate_with_propagation(bool succeed) i32:
 
     # This line only executes if might_fail succeeded
     # If get_answer returns Err, ?? propagates that error too
-    let i32 answer = get_answer()??
+    let i32 answer = get_answer()
 
     # Only reaches here if both operations succeeded
     return Result.Ok(value + answer)
@@ -47,5 +47,5 @@ fn main() i32:
     let i32 result2 = calculate_with_propagation(false).realise(-1)
     println("Failure case: {result2}")  # Prints: -1
 
-    return Result.Ok(0)
+    return 0
 

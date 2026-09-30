@@ -179,7 +179,7 @@ Create a file named `hello.sushi`:
 ```sushi
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 2. Compile It
@@ -282,7 +282,7 @@ Let's write a program that demonstrates error handling:
 Create `calculator.sushi`:
 
 ```sushi
-fn divide(i32 numerator, i32 denominator) i32:
+fn divide(i32 numerator, i32 denominator) i32 | StdError:
     if (denominator == 0):
         println("Error: Cannot divide by zero!")
         return Result.Err(StdError.Error)
@@ -306,7 +306,7 @@ fn main() i32:
     else:
         println("Second division failed (as expected)")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 Compile and run:

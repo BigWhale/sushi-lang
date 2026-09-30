@@ -8,6 +8,6 @@ fn main() i32:
     readings.push(99)
     readings.push(7)
     # Keep only the improbability readings that clear the threshold.
-    let List@(i32) high = filter(readings, |i32 r| r >= minimum).realise(List.new())
+    let List@(i32) high = filter(readings, |i32 r| r >= minimum)
     println(high.len())
-    return Result.Ok(0)
+    return 0

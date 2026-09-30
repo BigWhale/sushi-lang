@@ -12,4 +12,4 @@ fn main() i32:
         Tree.Leaf(v) -> println("A leaf holding {v}")
         Tree.Empty() -> println("Tree.Empty() needs its declared type")
 
-    return Result.Ok(0)
+    return 0

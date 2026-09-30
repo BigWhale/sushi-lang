@@ -28,4 +28,4 @@ fn main() i32:
 
     println(b.paired("a towel"))
 
-    return Result.Ok(0)
+    return 0

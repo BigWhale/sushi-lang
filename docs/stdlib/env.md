@@ -49,7 +49,7 @@ fn main() i32:
         Maybe.None() ->
             println("PATH not set")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Common environment variables:**
@@ -75,7 +75,7 @@ fn main() i32:
     if (home.is_some()):
         println("Home: {home.realise('')}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### setenv
@@ -116,7 +116,7 @@ fn configure() i32 | EnvError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(configure().realise(1))
+    return configure().realise(1)
 ```
 
 **Overwriting an existing value:**
@@ -137,7 +137,7 @@ fn set_twice() i32 | EnvError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(set_twice().realise(1))
+    return set_twice().realise(1)
 ```
 
 ## Error Handling
@@ -166,7 +166,7 @@ fn main() i32:
     # With .expect() for required variables
     let string required = getenv("REQUIRED_VAR").expect("REQUIRED_VAR must be set")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### setenv Error Handling
@@ -191,7 +191,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to set variable")
 
-    return Result.Ok(set_var().realise(1))
+    return set_var().realise(1)
 ```
 
 ## Platform-Specific Behavior
@@ -231,7 +231,7 @@ fn main() i32:
         println("API key is configured")
         # Bad: println("API key: {api_key.realise("")}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Validation
@@ -243,21 +243,21 @@ use <sys/env>
 
 fn is_valid_port(peek string port) bool:
     # Add validation logic
-    return Result.Ok(true)
+    return true
 
 fn main() i32:
     match getenv("SERVER_PORT"):
         Maybe.Some(port) ->
             # port is a match binding, a borrow: pass it by peek rather than
             # by value (a by-value call would need port.clone() instead)
-            if (is_valid_port(peek port).realise(false)):
+            if (is_valid_port(peek port)):
                 println("Using port: {port}")
             else:
                 println("Invalid port in SERVER_PORT")
         Maybe.None() ->
             println("Using default port: 8080")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Name Restrictions
@@ -291,10 +291,10 @@ fn load_config() Config:
     let bool debug = debug_str == "true" or debug_str == "1"
 
     let Config config = Config(host, port, debug)
-    return Result.Ok(config)
+    return config
 
 fn main() i32:
-    let Config config = load_config().realise(Config("localhost", 8080, false))
+    let Config config = load_config()
 
     println("Host: {config.host}")
     println("Port: {config.port}")
@@ -302,7 +302,7 @@ fn main() i32:
     if (config.debug):
         println("Debug mode enabled")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Testing with Environment Variables
@@ -327,7 +327,7 @@ fn test_env_vars() i32 | EnvError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(test_env_vars().realise(1))
+    return test_env_vars().realise(1)
 ```
 
 ## See Also

@@ -1,6 +1,6 @@
 fn solve(poke i32[] cols, i32 row, i32 n) i32:
     if (row == n):
-        return Result.Ok(1)
+        return 1
     let i32 count = 0
     foreach(c in 0..n):
         let bool ok = true
@@ -12,11 +12,11 @@ fn solve(poke i32[] cols, i32 row, i32 n) i32:
             r := r + 1
         if (ok):
             cols[row] := c
-            count := count + solve(poke cols, row + 1, n)??
-    return Result.Ok(count)
+            count := count + solve(poke cols, row + 1, n)
+    return count
 
 fn main() i32:
     let i32 n = 9
     let i32[] cols = from([0; n])
-    println(solve(poke cols, 0, n).realise(0))
-    return Result.Ok(0)
+    println(solve(poke cols, 0, n))
+    return 0

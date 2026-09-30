@@ -6,9 +6,9 @@ fn tab_total() i32:
     orders.push(6)
     orders.push(30)
     # Double every order, keep the big ones, and sum what is left.
-    let i32 total = orders.map(|i32 x| x * 2)??.filter(|i32 x| x > 10)??.fold(0, |i32 acc, i32 x| acc + x)??
-    return Result.Ok(total)
+    let i32 total = orders.map(|i32 x| x * 2).filter(|i32 x| x > 10).fold(0, |i32 acc, i32 x| acc + x)
+    return total
 
 fn main() i32:
-    println("{tab_total().realise(-1)}")
-    return Result.Ok(0)
+    println("{tab_total()}")
+    return 0

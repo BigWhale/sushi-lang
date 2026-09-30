@@ -14,7 +14,7 @@
 # unwrap the Result layer before working with the Maybe@(T) value.
 
 # crew is only read -- borrow it peek so the caller keeps it across searches.
-fn find_crew_member(peek string[] crew, string name) Maybe@(i32):
+fn find_crew_member(peek string[] crew, string name) Maybe@(i32) | StdError:
     # Search for a crew member by name and return their position
     # Returns Maybe.Some(index) if found, Maybe.None() if not found
     let i32 i = 0
@@ -81,6 +81,6 @@ fn main() i32:
         Result.Err(_) ->
             println("Error searching for Ford")
 
-    return Result.Ok(0)
+    return 0
 
 

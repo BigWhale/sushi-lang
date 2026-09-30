@@ -4,9 +4,8 @@ enum Cargo:
 
 fn keep(nom string[] names) ~:
     println("Names kept: {names.len()}")
-    return Result.Ok(~)
 
-fn load() Cargo:
+fn load() Cargo | StdError:
     return Result.Ok(Cargo.Names(from(["Arthur", "Ford"])))
 
 fn main() i32:
@@ -45,4 +44,4 @@ fn main() i32:
         Cargo.Crates(_) ->
             println("only crates")
 
-    return Result.Ok(0)
+    return 0

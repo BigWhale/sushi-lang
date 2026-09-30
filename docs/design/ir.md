@@ -861,7 +861,7 @@ The source:
 
 <!-- docs-sweep: skip (fragment: calls functions the example does not declare) -->
 ```sushi
-fn greet(nom string name, bool loud) ~:
+fn greet(nom string name, bool loud) ~ | StdError:
     let string msg = decorate(nom name)??
     if (loud):
         shout(nom msg)

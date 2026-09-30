@@ -77,8 +77,8 @@ fn exchange() ~ | NetError:
 
 fn main() i32:
     match exchange():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### `s.local_port() i32 | NetError`, `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError`, `s.close(nom self) ~ | NetError`

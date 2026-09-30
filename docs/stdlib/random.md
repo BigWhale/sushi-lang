@@ -35,7 +35,7 @@ use <random>
 fn main() i32:
     let u64 value = rand()
     println("Random u64: {value}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### rand_range()
@@ -65,7 +65,7 @@ fn main() i32:
     # Random index for array of size 10
     let i32 index = rand_range(0, 10)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### rand_f64()
@@ -89,7 +89,7 @@ fn main() i32:
     let f64 sample = rand_f64()
     println("Sample: {sample}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### srand()
@@ -122,7 +122,7 @@ fn main() i32:
 
     println("Sequence: {a}, {b}, {c}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Implementation Notes
@@ -158,14 +158,14 @@ fn main() i32:
 use <random>
 
 fn coin_flip() bool:
-    return Result.Ok(rand_range(0, 2) == 1)
+    return rand_range(0, 2) == 1
 
 fn main() i32:
-    if (coin_flip().realise(false)):
+    if (coin_flip()):
         println("Heads")
     else:
         println("Tails")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Random Element from Array
@@ -178,7 +178,7 @@ fn main() i32:
     let i32 index = rand_range(0, choices.len())
     let string choice = choices[index]
     println("Choice: {choice}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Reproducible Random Sequences
@@ -186,7 +186,7 @@ fn main() i32:
 ```sushi
 use <random>
 
-fn generate_level(u64 level_seed) i32[]:
+fn generate_level(u64 level_seed) i32[] | StdError:
     # Same seed always generates same level
     srand(level_seed)
 
@@ -201,7 +201,7 @@ fn main() i32:
     match generate_level(1):
         Result.Ok(level1) -> println("{level1.len()} tiles")
         Result.Err(_) -> println("no level")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See Also

@@ -27,8 +27,8 @@ fn banner(poke File out) ~ | IoError:
 
 fn main() i32:
     match banner(poke stdout):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 The parameter is `poke` because every write and every read is a `poke self` method (the
@@ -75,7 +75,7 @@ fn main() i32:
     println("Multiple lines")
     println("work perfectly")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **String interpolation:**
@@ -88,7 +88,7 @@ fn main() i32:
     println("Hello, {name}!")
     println("{name} is {age} years old")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### print
@@ -110,7 +110,7 @@ fn main() i32:
     print(".")
     println(" Done!")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Output:** `Loading... Done!`
@@ -120,7 +120,7 @@ fn main() i32:
 ```sushi
 use <time>
 
-fn progress(i32 total) ~:
+fn progress(i32 total) ~ | StdError:
     foreach(i in 0..total):
         print("*")
         if (i == total - 1):
@@ -132,7 +132,7 @@ fn main() i32:
     match progress(10):
         Result.Ok(_) -> println("Complete!")
         Result.Err(_) -> println("interrupted")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Standard Streams
@@ -164,7 +164,7 @@ fn main() i32:
         Result.Ok(Maybe.None) -> println("Nothing to read.")
         Result.Err(_) -> println("Could not read the name.")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Interactive prompt:**
@@ -191,7 +191,7 @@ fn main() i32:
         Maybe.None() ->
             println("Invalid age")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 #### stdin.read_bytes
@@ -227,8 +227,8 @@ fn dump(i32 max) ~ | IoError:
 fn main() i32:
     println("Enter some bytes:")
     match dump(4):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 **Binary data:** a fixed-size header needs the loop, because one read is not a promise.
@@ -250,7 +250,7 @@ fn main() i32:
         Result.Ok(header) -> println("Header: {header.to_string()}")
         Result.Err(_) -> println("short header")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### stdout
@@ -286,8 +286,8 @@ fn emit_bytes() ~ | IoError:
 
 fn main() i32:
     match emit_bytes():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 **Output:** `Ford`
@@ -307,8 +307,8 @@ fn emit_text() ~ | IoError:
 
 fn main() i32:
     match emit_text():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### stderr
@@ -342,8 +342,8 @@ fn complain() ~ | IoError:
 
 fn main() i32:
     match complain():
-        Result.Ok(_) -> return Result.Ok(1)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 1
 ```
 
 **Error logging:** `writeln` is the shorter route -- it takes a string and appends the
@@ -363,8 +363,8 @@ fn report() ~ | IoError:
 
 fn main() i32:
     match report():
-        Result.Ok(_) -> return Result.Ok(1)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 1
 ```
 
 ### is_terminal
@@ -400,7 +400,7 @@ fn main() i32:
 
     println("{green}Mostly Harmless{reset}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Output:** `Mostly Harmless` in green on a terminal, and the same words with no escape
@@ -425,8 +425,8 @@ fn greet() ~ | IoError:
 
 fn main() i32:
     match greet():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### flush
@@ -456,8 +456,8 @@ fn work() ~ | IoError:
 
 fn main() i32:
     match work():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ## Combining Streams
@@ -505,8 +505,8 @@ fn run() ~ | IoError:
 
 fn main() i32:
     match run():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 **Run with:**
@@ -543,8 +543,8 @@ fn emit_many(i32 count) ~ | IoError:
 
 fn main() i32:
     match emit_many(1000):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 A `BufWriter` takes a handle it OWNS, and the console handle is a unit variable that is
@@ -568,7 +568,7 @@ fn main() i32:
     println("日本語")
     println("Привет")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See Also

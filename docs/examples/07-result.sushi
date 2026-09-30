@@ -15,7 +15,7 @@
 # Function demonstrating multiple error conditions.
 # Shows validation at multiple stages before performing computation.
 # Each error path logs a message and returns Result.Err(error_value).
-fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32:
+fn calculate_hyperspace_jump(i32 distance, i32 fuel) i32 | StdError:
     # First validation: minimum fuel check.
     # Guard clauses at the top make error cases explicit.
     if (fuel < 10):
@@ -89,4 +89,4 @@ fn main() i32:
     let i32 safe_result = jump4.realise(0)
     println("Safe result with default: {safe_result}")
 
-    return Result.Ok(0)
+    return 0

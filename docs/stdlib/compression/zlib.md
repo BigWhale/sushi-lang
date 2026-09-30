@@ -13,7 +13,7 @@ readable here.
 use <compression/zlib>
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Overview
@@ -77,7 +77,7 @@ fn run() i32 | ZError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run().realise(1))
+    return run().realise(1)
 # 15 bytes in, 23 bytes out
 ```
 
@@ -101,7 +101,7 @@ fn run() i32 | ZError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run().realise(1))
+    return run().realise(1)
 # recovered 12 bytes
 ```
 
@@ -129,7 +129,7 @@ fn run() i32 | ZError:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run().realise(1))
+    return run().realise(1)
 # 3 bytes: abc
 ```
 
@@ -143,8 +143,8 @@ use <compression/zlib>
 
 fn main() i32:
     let u8[] data = from([77, 111, 115, 116, 108, 121, 32, 72, 97, 114, 109, 108, 101, 115, 115])
-    println("{adler32(data).realise(0)}")
-    return Result.Ok(0)
+    println("{adler32(data)}")
+    return 0
 # 777324008
 ```
 
@@ -162,15 +162,15 @@ fn decode(u8[] blob) i32:
     match zlib_uncompress(blob):
         Result.Ok(out) ->
             println("ok, {out.len()} bytes")
-            return Result.Ok(0)
+            return 0
         Result.Err(e) ->
             println("failed: {e.text()}")
-            return Result.Ok(1)
+            return 1
 
 fn main() i32:
     # a zlib header whose 31-check fails
     let u8[] bad = from([0x78, 0x9d, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01])
-    return Result.Ok(decode(bad).realise(1))
+    return decode(bad)
 # failed: bad zlib header
 ```
 
@@ -189,11 +189,10 @@ fn report(ZError e) ~:
             println("input ended at byte {at}")
         _ ->
             println("{e.text()}")
-    return Result.Ok(~)
 
 fn main() i32:
     report(ZError.BadChecksum(777324008 as u32, 12345 as u32))
-    return Result.Ok(0)
+    return 0
 # checksum 777324008 expected, 12345 computed
 ```
 

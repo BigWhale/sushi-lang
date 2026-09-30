@@ -1,6 +1,6 @@
 # A function that succeeds returns Result.Ok(value).
 # A function that fails returns Result.Err(error).
-fn halve(i32 n) i32:
+fn halve(i32 n) i32 | StdError:
     if (n % 2 != 0):
         return Result.Err(StdError.Error)
     return Result.Ok(n / 2)
@@ -19,4 +19,4 @@ fn main() i32:
     else:
         println("7 is odd, cannot halve cleanly")
 
-    return Result.Ok(0)
+    return 0
