@@ -411,13 +411,11 @@ class ExpressionScanner:
         parameters. Only the wrapper used to be recorded, through a substitution that
         rewrote a top-level type parameter and left `Box@(T)` untouched.
 
-        The Result wrapper is recorded with StdError -- the call site types a generic's
-        channel that way today (#538) -- and with the declared channel too, which is what
-        the monomorphizer interns for the concrete copy.
+        The declared channel's Result wrapper is recorded too, which is what the
+        monomorphizer interns for the concrete copy; a bare generic has none.
         """
         from sushi_lang.semantics.generics.types import (
             substitute_type_params, substituted_call_result, type_param_substitution)
-        from sushi_lang.semantics.typesys import UnknownType
 
         substitution = type_param_substitution(generic_func, type_args)
         if substitution is None:
@@ -427,10 +425,8 @@ class ExpressionScanner:
             ret = substitute_type_params(generic_func.ret, substitution)
             self.collect_type(ret)
             wrapped = substituted_call_result(generic_func, type_args)
-            self.collect_type(wrapped)
             if wrapped is not ret:
-                self.collect_type(GenericTypeRef(
-                    base_name="Result", type_args=(ret, UnknownType("StdError"))))
+                self.collect_type(wrapped)
 
         for param in generic_func.params:
             if param.ty is not None and not param.is_pack:

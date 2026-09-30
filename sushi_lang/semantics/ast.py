@@ -197,7 +197,7 @@ class FuncDef(Node):
     body: "Block"
     is_public: bool = False
     type_params: Optional[List[BoundedTypeParam]] = None
-    err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
+    err_type: Optional[Type] = None  # The `| E` channel; None is a bare function
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     # Where the channel is WRITTEN. An extension and a perk contract both keep it, and

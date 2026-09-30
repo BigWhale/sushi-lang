@@ -75,6 +75,12 @@ class TypeValidator:
             BuiltinType.BOOL, BuiltinType.STRING, BuiltinType.BLANK,
         }
         self.current_function: Optional[FuncDef] = None
+        # The body being validated, whatever its kind (signatures.py `_enter_body`): how
+        # a diagnostic names it, the return type it declares, and the Result it answers
+        # (None for a bare body).
+        self.body_name: Optional[str] = None
+        self.body_return_type: Optional[Type] = None
+        self.channel_result: Optional[Type] = None
         # Whose code is being validated. A source library's unit is compiled at the
         # consumer, and its bodies mention whatever the consumer's call substituted into
         # a template -- a private type of the consumer's included. The consumer must not

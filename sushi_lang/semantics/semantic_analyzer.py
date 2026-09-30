@@ -1110,7 +1110,7 @@ class SemanticAnalyzer:
         all and set one bool.
 
         The order is the ruling's: the entry point exists, a library refuses one, the
-        return is an integer, and the parameter is `string[] args` -- with no mode, since
+        return is a bare integer with no `| E` (docs/design/error-channel.md), and the parameter is `string[] args` -- with no mode, since
         argv is a borrowed view the runtime owns (#844) -- or nothing. The last
         answers `main_expects_args`, which the back end reads to hand argv on.
         """
@@ -1141,6 +1141,10 @@ class SemanticAnalyzer:
                 er.emit(self.reporter, er.ERR.CE0106,
                         getattr(func, "ret_span", None) or func.name_span,
                         type=display_type(ret_ty))
+            elif ret_ty is not None and func.err_type is not None:
+                er.emit(self.reporter, er.ERR.CE0106,
+                        func.err_span or func.ret_span or func.name_span,
+                        type=f"{display_type(ret_ty)} | {display_type(func.err_type)}")
 
         def is_args(param) -> bool:
             return (param.name == "args"

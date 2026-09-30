@@ -174,20 +174,28 @@ class LambdaLifter:
 
 
 def _normalized_body(lam: Lambda) -> Block:
-    """A lambda's body as a Block. An expression body returns `Result.Ok` of itself."""
+    """A lambda's body as a Block. An expression body returns itself: bare, or as the
+    `Result.Ok` of a lambda whose type has a channel (docs/design/error-channel.md)."""
     if isinstance(lam.body, Block):
         return lam.body
-    ok = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
-                 args=[lam.body], loc=lam.loc)
-    return Block(statements=[Return(value=ok, loc=lam.loc)], loc=lam.loc)
+    value = lam.body
+    if _lambda_err_type(lam) is not None:
+        value = DotCall(receiver=Name(id="Result", loc=lam.loc), method="Ok",
+                        args=[lam.body], loc=lam.loc)
+    return Block(statements=[Return(value=value, loc=lam.loc)], loc=lam.loc)
+
+
+def _lambda_err_type(lam: Lambda):
+    """The lambda's `| E`, from its inferred type when it has one."""
+    return (lam.resolved_type.err_type if lam.resolved_type is not None
+            else lam.err_type)
 
 
 def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType,
                            body: Block) -> FuncDef:
     """The top-level function a lambda becomes: the environment, then its own params."""
     ok_type = lam.resolved_type.ok_type if lam.resolved_type is not None else lam.ret
-    err_type = (lam.resolved_type.err_type if lam.resolved_type is not None
-                else lam.err_type)
+    err_type = _lambda_err_type(lam)
     # The env borrow is `poke`, and the mode is not decoration: a move-captured
     # `List@(T)` is MUTABLE inside the body by design, so the write must persist across
     # calls. Spelled `peek`, it made the language's own closure semantics a CE2408 once

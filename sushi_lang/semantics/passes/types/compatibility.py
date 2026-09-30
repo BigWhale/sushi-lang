@@ -201,8 +201,11 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
         if not all(_params_compatible(validator, ap, ep)
                    for ap, ep in zip(actual.param_types, expected.param_types, strict=False)):
             return False
+        if (actual.err_type is None) != (expected.err_type is None):
+            return False
         return (types_compatible(validator, actual.ok_type, expected.ok_type) and
-                types_compatible(validator, actual.err_type, expected.err_type))
+                (actual.err_type is None
+                 or types_compatible(validator, actual.err_type, expected.err_type)))
 
     # Reference type compatibility with coercion
     # - poke T can be passed where peek T is expected (safe downgrade)

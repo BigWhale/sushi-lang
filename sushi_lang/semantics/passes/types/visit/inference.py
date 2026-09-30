@@ -303,15 +303,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         return None
 
-    def _intern_result(self, ok_type: Type, err_type: Type) -> Optional[Type]:
-        """The interned ``Result<ok, err>`` EnumType -- what a call's return type IS at runtime.
-        """
-        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        return ensure_result_type_in_table(
-            self.type_validator.enum_table, ok_type, err_type,
-            struct_table=self.type_validator.struct_table.by_name,
-        )
-
+    def _fn_value_yield(self, fn_type) -> Optional[Type]:
+        """What a call through a function value yields: bare, or its channel Result."""
+        from sushi_lang.semantics.passes.types.resolution import call_yield
+        return call_yield(self.type_validator, fn_type.ok_type, fn_type.err_type)
 
     def visit_call(self, node: Call) -> Optional[Type]:
         """Infer a function call's type and stamp the node with it.
@@ -332,18 +327,18 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         from sushi_lang.semantics.passes.types.calls.user_defined import (
             struct_takes_the_call)
         # Call-through any expression yielding a function value (`env.f(x)`,
-        # `obj.handler()`, `arr[0]()`). Yields Result<ok, err> like a direct call.
+        # `obj.handler()`, `arr[0]()`). Yields what a direct call yields.
         if not isinstance(node.callee, Name):
             callee_ty = self.type_validator.infer_expression_type(node.callee)
             if isinstance(callee_ty, FunctionType):
-                return self._intern_result(callee_ty.ok_type, callee_ty.err_type)
+                return self._fn_value_yield(callee_ty)
             return None
 
         function_name = node.callee.id
 
         callee_var_ty = self.type_validator.variable_types.get(function_name)
         if isinstance(callee_var_ty, FunctionType):
-            return self._intern_result(callee_var_ty.ok_type, callee_var_ty.err_type)
+            return self._fn_value_yield(callee_var_ty)
 
         if struct_takes_the_call(self.type_validator, function_name):
             return self.type_validator.struct_table.by_name[function_name]
@@ -388,34 +383,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return None
 
     def result_type_of(self, func_sig) -> Optional[Type]:
-        """What a call to this signature yields: its return type, wrapped in Result.
+        """What a call to this signature yields (`resolution.call_yield`).
 
-        One derivation, so a call written through a namespace agrees with the bare
-        form. Every arm below is the same rule read from a different spelling of the
-        declared return.
+        One derivation, so a call written through a namespace agrees with the bare form.
         """
-        if func_sig.ret_type is None:
-            return None
-
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        from sushi_lang.semantics.generics.results import signature_result_arms
-
-        arms = signature_result_arms(
-            func_sig.ret_type, func_sig.err_type,
-            self.type_validator.enum_table.by_name.get("StdError"))
-        if arms is not None:
-            return self._intern_result(*arms)
-        # Already the interned enum (the signature was resolved in place): wrapping it
-        # again would produce Result<Result<T, E>, StdError>. A `Result` reference of
-        # the wrong arity resolves by name, or stays what it is.
-        if isinstance(func_sig.ret_type, GenericTypeRef):
-            return resolve_unknown_type(
-                func_sig.ret_type,
-                self.type_validator.struct_table.by_name,
-                self.type_validator.enum_table.by_name
-            )
-        return func_sig.ret_type
+        from sushi_lang.semantics.passes.types.resolution import call_yield
+        return call_yield(self.type_validator, func_sig.ret_type, func_sig.err_type)
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
@@ -494,8 +467,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         target = resolve_dotcall(self.type_validator, node, report=False)
 
         if target.kind is DotCallKind.FN_FIELD:
-            node.inferred_return_type = self._intern_result(target.fn_type.ok_type,
-                                                            target.fn_type.err_type)
+            node.inferred_return_type = self._fn_value_yield(target.fn_type)
             return node.inferred_return_type
 
         if target.kind is not DotCallKind.METHOD:

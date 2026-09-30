@@ -2,8 +2,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.semantics.generics.interned import interned_name
-from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
 if TYPE_CHECKING:
@@ -12,48 +10,45 @@ if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
 
 
-def resolve_return_type_to_result(validator: 'TypeValidator',
-                                   declared_type: 'Type',
-                                   err_type_node: Optional['Type']) -> 'Type':
-    """Convert a function's declared return type to its interned Result<T, E> enum."""
-    resolved_type = declared_type
+def channel_result(validator: 'TypeValidator', declared_type: Optional['Type'],
+                   err_type_node: Optional['Type']) -> Optional['Type']:
+    """The interned `Result@(T, E)` a body answers, or None when the body is BARE.
 
-    if isinstance(declared_type, GenericTypeRef):
-        if declared_type.base_name == "Result" and len(declared_type.type_args) == 2:
-            resolved_type = resolve_unknown_type(
-                declared_type,
-                validator.struct_table.by_name,
-                validator.enum_table.by_name
-            )
-        else:
-            enum_name = interned_name(declared_type.base_name, declared_type.type_args)
-            if enum_name in validator.enum_table.by_name:
-                resolved_type = validator.enum_table.by_name[enum_name]
+    ONE derivation for a function, a method and a lifted lambda: the channel is the
+    spelled `| E`, or the explicit `Result@(T, E)` return; with neither there is no
+    channel and no default error type (docs/design/error-channel.md).
+    """
+    from sushi_lang.semantics.generics.results import (
+        ensure_result_type_in_table, is_result_enum, signature_result_arms)
 
-    # Case 2/3: Implicit Result wrapping (T | E or just T).
-    # An explicit Result<T, E> has already resolved to its interned enum above, and wrapping that
-    # again would produce Result<Result<T, E>, StdError> -- hence the guard.
-    from sushi_lang.semantics.generics.results import is_result_enum, ensure_result_type_in_table
+    if is_result_enum(declared_type):
+        return declared_type
+    arms = signature_result_arms(declared_type, err_type_node)
+    if arms is None:
+        return None
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    ok = resolve_unknown_type(arms[0], structs, enums)
+    err = resolve_unknown_type(arms[1], structs, enums)
+    return ensure_result_type_in_table(validator.enum_table, ok, err, struct_table=structs)
 
-    if not is_result_enum(resolved_type):
 
-        if err_type_node:
-            err_type = resolve_unknown_type(
-                err_type_node,
-                validator.struct_table.by_name,
-                validator.enum_table.by_name
-            )
-        else:
-            err_type = validator.enum_table.by_name.get("StdError")
+def call_yield(validator: 'TypeValidator', ret: Optional['Type'],
+               err_type: Optional['Type']) -> Optional['Type']:
+    """What a call yields: the callee's channel Result, or its bare return value.
 
-        if err_type:
-            interned = ensure_result_type_in_table(
-                validator.enum_table, resolved_type, err_type,
-                struct_table=validator.struct_table.by_name,
-            )
-            resolved_type = interned if interned is not None else resolved_type
-
-    return resolved_type
+    ONE answer for every callee kind -- a function, a function value, an extension or
+    perk method -- so `??`, `.realise` and the chain gate (CE2515) read one rule. A
+    written wrapper return (`Maybe@(T)`) is interned, as a declared type is.
+    """
+    if ret is None:
+        return None
+    channel = channel_result(validator, ret, err_type)
+    if channel is not None:
+        return channel
+    from .utils import intern_declared_wrapper, resolve_declared_type
+    interned = intern_declared_wrapper(validator, ret)
+    return interned if interned is not None else resolve_declared_type(validator, ret)
 
 
 def resolve_variable_type(validator: 'TypeValidator',

@@ -54,7 +54,7 @@ def display_type(ty) -> str:
             for p, m in zip(ty.param_types, ty.modes, strict=True)
         )
         base = f"fn({params}) -> {display_type(ty.ok_type)}"
-        if str(ty.err_type) != "StdError":
+        if ty.err_type is not None:
             base += f" | {display_type(ty.err_type)}"
         return base
 

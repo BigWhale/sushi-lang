@@ -73,7 +73,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
 
     pipe_parts = split_type_arguments(rest, "|")
     ret_str = pipe_parts[0].strip()
-    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
+    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else None
 
     # A `nom` parameter is spelled with the marker, which is not part of any type name.
     # `str(FunctionType)` writes it, so reading one back must accept it -- it used to reach
@@ -86,7 +86,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
         for text, flag in zip(param_texts, nom_flags, strict=True)
     )
     ok_type = resolve_type_from_string(ret_str, tables)
-    err_type = resolve_type_from_string(err_str, tables)
+    err_type = None if err_str is None else resolve_type_from_string(err_str, tables)
     return FunctionType(
         param_types=param_types, ok_type=ok_type, err_type=err_type,
         param_modes=normalize_modes(param_types, [

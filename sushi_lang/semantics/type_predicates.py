@@ -192,5 +192,6 @@ def contains_reference(ty: Optional[Type]) -> bool:
         return any(contains_reference(arg) for arg in (ty.type_args or ()))
     if isinstance(ty, FunctionType):
         # Parameters are the ONE supported position; the return is not (see the docstring).
-        return contains_reference(ty.ok_type) or contains_reference(ty.err_type)
+        return contains_reference(ty.ok_type) or (
+            ty.err_type is not None and contains_reference(ty.err_type))
     return False
