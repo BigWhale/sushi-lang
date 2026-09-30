@@ -1,0 +1,12 @@
+# The contract's `compare` answers an `i32`, so a `bool` answer does not match it.
+# EXPECT_ERROR_CODE: CE4004
+
+struct Score:
+    i32 points
+
+extend Score with Ord:
+    fn compare(Score other) bool:
+        return self.points < other.points
+
+fn main() i32:
+    return 0

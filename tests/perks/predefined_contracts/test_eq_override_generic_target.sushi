@@ -1,0 +1,19 @@
+# A generic target writes its own instantiation where the contract says `Self`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+
+struct Box@(T):
+    T value
+    i32 tag
+
+extend Box@(T) with Eq:
+    fn eq(Box@(T) other) bool:
+        return self.tag == other.tag
+
+fn main() i32:
+    let Box@(i32) a = Box(1, 7)
+    let Box@(i32) b = Box(2, 7)
+    let Box@(i32) c = Box(1, 8)
+    println("{a.eq(b)}")
+    println("{a.eq(c)}")
+    return 0

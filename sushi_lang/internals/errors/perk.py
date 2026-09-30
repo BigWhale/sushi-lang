@@ -66,3 +66,7 @@ _add(ErrorMessage("CE4012", Severity.ERROR,
 _add(ErrorMessage("CE4014", Severity.ERROR,
     "perk '{perk}' cannot hold the static method '{method}'",
     Category.PERK, "HANDLES.md ruling R7: a perk has no `Self`, so a contract cannot say 'returns one of me' and a constructor has no signature to declare there. #542 ruling R1 keeps the refusal a COMPILER error rather than a parse error: the grammar admits the marker in the implementation position precisely so this diagnostic can point at it and say why. Declare the static as a plain extension method on the type (`extend Vec static at(...)`) -- it is as visible as the type either way -- and leave the perk to the instance methods it can contract."))
+
+_add(ErrorMessage("CE4015", Severity.ERROR,
+    "perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it",
+    Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation."))

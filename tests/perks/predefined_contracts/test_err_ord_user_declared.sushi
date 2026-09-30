@@ -1,0 +1,9 @@
+# `Ord` is predefined beside `Drop` and `Hashable`, so a unit that declares it
+# collides with the compiler's own definition.
+# EXPECT_ERROR_CODE: CE4001
+
+perk Ord:
+    fn compare(i32 other) i32
+
+fn main() i32:
+    return 0

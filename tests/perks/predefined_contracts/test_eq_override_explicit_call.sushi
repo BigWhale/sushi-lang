@@ -1,0 +1,20 @@
+# An `Eq` implementation names its receiver type where the contract says `Self`, and
+# an explicit `eq` call reads it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point with Eq:
+    fn eq(Point other) bool:
+        return self.x == other.x
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let Point q = Point(1, 9)
+    let Point r = Point(3, 2)
+    println("{p.eq(q)}")
+    println("{p.eq(r)}")
+    return 0

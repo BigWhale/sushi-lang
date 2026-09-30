@@ -1,0 +1,21 @@
+# Two perks cannot give one type the same method name: the name would have two homes,
+# and a call of it names neither.
+# EXPECT_ERROR_CODE: CE4015
+# EXPECT_STDERR_CONTAINS: perk 'Ord' provides 'compare' here
+
+perk Ranked:
+    fn compare(Score other) i32
+
+struct Score:
+    i32 points
+
+extend Score with Ord:
+    fn compare(Score other) i32:
+        return self.points - other.points
+
+extend Score with Ranked:
+    fn compare(Score other) i32:
+        return other.points - self.points
+
+fn main() i32:
+    return 0
