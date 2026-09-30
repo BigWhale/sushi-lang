@@ -8,4 +8,4 @@ use "helpers/limits"
 fn main() i32:
     let i32 n = PRIVATE_LIMIT
     println("{n}")
-    return Result.Ok(0)
+    return 0

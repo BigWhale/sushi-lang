@@ -1,7 +1,7 @@
 # A generic function and a generic callee that another unit reaches behind an alias.
 public fn five@(T)(T x) i32:
     let u64 h = x.hash()
-    return Result.Ok(5 + (h & 0) as i32)
+    return 5 + (h & 0) as i32
 
 public fn apply@(T)(fn(T) -> i32 f, T x) i32:
-    return Result.Ok(f(x).realise(0))
+    return f(x)

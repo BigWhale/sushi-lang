@@ -34,5 +34,5 @@ fn run(string path) ~ | IoError:
 
 fn main() i32:
     match run("test_lines_output.txt"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

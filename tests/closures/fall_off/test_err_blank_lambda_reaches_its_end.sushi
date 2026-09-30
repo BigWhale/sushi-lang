@@ -2,9 +2,9 @@
 # CE0107. It used to answer Result.Err, and no source wrote that Err.
 # EXPECT_ERROR_CODE: CE0107
 fn main() i32:
-    let fn() -> ~ g = |~|:
+    let fn() -> ~ | StdError g = |~|:
         println("g")
     match g():
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("gerr")
-    return Result.Ok(0)
+    return 0

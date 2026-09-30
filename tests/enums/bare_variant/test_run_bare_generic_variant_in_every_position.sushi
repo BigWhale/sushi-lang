@@ -8,16 +8,16 @@ struct Holder:
     Maybe@(string) name
 
 fn none_ret() Maybe@(string):
-    return Result.Ok(Maybe.None)
+    return Maybe.None
 
 fn take(nom Maybe@(i32) m) i32:
-    return Result.Ok(m.realise(7))
+    return m.realise(7)
 
 fn main() i32:
     let Holder h = Holder(Maybe.None)
-    let Maybe@(string) r = none_ret().realise(Maybe.Some("wrong"))
-    let i32 t = take(nom Maybe.None).realise(-1)
+    let Maybe@(string) r = none_ret()
+    let i32 t = take(nom Maybe.None)
     let Maybe@(string) again = Maybe.Some("towel")
     again := Maybe.None
     println("{r.is_some()} {h.name.is_some()} {t} {again.is_some()}")
-    return Result.Ok(0)
+    return 0

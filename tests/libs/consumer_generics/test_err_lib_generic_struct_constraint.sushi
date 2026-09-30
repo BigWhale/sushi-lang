@@ -13,4 +13,4 @@ struct Widget:
 fn main() i32:
     let Ranked@(Widget) r = Ranked(Widget(1))
     println(r.value.id)
-    return Result.Ok(0)
+    return 0

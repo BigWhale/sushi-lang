@@ -31,4 +31,4 @@ fn main() i32:
         Result.Err(_) ->
             code := 1
     remove_all(PATH)
-    return Result.Ok(code)
+    return code

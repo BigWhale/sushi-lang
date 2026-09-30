@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2001
 
 fn mk(i32[] a) Iterator@(i32):
-    return Result.Ok(a.iter())
+    return a.iter()
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

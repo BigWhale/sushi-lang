@@ -20,10 +20,10 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     while (j < 7):
         h.push(0)
         j := j + 1
-    return Result.Ok(h)
+    return h
 
 fn valid_fixture() u8[]:
-    let u8[] b = fixture_header(4, 19)??
+    let u8[] b = fixture_header(4, 19)
     b.push(0x81)
     b.push(0xac)
     b.push(0x6c)
@@ -43,20 +43,20 @@ fn valid_fixture() u8[]:
     b.push(0x65)
     b.push(0x6d)
     b.push(0x6f)
-    return Result.Ok(b)
+    return b
 
 fn write_fixture(string path, u8[] bytes) i32:
     match open(path, FileMode.WriteB()):
         Result.Ok(nom out) ->
             out.write_bytes(bytes)
             out.close()
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
-fn run_test() i32:
-    let u8[] fixture = valid_fixture()??
-    if (write_fixture("test_slib_valid.slib", fixture)?? != 0):
+fn run_test() i32 | StdError:
+    let u8[] fixture = valid_fixture()
+    if (write_fixture("test_slib_valid.slib", fixture) != 0):
         println("cannot write fixture")
         return Result.Ok(1)
     match read_metadata("test_slib_valid.slib"):
@@ -68,4 +68,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

@@ -25,4 +25,4 @@ fn main() i32:
     match high.read():
         Sign.Plus -> println("plus")
         Sign.Minus -> println("minus")
-    return Result.Ok(0)
+    return 0

@@ -20,20 +20,20 @@ fn main() i32:
         println("PASS: err returns None for Ok")
     else:
         println("FAIL: err should return None for Ok")
-        return Result.Ok(1)
+        return 1
 
     let Maybe@(MyError) maybe_err2 = get_err().err()
     if (maybe_err2.is_some()):
         match maybe_err2:
             Maybe.Some(MyError.BadInput) ->
                 println("PASS: err returns Some(error) for Err")
-                return Result.Ok(0)
+                return 0
             Maybe.Some(_) ->
                 println("FAIL: err returned wrong error variant")
-                return Result.Ok(1)
+                return 1
             Maybe.None() ->
                 println("FAIL: err returned None for Err")
-                return Result.Ok(1)
+                return 1
     else:
         println("FAIL: err should return Some for Err")
-        return Result.Ok(1)
+        return 1

@@ -13,27 +13,27 @@ enum Shape:
 fn area(Shape s) i32:
     match s:
         Shape.Circle(r) ->
-            return Result.Ok(r * r)
+            return r * r
         Shape.Rect(p1, p2) ->
             let i32 w = p2.x - p1.x
             let i32 h = p2.y - p1.y
-            return Result.Ok(w * h)
+            return w * h
 
 fn main() i32:
     let Shape c = Shape.Circle(5)
-    let i32 a1 = area(c).realise(0)
+    let i32 a1 = area(c)
 
     let Point tl = Point(0, 0)
     let Point br = Point(4, 3)
     let Shape r = Shape.Rect(tl, br)
-    let i32 a2 = area(r).realise(0)
+    let i32 a2 = area(r)
 
     println("Circle area: {a1}")
     println("Rect area: {a2}")
 
     if (a1 != 25):
-        return Result.Ok(1)
+        return 1
     if (a2 != 12):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

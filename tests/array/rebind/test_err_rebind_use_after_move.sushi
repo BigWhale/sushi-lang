@@ -8,4 +8,4 @@ fn main() i32:
     let string[] slots = from(["{prefix}-a"])
     slots[0] := gift
     println(gift)
-    return Result.Ok(0)
+    return 0

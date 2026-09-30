@@ -8,7 +8,7 @@ fn total(List@(i32) xs) i32:
     let i32 acc = 0
     foreach(x in xs.iter()):
         acc := acc + x
-    return Result.Ok(acc)
+    return acc
 
 fn main() i32:
     let List@(i32) xs = List.new()
@@ -16,6 +16,6 @@ fn main() i32:
     xs.push(20)
     xs.push(30)
     # xs is moved into total(); total() owns and frees it, main must not free again.
-    let i32 sum = total(xs).realise(-1)
+    let i32 sum = total(xs)
     println("sum={sum}")
-    return Result.Ok(0)
+    return 0

@@ -8,10 +8,10 @@ struct NoPerks:
     i32 value
 
 fn process@(T: Hashable + Displayable)(T item) ~:
-    return Result.Ok(~)
+    return ~
 
 fn main() i32:
     let NoPerks n = NoPerks(42)
     # Error CE4006: NoPerks doesn't implement required perks (Hashable + Displayable)
     process(n)
-    return Result.Ok(0)
+    return 0

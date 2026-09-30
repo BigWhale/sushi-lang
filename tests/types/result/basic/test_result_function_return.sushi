@@ -26,15 +26,15 @@ fn main() i32:
                 println("PASS: Explicit Ok return works")
             else:
                 println("FAIL: Wrong value")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error")
-            return Result.Ok(1)
+            return 1
 
     match explicit_return_err():
         Result.Ok(_) ->
             println("FAIL: Should get error")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyError.Error) ->
             println("PASS: Explicit Err return works")
 
@@ -44,16 +44,16 @@ fn main() i32:
                 println("PASS: Conditional return Ok works")
             else:
                 println("FAIL: Wrong message")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error on success")
-            return Result.Ok(1)
+            return 1
 
     match conditional_return(false):
         Result.Ok(_) ->
             println("FAIL: Should get error on failure")
-            return Result.Ok(1)
+            return 1
         Result.Err(MyError.Error) ->
             println("PASS: Conditional return Err works")
 
-    return Result.Ok(0)
+    return 0

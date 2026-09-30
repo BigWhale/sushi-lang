@@ -10,7 +10,7 @@
 
 use <collections/strings>
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test 1: Basic split with single delimiter
     let string s1 = "hello,world,test"
     let string[] parts1 = s1.split(",")
@@ -78,4 +78,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

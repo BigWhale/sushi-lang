@@ -5,15 +5,15 @@
 use <collections/strings>
 
 fn word(string s) string:
-    return Result.Ok(s.s(0, 8))
+    return s.s(0, 8)
 
 fn look(bool b) i32:
     if (b):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0
 
 fn main() i32:
     let string a = "manifest x"
     let bool b = not (a.s(0, 8) == "manifest")
     println(b)
-    return Result.Ok(0)
+    return 0

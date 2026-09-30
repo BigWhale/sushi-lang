@@ -4,4 +4,4 @@ unsafe external "C" as libc because "intentional clash":
     fn my_strlen(i32 x) i32 = "strlen"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

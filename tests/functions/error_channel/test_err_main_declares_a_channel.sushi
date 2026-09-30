@@ -1,0 +1,17 @@
+# `main` is bare: it answers the exit code and has no error channel. A `| E` on it is
+# refused (CE0106), whatever the size of the error payload.
+# EXPECT_ERROR_CODES_EXACT: CE0106
+struct Big:
+    i64 a
+    i64 b
+    i64 c
+    i64 d
+    i64 e
+
+enum BigErr:
+    Huge(Big)
+    Small
+
+fn main() i32 | BigErr:
+    println("Mostly Harmless")
+    return Result.Err(BigErr.Huge(Big(1, 2, 3, 4, 5)))

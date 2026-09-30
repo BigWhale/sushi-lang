@@ -7,4 +7,4 @@ extend f64 static of_int(i32 v) f64:
 fn main() i32:
     let f64 x = f64.of_int(42)
     println("{x}")
-    return Result.Ok(0)
+    return 0

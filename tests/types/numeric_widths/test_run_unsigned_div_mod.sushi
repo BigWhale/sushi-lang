@@ -16,5 +16,5 @@ fn main() i32:
     println(q64)
 
     if ((q32 == (2000000000 as u32)) and (r32 == (1 as u32)) and (q64 == (9000000000000000000 as u64)) and (r64 == (4 as u64))):
-        return Result.Ok(0)
-    return Result.Ok(1)
+        return 0
+    return 1

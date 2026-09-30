@@ -5,4 +5,4 @@ const i32 PI = 3
 
 fn main() i32:
     println("{PI}")
-    return Result.Ok(0)
+    return 0

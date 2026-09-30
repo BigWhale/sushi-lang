@@ -3,17 +3,17 @@
 # EXPECT_ERROR_CODE: CE2405
 
 fn total(nom List@(i32) xs) i32:
-    return Result.Ok(xs.len())
+    return xs.len()
 
 fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let i32 a = total(nom xs)??
+    let i32 a = total(nom xs)
     # xs was moved into total() -- this reuse is illegal.
-    let i32 b = total(nom xs)??
-    return Result.Ok(b)
+    let i32 b = total(nom xs)
+    return b
 
 fn main() i32:
-    let i32 r = run().realise(-1)
-    return Result.Ok(0)
+    let i32 r = run()
+    return 0

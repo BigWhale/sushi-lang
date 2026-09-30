@@ -7,24 +7,24 @@ struct Holder:
     slot.Slot@(string) name
 
 fn filled() slot.Slot@(string):
-    return Result.Ok(slot.Slot.Filled("towel"))
+    return slot.Slot.Filled("towel")
 
 fn take(nom slot.Slot@(i32) s) i32:
     match s:
-        slot.Slot.Filled(v) -> return Result.Ok(v)
-        slot.Slot.Empty -> return Result.Ok(7)
+        slot.Slot.Filled(v) -> return v
+        slot.Slot.Empty -> return 7
 
 fn is_filled(slot.Slot@(string) s) bool:
     match s:
-        slot.Slot.Filled(_) -> return Result.Ok(true)
-        slot.Slot.Empty -> return Result.Ok(false)
+        slot.Slot.Filled(_) -> return true
+        slot.Slot.Empty -> return false
 
 fn main() i32:
     let Holder h = Holder(slot.Slot.Empty)
-    let slot.Slot@(string) f = filled().realise(slot.Slot.Empty)
-    let i32 t = take(nom slot.Slot.Empty).realise(-1)
-    let bool a = is_filled(f).realise(false)
-    let bool b = is_filled(h.name).realise(true)
+    let slot.Slot@(string) f = filled()
+    let i32 t = take(nom slot.Slot.Empty)
+    let bool a = is_filled(f)
+    let bool b = is_filled(h.name)
     h.name := slot.Slot.Filled("later")
     println("{a} {b} {t}")
-    return Result.Ok(0)
+    return 0

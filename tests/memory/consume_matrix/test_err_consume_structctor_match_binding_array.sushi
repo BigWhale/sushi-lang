@@ -21,4 +21,4 @@ fn main() i32:
             let W w = W(p)
             println("w={w.items.len()}")
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

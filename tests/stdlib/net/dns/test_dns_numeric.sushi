@@ -20,4 +20,4 @@ fn main() i32:
                 println("{a.text()}")
         Result.Err(_) -> println("resolve failed")
 
-    return Result.Ok(0)
+    return 0

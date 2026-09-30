@@ -5,9 +5,9 @@
 # EXPECT_STDOUT_EXACT: "true\ntrue\n"
 
 fn has@(T)(T x) bool:
-    return Result.Ok(Maybe.Some(x.clone()).is_some())
+    return Maybe.Some(x.clone()).is_some()
 
 fn main() i32:
-    println(has(4).realise(false))
-    println(has("four").realise(false))
-    return Result.Ok(0)
+    println(has(4))
+    println(has("four"))
+    return 0

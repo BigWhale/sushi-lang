@@ -18,4 +18,4 @@ fn main() i32:
     c.push(7)
     println("clone: {c.len()} owner: {o.get().items.len()}")
     o.destroy()
-    return Result.Ok(0)
+    return 0

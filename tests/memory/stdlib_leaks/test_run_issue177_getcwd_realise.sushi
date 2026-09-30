@@ -11,4 +11,4 @@ use <sys/process>
 fn main() i32:
     let string cwd = getcwd().realise("/nope")
     println("cwd = {cwd}")
-    return Result.Ok(0)
+    return 0

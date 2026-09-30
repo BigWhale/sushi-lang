@@ -3,11 +3,10 @@
 public const i32 MAX_DEPTH = 32
 
 public fn twice(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn hidden(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 public fn eat(nom string s) ~:
     println("eaten: {s}")
-    return Result.Ok(~)

@@ -9,6 +9,6 @@ fn main() i32:
     let Result@(i32, StdError) r = point_sum(p)
     match r:
         Result.Ok(sum) -> println(sum)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
-    return Result.Ok(0)
+    return 0

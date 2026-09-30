@@ -1,8 +1,8 @@
 # Tests error for returning bare value instead of Result.Ok()
 # EXPECT_ERROR_CODE: CE2030
 
-fn test_func() i32:
+fn test_func() i32 | StdError:
     return 42
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

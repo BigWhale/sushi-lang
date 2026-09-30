@@ -28,19 +28,19 @@ fn main() i32:
                 println("PASS: Nested calls work with Ok")
             else:
                 println("FAIL: Wrong value from nested calls")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error on success path")
-            return Result.Ok(1)
+            return 1
 
     match parse_statement("bad"):
         Result.Ok(_) ->
             println("FAIL: Should have propagated error")
-            return Result.Ok(1)
+            return 1
         Result.Err(ParseError.InvalidSyntax) ->
             println("PASS: Error propagated through nested calls")
         Result.Err(_) ->
             println("FAIL: Wrong error type")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

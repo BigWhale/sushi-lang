@@ -13,7 +13,7 @@ fn main() i32:
             f.write("Mostly Harmless")
             f.close()
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     let bool e = exists('/tmp/sushi_leak_query.txt')
     let bool f = is_file('/tmp/sushi_leak_query.txt')
@@ -22,4 +22,4 @@ fn main() i32:
     println("e={e} f={f} d={d} size={size}")
 
     remove('/tmp/sushi_leak_query.txt').realise(-1)
-    return Result.Ok(0)
+    return 0

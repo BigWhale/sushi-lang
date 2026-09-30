@@ -8,10 +8,10 @@ enum Color:
 fn f(i32 n) string:
     match n:
         Color.Red() ->
-            return Result.Ok("red")
+            return "red"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(f(1).realise("err"))
-    return Result.Ok(0)
+    println(f(1))
+    return 0

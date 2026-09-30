@@ -4,7 +4,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "4\n"
-fn make() i32[]:
+fn make() i32[] | StdError:
     return Result.Ok(from([1, 2, 3]))
 
 fn main() i32:
@@ -13,4 +13,4 @@ fn main() i32:
             p.push(9)
             println(p.len())
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

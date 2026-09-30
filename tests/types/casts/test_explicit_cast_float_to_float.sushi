@@ -9,6 +9,6 @@ fn main() i32:
     # f64 arithmetic works correctly
     let f64 sum = (x as f64) + y
     if (sum > 5.8 and sum < 5.9):
-      return Result.Ok(0)
+      return 0
 
-  return Result.Ok(1)
+  return 1

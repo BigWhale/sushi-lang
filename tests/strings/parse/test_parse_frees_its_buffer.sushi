@@ -26,4 +26,4 @@ fn main() i32:
             parsed_floats := parsed_floats + 1
     println("the floats add up")
 
-    return Result.Ok(0)
+    return 0

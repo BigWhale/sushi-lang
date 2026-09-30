@@ -19,10 +19,10 @@ fn main() i32:
         Result.Ok(pair) ->
             if (pair.first == 42 and pair.second == "answer"):
                 println("PASS: Generic struct in Result works")
-                return Result.Ok(0)
+                return 0
             else:
                 println("FAIL: Wrong pair values")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error")
-            return Result.Ok(1)
+            return 1

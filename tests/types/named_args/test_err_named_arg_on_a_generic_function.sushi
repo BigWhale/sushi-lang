@@ -2,9 +2,9 @@
 # EXPECT_ERROR_CODE: CE6104
 
 fn pick@(T)(T first, T second) T:
-    return Result.Ok(first)
+    return first
 
 fn main() i32:
-    let i32 v = pick(second: 2, first: 1).realise(0)
+    let i32 v = pick(second: 2, first: 1)
     println("{v}")
-    return Result.Ok(0)
+    return 0

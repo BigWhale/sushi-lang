@@ -6,7 +6,7 @@
 use <io/files>
 use <io/fs>
 
-fn load_config() string:
+fn load_config() string | StdError:
     let Result@(File, IoError) result = open("nonexistent_nested_test.txt", FileMode.Read())
     match nom result:
         Result.Ok(nom f) ->
@@ -26,4 +26,4 @@ fn load_config() string:
 fn main() i32:
     let string config = load_config().realise("")
     println("Config: {config}")
-    return Result.Ok(0)
+    return 0

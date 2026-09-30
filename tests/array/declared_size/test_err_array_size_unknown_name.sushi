@@ -5,4 +5,4 @@
 fn main() i32:
     let i32[NOT_DECLARED] counts = [1, 2]
     println("{counts.len()}")
-    return Result.Ok(0)
+    return 0

@@ -6,20 +6,20 @@ use "helpers/libcallee" as l
 
 fn seven@(T)(T x) i32:
     let u64 h = x.hash()
-    return Result.Ok(7 + (h & 0) as i32)
+    return 7 + (h & 0) as i32
 
 fn same@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn flip@(T)(T x, fn(T) -> i32 f) i32:
-    return Result.Ok(f(x).realise(0))
+    return f(x)
 
 fn run@(T)(fn(T) -> T f, T x) T:
-    return Result.Ok(f(x).realise(x))
+    return f(x)
 
 fn main() i32:
-    println(flip("s", seven).realise(0))
-    println(run(same, 41).realise(0))
-    println(l.apply(l.five, 3).realise(0))
-    println(l.apply(seven, 3).realise(0))
-    return Result.Ok(0)
+    println(flip("s", seven))
+    println(run(same, 41))
+    println(l.apply(l.five, 3))
+    println(l.apply(seven, 3))
+    return 0

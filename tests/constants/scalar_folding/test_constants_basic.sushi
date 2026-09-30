@@ -17,4 +17,4 @@ fn main() i32:
     size := size + pi_int
 
     # size should be 100 + 3 = 103
-    return Result.Ok(size)
+    return size

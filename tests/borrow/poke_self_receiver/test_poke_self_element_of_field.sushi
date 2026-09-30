@@ -18,4 +18,4 @@ fn main() i32:
     b.cs[0].bump()
     b.fixed[0].bump()
     println("{b.cs[0].n} {b.cs[1].n} {b.fixed[0].n}")
-    return Result.Ok(0)
+    return 0

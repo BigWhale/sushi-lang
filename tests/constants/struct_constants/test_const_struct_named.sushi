@@ -11,4 +11,4 @@ const Handle ERR = Handle(owned: true, fd: 2)
 
 fn main() i32:
     println("{ERR.fd} {ERR.owned}")
-    return Result.Ok(0)
+    return 0

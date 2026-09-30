@@ -2,4 +2,4 @@
 # EXPECT_ERROR_CODE: CE1001
 fn main() i32:
   let i32 x = y + 10  # y is not declared
-  return Result.Ok(x)
+  return x

@@ -25,4 +25,4 @@ fn main() i32:
     match run("/tmp/sushi_lines_after.txt"):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("refused")
-    return Result.Ok(0)
+    return 0

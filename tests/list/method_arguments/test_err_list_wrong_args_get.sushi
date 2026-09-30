@@ -1,6 +1,6 @@
 # Test error: get() with wrong number of arguments (expects 1)
 # EXPECT_ERROR_CODE: CE2009
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let List@(i32) data = List.new()
     # ERROR: get() expects exactly 1 argument (index)
     let i32 val = data.get()??
@@ -8,4 +8,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

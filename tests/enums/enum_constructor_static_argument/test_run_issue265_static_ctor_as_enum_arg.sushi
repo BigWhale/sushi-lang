@@ -43,4 +43,4 @@ fn main() i32:
         Boxed.Wrap(o) -> println("own: {o.get().n}")
         Boxed.Items(l) -> println("list: {l.len()}")
         Boxed.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

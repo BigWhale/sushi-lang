@@ -7,7 +7,7 @@
 # EXPECT_STDOUT_EXACT: "21\n"
 
 fn identity@(T)(T value) T:
-    return Result.Ok(value)
+    return value
 
 struct P:
     i32 x
@@ -16,19 +16,19 @@ extend P get_x() i32:
     return self.x
 
 fn seven() i32:
-    return Result.Ok(7)
+    return 7
 
 fn compute() i32:
     let P p = P(3)
     let i32[] arr = from([3, 4])
     let i32 n = 5
-    let i32 a = identity(p.get_x())??     # method call
-    let i32 b = identity(p.x)??           # field access
-    let i32 c = identity(arr[0])??        # index
-    let i32 d = identity(-n)?? * -1       # unary op
-    let i32 e = identity(seven()??)??     # nested call
-    return Result.Ok(a + b + c + d + e)
+    let i32 a = identity(p.get_x())     # method call
+    let i32 b = identity(p.x)           # field access
+    let i32 c = identity(arr[0])        # index
+    let i32 d = identity(-n) * -1       # unary op
+    let i32 e = identity(seven())     # nested call
+    return a + b + c + d + e
 
 fn main() i32:
-    println(compute().realise(-1))
-    return Result.Ok(0)
+    println(compute())
+    return 0

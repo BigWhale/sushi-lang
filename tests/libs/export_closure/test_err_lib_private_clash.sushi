@@ -7,9 +7,9 @@
 use <lib/private_closure_lib>
 
 fn scale_up(i32 x) i32:
-    return Result.Ok(x * 100)
+    return x * 100
 
 fn main() i32:
-    let i32 m = compute(10, 20).realise(99)
+    let i32 m = compute(10, 20)
     println(m)
-    return Result.Ok(0)
+    return 0

@@ -28,4 +28,4 @@ fn main() i32:
     let Deep d1 = Deep(Outer(Tag("a", 1), 5))
     let Deep d2 = Deep(Outer(Tag("a", 9), 5))
     println("deep {d1.hash() == d2.hash()}")
-    return Result.Ok(0)
+    return 0

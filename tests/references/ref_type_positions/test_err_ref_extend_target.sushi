@@ -7,4 +7,4 @@ extend peek i32 weird() i32:
 
 fn main() i32:
     println("built")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ fn main() i32:
     let Pair@(i32, string) p = Pair(42, "Mostly Harmless")
     println(p.first)
     println(p.second)
-    return Result.Ok(0)
+    return 0

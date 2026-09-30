@@ -7,4 +7,4 @@ const i32 LIB_SHOWN = 3
 
 fn main() i32:
     println("{LIB_SHOWN}")
-    return Result.Ok(0)
+    return 0

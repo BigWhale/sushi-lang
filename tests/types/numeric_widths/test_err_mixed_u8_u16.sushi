@@ -7,4 +7,4 @@ fn main() i32:
   # This should fail - mixed u8 and u16
   let u16 c = a + b
 
-  return Result.Ok(0)
+  return 0

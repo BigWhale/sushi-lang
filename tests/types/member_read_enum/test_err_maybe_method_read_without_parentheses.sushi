@@ -9,4 +9,4 @@ fn main() i32:
     let Point[] pts = from([Point(11, 22)])
     let Point p = pts.get(0).realise
     println("{p.x}")
-    return Result.Ok(0)
+    return 0

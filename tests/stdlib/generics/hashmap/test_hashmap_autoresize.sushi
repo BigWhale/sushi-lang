@@ -51,7 +51,7 @@ fn main() i32:
     let i32 final_size = map.len()
     if (final_size == 15):
         println("✓ All 15 items preserved after resize")
-        return Result.Ok(0)
+        return 0
 
     println("ERROR: Expected size 15, got {final_size}")
-    return Result.Ok(1)
+    return 1

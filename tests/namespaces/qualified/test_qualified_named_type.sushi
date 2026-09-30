@@ -7,13 +7,13 @@ struct Holder:
     geo.Vec spot
 
 fn total(geo.Vec v) i32:
-    return Result.Ok(v.x + v.y)
+    return v.x + v.y
 
 fn run() i32:
-    let geo.Vec v = geo.origin()??
+    let geo.Vec v = geo.origin()
     let Holder h = Holder(v)
-    return Result.Ok(total(h.spot)??)
+    return total(h.spot)
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

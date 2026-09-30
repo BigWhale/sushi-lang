@@ -10,10 +10,10 @@ use <lib/binary_api_lib>
 fn main() i32:
     let Crate a = Crate(7, "box")
     let Crate b = Crate(3, "tin")
-    println(describe(a, Mood.Calm).realise("?"))
-    println(describe(b, Mood.Loud(3)).realise("?"))
+    println(describe(a, Mood.Calm))
+    println(describe(b, Mood.Loud(3)))
     let i32 two = 2
     let i32 three = 3
-    println(heavier(nom two, nom three).realise(0).weigh())
-    println(heavier(nom a, nom b).realise(Crate(0, "none")).weight)
-    return Result.Ok(0)
+    println(heavier(nom two, nom three).weigh())
+    println(heavier(nom a, nom b).weight)
+    return 0

@@ -2,4 +2,4 @@
 public use "helpers/foo_b"
 
 public fn tag_b() i32:
-    return Result.Ok(20)
+    return 20

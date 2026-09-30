@@ -8,5 +8,5 @@
 use "helpers/sealed"
 
 fn main() i32:
-    println("{audit().realise(0)}")
-    return Result.Ok(0)
+    println("{audit()}")
+    return 0

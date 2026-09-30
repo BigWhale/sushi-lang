@@ -1,3 +1,3 @@
 public fn answer() i32:
     let string s = "ÿ"
-    return Result.Ok(42)
+    return 42

@@ -7,4 +7,4 @@ const string NAME = "Mostly Harmless"
 fn main() i32:
     let string mine = NAME
     println(mine)
-    return Result.Ok(0)
+    return 0

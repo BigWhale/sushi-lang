@@ -11,8 +11,8 @@ fn run_test() i32:
     out.extend_range(src, 2, 3)
     out.push(9)
     println("{out.len()} {out[0]} {out[1]} {out[2]} {out[3]} {out[4]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

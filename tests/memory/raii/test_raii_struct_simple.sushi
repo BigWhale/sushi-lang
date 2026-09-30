@@ -10,7 +10,7 @@ struct Container:
     i32[] numbers
     string name
 
-fn test_basic_raii() i32:
+fn test_basic_raii() i32 | StdError:
     let Container c = Container(new(), "test")
     c.numbers.push(10)
     c.numbers.push(20)
@@ -23,7 +23,7 @@ fn test_basic_raii() i32:
     # RAII should automatically clean up when c goes out of scope
     return Result.Ok(0)
 
-fn test_nested_scopes() i32:
+fn test_nested_scopes() i32 | StdError:
     println("Outer scope start")
 
     if (true):
@@ -39,5 +39,5 @@ fn main() i32:
     let Result@(i32, StdError) result1 = test_basic_raii()
     let Result@(i32, StdError) result2 = test_nested_scopes()
     if (result1.is_ok() and result2.is_ok()):
-        return Result.Ok(0)
-    return Result.Err(StdError.Error)
+        return 0
+    return 1

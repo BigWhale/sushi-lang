@@ -21,20 +21,20 @@ fn main() i32:
             println("PASS: ProcessError.SpawnFailed works")
         _ ->
             println("FAIL: SpawnFailed pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match spawn_process("fail"):
         Result.Err(ProcessError.ExitFailure) ->
             println("PASS: ProcessError.ExitFailure works")
         _ ->
             println("FAIL: ExitFailure pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match spawn_process("signal"):
         Result.Err(ProcessError.SignalReceived) ->
             println("PASS: ProcessError.SignalReceived works")
         _ ->
             println("FAIL: SignalReceived pattern failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

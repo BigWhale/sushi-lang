@@ -10,4 +10,4 @@ public const i32[3] STEPS = [2, 3, 5]
 const i32 SCRATCH = 7
 
 public fn scratch_plus(i32 n) i32:
-    return Result.Ok(SCRATCH + n)
+    return SCRATCH + n

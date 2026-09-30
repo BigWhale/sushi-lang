@@ -9,4 +9,4 @@ extend Cage@(T) static holding(T item) Cage@(T):
 
 fn main() i32:
     println("{Cage.holding(9).item}")
-    return Result.Ok(0)
+    return 0

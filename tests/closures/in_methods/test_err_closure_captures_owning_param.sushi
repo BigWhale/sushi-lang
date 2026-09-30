@@ -4,10 +4,10 @@
 # EXPECT_ERROR_CODE: CE2411
 extend i32 combined(string tag) i32:
     let fn(i32) -> i32 f = |i32 x| x + tag.len()
-    let i32 r = f(self).realise(0)
+    let i32 r = f(self)
     return r
 
 fn main() i32:
     let string t = "zaphod"
     println("{4.combined(t)}")
-    return Result.Ok(0)
+    return 0

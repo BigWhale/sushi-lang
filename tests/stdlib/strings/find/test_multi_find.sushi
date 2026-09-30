@@ -3,7 +3,7 @@
 # Test multiple string.find() calls
 use <collections/strings>
 
-fn test_case1() i32:
+fn test_case1() i32 | StdError:
     # "hello" does not contain "world", so this should return None
     match "hello".find("world"):
         Maybe.Some(_) ->
@@ -14,7 +14,7 @@ fn test_case1() i32:
 
     return Result.Ok(0)
 
-fn test_case2() i32:
+fn test_case2() i32 | StdError:
     match "hello".find("xyz"):
         Maybe.Some(_) ->
             println("ERROR: Should not find xyz")
@@ -27,10 +27,10 @@ fn test_case2() i32:
 fn main() i32:
     let i32 r1 = test_case1().realise(1)
     if (r1 != 0):
-        return Result.Err(StdError.Error)
+        return 1
 
     let i32 r2 = test_case2().realise(1)
     if (r2 != 0):
-        return Result.Err(StdError.Error)
+        return 1
 
-    return Result.Ok(0)
+    return 0

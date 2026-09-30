@@ -13,9 +13,9 @@ struct NestedBuffer:
     DataBuffer buffer2
 
 fn create_buffer(nom string name) DataBuffer:
-    return Result.Ok(DataBuffer(from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8]), name, 5))
+    return DataBuffer(from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8]), name, 5)
 
-fn process_buffer(DataBuffer buf) i32:
+fn process_buffer(DataBuffer buf) i32 | StdError:
     # Access byte array field from struct
     println("Processing buffer: {buf.name}")
     println("  Size: {buf.size}")
@@ -27,7 +27,7 @@ fn process_buffer(DataBuffer buf) i32:
 
     return Result.Ok(buf.data.len())
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test 1: Basic struct with byte array field
     println("Test 1: Basic struct with byte array")
     let DataBuffer buf1 = DataBuffer(new(), "buffer1", 0)
@@ -88,4 +88,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

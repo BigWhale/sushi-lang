@@ -7,7 +7,7 @@
 # EXPECT_NO_LEAKS: true
 
 fn make_towel() string:
-    return Result.Ok("towel")
+    return "towel"
 
 fn run_test() i32:
     let string prefix = "pre"
@@ -16,7 +16,7 @@ fn run_test() i32:
     let string[3] fixed = ["{prefix}-a", "{prefix}-b", "{prefix}-c"]
     fixed[0] := "zaphod"
     fixed[1] := "{prefix}-beeblebrox"
-    fixed[2] := make_towel()??
+    fixed[2] := make_towel()
     println("fixed: {fixed[0]} {fixed[1]} {fixed[2]}")
 
     let string[] dynamic = from(["{prefix}-x", "{prefix}-y"])
@@ -24,8 +24,8 @@ fn run_test() i32:
     dynamic[1] := "{prefix}-android"
     println("dynamic: {dynamic[0]} {dynamic[1]}")
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

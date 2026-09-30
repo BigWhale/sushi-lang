@@ -8,5 +8,5 @@ use <lib/private_generic_type_lib>
 
 fn main() i32:
     let i32 five = 5
-    println(boxed(nom five).realise(0))
-    return Result.Ok(0)
+    println(boxed(nom five))
+    return 0

@@ -14,9 +14,9 @@ extend Crate with Heavy:
         return self.mass
 
 fn total@(T: Heavy)(peek T item) i32:
-    return Result.Ok(item.weigh())
+    return item.weigh()
 
 fn main() i32:
     let Crate c = Crate(5)
-    println("{total(peek c).realise(0)}")
-    return Result.Ok(0)
+    println("{total(peek c)}")
+    return 0

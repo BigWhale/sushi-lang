@@ -3,13 +3,12 @@
 # EXPECT_ERROR_CODES_EXACT: CE2062
 # EXPECT_STDERR_CONTAINS: test_err_hole_on_a_later_line.sushi:11:10: error [CE2062]
 fn pick@(T)(T x) i32:
-    return Result.Ok(1)
+    return 1
 
 
 fn show() ~:
     println("value
-  {pick@(i32, i32)(5)??}")
-    return Result.Ok(~)
+  {pick@(i32, i32)(5)}")
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

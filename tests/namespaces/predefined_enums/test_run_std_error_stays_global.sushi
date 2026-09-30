@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "error\n"
 
-fn fail() i32:
+fn fail() i32 | StdError:
     return Result.Err(StdError.Error)
 
 fn main() i32:
@@ -15,4 +15,4 @@ fn main() i32:
             match got:
                 StdError.Error -> println("error")
     match e:
-        StdError.Error -> return Result.Ok(0)
+        StdError.Error -> return 0

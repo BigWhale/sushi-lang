@@ -5,11 +5,11 @@
 # EXPECT_STDOUT_CONTAINS: "got "
 # EXPECT_NO_LEAKS: true
 
-fn mk() string:
+fn mk() string | StdError:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn main() i32:
     match mk():
         Result.Ok(v) -> println("got {v}")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

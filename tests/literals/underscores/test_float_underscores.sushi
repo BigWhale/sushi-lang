@@ -17,4 +17,4 @@ fn main() i32:
     if (d > 10.2 and d < 10.3):
         ok := ok + 1
     println("{ok}")
-    return Result.Ok(0)
+    return 0

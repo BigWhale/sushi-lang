@@ -30,4 +30,4 @@ public fn audit() i32:
     let Ledger l = Ledger(4)
     let Vault v = Vault(2)
     let i32 base = 100
-    return Result.Ok(l.stamp(v) + base.stamped(v))
+    return l.stamp(v) + base.stamped(v)

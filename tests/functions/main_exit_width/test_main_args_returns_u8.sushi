@@ -3,4 +3,4 @@
 
 fn main(string[] args) u8:
     let u8 base = 200
-    return Result.Ok(base + (args.len() as u8))
+    return base + (args.len() as u8)

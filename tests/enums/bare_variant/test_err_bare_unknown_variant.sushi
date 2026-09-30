@@ -9,4 +9,4 @@ enum Shape:
 fn main() i32:
     let Shape s = Shape.Nope
     println("{s.is_some()}")
-    return Result.Ok(0)
+    return 0

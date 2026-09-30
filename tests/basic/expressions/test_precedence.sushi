@@ -15,5 +15,5 @@ fn main() i32:
   let bool flag = a < b and b < c  # Should be (2 < 3) and (3 < 4) = true
 
   if (flag and result1 == 14 and result2 == 10 and result3 == 20):
-    return Result.Ok(1)
-  return Result.Ok(0)
+    return 1
+  return 0

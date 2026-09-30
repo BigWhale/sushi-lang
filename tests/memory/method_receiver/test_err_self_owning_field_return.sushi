@@ -16,4 +16,4 @@ fn main() i32:
     let Holder h = Holder("initial-{0}")
     let string s = h.get_label()
     println("s: {s} label: {h.label}")
-    return Result.Ok(0)
+    return 0

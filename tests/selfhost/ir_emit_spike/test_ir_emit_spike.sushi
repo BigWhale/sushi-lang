@@ -31,7 +31,7 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("emit=FAIL")
-            return Result.Err(StdError.Error)
+            return 1
     println("emit=OK")
 
     # 2. Compile the text IR straight to a native binary with clang.
@@ -41,10 +41,10 @@ fn main() i32:
                 println("compile=OK")
             else:
                 println("compile=FAIL {cout.stderr_text}")
-                return Result.Err(StdError.Error)
+                return 1
         Result.Err(_) ->
             println("compile=SPAWNFAIL")
-            return Result.Err(StdError.Error)
+            return 1
 
     # 3. Run the produced binary; its exit code (42) proves it really executed.
     match run("./sushi_spike_bin"):
@@ -52,6 +52,6 @@ fn main() i32:
             println("ran exit={rout.exit_code}")
         Result.Err(_) ->
             println("run=SPAWNFAIL")
-            return Result.Err(StdError.Error)
+            return 1
 
-    return Result.Ok(0)
+    return 0

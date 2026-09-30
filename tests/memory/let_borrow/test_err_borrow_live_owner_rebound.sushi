@@ -12,4 +12,4 @@ fn main() i32:
     let i32[] view = h.items
     h := Holder(from([9]))
     println("view={view.len()}")
-    return Result.Ok(0)
+    return 0

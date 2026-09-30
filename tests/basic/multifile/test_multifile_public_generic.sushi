@@ -5,6 +5,6 @@
 use "helpers/generic_private_helper"
 
 fn main() i32:
-    let i32 a = public_generic(nom 7).realise(0)
+    let i32 a = public_generic(nom 7)
     println("{a}")
-    return Result.Ok(0)
+    return 0

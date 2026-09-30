@@ -7,4 +7,4 @@ fn main() i32:
     let string s = "a,b"
     let string[] parts = s.split(",")
     println("{parts.len()}")
-    return Result.Ok(0)
+    return 0

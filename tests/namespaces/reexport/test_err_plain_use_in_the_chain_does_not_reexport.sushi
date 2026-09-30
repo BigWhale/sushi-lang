@@ -7,6 +7,6 @@
 use "helpers/middle_plain"
 
 fn main() i32:
-    let Vec c = corner().realise(Vec(0, 0))
+    let Vec c = corner()
     println("{c.x}")
-    return Result.Ok(0)
+    return 0

@@ -15,4 +15,4 @@ struct Pair@(A, B):
 fn main() i32:
     let Pair@(i32, string) p = Pair(3, Box("x"))
     println("{p.first} {p.second.v}")
-    return Result.Ok(0)
+    return 0

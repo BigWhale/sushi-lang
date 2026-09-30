@@ -3,8 +3,7 @@
 fn print_all(...string parts) ~:
     foreach(p in parts.iter()):
         println(p)
-    return Result.Ok(~)
 
 fn main() i32:
     print_all("Mostly", "Harmless")
-    return Result.Ok(0)
+    return 0

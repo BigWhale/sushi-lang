@@ -12,5 +12,5 @@ enum Tree@(T):
 fn main() i32:
     let Tree@(i32) t = Tree.Leaf(1)
     match t:
-        Tree.Leaf(v) -> return Result.Ok(v)
-        Tree.Node(_) -> return Result.Ok(0)
+        Tree.Leaf(v) -> return v
+        Tree.Node(_) -> return 0

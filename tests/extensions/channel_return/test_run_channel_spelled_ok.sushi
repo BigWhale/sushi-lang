@@ -24,4 +24,4 @@ fn main() i32:
         Result.Ok(_) -> println("ticked")
         Result.Err(_) -> println("stopped")
     println("{four.half_checked().realise(0)} {three.half_checked().realise(0)} {c.ticks}")
-    return Result.Ok(0)
+    return 0

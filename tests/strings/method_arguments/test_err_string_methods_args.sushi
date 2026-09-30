@@ -12,4 +12,4 @@ fn main() i32:
   let string result3 = text.sright(1, 2)  # sright() expects 1 arg, got 2
   let string result4 = text.char_at(0, 1)  # char_at() expects 1 arg, got 2
 
-  return Result.Ok(0)
+  return 0

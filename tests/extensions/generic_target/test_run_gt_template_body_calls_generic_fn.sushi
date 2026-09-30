@@ -9,16 +9,16 @@ struct Box@(T):
     T value
 
 fn tag@(U)(U x) i32:
-    return Result.Ok(((x.hash() as i32) * 0) + 7)
+    return ((x.hash() as i32) * 0) + 7
 
 fn outer@(U)(U x) i32:
-    return Result.Ok(tag(x).realise(0) + 1)
+    return tag(x) + 1
 
 extend Box@(T) tagged() i32:
-    return tag(self.value).realise(0)
+    return tag(self.value)
 
 extend Box@(T) chained() i32:
-    return outer(self.value).realise(0)
+    return outer(self.value)
 
 fn run_test() i32:
     let Box@(i32) n = Box(5)
@@ -27,7 +27,7 @@ fn run_test() i32:
     println(s.tagged())
     println(n.chained())
     println(s.chained())
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

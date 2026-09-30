@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "ate 3\n"
 
-fn make() i32[]:
+fn make() i32[] | StdError:
     return Result.Ok(from([1, 2, 3]))
 
 # The body only has to CONSUME what it took. Hashing is the one operation total over an
@@ -14,14 +14,14 @@ fn make() i32[]:
 fn eat@(T)(nom T v) i32:
     let u64 fingerprint = v.hash()
     if (fingerprint == 0 as u64):
-        return Result.Ok(1)
-    return Result.Ok(1)
+        return 1
+    return 1
 
 fn main() i32:
     match make():
         Result.Ok(nom xs) ->
             let i32 n = xs.len()
-            let i32 one = eat(nom xs).realise(0)
+            let i32 one = eat(nom xs)
             println("ate {n * one}")
         Result.Err(_) -> println("no")
-    return Result.Ok(0)
+    return 0

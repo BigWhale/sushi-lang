@@ -6,8 +6,8 @@
 use <lib/private_names_lib> as pn
 
 fn bump(i32 n) i32:
-    return Result.Ok(n + 2)
+    return n + 2
 
 fn main() i32:
-    println("{bump(1).realise(0)} {pn.lib_bump(1).realise(0)}")
-    return Result.Ok(0)
+    println("{bump(1)} {pn.lib_bump(1)}")
+    return 0

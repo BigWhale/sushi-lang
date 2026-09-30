@@ -15,4 +15,4 @@ fn main() i32:
     f.fill(f[1].clone())
     println(f[0])
     println(f[1])
-    return Result.Ok(0)
+    return 0

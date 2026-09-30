@@ -4,6 +4,6 @@
 use "helpers/pub_twin"
 
 fn main() i32:
-    let i32 a = ptwin(nom 5).realise(0)
+    let i32 a = ptwin(nom 5)
     println("{a}")
-    return Result.Ok(0)
+    return 0

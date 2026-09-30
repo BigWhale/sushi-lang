@@ -18,4 +18,4 @@ extend string with Display:
 fn main() i32:
     show_all()
     show_all(42, "hi")
-    return Result.Ok(0)
+    return 0

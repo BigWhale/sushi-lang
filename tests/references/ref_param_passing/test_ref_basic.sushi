@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 
 
-fn add_one(poke i32 x) i32:
+fn add_one(poke i32 x) i32 | StdError:
     let i32 val = x
     return Result.Ok(val + 1)
 
@@ -16,4 +16,4 @@ fn main() i32:
     println(num)
     println(result.realise(0))
 
-    return Result.Ok(0)
+    return 0

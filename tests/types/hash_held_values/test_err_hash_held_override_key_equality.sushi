@@ -22,4 +22,4 @@ fn main() i32:
     m.insert(H(F(|i32 x| x + 1, 5)), 42)
     println("found {m.get(H(F(|i32 x| x * 2, 5))).realise(0)}")
     m.free()
-    return Result.Ok(0)
+    return 0

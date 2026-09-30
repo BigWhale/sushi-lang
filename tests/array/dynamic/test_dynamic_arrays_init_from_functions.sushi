@@ -6,11 +6,11 @@ use <collections/strings>
 
 fn create_numbers() i32[]:
     let i32[] arr = from([10, 20, 30])
-    return Result.Ok(arr)
+    return arr
 
 fn create_empty() string[]:
     let string[] arr = new()
-    return Result.Ok(arr)
+    return arr
 
 fn create_sequence(i32 count) u8[]:
     let u8[] seq = new()
@@ -18,12 +18,12 @@ fn create_sequence(i32 count) u8[]:
     while (i < count):
         seq.push((i % 256) as u8)
         i := i + 1
-    return Result.Ok(seq)
+    return seq
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test 1: Direct initialization from function call returning Result@(i32[])
     # This now works without the two-step workaround!
-    let i32[] numbers = create_numbers()??
+    let i32[] numbers = create_numbers()
     println("Test 1: numbers.len() = {numbers.len()}")
     if (numbers.len() != 3):
         return Result.Ok(1)
@@ -31,13 +31,13 @@ fn run_test() i32:
         return Result.Ok(2)
 
     # Test 2: Direct initialization with empty array
-    let string[] empty = create_empty()??
+    let string[] empty = create_empty()
     println("Test 2: empty.len() = {empty.len()}")
     if (empty.len() != 0):
         return Result.Ok(3)
 
     # Test 3: Direct initialization with function parameter
-    let u8[] sequence = create_sequence(5)??
+    let u8[] sequence = create_sequence(5)
     println("Test 3: sequence.len() = {sequence.len()}")
     if (sequence.len() != 5):
         return Result.Ok(4)
@@ -50,9 +50,9 @@ fn run_test() i32:
         return Result.Ok(5)
 
     # Test 5: Verify RAII cleanup works correctly
-    let i32[] temp1 = create_numbers()??
+    let i32[] temp1 = create_numbers()
     temp1.destroy()
-    let u8[] temp2 = create_sequence(3)??
+    let u8[] temp2 = create_sequence(3)
     temp2.destroy()
     println("Test 5: RAII cleanup successful")
 
@@ -61,4 +61,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

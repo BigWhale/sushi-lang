@@ -9,10 +9,10 @@ struct Point:
     i32 x
     i32 y
 
-fn first_x(Point[] pts) i32:
+fn first_x(Point[] pts) i32 | StdError:
     return Result.Ok(pts.get(0)??.x)
 
 fn main() i32:
     let Point[] pts = from([Point(4, 5)])
     println("{first_x(pts).realise(0)}")
-    return Result.Ok(0)
+    return 0

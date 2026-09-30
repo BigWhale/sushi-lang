@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODE: CE2094
 fn use_ref(peek i32 r) i32:
     let fn(i32) -> i32 g = |i32 x| x + r
-    return Result.Ok(g(1).realise(0))
+    return g(1)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

@@ -11,7 +11,7 @@ fn main() i32:
     match nums.insert(-1, 99):
         Result.Ok(_) ->
             println("ERROR: Insert with negative index should fail")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             println("Negative index correctly rejected")
 
@@ -19,14 +19,14 @@ fn main() i32:
     match nums.insert(4, 99):
         Result.Ok(_) ->
             println("ERROR: Insert beyond len should fail")
-            return Result.Ok(2)
+            return 2
         Result.Err(_) ->
             println("Out of bounds index correctly rejected")
 
     # Verify list unchanged after failed inserts
     if (nums.len() != 3):
         println("ERROR: List should still have 3 elements")
-        return Result.Ok(3)
+        return 3
 
     # Test 3: Insert at exactly len should work (append)
     match nums.insert(3, 4):
@@ -34,11 +34,11 @@ fn main() i32:
             println("Insert at len succeeded (append)")
         Result.Err(_) ->
             println("ERROR: Insert at len should succeed")
-            return Result.Ok(4)
+            return 4
 
     if (nums.len() != 4):
         println("ERROR: Length should be 4 after successful insert")
-        return Result.Ok(5)
+        return 5
 
     println("Bounds checking test passed!")
-    return Result.Ok(0)
+    return 0

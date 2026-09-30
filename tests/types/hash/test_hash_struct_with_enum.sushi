@@ -21,4 +21,4 @@ fn main() i32:
 
     # Different status should produce different hashes
     println("Struct with enum field hashes computed!")
-    return Result.Ok(0)
+    return 0

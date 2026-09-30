@@ -6,4 +6,4 @@ use "helpers/geo" as geo
 fn main() i32:
     let string s = "mostly harmless"
     geo.eat(nom s)
-    return Result.Ok(0)
+    return 0

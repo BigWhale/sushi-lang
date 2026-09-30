@@ -17,4 +17,4 @@ extend Sink with Wr:
 fn main() i32:
     let Sink s = Sink(1)
     s.put("one", "two")
-    return Result.Ok(0)
+    return 0

@@ -4,7 +4,7 @@
 # Multiple read-only borrows should work
 # EXPECT_NO_LEAKS: true
 
-fn sum_two(peek i32 a, peek i32 b) i32:
+fn sum_two(peek i32 a, peek i32 b) i32 | StdError:
     return Result.Ok(a + b)
 
 fn main() i32:
@@ -18,6 +18,6 @@ fn main() i32:
     let i32 result = sum_result.realise(0)
 
     if (result == 84):
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

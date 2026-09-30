@@ -28,19 +28,19 @@ fn main() i32:
             println("PASS: FileError works")
         _ ->
             println("FAIL: FileError failed")
-            return Result.Ok(1)
+            return 1
 
     match io_operation(1):
         Result.Err(IoError.NotFound) ->
             println("PASS: IoError works")
         _ ->
             println("FAIL: IoError failed")
-            return Result.Ok(1)
+            return 1
 
     match math_operation(10, 0):
         Result.Err(MathError.DivisionByZero) ->
             println("PASS: MathError works")
-            return Result.Ok(0)
+            return 0
         _ ->
             println("FAIL: MathError failed")
-            return Result.Ok(1)
+            return 1

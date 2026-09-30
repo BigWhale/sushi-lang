@@ -17,12 +17,12 @@ extend string with Display:
 fn first@(...Ts: Display)(...Ts args) string:
     expand(a in args):
         if (a.display() != ""):
-            return Result.Ok("first:{a.display()}")
-        return Result.Ok("empty")
+            return "first:{a.display()}"
+        return "empty"
     println("no arguments")
-    return Result.Ok("none")
+    return "none"
 
 fn main() i32:
-    println(first(7, "two").realise(""))
-    println(first("x", 3).realise(""))
-    return Result.Ok(0)
+    println(first(7, "two"))
+    println(first("x", 3))
+    return 0

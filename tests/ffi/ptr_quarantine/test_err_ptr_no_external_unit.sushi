@@ -3,7 +3,7 @@
 # is dead plumbing (no value could ever inhabit it) and is rejected.
 # EXPECT_ERROR_CODE: CE5009
 fn pass_through(ptr p) ptr:
-    return Result.Ok(p)
+    return p
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

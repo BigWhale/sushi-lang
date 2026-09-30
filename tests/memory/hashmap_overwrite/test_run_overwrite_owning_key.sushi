@@ -17,4 +17,4 @@ fn main() i32:
     println(m.get("key 7").realise(-1))
     println(m.len())
     m.free()
-    return Result.Ok(0)
+    return 0

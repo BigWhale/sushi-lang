@@ -11,4 +11,4 @@ fn main() i32:
     let Tag outer = Tag.of(4)
     let i32 Tag = 7
     println("{outer.n} {Tag.to_str()}")
-    return Result.Ok(0)
+    return 0

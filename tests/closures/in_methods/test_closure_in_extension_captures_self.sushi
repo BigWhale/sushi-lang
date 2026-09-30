@@ -8,10 +8,10 @@ struct Point:
 
 extend Point summed() i32:
     let fn(i32) -> i32 f = |i32 extra| self.x + self.y + extra
-    let i32 r = f(0).realise(0)
+    let i32 r = f(0)
     return r
 
 fn main() i32:
     let Point p = Point(10, 20)
     println("{p.summed()}")
-    return Result.Ok(0)
+    return 0

@@ -23,17 +23,17 @@ fn main() i32:
         Maybe.Some(n) ->
             if (n != 3):
                 println("FAIL: expected 3 got {n}")
-                return Result.Ok(1)
+                return 1
             println("Suit hash via HashMap: {n}")
         Maybe.None() ->
             println("FAIL: not found")
-            return Result.Ok(1)
+            return 1
 
     # Verify all four suits hash distinctly (all insertions survived)
     if (values.len() != 4):
         println("FAIL: expected 4 entries got {values.len()}")
-        return Result.Ok(1)
+        return 1
 
     values.free()
     println("Enum hashing (via HashMap): passed")
-    return Result.Ok(0)
+    return 0

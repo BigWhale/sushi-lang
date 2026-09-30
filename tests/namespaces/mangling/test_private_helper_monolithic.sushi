@@ -6,5 +6,5 @@ use "helpers/mangle_left"
 use "helpers/mangle_right"
 
 fn main() i32:
-    println("{left_value().realise(0)} {right_value().realise(0)}")
-    return Result.Ok(0)
+    println("{left_value()} {right_value()}")
+    return 0

@@ -11,32 +11,32 @@ enum Message:
 fn process(Message m) string:
     match m:
         Message.Greeting(text) ->
-            return Result.Ok("Received: {text}")
+            return "Received: {text}"
         Message.Farewell(text) ->
-            return Result.Ok("Bye: {text}")
+            return "Bye: {text}"
         Message.Silent ->
-            return Result.Ok("Silence")
+            return "Silence"
 
 fn make_greeting(nom string name) string:
     let Message m = Message.Greeting(name)
-    let string result = process(m).realise("error")
+    let string result = process(m)
     # m leaves scope here; string payload freed
-    return Result.Ok(result)
+    return result
 
 fn main() i32:
-    let string s1 = make_greeting(nom "Alice").realise("error")
-    let string s2 = make_greeting(nom "Bob").realise("error")
-    let string s3 = make_greeting(nom "Carol").realise("error")
+    let string s1 = make_greeting(nom "Alice")
+    let string s2 = make_greeting(nom "Bob")
+    let string s3 = make_greeting(nom "Carol")
 
     println("{s1}")
     println("{s2}")
     println("{s3}")
 
     if (s1 != "Received: Alice"):
-        return Result.Ok(1)
+        return 1
     if (s2 != "Received: Bob"):
-        return Result.Ok(1)
+        return 1
     if (s3 != "Received: Carol"):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

@@ -3,11 +3,11 @@
 # through a function-typed argument). inc(41) -> 42.
 # EXPECT_STDOUT_EXACT: "42\n"
 fn apply@(T)(fn(T) -> T f, T x) T:
-    return Result.Ok(f(x)??)
+    return f(x)
 
 fn inc(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1
 
 fn main() i32:
-    println(apply(inc, 41).realise(-1))
-    return Result.Ok(0)
+    println(apply(inc, 41))
+    return 0

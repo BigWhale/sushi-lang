@@ -8,4 +8,4 @@ use <lib/kept_private_lib>
 fn main() i32:
     let i32 n = 7
     println("{convert(nom n).realise(0)}")
-    return Result.Ok(0)
+    return 0

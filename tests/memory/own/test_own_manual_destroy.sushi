@@ -22,4 +22,4 @@ fn main() i32:
     # Compute result: 10 + 20 + 30 = 60
     let i32 result = val1 + val2 + val3
     let i32 expected = 60
-    return Result.Ok(result - expected)
+    return result - expected

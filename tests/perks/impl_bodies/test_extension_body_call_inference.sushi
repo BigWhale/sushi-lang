@@ -11,7 +11,7 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 use <time>
 
-fn plain(i32 n) i32:
+fn plain(i32 n) i32 | StdError:
     return Result.Ok(n * 2)
 
 extend i32 boosted() i32:
@@ -27,4 +27,4 @@ extend i32 boosted() i32:
 
 fn main() i32:
     println(21.boosted())
-    return Result.Ok(0)
+    return 0

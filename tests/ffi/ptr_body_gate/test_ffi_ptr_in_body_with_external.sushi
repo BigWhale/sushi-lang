@@ -8,4 +8,4 @@ fn main() i32:
     let ptr block = libc.reserve(1 as u64, 8 as u64)
     libc.release(block)
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

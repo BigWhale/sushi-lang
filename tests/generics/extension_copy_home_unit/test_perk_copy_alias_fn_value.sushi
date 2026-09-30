@@ -12,9 +12,9 @@ struct Box@(T):
 extend Box@(T) with Runs:
     fn run() i32:
         let fn(i32) -> i32 f = c.tick
-        return f(4).realise(0)
+        return f(4)
 
 fn main() i32:
     let Box@(bool) b = Box(true)
     println(b.run())
-    return Result.Ok(0)
+    return 0

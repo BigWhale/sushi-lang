@@ -18,4 +18,4 @@ fn main() i32:
     let Holder h = Holder("initial-{0}")
     let Holder same = h.passthrough()
     println("label: {same.label} orig: {h.label}")
-    return Result.Ok(0)
+    return 0

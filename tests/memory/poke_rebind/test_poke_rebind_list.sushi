@@ -9,9 +9,8 @@ fn replace_list(poke List@(i32) l) ~:
     fresh.push(77)
     fresh.push(88)
     l := fresh
-    return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let List@(i32) numbers = List.new()
     numbers.push(1)
     numbers.push(2)
@@ -23,4 +22,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    return code

@@ -14,9 +14,9 @@ extend Box@(T) with Show:
         return "boxed {self.item}"
 
 fn render@(S: Show)(S thing) string:
-    return Result.Ok(thing.show())
+    return thing.show()
 
 fn main() i32:
     let Box@(i32) n = Box(42)
-    println(render(n).realise("failed"))
-    return Result.Ok(0)
+    println(render(n))
+    return 0

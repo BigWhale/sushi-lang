@@ -21,16 +21,16 @@ fn main() i32:
                 println("PASS: Result field in struct Ok works")
             else:
                 println("FAIL: Wrong value in struct field")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: Got error in op1")
-            return Result.Ok(1)
+            return 1
 
     match op2.result:
         Result.Ok(_) ->
             println("FAIL: Should get error in op2")
-            return Result.Ok(1)
+            return 1
         Result.Err(OpError.Failed) ->
             println("PASS: Result field in struct Err works")
 
-    return Result.Ok(0)
+    return 0

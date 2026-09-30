@@ -6,4 +6,4 @@ const u8 TOO_BIG = 200 + 100
 
 fn main() i32:
     println(TOO_BIG)
-    return Result.Ok(0)
+    return 0

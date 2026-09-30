@@ -13,4 +13,4 @@ fn main() i32:
     let Acc p = Acc(3)
     let Acc q = Acc(m: 4)
     println("{p.m} {q.m}")
-    return Result.Ok(0)
+    return 0

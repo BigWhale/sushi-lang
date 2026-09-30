@@ -10,4 +10,4 @@ fn main() i32:
     let Row r = rows[0]
     r := Row(tag: "rebound")
     println(r.tag)
-    return Result.Ok(0)
+    return 0

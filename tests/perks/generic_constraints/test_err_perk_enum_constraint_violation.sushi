@@ -16,4 +16,4 @@ fn main() i32:
     let Index ix = Index(HashMap.new())
     # Should fail: Index doesn't satisfy Hashable constraint
     let Option@(Index) opt = Option.Some(ix)
-    return Result.Ok(0)
+    return 0

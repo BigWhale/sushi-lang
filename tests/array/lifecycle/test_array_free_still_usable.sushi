@@ -9,4 +9,4 @@ fn main() i32:
     arr.push(10)
     println(arr.len())
 
-    return Result.Ok(0)
+    return 0

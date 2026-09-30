@@ -7,4 +7,4 @@ use <lib/generic_perk_bin_lib>
 fn main() i32:
     let Box@(string) b = Box("Mostly Harmless")
     println("{b.show()} {b.item}")
-    return Result.Ok(0)
+    return 0

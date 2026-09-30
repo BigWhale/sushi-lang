@@ -5,4 +5,4 @@
 fn main() i32:
     foreach(x in Maybe.Some(1)):
         println(x)
-    return Result.Ok(0)
+    return 0

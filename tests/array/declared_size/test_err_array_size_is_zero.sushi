@@ -6,4 +6,4 @@
 fn main() i32:
     let i32[0] nothing = [1]
     println("{nothing.len()}")
-    return Result.Ok(0)
+    return 0

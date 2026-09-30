@@ -11,51 +11,51 @@ enum Token:
 fn is_operator(Token t) bool:
     match t:
         Token.Plus ->
-            return Result.Ok(true)
+            return true
         Token.Minus ->
-            return Result.Ok(true)
+            return true
         Token.Star ->
-            return Result.Ok(true)
+            return true
         Token.Number(_) ->
-            return Result.Ok(false)
+            return false
 
 fn negate(Token t) Token:
     match t:
         Token.Plus ->
-            return Result.Ok(Token.Minus())
+            return Token.Minus()
         Token.Minus ->
-            return Result.Ok(Token.Plus())
+            return Token.Plus()
         Token.Star ->
-            return Result.Ok(Token.Star())
+            return Token.Star()
         Token.Number(n) ->
-            return Result.Ok(Token.Number(0 - n))
+            return Token.Number(0 - n)
 
 fn get_value(Token t) i32:
     match t:
         Token.Number(n) ->
-            return Result.Ok(n)
+            return n
         _ ->
-            return Result.Ok(0)
+            return 0
 
 fn main() i32:
     let Token t1 = Token.Number(42)
     let Token t2 = Token.Plus()
 
-    let bool is_op1 = is_operator(t1).realise(true)
-    let bool is_op2 = is_operator(t2).realise(false)
+    let bool is_op1 = is_operator(t1)
+    let bool is_op2 = is_operator(t2)
 
     if (is_op1):
         println("FAIL: Number is not operator")
-        return Result.Ok(1)
+        return 1
     if (not is_op2):
         println("FAIL: Plus is operator")
-        return Result.Ok(1)
+        return 1
 
-    let Token neg = negate(t1).realise(Token.Number(0))
-    let i32 v = get_value(neg).realise(0)
+    let Token neg = negate(t1)
+    let i32 v = get_value(neg)
     if (v != -42):
         println("FAIL: expected -42 got {v}")
-        return Result.Ok(1)
+        return 1
 
     println("Enum param/return: all passed")
-    return Result.Ok(0)
+    return 0

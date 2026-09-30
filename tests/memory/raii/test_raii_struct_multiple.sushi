@@ -9,7 +9,7 @@ struct MultiArray:
     string[] names
     bool[] flags
 
-fn test_multiple_arrays() i32:
+fn test_multiple_arrays() i32 | StdError:
     let MultiArray m = MultiArray(new(), new(), new())
 
     m.numbers.push(10)
@@ -32,5 +32,5 @@ fn test_multiple_arrays() i32:
 fn main() i32:
     let Result@(i32, StdError) result = test_multiple_arrays()
     if (result.is_ok()):
-        return Result.Ok(0)
-    return Result.Err(StdError.Error)
+        return 0
+    return 1

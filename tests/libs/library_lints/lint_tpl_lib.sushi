@@ -1,7 +1,7 @@
 fn one() i32:
-    return Result.Ok(1)
+    return 1
 
 public fn count_two@(T)(T a) i32:
     let i32 spare = 3
     one()
-    return Result.Ok(2)
+    return 2

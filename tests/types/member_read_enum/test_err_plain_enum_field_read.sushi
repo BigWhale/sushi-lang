@@ -9,4 +9,4 @@ fn main() i32:
     let Sign s = Sign.Plus
     let i32 v = s.nope
     println("{v}")
-    return Result.Ok(0)
+    return 0

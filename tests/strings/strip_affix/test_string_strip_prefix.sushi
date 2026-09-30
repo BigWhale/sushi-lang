@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: strip_prefix with UTF-8
 use <collections/strings>
 
-fn test_basic_strip() ~:
+fn test_basic_strip() ~ | StdError:
     let string s = "hello world"
     let string result = s.strip_prefix("hello ")
     if (result == "world"):
@@ -11,7 +11,7 @@ fn test_basic_strip() ~:
         println("FAIL: Basic strip_prefix - expected 'world', got '{result}'")
     return Result.Ok(~)
 
-fn test_no_match() ~:
+fn test_no_match() ~ | StdError:
     let string s = "hello world"
     let string result = s.strip_prefix("goodbye")
     if (result == "hello world"):
@@ -20,7 +20,7 @@ fn test_no_match() ~:
         println("FAIL: strip_prefix no match - expected 'hello world', got '{result}'")
     return Result.Ok(~)
 
-fn test_empty_prefix() ~:
+fn test_empty_prefix() ~ | StdError:
     let string s = "hello"
     let string result = s.strip_prefix("")
     if (result == "hello"):
@@ -29,7 +29,7 @@ fn test_empty_prefix() ~:
         println("FAIL: strip_prefix empty - expected 'hello', got '{result}'")
     return Result.Ok(~)
 
-fn test_empty_string() ~:
+fn test_empty_string() ~ | StdError:
     let string s = ""
     let string result = s.strip_prefix("x")
     if (result == ""):
@@ -38,7 +38,7 @@ fn test_empty_string() ~:
         println("FAIL: strip_prefix empty string - expected '', got '{result}'")
     return Result.Ok(~)
 
-fn test_full_match() ~:
+fn test_full_match() ~ | StdError:
     let string s = "test"
     let string result = s.strip_prefix("test")
     if (result == ""):
@@ -47,7 +47,7 @@ fn test_full_match() ~:
         println("FAIL: strip_prefix full - expected '', got '{result}'")
     return Result.Ok(~)
 
-fn test_prefix_longer() ~:
+fn test_prefix_longer() ~ | StdError:
     let string s = "hi"
     let string result = s.strip_prefix("hello")
     if (result == "hi"):
@@ -56,7 +56,7 @@ fn test_prefix_longer() ~:
         println("FAIL: strip_prefix longer - expected 'hi', got '{result}'")
     return Result.Ok(~)
 
-fn test_utf8() ~:
+fn test_utf8() ~ | StdError:
     let string s = "café au lait"
     let string result = s.strip_prefix("café ")
     if (result == "au lait"):
@@ -65,7 +65,7 @@ fn test_utf8() ~:
         println("FAIL: strip_prefix UTF-8 - expected 'au lait', got '{result}'")
     return Result.Ok(~)
 
-fn test_single_char() ~:
+fn test_single_char() ~ | StdError:
     let string s = "xhello"
     let string result = s.strip_prefix("x")
     if (result == "hello"):
@@ -91,4 +91,4 @@ fn main() i32:
         println("")
     if (test_single_char().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

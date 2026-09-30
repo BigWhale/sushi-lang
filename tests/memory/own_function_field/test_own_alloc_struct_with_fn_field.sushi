@@ -11,5 +11,5 @@ struct F:
 fn main() i32:
     let Own@(F) o1 = Own.alloc(F(|i32 x| x + 1, 5))
     println("{o1.get().n}")
-    println("{o1.get().f(41).realise(0)}")
-    return Result.Ok(0)
+    println("{o1.get().f(41)}")
+    return 0

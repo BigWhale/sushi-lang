@@ -4,7 +4,7 @@
 # EXPECT_STDOUT_EXACT: "longer-aa-1\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-fn swap_in(poke string s) ~:
+fn swap_in(poke string s) ~ | StdError:
     let string n = "longer-{s}"
     s := n
     return Result.Ok(~)
@@ -14,4 +14,4 @@ fn main() i32:
     let Result@(~, StdError) r = swap_in(poke a)
     if (r.is_ok()):
         println(a)
-    return Result.Ok(0)
+    return 0

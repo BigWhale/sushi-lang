@@ -4,17 +4,17 @@
 use "helpers/ecopy_cst"
 
 fn plain(i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 struct Box@(T):
     T v
 
 extend Box@(T) run() i32:
     let fn(i32) -> i32 f = plain
-    return f(4).realise(0)
+    return f(4)
 
 fn main() i32:
     let Box@(bool) b = Box(true)
     println(b.run())
-    println(tick(1).realise(0))
-    return Result.Ok(0)
+    println(tick(1))
+    return 0

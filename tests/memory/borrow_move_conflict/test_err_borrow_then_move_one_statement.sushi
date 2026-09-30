@@ -8,14 +8,14 @@
 # EXPECT_ERROR_CODE: CE2401
 fn both(peek string r, nom string owned) i32:
     println("ref: {r} owned: {owned}")
-    return Result.Ok(1)
+    return 1
 
 fn run_test() i32:
     let string s = "hello-{1}"
-    let i32 x = both(peek s, nom s)??
+    let i32 x = both(peek s, nom s)
     println("x: {x}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

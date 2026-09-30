@@ -8,4 +8,4 @@ fn main() i32:
     # This should cause a type error - bitwise operations not supported on strings
     let i32 result = s & 5
 
-    return Result.Ok(0)
+    return 0

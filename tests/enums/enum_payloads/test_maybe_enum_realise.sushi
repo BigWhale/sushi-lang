@@ -22,4 +22,4 @@ fn main() i32:
     Color.Red -> println("default red")
     Color.Blue -> println("default blue")
 
-  return Result.Ok(0)
+  return 0

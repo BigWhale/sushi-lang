@@ -11,9 +11,8 @@ fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
         let string next_word = words[i + 1]
         chain.insert(current.clone(), next_word.clone())
         i := i + 1
-    return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let string corpus = "hello world test foo bar"
     let string[] words = corpus.split(" ")
     let HashMap@(string, string) chain = HashMap.new()
@@ -28,7 +27,7 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result
 
 
 

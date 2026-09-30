@@ -13,4 +13,4 @@ extend Cell static of(i32 n) Cell:
 fn main() i32:
     let Cell c = Cell.of(1)
     println("{c.n}")
-    return Result.Ok(0)
+    return 0

@@ -6,7 +6,7 @@
 use "helpers/outer"
 
 fn main() i32:
-    let Vec o = origin().realise(Vec(0, 0))
-    let Vec sq = unit_square().realise(Vec(0, 0))
-    println("{describe(o).realise('?')} {describe(sq).realise('?')}")
-    return Result.Ok(0)
+    let Vec o = origin()
+    let Vec sq = unit_square()
+    println("{describe(o)} {describe(sq)}")
+    return 0

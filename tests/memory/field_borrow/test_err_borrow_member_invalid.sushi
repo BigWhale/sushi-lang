@@ -5,13 +5,12 @@
 struct Config:
     i32 port
 
-fn get_config() Config:
+fn get_config() Config | StdError:
     return Result.Ok(Config(8080))
 
 fn modify_port(poke i32 p) ~:
     p := 9000
-    return Result.Ok(~)
 
 fn main() i32:
     modify_port(poke get_config().port)
-    return Result.Ok(0)
+    return 0

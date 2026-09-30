@@ -8,34 +8,34 @@ fn create_pair@(T)(nom T first, nom T second) T:
     let T temp = second
     result := temp
     result := first
-    return Result.Ok(result)
+    return result
 
 fn compute@(T)(nom T value) T:
     # Multiple variable declarations with generic type
     let T a = value
     let T b = a
     let T c = b
-    return Result.Ok(c)
+    return c
 
 fn run_test() i32:
     # Test with i32
-    let i32 num1 = create_pair(nom 10, nom 20)??
-    let i32 num2 = compute(nom 42)??
+    let i32 num1 = create_pair(nom 10, nom 20)
+    let i32 num2 = compute(nom 42)
 
     # Test with string (still need to call to ensure monomorphization)
-    if (create_pair(nom "hello", nom "world")?? == ""):
-        return Result.Ok(10)
-    if (compute(nom "test")?? == ""):
-        return Result.Ok(11)
+    if (create_pair(nom "hello", nom "world") == ""):
+        return 10
+    if (compute(nom "test") == ""):
+        return 11
 
     # Verify values are correct
     if (num1 != 10):
-        return Result.Ok(1)
+        return 1
     if (num2 != 42):
-        return Result.Ok(2)
+        return 2
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

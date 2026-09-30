@@ -13,4 +13,4 @@ fn main() i32:
     tmp.push(3)
     let Maybe@(List@(i32)) m = Maybe.Some(tmp)
     println("some = {m.is_some()}")
-    return Result.Ok(0)
+    return 0

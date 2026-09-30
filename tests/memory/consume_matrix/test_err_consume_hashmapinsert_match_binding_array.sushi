@@ -21,4 +21,4 @@ fn main() i32:
             println("m={m.len()}")
         Shape.Empty -> println("empty")
     m.free()
-    return Result.Ok(0)
+    return 0

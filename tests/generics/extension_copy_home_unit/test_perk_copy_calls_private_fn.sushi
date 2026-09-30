@@ -4,7 +4,7 @@
 use "helpers/ecopy_cst"
 
 fn plain(i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 perk Runs:
     fn run() i32
@@ -14,10 +14,10 @@ struct Box@(T):
 
 extend Box@(T) with Runs:
     fn run() i32:
-        return plain(4).realise(0)
+        return plain(4)
 
 fn main() i32:
     let Box@(bool) b = Box(true)
     println(b.run())
-    println(tick(1).realise(0))
-    return Result.Ok(0)
+    println(tick(1))
+    return 0

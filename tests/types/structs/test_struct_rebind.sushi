@@ -10,4 +10,4 @@ fn main() i32:
     let Point p = Point(10, 20)
     p := Point(30, 40)
     print(p.x)
-    return Result.Ok(0)
+    return 0

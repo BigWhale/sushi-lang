@@ -25,26 +25,26 @@ struct Holder:
 
 # A return is a consuming use: the caller becomes the owner, so the field must be cloned.
 fn pick(peek Holder h) fn(i32) -> i32:
-    return Result.Ok(h.handler.clone())
+    return h.handler.clone()
 
-fn run() i32:
+fn run() i32 | StdError:
     let i32 k = 10
     let Holder h = Holder(|i32 x| x + k)
 
     # A container insert is a consuming use; the list owns and frees its own copy.
     let List@(fn(i32) -> i32) fns = List.new()
     fns.push(h.handler.clone())
-    let i32 a = fns.get(0)??(5)??
+    let i32 a = fns.get(0)??(5)
 
-    let fn(i32) -> i32 g = pick(peek h)??
-    let i32 b = g(7)??
+    let fn(i32) -> i32 g = pick(peek h)
+    let i32 b = g(7)
 
     # A container get-out borrows for the same reason a field read does.
     let fn(i32) -> i32 from_list = fns.get(0)??.clone()
-    let i32 c = from_list(9)??
+    let i32 c = from_list(9)
 
     # Every owner above is independent, so the original still works.
-    let i32 d = h.handler(11)??
+    let i32 d = h.handler(11)
 
     fns.destroy()
     println("{a} {b} {c} {d}")
@@ -52,4 +52,4 @@ fn run() i32:
 
 fn main() i32:
     let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    return rc

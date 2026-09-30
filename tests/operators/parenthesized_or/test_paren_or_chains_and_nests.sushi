@@ -20,4 +20,4 @@ fn main() i32:
     if (mixed):
         println("mixed")
 
-    return Result.Ok(0)
+    return 0

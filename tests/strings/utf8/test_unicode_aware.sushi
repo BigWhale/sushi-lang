@@ -51,4 +51,4 @@ fn main() i32:
     else:
         println(1)           # 1 (not empty)
 
-    return Result.Ok(0)
+    return 0

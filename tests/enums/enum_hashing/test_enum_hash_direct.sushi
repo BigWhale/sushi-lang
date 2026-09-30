@@ -18,6 +18,6 @@ fn main() i32:
     let u64 h2 = Suit.Spades().hash()
     if (h1 == h2):
         println("FAIL: different variants have same hash")
-        return Result.Ok(1)
+        return 1
     println("Unit enum hash: passed")
-    return Result.Ok(0)
+    return 0

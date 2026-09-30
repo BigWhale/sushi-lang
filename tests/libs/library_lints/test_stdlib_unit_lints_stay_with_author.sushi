@@ -8,4 +8,4 @@ use <fixture/lint_mod>
 
 fn main() i32:
     println(run_it(1).realise(0))
-    return Result.Ok(0)
+    return 0

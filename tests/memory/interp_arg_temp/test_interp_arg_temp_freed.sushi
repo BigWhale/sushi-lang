@@ -15,10 +15,10 @@ use <collections/strings>
 use <collections/hashmap>
 
 fn look(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn eat(nom string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let string tail = "cd"
@@ -42,7 +42,7 @@ fn main() i32:
     map.free()
 
     # A declared callee: the borrow, and the `nom` twin that must NOT be freed twice.
-    println(look("{tail}!").realise(-1))
-    println(eat(nom "{tail}!").realise(-1))
+    println(look("{tail}!"))
+    println(eat(nom "{tail}!"))
 
-    return Result.Ok(0)
+    return 0

@@ -7,7 +7,7 @@
 extend List@(T) dup@(U)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
-        let U mapped = f(x)??
+        let U mapped = f(x)
         let Maybe@(U) held = Maybe.Some(mapped)
         let Maybe@(U) copy = held.clone()
         out.push(copy??)
@@ -22,4 +22,4 @@ fn main() i32:
             foreach(s in b.iter()):
                 println(s)
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

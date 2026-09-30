@@ -16,15 +16,15 @@ fn main() i32:
     # Verify initial state
     if (size != 0):
         println("ERROR: Initial size should be 0")
-        return Result.Ok(1)
+        return 1
 
     if (not empty):
         println("ERROR: Initial list should be empty")
-        return Result.Ok(2)
+        return 2
 
     if (cap != 0):
         println("ERROR: Initial capacity should be 0 (lazy allocation)")
-        return Result.Ok(3)
+        return 3
 
     println("All basic methods working!")
-    return Result.Ok(0)
+    return 0

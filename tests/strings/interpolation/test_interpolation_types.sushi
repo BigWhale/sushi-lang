@@ -23,4 +23,4 @@ fn main() i32:
     let i32 b = 20
     println("Sum: {a + b}")
 
-    return Result.Ok(0)
+    return 0

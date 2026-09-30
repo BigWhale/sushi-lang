@@ -15,4 +15,4 @@ fn main() i32:
     let i32[HEX_WIDE] hex_named = [1, 2, 3, 4]
     println("{hex_named.len()}")
 
-    return Result.Ok(0)
+    return 0

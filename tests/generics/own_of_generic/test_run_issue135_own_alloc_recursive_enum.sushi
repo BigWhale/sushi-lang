@@ -15,4 +15,4 @@ fn main() i32:
     let Own@(Tree@(i32)) root = Own.alloc(Tree.Node(left, right))
     println("leaf = 1")
     root.destroy()
-    return Result.Ok(0)
+    return 0

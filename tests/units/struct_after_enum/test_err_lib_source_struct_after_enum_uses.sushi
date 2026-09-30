@@ -13,4 +13,4 @@ fn main() i32:
     let Color p = Color(3)
     let Color q = Color(m: 4)
     println("{p.m} {q.m}")
-    return Result.Ok(0)
+    return 0

@@ -14,4 +14,4 @@ fn main() i32:
     b.push(2)
     c.push("three")
     println("{a.len()} {b.len()} {c.len()}")
-    return Result.Ok(0)
+    return 0

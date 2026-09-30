@@ -27,4 +27,4 @@ fn main() i32:
     if (owner_rwx and group_rx and other_rx):
         println("Mostly Harmless")
     println(sum)
-    return Result.Ok(0)
+    return 0

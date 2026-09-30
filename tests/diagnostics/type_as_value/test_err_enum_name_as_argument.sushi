@@ -5,8 +5,7 @@ enum Color:
 
 fn eat(i32 v) ~:
     println("{v}")
-    return Result.Ok(~)
 
 fn main() i32:
-    eat(Color).realise(~)
-    return Result.Ok(0)
+    eat(Color)
+    return 0

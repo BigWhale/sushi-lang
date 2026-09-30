@@ -14,14 +14,14 @@ extend Box@(T) with Show:
     fn show() string:
         return "box"
 
-fn wrap@(T)(nom T v) Box@(T):
+fn wrap@(T)(nom T v) Box@(T) | StdError:
     return Result.Ok(Box(v))
 
 fn show_it@(S: Show)(S s) string:
-    return Result.Ok(s.show())
+    return s.show()
 
 fn main() i32:
     match wrap(nom "towel"):
-        Result.Ok(b) -> println(show_it(b).realise("?"))
+        Result.Ok(b) -> println(show_it(b))
         Result.Err(_) -> println("no box")
-    return Result.Ok(0)
+    return 0

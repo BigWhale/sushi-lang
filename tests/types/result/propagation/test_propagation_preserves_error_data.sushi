@@ -31,31 +31,31 @@ fn main() i32:
     match full_validation("a"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten TooShort")
-            return Result.Ok(1)
+            return 1
         Result.Err(ValidationError.TooShort) ->
             println("PASS: TooShort error preserved")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
     match full_validation("verylongstring"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten TooLong")
-            return Result.Ok(1)
+            return 1
         Result.Err(ValidationError.TooLong) ->
             println("PASS: TooLong error preserved")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
     match full_validation("###"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten InvalidFormat")
-            return Result.Ok(1)
+            return 1
         Result.Err(ValidationError.InvalidFormat) ->
             println("PASS: InvalidFormat error preserved")
         Result.Err(_) ->
             println("FAIL: Wrong error variant")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

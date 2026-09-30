@@ -22,4 +22,4 @@ fn main() i32:
     println("{total}")
     let Crate c = Crate.extend(9)
     println("{c.weight}")
-    return Result.Ok(0)
+    return 0

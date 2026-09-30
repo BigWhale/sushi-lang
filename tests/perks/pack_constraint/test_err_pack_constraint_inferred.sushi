@@ -12,8 +12,7 @@ extend i32 with Named:
 fn many@(...Ts: Named)(...Ts xs) ~:
     expand(a in xs):
         println(a.name())
-    return Result.Ok(~)
 
 fn main() i32:
     many(5, true)
-    return Result.Ok(0)
+    return 0

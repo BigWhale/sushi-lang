@@ -6,4 +6,4 @@ fn main() i32:
             let ptr p = 0
             println("Mostly Harmless")
         _ -> println("other")
-    return Result.Ok(0)
+    return 0

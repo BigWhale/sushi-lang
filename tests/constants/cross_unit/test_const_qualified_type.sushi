@@ -8,9 +8,9 @@ const sh.Shape SMALL = sh.UNIT
 
 fn radius(sh.Shape s) i32:
     match s:
-        sh.Shape.Dot -> return Result.Ok(0)
-        sh.Shape.Circle(r) -> return Result.Ok(r)
+        sh.Shape.Dot -> return 0
+        sh.Shape.Circle(r) -> return r
 
 fn main() i32:
-    println("{radius(SMALL).realise(-1)}")
-    return Result.Ok(0)
+    println("{radius(SMALL)}")
+    return 0

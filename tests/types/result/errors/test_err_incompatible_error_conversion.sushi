@@ -12,4 +12,4 @@ fn returns_a() i32 | ErrorA:
 
 fn main() i32:
     let Result@(i32, ErrorB) result = returns_a()
-    return Result.Ok(0)
+    return 0

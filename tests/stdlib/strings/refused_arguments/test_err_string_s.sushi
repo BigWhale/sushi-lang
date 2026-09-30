@@ -5,4 +5,4 @@ fn main() i32:
     let string s = "test"
     # Error: s() requires exactly 2 arguments (start, end)
     let string slice = s.s(0)
-    return Result.Ok(0)
+    return 0

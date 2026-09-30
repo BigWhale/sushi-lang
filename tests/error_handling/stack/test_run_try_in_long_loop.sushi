@@ -20,17 +20,17 @@ enum Tag:
     None()
 
 fn double(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 # one unwrap per iteration, a million times
 fn accumulate(i32 n) i64:
     let i64 total = 0
     let i32 i = 0
     while (i < n):
-        let i32 d = double(i)??
+        let i32 d = double(i)
         total := total + (d as i64)
         i := i + 1
-    return Result.Ok(total)
+    return total
 
 # two unwraps per iteration, in a nested loop, so the count is the product
 fn nested(i32 outer, i32 inner) i32:
@@ -39,13 +39,13 @@ fn nested(i32 outer, i32 inner) i32:
     while (i < outer):
         let i32 j = 0
         while (j < inner):
-            let i32 a = double(j)??
-            let i32 b = double(a)??
+            let i32 a = double(j)
+            let i32 b = double(a)
             if (b == (a * 2)):
                 count := count + 1
             j := j + 1
         i := i + 1
-    return Result.Ok(count)
+    return count
 
 # construct an enum and take its payload apart, once per iteration
 fn tagged(i32 n) i32:
@@ -60,10 +60,10 @@ fn tagged(i32 n) i32:
             Tag.None() ->
                 c := c
         i := i + 1
-    return Result.Ok(c)
+    return c
 
 # a List method returning Result/Maybe, once per iteration
-fn listed(i32 n) i32:
+fn listed(i32 n) i32 | StdError:
     let List@(i32) xs = List.new()
     let i32 i = 0
     while (i < n):
@@ -84,13 +84,13 @@ fn listed(i32 n) i32:
     xs.destroy()
     return Result.Ok(popped)
 
-fn run_test() i32:
-    println("sum={accumulate(1000000)??}")
-    println("deep={nested(1000, 2000)??}")
-    println("tagged={tagged(1000000)??}")
+fn run_test() i32 | StdError:
+    println("sum={accumulate(1000000)}")
+    println("deep={nested(1000, 2000)}")
+    println("tagged={tagged(1000000)}")
     println("listed={listed(300000)??}")
     return Result.Ok(0)
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

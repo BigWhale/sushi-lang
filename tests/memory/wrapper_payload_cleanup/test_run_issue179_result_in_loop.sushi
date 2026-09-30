@@ -4,11 +4,11 @@
 # EXPECT_STDOUT_CONTAINS: "9 ok = true"
 # EXPECT_NO_LEAKS: true
 
-fn mk() string:
+fn mk() string | StdError:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn main() i32:
     foreach(i in 0..10):
         let Result@(string, StdError) r = mk()
         println("{i} ok = {r.is_ok()}")
-    return Result.Ok(0)
+    return 0

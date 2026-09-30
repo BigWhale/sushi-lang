@@ -8,9 +8,9 @@ struct Mute:
     i32 n
 
 fn use_it@(T: k.Loud)(T x) i32:
-    return Result.Ok(x.volume())
+    return x.volume()
 
 fn main() i32:
     let Mute m = Mute(1)
-    println("{use_it(m).realise(0)}")
-    return Result.Ok(0)
+    println("{use_it(m)}")
+    return 0

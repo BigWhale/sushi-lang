@@ -23,20 +23,20 @@ fn main() i32:
             println("Monday: {s}")
         Maybe.None() ->
             println("FAIL: Monday not found")
-            return Result.Ok(1)
+            return 1
 
     let Maybe@(string) tue = schedule.get(Weekday.Tue())
     match tue:
         Maybe.Some(_) ->
             println("FAIL: Tuesday should not exist")
-            return Result.Ok(1)
+            return 1
         Maybe.None() ->
             println("Tuesday: none")
 
     if (schedule.len() != 3):
         println("FAIL: expected 3")
-        return Result.Ok(1)
+        return 1
 
     schedule.free()
     println("Weekday HashMap: all passed")
-    return Result.Ok(0)
+    return 0

@@ -9,7 +9,7 @@ enum Shade:
 struct Box:
     Shade s
 
-fn bump(peek Box b) ~:
+fn bump(peek Box b) ~ | StdError:
     match b.s:
         Shade.Dim(poke r) -> r := 9
         Shade.Lit(_) -> println("lit")
@@ -20,4 +20,4 @@ fn main() i32:
     match bump(peek b):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

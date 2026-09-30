@@ -10,10 +10,10 @@ fn run() i32:
     xs.push("ab")
     xs.push("x")
     xs.push("cde")
-    let List@(string) kept = filter(xs, |string s| s.len() > 1)??
+    let List@(string) kept = filter(xs, |string s| s.len() > 1)
     foreach(s in kept.iter()):
         println(s)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run().realise(1))
+    return run()

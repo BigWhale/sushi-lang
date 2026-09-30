@@ -26,7 +26,6 @@ fn allocate_large_struct() ~:
         i := i + 1
 
     # RAII should automatically free all 5 arrays when container goes out of scope
-    return Result.Ok(~)
 
 fn test_memory_cleanup() ~:
     println("Starting memory leak test...")
@@ -47,8 +46,7 @@ fn test_memory_cleanup() ~:
     println("Memory leak test completed!")
     println("If you saw stable memory usage, RAII is working correctly!")
 
-    return Result.Ok(~)
 
 fn main() i32:
     test_memory_cleanup()
-    return Result.Ok(0)
+    return 0

@@ -4,11 +4,11 @@
 # EXPECT_STDERR_CONTAINS: help: borrow it at the call site: `peek t`
 fn look@(T)(peek string s, T x) i32:
     println("{x}")
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let string t = "hi"
     let i32 n = 1
-    let i32 r = look(t, n).realise(0)
+    let i32 r = look(t, n)
     println("{r}")
-    return Result.Ok(0)
+    return 0

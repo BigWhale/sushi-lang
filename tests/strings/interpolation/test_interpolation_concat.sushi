@@ -6,4 +6,4 @@ fn main() i32:
   let string the_question = "What is 6 * 9?"
   let string deep_thought = "{the_question} {the_answer}"
   println(deep_thought)
-  return Result.Ok(0)
+  return 0

@@ -10,7 +10,7 @@ extend List@(i32) doubled() List@(i32) | StdError:
         out.push(x * 2)
     return Result.Ok(out)
 
-fn run() i32:
+fn run() i32 | StdError:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
@@ -22,4 +22,4 @@ fn run() i32:
 
 fn main() i32:
     let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    return rc

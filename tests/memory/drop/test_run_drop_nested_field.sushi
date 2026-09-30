@@ -22,4 +22,4 @@ extend Wrapper with Drop:
 fn main() i32:
     let Wrapper w = Wrapper(Handle(1), 9)
     println("{w.tag}")
-    return Result.Ok(0)
+    return 0

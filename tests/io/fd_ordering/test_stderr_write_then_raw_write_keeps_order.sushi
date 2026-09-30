@@ -14,4 +14,4 @@ fn main() i32:
     posix.raw_write(2, "B-", 2 as i64)
     stderr.write("C")
     println("done")
-    return Result.Ok(0)
+    return 0

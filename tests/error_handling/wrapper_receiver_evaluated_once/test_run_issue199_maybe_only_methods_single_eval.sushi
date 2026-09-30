@@ -8,13 +8,12 @@
 
 fn mk() Maybe@(i32):
     println("called")
-    return Result.Ok(Maybe.Some(1))
+    return Maybe.Some(1)
 
 fn probe() ~:
-    println("some = {mk()??.is_some()}")
-    println("none = {mk()??.is_none()}")
-    return Result.Ok(~)
+    println("some = {mk().is_some()}")
+    println("none = {mk().is_none()}")
 
 fn main() i32:
     probe()
-    return Result.Ok(0)
+    return 0

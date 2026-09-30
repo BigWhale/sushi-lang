@@ -5,8 +5,8 @@ use <collections/hashmap>
 fn main() i32:
     let HashMap@(i32, Point) map = HashMap.new()
     if (map.len() != 0):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0
 
 struct Point:
     i32 x

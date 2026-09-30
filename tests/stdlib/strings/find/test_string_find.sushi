@@ -69,7 +69,7 @@ fn main() i32:
         Maybe.Some(index) -> println(index)
         Maybe.None() -> println(-1)
 
-    return Result.Ok(0)
+    return 0
 
 # Expected output:
 # 6

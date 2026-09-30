@@ -10,10 +10,9 @@ fn show(string text) ~:
     match parse_url(text):
         Result.Ok(u) -> println("{u.text()}")
         Result.Err(_) -> println("{text} refused")
-    return Result.Ok(~)
 
 fn main() i32:
     show("HTTP://EXAMPLE.COM:80/a")
     show("https://example.com:8443")
     show("http://user@example.com/p?q=1#f")
-    return Result.Ok(0)
+    return 0

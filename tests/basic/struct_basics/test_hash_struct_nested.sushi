@@ -15,4 +15,4 @@ fn main() i32:
     let Rectangle r = Rectangle(tl, br)
     let u64 h = r.hash()
     println("Rectangle hash: {h}")
-    return Result.Ok(0)
+    return 0

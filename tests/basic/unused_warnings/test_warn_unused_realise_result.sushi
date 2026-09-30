@@ -9,4 +9,4 @@ fn main() i32:
     # Try to call a method on it
     let i32 x = result.realise(0)
 
-    return Result.Ok(0)
+    return 0

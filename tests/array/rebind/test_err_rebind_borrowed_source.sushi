@@ -7,4 +7,4 @@ fn main() i32:
     let string prefix = "pre"
     let string[] words = from(["{prefix}-a", "{prefix}-b"])
     words[0] := words[1]
-    return Result.Ok(0)
+    return 0

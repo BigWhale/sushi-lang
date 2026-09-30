@@ -21,70 +21,70 @@ fn fixture_header(u8 version, u8 mlen) u8[]:
     while (j < 7):
         h.push(0)
         j := j + 1
-    return Result.Ok(h)
+    return h
 
 fn write_fixture(string path, u8[] bytes) i32:
     match open(path, FileMode.WriteB()):
         Result.Ok(nom out) ->
             out.write_bytes(bytes)
             out.close()
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
 fn show_err(SlibError e) string:
     match e:
         SlibError.Io(io) ->
             match io:
                 IoError.NotFound ->
-                    return Result.Ok("Io(NotFound)")
+                    return "Io(NotFound)"
                 _ ->
-                    return Result.Ok("Io(another IoError)")
+                    return "Io(another IoError)"
         SlibError.BadMagic() ->
-            return Result.Ok("BadMagic")
+            return "BadMagic"
         SlibError.BadVersion(v) ->
-            return Result.Ok("BadVersion({v})")
+            return "BadVersion({v})"
         SlibError.Truncated(_, _, _) ->
-            return Result.Ok("Truncated")
+            return "Truncated"
         SlibError.TooLarge(_) ->
-            return Result.Ok("TooLarge")
+            return "TooLarge"
         SlibError.Invalid(_) ->
-            return Result.Ok("Invalid")
+            return "Invalid"
         SlibError.Decode(me) ->
             match me:
                 MpError.Truncated(off) ->
-                    return Result.Ok("Decode(Truncated({off}))")
+                    return "Decode(Truncated({off}))"
                 MpError.Unsupported(t) ->
-                    return Result.Ok("Decode(Unsupported({t}))")
+                    return "Decode(Unsupported({t}))"
                 MpError.BadUtf8(off) ->
-                    return Result.Ok("Decode(BadUtf8({off}))")
+                    return "Decode(BadUtf8({off}))"
                 MpError.Trailing(p) ->
-                    return Result.Ok("Decode(Trailing({p}))")
+                    return "Decode(Trailing({p}))"
 
-fn check(string path) ~:
+fn check(string path) ~ | StdError:
     match read_metadata(path):
         Result.Ok(meta) ->
             println(show(meta)??)
         Result.Err(e) ->
-            println(show_err(e)??)
+            println(show_err(e))
     return Result.Ok(~)
 
-fn run_test() i32:
-    let u8[] wrong_magic = fixture_header(4, 1)??
+fn run_test() i32 | StdError:
+    let u8[] wrong_magic = fixture_header(4, 1)
     wrong_magic[0] := 0x00
     wrong_magic.push(0xc0)
-    write_fixture("test_slib_wrong_magic.slib", wrong_magic)??
+    write_fixture("test_slib_wrong_magic.slib", wrong_magic)
 
-    let u8[] old_version = fixture_header(2, 1)??
+    let u8[] old_version = fixture_header(2, 1)
     old_version.push(0xc0)
-    write_fixture("test_slib_old_version.slib", old_version)??
+    write_fixture("test_slib_old_version.slib", old_version)
 
     let u8[] short_file = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3, 0x04, 0x00, 0x00, 0x00])
-    write_fixture("test_slib_short.slib", short_file)??
+    write_fixture("test_slib_short.slib", short_file)
 
-    let u8[] bad_blob = fixture_header(4, 1)??
+    let u8[] bad_blob = fixture_header(4, 1)
     bad_blob.push(0xc1)
-    write_fixture("test_slib_bad_blob.slib", bad_blob)??
+    write_fixture("test_slib_bad_blob.slib", bad_blob)
 
     check("test_slib_wrong_magic.slib")??
     check("test_slib_old_version.slib")??
@@ -95,4 +95,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

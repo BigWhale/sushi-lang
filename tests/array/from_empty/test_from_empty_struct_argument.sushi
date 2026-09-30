@@ -11,4 +11,4 @@ struct Holder:
 fn main() i32:
     let Holder h = Holder(from([]), from(["towel"]))
     println("{h.data.len()} {h.names.len()}")
-    return Result.Ok(0)
+    return 0

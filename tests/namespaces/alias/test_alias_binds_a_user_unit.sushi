@@ -4,6 +4,6 @@
 use "helpers/geo" as geo
 
 fn main() i32:
-    let i32 doubled = geo.twice(42).realise(0)
+    let i32 doubled = geo.twice(42)
     println("{doubled} {geo.MAX_DEPTH}")
-    return Result.Ok(0)
+    return 0

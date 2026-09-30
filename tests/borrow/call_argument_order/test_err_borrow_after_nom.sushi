@@ -5,11 +5,11 @@
 use <collections/strings>
 
 fn keep(nom string[] dst, string v) i32:
-    return Result.Ok(v.len() + dst.len())
+    return v.len() + dst.len()
 
 fn main() i32:
     let string s = "abc"
     let string[] a = from([s.upper(), s.lower()])
     let string first = a[0]
-    println(keep(nom a, first).realise(0))
-    return Result.Ok(0)
+    println(keep(nom a, first))
+    return 0

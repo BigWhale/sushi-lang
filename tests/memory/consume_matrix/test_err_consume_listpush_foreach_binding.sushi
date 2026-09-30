@@ -19,4 +19,4 @@ fn main() i32:
     foreach(p in src.iter()):
         dst.push(p)
     println("dst={dst.len()}")
-    return Result.Ok(0)
+    return 0

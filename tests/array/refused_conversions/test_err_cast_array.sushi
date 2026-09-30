@@ -4,4 +4,4 @@
 fn main() i32:
   let i32[3] arr = [1, 2, 3]
   let i32 x = arr as i32  # Should fail with CE2014
-  return Result.Ok(0)
+  return 0

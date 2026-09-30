@@ -29,10 +29,10 @@ Reads a ship's hull rating.
 - Returns: The hull rating.
 :##
 fn hull_of(Ship ship) i32:
-    return Result.Ok(ship.hull)
+    return ship.hull
 
 fn main() i32:
     let Ship s = Ship(7)
     println("{ANSWER}")
-    println("{hull_of(s).realise(0)}")
-    return Result.Ok(0)
+    println("{hull_of(s)}")
+    return 0

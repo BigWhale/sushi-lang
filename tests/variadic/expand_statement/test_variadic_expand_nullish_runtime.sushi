@@ -21,12 +21,12 @@ extend bool with Display:
     fn display() string:
         return "yes"
 
-fn check(string s) string:
+fn check(string s) string | StdError:
     if (s == "BOOM"):
         return Result.Err(StdError.Error)
     return Result.Ok("ok:{s}")
 
-fn process@(...Ts: Display)(...Ts args) ~:
+fn process@(...Ts: Display)(...Ts args) ~ | StdError:
     expand(a in args):
         let string shown = a.display()
         let string checked = check(shown)??
@@ -36,4 +36,4 @@ fn process@(...Ts: Display)(...Ts args) ~:
 fn main() i32:
     process(42, "hi", true)
     println("done")
-    return Result.Ok(0)
+    return 0

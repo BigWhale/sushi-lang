@@ -12,10 +12,10 @@ fn describe(u8[] b) i32:
     println("len={b.len()}")
     println("sum={total}")
     println("first={b[0] as i32}")
-    return Result.Ok(b.len())
+    return b.len()
 
 fn main() i32:
     # Inline from([...]) argument -- the exact #131 repro shape.
-    let i32 ret = describe(from([104 as u8, 105 as u8])).realise(-1)
+    let i32 ret = describe(from([104 as u8, 105 as u8]))
     println("ret={ret}")
-    return Result.Ok(0)
+    return 0

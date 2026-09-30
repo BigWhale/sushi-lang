@@ -9,4 +9,4 @@ public enum Slot@(T):
     Empty
 
 public fn make_crate(i32 v) Crate@(i32):
-    return Result.Ok(Crate(v))
+    return Crate(v)

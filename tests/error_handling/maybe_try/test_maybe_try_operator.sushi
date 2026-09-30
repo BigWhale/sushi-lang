@@ -6,7 +6,7 @@
 
 use <collections/strings>
 
-fn try_parse(string input) i32:
+fn try_parse(string input) i32 | StdError:
     let i32 pos = input.find("x")??  # Unwrap Some or propagate None as Err
     return Result.Ok(pos)
 
@@ -25,4 +25,4 @@ fn main() i32:
     else:
         println("Not found (propagated from None)")
 
-    return Result.Ok(0)
+    return 0

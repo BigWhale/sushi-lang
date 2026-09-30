@@ -8,4 +8,4 @@ const f64 TWO_TURNS = TAU * 2.0
 
 fn main() i32:
     println("{QUARTER_TURN} {TWO_TURNS}")
-    return Result.Ok(0)
+    return 0

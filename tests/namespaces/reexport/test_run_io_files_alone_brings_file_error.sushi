@@ -16,4 +16,4 @@ fn main() i32:
     match seen:
         FileError.NotFound -> println("not found")
         _ -> println("other")
-    return Result.Ok(0)
+    return 0

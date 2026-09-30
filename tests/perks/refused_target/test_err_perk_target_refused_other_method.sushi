@@ -17,4 +17,4 @@ extend Box@(i32) with Named:
 fn main() i32:
     let Box@(i32, i32) b = Box(1, 2)
     println(b.title())
-    return Result.Ok(0)
+    return 0

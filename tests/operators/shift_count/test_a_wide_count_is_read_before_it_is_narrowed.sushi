@@ -4,13 +4,13 @@
 # The range is read from the count as it was written, not from what is left of it.
 
 fn shl_u8_wide(u8 value, u64 places) u8:
-    return Result.Ok(value << places)
+    return value << places
 
 fn main() i32:
     println("Mostly Harmless")
 
-    println("{shl_u8_wide(0x12, 256).realise(0)}")
-    println("{shl_u8_wide(0x12, 8).realise(0)}")
-    println("{shl_u8_wide(0x12, 2).realise(0)}")
+    println("{shl_u8_wide(0x12, 256)}")
+    println("{shl_u8_wide(0x12, 8)}")
+    println("{shl_u8_wide(0x12, 2)}")
 
-    return Result.Ok(0)
+    return 0

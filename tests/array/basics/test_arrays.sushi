@@ -6,7 +6,7 @@
 # Arrays are a CORE language feature (not stdlib) that use inline emission
 # This test validates that array methods work correctly
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test dynamic array methods
     let i32[] numbers = new()
 
@@ -51,4 +51,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

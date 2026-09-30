@@ -11,20 +11,20 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 fn bump(peek i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn apply(fn(peek i32) -> i32 f, peek i32 v) i32:
-    return Result.Ok(f(peek v)??)
+    return f(peek v)
 
 fn run_test() i32:
     let i32 n = 42
     # A fn value whose parameter is a borrow, called directly...
     let fn(peek i32) -> i32 g = bump
-    println(g(peek n)??)
+    println(g(peek n))
     # ...and passed to a higher-order function that calls it through a re-borrow.
-    println(apply(g, peek n)??)
-    return Result.Ok(0)
+    println(apply(g, peek n))
+    return 0
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

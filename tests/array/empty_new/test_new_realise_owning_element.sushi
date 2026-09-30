@@ -5,12 +5,12 @@
 # EXPECT_STDOUT_EXACT: "ok = mostly\nerr = 0\n"
 # EXPECT_NO_LEAKS: true
 
-fn mk(bool good) string[]:
+fn mk(bool good) string[] | StdError:
     if (not good):
         return Result.Err(StdError.Error)
     return Result.Ok(from(["mostly", "harmless"]))
 
-fn probe() ~:
+fn probe() ~ | StdError:
     let string[] words = mk(true).realise(new())
     println("ok = {words.get(0)??}")
 
@@ -20,4 +20,4 @@ fn probe() ~:
 
 fn main() i32:
     probe()
-    return Result.Ok(0)
+    return 0

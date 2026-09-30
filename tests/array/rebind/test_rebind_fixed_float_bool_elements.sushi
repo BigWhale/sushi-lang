@@ -17,6 +17,6 @@ fn main() i32:
     println("bools: {flags[0]} {flags[1]}")
 
     if (small[1] != 2.5):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

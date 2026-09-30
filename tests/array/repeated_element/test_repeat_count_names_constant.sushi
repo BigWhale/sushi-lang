@@ -8,4 +8,4 @@ const i32[4] SEVENS = [7; N]
 fn main() i32:
     foreach(i in 0..4):
         println(SEVENS[i])
-    return Result.Ok(0)
+    return 0

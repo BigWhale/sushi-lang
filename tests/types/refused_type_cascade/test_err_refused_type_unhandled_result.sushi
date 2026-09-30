@@ -1,10 +1,10 @@
 # A call that answers a Result, bound to a refused type, is not CE2505.
 # EXPECT_ERROR_CODES_EXACT: CE2001
 
-fn one() i32:
+fn one() i32 | StdError:
     return Result.Ok(1)
 
 fn main() i32:
     let Nope x = one()
     println(x)
-    return Result.Ok(0)
+    return 0

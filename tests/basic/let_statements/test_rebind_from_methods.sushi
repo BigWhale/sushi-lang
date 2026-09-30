@@ -11,4 +11,4 @@ fn main() i32:
     println("After rebind")
     println("Byte count: {bytes1.len()}")
 
-    return Result.Ok(0)
+    return 0

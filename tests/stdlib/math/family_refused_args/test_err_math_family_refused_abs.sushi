@@ -6,4 +6,4 @@ use <math>
 fn main() i32:
     let i32 a = abs("x")
     println("{a}")
-    return Result.Ok(0)
+    return 0

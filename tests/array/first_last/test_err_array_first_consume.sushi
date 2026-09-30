@@ -3,9 +3,8 @@
 # EXPECT_ERROR_CODE: CE2411
 fn eat(nom string s) ~:
     println(s)
-    return Result.Ok(~)
 
-fn f(string[] words) ~:
+fn f(string[] words) ~ | StdError:
     eat(nom words.first()??)
     return Result.Ok(~)
 
@@ -14,4 +13,4 @@ fn main() i32:
     let Result@(~, StdError) r = f(words)
     if (r.is_ok()):
         println("done")
-    return Result.Ok(0)
+    return 0

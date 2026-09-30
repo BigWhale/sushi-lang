@@ -5,13 +5,13 @@
 use <time>
 
 fn now@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn wide() i64:
-    return Result.Ok(9 as i64)
+    return 9 as i64
 
 fn main() i32:
-    let i32 r = now(42).realise(0)
+    let i32 r = now(42)
     println(r)
-    println(wide().realise(0 as i64))
-    return Result.Ok(0)
+    println(wide())
+    return 0

@@ -22,10 +22,10 @@ fn main() i32:
                 Maybe.Some(value) ->
                     println("{value}")
                     map.free()
-                    return Result.Ok(0)
+                    return 0
                 Maybe.None() ->
                     map.free()
-                    return Result.Ok(1)
+                    return 1
         Maybe.None() ->
             map.free()
-            return Result.Ok(2)
+            return 2

@@ -4,6 +4,6 @@
 public use "helpers/geometry" as geo
 
 fn main() i32:
-    let geo.Vec v = geo.origin().realise(geo.Vec(0, 0))
+    let geo.Vec v = geo.origin()
     println("{v.x}")
-    return Result.Ok(0)
+    return 0

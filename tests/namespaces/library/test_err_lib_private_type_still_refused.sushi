@@ -10,5 +10,5 @@ struct Tally:
 
 fn main() i32:
     let Tally t = Tally(7)
-    println("{t.total} {lib_tally(1).realise(0)}")
-    return Result.Ok(0)
+    println("{t.total} {lib_tally(1)}")
+    return 0

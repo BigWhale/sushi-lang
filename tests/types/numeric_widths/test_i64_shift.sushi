@@ -6,4 +6,4 @@ fn main() i32:
     let i64 one = 1 as i64
     let i64 shifted = one << 35
     println(shifted)
-    return Result.Ok(0)
+    return 0

@@ -59,4 +59,4 @@ fn main() i32:
     println("Pair@(i32, string) hash: {h6}")
 
     println("All hash tests passed!")
-    return Result.Ok(0)
+    return 0

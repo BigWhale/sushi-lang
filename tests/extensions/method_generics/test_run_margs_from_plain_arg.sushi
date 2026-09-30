@@ -9,4 +9,4 @@ fn main() i32:
     let List@(string) xs = List.new()
     xs.push("marvin")
     println("{xs.fallback_of(42)}")
-    return Result.Ok(0)
+    return 0

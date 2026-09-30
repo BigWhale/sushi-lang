@@ -33,7 +33,7 @@ fn run_test() i32:
         Maybe.Some(l) -> println(l.len())
         Maybe.None() -> println("none")
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

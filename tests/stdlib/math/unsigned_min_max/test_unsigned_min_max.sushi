@@ -25,4 +25,4 @@ fn main() i32:
     let i8 p8 = 3 as i8
     println("max i8 = {max(n8, p8)}")
     println("abs i8 = {abs(n8)}")
-    return Result.Ok(0)
+    return 0

@@ -4,4 +4,4 @@ use <io>
 
 fn main() i32:
     println("Testing stdlib import syntax")
-    return Result.Ok(0)
+    return 0

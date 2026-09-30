@@ -13,4 +13,4 @@ fn main() i32:
             println("Interpolated: {ford.second}")
         Maybe.None() -> println("Nope")
 
-    return Result.Ok(0)
+    return 0

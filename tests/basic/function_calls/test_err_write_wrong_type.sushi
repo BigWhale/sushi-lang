@@ -5,4 +5,4 @@ use <io/fs>
 
 fn main() i32:
     stdout.write(42)  # Error: write() expects string, not i32
-    return Result.Ok(0)
+    return 0

@@ -12,7 +12,7 @@ fn main() i32:
     let i32 cap_before = data.capacity()
     if (data.len() != 5):
         println("ERROR: Expected length 5")
-        return Result.Ok(1)
+        return 1
 
     # Clear the list
     data.clear()
@@ -20,23 +20,23 @@ fn main() i32:
     # Check state after clear
     if (data.len() != 0):
         println("ERROR: Length should be 0 after clear")
-        return Result.Ok(2)
+        return 2
 
     if (not data.is_empty()):
         println("ERROR: Should be empty after clear")
-        return Result.Ok(3)
+        return 3
 
     # Capacity should be preserved
     let i32 cap_after = data.capacity()
     if (cap_after != cap_before):
         println("ERROR: Capacity should be preserved after clear")
-        return Result.Ok(4)
+        return 4
 
     # Should be able to push after clear
     data.push(99)
     if (data.len() != 1):
         println("ERROR: Should be able to push after clear")
-        return Result.Ok(5)
+        return 5
 
     println("Clear tests passed!")
-    return Result.Ok(0)
+    return 0

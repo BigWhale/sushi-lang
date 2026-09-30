@@ -12,4 +12,4 @@ fn main() i32:
     if (flag):
         first := first + 10
     let i32 expected = 1
-    return Result.Ok(first - expected)
+    return first - expected

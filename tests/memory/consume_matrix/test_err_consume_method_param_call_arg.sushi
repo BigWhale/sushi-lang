@@ -13,14 +13,14 @@ struct Box:
 
 fn eat(nom Holder h) i32:
     println("eating {h.label}")
-    return Result.Ok(1)
+    return 1
 
 extend Box feed(Holder h) i32:
-    return eat(nom h).realise(0)
+    return eat(nom h)
 
 fn main() i32:
     let Box b = Box(1)
     let Holder h = Holder("initial-{0}")
     let i32 n = b.feed(h)
     println("n: {n} orig: {h.label}")
-    return Result.Ok(0)
+    return 0

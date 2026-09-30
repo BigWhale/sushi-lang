@@ -15,8 +15,8 @@ fn run_test() i32:
 
     b.push(7)
     println("{b.len()} {b[0]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

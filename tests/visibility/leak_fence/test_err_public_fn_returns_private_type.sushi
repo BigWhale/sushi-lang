@@ -6,9 +6,9 @@ struct Point:
     i32 x
 
 public fn origin() Point:
-    return Result.Ok(Point(0))
+    return Point(0)
 
 fn main() i32:
-    let Point p = origin().realise(Point(1))
+    let Point p = origin()
     println("{p.x}")
-    return Result.Ok(0)
+    return 0

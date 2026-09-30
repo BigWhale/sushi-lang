@@ -16,8 +16,8 @@ fn run_test() i32:
     n.slots.fill(word)
     println("{n.slots[0]} {n.slots[1]} {n.slots[2]}")
     println(word)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

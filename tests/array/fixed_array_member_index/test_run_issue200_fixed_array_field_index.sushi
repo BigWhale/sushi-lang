@@ -16,4 +16,4 @@ fn main() i32:
     let Holder h = Holder(nums: [1, 2, 3])
     println("first = {h.nums[0]}")
     println("last = {h.nums[2]}")
-    return Result.Ok(0)
+    return 0

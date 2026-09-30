@@ -10,10 +10,10 @@ struct Holder:
 
 fn view_and_eat(string r, nom string owned) i32:
     println("ref: {r} owned: {owned}")
-    return Result.Ok(1)
+    return 1
 
 fn main() i32:
     let string s = "hello-{1}"
     let Holder h = Holder(view_and_eat)
-    println(h.both(s, nom s).realise(-1))
-    return Result.Ok(0)
+    println(h.both(s, nom s))
+    return 0

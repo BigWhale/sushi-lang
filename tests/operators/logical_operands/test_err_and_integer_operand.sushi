@@ -5,4 +5,4 @@ fn main() i32:
     let i32 n = 5
     if (n and true):
         println("took it")
-    return Result.Ok(0)
+    return 0

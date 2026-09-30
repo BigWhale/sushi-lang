@@ -46,4 +46,4 @@ fn main() i32:
         MathError.Overflow -> count := count + 1
         _ -> count := count
     println("{count}")
-    return Result.Ok(0)
+    return 0

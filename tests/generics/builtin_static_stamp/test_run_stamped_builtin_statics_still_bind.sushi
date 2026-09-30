@@ -10,13 +10,13 @@ struct Holder:
     List@(i32) items
 
 fn make() List@(string):
-    return Result.Ok(List.new())
+    return List.new()
 
 fn count(List@(i32) xs) i32:
-    return Result.Ok(xs.len())
+    return xs.len()
 
 fn keys(HashMap@(i32, string) m) i32:
-    return Result.Ok(m.len())
+    return m.len()
 
 extend i32 boxed() Own@(i32):
     return Own.alloc(self)
@@ -27,11 +27,11 @@ fn main() i32:
     let Own@(i32) o = Own.alloc(5)
     let Holder h = Holder(List.new())
     h.items.push(1)
-    let List@(string) made = make().realise(List.new())
-    let i32 a = count(List.new()).realise(9)
-    let i32 b = keys(HashMap.new()).realise(9)
+    let List@(string) made = make()
+    let i32 a = count(List.new())
+    let i32 b = keys(HashMap.new())
     let Own@(i32) three = 3.boxed()
     let List@(List@(i32)) outer = List.new()
     outer.push(List.new())
     println("{l.len()} {m.len()} {o.get()} {h.items.len()} {a} {b} {three.get()} {outer.len()}")
-    return Result.Ok(made.len())
+    return made.len()

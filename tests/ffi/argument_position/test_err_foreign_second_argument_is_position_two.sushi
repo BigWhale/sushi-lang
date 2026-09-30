@@ -11,4 +11,4 @@ fn main() i32:
     let i32 n = 7
     let i32 r = libc.strcmp("x", n)
     println("{r}")
-    return Result.Ok(0)
+    return 0

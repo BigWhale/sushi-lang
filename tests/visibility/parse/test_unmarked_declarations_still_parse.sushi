@@ -20,10 +20,10 @@ extend Crate with Loud:
         return "loud"
 
 fn weigh(peek Crate c) i32:
-    return Result.Ok(c.weight)
+    return c.weight
 
 fn main() i32:
     let Crate c = Crate(7)
-    let i32 w = weigh(peek c).realise(0)
+    let i32 w = weigh(peek c)
     println("{ANSWER} {w} {c.shout()}")
-    return Result.Ok(0)
+    return 0

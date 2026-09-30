@@ -16,4 +16,4 @@ fn main() i32:
     println(SlibError.BadMagic().text())
     println(SlibError.Truncated(SlibSection.Source(), 8, 2).text())
     println(UrlError.NoScheme.text())
-    return Result.Ok(0)
+    return 0

@@ -5,4 +5,4 @@ fn main() i32:
   let i32 a = 10
   let i32 b = 20
   print("Sum: {a + b}, Product: {a * b}")
-  return Result.Ok(0)
+  return 0

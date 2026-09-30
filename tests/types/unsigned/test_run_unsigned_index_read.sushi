@@ -41,4 +41,4 @@ fn main() i32:
     println(s32)
     println(s64)
 
-    return Result.Ok(0)
+    return 0

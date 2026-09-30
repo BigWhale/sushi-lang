@@ -2,12 +2,12 @@
 # EXPECT_RUNTIME_EXIT: 0
 # Test error propagation with ?? operator
 
-fn might_fail(bool succeed) i32:
+fn might_fail(bool succeed) i32 | StdError:
     if (succeed):
         return Result.Ok(42)
     return Result.Err(StdError.Error)
 
-fn caller(bool flag) i32:
+fn caller(bool flag) i32 | StdError:
     # Pass flag to might_fail to test both success and error paths
     let i32 x = might_fail(flag)??  # Should propagate error
     return Result.Ok(x + 10)
@@ -21,4 +21,4 @@ fn main() i32:
     let i32 bad = caller(false).realise(99)  # Should get 99 (default)
     println("Bad: {bad}")
     let i32 expected = 99
-    return Result.Ok(bad - expected)
+    return bad - expected

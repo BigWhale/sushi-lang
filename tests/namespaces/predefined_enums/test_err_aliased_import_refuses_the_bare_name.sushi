@@ -6,4 +6,4 @@ use <io/fs> as fs
 
 fn main() i32:
     let FileMode mode = fs.FileMode.Read()
-    return Result.Ok(0)
+    return 0

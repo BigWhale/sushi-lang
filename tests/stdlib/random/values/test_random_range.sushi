@@ -23,7 +23,6 @@ fn test_die_rolls() ~:
     if (roll3 >= 1 and roll3 < 7):
         println("  Pass: Roll 3 in valid range [1, 7)")
 
-    return Result.Ok(~)
 
 fn test_array_indices() ~:
     println("Array index test (0-9):")
@@ -43,7 +42,6 @@ fn test_array_indices() ~:
     if (idx3 >= 0 and idx3 < 10):
         println("  Pass: Index 3 in valid range [0, 10)")
 
-    return Result.Ok(~)
 
 fn main() i32:
     println("=== Random Range Test ===")
@@ -56,4 +54,4 @@ fn main() i32:
     println("")
 
     println("=== Range Test Passed ===")
-    return Result.Ok(0)
+    return 0

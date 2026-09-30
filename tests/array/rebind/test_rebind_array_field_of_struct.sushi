@@ -18,4 +18,4 @@ fn main() i32:
     println("grid: {b.grid[0]} {b.grid[1]}")
     println("items: {b.items[0]} {b.items[1]}")
 
-    return Result.Ok(0)
+    return 0

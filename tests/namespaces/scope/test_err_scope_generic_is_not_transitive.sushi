@@ -7,4 +7,4 @@ use "helpers/mapper"
 fn main() i32:
     let HashMap@(i32, i32) m = HashMap.new()
     m.free()
-    return Result.Ok(counted().realise(0))
+    return counted()

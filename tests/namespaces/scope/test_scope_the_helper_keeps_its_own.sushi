@@ -8,7 +8,7 @@ use "helpers/mapper"
 use "helpers/ffi_holder"
 
 fn main() i32:
-    let i32 root = rooted(16.0).realise(0.0) as i32
-    let i32 size = measured("abc").realise(0)
-    println("{root} {counted().realise(0)} {size}")
-    return Result.Ok(0)
+    let i32 root = rooted(16.0) as i32
+    let i32 size = measured("abc")
+    println("{root} {counted()} {size}")
+    return 0

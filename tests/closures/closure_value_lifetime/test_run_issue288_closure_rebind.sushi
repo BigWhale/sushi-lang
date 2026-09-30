@@ -13,17 +13,17 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
 fn make(i32 m) fn(i32) -> i32:
-    return Result.Ok(|i32 x| x * m)
+    return |i32 x| x * m
 
-fn run() i32:
-    let fn(i32) -> i32 g = make(2)??
-    println(g(3)??)
-    g := make(5)??
-    println(g(3)??)
+fn run() i32 | StdError:
+    let fn(i32) -> i32 g = make(2)
+    println(g(3))
+    g := make(5)
+    println(g(3))
     return Result.Ok(0)
 
 fn main() i32:
     match run():
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

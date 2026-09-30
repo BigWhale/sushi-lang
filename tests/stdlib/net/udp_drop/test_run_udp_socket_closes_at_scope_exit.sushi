@@ -10,13 +10,13 @@ use <net/udp>
 
 fn once() i32:
     match bind("127.0.0.1", 0):
-        Result.Ok(s) -> return Result.Ok(s.fd)
-        Result.Err(_) -> return Result.Ok(-1)
+        Result.Ok(s) -> return s.fd
+        Result.Err(_) -> return -1
 
 fn main() i32:
-    let i32 first = once().realise(-2)
-    let i32 second = once().realise(-3)
-    let i32 third = once().realise(-4)
+    let i32 first = once()
+    let i32 second = once()
+    let i32 third = once()
     println("{first >= 0}")
     println("{first == second and second == third}")
-    return Result.Ok(0)
+    return 0

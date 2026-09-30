@@ -5,4 +5,4 @@ enum Color:
 
 fn main() i32:
     println("{Color}")
-    return Result.Ok(0)
+    return 0

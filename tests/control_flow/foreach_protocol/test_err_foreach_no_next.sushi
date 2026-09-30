@@ -9,4 +9,4 @@ fn main() i32:
     let Plain p = Plain(3)
     foreach(n in p):
         println(n)
-    return Result.Ok(0)
+    return 0

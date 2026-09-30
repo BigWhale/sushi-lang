@@ -22,4 +22,4 @@ fn main() i32:
         Maybe.None() -> println("ERROR: Should have found pair")
 
     println("Test passed")
-    return Result.Ok(0)
+    return 0

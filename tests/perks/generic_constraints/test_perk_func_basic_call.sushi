@@ -16,14 +16,14 @@ extend Point with Hashable:
 
 # Generic function with constraint
 fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn run_test() i32:
     let Point p = Point(10, 20)
-    let u64 result = compute_hash(p)??
+    let u64 result = compute_hash(p)
     println(result)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

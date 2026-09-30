@@ -33,4 +33,4 @@ fn main() i32:
             println("FAIL: (3,4) not found")
 
     m.free()
-    return Result.Ok(0)
+    return 0

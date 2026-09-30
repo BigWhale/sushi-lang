@@ -9,10 +9,10 @@ struct Publisher:
     i32 issues
 
 fn publish(peek Publisher p) i32:
-    return Result.Ok(p.issues)
+    return p.issues
 
 fn main() i32:
     let Publisher p = Publisher(2)
-    let i32 total = PUBLICATION + publish(peek p).realise(0)
+    let i32 total = PUBLICATION + publish(peek p)
     println("{total}")
-    return Result.Ok(0)
+    return 0

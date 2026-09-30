@@ -6,4 +6,4 @@
 
 fn main() i32:
     println("{List.new().len()}")
-    return Result.Ok(0)
+    return 0

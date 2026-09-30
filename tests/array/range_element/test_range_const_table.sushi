@@ -10,4 +10,4 @@ const i32[4] DOWN = [9..=6]
 fn main() i32:
     println("{UP[0]} {UP[5]}")
     println("{DOWN[0]} {DOWN[3]}")
-    return Result.Ok(0)
+    return 0

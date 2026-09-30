@@ -17,4 +17,4 @@ fn main() i32:
             p.push(9)
         Outer.Wrap(Inner.Nil) -> println("nil")
         Outer.Nothing -> println("none")
-    return Result.Ok(0)
+    return 0

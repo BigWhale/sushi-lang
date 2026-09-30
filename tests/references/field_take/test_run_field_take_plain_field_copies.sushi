@@ -11,4 +11,4 @@ fn main() i32:
     let Pair p = Pair(5, 9)
     let i32 taken = nom p.first
     println("{taken} {p.first}")
-    return Result.Ok(0)
+    return 0

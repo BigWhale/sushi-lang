@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: Repeat with n=0
 use <collections/strings>
 
-fn test_repeat_basic() ~:
+fn test_repeat_basic() ~ | StdError:
     let string original = "abc"
     let string repeated = original.repeat(3)
 
@@ -13,7 +13,7 @@ fn test_repeat_basic() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_single_char() ~:
+fn test_repeat_single_char() ~ | StdError:
     let string original = "x"
     let string repeated = original.repeat(5)
 
@@ -24,7 +24,7 @@ fn test_repeat_single_char() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_zero() ~:
+fn test_repeat_zero() ~ | StdError:
     let string original = "test"
     let string repeated = original.repeat(0)
 
@@ -35,7 +35,7 @@ fn test_repeat_zero() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_negative() ~:
+fn test_repeat_negative() ~ | StdError:
     let string original = "test"
     let string repeated = original.repeat(-5)
 
@@ -46,7 +46,7 @@ fn test_repeat_negative() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_one() ~:
+fn test_repeat_one() ~ | StdError:
     let string original = "hello"
     let string repeated = original.repeat(1)
 
@@ -57,7 +57,7 @@ fn test_repeat_one() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_empty_string() ~:
+fn test_repeat_empty_string() ~ | StdError:
     let string original = ""
     let string repeated = original.repeat(10)
 
@@ -68,7 +68,7 @@ fn test_repeat_empty_string() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_utf8() ~:
+fn test_repeat_utf8() ~ | StdError:
     let string original = "🎉"
     let string repeated = original.repeat(3)
 
@@ -79,7 +79,7 @@ fn test_repeat_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_multibyte() ~:
+fn test_repeat_multibyte() ~ | StdError:
     let string original = "café"
     let string repeated = original.repeat(2)
 
@@ -90,7 +90,7 @@ fn test_repeat_multibyte() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_large() ~:
+fn test_repeat_large() ~ | StdError:
     let string original = "-"
     let string repeated = original.repeat(10)
 
@@ -101,7 +101,7 @@ fn test_repeat_large() ~:
 
     return Result.Ok(~)
 
-fn test_repeat_word() ~:
+fn test_repeat_word() ~ | StdError:
     let string original = "ha"
     let string repeated = original.repeat(3)
 
@@ -134,4 +134,4 @@ fn main() i32:
     if (test_repeat_word().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

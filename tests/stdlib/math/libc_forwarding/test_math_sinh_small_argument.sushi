@@ -5,4 +5,4 @@ use <math>
 
 fn main() i32:
     println("{sinh(1e-20)}")
-    return Result.Ok(0)
+    return 0

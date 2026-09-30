@@ -12,4 +12,4 @@ fn main() i32:
     let Node n = Node.Leaf(Own.alloc(3))
     match n:
         Node.Leaf(Own(Other.Alpha)) -> println("a")
-    return Result.Ok(0)
+    return 0

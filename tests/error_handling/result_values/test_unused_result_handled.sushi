@@ -4,7 +4,7 @@
 # This test should NOT emit warnings because all Result@(T) values are properly handled
 
 
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -23,4 +23,4 @@ fn main() i32:
     let i32 y = result.realise(0)
     println(y)
 
-    return Result.Ok(0)
+    return 0

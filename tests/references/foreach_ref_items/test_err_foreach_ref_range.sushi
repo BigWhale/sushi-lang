@@ -4,4 +4,4 @@
 fn main() i32:
     foreach(poke q in 0..3):
         println(q)
-    return Result.Ok(0)
+    return 0

@@ -6,4 +6,4 @@ use <collections/hashmap> as hm
 fn main() i32:
     let hm.HashMap@(i32, string) m = HashMap.new()
     m.free()
-    return Result.Ok(0)
+    return 0

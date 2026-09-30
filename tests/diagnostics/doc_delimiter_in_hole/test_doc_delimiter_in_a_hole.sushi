@@ -5,4 +5,4 @@
 fn main() i32:
     let i32 x = 4
     println("{x ##: + 1} {x :## * 2}")
-    return Result.Ok(0)
+    return 0

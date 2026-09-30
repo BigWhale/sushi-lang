@@ -3,4 +3,4 @@
 # The shell reads the low eight bits of -2, which is 254.
 
 fn main() i16:
-    return Result.Ok(-2)
+    return -2

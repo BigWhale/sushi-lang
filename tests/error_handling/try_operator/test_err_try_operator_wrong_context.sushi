@@ -5,13 +5,13 @@
 # EXPECT_ERROR_CODE: CE0131
 
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
 extend string bad_method() i32:
-    let i32 x = get_value()??
+    let i32 x = get_value()
     return x
 
 fn main() i32:
     let string val = "test"
     let i32 result = val.bad_method()
-    return Result.Ok(result)
+    return result

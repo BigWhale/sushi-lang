@@ -10,16 +10,16 @@ enum Expr:
 fn test_pattern(peek Expr expr) i32:
     match expr:
         Expr.IntLit(n) ->
-            return Result.Ok(n)
+            return n
         Expr.BinOp(Own(left), Own(right), _) ->
             # Recursively evaluate left and right
-            let i32 left_val = test_pattern(peek left).realise(0)
-            let i32 right_val = test_pattern(peek right).realise(0)
-            return Result.Ok(left_val + right_val)
+            let i32 left_val = test_pattern(peek left)
+            let i32 right_val = test_pattern(peek right)
+            return left_val + right_val
 
 fn main() i32:
     # Test with IntLit
     let Expr e1 = Expr.IntLit(5)
-    let i32 result = test_pattern(peek e1).realise(-1)
+    let i32 result = test_pattern(peek e1)
     let i32 expected = 5
-    return Result.Ok(result - expected)
+    return result - expected

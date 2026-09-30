@@ -8,4 +8,4 @@ fn main() i32:
 
     println("Done (should not print any numbers)")
 
-    return Result.Ok(0)
+    return 0

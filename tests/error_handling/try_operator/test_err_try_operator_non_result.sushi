@@ -3,13 +3,13 @@
 # Expected: CE2507 error
 
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Error: trying to use ?? on a plain i32
     let i32 x = 5??
     return Result.Ok(x)
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

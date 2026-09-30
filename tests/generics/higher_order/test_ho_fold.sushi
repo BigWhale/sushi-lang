@@ -5,8 +5,8 @@
 fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
     let U acc = init
     foreach(x in xs.iter()):
-        acc := f(acc, x)??
-    return Result.Ok(acc)
+        acc := f(acc, x)
+    return acc
 
 fn run() i32:
     let i32 base = 100
@@ -14,8 +14,8 @@ fn run() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    return Result.Ok(fold(xs, base, |i32 acc, i32 x| acc + x)??)
+    return fold(xs, base, |i32 acc, i32 x| acc + x)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

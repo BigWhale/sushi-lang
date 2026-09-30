@@ -14,4 +14,4 @@ fn main() i32:
     let Once o = Once(3)
     foreach(n in o):
         println(n)
-    return Result.Ok(0)
+    return 0

@@ -20,4 +20,4 @@ fn main() i32:
     match b:
         Box.Full(s) -> println(s)
         Box.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

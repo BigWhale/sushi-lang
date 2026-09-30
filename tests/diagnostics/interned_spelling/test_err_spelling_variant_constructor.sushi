@@ -6,4 +6,4 @@
 fn main() i32:
     let Maybe@(i32) m = Maybe.Nope(1)
     println("{m.is_some()}")
-    return Result.Ok(0)
+    return 0

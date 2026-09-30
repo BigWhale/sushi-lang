@@ -4,7 +4,7 @@
 struct Holder:
     i32[] items
 
-fn f(poke i32[] a) ~:
+fn f(poke i32[] a) ~ | StdError:
     let Holder h = Holder(a)
     println(h.items.len())
     return Result.Ok(~)
@@ -14,4 +14,4 @@ fn main() i32:
     let Result@(~, StdError) r = f(poke arr)
     if (r.is_ok()):
         println("after")
-    return Result.Ok(0)
+    return 0

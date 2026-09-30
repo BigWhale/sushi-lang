@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: First byte: 65
 # EXPECT_STDOUT_CONTAINS: Converted text: Hello
 # Test basic byte array operations
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Create empty byte array
     let u8[] bytes = new()
     println("Initial length: {bytes.len()}")  # Should be 0
@@ -43,4 +43,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

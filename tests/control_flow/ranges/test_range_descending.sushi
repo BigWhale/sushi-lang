@@ -9,4 +9,4 @@ fn main() i32:
     foreach(i in 10..=5):
         println(i)
 
-    return Result.Ok(0)
+    return 0

@@ -5,7 +5,7 @@ fn process@(T)(T x) T:
     return Result.Ok(x)
 
 fn process@(U)(U y) U:  # Error CE0101: duplicate
-    return Result.Ok(y)
+    return y
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

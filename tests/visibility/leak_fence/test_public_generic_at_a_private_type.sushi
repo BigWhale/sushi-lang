@@ -9,7 +9,7 @@ struct Point:
     i32 x
 
 public fn keep@(T)(nom T a) T:
-    return Result.Ok(a)
+    return a
 
 public perk Loud:
     fn shout() i32
@@ -19,9 +19,9 @@ extend Point with Loud:
         return self.x
 
 public fn loudest@(T: Loud)(T thing) i32:
-    return Result.Ok(thing.shout())
+    return thing.shout()
 
 fn main() i32:
-    let Point kept = keep(nom Point(3)).realise(Point(0))
-    println("{kept.x} {loudest(Point(4)).realise(0)}")
-    return Result.Ok(0)
+    let Point kept = keep(nom Point(3))
+    println("{kept.x} {loudest(Point(4))}")
+    return 0

@@ -8,4 +8,4 @@ fn main() i32:
     stdout.write(" ")
     stdout.write("World")
     stdout.write("\n")
-    return Result.Ok(0)
+    return 0

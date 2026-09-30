@@ -7,4 +7,4 @@ use <io/fs>
 
 fn main() i32:
     stdout.close()
-    return Result.Ok(0)
+    return 0

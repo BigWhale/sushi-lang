@@ -19,4 +19,4 @@ fn main() i32:
     let Bag b = Bag(map, l)
     # map and l were MOVED into b; b owns and frees them at scope exit (no map.free()).
     println("ok {b.m.len()} {b.xs.len()}")
-    return Result.Ok(0)
+    return 0

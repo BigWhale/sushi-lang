@@ -6,4 +6,4 @@ fn main() i32:
     match Maybe.Some(Maybe.None()):
         Maybe.Some(_) -> println(1)
         Maybe.None() -> println(0)
-    return Result.Ok(0)
+    return 0

@@ -13,4 +13,4 @@ extend S empty() u8[]:
 fn main() i32:
     let S s = S(1)
     println("{s.empty().len()}")
-    return Result.Ok(0)
+    return 0

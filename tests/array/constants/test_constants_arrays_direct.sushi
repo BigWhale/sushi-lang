@@ -16,7 +16,7 @@ const bool[2] FLAGS = [true, false]
 
 fn third() i32:
     # The read works in an ordinary function too, not just in main().
-    return Result.Ok(PRIMES[2])
+    return PRIMES[2]
 
 fn main() i32:
     let i32 first = PRIMES[0]
@@ -35,6 +35,6 @@ fn main() i32:
     println("sum: {total}")
 
     println("flag: {FLAGS[0]}")   # bools print as 1/0, not true/false
-    println("third: {third().realise(0)}")
+    println("third: {third()}")
 
-    return Result.Ok(0)
+    return 0

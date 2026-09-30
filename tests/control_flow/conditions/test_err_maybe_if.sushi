@@ -6,4 +6,4 @@ fn main() i32:
     let Maybe@(i32) first = xs.get(0)
     if (first):
         println("some")
-    return Result.Ok(0)
+    return 0

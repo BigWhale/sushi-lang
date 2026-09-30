@@ -10,4 +10,4 @@ fn main() i32:
     let Pair@(i32, string) p = Pair(42, "hello")
     let u64 h = p.hash()
     println("Pair@(i32, string) hash: {h}")
-    return Result.Ok(0)
+    return 0

@@ -8,10 +8,10 @@
 # EXPECT_ERROR_CODE: CE2511
 use <sys/env>
 
-fn set_it() i32:
+fn set_it() i32 | StdError:
     let i32 rc = setenv("SUSHI_TEST_STRICT", "x")??
     return Result.Ok(rc)
 
 fn main() i32:
     println(set_it().realise(-1))
-    return Result.Ok(0)
+    return 0

@@ -6,5 +6,5 @@ use "helpers/pick_plain"
 
 fn main() i32:
     let fn(string) -> i32 f = pick
-    println(f("abc").realise(0))
-    return Result.Ok(0)
+    println(f("abc"))
+    return 0

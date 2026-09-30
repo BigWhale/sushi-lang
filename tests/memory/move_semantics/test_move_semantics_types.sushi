@@ -50,4 +50,4 @@ fn main() i32:
     println(i)       # Should print 5
     println(counter) # Should print 3
 
-    return Result.Ok(0)
+    return 0

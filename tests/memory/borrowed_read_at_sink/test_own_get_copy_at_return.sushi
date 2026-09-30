@@ -31,12 +31,12 @@ fn make() Holder:
     let Leafy l = Leafy(9)
     let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
     let Own@(Holder) o = Own.alloc(h)
-    return Result.Ok(o.get().clone())
+    return o.get().clone()
 
 fn run_test() i32:
-    let Holder g = make()??
+    let Holder g = make()
     println("v={g.value}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(99))
+    return run_test()

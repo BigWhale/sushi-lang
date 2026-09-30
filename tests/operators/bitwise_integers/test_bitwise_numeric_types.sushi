@@ -13,17 +13,17 @@ fn main() i32:
 
     # Verify results
     if (result_and != 8):
-        return Result.Ok(1)
+        return 1
     if (result_or != 14):
-        return Result.Ok(2)
+        return 2
     if (xresult_or != 6):
-        return Result.Ok(3)
+        return 3
     # Test shift operations
     let i32 left = 5 << 1    # 5 << 1 = 10
     let i32 right = 10 >> 1  # 10 >> 1 = 5
 
     if (left != 10):
-        return Result.Ok(4)
+        return 4
     if (right != 5):
-        return Result.Ok(5)
-    return Result.Ok(0)
+        return 5
+    return 0

@@ -13,4 +13,4 @@ fn main() i32:
     let Colour c = Colour.Red
     let string h = c.hash()
     println(h)
-    return Result.Ok(0)
+    return 0

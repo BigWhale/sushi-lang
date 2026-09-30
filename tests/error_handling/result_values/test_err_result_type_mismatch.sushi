@@ -3,7 +3,7 @@
 # Should fail with CE2031
 
 fn wrong_type() i32:
-  return Result.Ok(true)  # Error: expected i32, got bool
+  return true  # Error: expected i32, got bool
 
 fn main() i32:
-  return Result.Ok(0)
+  return 0

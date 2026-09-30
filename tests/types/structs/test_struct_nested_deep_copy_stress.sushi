@@ -24,14 +24,14 @@ fn create_nested_struct() Outer:
 
     # inner.values will be cleaned up here (RAII)
     # If deep-copy failed, this would be a double-free crash
-    return Result.Ok(result)
+    return result
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     println("Testing nested struct deep copy - 1000 iterations")
 
     let i32 i = 0
     while (i < 1000):
-        let Outer nested = create_nested_struct().realise(Outer(Inner(new()), "default"))
+        let Outer nested = create_nested_struct()
 
         # Verify data integrity
         if (nested.data.values.len() != 3):
@@ -53,4 +53,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

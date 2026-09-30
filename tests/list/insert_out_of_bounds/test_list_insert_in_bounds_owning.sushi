@@ -20,4 +20,4 @@ fn main() i32:
         Result.Ok(_) -> print("")
         Result.Err(_) -> println("err")
     println("{l.get(0).realise('?')} {l.get(1).realise('?')} {l.get(2).realise('?')} {l.get(3).realise('?')}")
-    return Result.Ok(0)
+    return 0

@@ -5,9 +5,9 @@
 use <lib/private_perk_lib>
 
 fn hush_all@(T: Quiet)(T thing) string:
-    return Result.Ok(thing.hush())
+    return thing.hush()
 
 fn main() i32:
     let Muffler m = Muffler(3)
-    println(hush_all(m).realise("none"))
-    return Result.Ok(0)
+    println(hush_all(m))
+    return 0

@@ -8,7 +8,7 @@
 # EXPECT_STDERR_CONTAINS: :18:13: warning [CW1002]: declared variable 'k' already exists in an outer scope.
 # EXPECT_STDERR_CONTAINS: :20:37: warning [CW1001]: unused variable 'unused'.
 
-fn f@(...Ts)(...Ts args) ~:
+fn f@(...Ts)(...Ts args) ~ | StdError:
     let i32 k = 1
     let i32[] xs = from([k, 2])
     expand(a in args):
@@ -18,11 +18,11 @@ fn f@(...Ts)(...Ts args) ~:
             Maybe.Some(k) -> println(k)
             Maybe.None -> println("none")
         let fn(i32) -> i32 g = |i32 unused| 3
-        println(g(1)??)
+        println(g(1))
     return Result.Ok(~)
 
 fn main() i32:
     match f("x", "y"):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

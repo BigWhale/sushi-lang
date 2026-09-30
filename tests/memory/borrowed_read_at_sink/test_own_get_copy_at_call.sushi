@@ -28,15 +28,15 @@ struct Holder:
     Maybe@(Own@(Leafy)) next
 
 fn takes(Holder h) i32:
-    return Result.Ok(h.value)
+    return h.value
 
 fn run_test() i32:
     let Leafy l = Leafy(9)
     let Holder h = Holder(1, Maybe.Some(Own.alloc(l)))
     let Own@(Holder) o = Own.alloc(h)
-    let i32 v = takes(o.get().clone())??
+    let i32 v = takes(o.get().clone())
     println("v={v}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(99))
+    return run_test()

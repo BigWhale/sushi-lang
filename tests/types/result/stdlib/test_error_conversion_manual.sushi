@@ -22,10 +22,10 @@ fn main() i32:
     match app_logic():
         Result.Ok(_) ->
             println("FAIL: Should have gotten error")
-            return Result.Ok(1)
+            return 1
         Result.Err(IoError.NotFound) ->
             println("PASS: Manual error conversion works")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             println("FAIL: Wrong error type")
-            return Result.Ok(1)
+            return 1

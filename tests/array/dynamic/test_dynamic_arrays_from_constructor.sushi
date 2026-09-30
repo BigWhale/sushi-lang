@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "510503applecherry5falsetrue1420"
 # Test dynamic array from() constructor with various element types
-fn run_test() i32:
+fn run_test() i32 | StdError:
   # Test from() with integers
   let i32[] nums = from([10, 20, 30, 40, 50])
   print(nums.len())         # Should print 5
@@ -32,4 +32,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

@@ -3,7 +3,7 @@
 # Test string.to_bytes() method with runtime validation
 use <collections/strings>
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test 1: ASCII string to bytes
     let string s1 = "Hello"
     let u8[] bytes1 = s1.to_bytes()
@@ -32,4 +32,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

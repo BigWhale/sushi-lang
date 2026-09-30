@@ -8,9 +8,9 @@ struct Vex:
     i32 n
 
 fn run() i32:
-    let geo.Vex v = geo.origin()??
-    return Result.Ok(v.n)
+    let geo.Vex v = geo.origin()
+    return v.n
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

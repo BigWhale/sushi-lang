@@ -9,7 +9,7 @@
 
 use <collections/strings>
 
-fn test_chained_methods() ~:
+fn test_chained_methods() ~ | StdError:
     let string s = "  hello  "
     let string result = s.trim().pad_left(10, '*')
     let string interp = "{s.trim().pad_left(10, '*')}"
@@ -19,7 +19,7 @@ fn test_chained_methods() ~:
         println("FAIL: Chained methods")
     return Result.Ok(~)
 
-fn test_contains() ~:
+fn test_contains() ~ | StdError:
     let string s = "hello world"
     let string interp = "{s.contains('world')}"
     if (interp == "true"):
@@ -28,7 +28,7 @@ fn test_contains() ~:
         println("FAIL: contains method")
     return Result.Ok(~)
 
-fn test_starts_with() ~:
+fn test_starts_with() ~ | StdError:
     let string s = "hello world"
     let string interp = "{s.starts_with('hello')}"
     if (interp == "true"):
@@ -37,7 +37,7 @@ fn test_starts_with() ~:
         println("FAIL: starts_with method")
     return Result.Ok(~)
 
-fn test_ends_with() ~:
+fn test_ends_with() ~ | StdError:
     let string s = "hello world"
     let string interp = "{s.ends_with('world')}"
     if (interp == "true"):
@@ -46,7 +46,7 @@ fn test_ends_with() ~:
         println("FAIL: ends_with method")
     return Result.Ok(~)
 
-fn test_count() ~:
+fn test_count() ~ | StdError:
     let string s = "hello"
     let string interp = "{s.count('l')}"
     if (interp == "2"):
@@ -66,4 +66,4 @@ fn main() i32:
         println("")
     if (test_count().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

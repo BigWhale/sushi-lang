@@ -8,7 +8,7 @@
             The common indent comes off; the relative indent stays.
 :##
 fn seven() i32:
-    return Result.Ok(7)
+    return 7
 
 fn main() i32:
     ##:
@@ -18,6 +18,6 @@ fn main() i32:
 
             let i32 n = seven().realise(0)
     :##
-    let i32 n = seven().realise(0)
+    let i32 n = seven()
     println("{n}")
-    return Result.Ok(0)
+    return 0

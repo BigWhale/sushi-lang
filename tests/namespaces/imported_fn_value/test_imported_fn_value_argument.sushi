@@ -4,8 +4,8 @@
 use "helpers/lib3"
 
 fn apply(fn(string) -> i32 f) i32:
-    return Result.Ok(f("abcd").realise(0))
+    return f("abcd")
 
 fn main() i32:
-    println(apply(plain).realise(0))
-    return Result.Ok(0)
+    println(apply(plain))
+    return 0

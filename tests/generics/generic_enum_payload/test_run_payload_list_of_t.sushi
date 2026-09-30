@@ -10,13 +10,13 @@ enum Wrap@(T):
     Zero
 
 fn count@(U)(List@(U) l) i32:
-    return Result.Ok(l.len())
+    return l.len()
 
 fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     let Wrap@(i32) w = Wrap.Many(xs)
     match w:
-        Wrap.Many(l) -> println(count(l).realise(0))
+        Wrap.Many(l) -> println(count(l))
         Wrap.Zero -> println(0)
-    return Result.Ok(0)
+    return 0

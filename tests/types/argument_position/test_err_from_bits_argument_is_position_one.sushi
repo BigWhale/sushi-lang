@@ -8,4 +8,4 @@ fn main() i32:
     let i32 bits = 1
     let f64 x = f64.from_bits(bits)
     println("{x}")
-    return Result.Ok(0)
+    return 0

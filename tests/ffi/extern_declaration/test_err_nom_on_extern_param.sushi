@@ -11,4 +11,4 @@ unsafe external "C" as libc because "the four guarantees do not apply to a C cal
 fn main() i32:
     let i32 n = libc.puts("Mostly Harmless")
     println(n)
-    return Result.Ok(0)
+    return 0

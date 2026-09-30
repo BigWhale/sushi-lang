@@ -3,10 +3,10 @@
 # EXPECT_ERROR_CODE: CE0108
 
 fn seed() i32:
-    return Result.Ok(7)
+    return 7
 
 var i32 n = seed().realise(0)
 
 fn main() i32:
     println("{n}")
-    return Result.Ok(0)
+    return 0

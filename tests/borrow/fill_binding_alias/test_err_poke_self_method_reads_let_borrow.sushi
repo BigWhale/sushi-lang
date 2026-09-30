@@ -16,4 +16,4 @@ fn main() i32:
     let string first = sh.items[0]
     sh.restock(first)
     println(sh.items[1])
-    return Result.Ok(0)
+    return 0

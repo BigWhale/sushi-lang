@@ -21,4 +21,4 @@ fn main() i32:
     match view:
         Maybe.Some(b) -> println("n={b.data.len()}")
         Maybe.None -> println("none")
-    return Result.Ok(0)
+    return 0

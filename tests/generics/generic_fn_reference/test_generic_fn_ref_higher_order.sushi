@@ -5,16 +5,16 @@
 use <collections/iter>
 
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn run() i32:
     let fn(i32) -> i32 id = identity
     let List@(i32) xs = List.new()
     xs.push(5)
     xs.push(7)
-    let List@(i32) ys = map(xs, id)??
-    return Result.Ok(ys.get(1).realise(-1))
+    let List@(i32) ys = map(xs, id)
+    return ys.get(1).realise(-1)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

@@ -8,6 +8,6 @@ unsafe external "C" as raw because "naming a private of another unit":
     fn hidden(i32 n) i32 = "kept"
 
 fn main() i32:
-    println("{shown(3).realise(0)}")
+    println("{shown(3)}")
     println("{raw.hidden(7)}")
-    return Result.Ok(0)
+    return 0

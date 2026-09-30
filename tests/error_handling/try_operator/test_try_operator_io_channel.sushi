@@ -38,4 +38,4 @@ fn main() i32:
     let string result = process_config().realise("Error reading config")
     println("Result: {result}")
 
-    return Result.Ok(0)
+    return 0

@@ -7,10 +7,9 @@ use <io/fs>
 
 fn eat(nom List@(File) l) ~:
     println(l.len())
-    return Result.Ok(~)
 
-fn go(List@(File) l) ~:
-    eat(nom l)??
+fn go(List@(File) l) ~ | StdError:
+    eat(nom l)
     return Result.Ok(~)
 
 fn main() i32:
@@ -18,4 +17,4 @@ fn main() i32:
     match go(l):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

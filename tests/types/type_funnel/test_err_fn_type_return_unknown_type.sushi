@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2001
 
 fn apply(fn(i32) -> Nope f) i32:
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

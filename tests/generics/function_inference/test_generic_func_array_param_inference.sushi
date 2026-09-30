@@ -3,12 +3,12 @@
 # Owning T[] params move by value (#133), so each call uses its own array.
 # EXPECT_STDOUT_EXACT: "1 6 a z\n"
 
-fn first@(T)(T[] arr) T:
+fn first@(T)(T[] arr) T | StdError:
     # A get-out borrows what the array still owns, so returning it needs a clone.
     let T elem = arr.get(0)??
     return Result.Ok(elem.clone())
 
-fn last@(T)(T[] arr) T:
+fn last@(T)(T[] arr) T | StdError:
     let i32 len = arr.len()
     let T elem = arr.get(len - 1)??
     return Result.Ok(elem.clone())
@@ -27,8 +27,8 @@ fn run_test() i32:
     let string last_str = last(d).realise("q")
 
     println("{first_int} {last_int} {first_str} {last_str}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

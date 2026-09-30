@@ -5,7 +5,7 @@ enum Color:
     Green
     Blue
 
-fn test_color(Color c) i32:
+fn test_color(Color c) i32 | StdError:
     match c:
         Color.Red ->
             return Result.Ok(1)
@@ -16,4 +16,4 @@ fn test_color(Color c) i32:
 fn main() i32:
     let Color c = Color.Red()
     let i32 result = test_color(c)
-    return Result.Ok(result)
+    return result

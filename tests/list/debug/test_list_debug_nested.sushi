@@ -13,4 +13,4 @@ fn main() i32:
 
     matrix.debug()
 
-    return Result.Ok(0)
+    return 0

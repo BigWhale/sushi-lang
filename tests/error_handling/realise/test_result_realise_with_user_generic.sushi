@@ -7,7 +7,7 @@ enum Either@(T, U):
     Left(T)
     Right(U)
 
-fn test_return_type() Either@(i32, string):
+fn test_return_type() Either@(i32, string) | StdError:
     return Result.Ok(Either.Left(42))
 
 fn main() i32:
@@ -26,4 +26,4 @@ fn main() i32:
         Either.Right(s) ->
             println("Got Right: {s}")
 
-    return Result.Ok(0)
+    return 0

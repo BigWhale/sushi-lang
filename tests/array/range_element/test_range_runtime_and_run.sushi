@@ -9,8 +9,8 @@ fn run_test() i32:
     let i32 k = 3
     let i32[] a = from([0..k, 8; k, 5])
     println("{a.len()} {a[0]} {a[1]} {a[2]} {a[3]} {a[4]} {a[5]} {a[6]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

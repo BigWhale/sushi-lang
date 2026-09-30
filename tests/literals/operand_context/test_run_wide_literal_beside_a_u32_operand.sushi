@@ -9,4 +9,4 @@ fn main() i32:
         println("u32 lt")
     println("{x + 1}")
     println("{x & 2147483648}")
-    return Result.Ok(0)
+    return 0

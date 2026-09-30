@@ -5,7 +5,7 @@
 # EXPECT_STDOUT_CONTAINS: "42 42 7 7 7"
 
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[] dynamic = from([1, 2])
     dynamic.fill(42)
 
@@ -17,4 +17,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

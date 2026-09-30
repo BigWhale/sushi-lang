@@ -6,4 +6,4 @@ fn main() i32:
     let i8 n = -1 as i8
     let i32[] a = from([7; n])
     println("len {a.len()}")
-    return Result.Ok(0)
+    return 0

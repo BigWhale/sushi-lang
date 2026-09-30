@@ -7,9 +7,9 @@ enum Shape:
     Circle(i32)
 
 fn pick() i32:
-    return Result.Ok(1)
+    return 1
 
 const Shape S = Shape.Circle(pick())
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

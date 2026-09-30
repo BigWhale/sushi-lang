@@ -15,4 +15,4 @@ fn main() i32:
             Result.Ok(_) -> println("got one")
             Result.Err(_) -> println("listen failed")
     println("done")
-    return Result.Ok(0)
+    return 0

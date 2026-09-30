@@ -12,9 +12,9 @@ struct Segment:
     i32 length
 
 fn pick() i32:
-    return Result.Ok(1)
+    return 1
 
 const Segment SEG = Segment(Point(pick(), 2), 3)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

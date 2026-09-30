@@ -12,21 +12,21 @@ public enum Color:
     Green
     Blue(i32)
 
-public fn make_point(i32 x, i32 y) Point:
+public fn make_point(i32 x, i32 y) Point | StdError:
     let Point p = Point(x, y)
     return Result.Ok(p)
 
-public fn point_sum(Point p) i32:
+public fn point_sum(Point p) i32 | StdError:
     return Result.Ok(p.x + p.y)
 
-public fn get_color(i32 code) Color:
+public fn get_color(i32 code) Color | StdError:
     if (code == 0):
         return Result.Ok(Color.Red)
     if (code == 1):
         return Result.Ok(Color.Green)
     return Result.Ok(Color.Blue(code))
 
-public fn color_name(Color c) string:
+public fn color_name(Color c) string | StdError:
     match c:
         Color.Red -> return Result.Ok("red")
         Color.Green -> return Result.Ok("green")

@@ -7,16 +7,16 @@
 var i32 counter = 5
 
 fn current() i32:
-    return Result.Ok(counter)
+    return counter
 
 fn plus_one(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1
 
 fn main() i32:
     let i32 copy = counter
-    let i32 got = current().realise(0)
-    let i32 more = plus_one(counter).realise(0)
+    let i32 got = current()
+    let i32 more = plus_one(counter)
     copy := copy + 100
     println("{got} {counter} {more}")
     println("{counter}")
-    return Result.Ok(0)
+    return 0

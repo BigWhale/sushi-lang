@@ -11,4 +11,4 @@ fn main() i32:
     p.name := "hello world"
     p.age := 30
     println(p.name)
-    return Result.Ok(0)
+    return 0

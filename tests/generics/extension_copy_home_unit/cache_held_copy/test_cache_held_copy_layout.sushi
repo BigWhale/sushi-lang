@@ -14,5 +14,5 @@ fn main() i32:
     let HeldBox@(HeldPt) b = HeldBox(PT, 42)
     println(b.held())
     println(b.counted())
-    println(held_n(b).realise(0))
-    return Result.Ok(0)
+    println(held_n(b))
+    return 0

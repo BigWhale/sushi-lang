@@ -6,4 +6,4 @@ use <math> as m
 fn main() i32:
     let f64 a = m.min("a", "b")
     println("{a}")
-    return Result.Ok(0)
+    return 0

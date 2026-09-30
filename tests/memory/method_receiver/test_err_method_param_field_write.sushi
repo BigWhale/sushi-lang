@@ -26,4 +26,4 @@ fn main() i32:
     let Holder h = Holder("initial-{0}")
     let i32 x = b.relabel(h)
     println("label: {h.label} x: {x}")
-    return Result.Ok(0)
+    return 0

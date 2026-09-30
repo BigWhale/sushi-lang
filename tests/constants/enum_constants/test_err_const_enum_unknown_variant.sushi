@@ -9,4 +9,4 @@ enum Sign:
 const Sign S = Sign.Nope
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

@@ -16,30 +16,30 @@ struct Holder:
 fn total(Msg v) i32:
     match v:
         Msg.Num(n) ->
-            return Result.Ok(n)
+            return n
         Msg.Arr(items) ->
             let i32 acc = 0
             foreach(child in items.iter()):
-                acc := acc + total(child.clone()).realise(0)
-            return Result.Ok(acc)
+                acc := acc + total(child.clone())
+            return acc
 
 fn main() i32:
     # leaf locals reused across several sinks, so each sink takes an explicit clone.
     let Msg a = Msg.Arr(from([Msg.Num(1), Msg.Num(2), Msg.Num(3)]))   # total 6
     let Msg b = Msg.Arr(from([Msg.Num(4), Msg.Num(5), Msg.Num(6)]))   # total 15
     let Msg root = Msg.Arr(from([a.clone(), b.clone()]))             # a, b cloned into root
-    let i32 t1 = total(root.clone()).realise(-1)                     # move a clone in + foreach + recursion
+    let i32 t1 = total(root.clone())                     # move a clone in + foreach + recursion
     println(t1)                                                       # 21
 
     # a, b, root still usable (cloned above): plain enum array of clones, then get-out
     let Msg[] pair = from([a.clone(), b.clone()])                    # a, b cloned again
     let Msg first = pair[0]                                           # index get-out: independent copy of a
-    let i32 t2 = total(root.clone()).realise(-1) + total(first.clone()).realise(-1)   # 21 + 6
+    let i32 t2 = total(root.clone()) + total(first.clone())   # 21 + 6
     println(t2)                                                       # 27
 
     # enum struct field (move a clone in) + a fresh by-value move
     let Holder h = Holder(m: a.clone())                              # clone moved into h.m
-    let i32 t3 = total(h.m.clone()).realise(-1) + total(b.clone()).realise(-1)  # 6 + 15
+    let i32 t3 = total(h.m.clone()) + total(b.clone())  # 6 + 15
     println(t3)                                                       # 21
 
-    return Result.Ok(0)
+    return 0

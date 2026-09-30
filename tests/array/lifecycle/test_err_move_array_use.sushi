@@ -12,4 +12,4 @@ fn main() i32:
     # This should error - arr1 has been moved
     println(arr1.len())
 
-    return Result.Ok(0)
+    return 0

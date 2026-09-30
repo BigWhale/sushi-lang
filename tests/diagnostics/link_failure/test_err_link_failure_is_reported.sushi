@@ -11,4 +11,4 @@ unsafe external "C" as absent because "the symbol is deliberately missing, to ma
 fn main() i32:
     let i32 n = absent.vanished(1)
     println(n)
-    return Result.Ok(0)
+    return 0

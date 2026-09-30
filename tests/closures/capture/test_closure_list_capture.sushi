@@ -7,8 +7,8 @@ fn run() i32:
     let List@(i32) xs = List.new()
     xs.push(10)
     let fn(i32) -> i32 f = |i32 x| x + xs.len()
-    return Result.Ok(f(5)??)
+    return f(5)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

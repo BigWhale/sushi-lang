@@ -8,20 +8,20 @@ struct Flags:
 
 fn takes(u8 v) i32:
     println("{v}")
-    return Result.Ok(0)
+    return 0
 
 fn all_bits() u8:
-    return Result.Ok(~0)
+    return ~0
 
 fn main() i32:
     println("Mostly Harmless")
 
-    let i32 ignored = takes(~0).realise(1)
+    let i32 ignored = takes(~0)
 
     let Flags f = Flags(~0)
     println("{f.mask}")
 
-    let u8 returned = all_bits().realise(0)
+    let u8 returned = all_bits()
     println("{returned}")
 
     let u8[2] table = [~0, ~0xF0]
@@ -31,4 +31,4 @@ fn main() i32:
     let Maybe@(u8) payload = Maybe.Some(~0)
     println("{payload.realise(0)}")
 
-    return Result.Ok(ignored)
+    return ignored

@@ -8,4 +8,4 @@ fn main() i32:
     let Holder h = Holder(from([1, 2, 3]))
     let i32[] v = h.items
     v.destroy()
-    return Result.Ok(0)
+    return 0

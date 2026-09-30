@@ -14,4 +14,4 @@ fn main() i32:
     let Counter[] xs = from([Counter(1)])
     let i32 i = 5
     xs[i].bump()
-    return Result.Ok(0)
+    return 0

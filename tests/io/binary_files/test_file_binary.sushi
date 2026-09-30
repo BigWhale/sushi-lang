@@ -4,7 +4,7 @@
 use <io/files>
 use <io/fs>
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Write binary data to file
     let Result@(File, IoError) write_result = open("test_binary_output.bin", FileMode.WriteB())
     match nom write_result:
@@ -46,4 +46,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

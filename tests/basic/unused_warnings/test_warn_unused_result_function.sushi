@@ -4,8 +4,8 @@
 # but the return value is not used
 
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
 fn main() i32:
     get_value()  # Warning: unused Result@(i32)
-    return Result.Ok(0)
+    return 0

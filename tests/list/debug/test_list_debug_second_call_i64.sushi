@@ -7,4 +7,4 @@ fn main() i32:
     let List@(i64) b = List.new()
     b.push(20)
     b.debug()
-    return Result.Ok(0)
+    return 0

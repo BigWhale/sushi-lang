@@ -7,4 +7,4 @@ use "helpers/mid"
 
 fn main() i32:
     println("{deep_value().realise(0)}")
-    return Result.Ok(0)
+    return 0

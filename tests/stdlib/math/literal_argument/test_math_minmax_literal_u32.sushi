@@ -14,4 +14,4 @@ fn main() i32:
     println("{min(b, 1)}")
     let i32 both = max(3, 4)
     println("{both}")
-    return Result.Ok(0)
+    return 0

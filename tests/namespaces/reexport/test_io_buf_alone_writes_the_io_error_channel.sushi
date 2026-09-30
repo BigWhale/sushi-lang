@@ -11,4 +11,4 @@ fn count(i32 n) i32 | IoError:
 
 fn main() i32:
     println("{count(7).realise(0)}")
-    return Result.Ok(0)
+    return 0

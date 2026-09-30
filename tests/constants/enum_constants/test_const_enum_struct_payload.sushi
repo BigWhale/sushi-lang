@@ -17,4 +17,4 @@ fn main() i32:
     match S:
         Shape.Nothing -> println("nothing")
         Shape.At(p, r) -> println("{p.x} {p.y} {r}")
-    return Result.Ok(0)
+    return 0

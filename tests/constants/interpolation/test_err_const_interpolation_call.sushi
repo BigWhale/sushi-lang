@@ -2,10 +2,10 @@
 # still refused (#447 changes what CE0108 says nothing about).
 # EXPECT_ERROR_CODE: CE0108
 fn shout() string:
-    return Result.Ok("no")
+    return "no"
 
 const string BAD = "call {shout()??}"
 
 fn main() i32:
     println(BAD)
-    return Result.Ok(0)
+    return 0

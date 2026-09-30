@@ -2,4 +2,4 @@
 public use "helpers/foo_a"
 
 public fn tag_a() i32:
-    return Result.Ok(10)
+    return 10

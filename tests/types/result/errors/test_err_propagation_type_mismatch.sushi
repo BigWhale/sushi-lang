@@ -15,4 +15,4 @@ fn outer() i32 | ErrorB:
     return Result.Ok(value)
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

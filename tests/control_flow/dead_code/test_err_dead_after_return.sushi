@@ -4,10 +4,10 @@
 # EXPECT_STDERR_CONTAINS: test_err_dead_after_return.sushi:8:5
 # EXPECT_STDERR_CONTAINS: test_err_dead_after_return.sushi:7:5
 fn f(i32 x) i32:
-    return Result.Ok(x)
+    return x
     println("never")
-    return Result.Ok(2)
+    return 2
 
 fn main() i32:
-    println("{f(1).realise(0)}")
-    return Result.Ok(0)
+    println("{f(1)}")
+    return 0

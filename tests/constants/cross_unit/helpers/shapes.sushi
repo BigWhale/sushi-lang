@@ -17,4 +17,4 @@ public const i32 BIG = WIDTH * 2
 const i32 SECRET = 7
 
 public fn area() i32:
-    return Result.Ok(SIZE * SIZE)
+    return SIZE * SIZE

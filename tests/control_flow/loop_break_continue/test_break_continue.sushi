@@ -11,6 +11,6 @@ fn main() i32:
     sum := sum + i
   # sum should be 1+2+3+4+6+7 = 23
   if (sum == 23):
-    return Result.Ok(0)
+    return 0
   else:
-    return Result.Ok(1)
+    return 1

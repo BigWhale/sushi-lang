@@ -13,7 +13,7 @@ fn main() i32:
 
   # arr1 now holds what arr2 held
   if (arr1.len() != 5 or arr1[0] != 10 or arr1[4] != 50):
-    return Result.Ok(1)
+    return 1
 
   # At scope exit, only arr1 is freed (arr2 was moved and marked as invalid)
-  return Result.Ok(0)
+  return 0

@@ -25,4 +25,4 @@ fn main() i32:
         Option.None() ->
             println("None")
 
-    return Result.Ok(0)
+    return 0

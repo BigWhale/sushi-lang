@@ -24,12 +24,12 @@ fn main() i32:
         println("PASS: realise returns Ok value for structs")
     else:
         println("FAIL: Wrong config from Ok")
-        return Result.Ok(1)
+        return 1
 
     let Config cfg2 = load_config(true).realise(default_config)
     if (cfg2.port == 3000 and cfg2.host == "0.0.0.0"):
         println("PASS: realise returns default for Err")
-        return Result.Ok(0)
+        return 0
     else:
         println("FAIL: Wrong config from Err")
-        return Result.Ok(1)
+        return 1

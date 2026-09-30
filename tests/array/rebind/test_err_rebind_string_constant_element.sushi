@@ -6,4 +6,4 @@ const string[2] NAMES = ["ford", "arthur"]
 
 fn main() i32:
     NAMES[0] := "zaphod"
-    return Result.Ok(0)
+    return 0

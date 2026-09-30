@@ -11,4 +11,4 @@ fn main() i32:
     # This should trigger CE2406: use of destroyed variable
     let i32 len = data.len()
 
-    return Result.Ok(0)
+    return 0

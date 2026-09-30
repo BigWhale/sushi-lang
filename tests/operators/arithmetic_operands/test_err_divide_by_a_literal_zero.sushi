@@ -5,4 +5,4 @@
 fn main() i32:
     let i32 x = 10 / 0
     println("{x}")
-    return Result.Ok(0)
+    return 0

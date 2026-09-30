@@ -19,11 +19,11 @@ struct W:
 
 fn make() fn(i32) -> i32:
     let W w = W(from([111, 222, 333]))
-    return Result.Ok(|i32 n| n + w.items[1])
+    return |i32 n| n + w.items[1]
 
 fn main() i32:
-    let fn(i32) -> i32 f = make().realise(|i32 n| n)
+    let fn(i32) -> i32 f = make()
     # Churn the heap so a freed buffer is unlikely to still hold its old contents.
     let i32[] clobber = from([7, 7, 7, 7, 7, 7, 7, 7])
-    println("clobber={clobber.len()} v={f(0).realise(-1)}")
-    return Result.Ok(0)
+    println("clobber={clobber.len()} v={f(0)}")
+    return 0

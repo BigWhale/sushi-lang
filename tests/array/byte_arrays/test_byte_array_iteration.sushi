@@ -4,7 +4,7 @@
 # Test iteration over byte arrays with various patterns
 
 
-fn sum_bytes(u8[] data) i32:
+fn sum_bytes(u8[] data) i32 | StdError:
     let i32 sum = 0
     let i32 i = 0
     while (i < data.len()):
@@ -13,7 +13,7 @@ fn sum_bytes(u8[] data) i32:
         i := i + 1
     return Result.Ok(sum)
 
-fn count_zeros(u8[] data) i32:
+fn count_zeros(u8[] data) i32 | StdError:
     let i32 count = 0
     let i32 i = 0
     while (i < data.len()):
@@ -114,4 +114,4 @@ fn main() i32:
     println("Modified array count: {mod_count}")  # Should be 4
 
     println("All iteration tests completed!")
-    return Result.Ok(0)
+    return 0

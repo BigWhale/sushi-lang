@@ -3,18 +3,18 @@
 # by test_fn_value_field_call.
 # EXPECT_STDOUT_EXACT: "11\n"
 fn add_one(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 struct Handler:
     fn(i32) -> i32 op
 
 fn run(Handler h, i32 v) i32:
     let fn(i32) -> i32 f = h.op
-    let i32 r = f(v)??
-    return Result.Ok(r)
+    let i32 r = f(v)
+    return r
 
 fn main() i32:
     let Handler h = Handler(add_one)
-    let i32 out = run(h, 10).realise(0)
+    let i32 out = run(h, 10)
     println(out)
-    return Result.Ok(0)
+    return 0

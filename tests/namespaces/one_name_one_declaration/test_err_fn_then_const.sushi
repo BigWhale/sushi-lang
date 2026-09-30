@@ -9,10 +9,10 @@
 #
 
 fn box() i32:
-    return Result.Ok(4)
+    return 4
 
 const i32 box = 3
 
 fn main() i32:
-    println(box().realise(0))
-    return Result.Ok(0)
+    println(box())
+    return 0

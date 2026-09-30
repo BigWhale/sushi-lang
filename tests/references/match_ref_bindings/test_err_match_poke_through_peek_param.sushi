@@ -10,10 +10,10 @@ fn peek_at(peek Shape s) i32:
         Shape.Poly(poke p) ->
             p.push(9)
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     let Shape s = Shape.Poly(from([1]))
-    let i32 r = peek_at(peek s).realise(0)
+    let i32 r = peek_at(peek s)
     println(r)
-    return Result.Ok(0)
+    return 0

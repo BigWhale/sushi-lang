@@ -12,4 +12,4 @@ extend i32 add(i32 value) i32:
 fn main() i32:
   let i32 x = 5
   let i32 result = x.add(3)
-  return Result.Ok(result)
+  return result

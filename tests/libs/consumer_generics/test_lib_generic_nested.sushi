@@ -9,4 +9,4 @@ fn main() i32:
     let Cell@(i32) c = Cell(99)
     let Holder@(i32) h = Holder(c)
     println(h.cell.item)
-    return Result.Ok(0)
+    return 0

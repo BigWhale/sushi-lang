@@ -16,4 +16,4 @@ fn main() i32:
     println("{LAST}")
     println("{SUM}")
     println(SECOND)
-    return Result.Ok(0)
+    return 0

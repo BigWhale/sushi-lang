@@ -17,4 +17,4 @@ extend Box@(T) yell() i32:
 fn main() i32:
     let Box@(i32) b = Box(5)
     println("{b.yell()}")
-    return Result.Ok(0)
+    return 0

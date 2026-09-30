@@ -2,4 +2,4 @@
 fn main() i32:
     let i32 x = 40
     let i32 y = 2
-    return Result.Ok(x + y)
+    return x + y

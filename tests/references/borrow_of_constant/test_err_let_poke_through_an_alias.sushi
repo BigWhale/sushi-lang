@@ -9,4 +9,4 @@ use "helpers/alias_store" as o
 fn main() i32:
     let poke i32 ref = o.ALIAS_LIMIT
     ref := ref + 1
-    return Result.Ok(0)
+    return 0

@@ -31,7 +31,7 @@ fn main() i32:
 
     if (ok_count == 1 and err_count == 1):
         println("PASS: Exhaustive matching works")
-        return Result.Ok(0)
+        return 0
     else:
         println("FAIL: Wrong match counts")
-        return Result.Ok(1)
+        return 1

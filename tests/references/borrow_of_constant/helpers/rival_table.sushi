@@ -7,4 +7,4 @@ var i32[3] SLOTS = [0, 0, 0]
 
 public fn rival_slot() i32:
     SLOTS[0] := SLOTS[0] + 1
-    return Result.Ok(SLOTS[0])
+    return SLOTS[0]

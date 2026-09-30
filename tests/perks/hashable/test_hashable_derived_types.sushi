@@ -25,32 +25,32 @@ struct Box@(T):
     T item
 
 fn fingerprint@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     let i32 n = 42
-    println(fingerprint(n).realise(0 as u64) == n.hash())
+    println(fingerprint(n) == n.hash())
 
     let string s = "Mostly Harmless"
-    println(fingerprint(s).realise(0 as u64) == s.hash())
+    println(fingerprint(s) == s.hash())
 
     let Point p = Point(1, 2)
-    println(fingerprint(p).realise(0 as u64) == p.hash())
+    println(fingerprint(p) == p.hash())
 
     let Shape sh = Shape.Rect(3, 4)
-    println(fingerprint(sh).realise(0 as u64) == sh.hash())
+    println(fingerprint(sh) == sh.hash())
 
     let Bag bag = Bag(List.new())
     bag.items.push(7)
-    println(fingerprint(bag).realise(0 as u64) == bag.hash())
+    println(fingerprint(bag) == bag.hash())
 
     let Segment seg = Segment(Point(1, 2), Point(3, 4))
-    println(fingerprint(seg).realise(0 as u64) == seg.hash())
+    println(fingerprint(seg) == seg.hash())
 
     let Own@(i32) o = Own.alloc(5)
-    println(fingerprint(o).realise(0 as u64) == o.hash())
+    println(fingerprint(o) == o.hash())
 
     let Box@(i32) b = Box(9)
-    println(fingerprint(b).realise(0 as u64) == b.hash())
+    println(fingerprint(b) == b.hash())
 
-    return Result.Ok(0)
+    return 0

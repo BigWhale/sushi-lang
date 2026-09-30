@@ -4,7 +4,7 @@ public struct Crate@(T):
 extend Crate@(T) doubled_len() i32:
     let i32 two = 2
     let fn(i32) -> i32 f = |i32 x| x * two
-    let i32 r = f(self.measure()).realise(0)
+    let i32 r = f(self.measure())
     return r
 
 extend Crate@(i32) measure() i32:

@@ -8,4 +8,4 @@ fn main() i32:
     arr.destroy()
 
     println("Array.destroy() completed successfully!")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ extend T[] first_as_i32() i32:
 fn main() i32:
     let string[] names = from(["arthur", "ford"])
     println("{names.first_as_i32()}")
-    return Result.Ok(0)
+    return 0

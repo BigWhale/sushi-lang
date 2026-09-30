@@ -15,4 +15,4 @@ fn main() i32:
     let u32 left = c << 2
     println(left)  # Should be 20
 
-    return Result.Ok(0)
+    return 0

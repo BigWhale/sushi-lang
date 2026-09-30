@@ -4,4 +4,4 @@ struct Acc:
     i32 n
 
 public fn one() i32:
-    return Result.Ok(1)
+    return 1

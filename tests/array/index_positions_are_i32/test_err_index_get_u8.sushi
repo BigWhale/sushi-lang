@@ -7,4 +7,4 @@ fn main() i32:
     let string[] arr = from(["hello", "world"])
     let u8 n = 0 as u8
     println(arr.get(n).realise("none"))
-    return Result.Ok(0)
+    return 0

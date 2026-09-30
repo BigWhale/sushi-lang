@@ -5,4 +5,4 @@
 # EXPECT_STDERR_CONTAINS: "is not a directory"
 
 public fn answer() i32:
-    return Result.Ok(42)
+    return 42

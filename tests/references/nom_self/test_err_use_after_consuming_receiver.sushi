@@ -16,4 +16,4 @@ fn main() i32:
     let Box b = Box("{tag} Harmless")
     println(b.unwrap())
     println(b.label)
-    return Result.Ok(0)
+    return 0

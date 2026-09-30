@@ -12,4 +12,4 @@ fn main() i32:
     println("A-via-println")
     posix.raw_write(1, "B-via-write\n", 12 as i64)
     println("C-via-println")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ fn main() i32:
     let peek string r = s
     r := "rebound"
     println(r)
-    return Result.Ok(0)
+    return 0

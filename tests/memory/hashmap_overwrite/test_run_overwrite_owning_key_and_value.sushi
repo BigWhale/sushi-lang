@@ -19,4 +19,4 @@ fn main() i32:
         println(key)
     println(m.len())
     m.free()
-    return Result.Ok(0)
+    return 0

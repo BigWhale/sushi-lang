@@ -5,4 +5,4 @@ use "helpers/state"
 
 fn main() i32:
     hidden := 1
-    return Result.Ok(0)
+    return 0

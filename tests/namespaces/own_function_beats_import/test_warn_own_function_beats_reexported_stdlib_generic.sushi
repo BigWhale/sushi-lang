@@ -8,8 +8,8 @@ use <io/fs>
 use <collections/strings>
 
 fn read_all(string path) i32:
-    return Result.Ok(path.len())
+    return path.len()
 
 fn main() i32:
-    println(read_all("abc").realise(0))
-    return Result.Ok(0)
+    println(read_all("abc"))
+    return 0

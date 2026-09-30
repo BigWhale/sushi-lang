@@ -8,11 +8,11 @@ enum Color:
 fn f(Color c) string:
     match c:
         1 ->
-            return Result.Ok("one")
+            return "one"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
     let Color c = Color.Red()
-    println(f(c).realise("err"))
-    return Result.Ok(0)
+    println(f(c))
+    return 0

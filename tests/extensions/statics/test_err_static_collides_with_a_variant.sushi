@@ -10,4 +10,4 @@ extend Shape static Circle() Shape:
 fn main() i32:
     match Shape.Circle:
         Shape.Circle -> println("circle")
-    return Result.Ok(0)
+    return 0

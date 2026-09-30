@@ -15,4 +15,4 @@ var Tracker current = Tracker(1)
 fn main() i32:
     current := Tracker(2)
     println("end")
-    return Result.Ok(0)
+    return 0

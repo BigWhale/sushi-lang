@@ -5,11 +5,11 @@
 # return type -- and no return spelling can satisfy that.
 # EXPECT_ERROR_CODE: CE0131
 fn tag(i32 n) i32:
-    return Result.Ok(n)
+    return n
 
 extend i32 fixed() i32:
-    return tag(9)??
+    return tag(9)
 
 fn main() i32:
     println("{8.fixed()}")
-    return Result.Ok(0)
+    return 0

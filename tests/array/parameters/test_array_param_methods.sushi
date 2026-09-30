@@ -3,18 +3,18 @@
 # mutations are visible to the caller (flags.len()==2 after pop, test_arr.len()==4 after
 # two pushes) -- unlike a by-value array param, whose header copy would lose them.
 
-fn safe_get(i32[] arr, i32 index) i32:
+fn safe_get(i32[] arr, i32 index) i32 | StdError:
     return Result.Ok(arr.get(index)??)
 
-fn check_capacity(string[] arr) i32:
+fn check_capacity(string[] arr) i32 | StdError:
     return Result.Ok(arr.capacity())
 
 # Mutating helpers borrow poke so the caller keeps ownership and sees the mutation
 # (a by-value array param would be moved and freed by the callee).
-fn pop_last(poke bool[] arr) bool:
+fn pop_last(poke bool[] arr) bool | StdError:
     return Result.Ok(arr.pop()??)
 
-fn chain_methods(poke i32[] arr) i32:
+fn chain_methods(poke i32[] arr) i32 | StdError:
     print(arr.push(42))
     print(arr.push(24))
     return Result.Ok(arr.len())
@@ -42,4 +42,4 @@ fn main() i32:
     print(final_len_result.realise(0))    # Should print 4
     print(test_arr.len())  # Should also print 4
 
-    return Result.Ok(0)
+    return 0

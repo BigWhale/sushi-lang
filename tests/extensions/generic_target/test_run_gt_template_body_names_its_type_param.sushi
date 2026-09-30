@@ -37,7 +37,7 @@ fn run_test() i32:
     println(n.held())
     println(s.held())
     println(n.maybe_len())
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

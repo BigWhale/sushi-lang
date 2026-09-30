@@ -5,4 +5,4 @@ fn main() i32:
     let Result@(i32, StdError) r = Result.Ok(1)
     # Error: is_ok() takes no arguments
     let bool ok = r.is_ok(1)
-    return Result.Ok(0)
+    return 0

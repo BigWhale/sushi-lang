@@ -19,10 +19,10 @@ struct Tag@(T: Named):
     T v
 
 fn one@(T: Named)(T x) ~:
-    return Result.Ok(~)
+    return ~
 
 fn main() i32:
     let Box@(bool) a = Box(true)
     one(true)
     let Tag@(bool) b = Tag(true)
-    return Result.Ok(0)
+    return 0

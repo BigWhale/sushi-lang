@@ -6,4 +6,4 @@ fn main() i32:
     let string sep = ", "
     let string[] words = from(["a", "b"])
     println(sep.join(words))
-    return Result.Ok(0)
+    return 0

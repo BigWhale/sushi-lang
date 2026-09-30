@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODE: CE2425
 
 fn take(nom count) ~:
-    return Result.Ok(~)
+    return ~
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

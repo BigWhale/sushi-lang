@@ -14,24 +14,24 @@ const i32 NEG = -42
 fn main() i32:
     # Verify arithmetic results
     if (BASE != 10):
-        return Result.Err(StdError.Error)
+        return 1
     if (DOUBLE != 20):
-        return Result.Err(StdError.Error)
+        return 1
     if (SUM != 150):
-        return Result.Err(StdError.Error)
+        return 1
     if (DIFF != 50):
-        return Result.Err(StdError.Error)
+        return 1
     if (PRODUCT != 50):
-        return Result.Err(StdError.Error)
+        return 1
     if (QUOTIENT != 25):
-        return Result.Err(StdError.Error)
+        return 1
     if (REMAINDER != 2):
-        return Result.Err(StdError.Error)
+        return 1
     if (COMPLEX != 50):
-        return Result.Err(StdError.Error)
+        return 1
     if (NEG != -42):
-        return Result.Err(StdError.Error)
+        return 1
 
     println("All arithmetic constant tests passed")
-    return Result.Ok(0)
+    return 0
 

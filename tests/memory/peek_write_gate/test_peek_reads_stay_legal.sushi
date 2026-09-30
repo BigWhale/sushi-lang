@@ -9,7 +9,7 @@
 struct Holder:
     i32[] items
 
-fn read_all(peek i32[] a) i32:
+fn read_all(peek i32[] a) i32 | StdError:
     println(a.len())
     println(a.get(0)??)
     let i32 total = 0
@@ -20,15 +20,15 @@ fn read_all(peek i32[] a) i32:
     return Result.Ok(total)
 
 fn read_field(peek Holder h) i32:
-    return Result.Ok(h.items.len())
+    return h.items.len()
 
 fn run_test() i32:
     let i32[] xs = from([1, 2, 3])
     let i32 total = read_all(peek xs).realise(0)
     let Holder holder = Holder(from([7, 8]))
-    println(read_field(peek holder).realise(0))
-    return Result.Ok(total - total)
+    println(read_field(peek holder))
+    return total - total
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

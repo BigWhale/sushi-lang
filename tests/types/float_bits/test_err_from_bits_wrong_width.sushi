@@ -5,4 +5,4 @@ fn main() i32:
     let u32 narrow = 5 as u32
     let f64 x = f64.from_bits(narrow)
     println("{x}")
-    return Result.Ok(0)
+    return 0

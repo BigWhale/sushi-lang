@@ -10,6 +10,6 @@ use "helpers/prefix_aliased"
 
 fn main() i32:
     let string s = "a,b"
-    println(opens_with_a(s).realise(false))
-    println(leads_with_a(s).realise(false))
-    return Result.Ok(0)
+    println(opens_with_a(s))
+    println(leads_with_a(s))
+    return 0

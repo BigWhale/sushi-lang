@@ -8,5 +8,5 @@ use <lib/shadow_kinds_lib>
 var i32 counter = 1
 
 fn main() i32:
-    println("{counter} {touch().realise(0)}")
-    return Result.Ok(0)
+    println("{counter} {touch()}")
+    return 0

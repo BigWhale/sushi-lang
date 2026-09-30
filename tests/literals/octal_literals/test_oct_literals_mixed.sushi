@@ -26,4 +26,4 @@ fn main() i32:
     if (all_equal and check1 and check2 and check3):
         println("Mostly Harmless")
     println(sum)
-    return Result.Ok(0)
+    return 0

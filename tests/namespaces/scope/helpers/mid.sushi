@@ -3,4 +3,4 @@
 use "helpers/deep"
 
 public fn mid_value() i32:
-    return Result.Ok(deep_value()?? + 1)
+    return deep_value() + 1

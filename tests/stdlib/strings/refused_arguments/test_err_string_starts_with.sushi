@@ -6,4 +6,4 @@ fn main() i32:
     let string s = "hello"
     let bool result = s.starts_with()
     println(result)
-    return Result.Ok(0)
+    return 0

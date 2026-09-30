@@ -29,4 +29,4 @@ fn main() i32:
                 Result.Ok(_) -> println("written")
                 Result.Err(_) -> println("write failed")
         Result.Err(_) -> println("reopen failed")
-    return Result.Ok(0)
+    return 0

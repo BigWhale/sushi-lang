@@ -8,4 +8,4 @@ struct Point:
 fn main() i32:
     # ERROR: 'z' is not a field of Point
     let Point p = Point(x: 10, y: 20, z: 30)
-    return Result.Ok(0)
+    return 0

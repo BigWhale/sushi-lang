@@ -11,15 +11,15 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("ERROR: could not create test file")
-            return Result.Ok(1)
+            return 1
 
     if (not exists("/tmp/sushi_r108_exists.txt")):
         println("ERROR: File should exist")
-        return Result.Ok(1)
+        return 1
 
     if (exists("/tmp/nonexistent_file_12345.txt")):
         println("ERROR: File should not exist")
-        return Result.Ok(1)
+        return 1
 
     println("OK: exists() works correctly")
-    return Result.Ok(0)
+    return 0

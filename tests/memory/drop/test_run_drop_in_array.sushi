@@ -12,4 +12,4 @@ extend Handle with Drop:
 fn main() i32:
     let Handle[] xs = from([Handle(1), Handle(2)])
     println("{xs.len()}")
-    return Result.Ok(0)
+    return 0

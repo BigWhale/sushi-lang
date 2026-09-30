@@ -9,11 +9,11 @@
 #
 
 fn box() i32:
-    return Result.Ok(4)
+    return 4
 
 perk box:
     fn size() i32
 
 fn main() i32:
-    println(box().realise(0))
-    return Result.Ok(0)
+    println(box())
+    return 0

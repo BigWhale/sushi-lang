@@ -18,7 +18,7 @@ fn main() i32:
 
     if (size != 3):
         println("ERROR: Expected size 3, got {size}")
-        return Result.Ok(1)
+        return 1
 
     # Test updating an existing key
     ages.insert("Trillian", 26)
@@ -27,7 +27,7 @@ fn main() i32:
 
     if (size2 != 3):
         println("ERROR: Size should still be 3 after update, got {size2}")
-        return Result.Ok(2)
+        return 2
 
     println("String keys test passed!")
-    return Result.Ok(0)
+    return 0

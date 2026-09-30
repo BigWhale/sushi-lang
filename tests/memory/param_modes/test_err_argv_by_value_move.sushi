@@ -9,8 +9,8 @@
 # EXPECT_ERROR_CODE: CE2410
 
 fn use_args(nom string[] a) i32:
-    return Result.Ok(a.len())
+    return a.len()
 
 fn main(string[] args) i32:
-    println(use_args(nom args).realise(-1))
-    return Result.Ok(0)
+    println(use_args(nom args))
+    return 0

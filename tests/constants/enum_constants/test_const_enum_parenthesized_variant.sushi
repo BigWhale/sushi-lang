@@ -12,4 +12,4 @@ fn main() i32:
     match FAVOURITE:
         Colour.Red -> println("red")
         Colour.Green -> println("green")
-    return Result.Ok(0)
+    return 0

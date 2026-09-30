@@ -9,4 +9,4 @@ struct Pair@(T, U):
 fn main() i32:
     # Pair requires 2 type parameters, but only providing 1
     let Result@(Pair@(i32), StdError) bad = Result.Ok(Pair(42, "wrong"))
-    return Result.Ok(0)
+    return 0

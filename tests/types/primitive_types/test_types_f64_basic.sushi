@@ -41,6 +41,6 @@ fn main() i32:
 
   # Return success if all validations passed
   if (validation == 5):
-    return Result.Ok(0)
+    return 0
   else:
-    return Result.Err(StdError.Error)
+    return 1

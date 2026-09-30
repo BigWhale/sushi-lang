@@ -15,4 +15,4 @@ fn main() i32:
 
   # result should be 42 (zero value for i32)
   let i32 expected = 42
-  return Result.Ok(result - expected)
+  return result - expected

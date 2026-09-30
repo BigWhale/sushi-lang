@@ -25,6 +25,6 @@ fn main() i32:
 
   # Verify results
   if (result1 == 8 and result2 == 20 and result3 == false):
-    return Result.Ok(0)
+    return 0
   else:
-    return Result.Ok(1)
+    return 1

@@ -11,32 +11,32 @@ fn swap@(T, U)(Either@(T, U) e) Either@(U, T):
     # a new enum needs an independent value.
     match e:
         Either.Left(v) ->
-            return Result.Ok(Either.Right(v.clone()))
+            return Either.Right(v.clone())
         Either.Right(v) ->
-            return Result.Ok(Either.Left(v.clone()))
+            return Either.Left(v.clone())
 
 fn main() i32:
     let Either@(i32, string) e1 = Either.Left(42)
-    let Either@(string, i32) swapped = swap(e1).realise(Either.Left("err"))
+    let Either@(string, i32) swapped = swap(e1)
 
     match swapped:
         Either.Left(s) ->
             println("FAIL: expected Right not Left({s})")
-            return Result.Ok(1)
+            return 1
         Either.Right(n) ->
             println("Right: {n}")
             if (n != 42):
-                return Result.Ok(1)
+                return 1
 
     let Either@(string, i32) e2 = Either.Right(99)
-    let Either@(i32, string) s2 = swap(e2).realise(Either.Right("err"))
+    let Either@(i32, string) s2 = swap(e2)
     match s2:
         Either.Left(n) ->
             if (n != 99):
                 println("FAIL: expected 99 got {n}")
-                return Result.Ok(1)
+                return 1
         Either.Right(_) ->
             println("FAIL: expected Left")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

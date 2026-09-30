@@ -11,13 +11,13 @@ struct Box:
     i32 n
 
 fn empty@(T)() T[]:
-    return Result.Ok(new())
+    return new()
 
 extend Box slots() i32[]:
     return new()
 
 fn probe() ~:
-    let i32[] a = empty@(i32)()??
+    let i32[] a = empty@(i32)()
     println("generic = {a.len()}")
 
     let Box b = Box(n: 1)
@@ -32,8 +32,7 @@ fn probe() ~:
     m.insert(1, new())
     println("map = {m.len()}")
     m.free()
-    return Result.Ok(~)
 
 fn main() i32:
     probe()
-    return Result.Ok(0)
+    return 0

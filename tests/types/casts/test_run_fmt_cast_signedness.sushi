@@ -11,4 +11,4 @@ fn main() i32:
     let u32 m = n as u32
     println("{m}")
 
-    return Result.Ok(0)
+    return 0

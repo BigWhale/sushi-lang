@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: strip_suffix removes file extension
 use <collections/strings>
 
-fn test_basic_strip() ~:
+fn test_basic_strip() ~ | StdError:
     let string s = "hello world"
     let string result = s.strip_suffix(" world")
     if (result == "hello"):
@@ -11,7 +11,7 @@ fn test_basic_strip() ~:
         println("FAIL: Basic strip_suffix - expected 'hello', got '{result}'")
     return Result.Ok(~)
 
-fn test_no_match() ~:
+fn test_no_match() ~ | StdError:
     let string s = "hello world"
     let string result = s.strip_suffix("goodbye")
     if (result == "hello world"):
@@ -20,7 +20,7 @@ fn test_no_match() ~:
         println("FAIL: strip_suffix no match - expected 'hello world', got '{result}'")
     return Result.Ok(~)
 
-fn test_empty_suffix() ~:
+fn test_empty_suffix() ~ | StdError:
     let string s = "hello"
     let string result = s.strip_suffix("")
     if (result == "hello"):
@@ -29,7 +29,7 @@ fn test_empty_suffix() ~:
         println("FAIL: strip_suffix empty - expected 'hello', got '{result}'")
     return Result.Ok(~)
 
-fn test_empty_string() ~:
+fn test_empty_string() ~ | StdError:
     let string s = ""
     let string result = s.strip_suffix("x")
     if (result == ""):
@@ -38,7 +38,7 @@ fn test_empty_string() ~:
         println("FAIL: strip_suffix empty string - expected '', got '{result}'")
     return Result.Ok(~)
 
-fn test_full_match() ~:
+fn test_full_match() ~ | StdError:
     let string s = "test"
     let string result = s.strip_suffix("test")
     if (result == ""):
@@ -47,7 +47,7 @@ fn test_full_match() ~:
         println("FAIL: strip_suffix full - expected '', got '{result}'")
     return Result.Ok(~)
 
-fn test_suffix_longer() ~:
+fn test_suffix_longer() ~ | StdError:
     let string s = "hi"
     let string result = s.strip_suffix("hello")
     if (result == "hi"):
@@ -56,7 +56,7 @@ fn test_suffix_longer() ~:
         println("FAIL: strip_suffix longer - expected 'hi', got '{result}'")
     return Result.Ok(~)
 
-fn test_utf8() ~:
+fn test_utf8() ~ | StdError:
     let string s = "café au lait"
     let string result = s.strip_suffix(" au lait")
     if (result == "café"):
@@ -65,7 +65,7 @@ fn test_utf8() ~:
         println("FAIL: strip_suffix UTF-8 - expected 'café', got '{result}'")
     return Result.Ok(~)
 
-fn test_single_char() ~:
+fn test_single_char() ~ | StdError:
     let string s = "hellox"
     let string result = s.strip_suffix("x")
     if (result == "hello"):
@@ -74,7 +74,7 @@ fn test_single_char() ~:
         println("FAIL: strip_suffix single - expected 'hello', got '{result}'")
     return Result.Ok(~)
 
-fn test_file_extension() ~:
+fn test_file_extension() ~ | StdError:
     let string s = "document.txt"
     let string result = s.strip_suffix(".txt")
     if (result == "document"):
@@ -102,4 +102,4 @@ fn main() i32:
         println("")
     if (test_file_extension().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

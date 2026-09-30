@@ -7,4 +7,4 @@ fn main() i32:
     let i64 b = 2000000 as i64
     let i64 big = a * b
     println(big)
-    return Result.Ok(0)
+    return 0

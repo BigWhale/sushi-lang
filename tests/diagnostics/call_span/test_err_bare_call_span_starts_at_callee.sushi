@@ -4,10 +4,10 @@
 # EXPECT_ERROR_CODE: CE2505
 # EXPECT_STDERR_CONTAINS: "test_err_bare_call_span_starts_at_callee.sushi:11:20: error [CE2505]"
 # EXPECT_STDERR_CONTAINS: "  |     let string a = f()\n  `                    -+-\n"
-fn f() i32:
+fn f() i32 | StdError:
     return Result.Ok(1)
 
 fn main() i32:
     let string a = f()
     println("{a}")
-    return Result.Ok(0)
+    return 0

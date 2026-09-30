@@ -18,4 +18,4 @@ fn main() i32:
     let string first = l.lines.get(0).realise('?')
     let string second = l.lines.get(1).realise('?')
     println("{l.lines.len()} {first} {second}")
-    return Result.Ok(0)
+    return 0

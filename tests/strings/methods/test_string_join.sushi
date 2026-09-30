@@ -10,7 +10,7 @@
 
 use <collections/strings>
 
-fn test_join_basic() ~:
+fn test_join_basic() ~ | StdError:
     let string[] parts = from(["a", "b", "c"])
     let string result = ",".join(parts)
 
@@ -21,7 +21,7 @@ fn test_join_basic() ~:
 
     return Result.Ok(~)
 
-fn test_join_empty_array() ~:
+fn test_join_empty_array() ~ | StdError:
     let string[] empty = from([])
     let string result = ",".join(empty)
 
@@ -32,7 +32,7 @@ fn test_join_empty_array() ~:
 
     return Result.Ok(~)
 
-fn test_join_single_element() ~:
+fn test_join_single_element() ~ | StdError:
     let string[] single = from(["hello"])
     let string result = ",".join(single)
 
@@ -43,7 +43,7 @@ fn test_join_single_element() ~:
 
     return Result.Ok(~)
 
-fn test_join_empty_separator() ~:
+fn test_join_empty_separator() ~ | StdError:
     let string[] parts = from(["a", "b", "c"])
     let string result = "".join(parts)
 
@@ -54,7 +54,7 @@ fn test_join_empty_separator() ~:
 
     return Result.Ok(~)
 
-fn test_join_multi_char_separator() ~:
+fn test_join_multi_char_separator() ~ | StdError:
     let string[] parts = from(["foo", "bar", "baz"])
     let string result = " | ".join(parts)
 
@@ -65,7 +65,7 @@ fn test_join_multi_char_separator() ~:
 
     return Result.Ok(~)
 
-fn test_join_with_empty_parts() ~:
+fn test_join_with_empty_parts() ~ | StdError:
     let string[] parts = from(["a", "", "c"])
     let string result = ",".join(parts)
 
@@ -76,7 +76,7 @@ fn test_join_with_empty_parts() ~:
 
     return Result.Ok(~)
 
-fn test_join_utf8() ~:
+fn test_join_utf8() ~ | StdError:
     let string[] parts = from(["café", "naïve", "résumé"])
     let string result = " • ".join(parts)
 
@@ -87,7 +87,7 @@ fn test_join_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_join_emoji() ~:
+fn test_join_emoji() ~ | StdError:
     let string[] parts = from(["🎉", "test", "🎊"])
     let string result = "-".join(parts)
 
@@ -98,7 +98,7 @@ fn test_join_emoji() ~:
 
     return Result.Ok(~)
 
-fn test_join_two_elements() ~:
+fn test_join_two_elements() ~ | StdError:
     let string[] parts = from(["first", "second"])
     let string result = " and ".join(parts)
 
@@ -109,7 +109,7 @@ fn test_join_two_elements() ~:
 
     return Result.Ok(~)
 
-fn test_join_long_strings() ~:
+fn test_join_long_strings() ~ | StdError:
     let string[] parts = from(["The", "quick", "brown", "fox"])
     let string result = " ".join(parts)
 
@@ -142,4 +142,4 @@ fn main() i32:
     if (test_join_long_strings().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

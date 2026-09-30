@@ -46,4 +46,4 @@ fn main() i32:
     let f64 default = invalid2.to_f64().realise(-1.0)
     println("Using realise() with invalid: {default}")
 
-    return Result.Ok(0)
+    return 0

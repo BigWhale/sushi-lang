@@ -14,4 +14,4 @@ fn main() i32:
     let Handle h = Handle(p, 16 as i64)
     libc.free(h.raw)
     println("handle ok {h.size}")
-    return Result.Ok(0)
+    return 0

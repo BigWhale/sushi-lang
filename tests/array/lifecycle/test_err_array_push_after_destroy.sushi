@@ -6,4 +6,4 @@ fn main() i32:
     # ERROR CE2406: use of destroyed variable 'arr'
     arr.push(4)
 
-    return Result.Ok(0)
+    return 0

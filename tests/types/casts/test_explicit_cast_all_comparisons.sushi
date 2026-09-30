@@ -13,6 +13,6 @@ fn main() i32:
 
   # x=10, y=5: eq=false, neq=true, gt=true, gte=true, lt=false, lte=false
   if (not eq and neq and gt and gte and not lt and not lte):
-    return Result.Ok(0)
+    return 0
 
-  return Result.Ok(1)
+  return 1

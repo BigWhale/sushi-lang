@@ -7,4 +7,4 @@ fn main() i32:
   # This should fail - mixed i32 and i64
   let i32 c = a + b
 
-  return Result.Ok(c)
+  return c

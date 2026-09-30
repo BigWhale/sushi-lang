@@ -22,4 +22,4 @@ fn main() i32:
     let Own@(i32) boxed = Own.alloc(42)
     println(boxed.get())
 
-    return Result.Ok(0)
+    return 0

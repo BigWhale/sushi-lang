@@ -11,4 +11,4 @@ fn main() i32:
     let i32[] v = h.items
     v.push(3)
     println(h.items.len())
-    return Result.Ok(0)
+    return 0

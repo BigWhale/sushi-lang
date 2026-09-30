@@ -27,4 +27,4 @@ fn main() i32:
     let Point p = Point(10, 20)
     p.hash()
     println("sum: {p.sum()}")
-    return Result.Ok(0)
+    return 0

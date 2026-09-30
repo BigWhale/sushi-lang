@@ -8,5 +8,5 @@ use "helpers/prefix_bare"
 use <collections/strings>
 
 fn main() i32:
-    println(starts_with_a("a,b").realise(false))
-    return Result.Ok(0)
+    println(starts_with_a("a,b"))
+    return 0

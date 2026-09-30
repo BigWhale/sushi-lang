@@ -14,4 +14,4 @@ fn main() i32:
     let Rectangle r = Rectangle(20, 20)
     let i32 the_answer = p.x + r.width + r.height
     let i32 expected = 42
-    return Result.Ok(expected - the_answer)
+    return expected - the_answer

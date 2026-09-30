@@ -8,8 +8,8 @@ const u32 FLAGS = 0x01 | 0x02 | 0x04
 fn main() i32:
   let u32 m = 0x01 | 0x02
   if (FLAGS != 7 as u32):
-    return Result.Ok(1)
+    return 1
   if (m != 3 as u32):
-    return Result.Ok(2)
+    return 2
   println("bitwise ok")
-  return Result.Ok(0)
+  return 0

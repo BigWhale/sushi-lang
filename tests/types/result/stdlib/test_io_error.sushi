@@ -22,20 +22,20 @@ fn main() i32:
             println("PASS: IoError.NotFound works")
         _ ->
             println("FAIL: NotFound pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match do_io("write"):
         Result.Err(IoError.DiskFull) ->
             println("PASS: IoError.DiskFull works")
         _ ->
             println("FAIL: DiskFull pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match do_io("flush"):
         Result.Err(IoError.Os(code)) ->
             println("PASS: IoError.Os carries the errno {code}")
         _ ->
             println("FAIL: Os pattern failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

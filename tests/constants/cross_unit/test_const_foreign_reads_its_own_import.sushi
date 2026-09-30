@@ -11,4 +11,4 @@ const i32 ALSO = BIG + WIDTH - WIDTH
 
 fn main() i32:
     println("{FLAT} {ALSO}")
-    return Result.Ok(0)
+    return 0

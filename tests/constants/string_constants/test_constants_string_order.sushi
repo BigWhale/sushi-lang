@@ -21,27 +21,27 @@ const bool LT_EQUAL = "same" < "same"
 
 fn main() i32:
     if (not LT):
-        return Result.Ok(1)
+        return 1
     if (LT_FALSE):
-        return Result.Ok(2)
+        return 2
     if (not GT):
-        return Result.Ok(3)
+        return 3
     if (GT_FALSE):
-        return Result.Ok(4)
+        return 4
     if (not PREFIX_LT):
-        return Result.Ok(5)
+        return 5
     if (not PREFIX_GT):
-        return Result.Ok(6)
+        return 6
     if (not CAPS_FIRST):
-        return Result.Ok(7)
+        return 7
     if (not EMPTY_LT):
-        return Result.Ok(8)
+        return 8
     if (not LE_EQUAL):
-        return Result.Ok(9)
+        return 9
     if (not GE_EQUAL):
-        return Result.Ok(10)
+        return 10
     if (LT_EQUAL):
-        return Result.Ok(11)
+        return 11
 
     println("All constant string order tests passed")
-    return Result.Ok(0)
+    return 0

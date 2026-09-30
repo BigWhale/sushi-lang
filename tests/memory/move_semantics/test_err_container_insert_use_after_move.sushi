@@ -19,4 +19,4 @@ fn main() i32:
     l.push(a)
     # `a` was moved into the List -- this read is a use-after-move.
     println("a={a.len()}")
-    return Result.Ok(0)
+    return 0

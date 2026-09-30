@@ -9,25 +9,25 @@ use <collections/hashmap>
 fn make_list() List@(i32):
     let List@(i32) l = List.new()
     l.push(7)
-    return Result.Ok(l)
+    return l
 
 fn make_own() Own@(i32):
-    return Result.Ok(Own.alloc(7))
+    return Own.alloc(7)
 
 fn make_map() HashMap@(i32, i32):
     let HashMap@(i32, i32) m = HashMap.new()
     m.insert(1, 7)
-    return Result.Ok(m)
+    return m
 
-fn run_test() i32:
-    println(make_list()??.len())
-    println(make_list()??.get(0)??)
+fn run_test() i32 | StdError:
+    println(make_list().len())
+    println(make_list().get(0)??)
 
-    println(make_own()??.get())
+    println(make_own().get())
 
-    println(make_map()??.len())
+    println(make_map().len())
 
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test().realise(9)

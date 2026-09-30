@@ -7,7 +7,7 @@
 fn item(i32 n) Result@(i32, StdError):
     return Result.Ok(n)
 
-fn walk() ~:
+fn walk() ~ | StdError:
     let Result@(i32, StdError) __fe_item0 = item(100)
     foreach(v?? in from([item(1), item(2)]).iter()):
         println(v + __fe_item0.realise(0))
@@ -15,5 +15,5 @@ fn walk() ~:
 
 fn main() i32:
     match walk():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

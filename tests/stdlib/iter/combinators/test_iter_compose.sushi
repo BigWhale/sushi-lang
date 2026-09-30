@@ -4,15 +4,15 @@
 use <collections/iter>
 
 fn inc(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn dbl(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn run() i32:
-    let fn(i32) -> i32 h = compose(nom inc, nom dbl)??
-    return Result.Ok(h(10)??)
+    let fn(i32) -> i32 h = compose(nom inc, nom dbl)
+    return h(10)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

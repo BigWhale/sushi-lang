@@ -6,4 +6,4 @@ fn main() i32:
     l.push(5)
     let i16 at = 0 as i16
     println("{l.remove(at).realise(-1)}")
-    return Result.Ok(0)
+    return 0

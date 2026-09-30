@@ -5,4 +5,4 @@ use <math>
 
 fn main() i32:
     println("{tanh(1000.0)} {tanh(-1000.0)}")
-    return Result.Ok(0)
+    return 0

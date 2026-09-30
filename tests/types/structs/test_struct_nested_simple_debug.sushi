@@ -9,7 +9,7 @@ struct Inner:
 struct Outer:
     Inner data
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Create inner struct with dynamic array
     let Inner inner = Inner(new())
     inner.values.push(42)
@@ -32,4 +32,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

@@ -5,9 +5,8 @@
 # EXPECT_NO_LEAKS
 fn replace_array(poke i32[] arr) ~:
     arr := from([1, 2, 3])
-    return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[] original = from([99, 88])
     replace_array(poke original)
     println(original.len())
@@ -16,4 +15,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result
