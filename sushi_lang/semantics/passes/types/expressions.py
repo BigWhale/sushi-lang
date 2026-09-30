@@ -196,82 +196,23 @@ def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
 def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
     """The interned `Result@(T, E)` a `??` propagates into, or None once it is reported.
 
-    Every way of having no channel reads CE2508, and there is one silent way out: a BARE
-    extension body has no channel and the collect pass already rejected every `??` in it
-    with CE0131 (#398), so a second diagnostic here would only mislead.
+    A BARE body has no channel (docs/design/error-channel.md). The collect pass already
+    refused every `??` in a written function or method body with CE0131, so a second
+    diagnostic here would only mislead. A lambda is the one body that pass cannot judge:
+    its channel comes from its TYPE, which this pass infers, so its CE0131 is emitted
+    here. A `??` outside every body keeps the CE2508 backstop.
     """
-    declared = _declared_channel(validator, expr)
-    if declared is None:
-        return None
-
-    return _intern_channel(validator, expr, declared)
-
-
-def _declared_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
-    """The return type the enclosing body declares, before it is interned."""
-    if validator.current_function is None:
-        # A CHANNEL extension body (`| E`, ruling 1) propagates into its own interned
-        # Result. A BARE one is the silent case above; any other None context keeps the
-        # CE2508 backstop.
-        channel = getattr(validator, "extension_channel_result", None)
-        if channel is None:
-            if not getattr(validator, "in_extension_context", False):
-                er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return None
+    channel = validator.channel_result
+    if channel is not None:
         return channel
-
-    # CW2511: `??` works in main, but explicit handling is clearer at the entry point.
-    if validator.current_function.name == "main":
-        er.emit(validator.reporter, er.ERR.CW2511, expr.loc)
-
-    if validator.current_function.ret is None:
+    if validator.body_name is None:
         er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-        return None
-    return validator.current_function.ret
-
-
-def _intern_channel(validator: 'TypeValidator', expr: 'TryExpr',
-                    declared: 'Type') -> Optional['Type']:
-    """The declared channel as its interned Result, whichever way it was spelled.
-
-    An implicit `fn foo() T` / `fn foo() T | E`, an explicit `fn foo() Result@(T, E)`
-    still spelled as a `GenericTypeRef`, or a signature already resolved in place.
-    """
-    from sushi_lang.semantics.generics.results import (
-        ensure_result_type_in_table, is_result_enum,
-    )
-
-    structs = validator.struct_table.by_name
-    enums = validator.enum_table.by_name
-
-    def intern(ok: 'Type', err: 'Type'):
-        return ensure_result_type_in_table(validator.enum_table, ok, err,
-                                           struct_table=structs)
-
-    # Result ALONE, where `utils.intern_declared_wrapper` also answers for a written
-    # `Maybe@(T)`: a Maybe return type belongs in the wrap below, as the OK payload of
-    # the enclosing Result, and interning it here would make `??` read it as the channel.
-    if isinstance(declared, GenericTypeRef) and declared.base_name == "Result":
-        if len(declared.type_args) != 2:
-            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return None
-        declared = intern(declared.type_args[0], declared.type_args[1])
-    elif not is_result_enum(declared):
-        if (validator.current_function is not None
-                and validator.current_function.err_type is not None):
-            err_type = resolve_unknown_type(
-                validator.current_function.err_type, structs, enums)
-        else:
-            err_type = enums.get("StdError")
-        if err_type is None:
-            er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-            return None
-        declared = intern(declared, err_type)
-
-    if not is_result_enum(declared):
-        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
-        return None
-    return declared
+    elif validator.body_name == "lambda":
+        er.emit_with(validator.reporter, er.ERR.CE0131, expr.loc,
+                     context="a lambda without '| E'") \
+            .help("write '| E' in the function type the lambda takes, or handle the "
+                  "Result in the body with match or .realise(default)").emit()
+    return None
 
 
 def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr',

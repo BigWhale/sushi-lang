@@ -199,7 +199,7 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     A bare name reads the unit's own view; a name behind an alias hands in the
     declaration its provider resolved (#1017).
     """
-    from sushi_lang.semantics.typesys import FunctionType, UnknownType
+    from sushi_lang.semantics.typesys import FunctionType
     from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
     if not isinstance(expected_ty, FunctionType):
         return None
@@ -226,8 +226,8 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     if any(pt is None for pt in param_types):
         return None
     ok_type = func_sig.ret_type
-    err_type = func_sig.err_type if func_sig.err_type is not None else UnknownType("StdError")
-    concrete_ft = FunctionType(param_types=param_types, ok_type=ok_type, err_type=err_type,
+    concrete_ft = FunctionType(param_types=param_types, ok_type=ok_type,
+                               err_type=func_sig.err_type,
                                param_modes=declared_modes(func_sig.params))
     return mangled_name, concrete_ft
 

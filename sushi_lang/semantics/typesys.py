@@ -189,10 +189,14 @@ class ForeignPtrType:
 
 @dataclass(frozen=True)
 class FunctionType:
-    """Represents a first-class function type (a bare function pointer)."""
+    """Represents a first-class function type (a bare function pointer).
+
+    `err_type` is the `| E` channel, and None is a BARE function type: a call through
+    the value yields `ok_type` itself (docs/design/error-channel.md).
+    """
     param_types: tuple["Type", ...]
     ok_type: "Type"
-    err_type: "Type"
+    err_type: Optional["Type"]
     captures: Optional[tuple] = None
     param_modes: Optional[tuple] = None
 
@@ -208,7 +212,7 @@ class FunctionType:
             for p, m in zip(self.param_types, self.modes, strict=True)
         )
         base = f"fn({params}) -> {self.ok_type}"
-        if str(self.err_type) != "StdError":
+        if self.err_type is not None:
             base += f" | {self.err_type}"
         return base
 

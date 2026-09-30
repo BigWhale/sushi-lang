@@ -13,9 +13,8 @@ _add(ErrorMessage("CW2001", Severity.WARNING,
     "unused Result@(T) value (use .realise() or if statement to handle the result)",
     Category.TYPE, "Result@(T) values should be explicitly handled to avoid losing error information."))
 
-_add(ErrorMessage("CW2511", Severity.WARNING,
-    "?? operator used in main function (consider explicit error handling for clarity)",
-    Category.TYPE, "While ?? works in main, explicit error handling with .realise(), if statements, or match expressions makes error behavior clearer at the program entry point."))
+# CW2511 ("?? operator used in main function") was RETIRED by the bare-function change
+# (docs/design/error-channel.md): `main` is bare, so a `??` in its body is CE0131.
 
 # CW2409 (re-borrowing as poke, WARNING) was deleted: its only trigger was forwarding a
 # whole poke parameter to a poke argument -- the composition idiom the borrow model

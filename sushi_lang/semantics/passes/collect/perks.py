@@ -538,11 +538,11 @@ class PerkCollector:
         if not isinstance(perk_name, str):
             return False
 
-        # A `??` has no error channel in a BARE perk-impl body (CE0131, #398). A
-        # declared `| E` IS the channel (ruling R1), so the reject does not apply
-        # there -- the same three lines the extension arm runs.
+        # A `??` has no error channel in a BARE perk-impl body (CE0131, #398), the
+        # rule every bare body has.
+        from sushi_lang.semantics.channel import has_channel
         for method in impl.methods or []:
-            if method.err_type is None:
+            if not has_channel(method):
                 reject_try_in_body(self.r, method.body, "a perk method")
 
         # A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a

@@ -35,12 +35,12 @@ _add(ErrorMessage("CE0105", Severity.ERROR,
     Category.FUNC, "Two constants share the same name in a compilation unit."))
 
 _add(ErrorMessage("CE0106", Severity.ERROR,
-    "main() function must return an integer type (i8-i64, u8-u64), got '{type}'",
-    Category.FUNC, "The main function must return an integer type to be used as a shell exit code."))
+    "main() function must return a bare integer type (i8-i64, u8-u64), got '{type}'",
+    Category.FUNC, "The main function answers the exit code of the program, so it returns a bare integer type and has no error channel: a '| E' on it, or a 'Result@(T, E)' return, is refused. A failure in main is handled in its body, with match or .realise(default), and answered as a code (docs/design/error-channel.md). Until the bare-function change every function answered an implicit Result@(T, StdError), and an Err from main exited 1 and printed nothing."))
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
     "{callable} must return a value on all code paths",
-    Category.FUNC, "A body that answers a Result must end in a return on every code path, and a `~` body is no exception. A `~` function, a `~` lambda block body, and a `~` extension or perk-implementation method with a `| E` channel all end with `return Result.Ok(~)` (#848). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. An extension or perk method with a BARE return (no `| E`) answers no Result, so a `~` body that reaches its end is correct there. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
+    Category.FUNC, "A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)` (#848). A BARE `~` body answers nothing, so it may reach its end (docs/design/error-channel.md). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
@@ -120,8 +120,8 @@ _add(ErrorMessage("CE0125", Severity.ERROR,
     Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
 
 _add(ErrorMessage("CE0131", Severity.ERROR,
-    "'??' operator not allowed in {context}: the method returns a bare value and has no error channel",
-    Category.FUNC, "An extension method and a perk-impl method return a bare value (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the method body with match or .realise(). Emitted from the collect pass collection, so it fires once per declaration and covers templates nobody instantiates. A ?? inside a LAMBDA in such a body is legal - the lambda has its own Result channel (#399)."))
+    "'??' operator not allowed in {context}: it returns a bare value and has no error channel",
+    Category.FUNC, "A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E) (docs/design/error-channel.md). A BARE function, method or lambda returns the value itself (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body (#399). 'main' is bare, so this replaced the CW2511 warning for a ?? in main."))
 
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",

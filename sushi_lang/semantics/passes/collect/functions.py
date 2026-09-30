@@ -198,7 +198,7 @@ class FuncSig:
                                          # which build their own), so a cross-unit duplicate has
                                          # to name its file explicitly or it renders against
                                          # whichever file the reporter happens to be pointing at.
-    err_type: Optional[Type] = None      # Error type for Result<T, E> (None = StdError default)
+    err_type: Optional[Type] = None      # The `| E` channel; None is a bare function
     link_symbol: Optional[str] = None    # The symbol a BINARY .slib's bitcode gave this
                                          # function. Read from the manifest and never
                                          # derived: a producer's `<unit>$<name>` is not a
@@ -217,7 +217,7 @@ class GenericFuncDef:
     loc: Optional[Span] = None
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
-    err_type: Optional[Type] = None              # Error type for Result<T, E> (None = StdError default)
+    err_type: Optional[Type] = None              # The `| E` channel; None is a bare function
     err_span: Optional[Span] = None              # Where the channel is written (#662); an
                                                  # instance is a copy of this node and the
                                                  # signature walk reads the span off it
@@ -681,12 +681,7 @@ class FunctionCollector:
         # which is built structurally and never passes the enum-payload check.
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty: Optional[Type] = fn.err_type
-        if is_explicit_result_type(ret_ty) and err_ty is not None:
-            # User wrote: fn foo() Result<T, E1> | E2
-            # This is an error because it's ambiguous and implies nesting
-            err_type_name = getattr(err_ty, "name", str(err_ty))
-            er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
+        self._reject_channel_faults(fn, ret_ty, ret_span)
 
         params: List[Param] = []
         param_names: Set[str] = set()
@@ -801,12 +796,7 @@ class FunctionCollector:
 
         reject_reference_in(self.r, ret_ty, ret_span, ERR.CE2417)
 
-        err_ty = fn.err_type
-        if is_explicit_result_type(ret_ty) and err_ty is not None:
-            # User wrote: fn foo<T>() Result<T, E1> | E2
-            # This is an error because it's ambiguous and implies nesting
-            err_type_name = getattr(err_ty, "name", str(err_ty))
-            er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
+        self._reject_channel_faults(fn, ret_ty, ret_span)
 
         body = fn.body
         if body is None:
@@ -830,6 +820,21 @@ class FunctionCollector:
 
         self.generic_funcs.declare(name, generic_func)
 
+    def _reject_channel_faults(self, fn: FuncDef, ret_ty: Optional[Type],
+                               ret_span: Optional[Span]) -> None:
+        """The two channel refusals of a function header, concrete or generic.
+
+        Both spellings at once (`Result@(T, E1) | E2`) is CE2085: it reads as a nested
+        Result. A `??` in a BARE body has no channel to propagate into (CE0131), the rule
+        an extension and a perk method already have (docs/design/error-channel.md).
+        """
+        from sushi_lang.semantics.channel import has_channel
+        if is_explicit_result_type(ret_ty) and fn.err_type is not None:
+            err_type_name = getattr(fn.err_type, "name", str(fn.err_type))
+            er.emit(self.r, ERR.CE2085, ret_span, err_type=err_type_name)
+        if not has_channel(fn) and fn.body is not None:
+            reject_try_in_body(self.r, fn.body, f"function '{fn.name}'")
+
     def _collect_extension_def(self, ext: ExtendDef) -> None:
         """Collect one `extend` declaration: read it, refuse it, then file it.
 
@@ -845,9 +850,9 @@ class FunctionCollector:
         if header.is_static and self._reject_static_faults(header):
             return
 
-        # A `??` has no error channel in a BARE extension body (CE0131, #398). A
-        # declared `| E` IS the channel (ruling 1), so the reject does not apply there.
-        if header.err_ty is None:
+        # A `??` has no error channel in a BARE extension body (CE0131, #398).
+        from sushi_lang.semantics.channel import has_channel
+        if not has_channel(ext):
             reject_try_in_body(self.r, header.body, "an extension method")
 
         self._collect_for_target(header)
