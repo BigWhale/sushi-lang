@@ -80,8 +80,8 @@ def _render_signature(func: dict, p: Palette) -> str:
     params = _render_params(func.get('params') or [], func.get('self_mode'))
     name = f"{p.bold}{func['name']}{p.reset}"
     line = f"fn {name}{generic}({params}) {_surface(func['return_type'])}"
-    # The default error type is StdError and a signature that takes it does not say so,
-    # so a record with no `error_type` prints no arm either.
+    # A record with no `error_type` is bare, or spells its Result in `return_type`, so it
+    # prints no arm either.
     error = func.get('error_type')
     return f"{line} | {_surface(error)}" if error else line
 

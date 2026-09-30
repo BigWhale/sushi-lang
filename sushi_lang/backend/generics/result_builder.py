@@ -20,34 +20,50 @@ def intern_result(codegen: 'LLVMCodegen', ok_type: Type, err_type: Type) -> Opti
     )
 
 
-def implicit_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
-    """The interned Result a function's declared return type implies."""
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+def channel_result_of(codegen: 'LLVMCodegen', fn) -> Optional[EnumType]:
+    """The interned Result a callable returns, or None for a BARE one.
 
-    err_type = getattr(fn, 'err_type', None)
-    if err_type is not None:
-        err_type = resolve_unknown_type(
-            err_type, codegen.struct_table.by_name, codegen.enum_table.by_name)
-    else:
-        err_type = codegen.enum_table.by_name.get("StdError")
-    if err_type is None:
-        err_type = fn.ret  # Fallback (shouldn't happen with StdError registered)
-    return intern_result(codegen, fn.ret, err_type)
-
-
-def extension_result_of(codegen: 'LLVMCodegen', ext) -> Optional[EnumType]:
-    """The interned Result a CHANNEL extension ('| E', ruling 1) returns.
-
-    None for a bare extension -- the one reader for "does this ExtendDef have the
-    Result ABI", used by the declaration, the body emission and the default return.
+    The one backend reader of "does this callable have the Result ABI", for a function,
+    an extension or perk method and a library signature alike: it has one when it
+    writes `| E` or returns an explicit `Result@(T, E)` (docs/design/error-channel.md).
+    A spelled Result return arrives as the resolve pass's stamp (#857).
     """
-    err_type = getattr(ext, 'err_type', None)
-    if err_type is None:
-        return None
+    from sushi_lang.semantics.channel import declared_return
+    from sushi_lang.semantics.generics.results import is_result_enum, signature_result_arms
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
-    err_resolved = resolve_unknown_type(
-        err_type, codegen.struct_table.by_name, codegen.enum_table.by_name)
-    return intern_result(codegen, ext.ret, err_resolved)
+
+    stamped = getattr(fn, "resolved_result", None)
+    if is_result_enum(stamped):
+        return stamped
+    ret = declared_return(fn)
+    if is_result_enum(ret):
+        return ret
+    arms = signature_result_arms(ret, getattr(fn, "err_type", None))
+    if arms is None:
+        return None
+    structs, enums = codegen.struct_table.by_name, codegen.enum_table.by_name
+    return intern_result(codegen, resolve_unknown_type(arms[0], structs, enums),
+                         resolve_unknown_type(arms[1], structs, enums))
+
+
+def call_value_type(codegen: 'LLVMCodegen', fn) -> Optional[Type]:
+    """What a call of the callable yields: its channel Result, or its bare return."""
+    from sushi_lang.semantics.channel import declared_return
+    channel = channel_result_of(codegen, fn)
+    return channel if channel is not None else declared_return(fn)
+
+
+def fn_value_result_type(codegen: 'LLVMCodegen', fn_type) -> Optional[Type]:
+    """What a call through a function value yields: the bare return, or its channel Result."""
+    if fn_type.err_type is None:
+        return fn_type.ok_type
+    return intern_result(codegen, fn_type.ok_type, fn_type.err_type)
+
+
+def declared_return_ll(codegen: 'LLVMCodegen', fn) -> ir.Type:
+    """The LLVM return type of a callable: its channel Result, its bare return, or void."""
+    value_type = call_value_type(codegen, fn)
+    return codegen.types.ll_type(value_type) if value_type else ir.VoidType()
 
 
 def build_ok_variant(

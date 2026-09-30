@@ -97,11 +97,12 @@ class MainFunctionWrapper:
 
     def _return_exit_code(self, fn: FuncDef, user_main: ir.Function,
                           user_main_args: list[ir.Value]) -> None:
-        """Call the user's main and return its Ok value as an i32, or 1 for an Err."""
-        result_struct = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
+        """Call the user's main and return its value as an i32.
 
-        value_type = self.codegen.types.ll_type(fn.ret)
-        is_ok, value = self.extract_value_from_result_enum(result_struct, value_type, fn.ret)
+        The user's main is bare (CE0106 refuses a channel), so its value IS the exit
+        code, widened or cut to the C `int`.
+        """
+        value = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
         i32 = self.codegen.types.i32
         if value.type == i32:
@@ -115,22 +116,19 @@ class MainFunctionWrapper:
         else:
             converted_value = ir.Constant(i32, 0)
 
-        one = ir.Constant(i32, 1)
-        result = self.codegen.builder.select(is_ok, converted_value, one, name="main_exit_code")
-
         cmd_args_desc = self.codegen.dynamic_arrays._array("cmd_args")
         if cmd_args_desc is not None:
             self.codegen.dynamic_arrays.emit_array_destructor("cmd_args")
             cmd_args_desc.destroyed = True
 
-        self.codegen.builder.ret(result)
+        self.codegen.builder.ret(converted_value)
 
     def create_user_main_function(self, fn: FuncDef) -> ir.Function:
         """Create a separate function for the user's main function body."""
         params = self.codegen.functions.helpers.params_of(fn)
         ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-        from sushi_lang.backend.functions.helpers import declared_result_of
-        ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
+        from sushi_lang.backend.generics.result_builder import declared_return_ll
+        ll_ret = declared_return_ll(self.codegen, fn)
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)
         user_main = ir.Function(self.codegen.module, fnty, name="user_main")

@@ -204,9 +204,9 @@ def infer_generic_enum_type(codegen: 'LLVMCodegen', receiver: Expr, receiver_val
         if not isinstance(receiver.callee, Name):
             fn_ty = getattr(receiver, 'callee_fn_type', None)
             if isinstance(fn_ty, FunctionType):
-                from sushi_lang.backend.generics.result_builder import intern_result
-                result_enum = intern_result(codegen, fn_ty.ok_type, fn_ty.err_type)
-                if result_enum is not None and is_instance_of(result_enum, base):
+                from sushi_lang.backend.generics.result_builder import fn_value_result_type
+                result_enum = fn_value_result_type(codegen, fn_ty)
+                if isinstance(result_enum, EnumType) and is_instance_of(result_enum, base):
                     return result_enum
         else:
             func_name = receiver.callee.id

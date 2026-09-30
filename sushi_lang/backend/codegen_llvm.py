@@ -52,9 +52,9 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         # lost write of #326, reintroduced through the perk door.
         self_mode=getattr(method, "self_mode", None),
         self_mode_span=getattr(method, "self_mode_span", None),
-        # And so must the error channel (ruling R1): `extension_result_of` reads it
-        # for the declaration ABI, the Ok wrap at the return seam and the Err default,
-        # and a dropped one would compile a channel body against a bare signature.
+        # And so must the error channel (ruling R1): `channel_result_of` reads it for
+        # the declaration ABI, and a dropped one would compile a channel body against a
+        # bare signature.
         err_type=getattr(method, "err_type", None),
         err_span=getattr(method, "err_span", None),
     )
@@ -122,10 +122,6 @@ class LLVMCodegen:
 
         self.builder: Optional[ir.IRBuilder] = None
         self.func: Optional[ir.Function] = None
-        # The interned Result a CHANNEL extension body ('| E') returns; None in a bare
-        # body. Set and cleared by emit_extension_method_def, read by emit_return.
-        self.current_extension_result = None
-
         # Loop context tracking for break/continue statements. Each entry is
         # (continue-target block, break-target block, loop-body scope index); the scope
         # index bounds break/continue RAII cleanup to the loop's own scopes.
@@ -511,17 +507,15 @@ class LLVMCodegen:
             return
 
         def _declare_one(func_sig, name: str, unit: str | None):
-            from sushi_lang.backend.generics.result_builder import intern_result
-            from sushi_lang.semantics.generics.results import signature_result_arms
+            from sushi_lang.backend.generics.result_builder import (
+                call_value_type, declared_return_ll)
 
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
-            std_error = self.enum_table.by_name.get("StdError") if self.enum_table else None
             # The typecheck pass's derivation, so the call and the prototype agree on the
-            # channel: `| E` is the Err arm, and an explicit Result is not wrapped twice
-            # (#541).
-            arms = signature_result_arms(func_sig.ret_type, func_sig.err_type, std_error)
-            result_type = intern_result(self, *arms) if arms is not None else func_sig.ret_type
-            ll_ret = self.types.ll_type(result_type)
+            # channel: `| E` is the Err arm, an explicit Result is not wrapped twice
+            # (#541), and a bare signature is its return.
+            result_type = call_value_type(self, func_sig)
+            ll_ret = declared_return_ll(self, func_sig)
 
             symbol = getattr(func_sig, "link_symbol", None) or name
             llvm_fn = self.module.globals.get(symbol)
