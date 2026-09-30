@@ -1,0 +1,15 @@
+# A struct that holds a function value has no derived order.
+# EXPECT_ERROR_CODE: CE2514
+# EXPECT_STDERR_CONTAINS: no derived Ord: field 'f' -> a function value
+
+struct Handler:
+    i32 id
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    if (Handler(1, twice) < Handler(2, twice)):
+        return 1
+    return 0

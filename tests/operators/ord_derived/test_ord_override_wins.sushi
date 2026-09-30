@@ -1,0 +1,20 @@
+# An `Ord` implementation answers `<` on the type and a field of it inside a derived
+# order. A user perk that provides `compare` is not the order `<` reads.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
+
+struct Reverse:
+    i32 n
+
+extend Reverse with Ord:
+    fn compare(Reverse other) i32:
+        return other.n - self.n
+
+struct Holder:
+    Reverse r
+
+fn main() i32:
+    println(Reverse(9) < Reverse(1))
+    println(Holder(Reverse(9)) < Holder(Reverse(1)))
+    println(Reverse(1) < Reverse(9))
+    return 0
