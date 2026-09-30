@@ -362,7 +362,7 @@ def doc_gate_program(modules: Dict[str, Path]) -> str:
     """ONE program that imports every module, each behind an alias so no bare name clashes."""
     uses = [f"use <{name}> as dg_{name.replace('/', '_')}" for name in sorted(modules)]
     return "\n".join(["##: Imports every module the stdlib doc-block gate checks. :##", "",
-                      *uses, "", "fn main() i32:", "    return Result.Ok(0)", ""])
+                      *uses, "", "fn main() i32:", "    return 0", ""])
 
 
 def _doc_findings(output: str, cwd: Path, modules: Dict[str, Path],
@@ -536,7 +536,7 @@ Adds two numbers.
 - Returns: The sum.
 :##
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 ##:
 Gives its argument back.
@@ -545,7 +545,7 @@ Gives its argument back.
 - Returns: The value.
 :##
 public fn same@(T)(nom T value) T:
-    return Result.Ok(value)
+    return value
 
 ##: A box that holds one value. :##
 public struct Box@(T):
@@ -560,9 +560,9 @@ _GATE_CONSUMER = """\
 use <lib/{name}>
 
 fn main() i32:
-    let i32 n = add(40, 2).realise(0)
-    println(same(nom n).realise(0))
-    return Result.Ok(0)
+    let i32 n = add(40, 2)
+    println(same(nom n))
+    return 0
 """
 
 
@@ -624,6 +624,14 @@ def _meta_len(source: Path, length: int) -> bytes:
     return raw[:44] + struct.pack("<Q", length) + raw[52:]
 
 
+def _container_version(source: Path, version: int) -> bytes:
+    """A copy whose header states container `version`."""
+    import struct
+
+    raw = source.read_bytes()
+    return raw[:16] + struct.pack("<I", version) + raw[20:]
+
+
 def _oversize(source: Path, target: Path) -> Path:
     """A whole library followed by a hole, one byte past the 1 GiB limit (sparse)."""
     from sushi_lang.backend.library_format import LibraryFormat
@@ -641,6 +649,11 @@ def _write_edit(source: Path, case_dir: Path, edit) -> Path:
 # (case, expected code or None for a clean run, how the input is made). A maker takes
 # the directory of the built libraries and the case's own directory, and gives the path
 # the command reads. `--lib-info` runs each case in both halves.
+# The versions before the bare-function change: their signatures without `| E` meant
+# `| StdError`, so a reader must refuse them rather than read them as bare.
+_OLD_CONTAINER = 4
+_OLD_TEMPLATES = 7
+
 LIB_INFO_CASES = (
     ("a whole library", None, lambda libs, d: libs / "gate_lib.slib"),
     ("no library_name", "CE3512", lambda libs, d: _write_edit(
@@ -651,6 +664,9 @@ LIB_INFO_CASES = (
         libs / "gate_lib.slib", d, _put("x", "templates"))),
     ("a function record with no name", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_lib.slib", d, _drop("public_functions", 0, "name"))),
+    ("a function record that does not state its channel", "CE3512",
+     lambda libs, d: _write_edit(
+        libs / "gate_lib.slib", d, _drop("public_functions", 0, "has_channel"))),
     ("a parameter type that is a number", "CE3512", lambda libs, d: _write_edit(
         libs / "gate_lib.slib", d, _put(7, "public_functions", 0, "params", 0, "type"))),
     ("a bad magic", "CE3508", lambda libs, d: _write_bytes(
@@ -666,6 +682,8 @@ LIB_INFO_CASES = (
         d / "gate_lib.slib", _meta_len(libs / "gate_lib.slib", 1 << 40))),
     ("a file past MAX_FILE_SIZE", "CE3513", lambda libs, d: _oversize(
         libs / "gate_lib.slib", d / "gate_lib.slib")),
+    ("an older container version", "CE3509", lambda libs, d: _write_bytes(
+        d / "gate_lib.slib", _container_version(libs / "gate_lib.slib", _OLD_CONTAINER))),
 )
 
 def _append(text: str, *keys):
@@ -678,12 +696,13 @@ def _append(text: str, *keys):
     return edit
 
 
-_SECOND_DECLARATION = "\npublic fn extra() i32:\n    return Result.Ok(0)\n"
+_SECOND_DECLARATION = "\npublic fn extra() i32:\n    return 0\n"
 
 # (case, expected code or None, the edit of the binary library's manifest). A consumer
 # that imports the edited library is compiled for each case.
 CONSUMER_CASES = (
     ("a whole library", None, None),
+    ("an older templates schema", "CE3512", _put(_OLD_TEMPLATES, "templates", "version")),
     ("a generic function record with no name", "CE3512",
      _drop("templates", "generic_functions", 0, "name")),
     ("no library_name", "CE3512", _drop("library_name")),
@@ -878,7 +897,7 @@ Takes a value with two constraints.
 - Returns: Zero.
 :##
 public fn both@(T: Hashable + Named)(T x) i32:
-    return Result.Ok(0)
+    return 0
 
 ##:
 A blue colour.
@@ -887,29 +906,45 @@ A blue colour.
 - Returns: The colour.
 :##
 public fn paint(i32 n) Colour:
-    return Result.Ok(Colour.Blue("blue", n))
+    return Colour.Blue("blue", n)
+
+##:
+Halves an even number.
+
+- Parameter n: The number.
+- Returns: Half of `n`.
+- Errors: `StdError.Error` for an odd number.
+:##
+public fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n / 2)
 """
 
 _REPORT_CONSUMER = """\
 use <lib/{name}>
 
 fn main() i32:
-    match paint(42).realise(Colour.Red):
+    match paint(42):
         Colour.Blue(s, n) -> println("{{s}} {{n}}")
         Colour.Red -> println("red")
     match Colour.Blue("made", 7):
         Colour.Blue(s, n) -> println("{{s}} {{n}}")
         Colour.Red -> println("red")
-    return Result.Ok(0)
+    println(half(8).realise(-1))
+    println(half(7).realise(-1))
+    return 0
 """
 
 # Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966).
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
+    "  fn paint(i32 n) Colour",
+    "  fn half(i32 n) i32 | StdError",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
-REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n"
+REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\n"
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,

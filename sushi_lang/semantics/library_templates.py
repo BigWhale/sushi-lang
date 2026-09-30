@@ -114,6 +114,7 @@ def signature_record(func: "FuncDef") -> dict:
     carry no parameter list at all, so its `- Parameter` tags named nothing a renderer
     could print them against (`docs/design/documentation.md`, R46).
     """
+    from sushi_lang.semantics.channel import has_channel
     from sushi_lang.semantics.param_modes import param_mode
 
     record: dict = {
@@ -128,9 +129,11 @@ def signature_record(func: "FuncDef") -> dict:
             for p in func.params
         ],
         "return_type": type_string(func.ret),
+        # Stated for every callable, so a reader never guesses a channel from an absent
+        # key (docs/design/error-channel.md). An explicit `Result@(T, E)` return has
+        # one and carries its arms in `return_type`.
+        "has_channel": has_channel(func),
     }
-    # Absent when the signature does not say one: the default is StdError, and a record
-    # that spelled the default would claim the author wrote it.
     if getattr(func, "err_type", None) is not None:
         record["error_type"] = type_string(func.err_type)
     return record

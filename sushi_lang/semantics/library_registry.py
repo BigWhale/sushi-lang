@@ -188,8 +188,8 @@ class LibraryRegistry:
                 self._struct_table,
                 self._enum_table
             )
-            # The channel the declaration spelled (`| E`). Absent means StdError, and
-            # the record says so by saying nothing (#541).
+            # The channel the declaration spelled (`| E`, #541). Absent is a bare function,
+            # or an explicit Result return that carries its arms in `return_type`.
             err_type_str = func_info.get("error_type")
             err_type = (parse_type_string(err_type_str, self._struct_table, self._enum_table)
                         if err_type_str else None)

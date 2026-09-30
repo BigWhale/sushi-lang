@@ -286,10 +286,9 @@ def parse_attrs(info: str) -> Attrs:
 def wrap_example(code: str, unit_import: str, index: int) -> str:
     """One example as a whole program (documentation.md S10, R19 and R20).
 
-    A snippet with no `fn main(` goes into a helper, and `main` matches on the result.
-    A bare `main` holding a `??` warns CW2511 on every such example, and that warning
-    exists to discourage `??` in `main`: a harness that writes the discouraged form on
-    the author's behalf teaches it.
+    A snippet with no `fn main(` goes into a helper with a `| StdError` channel, so a
+    `??` in the snippet has a channel to propagate into, and `main` matches on the
+    result. `main` is bare, so it cannot hold the snippet itself (CE0131).
     """
     uses: list[str] = []
     body: list[str] = []
@@ -313,16 +312,16 @@ def wrap_example(code: str, unit_import: str, index: int) -> str:
     indented = "\n".join(f"    {line}" if line.strip() else "" for line in body)
     return (
         f"{header}"
-        f"fn {name}() ~:\n"
+        f"fn {name}() ~ | StdError:\n"
         f"{indented}\n"
         f"    return Result.Ok(~)\n"
         f"\n"
         f"fn main() i32:\n"
         f"    match {name}():\n"
         f"        Result.Ok(_) ->\n"
-        f"            return Result.Ok(0)\n"
+        f"            return 0\n"
         f"        Result.Err(_) ->\n"
-        f"            return Result.Ok(1)\n"
+        f"            return 1\n"
     )
 
 

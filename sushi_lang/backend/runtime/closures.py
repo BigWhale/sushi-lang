@@ -34,11 +34,9 @@ def build_closure_value(
 
 
 def _env_prepended_signature(codegen: "LLVMCodegen", fn_type: FunctionType) -> ir.FunctionType:
-    """The real callee signature: `Result<T,E>(i8* env, <params>)`."""
-    from sushi_lang.backend.generics.result_builder import intern_result
-    result_ll = codegen.types.ll_type(
-        intern_result(codegen, fn_type.ok_type, fn_type.err_type)
-    )
+    """The real callee signature: `R(i8* env, <params>)`, R the bare return or the channel Result."""
+    from sushi_lang.backend.generics.result_builder import fn_value_result_type
+    result_ll = codegen.types.ll_type(fn_value_result_type(codegen, fn_type))
     param_ll = [codegen.types.ll_type(p) for p in fn_type.param_types]
     return ir.FunctionType(result_ll, [codegen.types.str_ptr] + param_ll)
 
