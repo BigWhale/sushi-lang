@@ -147,7 +147,11 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         if codegen.types.is_dynamic_array_type(dst):
             _emit_dynamic_array_rebind(codegen, stmt, slot, val, dst, var_name, semantic_type)
         else:
-            _emit_struct_rebind(codegen, stmt, slot, val, var_name, semantic_type)
+            _emit_owned_value_rebind(codegen, stmt, slot, val, var_name, semantic_type)
+    elif isinstance(dst, ir.ArrayType):
+        # A fixed array follows the struct rule (#1082): a plain element type copies, and
+        # an owning one moves through the seam after the old elements are destroyed.
+        _emit_owned_value_rebind(codegen, stmt, slot, val, var_name, semantic_type)
     else:
         raise_internal_error("CE0022", type=str(dst))
 
@@ -213,10 +217,10 @@ def _emit_dynamic_array_rebind(
             codegen.builder.store(null_ptr, data_ptr_ptr)
 
 
-def _emit_struct_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value',
+def _emit_owned_value_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value',
                         val: 'ir.Value', var_name: str,
                         semantic_type: 'Type | None') -> None:
-    """Emit rebinding for user-defined structs with cleanup."""
+    """Emit rebinding for a struct, an enum or a fixed array, with cleanup."""
     from sushi_lang.backend.destructors import resolve_named_type
 
     # User-defined struct / enum rebind - free the OLD owning value before overwriting it.

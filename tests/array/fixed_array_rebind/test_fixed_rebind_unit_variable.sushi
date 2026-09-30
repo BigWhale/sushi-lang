@@ -1,0 +1,10 @@
+# A rebind of a fixed-array unit variable drops the old value and stores the new one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 5 6\n"
+
+var i32[3] g = [1, 2, 3]
+
+fn main() i32:
+    g := [4, 5, 6]
+    println("{g[0]} {g[1]} {g[2]}")
+    return 0

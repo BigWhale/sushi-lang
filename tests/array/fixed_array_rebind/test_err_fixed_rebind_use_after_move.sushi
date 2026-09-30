@@ -1,0 +1,10 @@
+# An owning fixed array moves at `a := b`, so a later use of `b` is a use after a move.
+# EXPECT_ERROR_CODE: CE2405
+
+fn main() i32:
+    let string prefix = "pre"
+    let string[2] a = ["{prefix}-x", "{prefix}-y"]
+    let string[2] b = ["{prefix}-p", "{prefix}-q"]
+    a := b
+    println(b[0])
+    return 0

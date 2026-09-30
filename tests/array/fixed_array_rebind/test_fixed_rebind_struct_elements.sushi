@@ -1,0 +1,18 @@
+# A fixed array of a struct that owns a string moves at a rebind, as a string array does.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "pre-c 3 pre-d 4\npre-e 5 pre-f 6\n"
+# EXPECT_NO_LEAKS: true
+
+struct Tag:
+    string label
+    i32 weight
+
+fn main() i32:
+    let string prefix = "pre"
+    let Tag[2] a = [Tag("{prefix}-a", 1), Tag("{prefix}-b", 2)]
+    a := [Tag("{prefix}-c", 3), Tag("{prefix}-d", 4)]
+    println("{a[0].label} {a[0].weight} {a[1].label} {a[1].weight}")
+    let Tag[2] b = [Tag("{prefix}-e", 5), Tag("{prefix}-f", 6)]
+    a := b
+    println("{a[0].label} {a[0].weight} {a[1].label} {a[1].weight}")
+    return 0
