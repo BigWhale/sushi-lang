@@ -28,12 +28,22 @@ def marshal_argument(codegen: 'LLVMCodegen', arg, param_ty) -> ir.Value:
     if is_byte_buffer(param_ty):
         return _byte_buffer_data(codegen, arg, value, deref_type(param_ty))
     if param_ty == BuiltinType.STRING:
-        return marshal_cstr(codegen, value)
+        return marshal_string(codegen, arg, value)
     payload = nullable_payload(param_ty)
     if payload is not None:
         own_temporary(codegen, arg, value, param_ty)
         return _marshal_nullable(codegen, value, param_ty, payload)
     return value
+
+
+def marshal_string(codegen: 'LLVMCodegen', arg, value: ir.Value) -> ir.Value:
+    """A `string` crosses as a marshalled `char*`, freed at scope exit.
+
+    The Sushi string stays the caller's. A temporary one (`"{n}"`) has no other owner,
+    so it gets one here, or it leaks.
+    """
+    own_temporary(codegen, arg, value, BuiltinType.STRING)
+    return marshal_cstr(codegen, value)
 
 
 def _byte_buffer_data(codegen: 'LLVMCodegen', arg, value: ir.Value, array_ty) -> ir.Value:

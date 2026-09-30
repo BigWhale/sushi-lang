@@ -1,0 +1,15 @@
+# A temporary owning string given to an extern is freed after the call. The marshalled
+# `char*` was freed at scope exit, but the Sushi string it was copied from had no owner.
+# EXPECT_STDOUT_EXACT: "11 424242424242\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+unsafe external "C" as libc because "measuring C strings":
+    fn strlen(string s) i64 = "strlen"
+    fn printf(string fmt, ...) i32 = "printf"
+
+fn main() i32:
+    let i32 n = 42
+    let i64 fixed = libc.strlen("answer {n} !")
+    let i32 printed = libc.printf("%lld ", fixed)
+    let i32 trailing = libc.printf("%s\n", "{n}{n}{n}{n}{n}{n}")
+    return Result.Ok(printed + trailing - 16)

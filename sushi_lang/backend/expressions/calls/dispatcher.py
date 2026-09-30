@@ -7,10 +7,11 @@ from sushi_lang.semantics.ast import Call, MethodCall, DotCall, Name
 from sushi_lang.semantics.name_ladder import call_constructs_struct
 from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.expressions.calls import intrinsics, generics
-from sushi_lang.backend.expressions.calls.utils import emit_receiver_value, marshal_cstr
+from sushi_lang.backend.expressions.calls.utils import emit_receiver_value
 from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
 from sushi_lang.backend.expressions.calls.foreign import (
-    emit_errno, marshal_argument, try_emit_foreign_ptr_method, unmarshal_return)
+    emit_errno, marshal_argument, marshal_string, try_emit_foreign_ptr_method,
+    unmarshal_return)
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
 from sushi_lang.backend.expressions.memory import own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
@@ -339,7 +340,7 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
         value = codegen.expressions.emit_expr(arg)
         sushi_ty = variadic_sushi_types[offset] if offset < len(variadic_sushi_types) else None
         trailing_args.append(
-            _promote_variadic_arg(codegen, value, sushi_ty)
+            _promote_variadic_arg(codegen, arg, value, sushi_ty)
         )
 
     call_result = codegen.builder.call(llvm_fn, fixed_args + trailing_args)
@@ -350,13 +351,13 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     return unmarshal_return(codegen, call_result, ret_ty)
 
 
-def _promote_variadic_arg(codegen: 'LLVMCodegen', value: ir.Value, sushi_ty) -> ir.Value:
+def _promote_variadic_arg(codegen: 'LLVMCodegen', arg, value: ir.Value, sushi_ty) -> ir.Value:
     """Apply C default-argument promotion to one untyped variadic argument."""
     from sushi_lang.semantics.typesys import BuiltinType
 
     # string -> char* (registered for the per-scope free, no leak).
     if isinstance(sushi_ty, BuiltinType) and sushi_ty == BuiltinType.STRING:
-        return marshal_cstr(codegen, value)
+        return marshal_string(codegen, arg, value)
 
     builder = codegen.builder
     vty = value.type
