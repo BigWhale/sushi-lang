@@ -3,23 +3,21 @@
 # Demonstrates:
 # - Basic program structure with main() function
 # - Standard output using println()
-# - The Result@(T, E) return type (the implicit wrapper around every return type)
+# - A bare main(): it has no error channel and returns the exit code
 # - Exit code conventions (0 = success)
 #
 # This is the simplest valid Sushi program. Every executable program
-# must have a main() function that returns i32. Behind the scenes,
-# a function that declares T returns Result@(T, StdError), for explicit
-# error handling.
+# must have a main() function that returns i32. main() is bare: it cannot
+# write an error channel `| E` (CE0106), and a ?? in it is CE0131.
 
 fn main() i32:
     # Every Sushi program starts with a main function that returns i32.
-    # The i32 return type is implicitly wrapped as Result@(i32, StdError).
-    # This allows consistent error handling across all functions.
+    # The i32 is the exit code itself. It is not wrapped in a Result.
 
     # println() outputs a line to stdout with a newline.
     println("Mostly Harmless")
 
-    # All functions must explicitly return Result.Ok(value) or Result.Err(error).
-    # For main(), returning Ok(0) indicates successful program execution.
+    # A bare function returns the value directly. For main(), returning 0
+    # indicates successful program execution.
     # Non-zero values indicate errors (following Unix convention).
     return 0

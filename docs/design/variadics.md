@@ -56,8 +56,8 @@ fn main() i32:
   consuming variadic spelling (`nom ...T`) is deferred — see `docs/design/borrow-model.md` S7.
 - **Extern lowering.** The extern declaration lowers to an LLVM `var_arg=True` declaration. Trailing
   arguments undergo C default-argument promotion: `i8`/`i16`/`bool` → `i32`, `f32` → `f64`; `string`
-  is marshalled to a `char*` and freed at scope exit on every path; `ptr` is passed as-is. Externs
-  remain the single exception to implicit `Result` wrapping (they return raw C values).
+  is marshalled to a `char*` and freed at scope exit on every path; `ptr` is passed as-is. An extern
+  returns the raw C value and never a `Result` (an extern has no error channel).
 - **Extern requires ≥1 fixed parameter** — the C ABI needs a named argument for `va_start`.
 
 ## Diagnostics

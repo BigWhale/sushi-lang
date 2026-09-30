@@ -72,17 +72,34 @@ fn main() i32:
 
 A function type mirrors the function-declaration return/error syntax:
 
-- `fn(i32) -> i32` — return type `i32`, error type implicitly `StdError`.
-- `fn(i32) -> i32 | MathError` — explicit custom error type.
+- `fn(i32) -> i32` — return type `i32`, BARE: no error channel, a call yields the `i32`.
+- `fn(i32) -> i32 | MathError` — an error channel: a call yields `Result@(i32, MathError)`.
 - `fn() -> ~` — no parameters, blank return.
 
 Collections of functions use the generic form: `List@(fn(i32) -> i32)` (a raw array of function
 pointers is not expressible — the `[]` in `fn() -> T[]` binds to the return type).
 
-**Result-transparent call.** A Sushi `fn` lowers to `Result@(T, E)(params)`. Calling through a
-function value therefore yields the same `Result@(T, E)` a direct call would, so `??`,
+**Channel-transparent call.** A Sushi `fn` with a channel lowers to `Result@(T, E)(params)`, and
+a bare `fn` lowers to `T(params)`. Calling through a function value therefore yields what a direct
+call would: the value for a bare type, and `Result@(T, E)` for a type with a channel, where `??`,
 `.realise(default)`, `.is_ok()` and pattern matching all work unchanged. A `Result` is not a
-condition: `if (f(x))` is CE2516, as for a direct call.
+condition: `if (f(x))` is CE2516, as for a direct call. The channel is part of the function type,
+so a bare type and a type with a channel do not convert (CE2002).
+
+A function with a channel that returns a function type writes the explicit form,
+`fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type belongs to
+that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare function that returns a
+function type with a channel.
+
+Until the bare-function change (`docs/design/error-channel.md`), a function type with no `| E` had
+the implicit error type `StdError`, and every call through a function value yielded a `Result`.
+
+A bare function is the exception, not the default style. Use it only when the function is total
+over its inputs and will stay so (a combinator argument, a pure arithmetic helper). Write a
+channel for everything that can fail, or can gain a failure later. A public function keeps a
+channel when there is any doubt, because a channel added later breaks every caller and every
+binary `.slib`. The compiler does not enforce this; `docs/design/error-channel.md` carries the
+rule.
 
 **Only plain top-level `fn`s are referenceable.** Extension methods, perk methods, and FFI
 externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and live in separate tables, so
@@ -102,13 +119,14 @@ name: legal where an expected function type solves it, CE2093 where nothing does
 Two body forms, both alternatives in the `atom` grammar production:
 
 ```sushi
-# expression body: |params| expr   (desugars to a fn returning Result.Ok(expr))
+# expression body: |params| expr   (bare: desugars to `return expr`;
+# with a channel: desugars to `return Result.Ok(expr)`)
 let fn(i32) -> i32 f = |i32 x| x + n
 
-# block body: |params|: <indented block>  (a full fn body; uses return Result.Ok(...))
+# block body: |params|: <indented block>  (a full fn body, with the rule of a fn body)
 let fn(i32) -> i32 g = |i32 x|:
     let i32 y = x * 2
-    return Result.Ok(y + n)
+    return y + n                         # the type is bare, so the body returns the value
 
 # optional return / error annotation after the closing pipe
 let fn(i32) -> i32 | MathError h = |i32 x| -> i32 | MathError: ...
@@ -125,17 +143,22 @@ let fn() -> i32 inc = |~| n + 1
   **only** where an expected `FunctionType` supplies the types (a call argument to a parameter of a
   concrete function type, or a binding with a `fn(...)` annotation); otherwise it is a "lambda
   parameter needs a type" diagnostic. A parameter of a GENERIC function type supplies nothing:
-  `map(xs, |x| x * 2)` is CE2060, and `map(xs, |i32 x| x * 2)` compiles. Return/error types are inferred from the body / expected type, or annotated
-  with `-> T [| E]` after the closing pipe.
-- **Result semantics are identical to `fn`.** An expression-body lambda `|x| e` desugars to a fn
-  whose body is `return Result.Ok(e)`; a block-body lambda is a literal fn body. Calling through a
-  closure yields `Result@(T, E)` exactly like any call, so `f(x)??`, `.realise(default)` and
-  matching are unchanged (and `if (f(x))` is CE2516, as for any call).
-  - *Corollary:* because the expression body is auto-wrapped in `Ok`, a fallible call in the body
-    must be unwrapped with `??` **at its point of use** — a bare `Result` left in body position is
-    wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. This is why `compose`'s body
-    is `f(g(x)??)??`, not `f(g(x)??)`. The rule generalizes: a lambda body can never let an inner
-    `Result` pass through unchanged; every fallible call needs its own `??`.
+  `map(xs, |x| x * 2)` is CE2060, and `map(xs, |i32 x| x * 2)` compiles. The return type comes
+  from the body or the expected type, or it is annotated with `-> T [| E]` after the closing pipe.
+- **The channel comes from the TYPE, never from the body.** A lambda has an error channel only
+  when its type writes `| E`: the annotation after the closing pipe, or the expected type (a
+  parameter, a `let`, a field). The compiler never infers a channel from the body. A bare lambda
+  is a bare fn: its expression body `|x| e` desugars to `return e`, a block body returns the value,
+  a `Result.Ok` or `Result.Err` there is CE2091, and a `??` there is CE0131 (the typecheck pass
+  emits it, because the channel is known only when the type is). A lambda with a channel is a fn
+  with a channel: `|x| e` desugars to `return Result.Ok(e)`, a block body spells both
+  constructors, and a `??` is legal in any body (#399). Calling through a closure yields what any
+  call yields (and `if (f(x))` is CE2516, as for any call).
+  - *Corollary for a channel lambda:* the expression body is wrapped in `Ok`, so a fallible call in
+    the body must be unwrapped with `??` **at its point of use** — a `Result` left in body position
+    is wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. Until the bare-function
+    change every lambda had a channel, and `compose`'s body was `f(g(x)??)??`. `compose` is bare
+    now and its body is `f(g(x))`.
 - **Block-body lambdas are a `let`-RHS-only form.** The grammar does not reach `lambda_block` from
   general `expr`, since it ends in a dedent with no trailing token, so `|x|: <block>` used directly
   as a call argument is a parse error — bind it to a `let` first.
@@ -402,8 +425,10 @@ fn main() i32:
   one; owned-element combinators are deferred (Part II §2).
 - **Two call forms:** the free function `map(xs, f)` and the method form `xs.map(f)` (Gap B, Part
   II §1). The method form is an extension with a method-level type parameter
-  (`extend List@(T) map@(U)`, `extend T[] map@(U)`), it declares `| StdError`, and it answers a
-  `List@(U)` for a `List@(T)` and for a `T[]` receiver alike.
+  (`extend List@(T) map@(U)`, `extend T[] map@(U)`). It is bare since the bare-function change
+  (it declared `| StdError` before), and it answers a `List@(U)` for a `List@(T)` and for a `T[]`
+  receiver alike. Every combinator takes a bare function and yields the value, so a call takes no
+  `??`.
 - **Function argument must be a typed-param lambda or a function reference** — a bare-param lambda
   (`|x| ...`) cannot be inferred against a generic parameter (§5's Gap-C limitation).
 
@@ -456,7 +481,7 @@ evaluates to a function value works, and it reuses the fat-pointer indirect-call
       fn(i32) -> i32 op
 
   fn run(Handler h, i32 v) i32:
-      return Result.Ok(h.op(v)??)     # calls the field directly
+      return h.op(v)     # calls the field directly; the field type is bare
   ```
 
 - **A `List` get-out or a parenthesized expression**, called immediately: `arr[0]()`, `(e)()`,

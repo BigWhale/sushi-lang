@@ -33,7 +33,10 @@ constants and unit variables, the function declarations, and then the function b
 `backend/functions/` holds the function manager: `declarations.py`, `definitions.py`, and
 `main_wrapper.py`, whose `emit_main` emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
-`string[]` when `main` takes `args`, and turns the Result into the exit code.
+`string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
+code. The Sushi `main` is bare (`CE0106` refuses a channel), so its value IS the exit code.
+Until the bare-function change, `main` answered a Result, and the wrapper turned an Err into
+exit code 1.
 
 ## Type system
 

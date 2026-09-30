@@ -184,9 +184,12 @@ fn main() i32:
 
 Sushi has two built-in generic enums.
 
-**Result@(T, E):** every function returns one. `fn divide(...) i32` returns
-`Result@(i32, StdError)`, and `fn divide(...) i32 | MathError` returns
-`Result@(i32, MathError)`:
+**Result@(T, E):** a function that writes an error channel returns one.
+`fn divide(...) i32 | StdError` returns `Result@(i32, StdError)`, and
+`fn divide(...) i32 | MathError` returns `Result@(i32, MathError)`. A function with no
+`| E` is bare and returns its value itself; there is no default error type. A bare
+function is the exception, not the default style (see
+[The error channel is opt-in](design/error-channel.md)):
 
 ```sushi
 fn divide(i32 a, i32 b) i32 | StdError:  # returns Result@(i32, StdError)
@@ -224,9 +227,10 @@ fn main() i32:
 ```
 
 !!! note
-    These examples use `.realise(default)` to unwrap the returned `Result` because the `??`
-    operator is discouraged inside `main()` (it produces warning CW2511). Inside other
-    functions, `let i32 x = identity(nom 42)??` is the idiomatic form.
+    `identity` writes no `| E`, so it is bare and its call returns the value: no `??` and
+    no `.realise()`. A generic function that can fail writes `| E`, and then its call
+    returns a `Result` (see [Errors Through Generics](#errors-through-generics)). `main` is
+    bare, so a `??` there is `CE0131`; use `.realise(default)` or `match` in `main`.
 
 !!! note "Why `nom`"
     `identity` gives its argument back to the caller, so the parameter declares `nom` and the
@@ -369,7 +373,7 @@ A generic function value is refused where nothing solves its type. For example,
 
 ```sushi
 let fn(i32) -> i32 id = same
-let List@(i32) copy = map(xs, id).realise(List.new())
+let List@(i32) copy = map(xs, id)       # map is bare: no `??`, no `.realise()`
 ```
 
 ## Constraints
@@ -377,8 +381,8 @@ let List@(i32) copy = map(xs, id).realise(List.new())
 ### Constraints on Functions
 
 A constraint `@(T: Perk)` says that every type argument must implement the perk. The body can
-then call the perk methods. A perk method returns a **bare** value, and the generic function
-still wraps its own result in `Result.Ok`. `Hashable` is predefined: every type with a
+then call the perk methods. A perk method returns a **bare** value, and so does a generic
+function with no `| E`. `Hashable` is predefined: every type with a
 derived `hash()` satisfies it, and the implementation below REPLACES the derived hash of
 `Point` (see [Perks](perks.md#the-predefined-perks)):
 
@@ -459,8 +463,8 @@ For more information on perks, see the [Perks documentation](perks.md).
 ## Methods on Generic Types
 
 An extension method adds a method to a type with `extend`. A **bare** extension method (no
-`| E`) returns its value directly: there is no `Result.Ok(...)` wrapper, and you call it
-without `??` or `.realise()`.
+`| E`) returns its value directly, as a bare function does: there is no `Result.Ok(...)`
+wrapper, and you call it without `??` or `.realise()`.
 
 ### Basic Extension
 
@@ -758,7 +762,7 @@ Sushi supports nested generic types.
 
 ### Two Levels
 
-A function that returns `Maybe@(i32)` really returns `Result@(Maybe@(i32), StdError)`, so you
+A function declared `Maybe@(i32) | StdError` returns `Result@(Maybe@(i32), StdError)`, so you
 match the outer `Result` and then the inner `Maybe`:
 
 ```sushi

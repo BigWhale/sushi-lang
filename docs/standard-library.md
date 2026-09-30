@@ -189,7 +189,8 @@ match open("output.txt", FileMode.Write()):
 
 A buffered writer is better when the loop is long: one system call per window, not one
 per line. `BufWriter` comes from `<io/buf>`. Each call answers `IoError`, so `??` goes in
-a function that has the `| IoError` channel, not in `main` (CW2511):
+a function that has the `| IoError` channel, not in `main`: `main` is bare, and a `??`
+there is CE0131:
 
 ```sushi
 use <io/fs>
@@ -248,8 +249,9 @@ fn greet() ~ | IoError:
 
 **Iter combinators** - higher-order functions (`use <collections/iter>`):
 - Methods on `List@(T)` and on `T[]`: `xs.map(f)`, `xs.filter(pred)`, `xs.fold(init, f)`.
-  Each answers `Result@(..., StdError)`. `filter` accepts an owning element type: it
-  clones each element that it keeps
+  Each is bare: it takes bare functions and answers the value itself, not a `Result`, so
+  no `??` follows the call. `filter` accepts an owning element type: it clones each
+  element that it keeps
 - Free functions over `List@(T)`: `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`,
   and `compose(nom g, nom f)`
 - Written in Sushi (a source stdlib module, no bitcode)

@@ -8,26 +8,28 @@ Type-safe error handling with explicit success and error types.
 
 `Result@(T, E)` is a generic enum that represents either success (`Ok`) containing a value of type `T`, or failure (`Err`) containing an error of type `E`.
 
-Every function that you declare with `fn` returns `Result@(T, E)`, where:
+A callable returns `Result@(T, E)` only when its signature has an **error channel**: it
+writes `| E` after the return type, or it returns an explicit `Result@(T, E)`. Then:
 - `T` is the declared return type
-- `E` is the error type (`StdError` if the declaration does not name one)
+- `E` is the error type that the signature names
 
-Two kinds of callable do not return a `Result`. An extension method with no `| E`
-channel returns a bare value, and an FFI external returns the raw C value.
+There is no default error type. A function, method, lambda or function type with no
+channel is **bare**: it returns the value itself, and a call gives the value, not a
+`Result`. An FFI external returns the raw C value and never has a channel. `main` is bare
+and returns the exit code.
+
+A bare function is the exception, not the default style. Use it only when the function is
+total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a
+path join). Write a channel for everything else, and keep a channel on a public function
+when you are not sure: a channel that you add later changes the signature and breaks every
+caller and every binary `.slib`. See [The error channel](../design/error-channel.md) and
+[Error handling](../error-handling.md).
 
 The error type `E` must be an enum. Any other type is CE2084.
 
 ## Type Syntax
 
-### Implicit Return with Default Error
-
-```sushi
-fn add(i32 a, i32 b) i32:
-    return a + b
-# Actually returns Result@(i32, StdError)
-```
-
-### Custom Error Type
+### Error Channel
 
 ```sushi
 enum ParseError:
@@ -40,6 +42,24 @@ fn parse_digit(string s) i32 | ParseError:
     return Result.Ok(7)
 # Returns Result@(i32, ParseError)
 ```
+
+The body with a channel spells both constructors. A bare `return 7` there is CE2030.
+
+### No Channel: the Bare Form
+
+```sushi
+fn add(i32 a, i32 b) i32:
+    return a + b
+# Returns i32, not a Result
+```
+
+A bare body returns the value. `return Result.Ok(...)` in it is CE2091, and `??` in it is
+CE0131. On the call of a bare function, `??` is CE2507 and `.realise(...)` is CE2008.
+
+### StdError and the Predefined Error Enums
+
+`StdError` is a built-in error enum with one variant, `StdError.Error`. A signature names
+it like any other error type: `fn f() i32 | StdError:`. It is not a default.
 
 A predefined error enum is used in the same way. `MathError` comes with `use <math>`:
 
@@ -77,7 +97,7 @@ one that brings the name:
 
 | enum | home | also brought by |
 |---|---|---|
-| `StdError` | none -- the implicit Result arm is in scope everywhere | |
+| `StdError` | none -- in scope everywhere | |
 | `MathError` | `use <math>` | |
 | `FileMode` | `use <io/fs>` | |
 | `IoError`, `FileError` | `use <io/error>` | `<io/contracts>`, `<io/fs>`, `<io/buf>`, `<io/files>`, `<net/tcp>` |
@@ -185,8 +205,8 @@ Environment variable errors.
 Create a success result containing a value.
 
 ```sushi
-fn get_answer() i32:
-    return 42
+fn get_answer() i32 | StdError:
+    return Result.Ok(42)
 ```
 
 ### `Result.Err(error)`
@@ -307,23 +327,10 @@ fn outer() i32 | ErrorA:
     return Result.Ok(x)
 ```
 
-### Warning: Do NOT Use `??` in main()
+### `??` Is Not Legal in main()
 
-Using `??` in the `main()` function generates a compiler warning and is highly discouraged:
-
-<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
-```sushi
-fn run() i32 | StdError:
-    let i32 x = risky()??  # warning CW2511
-    return Result.Ok(0)
-
-fn main() i32:
-    match run():
-        Result.Ok(code) -> return code
-        Result.Err(_) -> return 1
-```
-
-Instead, use explicit error handling:
+`main` is bare: it returns the exit code and has no error channel (`| E` on `main` is
+CE0106). So `??` in `main` is CE0131. Handle the error in `main` explicitly:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
@@ -335,6 +342,21 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed")
             return 1
+```
+
+A common shape puts the `??` chain in a helper with a channel, and `main` turns the
+result into an exit code:
+
+<!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
+```sushi
+fn run() i32 | StdError:
+    let i32 x = risky()??
+    return Result.Ok(x)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ## Pattern Matching
@@ -366,11 +388,12 @@ else:
 ## Best Practices
 
 - **Always handle errors explicitly** - Don't ignore Result values
+- **Write a channel on a function that can fail** - The bare form is for a total function only
 - **Use `??` for error propagation** - In function chains with matching error types
 - **Use `.realise(default)` for fallback values** - When a default makes sense
 - **Use pattern matching for detailed error handling** - When you need different behavior per error variant
 - **Avoid `expect()` in production code** - It terminates the program on error
-- **Avoid `??` in main()** - Use explicit error handling instead
+- **No `??` in main()** - `main` is bare (CE0131); use explicit error handling
 - **Keep error types consistent** - Makes error propagation easier
 - **Define custom error enums** - For domain-specific error conditions
 

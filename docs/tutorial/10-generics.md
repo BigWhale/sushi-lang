@@ -335,7 +335,9 @@ receiver, and `U` comes from the function argument. The call
 A method call has no `@(...)` slot, so the compiler must infer `U`. The lambda must write
 the types of its parameters: `|string s| ...`. A lambda with a bare parameter, `|s| ...`,
 gives nothing to infer from, and the call is CE2063 ("cannot infer method type parameter
-'U'"). The `| StdError` channel lets the body use `??` on each call of `f`.
+'U'"). The method writes the `| StdError` channel, so the call gives a
+`Result@(Stack@(U), StdError)`, and `main` unwraps it with `.realise(...)`. The parameter
+`fn(T) -> U` is a bare function type, so `f(x)` in the body gives a `U` directly.
 
 The standard library uses this form for `.map`, `.filter` and `.fold` on `List@(T)` and
 `T[]`. [Chapter 19](19-higher-order-combinators.md) shows them.
@@ -449,9 +451,9 @@ No count available
 ```
 
 `parse_count` writes its return type as `Result@(Maybe@(i32), StdError)`. The short form
-`fn parse_count(i32 raw) Maybe@(i32)` gives the same type; the long form only shows the
-nesting. To read the value, use two nested `match` statements: the first removes the
-`Result`, the second removes the `Maybe`.
+`fn parse_count(i32 raw) Maybe@(i32) | StdError` gives the same type; the long form only
+shows the nesting. To read the value, use two nested `match` statements: the first removes
+the `Result`, the second removes the `Maybe`.
 
 ## Constants, unit variables and derived methods
 

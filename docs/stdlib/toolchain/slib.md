@@ -18,10 +18,12 @@ fn main() i32:
 ## Overview
 
 `toolchain/slib` is a **Sushi-source** standard-library module. It reads the fixed
-52-byte little-endian header and the MessagePack metadata map of a version-4 `.slib`
+52-byte little-endian header and the MessagePack metadata map of a version-5 `.slib`
 library (see [Library Format](../../library-format.md)). The metadata comes back as a
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
-reads the length of a payload section, never the payload.
+reads the length of a payload section, never the payload. A container of another version
+is `SlibError.BadVersion`: a library written before the bare-function change is version 4,
+and its records do not say which callables are bare, so the reader refuses it.
 
 The module imports `<io/fs>`, `<encoding/msgpack>` and `<collections/strings>`. It
 re-exports `<io/error>` (`public use`), so
@@ -34,7 +36,7 @@ carries.
 public enum SlibError:
     Io(IoError)                         # the open or a read failed; the IoError names the cause
     BadMagic()                          # the 16 magic bytes do not match
-    BadVersion(u32)                     # header version is not 4
+    BadVersion(u32)                     # header version is not 5
     Truncated(SlibSection, u64, u64)    # the section, the bytes it needs, the bytes left
     TooLarge(u64)                       # the file is larger than 1 GiB; the file size
     Decode(MpError)                     # the metadata blob does not decode
@@ -88,7 +90,7 @@ fn main() i32:
 
 ### `sizes(string path) SlibSizes | SlibError`
 
-The length of both payload sections, in one pass over the file. A version-4 container
+The length of both payload sections, in one pass over the file. A version-5 container
 puts a length-prefixed source section between the metadata and the bitcode, so a reader
 steps over the source to reach the bitcode length. A source library records no bitcode,
 and a binary one no source.
@@ -140,7 +142,9 @@ fn main() i32:
 ### `check_manifest(MsgValue meta) ~ | SlibError`
 
 Check that a metadata map has the shape of a manifest: every required field is present
-and has its type. The Python reader checks the same rows (`MANIFEST_SCHEMA` in
+and has its type. Every function, helper and method record must state `has_channel`, a
+`bool` that says whether the callable has an error channel. The Python reader checks the
+same rows (`MANIFEST_SCHEMA` in
 `sushi_lang/backend/library_format.py`) and gives the same reason, as
 `SlibError.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
 partial map still reads.

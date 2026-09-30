@@ -67,7 +67,6 @@ struct Buf:
 
 fn zap(poke i32[4] arr) ~:
     arr.fill(0)                # reaches the caller's array
-    return Result.Ok(~)
 
 extend Buf clear(poke self) ~:
     self.slots.fill(0)         # reaches the caller's struct

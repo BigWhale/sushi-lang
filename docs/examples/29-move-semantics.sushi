@@ -30,7 +30,7 @@
 #         let i32[] pts = from([1, 2, 3])
 #         let Shape s = Shape.Poly(pts)
 #         println("points: {pts.len()}")
-#         return Result.Ok(0)
+#         return 0
 #
 #     error [CE2405]: cannot borrow moved variable 'pts'.
 #       |     println("points: {pts.len()}")

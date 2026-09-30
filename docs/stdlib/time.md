@@ -22,10 +22,11 @@ The time module provides sleep functions with various granularities and two cloc
 - `now()` - Read the unix clock, in seconds
 - `monotonic_ns()` - Read the monotonic clock, in nanoseconds
 
-The sleep functions return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64, StdError)`.
+Every function in the module has the `StdError` error channel. The sleep functions return `Result@(i32, StdError)` with 0 on success, or remaining microseconds if interrupted by a signal. A duration that is not valid (a negative value, or nanoseconds of 1,000,000,000 or more) returns `Result.Err(StdError.Error)`. The clock functions return `Result@(i64, StdError)`.
 
 A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
-examples use `match` or `.realise(...)` in `main`, because `??` in `main` is CW2511.
+examples use `match` or `.realise(...)` in `main`. `main` is bare, so `??` in `main` is
+CE0131.
 
 ## Functions
 

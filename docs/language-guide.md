@@ -33,11 +33,11 @@ fn main() i32:
 Key points:
 - `fn` declares a function
 - `i32` is the return type (32-bit integer)
-- All functions actually return `Result@(T, E)` - this is Sushi's approach to explicit error handling (more on this later)
+- `main` is bare: it has no error channel, and it returns the exit code itself
 - `println` outputs text with a newline to standard output
-- The `return Result.Ok(0)` convention indicates successful program termination (exit code 0)
+- `return 0` ends the program with exit code 0 (success)
 
-The main function must return an integer type, usually `i32` (the operating system uses it as the exit code; another return type is CE0106). Like all Sushi functions, it must explicitly wrap this value in `Result.Ok()` to indicate successful execution.
+The main function must return a bare integer type, usually `i32` (the operating system uses it as the exit code). Another return type is CE0106, and so is an error channel `| E` on `main`. A `??` in `main` is CE0131: handle each failure in the body with `match` or `.realise(default)`, and return a code.
 
 To read the command line, `main` takes exactly one parameter, `string[] args`. The first element is the program name. No other parameter list is accepted: the type must be `string[]` and the name must be `args`.
 
@@ -220,22 +220,32 @@ fn main() i32:
 
 ## Functions and Returns
 
-Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result.Ok(...)` or `Result.Err(...)` for all returns.
+Functions are the building blocks of Sushi programs. Every function has explicit parameter types and an explicit return type. A function that can fail writes an error channel `| E` after its return type. Then every return spells `Result.Ok(...)` or `Result.Err(...)`. A function with no `| E` is BARE: it returns the value itself.
 
 ### Basic Functions
 
 ```sushi
-fn add(i32 a, i32 b) i32:
+use <collections/strings>
+
+fn parse_count(string text) i32 | StdError:  # a channel: the call returns Result@(i32, StdError)
+    if (text.is_empty()):
+        return Result.Err(StdError.Error)
+    return Result.Ok(text.len())
+
+fn add(i32 a, i32 b) i32:  # bare: the call returns i32
     return a + b
 
 fn greet(string name) ~:  # ~ is "blank" type (no return value)
-    println("Hello, {name}!")
+    println("Mostly Harmless, {name}!")
 
 fn main() i32:
     let i32 sum = add(5, 7)
+    let i32 n = parse_count("42").realise(0)
     greet("Ford")
     return 0
 ```
+
+**A bare function is the exception.** Use it seldom: only when the function is total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would only force a dead `.realise` or `??` on every caller. Write a channel for everything else. A public function keeps a channel when there is any doubt, because a channel added later changes the signature and breaks every caller and every binary `.slib`. The compiler does not enforce this. See [The error channel is opt-in](design/error-channel.md).
 
 **Function syntax breakdown**:
 - `fn` keyword declares a function
@@ -243,12 +253,14 @@ fn main() i32:
 - Return type: comes after the parameter list
 - `~` ("blank" or "unit" type): used for functions that don't return a meaningful value
 - Body: indented block following the colon
-- Returns: must be `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` is CE2030
+- Returns with a channel: `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` there is CE2030
+- Returns in a bare function: `return value`; `Result.Ok(...)` there is CE2091, and `??` there is CE0131
 - Every path must end with a `return`: a body that can reach its end is CE0107, also for a
-  `~` function (end it with `return Result.Ok(~)`)
+  `~` function with a channel (end it with `return Result.Ok(~)`). A bare `~` function can
+  reach its end
 - A statement after a statement that always ends the path is dead code, and it is CE0140
 
-**The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. You must still wrap it: `return Result.Ok(~)`. This maintains consistency with Sushi's error handling model.
+**The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. A bare `~` function needs no `return`. A `~` function with a channel (`~ | E`) ends with `return Result.Ok(~)`.
 
 ### Multiple Parameters
 
@@ -425,7 +437,7 @@ fn main() i32:
 
 ### Result@(T, E)
 
-Sushi uses `Result@(T, E)` as its fundamental approach to error handling. Every function in Sushi returns a `Result@(T, E)`, even if you declare the return type as just `T` (then `E` is `StdError`). This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
+Sushi uses `Result@(T, E)` as its fundamental approach to error handling. A function that can fail writes its error type in the signature, `T | E`, and its call returns a `Result@(T, E)`. A function with no `| E` is bare and cannot return an error. There is no default error type. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
 
 **The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi puts the failure in the type instead: if a function can fail, that failure is part of what it returns, so the compiler can tell you where you have not dealt with it. You must explicitly choose to handle errors or propagate them.
 
@@ -449,8 +461,8 @@ fn main() i32:
 ```
 
 **Key Concepts**:
-- When you declare a function returning `i32`, it actually returns `Result@(i32, StdError)`
-- Success values must be wrapped: `return Result.Ok(value)`
+- A function declared `i32 | StdError` returns `Result@(i32, StdError)`; a function declared `i32` returns `i32`
+- In a function with a channel, success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
   `.is_err()`; `if (result)` on its own is CE2516
@@ -556,7 +568,7 @@ fn find_first_even(i32[] numbers) Maybe@(i32) | StdError:
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8])
-    # Functions return Result@(T, E), so find_first_even returns Result@(Maybe@(i32), StdError)
+    # find_first_even writes `| StdError`, so its call returns Result@(Maybe@(i32), StdError)
     let Result@(Maybe@(i32), StdError) result = find_first_even(data)
 
     match result:
@@ -1044,18 +1056,20 @@ marker of its own.
 `new` is a legal static name (`extend Box static new(i32 n) Box:`), which is one thing a
 free function cannot be called.
 
-**No `??` in a BARE extension body**: by default an extension method returns a bare
-value, not a `Result@(T, E)` (a `Result.Ok(...)` return is CE2091). A bare body has no
-error channel, so `??` has nothing to propagate into and is rejected with CE0131.
+**No `??` in a BARE extension body**: an extension method with no `| E` is bare, as a
+function with no `| E` is. It returns a bare value, not a `Result@(T, E)` (a `Result.Ok(...)`
+return is CE2091). A bare body has no error channel, so `??` has nothing to propagate into
+and is rejected with CE0131.
 Handle the Result in the body instead -- match on it, or use `.realise(default)`:
 
 ```sushi
 extend i32 tagged() i32:
-    return tag(self).realise(0)   # tag() returns Result@(i32, StdError)
+    return tag(self).realise(0)   # tag() writes `| StdError`, so it returns Result@(i32, StdError)
 ```
 
 The same rule applies to perk implementation methods. A `??` inside a LAMBDA in such a
-body is legal -- the lambda has its own Result channel:
+body is legal when the lambda's type writes `| E` -- the lambda then has its own Result
+channel. A lambda never takes a channel from its body:
 
 ```sushi
 extend i32 fixed() i32:
@@ -1309,7 +1323,7 @@ return a type you cannot write:
 # geometry.sushi        # shapes.sushi            # main.sushi
 public struct Vec:      use "geometry"            use "shapes"
     f64 x               public fn origin() Vec:   fn main() i32:
-                            return Result.Ok(...)     let Vec v = origin()??
+                            return Vec(...)           let Vec v = origin()
 ```
 
 `main` may call `origin()`, because `origin` is in scope. It may not write `Vec` until it
@@ -1325,7 +1339,7 @@ takes what an import brings and hands it on as the unit's own.
 # geometry.sushi        # shapes.sushi                  # main.sushi
 public struct Vec:      public use "geometry"          use "shapes"
     f64 x               public fn origin() Vec:        fn main() i32:
-                            return Result.Ok(...)          let Vec v = origin()??
+                            return Vec(...)                let Vec v = origin()
 ```
 
 Now `shapes` says "whoever imports me gets `geometry` too", and `main` writes `Vec` with

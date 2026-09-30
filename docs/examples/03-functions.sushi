@@ -4,32 +4,36 @@
 # - Function definitions with parameters and return types
 # - Multiple parameter passing
 # - Blank type (~) for functions with no return value
-# - Result@(T, E) for explicit error handling
+# - The error channel `| E`: the call returns Result@(T, E)
+# - Bare functions (no `| E`): the call returns the value itself
 # - Function calls and .realise() for unwrapping
 # - Error returns using Result.Err(error_value)
 #
-# Every function in Sushi implicitly returns Result@(T, E), enabling
-# consistent error handling. Functions must explicitly return
-# Result.Ok(value) or Result.Err(error_value) on all code paths.
+# A function has an error channel only when its signature writes `| E`.
+# A function with a channel returns Result.Ok(value) or
+# Result.Err(error_value) on all code paths. A function with no `| E` is
+# bare and returns the value directly. A bare function is the exception:
+# use it only for a function that is total over its inputs and will stay
+# so. See docs/design/error-channel.md.
 
 # Function with two parameters returning i32.
 # Parameters are declared as: <type> <name>
 # Return type comes after the closing parenthesis.
-# All return types are implicitly wrapped in Result@(T, E).
+# This function writes no `| E`, so it is bare: it cannot fail.
 fn calculate_answer(i32 a, i32 b) i32:
     let i32 result = a * b
-    # Must explicitly wrap return value in Result.Ok()
+    # A bare function returns the value directly
     return result
 
 # Function with no return value uses the blank type (~).
 # The blank type represents "nothing" or "void".
-# Even blank-returning functions must return Result.Ok(~).
+# A bare blank-returning function needs no return statement.
 fn greet(string name) ~:
     println("Hello, {name}! Welcome aboard the Heart of Gold.")
-    # Blank functions return Result.Ok(~) to indicate success
+    # A bare ~ body can reach its end
 
 # Function demonstrating explicit error handling.
-# Can return Result.Err(error_value) to indicate failure.
+# It writes the channel `| StdError`, so it can return Result.Err(error_value).
 # Caller must handle both success and error cases.
 fn divide_pangalactic(i32 numerator, i32 denominator) i32 | StdError:
     # Check for error conditions and return Result.Err(error_value)
@@ -41,15 +45,13 @@ fn divide_pangalactic(i32 numerator, i32 denominator) i32 | StdError:
     return Result.Ok(numerator / denominator)
 
 fn main() i32:
-    # Call functions and unwrap results immediately with .realise().
-    # .realise(default) unwraps Ok(value) or returns the default if Err.
-    # This is safe when you're confident the function will succeed.
+    # calculate_answer is bare, so its call returns the i32 directly.
+    # No .realise() and no ?? are necessary (they are errors on a bare call).
     let i32 answer = calculate_answer(6, 7)
     println("Calculated answer: {answer}")
 
     # Call blank-returning functions.
-    # These still return Result@(~, StdError) but we often don't need to check them.
-    # The Result is discarded if not assigned to a variable.
+    # greet is bare, so the call returns nothing and there is no Result to check.
     greet("Arthur")
     greet("Ford")
     greet("Zaphod")

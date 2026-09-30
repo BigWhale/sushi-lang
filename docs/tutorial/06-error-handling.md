@@ -8,13 +8,14 @@ function doesn't return "an `i32`, or maybe an explosion." It returns a `Result@
 success *or* error, right there in the type — and the compiler won't let you forget which
 one you're holding.
 
-By the end of this chapter you'll understand `Result@(T, E)`, the `??` propagation operator,
-the `Maybe@(T)` optional type, and the small set of patterns that keep `main` warning-free.
+By the end of this chapter you'll understand the error channel, `Result@(T, E)`, the `??`
+propagation operator, the `Maybe@(T)` optional type, and the small set of patterns that
+handle errors in `main`.
 
 ## `Result@(T, E)`, and why it exists
 
-You already met `Result` in Chapter 1: `main` ends with `return Result.Ok(0)`. That wasn't
-ceremony. **Every** function that you declare with `fn` returns a `Result@(T, E)` — a value
+A function that can fail writes an **error channel** in its signature: `fn f() T | E:`.
+This is the normal way to write such a function. The call gives a `Result@(T, E)` — a value
 that is either:
 
 - `Result.Ok(value)` — success, carrying a `T`, or
@@ -37,12 +38,29 @@ Output:
 
 Two details to absorb:
 
-- The function's declared return type is `i32`, but the body returns `Result.Ok(...)` /
-  `Result.Err(...)`. That's **implicit wrapping**: writing `fn halve(i32 n) i32` actually
-  means `Result@(i32, StdError)`. You write the *value* type; Sushi wraps it in `Result` for
-  you. (Recap from Chapter 4.)
-- `StdError` is the built-in default error type. `StdError.Error` is its catch-all variant —
-  fine for "something went wrong" when you don't need detail.
+- The signature `fn halve(i32 n) i32 | StdError` means "returns an `i32`, or fails with a
+  `StdError`". The call gives `Result@(i32, StdError)`. The body spells both constructors:
+  `return Result.Ok(...)` and `return Result.Err(...)`. A plain `return n / 2` in this body
+  is **CE2030**. (Recap from Chapter 4.)
+- `StdError` is a built-in error type. `StdError.Error` is its catch-all variant — fine for
+  "something went wrong" when you don't need detail. It is not a default: a function that
+  writes no `| E` has no channel at all.
+
+### The bare form is the exception
+
+A function without `| E` is **bare**. It cannot fail: the body returns the value
+(`return x`), and the call gives the value itself. In a bare body, `return Result.Ok(...)`
+is **CE2091** and `??` is **CE0131**. On the call of a bare function, `??` is **CE2507** and
+`.realise(...)` is **CE2008**, because the value is not a `Result`.
+
+Use the bare form seldom. Use it only when the function is total over its inputs and will
+stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would
+only force a dead `??` or `.realise` on every caller. Write a channel for everything else:
+I/O, parsing, allocation on a size that you get, and a function that can gain a failure
+later. Keep a channel on a public function when you are not sure: a channel that you add
+later changes the signature and breaks every caller and every binary library. The compiler
+does not enforce this rule. [The error channel](../design/error-channel.md) records the
+decision, and [Error handling](../error-handling.md) has the full text.
 
 !!! note "Why not just exceptions?"
     Exceptions are invisible in a function's signature — you can't tell by looking whether a
@@ -74,7 +92,7 @@ can name each failure mode (`DivisionByZero`, `NegativeInput`) and the compiler 
 you covered them all.
 
 !!! note "Don't mix `|` with an explicit `Result`"
-    Use *either* the implicit form `fn f() T | MyError` *or* the fully explicit
+    Use *either* the short form `fn f() T | MyError` *or* the fully explicit
     `fn f() Result@(T, MyError)` — never both at once. Writing
     `fn f() Result@(T, E1) | E2` is a contradiction and the compiler rejects it (CE2085).
 
@@ -155,8 +173,8 @@ No Vogons aboard, thankfully
 Vogon index (or -1): -1
 ```
 
-Because `find_index` is a normal function it returns `Result@(Maybe@(i32), StdError)` — two
-layers. We peel the `Result` with `match`, then inspect the `Maybe` inside. (`Result.Err(_)`
+`find_index` writes the channel `| StdError`, so the call gives
+`Result@(Maybe@(i32), StdError)` — two layers. We peel the `Result` with `match`, then inspect the `Maybe` inside. (`Result.Err(_)`
 uses `_` to ignore the bound error: a `match` arm for `Err` must bind something, and `_`
 says "I don't care about it" without tripping an unused-variable warning.)
 
@@ -181,21 +199,15 @@ second of three, doubled: 42
 second of one, doubled:   -1
 ```
 
-## Don't use `??` in `main()`
+## `main` is bare: no `??` there
 
-Here's the one rule that trips up newcomers. The `??` operator is wonderful in *helper*
-functions, but using it in `main` triggers a compiler warning, **CW2511**:
+Here's the one rule that trips up newcomers. `main` is a bare function: it returns the
+program's exit code directly (`return 0`), and it cannot have an error channel (`| E` on
+`main` is **CE0106**). So `??` in `main` has nowhere to propagate *to*, and the compiler
+refuses it with **CE0131**. `main` handles each error at the boundary instead, and chooses
+the exit code.
 
-```
-warning [CW2511]: ?? operator used in main function (consider explicit error handling for clarity).
-```
-
-Why discourage it? `main` is the top of the call stack — there's nowhere left to propagate
-*to*. If `main` propagated an error, your program would exit with an opaque failure and no
-explanation. Sushi nudges you to handle errors deliberately at the boundary instead. (In
-this tutorial, treat any warning as a failure to fix — a clean build has exit code `0`.)
-
-The fix is to consume results explicitly. There are three main-safe patterns:
+There are three patterns for `main`:
 
 - **`match`** — when you want to handle Ok and Err differently.
 - **`.realise(default)`** — when a fallback value is enough.
@@ -213,8 +225,8 @@ realise fallback: 0
 if ok: 7
 ```
 
-None of those use `??`, so the program builds cleanly. Save `??` for the helpers that
-`main` calls — that's exactly where its early-return magic belongs.
+None of those use `??`, so the program compiles. Save `??` for the helpers with a channel
+that `main` calls — that's exactly where its early-return magic belongs.
 
 !!! note "The shape of a tidy program"
     A common, comfortable structure: small helper functions that lean on `??` to chain
@@ -224,16 +236,18 @@ None of those use `??`, so the program builds cleanly. Save `??` for the helpers
 
 ## What you learned
 
-- Every `fn` returns `Result@(T, E)`: `Result.Ok(value)` or `Result.Err(error)`.
-- Writing `fn f() T` implicitly wraps to `Result@(T, StdError)`; `fn f() T | MyError` lets
-  you supply a custom error enum. The error type must be an enum (`CE2084`).
+- A function that can fail writes an error channel, `fn f() T | E:`. The call gives
+  `Result@(T, E)`, and the body returns `Result.Ok(value)` or `Result.Err(error)`. The error
+  type must be an enum (`CE2084`).
+- A function without `| E` is bare: it returns the value, and the call gives the value.
+  There is no default error type. Use the bare form only for a total function.
 - `??` unwraps `Ok` or propagates `Err` from the enclosing function — RAII-safe, zero-cost,
-  and meant for helper functions (not `main`). On a `Maybe`, `??` unwraps `Some` and
+  and legal only in a body with a channel. On a `Maybe`, `??` unwraps `Some` and
   returns an error for `None`.
 - `.realise(default)` unwraps with a fallback; `if (result.is_ok()):` splits Ok from Err.
 - `Maybe@(T)` (`Maybe.Some` / `Maybe.None`) models presence vs. absence — Sushi's `null`
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.
-- Using `??` in `main` warns with **CW2511**; handle errors there with `match`,
-  `.realise()`, or `if (result.is_ok()):` instead.
+- `main` is bare and returns the exit code. `??` in `main` is **CE0131**; handle errors
+  there with `match`, `.realise()`, or `if (result.is_ok()):` instead.
 
 Next we put values in bulk. On to [Arrays](07-arrays.md).

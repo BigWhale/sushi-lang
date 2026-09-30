@@ -69,6 +69,26 @@ Collect global definitions before analyzing function bodies.
    brings are structural and so are decided here: a receiver named in the signature or
    the body is `CE0134`, and a static spelling a variant of the enum it extends is
    `CE2103`. A `static` inside a perk implementation is `CE4014`, in the perk collector.
+7. **The error channel of a written body.** A callable has a channel only when its
+   signature writes `| E` or returns an explicit `Result@(T, E)`; there is no default
+   error type (`docs/design/error-channel.md`). The collect pass emits `CE0131` for a `??`
+   in EVERY bare function and method body: a free function, an extension method and a
+   perk-implementation method (`passes/collect/utils.py`, `functions.py`, `perks.py`).
+   It fires once per declaration and covers a template nobody instantiates. Both
+   spellings at once (`Result@(T, E1) | E2`) is `CE2085`, here too. A lambda takes its
+   channel from its TYPE, which only the `typecheck` pass knows, so the `typecheck` pass
+   emits `CE0131` for a `??` in a bare lambda (`passes/types/expressions.py`).
+
+### One predicate for the channel
+
+`has_channel` (`semantics/channel.py`) is the one question "does this callable answer a
+Result". Every reader asks it: the `collect` pass (`CE0131`, `CE2085`), the `typecheck`
+pass (the body state, the return rule, the `??` channel, `CE0107`, what a call yields),
+the `lift` pass (the desugar of an expression lambda: `return e` when bare,
+`return Result.Ok(e)` with a channel), and the backend. Do not test `err_type` directly:
+an explicit `Result@(T, E)` return has a channel and no `err_type`. Until the bare-function
+change, a free function with no `| E` answered an implicit `Result@(T, StdError)`, and
+only a method could be bare.
 
 ### Source order decides the holder of a name in one unit
 
@@ -418,7 +438,10 @@ The ONE home of main's rule. It checks four things, in this order:
 
 1. an executable carries a `main` -- `CE3007`;
 2. a library carries none -- `CE3501`;
-3. `main` returns an integer type (i8-i64, u8-u64) -- `CE0106`;
+3. `main` returns a BARE integer type (i8-i64, u8-u64), the exit code -- `CE0106`. A
+   `| E` on `main`, or a `Result@(T, E)` return, is `CE0106` too, and a `??` in its body
+   is `CE0131` from the `collect` pass (the retired `CW2511` warned about it before the
+   bare-function change);
 4. `main` takes no parameters or exactly one `string[] args` -- `CE0138`. The answer
    sets `main_expects_args` for the back end.
 
@@ -931,9 +954,11 @@ on a foreign value is `CE2507`.
 
 ### Return paths
 
-A body that can reach its end with no `return` is `CE0107`: a `~` function too, a `| E`
-extension or perk method, and a lambda block body. There is no implicit `Result.Ok`. A
-bare `~` extension or perk method has no Result and may reach its end.
+A body that answers a value or a Result and can reach its end with no `return` is
+`CE0107`. The rule is one for a function, a lambda block body and an extension or perk
+method. A `~` body with a channel ends with `return Result.Ok(~)`; nothing adds the
+`Ok`. A BARE `~` body (a function, a method or a lambda) answers nothing and may reach its
+end.
 
 A statement after a statement that always ends the path is `CE0140`: one diagnostic for
 each block, at the first dead statement, with a note at the statement that ends the path.
@@ -1001,7 +1026,7 @@ let i32 y = x + "hello"  # CE2509: operator '+' cannot be used with string types
 
 **Result Handling:**
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 # CE2505: cannot assign Result@(T, E) to non-Result variable without handling
@@ -1093,10 +1118,10 @@ fn main() i32:
 
 ```sushi
 fn func(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 # CE2404: cannot borrow '(5 + 3)': expression has no stable address
-# let i32 x = func(peek (5 + 3)).realise(0)
+# let i32 x = func(peek (5 + 3))
 
 # OK: borrow a variable
 let i32 temp = 5 + 3

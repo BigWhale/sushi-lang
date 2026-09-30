@@ -10,6 +10,8 @@ an explicit `Result@(T, E)`. The rule is the same for a free function, an extens
 perk method, a lambda and a function type. There is no default error type.
 
 ```sushi
+use <collections/strings>
+
 fn parse(string text) i32 | StdError:    # a channel: the call yields Result@(i32, StdError)
     if (text.is_empty()):
         return Result.Err(StdError.Error)
@@ -38,6 +40,10 @@ fn double(i32 x) i32:                    # bare: the call yields i32
   one included (#399).
 - A function type without `| E` is bare: `fn(i32) -> i32`. With it, `fn(i32) -> i32 | E`.
   The channel is part of the type, so the two do not convert (CE2002).
+- A function with a channel that returns a FUNCTION TYPE writes the explicit form,
+  `fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type
+  belongs to that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare
+  function that returns a function type with a channel.
 - The combinators of `<collections/iter>` (`map`, `filter`, `fold`, `compose`) are bare:
   they take bare functions and yield the value.
 - Perk contracts do not change: a contract method was already bare or had a channel, and

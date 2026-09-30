@@ -52,14 +52,21 @@ return and error types:
 
 | Syntax | Meaning |
 | --- | --- |
-| `fn(i32) -> i32` | takes an `i32`, returns `i32`, error type implicitly `StdError` |
+| `fn(i32) -> i32` | takes an `i32`, returns `i32`; bare, no error channel |
 | `fn(i32, string) -> bool` | two parameters, returns `bool` |
 | `fn() -> ~` | no parameters, blank (`~`) return |
-| `fn(i32) -> i32 \| MathError` | explicit custom error type (the `\| E` mirrors `fn f() i32 \| MathError`) |
+| `fn(i32) -> i32 \| MathError` | an error channel: a call answers `Result@(i32, MathError)` (the `\| E` mirrors `fn f() i32 \| MathError`) |
 
 The arrow `->` is required, and the return type is mandatory. Function types nest and compose
 like any other type — they work as parameter types, struct fields, and generic type arguments
 (`List@(fn(i32) -> i32)`).
+
+A function type has an error channel only when it writes `| E`. The channel is part of the type,
+so `fn(i32) -> i32` and `fn(i32) -> i32 | MathError` do not convert (CE2002). A `| E` written
+after a function type belongs to that function type. Thus a function with a channel that returns
+a function type writes the explicit form, `fn make() Result@(fn(i32) -> i32, StdError):`. The
+form `fn make() fn(i32) -> i32 | StdError:` is a BARE function that returns a function type with
+a channel.
 
 ## Function values
 
@@ -106,9 +113,10 @@ fn main() i32:
 
 ## Calling through a function value
 
-Call a function value the same as a named function: `f(args)`. Every Sushi function returns
-`Result@(T, E)`, so an indirect call gives the same `Result` as a direct call. Use `??`,
-`.realise()`, `.is_ok()` or a `match` on it:
+Call a function value the same as a named function: `f(args)`. An indirect call gives the same
+answer as a direct call. A bare function type (`fn(i32) -> i32`) gives the value. A function type
+with a channel (`fn(i32) -> i32 | E`) gives a `Result@(i32, E)`: use `??`, `.realise()`,
+`.is_ok()` or a `match` on it. A bare call takes no `??` (CE2507):
 
 ```sushi
 fn run_twice(fn(i32) -> i32 f, i32 v) i32:
@@ -137,15 +145,15 @@ fn run(Handler h, i32 v) i32:
 iterate:
 
 ```sushi
-fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32 | StdError:
+fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
     let i32 acc = v
     foreach(f in ops.iter()):
-        acc := f(acc)??
-    return Result.Ok(acc)
+        acc := f(acc)           # each function is bare, so the call gives an i32
+    return acc
 ```
 
 `.get(i)` returns `Maybe@(fn(...))`, the same as for every element type. Unwrap it and call it
-in one expression: `ops.get(0)??(v)`. You cannot write an array of function values: the `[]` in
+in one expression: `ops.get(0)??(v)`, in a function that has a channel. You cannot write an array of function values: the `[]` in
 `fn() -> T[]` binds to the return type `T[]`. Use `List@(fn(...))` for a collection.
 
 ## Custom error types
@@ -162,20 +170,28 @@ fn safe_div(i32 a, i32 b) i32 | DivError:
     return Result.Ok(a / b)
 
 fn run(fn(i32, i32) -> i32 | DivError op, i32 x, i32 y) i32 | DivError:
-    return Result.Ok(op(x, y))    # propagates DivError out of the indirect call
+    return Result.Ok(op(x, y)??)    # propagates DivError out of the indirect call
 ```
 
-A function whose type omits `| E` has the implicit `StdError` error type, exactly like an
-ordinary `fn f() T` declaration.
+A function whose type omits `| E` is bare, exactly like an ordinary `fn f() T` declaration. There
+is no default error type. Until the bare-function change, a function type with no `| E` had the
+implicit `StdError` error type.
+
+A bare function is the exception, not the default style. Use it only when the function is total
+over its inputs and will stay so, for example a pure arithmetic helper. Write a channel for a
+function that can fail, or can gain a failure later. A public function keeps a channel when there
+is any doubt, because a channel added later changes the signature and breaks every caller. The
+compiler does not enforce this. `docs/design/error-channel.md` carries the rule.
 
 ## How it compiles
 
 A function value is a **four-word fat pointer** `{fn_ptr, env_ptr, drop_ptr, clone_ptr}`. The
 [closures guide](closures.md#how-it-compiles) gives the full description.
 
-- A Sushi `fn add(i32) i32` becomes an LLVM function that returns a `Result@(i32, StdError)`. A
-  reference to it as a value holds the address of a small adapter thunk, and `env_ptr`,
-  `drop_ptr` and `clone_ptr` are null.
+- A bare Sushi `fn add(i32) i32` becomes an LLVM function that returns the `i32`. A function
+  with a channel, `fn add(i32) i32 | E`, returns its `Result@(i32, E)`. A reference to it as a
+  value holds the address of a small adapter thunk, and `env_ptr`, `drop_ptr` and `clone_ptr`
+  are null.
 - A call through a function value is one indirect `call`. It passes `env_ptr` as a hidden first
   argument, and the thunk of a plain reference ignores it.
 - A value that captures nothing (all the values on this page) allocates no environment and needs
@@ -185,7 +201,8 @@ A function value is a **four-word fat pointer** `{fn_ptr, env_ptr, drop_ptr, clo
 ## Type compatibility
 
 Function types are **invariant**: two are compatible only when the arity, every parameter type,
-the return type, and the error type match exactly. There is no implicit conversion between
+the return type, and the error channel match exactly. A bare type and a type with a channel are
+different types. There is no implicit conversion between
 function types (no variance, no coercion). A mismatch is a clean diagnostic — see below.
 
 ## Error codes
@@ -210,7 +227,8 @@ an external only through its namespace.
   pass the value where a parameter type gives it. There is no `identity@(i32)` value spelling.
 
 A call through any expression works: a struct field (`h.op(1)`), a container get-out
-(`ops.get(0)??(2)`), a call result (`get_fn()??(3)`) and a parenthesized expression (`(f)(6)`).
+(`ops.get(0)??(2)`), a call result (`get_fn()(3)`, or `get_fn()??(3)` when `get_fn` has a
+channel) and a parenthesized expression (`(f)(6)`).
 The [Closures guide](closures.md) gives the capture rules and the `<collections/iter>`
 combinators (`map`, `filter`, `fold`, `compose`).
 

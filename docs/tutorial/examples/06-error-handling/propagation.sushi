@@ -14,7 +14,7 @@ fn plan_jump(bool tank_present) i32 | StdError:
     return Result.Ok(distance / fuel)
 
 fn main() i32:
-    # In main we do NOT use ??. We unwrap with .realise(default) instead.
+    # main is bare, so ?? is refused here. We unwrap with .realise(default) instead.
     let i32 ok = plan_jump(true).realise(-1)
     println("with tank: {ok}")
 
