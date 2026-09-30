@@ -304,7 +304,8 @@ for the captured variable's provenance and type class, not a closures-specific r
    "is this a user borrow?" instead of matching the name `#closure_env`. One accommodation is a
    coincidence; two is a missing concept.
 3. At the lambda site, heap-allocate the env, populate captured fields (copy or move), and build
-   `{@__lambda_N, env_ptr, @__closure_env_N_drop}`.
+   the four-word value `{@__lambda_N, env_ptr, @__closure_env_N.__closure_drop,
+   @__closure_env_N.__closure_clone}`.
 
 ## 4. The capture pieces (T1.0-T1.7)
 

@@ -648,8 +648,11 @@ than guessed at.
 On the source path this question does not arise at the manifest level: the declaration
 ships whole, so the mode is in the text and the ordinary passes read it.
 
-**Not yet at the boundary:** a `nom` receiver (`nom self` does not exist), and a
-consuming variadic — a public v1 `...T` cannot ship in a binary library (CE0116, §5.1).
+A `nom self` receiver is a receiver mode like `peek self` and `poke self`: a method
+record carries it in `self_mode`.
+
+**Not at the boundary:** a consuming variadic — a public v1 `...T` cannot ship in a binary
+library (CE0116, §5.1).
 
 ### 5.7 Two link paths
 

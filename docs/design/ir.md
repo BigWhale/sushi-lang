@@ -1067,7 +1067,7 @@ the work is feasible.
 
 The Python unit layer is different: the mandated seam gates
 (`test_consuming_use_coverage`, `test_borrow_dispatch_is_total`,
-`test_callee_mode_matrix`, `test_owning_value_registry_is_total`, ...) assert on the
+`test_callee_mode_matrix`, `test_owning_binding_uses_the_router`, ...) assert on the
 OLD structure by name. Each guarded seam has a named replacement (8.12), so each gate
 is ported when its seam moves. This is a real, planned cost.
 

@@ -129,7 +129,7 @@ _add(ErrorMessage("CW7005", Severity.WARNING,
     "'{name}' declares an error arm, and no '- Errors:' tag says when it fails",
     Category.DOCS, "A function written `fn f() T | E` names its own error type, so the "
                    "author chose to have more than one way to fail and the reader needs "
-                   "to know which. A function on the implicit StdError arm is not asked. "
+                   "to know which. A function that writes no '| E' is not asked. "
                    "A declaration with NO block is CW7002 instead."))
 
 _add(ErrorMessage("CW7006", Severity.WARNING,
