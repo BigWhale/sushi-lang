@@ -91,9 +91,6 @@ public fn parse_url(string text) Url | UrlError:
     if (colon <= 0):
         return Result.Err(UrlError.NoScheme)
     let string raw_scheme = text.s(0, colon)
-    # .realise() rather than ??: these helpers answer StdError while this
-    # function answers UrlError, and a propagation matches error types
-    # exactly. None of them can fail.
     if (not is_scheme(raw_scheme)):
         return Result.Err(UrlError.BadScheme)
     let string scheme = raw_scheme.lower()
