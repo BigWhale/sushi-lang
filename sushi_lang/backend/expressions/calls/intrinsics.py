@@ -241,9 +241,10 @@ def try_emit_contract_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Dot
     from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.semantics.typesys import BuiltinType, deref_type
     ty = resolve_named_type(codegen, deref_type(semantic_type))
-    if contract == DISPLAY:
-        return None
-    if not isinstance(ty, BuiltinType) and not is_contract_receiver(ty):
+    if isinstance(ty, BuiltinType):
+        if contract == DISPLAY:
+            return None
+    elif not is_contract_receiver(ty):
         return None
 
     from sushi_lang.backend.expressions.memory import own_temporary
@@ -251,6 +252,9 @@ def try_emit_contract_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Dot
     receiver = (contracts.load_operand(codegen, receiver_value, ty)
                 if isinstance(receiver_type, ir.PointerType) else receiver_value)
     own_temporary(codegen, expr.receiver, receiver, ty)
+    if contract == DISPLAY:
+        from sushi_lang.backend.types.display import emit_value_to_str
+        return emit_value_to_str(codegen, receiver, ty)
     argument = contracts.load_operand(
         codegen, codegen.expressions.emit_expr(expr.args[0]), ty)
     own_temporary(codegen, expr.args[0], argument, ty)

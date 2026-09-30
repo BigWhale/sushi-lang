@@ -1,0 +1,20 @@
+# An enum prints its name and variant, and the payload by position.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Colour.Red\nShape.Circle(5)\nShape.Rect(3, 4)\n"
+# EXPECT_NO_LEAKS: true
+
+enum Colour:
+    Red
+    Green
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+
+fn main() i32:
+    let Colour c = Colour.Red
+    println("{c}")
+    println("{Shape.Circle(5)}")
+    let Shape r = Shape.Rect(3, 4)
+    println("{r}")
+    return 0

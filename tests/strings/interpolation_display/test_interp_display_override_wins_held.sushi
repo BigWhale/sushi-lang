@@ -1,0 +1,22 @@
+# A `Display` implementation answers the hole and a field of it inside a derived
+# string form.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "#7\nTicket(id: #7, open: true)\n"
+# EXPECT_NO_LEAKS: true
+
+struct Id:
+    i32 n
+
+extend Id with Display:
+    fn to_str() string:
+        return "#{self.n}"
+
+struct Ticket:
+    Id id
+    bool open
+
+fn main() i32:
+    let Id i = Id(7)
+    println("{i}")
+    println("{Ticket(Id(7), true)}")
+    return 0

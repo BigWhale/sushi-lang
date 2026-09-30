@@ -1,0 +1,14 @@
+# A printed temporary that owns a heap value is freed after it is written.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Tag(t: "z")\n"
+# EXPECT_NO_LEAKS: true
+
+struct Tag:
+    string t
+
+fn make() Tag:
+    return Tag("z".clone())
+
+fn main() i32:
+    println(make())
+    return 0

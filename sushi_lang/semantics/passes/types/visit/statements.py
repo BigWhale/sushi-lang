@@ -7,7 +7,6 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals import errors as er
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Expr
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.expressions import validate_boolean_condition
 from sushi_lang.semantics.passes.types.matching import validate_match_statement
@@ -88,24 +87,45 @@ class StatementValidator(RecursiveVisitor):
 
     def visit_print(self, node: Print) -> None:
         """Validate print statement."""
-        self._validate_printed_value(node.value)
+        self._validate_printed_value(node)
 
     def visit_println(self, node: PrintLn) -> None:
         """Validate println statement."""
-        self._validate_printed_value(node.value)
+        self._validate_printed_value(node)
 
-    def _validate_printed_value(self, value: 'Expr') -> None:
+    def _validate_printed_value(self, node: 'Print | PrintLn') -> None:
         """What `print` and `println` both ask of the value they take.
 
         An unhandled `Result@(T, E)` has no printable form, so it is CE2037 in either.
+        Any other value prints by the rule an interpolation hole reads: a primitive, or a
+        struct or an enum through `Display`. Everything else is CE2115, and a type that
+        holds something with no string form says which field it is.
         """
-        from sushi_lang.semantics.typesys import EnumType
+        from sushi_lang.semantics.generics.contracts import DISPLAY
+        from sushi_lang.semantics.passes.types.expressions import top_level_contract
+        from sushi_lang.semantics.type_predicates import is_string_convertible
+        from sushi_lang.semantics.typesys import EnumType, deref_type
 
+        value = node.value
         self.type_validator.validate_expression(value)
 
         expr_type = self.type_validator.infer_expression_type(value)
+        if expr_type is None:
+            return
         if isinstance(expr_type, EnumType) and is_instance_of(expr_type, "Result"):
             er.emit(self.type_validator.reporter, er.ERR.CE2037, value.loc)
+            return
+        if is_string_convertible(deref_type(expr_type)):
+            return
+        printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY)
+        if printable:
+            node.display_type = deref_type(expr_type)
+            return
+        report = er.emit_with(self.type_validator.reporter, er.ERR.CE2115, value.loc,
+                              type=display_type(expr_type))
+        if reason is not None:
+            report = report.note(f"no derived Display: {reason}")
+        report.emit()
 
     def visit_rebind(self, node: Rebind) -> None:
         """Validate rebind statement."""

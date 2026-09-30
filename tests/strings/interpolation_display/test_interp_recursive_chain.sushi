@@ -1,0 +1,13 @@
+# A type that reaches itself through `Own@(T)` prints; an `Own` prints its payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Chain.Link(1, Chain.Link(2, Chain.End))\n"
+# EXPECT_NO_LEAKS: true
+
+enum Chain:
+    End
+    Link(i32, Own@(Chain))
+
+fn main() i32:
+    let Chain c = Chain.Link(1, Own.alloc(Chain.Link(2, Own.alloc(Chain.End))))
+    println("{c}")
+    return 0

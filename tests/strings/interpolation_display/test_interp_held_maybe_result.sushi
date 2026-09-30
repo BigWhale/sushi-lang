@@ -1,0 +1,12 @@
+# A `Maybe` and a `Result` held in a type print as their variants.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Slot(value: Maybe.Some(3), state: Result.Ok(1))\nSlot(value: Maybe.None, state: Result.Err(StdError.Error))\n"
+
+struct Slot:
+    Maybe@(i32) value
+    Result@(i32, StdError) state
+
+fn main() i32:
+    println("{Slot(Maybe.Some(3), Result.Ok(1))}")
+    println("{Slot(Maybe.None, Result.Err(StdError.Error))}")
+    return 0

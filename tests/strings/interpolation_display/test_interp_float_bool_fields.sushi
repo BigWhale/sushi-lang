@@ -1,0 +1,12 @@
+# A float field prints as a float hole does, and a bool field as a word.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Reading(value: 2.5, ok: true, unit: ~)\n"
+
+struct Reading:
+    f64 value
+    bool ok
+    ~ unit
+
+fn main() i32:
+    println("{Reading(2.5, true, ~)}")
+    return 0

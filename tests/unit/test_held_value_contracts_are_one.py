@@ -1,4 +1,7 @@
-"""One equality and one order for a held value: `backend/types/contracts.py`.
+"""One equality, one order and one string form for a held value.
+
+`backend/types/contracts.py` holds the equality and the order, and
+`backend/types/display.py` the string form (`Display`).
 
 `==` on a struct, `contains`, the HashMap probe and a field of a derived equality all
 compare through `emit_value_eq`; the order operators and `compare` through
@@ -20,6 +23,8 @@ RETIRED = {
     "_emit_elementwise_equality",
 }
 SEAMS = {"emit_value_eq", "emit_value_compare"}
+DISPLAY_HOME = ROOT / "backend" / "types" / "display.py"
+DISPLAY_SEAMS = {"emit_value_to_str", "emit_value_fmt"}
 
 
 def _defined(path: Path) -> set[str]:
@@ -41,3 +46,10 @@ def test_the_seams_are_defined_once():
 
 def test_the_control_finds_the_seams():
     assert SEAMS <= _defined(HOME)
+
+
+def test_the_display_seams_are_defined_once():
+    homes = [p.relative_to(ROOT) for p in sorted(ROOT.rglob("*.py"))
+             if _defined(p) & DISPLAY_SEAMS]
+    assert homes == [DISPLAY_HOME.relative_to(ROOT)]
+    assert DISPLAY_SEAMS <= _defined(DISPLAY_HOME)

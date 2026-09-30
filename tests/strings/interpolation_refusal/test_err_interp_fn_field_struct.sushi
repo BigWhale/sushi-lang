@@ -1,0 +1,16 @@
+# A struct that holds a function value has no derived string form, and the diagnostic
+# says which field stops it.
+# EXPECT_ERROR_CODE: CE2035
+# EXPECT_STDERR_CONTAINS: no derived Display: field 'f' -> a function value
+
+struct Handler:
+    i32 id
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let Handler h = Handler(1, twice)
+    println("{h}")
+    return 0

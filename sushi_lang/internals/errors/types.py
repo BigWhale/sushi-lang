@@ -149,7 +149,7 @@ _add(ErrorMessage("CE2034", Severity.ERROR,
 
 _add(ErrorMessage("CE2035", Severity.ERROR,
     "cannot interpolate expression of type '{type}' into string",
-    Category.TYPE, "String interpolation only supports: integers, floats, booleans, and strings."))
+    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field. A `Maybe`, a `Result` and a bare array are not printed: handle the missing value or the error first, or print the elements."))
 
 _add(ErrorMessage("CE2036", Severity.ERROR,
     "Ok() requires a value. For blank return type use Ok(~)",
@@ -447,3 +447,7 @@ _add(ErrorMessage("CE2114", Severity.ERROR,
 _add(ErrorMessage("CE2112", Severity.ERROR,
     "cannot infer the type of '{constructor}': nothing gives {params}",
     Category.TYPE, "A generic enum constructor takes its instance from the position that holds it: a `let`, a `return`, a parameter, a field, a payload. A position with no declared type -- a match scrutinee, a method receiver, a `??` operand, a foreach iterable, an interpolation hole, an expression statement, a generic argument -- gives it nothing, so the arguments give the type: `Maybe.Some(1)` is `Maybe@(i32)` and `Slot.Full(7)` is `Slot@(i32)`. A type parameter that no argument gives has no source: the error type of `Result.Ok(1)`, the Ok type of `Result.Err(e)`, the type of `Maybe.None()`. There is no default, and a missing error type is not `StdError` (the rule of Rust E0282 and of Swift). Declare the type first, `let Maybe@(i32) m = Maybe.None()`, then use `m`. Until #1005 the typecheck pass accepted such a constructor with no stamp, and the backend stopped with an internal error (CE0113, CE0055, CE0124 or CE0015)."))
+
+_add(ErrorMessage("CE2115", Severity.ERROR,
+    "cannot print a value of type '{type}'",
+    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)` -- and an array has no string form of its own at the top level: print its elements, or hold it in a struct. A type that holds something with no string form has none, and a note names the field. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))

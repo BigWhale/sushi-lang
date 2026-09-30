@@ -46,7 +46,7 @@ def emit_value_eq(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value, ty: Type) ->
     """The i1 answer to "does `a` equal `b`", two loaded values of `ty`."""
     override = contract_override(codegen, ty, EQ)
     if override is not None:
-        return codegen.utils.as_i1(_call_override(codegen, override, [a, b]))
+        return codegen.utils.as_i1(call_override(codegen, override, [a, b]))
     if isinstance(ty, BuiltinType):
         return _primitive_eq(codegen, a, b, ty)
     return codegen.builder.call(_contract_func(codegen, ty, EQ), [a, b])
@@ -57,7 +57,7 @@ def emit_value_compare(codegen: 'LLVMCodegen', a: ir.Value, b: ir.Value,
     """The i32 order of `a` against `b`: negative, zero or positive."""
     override = contract_override(codegen, ty, ORD)
     if override is not None:
-        return _call_override(codegen, override, [a, b])
+        return call_override(codegen, override, [a, b])
     if isinstance(ty, BuiltinType):
         return _primitive_compare(codegen, a, b, ty)
     return codegen.builder.call(_contract_func(codegen, ty, ORD), [a, b])
@@ -81,7 +81,7 @@ def contract_override(codegen: 'LLVMCodegen', ty: Type, contract: str) -> Option
     return llvm_fn
 
 
-def _call_override(codegen: 'LLVMCodegen', fn: ir.Function, values: list) -> ir.Value:
+def call_override(codegen: 'LLVMCodegen', fn: ir.Function, values: list) -> ir.Value:
     """Call an implementation, spilling a value whose parameter takes an address."""
     builder = codegen.builder
     args = []

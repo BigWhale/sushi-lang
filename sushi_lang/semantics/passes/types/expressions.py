@@ -359,14 +359,15 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
     er.emit(validator.reporter, er.ERR.CE0112, expr.right.loc)
 
 
-def comparison_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
+def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
                         contract: str) -> 'tuple[bool, Optional[str]]':
-    """Can two values of `ty` meet the operators of `contract` (`Eq` or `Ord`)?
+    """May a value of `ty` meet the positions of `contract` at the top level?
 
-    THE rule, in one place: the operators, the array search methods (`contains`,
-    `index_of`) and the method call all ask it, so they cannot drift apart (CE2100
-    cites CE2514 for a reason). A primitive keeps its closed set; a struct or an enum
-    asks the derived contract, with the compilation's override.
+    `Eq` and `Ord` are the operators, the array search methods (`contains`, `index_of`)
+    and the method call (CE2100 cites CE2514 for a reason); `Display` is an
+    interpolation hole and `print`/`println`. THE rule, in one place, so the positions
+    cannot drift apart: a primitive keeps its closed set, and a struct or an enum asks
+    the derived contract, with the compilation's override.
     """
     from sushi_lang.semantics.generics.contracts import operand_contract, override_of
     return operand_contract(ty, contract,
@@ -376,7 +377,7 @@ def comparison_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
 def has_equality(validator: 'TypeValidator', ty: 'Type') -> bool:
     """Can two values of `ty` meet `==`?"""
     from sushi_lang.semantics.generics.contracts import EQ
-    return comparison_contract(validator, ty, EQ)[0]
+    return top_level_contract(validator, ty, EQ)[0]
 
 
 def _comparison_escape(ty: 'Type') -> Optional[str]:
@@ -419,7 +420,7 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD
     contract = EQ if expr.op in _EQUALITY_OPS else ORD
-    permitted, reason = comparison_contract(validator, left_type, contract)
+    permitted, reason = top_level_contract(validator, left_type, contract)
     if permitted:
         operand = deref_type(left_type)
         if not isinstance(operand, BuiltinType):

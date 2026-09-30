@@ -551,7 +551,7 @@ def _answers_contract(receiver_type, method_name, derived_methods):
     from sushi_lang.semantics.generics.contracts import (
         DISPLAY, METHOD_CONTRACT, operand_contract, override_of)
     contract = METHOD_CONTRACT.get(method_name)
-    if contract is None or contract == DISPLAY:
+    if contract is None:
         return False
     if isinstance(receiver_type, BuiltinType):
         return contract != DISPLAY and receiver_type != BuiltinType.BLANK

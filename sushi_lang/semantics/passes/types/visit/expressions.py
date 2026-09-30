@@ -385,12 +385,26 @@ class ExpressionValidator(RecursiveVisitor):
         The check is here and not in the inference, because the inference runs more than
         once over one expression and reported one fault once for each run.
         """
+        from sushi_lang.semantics.generics.contracts import DISPLAY
+        from sushi_lang.semantics.passes.types.expressions import top_level_contract
+        from sushi_lang.semantics.typesys import deref_type
+        stamps = []
         for part in node.parts:
+            stamps.append(None)
             if isinstance(part, str):
                 continue
             self.visit(part)
             part_type = self.type_validator.infer_expression_type(part)
-            if part_type is not None and not is_string_convertible(part_type):
-                er.emit(self.type_validator.reporter, er.ERR.CE2035, part.loc,
-                        type=display_type(part_type))
+            if part_type is None or is_string_convertible(part_type):
+                continue
+            printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY)
+            if printable:
+                stamps[-1] = deref_type(part_type)
+                continue
+            report = er.emit_with(self.type_validator.reporter, er.ERR.CE2035, part.loc,
+                                  type=display_type(part_type))
+            if reason is not None:
+                report = report.note(f"no derived Display: {reason}")
+            report.emit()
+        node.display_types = stamps if any(stamps) else None
 
