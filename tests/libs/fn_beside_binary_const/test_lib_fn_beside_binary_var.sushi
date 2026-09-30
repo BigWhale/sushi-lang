@@ -1,0 +1,14 @@
+# A consumer function beside a binary library's public unit variable of the
+# same name. Each needs a symbol of its own.
+# BUILD_LIB_BINARY: vlib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "77\n"
+
+use <lib/vlib>
+
+fn COUNTER() i32:
+    return 77
+
+fn main() i32:
+    println("{COUNTER()}")
+    return 0

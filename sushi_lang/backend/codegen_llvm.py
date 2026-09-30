@@ -647,13 +647,17 @@ class LLVMCodegen:
         if const_value is None:
             return  # Skip non-constant expressions
 
+        # A library constant's copy takes the symbol of the unit that declared it, so
+        # it never takes the name of a function in the unit that holds the copy (#1101).
+        symbol_unit = const.home_unit or unit_name
         initializer = self._materialize_constant(
-            const_value, mangle_unit_symbol(unit_name, f".str_data.{const.name}"))
+            const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"))
         if initializer is None:
             return  # Skip unsupported types
 
         self._register_global_constant(
-            const.name, self.types.ll_type(const.ty), initializer, unit_name)
+            const.name, self.types.ll_type(const.ty), initializer, unit_name,
+            symbol=mangle_unit_symbol(symbol_unit, const.name))
 
     def _evaluate_constant_expression(self, expr, expected_type=None,
                                       unit_name=None) -> Optional["ConstantValue"]:

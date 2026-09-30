@@ -1,0 +1,4 @@
+public const i32 LIMIT = 5
+
+public fn tally() i32:
+    return LIMIT
