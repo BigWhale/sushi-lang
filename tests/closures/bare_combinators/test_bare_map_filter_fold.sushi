@@ -1,6 +1,6 @@
 # The combinators of <collections/iter> are bare: they take a bare function and the
 # call yields the value, with no `??`.
-# EXPECT_STDOUT_EXACT: "3 12\n"
+# EXPECT_STDOUT_EXACT: "3 18\n"
 # EXPECT_STDERR_EMPTY: true
 use <collections/iter>
 

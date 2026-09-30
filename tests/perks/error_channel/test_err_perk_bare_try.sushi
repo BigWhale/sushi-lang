@@ -7,12 +7,12 @@ perk Greet:
 struct Robot:
     i32 head_count
 
-fn answer() i32:
-    return 42
+fn answer() i32 | StdError:
+    return Result.Ok(42)
 
 extend Robot with Greet:
     fn hello() i32:
-        return answer()
+        return answer()??
 
 fn main() i32:
     let Robot marvin = Robot(1)

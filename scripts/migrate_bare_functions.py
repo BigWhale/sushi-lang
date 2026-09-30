@@ -23,7 +23,6 @@ The script is deleted when the migration is complete.
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -38,6 +37,25 @@ sys.path.insert(0, str(ROOT))
 from sushi_lang.internals.parser import build_parser, parse_hole  # noqa: E402
 
 HELPERS = ROOT / "tests" / "libs" / "helpers"
+STDLIB_SOURCES = ROOT / "sushi_lang" / "sushi_stdlib" / "src_sushi"
+
+# The corpus being rewritten. In the stdlib corpus a `use <m>` is a unit of the corpus,
+# and a public function keeps its channel unless it is named here (rule 11: a public
+# function keeps a channel when there is any doubt).
+CORPORA = {
+    "tests": "tests/**/*.sushi",
+    "stdlib": "sushi_lang/sushi_stdlib/src_sushi/**/*.sushi",
+    "toolchain": "toolchain/src/**/*.sushi",
+    "docs": "docs/**/*.sushi",
+    "other": "benchmark/**/*.sushi",
+}
+PUBLIC_BARE = {"adler32", "join", "basename", "map", "filter", "fold", "compose"}
+# Private stdlib helpers that write `| E` and whose documentation says they do not fail.
+# They become bare when the analysis agrees, and lose the `| E`.
+EXPLICIT_BARE = {"signed", "fixed_lit", "fixed_dist", "put_code", "hash3", "match_len",
+                 "deflate_fixed", "header_flg", "le_uint", "value_kind", "type_words",
+                 "record_fault", "is_required", "value_fault"}
+MODE = {"corpus": "tests"}
 
 # Fixtures whose subject is CW2511 or a `??` in main. They are rewritten by hand.
 CW2511_FIXTURES = {
@@ -127,6 +145,11 @@ class Function(Callable):
     def implicit(self) -> bool:
         return (self.kind == "fn" and self.err is None and self.ret is not None
                 and not returns_result(self.ret))
+
+    @property
+    def drops_its_channel(self) -> bool:
+        return (MODE["corpus"] == "stdlib" and not self.public and self.kind == "fn"
+                and self.err is not None and self.name in EXPLICIT_BARE)
 
 
 def returns_result(ret: Tree) -> bool:
@@ -229,6 +252,10 @@ def read_imports(unit: Unit) -> None:
             module = "/".join(str(t) for t in path_node.children)
             unit.stdlib.add(module)
             resolved = module
+            if MODE["corpus"] == "stdlib":
+                source = STDLIB_SOURCES / f"{module}.sushi"
+                if source.exists():
+                    resolved = source.resolve()
         elif target.data == "lib_import":
             path_node = next(trees(target))
             name = str(path_node.children[-1])
@@ -605,7 +632,8 @@ def decide(corpus: Corpus) -> set[Function]:
     all_calls = [c for u in units for c in u.calls]
     all_values = [v for u in units for v in u.value_uses]
     bare = {f for u in units for f in u.functions.values()
-            if f.implicit and u.rel not in CW2511_FIXTURES}
+            if (f.implicit or f.drops_its_channel) and u.rel not in CW2511_FIXTURES
+            and not (MODE["corpus"] == "stdlib" and f.public and f.name not in PUBLIC_BARE)}
     for _ in range(100):
         changed = False
         for call in all_calls:
@@ -630,7 +658,7 @@ def decide(corpus: Corpus) -> set[Function]:
             for call in u.calls:
                 if isinstance(call.target, tuple) and call.followup in ("method", "value"):
                     reason = "a function value's Result is used"
-            for f, where in u.value_uses:
+            for f, _where in u.value_uses:
                 if f not in bare and (f.err is None or str(f.err.children[0]) == "StdError"):
                     reason = f"{f.name} is a function value that can fail"
             if reason:
@@ -748,6 +776,9 @@ def rewrite(corpus: Corpus, u: Unit, bare: set[Function]) -> Optional[str]:
             continue
         if f in bare:
             rewrite_returns(edits, u, f)
+            if f.err is not None:
+                assert f.ret is not None
+                edits.add(end_of(f.ret), end_of(f.err), "")
         elif f.implicit:
             assert f.ret is not None
             insert_std_error(edits, f.ret)
@@ -791,8 +822,12 @@ def rewrite_main(edits: Edits, corpus: Corpus, u: Unit, main: Function, bare: se
 
 
 def tracked_fixtures() -> list[Path]:
-    out = subprocess.run(["git", "ls-files", "tests/**/*.sushi"], cwd=ROOT,
-                         capture_output=True, text=True, check=True).stdout.split()
+    root = CORPORA[MODE["corpus"]].split("**")[0]
+    out = [p for p in subprocess.run(["git", "ls-files", root], cwd=ROOT, capture_output=True,
+                                     text=True, check=True).stdout.split()
+           if p.endswith(".sushi")]
+    if MODE["corpus"] == "other":
+        out.append("editor-support/SYNTAX_SHOWCASE.sushi")
     return [(ROOT / p).resolve() for p in out if not p.startswith("tests/unit/")]
 
 
@@ -801,7 +836,9 @@ def main() -> int:
     ap.add_argument("--write", action="store_true", help="write the files (default: dry run)")
     ap.add_argument("--report", type=Path, help="write the review report here")
     ap.add_argument("--only", help="rewrite only paths that contain this text")
+    ap.add_argument("--corpus", choices=sorted(CORPORA), default="tests")
     args = ap.parse_args()
+    MODE["corpus"] = args.corpus
 
     units: dict[Path, Unit] = {}
     for p in tracked_fixtures():

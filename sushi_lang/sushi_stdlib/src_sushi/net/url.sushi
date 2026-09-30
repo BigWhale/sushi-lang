@@ -94,7 +94,7 @@ public fn parse_url(string text) Url | UrlError:
     # .realise() rather than ??: these helpers answer StdError while this
     # function answers UrlError, and a propagation matches error types
     # exactly. None of them can fail.
-    if (not is_scheme(raw_scheme).realise(false)):
+    if (not is_scheme(raw_scheme)):
         return Result.Err(UrlError.BadScheme)
     let string scheme = raw_scheme.lower()
 
@@ -102,10 +102,10 @@ public fn parse_url(string text) Url | UrlError:
 
     # The fragment and then the query come off the tail, in that order: a `#`
     # ends the query, and a `?` inside a fragment is part of the fragment.
-    let string fragment = after_first(rest, "#").realise("")
-    let string without_fragment = before_first(rest, "#").realise("")
-    let string query = after_first(without_fragment, "?").realise("")
-    let string body = before_first(without_fragment, "?").realise("")
+    let string fragment = after_first(rest, "#")
+    let string without_fragment = before_first(rest, "#")
+    let string query = after_first(without_fragment, "?")
+    let string body = before_first(without_fragment, "?")
 
     if (not body.starts_with("//")):
         # No authority: an opaque or rooted path, kept exactly as written.
@@ -121,8 +121,8 @@ public fn parse_url(string text) Url | UrlError:
         authority := authority_and_path.s(0, slash)
         path := authority_and_path.s(slash, authority_and_path.len())
 
-    let string userinfo = before_last(authority, "@").realise("")
-    let string hostport = after_last(authority, "@").realise("")
+    let string userinfo = before_last(authority, "@")
+    let string hostport = after_last(authority, "@")
 
     let string host = ""
     let i32 port = 0
@@ -159,7 +159,7 @@ The known schemes are http 80, https 443, ws 80, wss 443, ftp 21 and ssh 22.
 extend Url port_or_default() Maybe@(i32):
     if (self.port != 0):
         return Maybe.Some(self.port)
-    return default_port(self.scheme).realise(Maybe.None())
+    return default_port(self.scheme)
 
 ##:
 Whether the host was written as a bracketed IPv6 literal.
@@ -192,7 +192,7 @@ extend Url text() string:
         pieces.push("[{self.host}]")
     else:
         pieces.push("{self.host}")
-    if (self.port != 0 and self.port != default_port(self.scheme).realise(Maybe.None()).realise(0)):
+    if (self.port != 0 and self.port != default_port(self.scheme).realise(0)):
         pieces.push(":{self.port}")
     pieces.push("{self.path}")
     if (self.query.len() > 0):
@@ -209,14 +209,14 @@ The default port of a scheme.
 :##
 fn default_port(string scheme) Maybe@(i32):
     if (scheme == "http" or scheme == "ws"):
-        return Result.Ok(Maybe.Some(80))
+        return Maybe.Some(80)
     if (scheme == "https" or scheme == "wss"):
-        return Result.Ok(Maybe.Some(443))
+        return Maybe.Some(443)
     if (scheme == "ftp"):
-        return Result.Ok(Maybe.Some(21))
+        return Maybe.Some(21)
     if (scheme == "ssh"):
-        return Result.Ok(Maybe.Some(22))
-    return Result.Ok(Maybe.None())
+        return Maybe.Some(22)
+    return Maybe.None()
 
 ##:
 Whether a text is a scheme.
@@ -228,18 +228,18 @@ RFC 3986 wants a letter first, then letters, digits, `+`, `-` and `.`.
 :##
 fn is_scheme(string text) bool:
     if (text.len() == 0):
-        return Result.Ok(false)
+        return false
     let string first = text.char_at(0).lower()
     if (first < "a" or first > "z"):
-        return Result.Ok(false)
+        return false
     foreach(i in 1..text.len()):
         let string c = text.char_at(i).lower()
         let bool letter = c >= "a" and c <= "z"
         let bool digit = c >= "0" and c <= "9"
         let bool mark = c == "+" or c == "-" or c == "."
         if (not (letter or digit or mark)):
-            return Result.Ok(false)
-    return Result.Ok(true)
+            return false
+    return true
 
 ##:
 Reads a port: digits only, and 1 to 65535.
@@ -272,8 +272,8 @@ fn before_first(string text, string mark) string:
     if (at < 0):
         # The parameter is a borrow, so handing it back is CE2411: the caller
         # keeps it. A copy is what the caller is being given.
-        return Result.Ok(text.clone())
-    return Result.Ok(text.s(0, at))
+        return text.clone()
+    return text.s(0, at)
 
 ##:
 The text after the first `mark`, or empty when there is none.
@@ -285,8 +285,8 @@ The text after the first `mark`, or empty when there is none.
 fn after_first(string text, string mark) string:
     let i32 at = text.find(mark).realise(-1)
     if (at < 0):
-        return Result.Ok("")
-    return Result.Ok(text.s(at + mark.len(), text.len()))
+        return ""
+    return text.s(at + mark.len(), text.len())
 
 ##:
 The text before the last `mark`, or empty when there is none.
@@ -300,8 +300,8 @@ The LAST one, because a userinfo may itself hold an `@`.
 fn before_last(string text, string mark) string:
     let i32 at = text.find_last(mark).realise(-1)
     if (at < 0):
-        return Result.Ok("")
-    return Result.Ok(text.s(0, at))
+        return ""
+    return text.s(0, at)
 
 ##:
 The text after the last `mark`, or the whole text when there is none.
@@ -313,5 +313,5 @@ The text after the last `mark`, or the whole text when there is none.
 fn after_last(string text, string mark) string:
     let i32 at = text.find_last(mark).realise(-1)
     if (at < 0):
-        return Result.Ok(text.clone())
-    return Result.Ok(text.s(at + mark.len(), text.len()))
+        return text.clone()
+    return text.s(at + mark.len(), text.len())
