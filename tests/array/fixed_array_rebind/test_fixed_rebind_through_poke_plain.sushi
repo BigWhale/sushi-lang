@@ -1,0 +1,13 @@
+# A rebind through a `poke` parameter of a plain fixed array stores the new value in
+# the caller's array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 5 6\n"
+
+fn reset(poke i32[3] a) ~:
+    a := [4, 5, 6]
+
+fn main() i32:
+    let i32[3] local = [1, 2, 3]
+    reset(poke local)
+    println("{local[0]} {local[1]} {local[2]}")
+    return 0
