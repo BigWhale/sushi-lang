@@ -484,6 +484,7 @@ class LibraryRegistration:
         decl = const_defs[0]
         if record.get("link_symbol") and hasattr(decl, "link_symbol"):
             decl.link_symbol = record["link_symbol"]
+        decl.home_unit = record.get("unit") or lib_name
         host_unit.ast.constants.append(decl)
 
     def _register_private_types(self, build_units: set[str]) -> None:
