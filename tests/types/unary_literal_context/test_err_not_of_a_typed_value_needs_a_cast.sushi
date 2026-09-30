@@ -6,4 +6,4 @@ fn main() i32:
     let u32 wide = 0x0F
     let u8 narrow = ~wide
     println("{narrow}")
-    return Result.Ok(0)
+    return 0

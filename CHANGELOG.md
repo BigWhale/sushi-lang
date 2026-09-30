@@ -50,6 +50,24 @@ All notable changes to Sushi Lang will be documented in this file.
 - **The `ptr` guarantee note of `CW5001`** no longer says that a returned `ptr` may be
   null.
 
+- **The error channel is opt-in for every callable.** A function, a lambda and a function
+  type have a channel only when they write `| E` (or return `Result@(T, E)`); there is no
+  implicit `Result@(T, StdError)` any more. `fn f() u32:` is bare: its body writes
+  `return x` and a call yields `u32`, so a `??` or `.realise` on the call goes. A function
+  that can fail writes `| StdError` or its own enum. In a bare body `??` is CE0131 and
+  `return Result.Ok/Err` is CE2091. `main` is bare and returns the exit code
+  (`return 0`); `| E` on it is CE0106, and CW2511 is retired. A lambda takes its channel
+  from its annotation or its expected type. A bare function is the exception, for a total
+  function; see `docs/design/error-channel.md`.
+- **The combinators of `<collections/iter>` are bare,** and so are `adler32`, `join`,
+  `basename`, `dirname`, `extension`, `normalize` and the msgpack `map_index`,
+  `map_get`, `map_get_str`, `map_get_bool` and `show`: drop the `??` or `.realise` after
+  each call.
+- **The `.slib` format changed.** Every function, helper and method record states
+  `has_channel`; the templates schema is 8 and the container version is 5. Rebuild every
+  library: an older one is refused (CE3512, CE3509).
+- **A one-argument `Result@(T)` is CE2062.** A Result names its error type.
+
 - **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
   `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`
   names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file

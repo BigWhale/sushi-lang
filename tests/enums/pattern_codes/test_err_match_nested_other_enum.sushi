@@ -15,4 +15,4 @@ fn main() i32:
     let Outer o = Outer.Wrap(Inner.One)
     match o:
         Outer.Wrap(Other.Alpha) -> println("a")
-    return Result.Ok(0)
+    return 0

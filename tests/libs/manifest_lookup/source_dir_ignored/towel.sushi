@@ -1,2 +1,2 @@
 public fn towel() i32:
-    return Result.Ok(42)
+    return 42

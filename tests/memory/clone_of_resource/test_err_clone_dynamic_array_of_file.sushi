@@ -10,4 +10,4 @@ fn main() i32:
     let File[] handles = from([f])
     let File[] copy = handles.clone()
     println("cloned")
-    return Result.Ok(0)
+    return 0

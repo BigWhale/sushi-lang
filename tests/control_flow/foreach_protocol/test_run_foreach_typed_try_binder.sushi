@@ -36,4 +36,4 @@ fn main() i32:
     match walk():
         Result.Ok(_) -> println("finished")
         Result.Err(_) -> println("stopped")
-    return Result.Ok(0)
+    return 0

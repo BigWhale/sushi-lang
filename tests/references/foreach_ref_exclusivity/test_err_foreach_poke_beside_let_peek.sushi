@@ -9,4 +9,4 @@ fn main() i32:
     foreach(poke r in a.iter()):
         r := 7
     println(w.len())
-    return Result.Ok(0)
+    return 0

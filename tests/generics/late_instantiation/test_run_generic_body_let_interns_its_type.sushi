@@ -18,8 +18,8 @@ extend Box@(T) with Show:
 
 fn outer@(T)(nom T v) string:
     let Box@(T) b = Box(v)
-    return Result.Ok("{b.show()} {b.item}")
+    return "{b.show()} {b.item}"
 
 fn main() i32:
-    println(outer(nom "towel").realise("?"))
-    return Result.Ok(0)
+    println(outer(nom "towel"))
+    return 0

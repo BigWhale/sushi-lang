@@ -7,4 +7,4 @@ fn main() i32:
     let Crate a = Crate.empty()
     let Crate b = Crate.weighing(42)
     println("{a.weight} {b.weight}")
-    return Result.Ok(0)
+    return 0

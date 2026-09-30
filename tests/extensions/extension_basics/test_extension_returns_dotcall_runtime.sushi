@@ -15,4 +15,4 @@ extend i32 twice_next() i32:
 fn main() i32:
     let i32 n = 41
     println(n.twice_next())
-    return Result.Ok(0)
+    return 0

@@ -3,4 +3,4 @@
 use <math>
 
 public fn rooted(f64 x) f64:
-    return Result.Ok(sqrt(x))
+    return sqrt(x)

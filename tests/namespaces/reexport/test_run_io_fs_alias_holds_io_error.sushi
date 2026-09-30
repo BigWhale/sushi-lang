@@ -18,4 +18,4 @@ fn main() i32:
     match origin:
         fs.SeekFrom.End -> println("end")
         _ -> println("elsewhere")
-    return Result.Ok(0)
+    return 0

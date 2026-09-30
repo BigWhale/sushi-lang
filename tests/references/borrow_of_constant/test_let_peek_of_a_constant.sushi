@@ -7,4 +7,4 @@ const i32 LIMIT = 10
 fn main() i32:
     let peek i32 seen = LIMIT
     println("{seen}")
-    return Result.Ok(0)
+    return 0

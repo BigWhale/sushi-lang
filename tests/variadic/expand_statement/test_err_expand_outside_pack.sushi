@@ -7,4 +7,4 @@ fn main() i32:
     let i32[] xs = from([1, 2])
     expand(a in xs):
         println(a)
-    return Result.Ok(0)
+    return 0

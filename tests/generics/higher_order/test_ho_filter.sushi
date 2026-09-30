@@ -4,9 +4,9 @@
 fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
     let List@(T) out = List.new()
     foreach(x in xs.iter()):
-        if (pred(x)??):
+        if (pred(x)):
             out.push(x)
-    return Result.Ok(out)
+    return out
 
 fn run() i32:
     let i32 threshold = 2
@@ -15,9 +15,9 @@ fn run() i32:
     xs.push(2)
     xs.push(3)
     xs.push(4)
-    let List@(i32) big = filter(xs, |i32 x| x > threshold)??
-    return Result.Ok(big.len())
+    let List@(i32) big = filter(xs, |i32 x| x > threshold)
+    return big.len()
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

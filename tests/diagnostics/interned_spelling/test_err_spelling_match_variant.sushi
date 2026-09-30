@@ -7,4 +7,4 @@ fn main() i32:
     match m:
         Maybe.Nope(v) -> println("{v}")
         _ -> println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

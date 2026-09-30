@@ -7,4 +7,4 @@ use "helpers/mathy"
 fn main() i32:
     let f64 root = sqrt(16.0)
     println("{root}")
-    return Result.Ok(0)
+    return 0

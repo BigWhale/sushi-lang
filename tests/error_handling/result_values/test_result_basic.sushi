@@ -5,15 +5,15 @@
 
 
 fn add(i32 a, i32 b) i32:
-  return Result.Ok(a + b)
+  return a + b
 
 fn multiply(i32 x, i32 y) i32:
-  return Result.Ok(x * y)
+  return x * y
 
 fn main() i32:
-  let i32 sum = add(5, 3).realise(0)
-  let i32 product = multiply(6, 7).realise(0)
+  let i32 sum = add(5, 3)
+  let i32 product = multiply(6, 7)
 
   # sum = 8, product = 42
   println("Sum: {sum}, Prod: {product}")
-  return Result.Ok(product)
+  return product

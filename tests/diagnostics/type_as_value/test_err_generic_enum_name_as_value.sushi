@@ -7,4 +7,4 @@ enum Wrap@(T):
 fn main() i32:
     let i32 x = Wrap
     println("{x}")
-    return Result.Ok(0)
+    return 0

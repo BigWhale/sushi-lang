@@ -13,7 +13,7 @@ fn main() i32:
             f.close()
             println("Create: Success")
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     match copy(src, dst):
         Result.Ok(_) ->
@@ -22,18 +22,18 @@ fn main() i32:
             match remove(src):
                 Result.Ok(_) -> println("Cleaned on error")
                 Result.Err(_) -> println("Cleanup failed")
-            return Result.Ok(2)
+            return 2
 
     match remove(src):
         Result.Ok(_) ->
             println("Remove src: Success")
         Result.Err(_) ->
-            return Result.Ok(3)
+            return 3
 
     match remove(dst):
         Result.Ok(_) ->
             println("Remove dst: Success")
         Result.Err(_) ->
-            return Result.Ok(4)
+            return 4
 
-    return Result.Ok(0)
+    return 0

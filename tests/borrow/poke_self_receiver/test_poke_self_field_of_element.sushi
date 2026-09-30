@@ -16,4 +16,4 @@ fn main() i32:
     let Outer[] xs = from([Outer(Counter(1), 7)])
     xs[0].inner.bump()
     println("{xs[0].inner.n} {xs[0].k}")
-    return Result.Ok(0)
+    return 0

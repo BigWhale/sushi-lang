@@ -17,4 +17,4 @@ fn main() i32:
     let Wrap@(string) w = Wrap("payload", "held {n}")
     let i32 k = w.eat()
     println("{k}")
-    return Result.Ok(0)
+    return 0

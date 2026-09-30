@@ -23,6 +23,6 @@ fn exchange() ~ | NetError:
 
 fn main() i32:
     match exchange():
-        Result.Ok(_) -> return Result.Ok(0)
+        Result.Ok(_) -> return 0
         Result.Err(_) -> println("failed")
-    return Result.Ok(1)
+    return 1

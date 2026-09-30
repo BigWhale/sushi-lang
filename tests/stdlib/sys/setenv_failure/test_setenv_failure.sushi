@@ -24,4 +24,4 @@ fn main() i32:
     match setenv("SUSHI_SETENV_FAILURE_OK", "42"):
         Result.Ok(v) -> println("valid key: Ok({v})")
         Result.Err(_) -> println("valid key: Err")
-    return Result.Ok(0)
+    return 0

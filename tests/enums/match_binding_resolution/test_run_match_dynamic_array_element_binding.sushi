@@ -16,4 +16,4 @@ fn main() i32:
     match arr[1]:
         Maybe.Some(x) -> println("got {x}")
         Maybe.None() -> println("none")
-    return Result.Ok(0)
+    return 0

@@ -1,7 +1,7 @@
 # The `??` guard walks the whole body, so a `??` nested under control flow is
 # found too (#398).
 # EXPECT_ERROR_CODE: CE0131
-fn tag(i32 n) i32:
+fn tag(i32 n) i32 | StdError:
     return Result.Ok(n)
 
 extend i32 summed() i32:
@@ -13,4 +13,4 @@ extend i32 summed() i32:
 
 fn main() i32:
     println("{8.summed()}")
-    return Result.Ok(0)
+    return 0

@@ -9,6 +9,6 @@ use <lib/const_lib>
 fn main() i32:
     let i32 limit = LIMIT
     let i32 step = STEPS[1]
-    let i32 sum = scratch_plus(100).realise(0)
+    let i32 sum = scratch_plus(100)
     println("{limit} {TAG} {step} {sum}")
-    return Result.Ok(0)
+    return 0

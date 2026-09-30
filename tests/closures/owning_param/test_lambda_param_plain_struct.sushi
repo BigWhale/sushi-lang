@@ -8,5 +8,5 @@ struct Point:
 
 fn main() i32:
     let fn(Point) -> i32 f = |Point p| p.x + p.y
-    println("{f(Point(3, 4)).realise(0)}")
-    return Result.Ok(0)
+    println("{f(Point(3, 4))}")
+    return 0

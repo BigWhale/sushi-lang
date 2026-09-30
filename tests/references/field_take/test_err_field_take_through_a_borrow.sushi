@@ -8,9 +8,9 @@ struct Sink:
     File out
     i32 tag
 
-fn steal(peek Sink s) File:
+fn steal(peek Sink s) File | StdError:
     return nom s.out
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

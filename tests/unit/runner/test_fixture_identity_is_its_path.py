@@ -39,7 +39,7 @@ PRINTER = (
     "\n"
     "fn main() i32:\n"
     '    println("{word}")\n'
-    "    return Result.Ok(0)\n"
+    "    return 0\n"
 )
 
 

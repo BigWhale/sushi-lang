@@ -97,7 +97,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to open file")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **With error propagation:**
@@ -118,7 +118,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to read config")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## File Methods
@@ -188,7 +188,7 @@ fn main() i32:
     match contents("data.txt"):
         Result.Ok(text) -> println("Content: {text}")
         Result.Err(_) -> println("Failed to read file")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Processing file content:**
@@ -212,7 +212,7 @@ fn main() i32:
     match report("numbers.txt"):
         Result.Ok(_) -> println("read")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### readln
@@ -297,7 +297,7 @@ fn main() i32:
     match write_report("report.txt", 42):
         Result.Ok(_) -> println("written")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Appending:** the mode is the only difference. `FileMode.Append()` puts every write at
@@ -315,7 +315,7 @@ fn main() i32:
     match log_line("Mostly Harmless"):
         Result.Ok(_) -> println("logged")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### flush
@@ -396,7 +396,7 @@ fn main() i32:
     match magic("archive.bin"):
         Result.Ok(m) -> println("starts with {m}")
         Result.Err(_) -> println("no archive")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### share
@@ -426,7 +426,7 @@ fn main() i32:
     match stdout.share():
         Result.Ok(nom out) -> out.writeln("Mostly Harmless")
         Result.Err(_) -> println("no second handle")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Error Handling
@@ -472,7 +472,7 @@ fn main() i32:
         Result.Err(IoError.NotFound) -> println("no such file")
         Result.Err(IoError.Os(code)) -> println("errno {code}")
         Result.Err(_) -> println("could not read it")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### FileError
@@ -506,7 +506,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Other error")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 #### Nested error handling
@@ -531,7 +531,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to copy")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 #### Using error propagation
@@ -557,7 +557,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Copy failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## File Utility Functions
@@ -587,7 +587,7 @@ fn main() i32:
         println("{path} is something else")
     else:
         println("{path} is not there")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### file_size
@@ -606,7 +606,7 @@ fn main() i32:
         Result.Ok(n) -> println("{n} bytes")
         Result.Err(FileError.NotFound) -> println("no such file")
         Result.Err(_) -> println("cannot read the size")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### remove
@@ -637,7 +637,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to delete file")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Important:** Only works on files, not directories. Use `rmdir()` for directories.
@@ -671,7 +671,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to rename")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Note:** Atomically replaces destination if it exists.
@@ -694,7 +694,7 @@ fn main() i32:
         Result.Ok(t) -> println("last built at {t}")
         Result.Err(_) -> println("never built")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Note:** ctime is the inode status-change time, not the creation time. A `chmod` moves it; a content write moves both.
@@ -717,7 +717,7 @@ fn main() i32:
             println("permissions: {m & 0o777}")
         Result.Err(_) -> println("no such file")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Note:** mask with `0o777` for the permission bits, with `0o170000` for the file-type bits. `is_file`/`is_dir`/`is_symlink` answer the type question directly.
@@ -744,7 +744,7 @@ fn main() i32:
                 println("the real thing")
         Result.Err(_) -> println("no such path")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### read_dir
@@ -773,7 +773,7 @@ fn main() i32:
                 println(name)
         Result.Err(_) -> println("Cannot list /tmp")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Notes:**
@@ -809,7 +809,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to create directory")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Common permissions:**
@@ -846,7 +846,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to remove directory")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Important:** Directory must be empty. Use `remove()` to delete files inside first.
@@ -880,7 +880,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Failed to copy file")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Note:** Overwrites destination if it exists. Uses efficient 4KB buffering internally.
@@ -890,7 +890,7 @@ fn main() i32:
 ```sushi
 use <io/files>
 
-fn backup_and_cleanup(string path) ~:
+fn backup_and_cleanup(string path) ~ | StdError:
     let string backup = "{path}.bak"
 
     match copy(path, backup):
@@ -915,7 +915,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Operation failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## The descriptor layer
@@ -1037,7 +1037,7 @@ fn main() i32:
         Result.Ok(content) -> println(content)
         Result.Err(_) -> println("could not read it")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Writing entire file
@@ -1056,7 +1056,7 @@ fn main() i32:
         Result.Ok(_) -> println("File written")
         Result.Err(_) -> println("could not write it")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Processing CSV file
@@ -1087,7 +1087,7 @@ fn main() i32:
         Result.Ok(_) -> println("read")
         Result.Err(_) -> println("failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Creating log file
@@ -1112,7 +1112,7 @@ fn main() i32:
         Result.Ok(_) -> println("logged")
         Result.Err(_) -> println("could not log")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Checking file existence
@@ -1131,7 +1131,7 @@ fn main() i32:
     else:
         println("Config file not found")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Platform Behavior
@@ -1152,7 +1152,7 @@ fn main() i32:
         Result.Ok(text) -> println(text)
         Result.Err(_) -> println("no input")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Line Endings
@@ -1193,7 +1193,7 @@ fn main() i32:
         Result.Ok(_) -> println("read")
         Result.Err(_) -> println("failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Memory Usage
@@ -1241,7 +1241,7 @@ fn main() i32:
         Result.Err(IoError.InvalidInput) -> println("Invalid path")
         Result.Err(_) -> println("could not read it")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### File Permissions
@@ -1263,7 +1263,7 @@ fn main() i32:
         Result.Ok(_) -> println("written")
         Result.Err(_) -> println("Failed to open file")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 Use `FileMode.Append()` to preserve existing content.

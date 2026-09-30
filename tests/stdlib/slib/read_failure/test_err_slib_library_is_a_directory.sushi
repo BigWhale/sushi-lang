@@ -6,4 +6,4 @@
 use <lib/tests/stdlib/slib/read_failure/broken/not_a_file>
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

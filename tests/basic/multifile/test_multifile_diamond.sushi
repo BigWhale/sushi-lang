@@ -7,8 +7,8 @@ use "helpers/bar_module"
 use "helpers/math_utils"
 
 fn main() i32:
-    let i32 result1 = foo_compute(10).realise(0)
-    let i32 result2 = bar_compute(5).realise(0)
+    let i32 result1 = foo_compute(10)
+    let i32 result2 = bar_compute(5)
     let i32 direct = add(result1, result2).realise(0)
     let i32 expected = 177
-    return Result.Ok(direct - expected)
+    return direct - expected

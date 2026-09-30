@@ -18,20 +18,20 @@
 # EXPECT_NO_LEAKS: true
 
 fn borrowed_hash(peek i32 x) u64:
-    return Result.Ok(x.hash())
+    return x.hash()
 
 fn borrowed_to_str(peek i32 x) string:
-    return Result.Ok(x.to_str())
+    return x.to_str()
 
 fn add_borrowed(peek i32 a, peek i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 fn main() i32:
     let i32 n = 42
     let i32 m = 3
 
-    let string shown = borrowed_to_str(peek n).realise("?")
-    println("hash_equal={borrowed_hash(peek n).realise(0 as u64) == n.hash()}")
+    let string shown = borrowed_to_str(peek n)
+    println("hash_equal={borrowed_hash(peek n) == n.hash()}")
     println("str={shown}")
-    println("sum={add_borrowed(peek n, peek m).realise(-1)}")
-    return Result.Ok(0)
+    println("sum={add_borrowed(peek n, peek m)}")
+    return 0

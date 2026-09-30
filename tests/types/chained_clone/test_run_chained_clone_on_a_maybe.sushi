@@ -15,4 +15,4 @@ fn main() i32:
     println("v={v}")
     let Cell kept = a.get(0).realise(Cell("-"))
     println("kept={kept.tag}")
-    return Result.Ok(0)
+    return 0

@@ -19,10 +19,10 @@ fn main() i32:
     match query():
         Result.Ok(_) ->
             println("FAIL: Should have propagated error")
-            return Result.Ok(1)
+            return 1
         Result.Err(DbError.ConnectionFailed) ->
             println("PASS: Error propagation preserves error type")
-            return Result.Ok(0)
+            return 0
         Result.Err(_) ->
             println("FAIL: Wrong error type")
-            return Result.Ok(1)
+            return 1

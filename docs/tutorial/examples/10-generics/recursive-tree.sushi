@@ -4,11 +4,11 @@ enum Tree@(T):
 
 fn count_leaves@(T)(Tree@(T) tree) i32:
     match tree:
-        Tree.Leaf(_) -> return Result.Ok(1)
+        Tree.Leaf(_) -> return 1
         Tree.Node(left, right) ->
-            let i32 l = count_leaves(left.get())??
-            let i32 r = count_leaves(right.get())??
-            return Result.Ok(l + r)
+            let i32 l = count_leaves(left.get())
+            let i32 r = count_leaves(right.get())
+            return l + r
 
 fn main() i32:
     let Tree@(i32) a = Tree.Leaf(1)
@@ -17,5 +17,5 @@ fn main() i32:
     let Tree@(i32) pair = Tree.Node(Own.alloc(a), Own.alloc(b))
     let Tree@(i32) root = Tree.Node(Own.alloc(pair), Own.alloc(c))
 
-    println("The tree has {count_leaves(root).realise(0)} leaves")
-    return Result.Ok(0)
+    println("The tree has {count_leaves(root)} leaves")
+    return 0

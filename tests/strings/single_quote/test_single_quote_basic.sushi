@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Single-quote string literal\n\nPASS: Single-quote equals double-quote\n\nPASS: Single-quote assignment\n\n"
 # Test basic single-quote string functionality
 
-fn test_literal() ~:
+fn test_literal() ~ | StdError:
     let string s = 'hello'
     if (s == "hello"):
         println("PASS: Single-quote string literal")
@@ -9,7 +9,7 @@ fn test_literal() ~:
         println("FAIL: Single-quote literal")
     return Result.Ok(~)
 
-fn test_equivalence() ~:
+fn test_equivalence() ~ | StdError:
     let string s1 = "world"
     let string s2 = 'world'
     if (s1 == s2):
@@ -18,7 +18,7 @@ fn test_equivalence() ~:
         println("FAIL: Quote styles not equivalent")
     return Result.Ok(~)
 
-fn test_assignment() ~:
+fn test_assignment() ~ | StdError:
     let string s1 = 'first'
     let string s3 = s1
     if (s3 == "first"):
@@ -34,4 +34,4 @@ fn main() i32:
         println("")
     if (test_assignment().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

@@ -30,4 +30,4 @@ fn main() i32:
     println(BIG)
     println("{40000 as u16}")
 
-    return Result.Ok(0)
+    return 0

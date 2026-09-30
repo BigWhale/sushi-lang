@@ -242,7 +242,7 @@ fn main() i32:
     let i64 size = buf.load_i64(ST_SIZE_OFFSET)
     println("stat: {rc}, size: {size}")
     libc.free(buf)
-    return Result.Ok(0)
+    return 0
 ```
 
 **Where the values come from.** `tests/platform_probe/probe.c` prints a whole platform
@@ -396,10 +396,8 @@ compiler currently produces a working Windows build:
   choices, and its `main()` prints `ERROR: Unsupported platform` and exits with status 1
   for anything else.
 
-Windows is a plausible future target — the codebase's platform-abstraction layer
-(`_platform/`) was clearly designed with a third platform in mind — but as of this
-writing it is aspirational only. Anyone relying on the doc's older wording ("Windows...
-partial support") should not expect any Windows-specific code path to run.
+Windows is a possible future target. The platform-abstraction layer (`_platform/`) can
+hold a third platform, but no Windows-specific code path exists.
 
 ## Adding Platform-Specific Functionality
 

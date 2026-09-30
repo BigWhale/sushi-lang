@@ -25,8 +25,8 @@ fn run() i32:
     let i64 len = libc.strlen(s)
     # `s` is read here, AFTER being passed to C. That is the whole assertion.
     println("len={len} s={s}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    let i32 rc = run()
+    return rc

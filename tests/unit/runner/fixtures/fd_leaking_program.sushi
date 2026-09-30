@@ -23,4 +23,4 @@ fn main() i32:
     if (fd < 0):
         println("open failed")
     println("fd fixture ran")
-    return Result.Ok(0)
+    return 0

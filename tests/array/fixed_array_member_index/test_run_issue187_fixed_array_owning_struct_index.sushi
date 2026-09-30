@@ -15,4 +15,4 @@ fn main() i32:
     let Box b2 = Box(data: from([9, 10, 11, 12]))
     let Box[2] a = [b1, b2]
     println("len = {a[0].data.len()}")
-    return Result.Ok(0)
+    return 0

@@ -26,4 +26,4 @@ fn main() i32:
     println("Response.Pending hash: {h3}")
 
     println("Nested enum hashes computed!")
-    return Result.Ok(0)
+    return 0

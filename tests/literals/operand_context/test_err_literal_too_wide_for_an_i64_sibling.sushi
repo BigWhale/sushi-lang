@@ -6,4 +6,4 @@ fn main() i32:
     let i64 big = 4294967301
     if (big == 18446744073709551616):
         println("never")
-    return Result.Ok(0)
+    return 0

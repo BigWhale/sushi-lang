@@ -18,25 +18,25 @@ unsafe external "C" as libc because "reading file metadata":
 
 fn file_type(ptr buf) i32:
     if (ST_MODE_BYTES == 2):
-        return Result.Ok((buf.load_u16(ST_MODE_OFFSET) as i32) & S_IFMT)
-    return Result.Ok(buf.load_i32(ST_MODE_OFFSET) & S_IFMT)
+        return (buf.load_u16(ST_MODE_OFFSET) as i32) & S_IFMT
+    return buf.load_i32(ST_MODE_OFFSET) & S_IFMT
 
 fn main() i32:
     let ptr buf = libc.calloc(1, STAT_SIZE as i64)
     let i32 r1 = libc.stat("towel.txt", buf)
-    let i32 f1 = expect("S_IFREG", file_type(buf).realise(0) as i64, S_IFREG as i64).realise(1)
-    let i32 f2 = expect("ST_SIZE_OFFSET", buf.load_i64(ST_SIZE_OFFSET), 15).realise(1)
-    let i32 f3 = expect_true("ST_MTIME_OFFSET", buf.load_i64(ST_MTIME_OFFSET) > 1000000000).realise(1)
-    let i32 f4 = expect_true("ST_CTIME_OFFSET", buf.load_i64(ST_CTIME_OFFSET) > 1000000000).realise(1)
+    let i32 f1 = expect("S_IFREG", file_type(buf) as i64, S_IFREG as i64)
+    let i32 f2 = expect("ST_SIZE_OFFSET", buf.load_i64(ST_SIZE_OFFSET), 15)
+    let i32 f3 = expect_true("ST_MTIME_OFFSET", buf.load_i64(ST_MTIME_OFFSET) > 1000000000)
+    let i32 f4 = expect_true("ST_CTIME_OFFSET", buf.load_i64(ST_CTIME_OFFSET) > 1000000000)
 
     let i32 r2 = libc.stat(".", buf)
-    let i32 f5 = expect("S_IFDIR", file_type(buf).realise(0) as i64, S_IFDIR as i64).realise(1)
+    let i32 f5 = expect("S_IFDIR", file_type(buf) as i64, S_IFDIR as i64)
 
     let i32 made = libc.symlink("towel.txt", "towel_link")
     let i32 r3 = libc.lstat("towel_link", buf)
-    let i32 f6 = expect("S_IFLNK", file_type(buf).realise(0) as i64, S_IFLNK as i64).realise(1)
+    let i32 f6 = expect("S_IFLNK", file_type(buf) as i64, S_IFLNK as i64)
     let i32 r4 = libc.stat("towel_link", buf)
-    let i32 f7 = expect_true("stat through a link", file_type(buf).realise(0) == S_IFREG and buf.load_i64(ST_SIZE_OFFSET) == 15).realise(1)
+    let i32 f7 = expect_true("stat through a link", file_type(buf) == S_IFREG and buf.load_i64(ST_SIZE_OFFSET) == 15)
     let i32 gone = libc.unlink("towel_link")
     libc.free(buf)
-    return Result.Ok(f1 + f2 + f3 + f4 + f5 + f6 + f7 + r1 + r2 + r3 + r4 + made + gone)
+    return f1 + f2 + f3 + f4 + f5 + f6 + f7 + r1 + r2 + r3 + r4 + made + gone

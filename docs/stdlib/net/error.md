@@ -58,7 +58,7 @@ fn main() i32:
         Result.Ok(_) -> println("connected")
         Result.Err(NetError.ConnectionRefused) -> println("nothing listens there")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## See also

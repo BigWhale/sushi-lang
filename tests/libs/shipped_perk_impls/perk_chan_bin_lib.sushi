@@ -1,0 +1,11 @@
+public perk Counter:
+    fn bump() i32 | StdError
+
+public struct Tally:
+    i32 n
+
+extend Tally with Counter:
+    fn bump() i32 | StdError:
+        if (self.n < 0):
+            return Result.Err(StdError.Error)
+        return Result.Ok(self.n + 1)

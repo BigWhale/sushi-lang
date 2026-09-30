@@ -142,7 +142,8 @@ class TypeSubstitutor:
                 ty,
                 param_types=tuple(self.substitute_type(p, substitution) for p in ty.param_types),
                 ok_type=self.substitute_type(ty.ok_type, substitution),
-                err_type=self.substitute_type(ty.err_type, substitution),
+                err_type=(None if ty.err_type is None
+                          else self.substitute_type(ty.err_type, substitution)),
             )
 
         return ty

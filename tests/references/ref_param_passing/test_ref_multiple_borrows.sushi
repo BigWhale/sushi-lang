@@ -5,13 +5,12 @@
 
 fn print_len(poke i32[] arr) ~:
     println(arr.len())
-    return Result.Ok(~)
 
-fn print_first(poke i32[] arr) ~:
+fn print_first(poke i32[] arr) ~ | StdError:
     println(arr.get(0)??)
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[] numbers = from([1, 2, 3, 4, 5])
 
     # First borrow
@@ -30,4 +29,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

@@ -20,4 +20,4 @@ fn main() i32:
         total := total + e.value.len()
         seen := seen + 1
     println("total {total} seen {seen}")
-    return Result.Ok(0)
+    return 0

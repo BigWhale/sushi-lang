@@ -10,6 +10,6 @@ struct Point:
     i32 x
 
 fn main() i32:
-    let Point p = boxed(nom Point(5)).realise(Point(0))
+    let Point p = boxed(nom Point(5))
     println(p.x)
-    return Result.Ok(0)
+    return 0

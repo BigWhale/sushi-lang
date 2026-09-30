@@ -10,10 +10,10 @@ struct Holder:
 
 fn consume_it(nom string owned) i32:
     println("owned: {owned}")
-    return Result.Ok(1)
+    return 1
 
 fn main() i32:
     let string s = "hello-{1}"
     let Holder h = Holder(consume_it)
-    println(h.eat(s).realise(-1))
-    return Result.Ok(0)
+    println(h.eat(s))
+    return 0

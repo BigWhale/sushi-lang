@@ -4,7 +4,7 @@
 # EXPECT_STDOUT_EXACT: "len=2\nget=c d\nrow=a b\nrow=c d\npop=c d len=1\nclone=1 a b\n"
 # EXPECT_NO_LEAKS
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let List@(string[2]) pairs = List.new()
     pairs.push(["a".clone(), "b".clone()])
     pairs.push(["c", "d"])
@@ -25,4 +25,4 @@ fn run_test() i32:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run_test().realise(1))
+    return run_test().realise(1)

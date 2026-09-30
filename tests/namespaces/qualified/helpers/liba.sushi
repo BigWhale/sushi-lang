@@ -2,4 +2,4 @@
 # `sine` means, so writing it bare is CE3012 and writing it behind an alias is
 # not (unit-namespaces.md section 6).
 public fn sine(f64 x) f64:
-    return Result.Ok(x + 1.0)
+    return x + 1.0

@@ -71,7 +71,7 @@ def test_a_snippet_is_wrapped_into_a_helper_and_a_match():
     assert generated == (
         'use "doubler"\n'
         '\n'
-        'fn doc_example_1() ~:\n'
+        'fn doc_example_1() ~ | StdError:\n'
         '    let i32 d = doubled(21)??\n'
         '    println("{d}")\n'
         '    return Result.Ok(~)\n'
@@ -79,9 +79,9 @@ def test_a_snippet_is_wrapped_into_a_helper_and_a_match():
         'fn main() i32:\n'
         '    match doc_example_1():\n'
         '        Result.Ok(_) ->\n'
-        '            return Result.Ok(0)\n'
+        '            return 0\n'
         '        Result.Err(_) ->\n'
-        '            return Result.Ok(1)\n'
+        '            return 1\n'
     )
 
 

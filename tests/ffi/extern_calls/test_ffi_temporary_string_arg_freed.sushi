@@ -12,4 +12,4 @@ fn main() i32:
     let i64 fixed = libc.strlen("answer {n} !")
     let i32 printed = libc.printf("%lld ", fixed)
     let i32 trailing = libc.printf("%s\n", "{n}{n}{n}{n}{n}{n}")
-    return Result.Ok(printed + trailing - 16)
+    return printed + trailing - 16

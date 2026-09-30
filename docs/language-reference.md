@@ -37,7 +37,7 @@ Every Sushi program must have a `main` function that returns `i32`:
 ```sushi
 fn main() i32:
     # Program entry point
-    return Result.Ok(0)
+    return 0
 ```
 
 `main` returns an integer type (`CE0106`) and takes one parameter, `string[] args`, or no
@@ -66,7 +66,7 @@ fn main() i32:
     let u8 letter = 66
     let bool a = letter.is_alpha()
     println("{a}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Without the outer parentheses the second line starts a new statement, and the parse
@@ -221,21 +221,28 @@ and use the name.
 ### Function Types
 
 A function type describes a first-class function value (a bare function pointer). The return
-type is mandatory; the optional `| E` names the error type (defaults to `StdError`).
+type is mandatory. The optional `| E` gives the function type an error channel. Without it,
+the function type is bare. The channel is part of the type, so the two forms do not convert
+(`CE2002`).
 
 ```sushi
-fn(i32) -> i32                 # takes i32, returns i32 (error type StdError)
+fn(i32) -> i32 | MathError     # takes i32, a call returns Result@(i32, MathError)
+fn(i32) -> i32                 # bare: a call returns i32
 fn(i32, string) -> bool        # two parameters
 fn() -> ~                      # no parameters, blank return
-fn(i32) -> i32 | MathError     # explicit custom error type
 ```
+
+A function with a channel that returns a function type writes the explicit form,
+`fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type
+belongs to that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare function
+that returns a function type with a channel.
 
 Reference a plain top-level function by name to get a value of that type, then store, pass, or
 call through it:
 
 ```sushi
-let fn(i32) -> i32 f = add_one     # `add_one` used as a value
-let i32 r = f(41)??                # call through it -> Result, like a direct call
+let fn(i32) -> i32 f = add_one     # `add_one` used as a value; it is bare
+let i32 r = f(41)                  # call through it, like a direct call
 ```
 
 Function types are invariant (arity, parameters, return, and error type must match exactly).
@@ -322,7 +329,7 @@ fn main() i32:
     h.items.push(9)                # reaches the payload
     h.n := 42
     println("{o.get().n} {o.get().items.len()}")   # 42 1
-    return Result.Ok(0)
+    return 0
 ```
 
 One `poke` binding of an owner at a time (**CE2403**); a `peek` beside a live `poke`, or
@@ -347,7 +354,7 @@ fn main() i32:
     # ERROR: y not in scope
     # println(y)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Functions
@@ -357,37 +364,53 @@ fn main() i32:
 ```sushi
 fn function_name(param1_type param1_name, param2_type param2_name) return_type:
     # Function body
-    return Result.Ok(value)
+    return value
 ```
 
 **Example:**
 
 ```sushi
+use <collections/strings>
+
+fn parse_age(string text) i32 | StdError:
+    if (text.is_empty()):
+        return Result.Err(StdError.Error)
+    return Result.Ok(text.len())
+
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 fn greet(string name) ~:
-    println("Hello, {name}!")
-    return Result.Ok(~)
+    println("Mostly Harmless, {name}!")
 ```
 
 ### Return Types
 
-Every function returns a `Result@(T, E)`. The declaration has three forms:
+A function has an error channel only when its signature writes one. The declaration has
+three forms:
 
-| declared return | the function returns |
+| declared return | the call returns |
 |---|---|
-| `fn f() T` | `Result@(T, StdError)` |
 | `fn f() T \| E` | `Result@(T, E)` |
 | `fn f() Result@(T, E)` | `Result@(T, E)`, not wrapped again |
+| `fn f() T` | `T`: the function is BARE |
 
 The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
-The error type `E` is an enum.
+The error type `E` is an enum. There is no default error type: `fn f() T` is bare and
+returns `T`.
+
+**A bare function is the exception.** Use it seldom: only when the function is total over
+its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join),
+and a channel would only force a dead `.realise` or `??` on every caller. Write a channel
+for everything else. A public function keeps a channel when there is any doubt, because a
+channel added later changes the signature and breaks every caller and every binary `.slib`.
+The compiler does not enforce this. The decision record is
+[The error channel is opt-in](design/error-channel.md).
 
 ```sushi
 use <math>
 
-fn halve(i32 a) i32:                        # Result@(i32, StdError)
+fn halve(i32 a) i32 | StdError:                        # Result@(i32, StdError)
     if (a % 2 != 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / 2)
@@ -400,21 +423,27 @@ fn divide(i32 a, i32 b) i32 | MathError:    # Result@(i32, MathError)
 fn main() i32:
     println(halve(8).realise(0))            # 4
     println(divide(7, 0).realise(-1))       # -1
-    return Result.Ok(0)
+    return 0
 ```
 
-A body returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a bare value:
-a bare `return value` is `CE2030`. `MathError` has its home in `<math>`, and `StdError` is
-global.
+A body with a channel returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a
+bare value: a bare `return value` is `CE2030`. A BARE body returns the value itself:
+`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`. `MathError` has its
+home in `<math>`, and `StdError` is global.
 
 The caller takes the value out of the `Result` in one of three ways: `??` returns the error
 from the calling function at once, `.realise(default)` gives the default for an error, and
 `match` reads each arm. `??` needs the same error type in the caller. It also works on a
-`Maybe@(T)`. In `main`, `??` is `CW2511`; use `match` or `.realise()` there. The full
-guide is [Error Handling](error-handling.md).
+`Maybe@(T)`. The call of a bare function returns the value, so `??` on it is `CE2507` and
+`.realise` on it is `CE2008`.
 
-The body must return on every code path, and a `~` function is no exception: it ends with
-`return Result.Ok(~)`. A body that can reach its end is `CE0107`.
+`main` is bare. It returns the exit code (`return 0`), and a `| E` on it is `CE0106`. A `??`
+in `main` is `CE0131`; use `match` or `.realise()` there. The full guide is
+[Error Handling](error-handling.md).
+
+The body must return on every code path. A `~` function with a channel ends with
+`return Result.Ok(~)`; a bare `~` function can reach its end. Any other body that can
+reach its end is `CE0107`.
 
 A statement that can never run is an error too, `CE0140`: a statement after a `return`,
 after an `if` with an `else` whose every arm returns, after a `match` whose every arm
@@ -437,31 +466,30 @@ mode is written at the declaration and at the call site alike:
 ```sushi
 fn modify(i32 x) i32:
     x := x + 1          # the callee's own copy
-    return Result.Ok(x)
+    return x
 ```
 
 **`nom` (a consume):**
 ```sushi
 fn eat(nom string s) ~:
     println(s)
-    return Result.Ok(~)  # s is freed here
+    return ~  # s is freed here
 
 fn main() i32:
     let string base = "Ford"
     let string s = "{base} Prefect"
     eat(nom s)
     # println(s)          # ERROR CE2405: s was handed over
-    return Result.Ok(0)
+    return 0
 ```
 
 **Borrowed by pointer:**
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
-    return Result.Ok(~)
 
 fn read_value(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 ```
 
 The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model.md).
@@ -481,7 +509,7 @@ fn main() i32:
     let u8 low = 0x34
     let u32 wide = 0x1200
     let u32 both = low | wide          # CE2510: u8 and u32
-    return Result.Ok(0)
+    return 0
 ```
 
 `as` makes the widths agree, and then the operation says what it means:
@@ -491,7 +519,7 @@ fn main() i32:
     let u8 low = 0x34
     let u32 wide = 0x1200
     let u32 both = (low as u32) | wide  # 0x1234
-    return Result.Ok(0)
+    return 0
 ```
 
 A shift is the exception. Its right operand is a count, not a second value: it
@@ -503,7 +531,7 @@ fn main() i32:
     let u64 value = 8
     let u8 places = 8
     let u64 shifted = value << places   # 2048
-    return Result.Ok(0)
+    return 0
 ```
 
 A count is also limited by the width of the value it shifts, because a count at or
@@ -515,7 +543,7 @@ a literal, a constant, an expression of them -- is **CE2512**:
 fn main() i32:
     let u8 high = 0x12
     let u8 shifted = high << 8          # CE2512: a u8 count runs from 0 to 7
-    return Result.Ok(0)
+    return 0
 ```
 
 Cast the value to the width the shift is meant to reach:
@@ -524,7 +552,7 @@ Cast the value to the width the shift is meant to reach:
 fn main() i32:
     let u8 high = 0x12
     let u32 reached = (high as u32) << 8    # 0x1200
-    return Result.Ok(0)
+    return 0
 ```
 
 A computed count -- a loop index, a value read from a file -- cannot be read at
@@ -536,12 +564,12 @@ other end and answers the same way.
 
 ```sushi
 fn shift(u8 value, u8 places) u8:
-    return Result.Ok(value << places)
+    return value << places
 
 fn main() i32:
-    println("{shift(0x12, 3).realise(0)}")     # 144
-    println("{shift(0x12, 8).realise(0)}")     # 0 -- every bit has left the u8
-    return Result.Ok(0)
+    println("{shift(0x12, 3)}")     # 144
+    println("{shift(0x12, 8)}")     # 0 -- every bit has left the u8
+    return 0
 ```
 
 The count is never masked. Masking is what the hardware does and what Java and Rust
@@ -572,7 +600,7 @@ fn main() i32:
     let bool flag = true
     let i32 x = 1 + flag      # CE2518: '+' takes a numeric operand, and 'bool' is not one
     println("{x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 **A divisor the compiler can read must not be zero.** A literal zero, a constant that
@@ -584,7 +612,7 @@ constant. A computed divisor is ordinary code and is left alone.
 fn main() i32:
     let i32 x = 10 / 0        # CE0112: division by zero
     println("{x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Overflow
@@ -598,7 +626,7 @@ constant and a fold of literals in a body — one expression has one meaning:
 fn main() i32:
     let u8 sum = 200 + 100    # CE2077: '+' gives 300, which is out of range for u8
     println(sum)
-    return Result.Ok(0)
+    return 0
 ```
 
 The **overflow-checked** operators are `+`, `-`, `*`, `/`, `%` and unary minus. Division
@@ -612,8 +640,8 @@ on a `u8` is 144, and `~0` on a `u32` is 4294967295.
 An `as` cast is the escape. It asks for the bit pattern, so it truncates: `300 as u8` is
 44. A wider type is the other answer.
 
-**Run time does not change.** Only an expression the compiler reads is checked, so two
-locals still wrap:
+**Run time is not checked.** Only an expression the compiler reads is checked, so two
+locals wrap:
 
 ```sushi
 fn main() i32:
@@ -621,7 +649,7 @@ fn main() i32:
     let u8 b = 100
     let u8 sum = a + b        # 44 at run time, and nothing reports it
     println(sum)
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Comparison
@@ -694,7 +722,7 @@ over a `u64` / `u32`, and `from_bits()` goes back. A float operand is **CE2004**
 fn main() i32:
     let f64 value = 1.5
     let f64 masked = value & 1.0    # CE2004: a float has no bits
-    return Result.Ok(0)
+    return 0
 ```
 
 ```sushi
@@ -703,7 +731,7 @@ fn main() i32:
     let u64 bits = value.to_bits()
     let u64 sign = (bits >> 63) & 1      # 0
     let f64 back = f64.from_bits(bits)   # 1.5
-    return Result.Ok(0)
+    return 0
 ```
 
 **Right shift behavior (matches Go/Rust):**
@@ -746,7 +774,7 @@ fn main() i32:
     let u8[] b = from([77, 111, 115, 116, 108, 121])
     let string word = string.from_bytes(nom b)
     println("{first} {word}")                 # 77 Mostly
-    return Result.Ok(0)
+    return 0
 ```
 
 An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` and
@@ -816,7 +844,7 @@ CW1001 (unused variable). A NAMED binder that the body never reads is still CW10
 fn main() i32:
     foreach(_ in 0..3):                  # three lines, no binding
         println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 The discard takes every binder form: a written type (`foreach(i32 _ in ...)`), a borrow
@@ -862,8 +890,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 A `??` binder over an item that is not a `Result` has nothing to unwrap and is
@@ -908,7 +936,7 @@ fn main() i32:
     let u8[0x4] hex = [1, 2, 3, 4]
     let u8[0b1_00] binary = [1, 2, 3, 4]
     let u8[0o4] octal = [1, 2, 3, 4]
-    return Result.Ok(0)
+    return 0
 ```
 
 It may also name an integer constant, so a size that repeats across declarations can
@@ -922,11 +950,11 @@ struct Counts:
     i32[MAX_BITS] slots
 
 fn walk(i32[MAX_BITS] counts) i32:
-    return Result.Ok(counts.len())
+    return counts.len()
 
 fn main() i32:
     let i32[MAX_BITS] counts = [1, 2, 3, 4]
-    return Result.Ok(walk(counts).realise(0))
+    return walk(counts)
 ```
 
 The constant must be declared in the **same unit**. A size is read while that unit's
@@ -941,7 +969,7 @@ not exist in Sushi.
 ```sushi
 fn main() i32:
     let i32[0] nothing = [1]        # CE2099: an array holds at least one element
-    return Result.Ok(0)
+    return 0
 ```
 
 #### A repeated element
@@ -961,7 +989,7 @@ fn main() i32:
     let i32[]   head  = from([-1; 32768])
     println(tally[9])
     println(head.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 **Where the count must be readable depends on the position, not on the element.** A
@@ -975,13 +1003,13 @@ expression**:
 
 ```sushi
 fn zeros(i32 n) i32[]:
-    return Result.Ok(from([0; n]))
+    return from([0; n])
 
 fn main() i32:
     let i32[] xs = from([10, 20, 30])
     let i32[] prev = from([-1; xs.len()])
     println("{prev.len()} {prev[0]}")       # 3 -1
-    return Result.Ok(0)
+    return 0
 ```
 
 A count the compiler CAN read and that is not a count is **CE2017** -- a zero, a
@@ -993,7 +1021,7 @@ fn main() i32:
     let i32 n = 4
     let i32[4] t = [7; n]           # CE2017: a fixed array needs a readable count
     println(t[0])
-    return Result.Ok(0)
+    return 0
 ```
 
 A count you can see that spells nothing is a typo, so `[0; 0]` stays an error. A count
@@ -1015,7 +1043,7 @@ fn main() i32:
     let string towel = "mostly harmless".upper()
     let string[3] t = [towel; 3]
     println("{t[0]} {towel}")       # both usable
-    return Result.Ok(0)
+    return 0
 ```
 
 #### A range element
@@ -1032,7 +1060,7 @@ fn main() i32:
     let i32[6] table   = [0..=5]
     let i32[]  mixed   = from([-1, 0..3, 99])   # -1 0 1 2 99
     println("{up.len()} {through.len()} {down.len()} {table[5]} {mixed.len()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
@@ -1046,7 +1074,7 @@ range that yields nothing:
 fn main() i32:
     let i32[] a = from([3..3])      # CE2019: this range yields no value
     println(a.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 A range cannot carry a repeat count. `value; count` repeats ONE value, and a range is
@@ -1082,14 +1110,14 @@ enum payload, a rebind, a struct field, and the default of a `.realise()`:
 
 ```sushi
 fn count(i32[] xs) i32:
-    return Result.Ok(xs.len())
+    return xs.len()
 
-fn mk(bool good) i32[]:
+fn mk(bool good) i32[] | StdError:
     if (not good):
         return Result.Ok(new())
     return Result.Ok(from([1, 2, 3]))
 
-let i32 none = count(new())??
+let i32 none = count(new())
 let i32[] taken = mk(false).realise(new())
 ```
 
@@ -1286,13 +1314,13 @@ fn main() i32:
             println("Other file error")
         Result.Ok(_) ->
             println("File opened")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Binding Modes
 
 A payload binding carries a MODE, and the three are the ones a parameter has. The bare
-form is the common case and is unchanged.
+form is the common case.
 
 | pattern | the binding is | write through it | rebind the name | may be given away |
 |---|---|---|---|---|
@@ -1363,18 +1391,18 @@ pattern arms never mix in one match (CE2076).
 fn tag_name(u8 t) string:
     match t:
         0xc0 ->
-            return Result.Ok("nil")
+            return "nil"
         0xc2 ->
-            return Result.Ok("false")
+            return "false"
         0xc3 ->
-            return Result.Ok("true")
+            return "true"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
     let u8 tag = 0xc0
-    println(tag_name(tag).realise("err"))
-    return Result.Ok(0)
+    println(tag_name(tag))
+    return 0
 ```
 
 ## Generics
@@ -1393,14 +1421,14 @@ enum Slot@(T):
     Full(T)
 
 fn identity@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let Pair@(i32, string) p = Pair(42, "answer")
-    let i32 a = identity(nom 7).realise(0)          # T comes from the argument
-    let i32 b = identity@(i32)(nom 8).realise(0)    # T is written at the call site
+    let i32 a = identity(nom 7)          # T comes from the argument
+    let i32 b = identity@(i32)(nom 8)    # T is written at the call site
     println("{p.first} {a} {b}")                    # 42 7 8
-    return Result.Ok(0)
+    return 0
 ```
 
 A function that gives its argument back takes it with `nom T`, because an unmarked
@@ -1438,7 +1466,7 @@ fn main() i32:
     let Counter c = Counter(0)
     c.bump()
     println("{c.n} {5.squared()}")                  # 1 25
-    return Result.Ok(0)
+    return 0
 ```
 
 **The receiver mode.** The receiver is a parameter, and it takes the parameter modes. A
@@ -1446,9 +1474,10 @@ bare `self` is a read-only borrow, `peek self` is a read-only pointer, `poke sel
 through to the caller's value, and `nom self` consumes the receiver. A write through a
 receiver that is not `poke self` is `CE2421`.
 
-**The bare return.** A method with no `| E` returns its value bare: `return value`, and a
-`~` method may end with no `return`. `return Result.Ok(...)` there is `CE2091`, and `??`
-there is `CE0131`, because the method has no error channel to return an error through.
+**The bare return.** A method with no `| E` is bare, as a function with no `| E` is. It
+returns its value bare: `return value`, and a `~` method may end with no `return`.
+`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`, because the method
+has no error channel to return an error through.
 
 **The error channel.** A method may declare `| E` after its return type. Its call then
 gives a `Result@(T, E)`, `??` is legal in the body, and the body spells both constructors
@@ -1495,13 +1524,13 @@ extend Vec static origin() Vec:
 fn main() i32:
     let Vec v = Vec.at(3, 4)
     println("{v.x} {v.y}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A name behind a type's dot is a **member** of that type: a variant, or a static method,
 never both. A local of the same name wins over the type.
 
-Everything but the receiver is unchanged. The parameters take the ordinary four modes
+Everything but the receiver is as on an instance method. The parameters take the ordinary four modes
 and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
 the error channel exactly as on an instance method; and the declaration carries no
 visibility marker, because a static is as visible as its target type.
@@ -1535,7 +1564,7 @@ fn main() i32:
     println("{Cage.holding(9).items[0]}")           # 9: the argument makes T an i32
     let Cage@(i32) none = Cage.empty()              # T comes from the declared type
     println("{none.items.len()}")                   # 0
-    return Result.Ok(0)
+    return 0
 ```
 
 A generic static whose parameters do not name the type parameter, in a position that
@@ -1576,11 +1605,10 @@ extend Point with Describe:
 
 fn show@(T: Describe)(T v) ~:
     println(v.describe())
-    return Result.Ok(~)
 
 fn main() i32:
     show(Point(1, 2))                               # (1, 2)
-    return Result.Ok(0)
+    return 0
 ```
 
 An implementation method follows the rules of an extension method: a bare return, or an
@@ -1642,7 +1670,7 @@ fn main() i32:
     let Token second = Token(2)
     println("{first.id} {second.id}")               # 1 2
     println(Key(7, 9).hash())                       # 7
-    return Result.Ok(0)                             # drop 2, then drop 1
+    return 0                             # drop 2, then drop 1
 ```
 
 ## Ownership Operations
@@ -1672,16 +1700,20 @@ The guides are [Memory Management](memory-management.md) and
 ## Closures
 
 A lambda is a value of a function type. `|params| expr` has one expression, `|params|:`
-starts a block body, and `|~|` takes no parameters. A block body returns with
-`return Result.Ok(...)`, as a function does.
+starts a block body, and `|~|` takes no parameters. A lambda has a channel only when its
+TYPE says `| E`: the annotation on the lambda (`|i32 x| -> i32 | E: ...`) or the expected
+type (a parameter, a `let`, a field). The compiler never infers a channel from the body. A
+block body of a bare lambda returns the value (`return x`); a block body with a channel
+writes `return Result.Ok(...)`, as a function does. A bare lambda is the exception, as a
+bare function is ([The error channel is opt-in](design/error-channel.md)).
 
 ```sushi
 fn main() i32:
     let i32 n = 10
     let fn(i32) -> i32 add_n = |i32 x| x + n        # captures a copy of n
     let fn() -> i32 five = |~| 5
-    println("{add_n(1).realise(0)} {five().realise(0)}")    # 11 5
-    return Result.Ok(0)
+    println("{add_n(1)} {five()}")    # 11 5
+    return 0
 ```
 
 A lambda captures a plain value by copy and an owning value by move. A capture of a
@@ -1704,19 +1736,18 @@ fn sum(...i32 xs) i32:
     let i32 total = 0
     foreach(x in xs.iter()):
         total := total + x
-    return Result.Ok(total)
+    return total
 
 fn show_all@(...Ts: Hashable)(...Ts xs) ~:
     expand(x in xs):                                # unrolled once per argument
         println(x.hash())
-    return Result.Ok(~)
 
 fn main() i32:
-    println(sum(1, 2, 3).realise(0))                # 6
+    println(sum(1, 2, 3))                # 6
     let i32[] rest = from([4, 5])
-    println(sum(rest...).realise(0))                # 9: `rest...` moves the array in
+    println(sum(rest...))                # 9: `rest...` moves the array in
     show_all(1, true)
-    return Result.Ok(0)
+    return 0
 ```
 
 The native parameter comes last. `arr...` forwards a bare array variable and moves it. A
@@ -1733,7 +1764,7 @@ unsafe external "C" as libc because "absolute value from libc":
 
 fn main() i32:
     println(libc.abs(-5))                           # 5
-    return Result.Ok(0)
+    return 0
 ```
 
 A foreign function returns the raw C value, not a `Result`. `ptr` is an opaque foreign
@@ -1760,14 +1791,14 @@ Sushi uses a unit system where each source file is a unit:
 ```sushi
 # file: calc.sushi
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 # file: main.sushi
 use "calc"
 
 fn main() i32:
-    println(add(40, 2).realise(0))          # 42
-    return Result.Ok(0)
+    println(add(40, 2))          # 42
+    return 0
 ```
 
 ### Importing a unit
@@ -1794,7 +1825,7 @@ fn main() i32:
     let f64 mine = my_math.sin(0.0).realise(0.0)
     let f64 theirs = std_math.sin(0.0)
     let i32 depth = my_math.MAX_DEPTH
-    return Result.Ok(0)
+    return 0
 ```
 
 #### Scope is per unit, and it is not transitive
@@ -1808,9 +1839,9 @@ never what `math` imported.
 ```sushi
 # deep.sushi                    # mid.sushi              # top.sushi
 public fn deep_value() i32:     use "deep"               use "mid"
-    return Result.Ok(7)                                  fn main() i32:
+    return 7                                             fn main() i32:
                                                              # CE2008 here
-                                                             let i32 a = deep_value()??
+                                                             let i32 a = deep_value()
 ```
 
 `top` adds `use "deep"`. The refusal is the ordinary "no such name" -- `CE2008` for a
@@ -1841,9 +1872,9 @@ ordinary `use` for the unit that writes it.
 # geometry.sushi          # shapes.sushi                 # main.sushi
 public struct Vec:        public use "geometry"         use "shapes"
     i32 x                 public fn area(Vec v) i32:    fn main() i32:
-    i32 y                     return Result.Ok(v.x*v.y)     let Vec v = Vec(2, 3)
-                                                             println("{area(v).realise(0)}")
-                                                             return Result.Ok(0)
+    i32 y                     return v.x * v.y              let Vec v = Vec(2, 3)
+                                                             println("{area(v)}")
+                                                             return 0
 ```
 
 `main` writes `Vec` with one import, because `shapes` hands it on. `use "shapes" as sh`
@@ -1890,7 +1921,7 @@ struct Holder:
     geo.Vec spot                            # a field
 
 fn total(geo.Vec v) i32:                    # a parameter
-    return Result.Ok(v.x + v.y)
+    return v.x + v.y
 
 fn run() i32:
     let geo.Vec v = geo.Vec(1, 2)           # an annotation, and a constructor
@@ -1898,7 +1929,7 @@ fn run() i32:
     match s:
         geo.Sign.Plus -> println("+")       # an enum pattern
         geo.Sign.Minus -> println("-")
-    return Result.Ok(total(v)??)
+    return total(v)
 ```
 
 **One position cannot be qualified.** A fixed array's size is read while the unit's own
@@ -1932,10 +1963,10 @@ name in two units stay refused, because a type is one per program.
 const i32 box = 3
 
 fn box() i32:               # CE1005: function 'box' already declared in this unit as a constant
-    return Result.Ok(4)
+    return 4
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 ```
 
 **A local variable wins.** A variable named `my_math` shadows the alias for the rest of
@@ -1982,10 +2013,10 @@ public perk Loud:                   # another unit may implement it
     fn shout() i32
 
 public fn helper() i32:
-    return Result.Ok(private_helper()??)
+    return private_helper()
 
 fn private_helper() i32:
-    return Result.Ok(42)
+    return 42
 ```
 
 An **enum variant** carries no marker: it is as visible as its enum, because a private
@@ -2209,7 +2240,7 @@ const string BANNER = "{MESSAGE}!"                # constants nest
 
 fn main() i32:
     println(BANNER)
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Constant References
@@ -2265,7 +2296,7 @@ fn main() i32:
     foreach(p in PRIMES.iter()):        # iteration
         println(p)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 A local may shadow an array constant, and the local wins:
@@ -2275,7 +2306,7 @@ const i32[3] PRIMES = [2, 3, 5]
 
 fn local_wins() i32:
     let i32[4] PRIMES = [7, 8, 9, 10]
-    return Result.Ok(PRIMES[0])         # 7, and .fill()/.reverse() work on it
+    return PRIMES[0]         # 7, and .fill()/.reverse() work on it
 ```
 
 A `string` element type works like any other:
@@ -2287,7 +2318,7 @@ fn main() i32:
     println(NAMES[1])                   # arthur
     let string[2] copy = NAMES.clone()  # a local of its own (CE2436 without the clone)
     println(copy[0])                    # ford
-    return Result.Ok(0)
+    return 0
 ```
 
 **Restrictions:**
@@ -2324,11 +2355,11 @@ const Segment SEG = Segment(Point(3, 4), 7)              # nested
 
 fn main() i32:
     println("{OUT.fd} {SEG.start.y}")                    # 1 4
-    return Result.Ok(0)
+    return 0
 ```
 
 Only a name the compiler knows to be a struct starts a constant construction, so an
-ordinary call is refused as it always was -- flat, and inside a field argument:
+ordinary call is refused -- flat, and inside a field argument:
 
 ```sushi
 const Handle BAD = Handle(pick())                # CE0108: function calls forbidden
@@ -2379,7 +2410,7 @@ fn main() i32:
         Shape.Dot -> println("dot")
         Shape.Circle(r) -> println("circle {r}")     # circle 1
         Shape.Labelled(name, r) -> println("{name} {r}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A variant the enum does not declare, a payload count that does not fit and a payload of
@@ -2451,13 +2482,12 @@ var i32 counter = 0                 # storage, initialized before main() runs
 
 fn bump() ~:
     counter := counter + 1          # a rebind writes the storage
-    return Result.Ok(~)
 
 fn main() i32:
     bump()
     bump()
     println("{counter}")            # 2
-    return Result.Ok(0)
+    return 0
 ```
 
 A unit variable is **private by default** and `public var` makes it visible to another
@@ -2489,7 +2519,6 @@ var List@(string) names = List.new()
 
 fn remember(nom string s) ~:
     names.push(s)                   # a mutating method reaches the storage
-    return Result.Ok(~)
 ```
 
 `HashMap.new()` mallocs its buckets and is refused, and so is a `from([1, 2])` with
@@ -2516,7 +2545,6 @@ use <io/fs>
 
 fn redirect(nom File f) ~:
     stdout := f                     # legal: the old handle is dropped, `f` moves in
-    return Result.Ok(~)
 
 # ERROR CE2436: cannot move 'stdout': it is a unit variable
 # let File mine = stdout
@@ -2525,7 +2553,7 @@ fn redirect(nom File f) ~:
 Nothing destroys a unit variable at exit. The process ends and the operating system
 reclaims the pages; a variable that holds heap at that moment is not freed first.
 
-A fixed array's size still wants an integer CONSTANT: a variable has a run-time value,
+A fixed array's size needs an integer CONSTANT: a variable has a run-time value,
 so `i32[N]` with `var i32 N = 3` is **CE2099**.
 
 ---

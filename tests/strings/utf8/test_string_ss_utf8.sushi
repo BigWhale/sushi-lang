@@ -8,7 +8,6 @@ fn test_ascii() ~:
         println("PASS: ASCII ss(0, 5)")
     else:
         println("FAIL: ASCII ss(0, 5) - expected 'Hello', got '{sub}'")
-    return Result.Ok(~)
 
 fn test_utf8_emoji() ~:
     let string s = "Hello 🌍 World"
@@ -30,7 +29,6 @@ fn test_utf8_emoji() ~:
     else:
         println("FAIL: UTF-8 ss(7, 6) - expected ' World', got '{sub3}'")
 
-    return Result.Ok(~)
 
 fn test_utf8_multibyte() ~:
     let string s = "Café"
@@ -46,7 +44,6 @@ fn test_utf8_multibyte() ~:
     else:
         println("FAIL: UTF-8 ss(3, 1) - expected 'é', got '{sub2}'")
 
-    return Result.Ok(~)
 
 fn test_utf8_cyrillic() ~:
     let string s = "Привет"
@@ -56,7 +53,6 @@ fn test_utf8_cyrillic() ~:
     else:
         println("FAIL: UTF-8 ss(0, 3) - expected 'При', got '{sub}'")
 
-    return Result.Ok(~)
 
 fn test_edge_cases() ~:
     let string s = "Test"
@@ -79,7 +75,6 @@ fn test_edge_cases() ~:
     else:
         println("FAIL: ss length beyond - expected 'st', got '{beyond}'")
 
-    return Result.Ok(~)
 
 fn main() i32:
     test_ascii()
@@ -87,5 +82,5 @@ fn main() i32:
     test_utf8_multibyte()
     test_utf8_cyrillic()
     test_edge_cases()
-    return Result.Ok(0)
+    return 0
 

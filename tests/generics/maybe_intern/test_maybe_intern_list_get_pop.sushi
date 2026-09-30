@@ -16,4 +16,4 @@ fn main() i32:
         Maybe.Some(v) -> println("{v.len()}")
         Maybe.None -> println("none")
     println("{l.len()}")
-    return Result.Ok(0)
+    return 0

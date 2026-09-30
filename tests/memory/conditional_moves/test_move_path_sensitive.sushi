@@ -10,16 +10,16 @@
 # EXPECT_NO_LEAKS
 fn pick(i32 which, nom string val) string:
     if (which > 0):
-        return Result.Ok(val)
-    return Result.Ok(val)
+        return val
+    return val
 
 fn run() i32:
     let i32 n = 1
     let string s = "hi{n}"
-    let string got = pick(1, nom s)??
+    let string got = pick(1, nom s)
     println(got)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    let i32 rc = run()
+    return rc

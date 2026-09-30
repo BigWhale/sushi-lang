@@ -6,4 +6,4 @@ const string MESSAGE = "the answer is {ANSWER}"
 
 fn main() i32:
     println(MESSAGE)
-    return Result.Ok(0)
+    return 0

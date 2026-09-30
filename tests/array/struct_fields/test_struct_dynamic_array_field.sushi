@@ -14,7 +14,7 @@ struct Person:
     i32 age
     string[] hobbies
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test struct with empty dynamic array field
     let Container c = Container(new(), "test")
     println("Container name: {c.name}")
@@ -50,4 +50,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

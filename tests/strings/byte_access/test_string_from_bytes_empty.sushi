@@ -8,4 +8,4 @@ fn main() i32:
     let u8[] b = new()
     let string s = string.from_bytes(nom b)
     println("[{s}] {s.size()}")
-    return Result.Ok(0)
+    return 0

@@ -8,4 +8,4 @@ use "helpers/ffi_holder"
 fn main() i32:
     let i64 n = libc.strlen("abc")
     println("{n}")
-    return Result.Ok(0)
+    return 0

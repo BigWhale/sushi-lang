@@ -10,4 +10,4 @@ fn main() i32:
     foreach(i in 0..10):
         total := total + t[i]
     println(total)
-    return Result.Ok(0)
+    return 0

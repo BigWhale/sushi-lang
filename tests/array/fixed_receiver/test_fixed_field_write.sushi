@@ -16,8 +16,8 @@ fn run_test() i32:
     let Buf c = Buf(slots: [1, 2, 3, 4])
     c.slots.reverse()
     println("{c.slots[0]} {c.slots[1]} {c.slots[2]} {c.slots[3]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

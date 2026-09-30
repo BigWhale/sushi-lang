@@ -17,4 +17,4 @@ fn main() i32:
     println("{STRINGS_MATCH}")
     println("{STRINGS_DIFFER}")
     println("{ALIAS_MATCHES}")
-    return Result.Ok(0)
+    return 0

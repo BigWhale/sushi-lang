@@ -19,4 +19,4 @@ extend Muffler with Loud:
         return "MUFFLER"
 
 public fn hush_of(peek Muffler m) string:
-    return Result.Ok(m.hush())
+    return m.hush()

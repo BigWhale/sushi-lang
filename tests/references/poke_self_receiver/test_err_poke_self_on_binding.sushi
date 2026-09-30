@@ -8,11 +8,11 @@ extend Counter bump(poke self) ~:
     self.n := self.n + 1
     return ~
 
-fn make() Counter:
+fn make() Counter | StdError:
     return Result.Ok(Counter(1))
 
 fn main() i32:
     match make():
         Result.Ok(c) -> c.bump()
         Result.Err(_) -> println("e")
-    return Result.Ok(0)
+    return 0

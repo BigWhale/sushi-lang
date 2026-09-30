@@ -65,4 +65,4 @@ fn main() i32:
     let string sub10 = s10.ss(3, 1)
     println(sub10)  # Expected: d
 
-    return Result.Ok(0)
+    return 0

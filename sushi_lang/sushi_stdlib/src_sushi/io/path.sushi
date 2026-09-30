@@ -24,12 +24,12 @@ base and marks it as a directory with a trailing separator.
 :##
 public fn join(string base, string child) string:
     if (child.starts_with("/")):
-        return Result.Ok(child.clone())
+        return child.clone()
     if (base.is_empty()):
-        return Result.Ok(child.clone())
+        return child.clone()
     if (base.ends_with("/")):
-        return Result.Ok(base.concat(child))
-    return Result.Ok(base.concat("/").concat(child))
+        return base.concat(child)
+    return base.concat("/").concat(child)
 
 ##:
 Returns the part after the last separator.
@@ -41,8 +41,8 @@ A path with a trailing separator has an empty basename.
 :##
 public fn basename(string path) string:
     match path.find_last("/"):
-        Maybe.Some(i) -> return Result.Ok(path.s(i + 1, path.len()))
-        Maybe.None() -> return Result.Ok(path.clone())
+        Maybe.Some(i) -> return path.s(i + 1, path.len())
+        Maybe.None() -> return path.clone()
 
 ##:
 Returns the part before the last separator.
@@ -58,9 +58,9 @@ public fn dirname(string path) string:
         Maybe.Some(i) ->
             let string head = path.s(0, i + 1)
             if (head.replace("/", "").is_empty()):
-                return Result.Ok(head)
-            return Result.Ok(strip_trailing_separators(head)??)
-        Maybe.None() -> return Result.Ok("")
+                return head
+            return strip_trailing_separators(head)
+        Maybe.None() -> return ""
 
 ##:
 Returns the extension of the last component, without the leading dot.
@@ -71,15 +71,15 @@ The leading dots of a hidden file do not count: `.bashrc` has no extension.
 - Returns: The extension, or an empty string.
 :##
 public fn extension(string path) string:
-    let string name = basename(path)??
+    let string name = basename(path)
     match name.find_last("."):
         Maybe.Some(d) ->
             if (d == 0):
-                return Result.Ok("")
-            if (leading_dots_reach(name, d)??):
-                return Result.Ok("")
-            return Result.Ok(name.s(d + 1, name.len()))
-        Maybe.None() -> return Result.Ok("")
+                return ""
+            if (leading_dots_reach(name, d)):
+                return ""
+            return name.s(d + 1, name.len())
+        Maybe.None() -> return ""
 
 ##:
 Normalizes a path lexically.
@@ -94,9 +94,9 @@ kept as two, the POSIX implementation-defined form; posixpath does the same.
 :##
 public fn normalize(string path) string:
     if (path.is_empty()):
-        return Result.Ok(".")
+        return "."
     let bool rooted = path.starts_with("/")
-    let string root = root_prefix(path)??
+    let string root = root_prefix(path)
     let List@(string) kept = List.new()
     let string[] parts = path.split("/")
     foreach(part in parts.iter()):
@@ -107,12 +107,12 @@ public fn normalize(string path) string:
         else:
             kept.push(part.clone())
 
-    let string body = rebuild(kept)??
+    let string body = rebuild(kept)
     if (rooted):
-        return Result.Ok(root.concat(body))
+        return root.concat(body)
     if (body.is_empty()):
-        return Result.Ok(".")
-    return Result.Ok(body)
+        return "."
+    return body
 
 ##:
 The root of a rooted path: `/`, kept as `//` when the root is exactly two
@@ -123,10 +123,10 @@ separators (POSIX leaves that form alone; three or more collapse).
 :##
 fn root_prefix(string path) string:
     if (not path.starts_with("/")):
-        return Result.Ok("")
+        return ""
     if (path.starts_with("//") and not path.starts_with("///")):
-        return Result.Ok("//")
-    return Result.Ok("/")
+        return "//"
+    return "/"
 
 ##:
 Drops the separator run at the end. The caller has already handled the
@@ -143,8 +143,8 @@ fn strip_trailing_separators(string head) string:
         if (head.char_at(back) == "/"):
             keep := back
         else:
-            return Result.Ok(head.s(0, keep))
-    return Result.Ok(head.s(0, keep))
+            return head.s(0, keep)
+    return head.s(0, keep)
 
 ##:
 True when every character before index `d` is a dot, which makes `d` part of
@@ -157,8 +157,8 @@ a hidden-file prefix and not an extension mark.
 fn leading_dots_reach(string name, i32 d) bool:
     foreach(i in 0..d):
         if (name.char_at(i) != "."):
-            return Result.Ok(false)
-    return Result.Ok(true)
+            return false
+    return true
 
 ##:
 Applies one `..` to the kept components: it removes the component before it;
@@ -173,15 +173,14 @@ fn pop_or_keep_dotdot(poke List@(string) kept, bool rooted) ~:
             Maybe.Some(last) ->
                 if (last == ".."):
                     kept.push("..")
-                    return Result.Ok(~)
+                    return ~
             Maybe.None() -> ~
         match kept.pop():
             Maybe.Some(_) -> ~
             Maybe.None() -> ~
-        return Result.Ok(~)
+        return ~
     if (not rooted):
         kept.push("..")
-    return Result.Ok(~)
 
 ##:
 Joins the kept components with single separators.
@@ -200,4 +199,4 @@ fn rebuild(List@(string) kept) string:
                 else:
                     out := part.clone()
             Maybe.None() -> ~
-    return Result.Ok(out)
+    return out

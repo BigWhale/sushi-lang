@@ -5,4 +5,4 @@
 fn main() i32:
     let i32 lowest = -2147483648
     println(lowest)
-    return Result.Ok(0)
+    return 0

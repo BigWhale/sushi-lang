@@ -14,4 +14,4 @@ fn main() i32:
     let List@(File) v = h.items
     v.clear()
     println(h.items.len())
-    return Result.Ok(0)
+    return 0

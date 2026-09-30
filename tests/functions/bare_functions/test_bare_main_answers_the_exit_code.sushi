@@ -1,0 +1,6 @@
+# `main` is bare: `return n` is the exit code of the program.
+# EXPECT_RUNTIME_EXIT: 3
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+fn main() i32:
+    println("Mostly Harmless")
+    return 3

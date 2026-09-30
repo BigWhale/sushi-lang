@@ -16,4 +16,4 @@ fn main() i32:
     let Server s = Server(cfg)
     let u64 h = s.hash()
     println("Server hash: {h}")
-    return Result.Ok(0)
+    return 0

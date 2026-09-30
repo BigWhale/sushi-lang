@@ -8,4 +8,4 @@
 use "answer"
 
 fn main() i32:
-    return Result.Ok(answer().realise(0) - 42)
+    return answer() - 42

@@ -11,4 +11,4 @@ fn main() i32:
         arr.reverse()
         passes := passes + 1
     println("{arr.len()} {passes}")
-    return Result.Ok(0)
+    return 0

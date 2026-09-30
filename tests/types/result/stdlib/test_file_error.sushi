@@ -25,34 +25,34 @@ fn main() i32:
             println("PASS: FileError.NotFound works")
         _ ->
             println("FAIL: NotFound pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match open_file("forbidden"):
         Result.Err(FileError.PermissionDenied) ->
             println("PASS: FileError.PermissionDenied works")
         _ ->
             println("FAIL: PermissionDenied pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match open_file("exists"):
         Result.Err(FileError.AlreadyExists) ->
             println("PASS: FileError.AlreadyExists works")
         _ ->
             println("FAIL: AlreadyExists pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match open_file("bad/path"):
         Result.Err(FileError.InvalidPath) ->
             println("PASS: FileError.InvalidPath works")
         _ ->
             println("FAIL: InvalidPath pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match open_file("io_fail"):
         Result.Err(FileError.IOError) ->
             println("PASS: FileError.IOError works")
         _ ->
             println("FAIL: IOError pattern failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

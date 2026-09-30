@@ -12,7 +12,7 @@ fn sum_i64(i64[] xs) i64:
     let i64 total = 0 as i64
     foreach(x in xs.iter()):
         total := total + x
-    return Result.Ok(total)
+    return total
 
 fn run_test() i32:
     # Each array is built, then GROWN with a push, so the realloc path sizes elements too.
@@ -28,7 +28,7 @@ fn run_test() i32:
     let i8 s8 = a8[0] + a8[1] + a8[2]
     let i16 s16 = a16[0] + a16[1] + a16[2]
     let i32 s32 = a32[0] + a32[1] + a32[2]
-    let i64 s64 = sum_i64(a64)??
+    let i64 s64 = sum_i64(a64)
     println("i8 {s8} i16 {s16} i32 {s32} i64 {s64}")
 
     let u8[] b8 = from([10 as u8, 20 as u8])
@@ -61,8 +61,8 @@ fn run_test() i32:
             trues := trues + 1
     println("f32 {u32sum} f64 {u64sum} bool {trues}")
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

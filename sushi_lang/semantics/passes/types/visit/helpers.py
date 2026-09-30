@@ -19,7 +19,7 @@ def function_value_type_of(type_validator, name: str) -> Optional[Type]:
 def function_type_of_sig(sig) -> Optional[Type]:
     """The FunctionType of a function value of this signature, bare or behind an alias."""
     from sushi_lang.semantics.param_modes import declared_modes
-    from sushi_lang.semantics.typesys import FunctionType, UnknownType
+    from sushi_lang.semantics.typesys import FunctionType
     if sig is None:
         return None
     for p in sig.params:
@@ -29,7 +29,7 @@ def function_type_of_sig(sig) -> Optional[Type]:
     if any(pt is None for pt in param_types):
         return None
     ok_type = sig.ret_type if sig.ret_type is not None else BuiltinType.BLANK
-    err_type = sig.err_type if sig.err_type is not None else UnknownType("StdError")
+    err_type = sig.err_type
     # The declared modes are part of the type, and it stays invariant in them
     # (docs/design/borrow-model.md S7). Without them a `nom` callee compared equal to a
     # borrow fn type, so binding one to the other was a double free (#368).
@@ -40,11 +40,12 @@ def function_type_of_sig(sig) -> Optional[Type]:
 def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     """Compute (and, by default, cache on the node) the FunctionType of a lambda literal."""
     from sushi_lang.semantics.param_modes import declared_modes
-    from sushi_lang.semantics.typesys import FunctionType, UnknownType
-    if stamp and getattr(lam, "resolved_type", None) is not None:
-        return lam.resolved_type
-
+    from sushi_lang.semantics.typesys import FunctionType
     expected = getattr(lam, "expected_type", None)
+    cached = getattr(lam, "resolved_type", None)
+    if stamp and cached is not None and not _channel_arrived_later(lam, cached, expected):
+        return cached
+
     saved = dict(type_validator.variable_types)
 
     param_types = []
@@ -76,9 +77,11 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
         if ok_type is None and isinstance(expected, FunctionType):
             ok_type = expected.ok_type
 
+    # The channel comes from the annotation or from the expected type, never from the
+    # body: with neither, the lambda is bare (docs/design/error-channel.md).
     err_type = lam.err_type
-    if err_type is None:
-        err_type = expected.err_type if isinstance(expected, FunctionType) else UnknownType("StdError")
+    if err_type is None and lam.ret is None and isinstance(expected, FunctionType):
+        err_type = expected.err_type
 
     type_validator.variable_types.clear()
     type_validator.variable_types.update(saved)
@@ -93,6 +96,15 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     if stamp:
         lam.resolved_type = ft
     return ft
+
+
+def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
+    """A lambda typed before its position said its type: a generic argument is typed to
+    solve the call, and the solved parameter type comes after. An unannotated lambda
+    takes its channel from that expected type, so the cached answer is read again."""
+    from sushi_lang.semantics.typesys import FunctionType
+    return (isinstance(expected, FunctionType) and lam.err_type is None and lam.ret is None
+            and cached.err_type != expected.err_type)
 
 
 def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:

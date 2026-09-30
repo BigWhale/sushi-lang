@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_CONTAINS: Total arguments: 6
 
 # args is main's borrowed view of C argv -- borrow it downstream (never move it by value).
-fn run_test(peek string[] args) i32:
+fn run_test(peek string[] args) i32 | StdError:
     println("Total arguments: {args.len()}")
 
     let i32 i = 0
@@ -21,5 +21,5 @@ fn main(string[] args) i32:
     # Touch args directly (avoids the borrow-only CW1003 lint); the reader borrows it.
     if (args.len() > 0):
         let i32 result = run_test(peek args).realise(99)
-        return Result.Ok(result)
-    return Result.Ok(0)
+        return result
+    return 0

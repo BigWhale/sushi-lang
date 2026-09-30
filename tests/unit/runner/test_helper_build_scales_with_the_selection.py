@@ -50,7 +50,7 @@ def _project(tmp_path: Path, helpers: list[str]) -> tuple[Path, Path]:
     helpers_dir.mkdir(parents=True)
     for name in helpers:
         (helpers_dir / f"{name}.sushi").write_text("public fn f() ~:\n"
-                                                   "    return Result.Ok(~)\n")
+                                                   "    return ~\n")
     sushic = root / "sushic"
     sushic.write_text(FAKE_SUSHIC.format(python=sys.executable, log=str(log)))
     sushic.chmod(sushic.stat().st_mode | stat.S_IXUSR)
@@ -70,7 +70,7 @@ def _fixture(root: Path, rel: str, text: str) -> Path:
 
 def test_a_selection_with_no_helper_need_builds_no_helper(tmp_path):
     root, log = _project(tmp_path, ["alpha_lib", "beta_lib"])
-    fixture = _fixture(root, "io/test_plain.sushi", "fn main() i32:\n    return Result.Ok(0)\n")
+    fixture = _fixture(root, "io/test_plain.sushi", "fn main() i32:\n    return 0\n")
 
     needed = run_tests.helpers_for_selection(root / "tests", [fixture])
 
@@ -83,7 +83,7 @@ def test_a_selection_builds_the_helpers_its_directory_imports(tmp_path):
     root, log = _project(tmp_path, ["alpha_lib", "beta_lib", "gamma_lib"])
     fixture = _fixture(root, "libs/test_uses.sushi",
                        'use <lib/alpha_lib>\nuse "helpers/unit"\n\n'
-                       "fn main() i32:\n    return Result.Ok(0)\n")
+                       "fn main() i32:\n    return 0\n")
     _fixture(root, "libs/helpers/unit.sushi", "public use <lib/beta_lib> \n")
 
     needed = run_tests.helpers_for_selection(root / "tests", [fixture])
@@ -108,7 +108,7 @@ def test_a_selection_removes_the_helpers_it_did_not_build(tmp_path):
 def test_an_import_it_cannot_follow_builds_every_helper(tmp_path):
     root, _ = _project(tmp_path, ["alpha_lib"])
     fixture = _fixture(root, "deep/test_up.sushi",
-                       'use "../elsewhere/unit"\n\nfn main() i32:\n    return Result.Ok(0)\n')
+                       'use "../elsewhere/unit"\n\nfn main() i32:\n    return 0\n')
 
     assert run_tests.helpers_for_selection(root / "tests", [fixture]) is None
 

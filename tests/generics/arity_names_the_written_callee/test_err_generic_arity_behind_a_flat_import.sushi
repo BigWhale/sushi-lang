@@ -4,5 +4,5 @@
 use "helpers/arity_pair"
 
 fn main() i32:
-    let i32 n = pair@(i32)(1).realise(0)
-    return Result.Ok(n)
+    let i32 n = pair@(i32)(1)
+    return n

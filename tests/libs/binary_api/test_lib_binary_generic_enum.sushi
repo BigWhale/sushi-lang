@@ -10,12 +10,12 @@ fn show(Opt@(i32) o) i32:
     match o:
         Opt.Yep(v) -> println("yep {v}")
         Opt.Nope -> println("nope")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     let i32 answer = 42
-    let Opt@(i32) some = wrap_opt(nom answer).realise(Opt.Nope)
+    let Opt@(i32) some = wrap_opt(nom answer)
     let Opt@(i32) none = Opt.Nope
-    let i32 a = show(some).realise(1)
-    let i32 b = show(none).realise(1)
-    return Result.Ok(a + b)
+    let i32 a = show(some)
+    let i32 b = show(none)
+    return a + b

@@ -21,4 +21,4 @@ fn main() i32:
     let Counter c = Counter(1)
     let i32 x = c.read_one()
     println("{x}")
-    return Result.Ok(0)
+    return 0

@@ -17,15 +17,15 @@ extend Box@(T) with Show:
         return "box"
 
 fn show_it@(S: Show)(S s) string:
-    return Result.Ok(s.show())
+    return s.show()
 
 fn wrap@(T)(nom T v) Box@(T):
-    return Result.Ok(Box(v))
+    return Box(v)
 
 fn outer@(T)(nom T v) string:
-    let Box@(T) b = wrap(nom v)??
-    return Result.Ok(show_it(b)??)
+    let Box@(T) b = wrap(nom v)
+    return show_it(b)
 
 fn main() i32:
-    println(outer(nom "towel").realise("?"))
-    return Result.Ok(0)
+    println(outer(nom "towel"))
+    return 0

@@ -33,7 +33,8 @@ constants and unit variables, the function declarations, and then the function b
 `backend/functions/` holds the function manager: `declarations.py`, `definitions.py`, and
 `main_wrapper.py`, whose `emit_main` emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
-`string[]` when `main` takes `args`, and turns the Result into the exit code.
+`string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
+code. The Sushi `main` is bare (`CE0106` refuses a channel), so its value IS the exit code.
 
 ## Type system
 
@@ -476,7 +477,7 @@ hash of one held value is `emit_value_hash` (`backend/types/value_hash.py`).
 fn main() i32:
     let i32 x = 42
     println("Answer: {x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A print writes to the descriptor with `write(2)` through `emit_console_write`, the ONE

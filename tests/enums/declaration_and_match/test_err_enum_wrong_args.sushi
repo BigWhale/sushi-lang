@@ -7,4 +7,4 @@ enum Status:
 fn main() i32:
     # Error: Success expects 1 argument, got 0
     let Status r = Status.Success()
-    return Result.Ok(0)
+    return 0

@@ -4,12 +4,12 @@
 # EXPECT_STDERR_CONTAINS: test_err_dead_after_if_else.sushi:10:5
 fn g(i32 x) i32:
     if (x > 0):
-        return Result.Ok(1)
+        return 1
     else:
-        return Result.Ok(2)
+        return 2
     println("never")
-    return Result.Ok(3)
+    return 3
 
 fn main() i32:
-    println("{g(1).realise(0)}")
-    return Result.Ok(0)
+    println("{g(1)}")
+    return 0

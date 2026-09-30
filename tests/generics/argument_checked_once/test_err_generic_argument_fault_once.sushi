@@ -2,8 +2,8 @@
 # walks no argument, and the check of the solved instance walks each one once.
 # EXPECT_ERROR_CODES_EXACT: CE0112
 fn id@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    println(id(5 / 0).realise(0))
-    return Result.Ok(0)
+    println(id(5 / 0))
+    return 0

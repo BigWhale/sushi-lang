@@ -27,4 +27,4 @@ fn main() i32:
     let i64 g = ~0
     println("{g}")
 
-    return Result.Ok(0)
+    return 0

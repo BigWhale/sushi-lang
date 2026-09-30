@@ -47,13 +47,13 @@ fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
-    let i32 a = sum(1, 2, 3, 4).realise(0)   # 10
-    let i32 b = sum().realise(0)             # 0 — zero args is valid
+    let i32 a = sum(1, 2, 3, 4)   # 10
+    let i32 b = sum()             # 0 — zero args is valid
     println("{a} {b}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Key properties:
@@ -83,13 +83,13 @@ fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])
-    let i32 s = sum(xs...).realise(0)   # bloom: xs is MOVED into the variadic slot
+    let i32 s = sum(xs...)   # bloom: xs is MOVED into the variadic slot
     println("sum = {s}")                # sum = 6
-    return Result.Ok(0)
+    return 0
 ```
 
 Key properties:
@@ -141,12 +141,11 @@ extend string with Describe:
 fn show_all@(...Ts: Describe)(...Ts args) ~:
     expand(a in args):
         println(a.describe())
-    return Result.Ok(~)
 
 fn main() i32:
     show_all(42, "Mostly Harmless")   # i32 then string, in one call
     show_all()                        # arity 0 is valid
-    return Result.Ok(0)
+    return 0
 ```
 
 `show_all(42, "Mostly Harmless")` monomorphizes a concrete `<unit>$show_all__i32_string.pack2`,
@@ -161,7 +160,6 @@ fn log@(...Ts: Render)(string label, ...Ts items) ~:
     println("{label}:")
     expand(it in items):
         println("  - {it.render()}")
-    return Result.Ok(~)
 ```
 
 ## Perk constraints on packs
@@ -197,7 +195,6 @@ value:
       expand(c in cells):
           line := "{line}[{c.show()}]"
       println(line)
-      return Result.Ok(~)
   ```
 
 - Early `return` and the `??` propagation operator work inside `expand`; any owned per-element
@@ -234,7 +231,6 @@ public perk Display:
 public fn show_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
-    return Result.Ok(~)
 ```
 
 <!-- docs-sweep: skip (needs a .slib library built from the page's earlier example) -->
@@ -252,7 +248,7 @@ extend string with Display:
 
 fn main() i32:
     show_all(42, "hi")    # monomorphized in the consumer
-    return Result.Ok(0)
+    return 0
 ```
 
 The library ships the `public perk Display` **definition** so the consumer need not redeclare it.

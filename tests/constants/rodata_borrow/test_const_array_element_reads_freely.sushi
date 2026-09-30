@@ -13,4 +13,4 @@ fn main() i32:
     println("{first} {NAMES[0].len()}")
     println("{NAMES[2]}")
 
-    return Result.Ok(0)
+    return 0

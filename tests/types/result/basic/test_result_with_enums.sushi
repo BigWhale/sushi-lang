@@ -30,19 +30,19 @@ fn main() i32:
             println("PASS: Parsed red correctly")
         Result.Ok(_) ->
             println("FAIL: Got wrong color")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             println("FAIL: Got error for valid color")
-            return Result.Ok(1)
+            return 1
 
     match parse_color("invalid"):
         Result.Ok(_) ->
             println("FAIL: Should have gotten InvalidColor error")
-            return Result.Ok(1)
+            return 1
         Result.Err(ParseError.InvalidColor) ->
             println("PASS: InvalidColor error works")
         Result.Err(_) ->
             println("FAIL: Got wrong error type")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

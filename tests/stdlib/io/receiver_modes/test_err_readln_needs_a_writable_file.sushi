@@ -5,9 +5,9 @@ use <io/fs>
 
 fn first_line(File f) string:
     match f.readln():
-        Result.Ok(Maybe.Some(nom line)) -> return Result.Ok(line)
-        Result.Ok(Maybe.None()) -> return Result.Ok("")
-        Result.Err(_) -> return Result.Ok("")
+        Result.Ok(Maybe.Some(nom line)) -> return line
+        Result.Ok(Maybe.None()) -> return ""
+        Result.Err(_) -> return ""
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

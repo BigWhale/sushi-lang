@@ -22,4 +22,4 @@ fn main() i32:
     match h:
         Holder.Full(Own(v)) -> println(v)
         Holder.Nil -> println("nil")
-    return Result.Ok(0)
+    return 0

@@ -6,8 +6,8 @@
 fn map@(T, U)(List@(T) xs, fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in xs.iter()):
-        out.push(f(x)??)
-    return Result.Ok(out)
+        out.push(f(x))
+    return out
 
 fn run() i32:
     let i32 factor = 10
@@ -15,9 +15,9 @@ fn run() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let List@(i32) ys = map(xs, |i32 x| x * factor)??
-    return Result.Ok(ys.get(2).realise(-1))
+    let List@(i32) ys = map(xs, |i32 x| x * factor)
+    return ys.get(2).realise(-1)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

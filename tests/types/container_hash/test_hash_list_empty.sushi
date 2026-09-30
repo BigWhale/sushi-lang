@@ -17,4 +17,4 @@ fn main() i32:
     a.free()
     b.free()
     one.free()
-    return Result.Ok(0)
+    return 0

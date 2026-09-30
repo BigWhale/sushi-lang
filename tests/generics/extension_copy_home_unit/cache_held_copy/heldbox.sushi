@@ -13,4 +13,4 @@ extend HeldBox@(T) with Counted:
         return self.n
 
 public fn held_n@(T)(HeldBox@(T) b) i32:
-    return Result.Ok(b.n)
+    return b.n

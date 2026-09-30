@@ -6,4 +6,4 @@ unsafe external "C" as libc because "the platform's own strlen":
     fn strlen(string s) i64 = "strlen"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

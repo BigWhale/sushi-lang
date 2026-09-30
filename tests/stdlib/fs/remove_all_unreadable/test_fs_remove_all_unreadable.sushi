@@ -19,7 +19,7 @@ fn main() i32:
         Result.Ok(_) -> println("made")
         Result.Err(_) ->
             println("mkdir_all failed")
-            return Result.Ok(1)
+            return 1
 
     let string name = "a".repeat(300)
     match remove_all("{root}/{name}"):
@@ -35,4 +35,4 @@ fn main() i32:
             let bool cleaned = not exists(root)
             println("cleaned: {cleaned}")
         Result.Err(_) -> println("cleanup failed")
-    return Result.Ok(0)
+    return 0

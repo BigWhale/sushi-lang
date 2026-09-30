@@ -1,8 +1,8 @@
 # EXPECT_ERROR_CODE: CE2006
-fn add(i32 a, i32 b) i32:
+fn add(i32 a, i32 b) i32 | StdError:
   return Result.Ok(a + b)
 
-fn greet(string name) string:
+fn greet(string name) string | StdError:
   return Result.Ok(name)
 
 fn main() i32:
@@ -14,4 +14,4 @@ fn main() i32:
   # Mixed errors
   let i32 result3 = add(5, "test")  # Should error: second arg is string instead of i32
 
-  return Result.Ok(result1)
+  return result1

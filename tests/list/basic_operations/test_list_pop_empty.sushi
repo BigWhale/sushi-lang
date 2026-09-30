@@ -8,8 +8,8 @@ fn main() i32:
     match empty.pop():
         Maybe.Some(val) ->
             println("ERROR: Should return None, got {val}")
-            return Result.Ok(1)
+            return 1
         Maybe.None() ->
             println("Correctly returned None for empty list")
 
-    return Result.Ok(0)
+    return 0

@@ -18,40 +18,40 @@ fn main() i32:
 
     # Verify log(1) = 0
     if (abs(log_1) > 0.0001):
-        return Result.Ok(1)
+        return 1
 
     # Verify log(E) = 1
     if (abs(log_e - 1.0) > 0.0001):
-        return Result.Ok(2)
+        return 2
 
     # Verify log2(1) = 0
     if (abs(log2_1) > 0.0001):
-        return Result.Ok(3)
+        return 3
 
     # Verify log2(2) = 1
     if (abs(log2_2 - 1.0) > 0.0001):
-        return Result.Ok(4)
+        return 4
 
     # Verify log2(8) = 3
     if (abs(log2_8 - 3.0) > 0.0001):
-        return Result.Ok(5)
+        return 5
 
     # Verify log10(1) = 0
     if (abs(log10_1) > 0.0001):
-        return Result.Ok(6)
+        return 6
 
     # Verify log10(10) = 1
     if (abs(log10_10 - 1.0) > 0.0001):
-        return Result.Ok(7)
+        return 7
 
     # Verify log10(100) = 2
     if (abs(log10_100 - 2.0) > 0.0001):
-        return Result.Ok(8)
+        return 8
 
     # Verify log/exp round-trip
     let f64 x = 2.5
     let f64 roundtrip = log(exp(x))
     if (abs(roundtrip - x) > 0.0001):
-        return Result.Ok(9)
+        return 9
 
-    return Result.Ok(0)
+    return 0

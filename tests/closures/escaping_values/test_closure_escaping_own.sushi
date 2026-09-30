@@ -7,15 +7,15 @@
 # EXPECT_STDOUT_EXACT: "33\n"
 fn make_boxed_adder(i32 base) fn(i32) -> i32:
     let Own@(i32) boxed = Own.alloc(base)
-    return Result.Ok(|i32 x| x + boxed.get())
+    return |i32 x| x + boxed.get()
 
 fn use_it() i32:
-    let fn(i32) -> i32 add = make_boxed_adder(10)??
+    let fn(i32) -> i32 add = make_boxed_adder(10)
     let i32 total = 0
     foreach(i in 0..3):
-        total := total + add(i)??
-    return Result.Ok(total)
+        total := total + add(i)
+    return total
 
 fn main() i32:
-    println(use_it().realise(-1))
-    return Result.Ok(0)
+    println(use_it())
+    return 0

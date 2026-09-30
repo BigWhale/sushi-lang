@@ -4,7 +4,7 @@
 # the collect pass (see tests/extensions/try_guard/).
 # EXPECT_ERROR_CODE: CE0131
 
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 extend string bad_method() i32:
@@ -14,4 +14,4 @@ extend string bad_method() i32:
 fn main() i32:
     let string val = "test"
     let i32 result = val.bad_method()
-    return Result.Ok(result)
+    return result

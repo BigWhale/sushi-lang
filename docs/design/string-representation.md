@@ -40,16 +40,15 @@ Given a runtime bit, the only sub-choice is where to store it:
 | | 3-field `{data, size, owned}` (chosen) | High-bit in `size` |
 |---|---|---|
 | String size | 16 B | 12 B |
-| `Result@(string, E)`/`Maybe@(string)` enum, at the time of the decision | 20 B (crosses the x86-64 16-byte SysV boundary) | 16 B (no growth) |
+| `Result@(string, E)`/`Maybe@(string)` enum | 24 B (`{i32, [2 x i64]}`) | 24 B (also `[2 x i64]`) |
 | `size` reads | clean `i32`, no masking | **every** read must mask off the ownership bit |
 | Failure mode of a missed site | a memcpy/memmove *length* is wrong → **loud crash**, easy to find | a masked *size* read is wrong by 2^31 → **silent corruption** |
 | Number of hazard sites | few (mem* length arguments) | many (`.len()`, `%.*s` precision, comparison, bounds, every method) |
 | `size` max | full `i32` | `2^31 - 1` |
 
-The enum row describes the enum layout at the time of the decision. Every enum is
-`{i32 tag, [K x i64] data}` with the payload at offset 8, so `Result@(string, StdError)` is
-`{i32, [2 x i64]}`, 24 bytes, and the 12-byte alternative also needs `[2 x i64]`. The row
-does not separate the two choices; the other rows do.
+Every enum is `{i32 tag, [K x i64] data}` with the payload at offset 8, so
+`Result@(string, StdError)` is `{i32, [2 x i64]}`, 24 bytes, and the 12-byte alternative also
+needs `[2 x i64]`. The enum row does not separate the two choices; the other rows do.
 
 High-bit packing trades a small, closed, **loud** problem for a large, open, **silent**
 one. It would have to mask the ownership bit at every one of the dozens of places that
@@ -85,11 +84,11 @@ directly as a `mem*` length — zero-extend to `i64` and use the `i64`-length in
 See `sushi_lang/backend/runtime/strings.py` and the stdlib `declare_memcpy` helper
 (`sushi_lang/sushi_stdlib/src/libc_declarations.py`) for the pattern.
 
-## Update (Phase 9, 2026-08-14): a `string` moves
+## A `string` moves
 
-This document's decision — the 3-field fat pointer, the runtime `owned` bit — is **unchanged**. What
-changed is a different question entirely: whether a `string` *value* is copied or moved at an
-ownership sink. See `docs/design/ownership-conventions.md` for the full model; the short version:
+This section answers a different question from the decision above: whether a `string` *value*
+is copied or moved at an ownership sink. See `docs/design/ownership-conventions.md` for the full
+model; the short version:
 
 A `string` **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
 `Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a `nom` parameter,
@@ -104,8 +103,8 @@ per-**type**: `BuiltinType.STRING` carries no such flag, so a `string` field ins
 
 **Why the runtime `owned` bit still matters, given that the compiler tracks ownership statically
 for strings too.** It would be tempting to think a compile-time MOVE/PLAIN classification makes the
-runtime bit redundant. It does not, for the same reason the bit existed in the first place (see
-"Why a runtime ownership bit at all", above): static tracking is necessarily conservative at every
+runtime bit redundant. It does not, for the reason in "Why a runtime ownership bit at all",
+above: static tracking is necessarily conservative at every
 point it cannot prove ownership statically — a rebind whose value depends on a runtime branch, a
 value arriving through a generic type parameter, a `string` read out of a container. In every one of
 those cases the compiler's honest answer is "treat this as owning a buffer, to be safe" (the same
@@ -116,7 +115,7 @@ fully track — costs one branch and no `free()` call. Without the bit, "when in
 would mean "when in doubt, actually free," which is unsound the moment the doubt is wrong. The bit
 is what lets the type system be conservative without being wrong.
 
-## Update (2026-08-24): the order operators read bytes
+## The order operators read bytes
 
 `<`, `>`, `<=` and `>=` on two strings are a byte order, which agrees with Rust and Go.
 `emit_string_order` (`backend/runtime/strings.py`) builds one three-way `i32` and then applies

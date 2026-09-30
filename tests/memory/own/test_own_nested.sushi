@@ -9,4 +9,4 @@ fn main() i32:
     let i32 value = unwrapped.get()
     println(value)
     let i32 expected = 42
-    return Result.Ok(value - expected)
+    return value - expected

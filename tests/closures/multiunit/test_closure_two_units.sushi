@@ -8,7 +8,7 @@ use "helpers/closure_unit_helper"
 fn main() i32:
     let i32 two = 2
     let fn(i32) -> i32 g = |i32 x| x * two
-    let i32 a = helper_apply().realise(0)
-    let i32 b = g(3).realise(0)
+    let i32 a = helper_apply()
+    let i32 b = g(3)
     println("{a} {b}")
-    return Result.Ok(0)
+    return 0

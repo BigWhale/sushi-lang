@@ -9,4 +9,4 @@ extend Pair@(A, B) static of_first(A a) Pair@(A, B):
 
 fn main() i32:
     println("{Pair.of_first(3).first}")
-    return Result.Ok(0)
+    return 0

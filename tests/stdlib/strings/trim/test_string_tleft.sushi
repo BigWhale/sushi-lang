@@ -47,4 +47,4 @@ fn main() i32:
     let string r7 = s7.tleft()
     println(r7)  # Expected: 你好
 
-    return Result.Ok(0)
+    return 0

@@ -25,13 +25,13 @@ use <collections/strings>
 # vocab is read on every step -- borrow it peek so the caller keeps ownership.
 fn random_word(peek string[] vocab) string:
     let i32 idx = rand_range(0, vocab.len())
-    return Result.Ok(vocab[idx].clone())
+    return vocab[idx].clone()
 
 # Pick word from pipe-delimited options
 fn pick_from_options(string options) string:
     let string[] choices = options.split("|")
     let i32 idx = rand_range(0, choices.len())
-    return Result.Ok(choices[idx].clone())
+    return choices[idx].clone()
 
 # Build the Markov chain from word pairs (mutates the chain)
 fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
@@ -49,7 +49,6 @@ fn build_chain(poke HashMap@(string, string) chain, string[] words) ~:
                 chain.insert(current.clone(), next_word.clone())
 
         i := i + 1
-    return Result.Ok(~)
 
 # Generate text using the chain with improbability factor
 fn generate_text(peek HashMap@(string, string) chain, peek string[] vocab, f64 factor, i32 count) ~:
@@ -59,16 +58,15 @@ fn generate_text(peek HashMap@(string, string) chain, peek string[] vocab, f64 f
     while (c < count):
         let f64 roll = rand_f64()
         if (roll < factor):
-            current := random_word(peek vocab).realise("")
+            current := random_word(peek vocab)
         else:
             match chain.get(current):
                 Maybe.Some(opts) ->
-                    current := pick_from_options(opts.clone()).realise("")
+                    current := pick_from_options(opts.clone())
                 Maybe.None() ->
-                    current := random_word(peek vocab).realise("")
+                    current := random_word(peek vocab)
         print(" {current}")
         c := c + 1
-    return Result.Ok(~)
 
 fn main() i32:
     # Seed the RNG for reproducible output
@@ -128,5 +126,5 @@ fn main() i32:
 
     chain.free()
 
-    return Result.Ok(0)
+    return 0
 

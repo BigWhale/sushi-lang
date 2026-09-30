@@ -8,7 +8,7 @@ struct Container:
     i32[] numbers
     string name
 
-fn test_rebind() i32:
+fn test_rebind() i32 | StdError:
     let Container c = Container(new(), "first")
     c.numbers.push(10)
     c.numbers.push(20)
@@ -31,5 +31,5 @@ fn test_rebind() i32:
 fn main() i32:
     let Result@(i32, StdError) result = test_rebind()
     if (result.is_ok()):
-        return Result.Ok(0)
-    return Result.Err(StdError.Error)
+        return 0
+    return 1

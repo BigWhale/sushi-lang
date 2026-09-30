@@ -93,7 +93,8 @@ class LibraryRegistry:
         metadata.enums = self._parse_enums(manifest.get("enums", []))
         self._enum_table.update(metadata.enums)
 
-        metadata.functions = self._parse_functions(manifest.get("public_functions", []))
+        metadata.functions = self._parse_functions(manifest.get("public_functions", []),
+                                                   lib_path=lib_path)
 
         # Keyed (unit, name): two of the library's own units may each ship a
         # private `helper`, and each record names its unit (#494). The key wears the
@@ -102,7 +103,7 @@ class LibraryRegistry:
         templates = manifest.get("templates") or {}
         for func_info in templates.get("private_functions", []) or []:
             unit = f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
-            parsed = self._parse_functions([func_info], owner=unit)
+            parsed = self._parse_functions([func_info], owner=unit, lib_path=lib_path)
             metadata.private_functions[(unit, func_info["name"])] = parsed[func_info["name"]]
 
         metadata.not_exported = {
@@ -150,14 +151,20 @@ class LibraryRegistry:
             result[enum_name] = EnumType(name=enum_name, variants=tuple(variants))
         return result
 
-    def _parse_functions(self, func_list: list[dict],
-                         owner: str | None = None) -> dict[str, 'FuncSig']:
+    def _parse_functions(self, func_list: list[dict], owner: str | None = None,
+                         lib_path: Path | None = None) -> dict[str, 'FuncSig']:
         """Parse function signatures from manifest.
 
         `owner` names the library for a record that is NOT part of its API: the export
         closure ships it so the library's own bodies can call it, and the signature says
         so, so that the CE3005 gate answers for it like any other private function.
+
+        A record states its channel twice: `has_channel`, and the `error_type` and
+        `return_type` it implies. A record whose two answers disagree is damaged, CE3512.
+        That the field is there at all is `check_manifest`'s rule, not this reader's.
         """
+        from sushi_lang.internals.diagnostics import SushiError
+        from sushi_lang.semantics.channel import has_channel
         from sushi_lang.semantics.param_modes import ParamMode
         from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
         from sushi_lang.semantics.type_resolution import parse_type_string
@@ -188,8 +195,8 @@ class LibraryRegistry:
                 self._struct_table,
                 self._enum_table
             )
-            # The channel the declaration spelled (`| E`). Absent means StdError, and
-            # the record says so by saying nothing (#541).
+            # The channel the declaration spelled (`| E`, #541). Absent is a bare function,
+            # or an explicit Result return that carries its arms in `return_type`.
             err_type_str = func_info.get("error_type")
             err_type = (parse_type_string(err_type_str, self._struct_table, self._enum_table)
                         if err_type_str else None)
@@ -206,6 +213,12 @@ class LibraryRegistry:
                 err_type=err_type,
                 link_symbol=func_info.get("link_symbol"),
             )
+            stated = func_info.get("has_channel")
+            if stated is not None and stated != has_channel(result[func_name]):
+                raise SushiError(
+                    "CE3512", path=str(lib_path),
+                    reason=f"function '{func_name}' states has_channel {str(stated).lower()}, "
+                           "and its error_type and return_type say otherwise")
 
         return result
 

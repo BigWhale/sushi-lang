@@ -4,4 +4,4 @@
 fn main() i32:
     let i8 left = -128 % -1
     println(left)
-    return Result.Ok(0)
+    return 0

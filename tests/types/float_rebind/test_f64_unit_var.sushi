@@ -7,4 +7,4 @@ var f64 total = 0.0
 fn main() i32:
     total := 2.5
     println(total)
-    return Result.Ok(0)
+    return 0

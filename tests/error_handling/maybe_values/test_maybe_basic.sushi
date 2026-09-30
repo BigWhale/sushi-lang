@@ -9,18 +9,18 @@ fn test_maybe_some() i32:
 
     match val:
         Maybe.Some(x) ->
-            return Result.Ok(x)
+            return x
         Maybe.None() ->
-            return Result.Ok(0)
+            return 0
 
 fn test_maybe_none() i32:
     let Maybe@(i32) val = Maybe.None()
 
     match val:
         Maybe.Some(x) ->
-            return Result.Ok(x)
+            return x
         Maybe.None() ->
-            return Result.Ok(-1)
+            return -1
 
 fn test_maybe_string() i32:
     let Maybe@(string) val = Maybe.Some("hello")
@@ -28,10 +28,10 @@ fn test_maybe_string() i32:
     match val:
         Maybe.Some(s) ->
             if (s == "hello"):
-                return Result.Ok(1)
-            return Result.Ok(0)
+                return 1
+            return 0
         Maybe.None() ->
-            return Result.Ok(0)
+            return 0
 
 fn test_maybe_bool() i32:
     let Maybe@(bool) val1 = Maybe.Some(true)
@@ -52,26 +52,26 @@ fn test_maybe_bool() i32:
         Maybe.None() ->
             result2 := 5
 
-    return Result.Ok(result1 + result2)
+    return result1 + result2
 
 fn main() i32:
     # test_maybe_some should return 42
-    let i32 r1 = test_maybe_some().realise(0)
+    let i32 r1 = test_maybe_some()
     println("test_maybe_some: {r1}")
 
     # test_maybe_none should return -1
-    let i32 r2 = test_maybe_none().realise(0)
+    let i32 r2 = test_maybe_none()
     println("test_maybe_none: {r2}")
 
     # test_maybe_string should return 1
-    let i32 r3 = test_maybe_string().realise(0)
+    let i32 r3 = test_maybe_string()
     println("test_maybe_string: {r3}")
 
     # test_maybe_bool should return 15 (10 + 5)
-    let i32 r4 = test_maybe_bool().realise(0)
+    let i32 r4 = test_maybe_bool()
     println("test_maybe_bool: {r4}")
 
     # Total: 42 + (-1) + 1 + 15 = 57
     let i32 result = r1 + r2 + r3 + r4
     let i32 expected = 57
-    return Result.Ok(result - expected)
+    return result - expected

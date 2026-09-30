@@ -57,4 +57,4 @@ fn main() i32:
     let i32 default = invalid3.to_i32().realise(-1)
     println("Using realise() with invalid: {default}")
 
-    return Result.Ok(0)
+    return 0

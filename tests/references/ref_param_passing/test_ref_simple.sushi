@@ -3,7 +3,7 @@
 # Minimal reference test
 # EXPECT_NO_LEAKS: true
 
-fn test(poke i32 x) i32:
+fn test(poke i32 x) i32 | StdError:
     println(x)
     return Result.Ok(42)
 
@@ -12,5 +12,5 @@ fn main() i32:
     let Result@(i32, StdError) result = test(poke i)
     if (result.is_ok()):
         println(i)
-        return Result.Ok(0)
-    return Result.Err(StdError.Error)
+        return 0
+    return 1

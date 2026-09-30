@@ -13,4 +13,4 @@ fn main() i32:
     let Tag g = Tag(1)
     let string t = "hi"
     println("{g.rename(t)}")
-    return Result.Ok(0)
+    return 0

@@ -1,4 +1,4 @@
-fn qsort(poke i32[] a, i32 lo, i32 hi) ~:
+fn qsort(poke i32[] a, i32 lo, i32 hi) ~ | StdError:
     if (lo >= hi):
         return Result.Ok(~)
     let i32 p = a[(lo + hi) / 2]
@@ -33,4 +33,4 @@ fn main() i32:
     foreach(i in 0..1000):
         check := check + (a[i * 499] as i64)
     println("{a[0]} {a[n - 1]} {check}")
-    return Result.Ok(0)
+    return 0

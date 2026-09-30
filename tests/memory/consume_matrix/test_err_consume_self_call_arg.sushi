@@ -13,13 +13,13 @@ struct Holder:
 
 fn eat(nom Holder h) i32:
     println("eating {h.label}")
-    return Result.Ok(1)
+    return 1
 
 extend Holder feed() i32:
-    return eat(nom self).realise(0)
+    return eat(nom self)
 
 fn main() i32:
     let Holder h = Holder("initial-{0}")
     let i32 n = h.feed()
     println("n: {n} orig: {h.label}")
-    return Result.Ok(0)
+    return 0

@@ -3,4 +3,4 @@ fn main() i32:
   let i32[] numbers = new()
   print(numbers.push(10))
   print(numbers.len())
-  return Result.Ok(0)
+  return 0

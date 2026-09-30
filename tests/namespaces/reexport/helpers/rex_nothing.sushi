@@ -3,4 +3,4 @@
 public use "helpers/nothing_public"
 
 public fn present() i32:
-    return Result.Ok(1)
+    return 1

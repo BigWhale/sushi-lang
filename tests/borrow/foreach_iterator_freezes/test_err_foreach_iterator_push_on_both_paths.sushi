@@ -11,4 +11,4 @@ fn main() i32:
             break
         a.push(6)
     println(a.len())
-    return Result.Ok(0)
+    return 0

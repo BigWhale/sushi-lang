@@ -18,4 +18,4 @@ fn main() i32:
     let string second = words[1]
     println(first)
     println(second)
-    return Result.Ok(0)
+    return 0

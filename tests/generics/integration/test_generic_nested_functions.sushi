@@ -4,7 +4,7 @@
 # Test functions returning nested generics
 # "Forty-two!" yelled Loonquawl. "Is that all you've got to show for seven and a half million years' work?"
 
-fn compute_answer() Maybe@(i32):
+fn compute_answer() Maybe@(i32) | StdError:
     return Result.Ok(Maybe.Some(42))
 
 fn wrap_in_result(Maybe@(i32) maybe_val) Result@(Maybe@(i32), StdError):
@@ -21,6 +21,6 @@ fn main() i32:
             let Maybe@(i32) maybe_val = wrapped.realise(Maybe.None())
             let i32 answer = maybe_val.realise(0)
             println("{answer}")
-            return Result.Ok(0)
+            return 0
 
-    return Result.Ok(1)
+    return 1

@@ -1,0 +1,10 @@
+# `main` is bare, so a `??` in its body has no channel to propagate into (CE0131). The
+# call it unwraps has a channel of its own; the refusal is about main, not the callee.
+# EXPECT_ERROR_CODES_EXACT: CE0131
+
+fn get_value() i32 | StdError:
+    return Result.Ok(42)
+
+fn main() i32:
+    let i32 x = get_value()??
+    return x

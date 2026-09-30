@@ -1,0 +1,16 @@
+# The free-function combinators are bare too.
+# EXPECT_STDOUT_EXACT: "1 6\n"
+use <collections/iter>
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let List@(i32) ys = map(xs, |i32 x| x * 2)
+    let List@(i32) zs = filter(ys, |i32 x| x > 2)
+    let i32 total = fold(ys, 0, |i32 acc, i32 x| acc + x)
+    println("{zs.len()} {total}")
+    xs.destroy()
+    ys.destroy()
+    zs.destroy()
+    return 0

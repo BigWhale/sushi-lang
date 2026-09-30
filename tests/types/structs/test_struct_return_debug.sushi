@@ -8,14 +8,14 @@ struct Inner:
 struct Outer:
     Inner data
 
-fn create_inner() Inner:
+fn create_inner() Inner | StdError:
     let Inner inner = Inner(new())
     inner.values.push(42)
     inner.values.push(100)
     println("In create_inner - before return: {inner.values.get(0)??}")
     return Result.Ok(inner)
 
-fn create_outer_from_inner(nom Inner arg) Outer:
+fn create_outer_from_inner(nom Inner arg) Outer | StdError:
     println("In create_outer_from_inner - arg len: {arg.values.len()}")
     println("In create_outer_from_inner - arg[0]: {arg.values.get(0)??}")
     let Outer result = Outer(arg)
@@ -23,7 +23,7 @@ fn create_outer_from_inner(nom Inner arg) Outer:
     println("In create_outer_from_inner - result[0]: {result.data.values.get(0)??}")
     return Result.Ok(result)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let Inner inner = create_inner().realise(Inner(new()))
     println("After create_inner - len: {inner.values.len()}")
     println("After create_inner - value: {inner.values.get(0)??}")
@@ -36,4 +36,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

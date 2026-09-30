@@ -87,8 +87,8 @@ and the value is freed with the closure's environment:
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
     let fn(i32) -> i32 f = |i32 x| x + nums.len()   # moves nums into the closure
-    println(f(10).realise(-1))                      # 13
-    return Result.Ok(0)
+    println(f(10))                      # 13
+    return 0
 ```
 
 A closure can even capture and call **another closure**, so you can build one function out of

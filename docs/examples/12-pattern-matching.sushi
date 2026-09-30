@@ -35,7 +35,6 @@ fn describe_status(peek JourneyStatus status) ~:
         JourneyStatus.Lost() ->
             println("Lost in space")
 
-    return Result.Ok(~)
 
 fn is_journey_active(peek JourneyStatus status) bool:
     # Using default pattern (_) to match multiple cases
@@ -43,11 +42,11 @@ fn is_journey_active(peek JourneyStatus status) bool:
     match status:
         JourneyStatus.InProgress(_, _) ->
             # _ ignores both the location and distance fields
-            return Result.Ok(true)
+            return true
         _ ->
             # Default pattern matches any remaining variants (NotStarted, Arrived, Lost)
             # This is useful when you only care about one or two specific cases
-            return Result.Ok(false)
+            return false
 
 fn main() i32:
     # Create different journey statuses
@@ -56,7 +55,7 @@ fn main() i32:
     let JourneyStatus s3 = JourneyStatus.Arrived("Magrathea")
     let JourneyStatus s4 = JourneyStatus.Lost()
 
-    # Process each status - function calls don't need ?? since they return Result@(~)
+    # Process each status - describe_status is bare, so its call returns nothing and takes no ??
     describe_status(peek s1)
     describe_status(peek s2)
     describe_status(peek s3)
@@ -65,8 +64,8 @@ fn main() i32:
     println("")
 
     # Demonstrate the default pattern (_) usage - only InProgress is active
-    let bool active = is_journey_active(peek s2).realise(false)
+    let bool active = is_journey_active(peek s2)
     println("InProgress is active: {active}")
 
-    return Result.Ok(0)
+    return 0
 

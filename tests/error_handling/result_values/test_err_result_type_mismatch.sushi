@@ -2,8 +2,8 @@
 # EXPECT_ERROR_CODE: CE2031
 # Should fail with CE2031
 
-fn wrong_type() i32:
+fn wrong_type() i32 | StdError:
   return Result.Ok(true)  # Error: expected i32, got bool
 
 fn main() i32:
-  return Result.Ok(0)
+  return 0

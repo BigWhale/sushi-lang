@@ -3,4 +3,4 @@
 public const i32 DEEP_ANSWER = 7
 
 public fn deep_value() i32:
-    return Result.Ok(DEEP_ANSWER)
+    return DEEP_ANSWER

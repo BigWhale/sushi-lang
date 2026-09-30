@@ -18,7 +18,6 @@ fn report(string[] words) ~:
         Result.Ok(n) -> println("accepted, score {n}")
         Result.Err(ParseError.Empty) -> println("refused: no words")
         Result.Err(ParseError.TooLarge(count)) -> println("refused: {count} words is too many")
-    return Result.Ok(~)
 
 fn main() i32:
     let string[] two = from(["Mostly", "Harmless"])
@@ -27,4 +26,4 @@ fn main() i32:
     report(two)
     report(none)
     report(four)
-    return Result.Ok(0)
+    return 0

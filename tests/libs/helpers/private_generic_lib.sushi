@@ -5,7 +5,7 @@
 # calls `unmarked` has to hear the same answer on every compilation path.
 
 fn unmarked@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x
 
 public fn marked@(T)(nom T x) T:
-    return Result.Ok(x)
+    return x

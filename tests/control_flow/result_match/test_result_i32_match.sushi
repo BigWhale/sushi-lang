@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Got 42\n"
 
-fn returns_i32() i32:
+fn returns_i32() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -9,4 +9,4 @@ fn main() i32:
             println("Got {val}")
         Result.Err(_) ->
             println("Error")
-    return Result.Ok(0)
+    return 0

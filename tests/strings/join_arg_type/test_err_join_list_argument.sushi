@@ -8,4 +8,4 @@ fn main() i32:
     let List@(string) words = List.new()
     words.push("a")
     println(sep.join(words))
-    return Result.Ok(0)
+    return 0

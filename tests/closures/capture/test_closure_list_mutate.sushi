@@ -7,11 +7,11 @@ fn run() i32:
     xs.push(10)
     let fn(i32) -> i32 f = |i32 x|:
         xs.push(x)
-        return Result.Ok(xs.len())
-    let i32 a = f(5)??
-    let i32 b = f(9)??
-    return Result.Ok(a + b)
+        return xs.len()
+    let i32 a = f(5)
+    let i32 b = f(9)
+    return a + b
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

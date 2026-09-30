@@ -7,8 +7,8 @@ struct Box@(T):
     T item
 
 fn pick(nom fn(i32) -> Box@(string) f) fn(i32) -> Box@(string):
-    return Result.Ok(f)
+    return f
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

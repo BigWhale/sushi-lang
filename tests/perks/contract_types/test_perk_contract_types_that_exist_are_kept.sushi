@@ -19,4 +19,4 @@ fn main() i32:
     let Crane c = Crane(3)
     let Load l = Load(4)
     println("{c.weigh(l)}")
-    return Result.Ok(0)
+    return 0

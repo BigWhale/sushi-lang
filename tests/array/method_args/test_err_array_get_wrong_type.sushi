@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODE: CE2006
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let i32[3] arr = [1, 2, 3]
 
     # This should fail with CE2006: get() expects i32 argument
@@ -9,4 +9,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

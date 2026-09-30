@@ -11,10 +11,10 @@ fn main() i32:
     let i32 fd = fd_open("descriptor_tty_probe.txt", 1, 420).realise(-1)
     if (fd < 0):
         println("open failed")
-        return Result.Ok(1)
+        return 1
 
     println("file {fd_isatty(fd)}")
     println("captured stdout {fd_isatty(1)}")
 
     fd_close(fd).realise(-1)
-    return Result.Ok(0)
+    return 0

@@ -18,4 +18,4 @@ fn main() i32:
                 Two.None2 -> println("none")
             a := 10
         Two.None2 -> println("none")
-    return Result.Ok(0)
+    return 0

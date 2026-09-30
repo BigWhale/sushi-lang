@@ -15,4 +15,4 @@ extend List@(i32) with Show:
         return 2 as u64
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

@@ -1,0 +1,11 @@
+# CW2001 names the real type of the discarded value and the three ways to handle it.
+# There is no Result@(T), and an `if` on a Result is CE2516, so neither is advice.
+# EXPECT_ERROR_CODES_EXACT: CW2001
+# EXPECT_STDERR_CONTAINS: "unused 'Result@(i32, StdError)' value"
+# EXPECT_STDERR_CONTAINS: "match, .realise(default), or '??' in a body with a channel"
+fn parse(i32 x) i32 | StdError:
+    return Result.Ok(x)
+
+fn main() i32:
+    parse(3)
+    return 0

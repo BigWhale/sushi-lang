@@ -5,15 +5,15 @@
 # EXPECT_STDOUT_EXACT: "carried 7\n"
 
 fn wrap@(T)(nom T v) T:
-    return Result.Ok(v)
+    return v
 
 fn carry@(U)(nom U v) string:
-    return Result.Ok("carried {v}")
+    return "carried {v}"
 
 fn run() string:
-    let string said = carry(nom wrap(nom 7)??)??
-    return Result.Ok(said)
+    let string said = carry(nom wrap(nom 7))
+    return said
 
 fn main() i32:
-    println(run().realise("?"))
-    return Result.Ok(0)
+    println(run())
+    return 0

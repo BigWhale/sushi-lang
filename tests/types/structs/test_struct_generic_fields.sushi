@@ -18,4 +18,4 @@ fn main() i32:
     else:
         println("Error: x should be Some")
 
-    return Result.Ok(0)
+    return 0

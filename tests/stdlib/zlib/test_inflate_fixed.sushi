@@ -11,29 +11,28 @@ use <compression/zlib>
 fn show(u8[] blob) ~:
     match inflate_raw(blob):
         Result.Ok(out) ->
-            println("len={out.len()} adler={adler32(out)??}")
+            println("len={out.len()} adler={adler32(out)}")
         Result.Err(e) ->
             println("err={e.text()}")
-    return Result.Ok(~)
 
 fn run_test() i32:
     let u8[] fx_empty = from([0x03, 0x00])
-    show(fx_empty)??
+    show(fx_empty)
 
     let u8[] fx_one = from([0x73, 0x04, 0x00])
-    show(fx_one)??
+    show(fx_one)
 
     let u8[] fx_text = from([
         0xf3, 0xcd, 0x2f, 0x2e, 0xc9, 0xa9, 0x54, 0xf0, 0x48, 0x2c, 0xca, 0xcd,
         0x49, 0x2d, 0x2e, 0x06, 0x00
     ])
-    show(fx_text)??
+    show(fx_text)
 
     let u8[] fx_abc = from([0x4b, 0x4c, 0x4a, 0x4e, 0xc4, 0x8d, 0x00])
-    show(fx_abc)??
+    show(fx_abc)
 
     let u8[] fx_run = from([0x4b, 0x4c, 0x1c, 0x05, 0xc4, 0x02, 0x00])
-    show(fx_run)??
+    show(fx_run)
 
     let u8[] fx_prose = from([
         0x2b, 0xc9, 0x48, 0x55, 0x28, 0x2c, 0xcd, 0x4c, 0xce, 0x56, 0x48, 0x2a,
@@ -42,15 +41,15 @@ fn run_test() i32:
         0x56, 0x55, 0x2a, 0xa4, 0xe4, 0xa7, 0xeb, 0x81, 0x79, 0xa3, 0x8a, 0xc9,
         0x52, 0x0c, 0x00
     ])
-    show(fx_prose)??
+    show(fx_prose)
 
     let u8[] fx_rand = from([
         0x9b, 0x67, 0x5e, 0xb9, 0xb3, 0xde, 0xab, 0x46, 0xf4, 0xf3, 0x9c, 0x03,
         0x09, 0x31, 0x6f, 0x4f, 0x98, 0x00, 0x00
     ])
-    show(fx_rand)??
-    return Result.Ok(0)
+    show(fx_rand)
+    return 0
 
 fn main() i32:
-    let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    let i32 r = run_test()
+    return r

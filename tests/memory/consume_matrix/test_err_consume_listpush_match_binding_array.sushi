@@ -19,4 +19,4 @@ fn main() i32:
             l.push(p)
             println("l={l.len()}")
         Shape.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

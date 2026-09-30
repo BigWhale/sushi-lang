@@ -7,4 +7,4 @@ fn main() i32:
     match r:
         Result.Ok(s) -> println("{s}")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

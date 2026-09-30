@@ -1,0 +1,8 @@
+# A bare function returns its value: `return Result.Ok(...)` is refused (CE2091).
+# EXPECT_ERROR_CODES_EXACT: CE2091
+fn answer() i32:
+    return Result.Ok(42)
+
+fn main() i32:
+    println(answer())
+    return 0

@@ -13,7 +13,7 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("setup failed")
-            return Result.Ok(1)
+            return 1
     match mtime(path):
         Result.Ok(t) ->
             if (t > 1_700_000_000):
@@ -29,4 +29,4 @@ fn main() i32:
     match remove(path):
         Result.Ok(_) -> println("cleanup ok")
         Result.Err(_) -> println("cleanup failed")
-    return Result.Ok(0)
+    return 0

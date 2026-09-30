@@ -17,4 +17,4 @@ fn main() i32:
     println("{has_zaphod}")
     let bool has_ford = names.holds("ford")
     println("{has_ford}")
-    return Result.Ok(0)
+    return 0

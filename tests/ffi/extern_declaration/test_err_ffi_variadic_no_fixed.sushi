@@ -5,4 +5,4 @@ unsafe external "C" as libc because "needs a fixed anchor parameter":
     fn bad(...) i32 = "bad"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

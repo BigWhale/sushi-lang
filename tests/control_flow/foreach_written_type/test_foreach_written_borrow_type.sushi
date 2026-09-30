@@ -11,4 +11,4 @@ fn main() i32:
         p.x := p.x + 1
     foreach(Point p in ps.iter()):
         println("{p.x}")
-    return Result.Ok(0)
+    return 0

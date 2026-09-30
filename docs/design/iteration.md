@@ -1,6 +1,6 @@
 # Iteration — the `foreach` protocol, and where a fallible iterator puts its failure
 
-Status: SHIPPED (the handles epic, Phase 7d, 2026-09-02). This is the decision record.
+Status: SHIPPED. This is the decision record.
 The rulings here are David's and are settled.
 
 The headline: `foreach` walks a type that carries `next()`, and a fallible iterator says
@@ -46,21 +46,21 @@ extend Countdown next(poke self) Maybe@(i32):
     return got
 ```
 
-`foreach(n in c)` now walks a `Countdown`.
+`foreach(n in c)` walks a `Countdown`.
 
 ## The rulings
 
 ### 1. A protocol, not a type and not a perk
 
-`foreach` learns the METHOD, and `Iterator@(T)`'s layout is untouched. Two candidates were
-weighed and dropped.
+`foreach` knows the METHOD, and `Iterator@(T)`'s layout does not change. Two other candidates
+are dropped.
 
 A **perk** — `perk Iterator@(Item): fn next() Maybe@(Item)` — is not expressible: a perk
 cannot carry a type parameter (**CE4010**), so the contract cannot name what it yields.
 Widening perks to carry type parameters is a language change with no other consumer, and
 buying it for one loop is the wrong trade.
 
-A **closure payload** on the iterator struct was the shape an earlier draft carried. It
+A **closure payload** on the iterator struct is the second candidate. It
 needs a layout change to a type every array walk in the language goes through, and it buys
 nothing the protocol does not: a protocol on `next()` needs no layout change at all, which
 is strictly less machinery.
@@ -84,10 +84,10 @@ argument in full.
 | the failure on the LOOP HEAD | Swift's `for try await` | a bare `T`; the loop machinery consumed the error |
 | a call inside a `while` | Zig, C | whatever the caller unpacks |
 
-A fourth was ruled out before the others: a deferred **`.err()` after the loop** — Go's
+A fourth is ruled out before the others: a deferred **`.err()` after the loop** — Go's
 `Scanner` shape — cannot report WHICH line failed, and per-line detection is the whole
-reason the phase existed. Sushi also has no unwind, so throwing out of the loop body was
-never on the table.
+reason for the protocol. Sushi also has no unwind, so a throw out of the loop body is not
+an option.
 
 **The loop-head form has no long form, and that is what decided it.** Its item is a bare
 `T`, so the error has already been consumed by the loop machinery by the time the body
@@ -108,8 +108,8 @@ ordinary value and every tool the language already has works on it: a `match`,
 So a fallible iterator sets `T` to a `Result`: `next()` answers
 `Maybe@(Result@(T, E))`. The outer `Maybe` says whether the input has more; the inner
 `Result` says whether reading it worked. **The two are never the same answer** — a blank
-line is `Some(Ok(""))` and the end is `None` — which is the same distinction ruling R22
-made for `File.readln()`.
+line is `Some(Ok(""))` and the end is `None` — which is the same distinction
+`File.readln()` makes.
 
 ### 3. `??` on the binder is the short form, and it is a MARKER
 
@@ -126,8 +126,8 @@ foreach(line?? in it):        →     foreach(#fe_itemN in it):
 ```
 
 That is the entire implementation. The unwrap, the exact-error-type check (**CE2511**), the
-warning in `main` (**CW2511**) and the scope cleanup on the propagation path are the ones
-`??` already has in every other position — there is no second implementation to keep in
+refusal in a bare body (**CE0131**, `main` included) and the scope cleanup on the propagation
+path are the ones `??` already has in every other position — there is no second implementation to keep in
 step. The one thing the parser cannot know is that `let`'s type, and the `foreach` validator
 fills it in from the item type.
 
@@ -207,7 +207,7 @@ reports a binding with no written name. So every later pass sees an ordinary `fo
 The discard takes every binder form: a written type, `peek`/`poke`, and the `??` marker.
 `foreach(_?? in it)` keeps the propagation and discards the value: the desugar of ruling 3
 binds the unwrapped value to a second hidden name with no span, and the scope exit destroys
-it. No new AST shape was necessary.
+it. It needs no new AST shape.
 
 ```
 foreach(_?? in it):           →     foreach(#fe_itemN in it):
@@ -215,18 +215,7 @@ foreach(_?? in it):           →     foreach(#fe_itemN in it):
                                           BODY
 ```
 
-## What this replaced
-
-`File.lines()` was a compiler builtin, and the only reading method the compiler still
-defined on a handle. It faked laziness through a sentinel: the iterator's `length` field
-held `-1` to mean "this is not a buffer", and the data slot carried a heap cell holding the
-DESCRIPTOR. `foreach` then read a line per iteration through a second loop arm.
-
-Two things were wrong with it beyond the shape. The sentinel was tested at RUN TIME with
-both loops emitted every time, which was merely wasteful on an array walk but became a LINK
-failure once the lazy arm called a stdlib function — every program iterating a `string[]`
-then referenced `sushi_io_files_fd_readln`. And the iterator had no destructor, so every
-`lines()` leaked sixteen bytes.
+## A `File` has no line loop
 
 **A `File` has no line loop**, and that is a decision rather than an omission: an
 unbuffered handle yielding lines is one system call per line, which is the cost the buffer

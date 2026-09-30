@@ -7,10 +7,10 @@ enum Msg:
     Text(string)
     Num(i32)
 
-fn mk() Msg:
+fn mk() Msg | StdError:
     return Result.Ok(Msg.Text("xxxxxxxxxxxx{'abcd'}"))
 
 fn main() i32:
     let Result@(Msg, StdError) r = mk()
     println("ok = {r.is_ok()}")
-    return Result.Ok(0)
+    return 0

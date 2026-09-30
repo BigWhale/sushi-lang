@@ -15,4 +15,4 @@ fn main() i32:
     let Pair@(bool, i32) p2 = Pair(second: 100, first: true)
     println(p2.second)
 
-    return Result.Ok(0)
+    return 0

@@ -12,15 +12,15 @@ fn show(string label, ptr slot) i32:
     match slot.load_ptr(0):
         Maybe.Some(q) -> println("{label}: {q.load_i32(0)}")
         Maybe.None -> println("{label}: none")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     let ptr table = libc.calloc(1, 8)
-    let i32 a = show("zeroed", table).realise(1)
+    let i32 a = show("zeroed", table)
     let ptr cell = libc.malloc(4)
     cell.store_i32(0, 42)
     table.store_ptr(0, cell)
-    let i32 b = show("stored", table).realise(1)
+    let i32 b = show("stored", table)
     libc.free(cell)
     libc.free(table)
-    return Result.Ok(a + b)
+    return a + b

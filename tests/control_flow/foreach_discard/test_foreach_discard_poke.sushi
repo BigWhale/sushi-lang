@@ -10,4 +10,4 @@ fn main() i32:
     foreach(poke _ in xs.iter()):
         n := n + 1
     println(n)
-    return Result.Ok(0)
+    return 0

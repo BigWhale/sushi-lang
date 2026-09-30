@@ -1,0 +1,11 @@
+# A function without `| E` is bare: its body returns the value, and the call yields
+# the value itself, with no Result to unwrap.
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_STDERR_EMPTY: true
+fn answer(i32 half) i32:
+    return half * 2
+
+fn main() i32:
+    let i32 n = answer(21)
+    println(n)
+    return 0

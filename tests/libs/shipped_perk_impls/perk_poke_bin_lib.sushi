@@ -1,0 +1,9 @@
+public perk Adder:
+    fn add(poke self, i32 n) ~
+
+public struct Tally:
+    i32 n
+
+extend Tally with Adder:
+    fn add(poke self, i32 n) ~:
+        self.n := self.n + n

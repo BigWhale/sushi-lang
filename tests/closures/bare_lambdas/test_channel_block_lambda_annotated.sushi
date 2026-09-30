@@ -1,0 +1,10 @@
+# A block lambda that writes `-> T | E` has a channel: it spells both constructors.
+# EXPECT_STDOUT_EXACT: "2\n-1\n"
+fn main() i32:
+    let fn(i32) -> i32 | StdError half = |i32 x| -> i32 | StdError:
+        if (x % 2 == 1):
+            return Result.Err(StdError.Error)
+        return Result.Ok(x / 2)
+    println(half(4).realise(-1))
+    println(half(3).realise(-1))
+    return 0

@@ -5,4 +5,4 @@
 fn main() i32:
     let Result@(i32, StdError) result = Result.Ok(42)
     result
-    return Result.Ok(0)
+    return 0

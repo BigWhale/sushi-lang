@@ -15,65 +15,62 @@ const string ROOT = "/tmp/sushi_read_library_manifest_shape"
 fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
         out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
-    return Result.Ok(~)
 
 fn push_str(poke u8[] out, string s) ~:
     out.push(0xa0 | (s.size() as u8))
     out.extend(s.to_bytes())
-    return Result.Ok(~)
 
 fn image(peek u8[] meta) u8[]:
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 4, 4)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, meta.len() as u64, 8)??
+    push_le(poke out, 5, 4)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    push_le(poke out, meta.len() as u64, 8)
     out.extend(meta)
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    return Result.Ok(out)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    return out
 
 fn write_image(string path, peek u8[] meta) bool:
     match open(path, FileMode.WriteB()):
         Result.Ok(nom out) ->
-            out.write_bytes(image(peek meta)??)
+            out.write_bytes(image(peek meta))
             out.close()
-            return Result.Ok(true)
+            return true
         Result.Err(_) ->
-            return Result.Ok(false)
+            return false
 
 fn show_fault(SlibError e) string:
     match e:
-        SlibError.Invalid(reason) -> return Result.Ok("Invalid({reason})")
-        _ -> return Result.Ok("another SlibError")
+        SlibError.Invalid(reason) -> return "Invalid({reason})"
+        _ -> return "another SlibError"
 
 fn check(string path) ~:
     match read_library(path):
         Result.Ok(_) -> println("Ok")
-        Result.Err(e) -> println(show_fault(e)??)
-    return Result.Ok(~)
+        Result.Err(e) -> println(show_fault(e))
 
 fn run_test() i32:
     let u8[] one_key = from([0x81])
-    push_str(poke one_key, "library_name")??
-    push_str(poke one_key, "demo")??
+    push_str(poke one_key, "library_name")
+    push_str(poke one_key, "demo")
     let u8[] wrong_type = from([0x81])
-    push_str(poke wrong_type, "library_name")??
+    push_str(poke wrong_type, "library_name")
     wrong_type.push(0x07)
     let u8[] not_a_map = from([0xc0])
 
     if (mkdir_all(ROOT, 0o755).is_err()):
-        return Result.Ok(1)
-    write_image("{ROOT}/one_key.slib", peek one_key)??
-    write_image("{ROOT}/wrong_type.slib", peek wrong_type)??
-    write_image("{ROOT}/not_a_map.slib", peek not_a_map)??
-    check("{ROOT}/one_key.slib")??
-    check("{ROOT}/wrong_type.slib")??
-    check("{ROOT}/not_a_map.slib")??
+        return 1
+    write_image("{ROOT}/one_key.slib", peek one_key)
+    write_image("{ROOT}/wrong_type.slib", peek wrong_type)
+    write_image("{ROOT}/not_a_map.slib", peek not_a_map)
+    check("{ROOT}/one_key.slib")
+    check("{ROOT}/wrong_type.slib")
+    check("{ROOT}/not_a_map.slib")
     remove_all(ROOT)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     remove_all(ROOT)
-    return Result.Ok(run_test().realise(1))
+    return run_test()

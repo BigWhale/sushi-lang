@@ -8,19 +8,19 @@ fn main() i32:
     if (size != 2):
         println("FAIL: wrong size")
         map.free()
-        return Result.Ok(1)
+        return 1
     let Maybe@(i32) val = map.get("answer")
     match val:
         Maybe.Some(v) ->
             if (v == 42):
                 println("PASS")
                 map.free()
-                return Result.Ok(0)
+                return 0
             else:
                 println("FAIL: wrong value")
                 map.free()
-                return Result.Ok(1)
+                return 1
         Maybe.None() ->
             println("FAIL: key not found")
             map.free()
-            return Result.Ok(1)
+            return 1

@@ -43,8 +43,8 @@ fn run_test() i32:
     # unpatched tree, and one this test must not be coupled to.
     let Maybe@(Own@(Holder)) again = Maybe.Some(o)
     println("held={again.is_some()}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

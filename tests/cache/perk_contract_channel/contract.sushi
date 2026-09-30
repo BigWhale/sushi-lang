@@ -1,0 +1,2 @@
+public perk Pinger:
+    fn ping() ~

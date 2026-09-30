@@ -14,4 +14,4 @@ fn main() i32:
     # Both ptr1 and ptr2 should be automatically destroyed here
     let i32 result = val1 + val2
     let i32 expected = 142
-    return Result.Ok(result - expected)
+    return result - expected

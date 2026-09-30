@@ -237,8 +237,8 @@ closes the descriptor. A later mention of the reader is refused while compiling.
 
   fn main() i32:
       match show("data.txt"):
-          Result.Ok(_) -> return Result.Ok(0)
-          Result.Err(_) -> return Result.Ok(1)
+          Result.Ok(_) -> return 0
+          Result.Err(_) -> return 1
   ```
 :##
 extend BufReader@(R) lines(nom self) Lines@(R):

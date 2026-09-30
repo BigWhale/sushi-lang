@@ -9,8 +9,8 @@ extend Point with Hashable:
         return 42 as u64
 
 # Function with single constraint
-fn compute_hash@(T: Hashable)(T value) u64:
+fn compute_hash@(T: Hashable)(T value) u64 | StdError:
     return value.hash()
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

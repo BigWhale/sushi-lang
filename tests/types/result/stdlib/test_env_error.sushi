@@ -21,20 +21,20 @@ fn main() i32:
             println("PASS: EnvError.NotFound works")
         _ ->
             println("FAIL: NotFound pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match get_env_var("INVALID"):
         Result.Err(EnvError.InvalidValue) ->
             println("PASS: EnvError.InvalidValue works")
         _ ->
             println("FAIL: InvalidValue pattern failed")
-            return Result.Ok(1)
+            return 1
 
     match get_env_var("FORBIDDEN"):
         Result.Err(EnvError.PermissionDenied) ->
             println("PASS: EnvError.PermissionDenied works")
         _ ->
             println("FAIL: PermissionDenied pattern failed")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

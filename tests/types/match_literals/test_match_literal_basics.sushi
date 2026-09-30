@@ -6,20 +6,20 @@
 fn classify(i32 n) string:
     match n:
         0 ->
-            return Result.Ok("zero")
+            return "zero"
         0x2a ->
-            return Result.Ok("answer")
+            return "answer"
         -1 ->
-            return Result.Ok("minus one")
+            return "minus one"
         1000000 ->
-            return Result.Ok("big")
+            return "big"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(classify(0).realise("err"))
-    println(classify(42).realise("err"))
-    println(classify(-1).realise("err"))
-    println(classify(1000000).realise("err"))
-    println(classify(7).realise("err"))
-    return Result.Ok(0)
+    println(classify(0))
+    println(classify(42))
+    println(classify(-1))
+    println(classify(1000000))
+    println(classify(7))
+    return 0

@@ -6,10 +6,10 @@
 
 use <encoding/msgpack>
 
-fn check(u8[] buf) ~:
+fn check(u8[] buf) ~ | StdError:
     match decode(buf):
         Result.Ok(v) ->
-            println(show(v)??)
+            println(show(v))
         Result.Err(e) ->
             match e:
                 MpError.Truncated(off) ->
@@ -22,7 +22,7 @@ fn check(u8[] buf) ~:
                     println("Trailing({p})")
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let u8[] b_empty = new()
     check(b_empty)??
     let u8[] b_short_str = from([0xa5, 0x68])
@@ -47,4 +47,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

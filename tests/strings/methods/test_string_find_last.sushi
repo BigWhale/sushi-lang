@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: find_last not found returns None
 use <collections/strings>
 
-fn test_find_last_basic() ~:
+fn test_find_last_basic() ~ | StdError:
     let string text = "hello world"
     let Maybe@(i32) result = text.find_last("o")
 
@@ -17,7 +17,7 @@ fn test_find_last_basic() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_not_found() ~:
+fn test_find_last_not_found() ~ | StdError:
     let string text = "hello"
     let Maybe@(i32) result = text.find_last("x")
 
@@ -28,7 +28,7 @@ fn test_find_last_not_found() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_first_char() ~:
+fn test_find_last_first_char() ~ | StdError:
     let string text = "test"
     let Maybe@(i32) result = text.find_last("t")
 
@@ -43,7 +43,7 @@ fn test_find_last_first_char() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_substring() ~:
+fn test_find_last_substring() ~ | StdError:
     let string text = "the cat in the hat"
     let Maybe@(i32) result = text.find_last("the")
 
@@ -58,7 +58,7 @@ fn test_find_last_substring() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_single_occurrence() ~:
+fn test_find_last_single_occurrence() ~ | StdError:
     let string text = "unique"
     let Maybe@(i32) result = text.find_last("que")
 
@@ -73,7 +73,7 @@ fn test_find_last_single_occurrence() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_empty_needle() ~:
+fn test_find_last_empty_needle() ~ | StdError:
     let string text = "test"
     let Maybe@(i32) result = text.find_last("")
 
@@ -88,7 +88,7 @@ fn test_find_last_empty_needle() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_empty_string() ~:
+fn test_find_last_empty_string() ~ | StdError:
     let string text = ""
     let Maybe@(i32) result = text.find_last("x")
 
@@ -99,7 +99,7 @@ fn test_find_last_empty_string() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_full_match() ~:
+fn test_find_last_full_match() ~ | StdError:
     let string text = "hello"
     let Maybe@(i32) result = text.find_last("hello")
 
@@ -114,7 +114,7 @@ fn test_find_last_full_match() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_utf8() ~:
+fn test_find_last_utf8() ~ | StdError:
     let string text = "café café"
     let Maybe@(i32) result = text.find_last("café")
 
@@ -129,7 +129,7 @@ fn test_find_last_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_emoji() ~:
+fn test_find_last_emoji() ~ | StdError:
     let string text = "🎉test🎉"
     let Maybe@(i32) result = text.find_last("🎉")
 
@@ -144,7 +144,7 @@ fn test_find_last_emoji() ~:
 
     return Result.Ok(~)
 
-fn test_find_last_vs_find() ~:
+fn test_find_last_vs_find() ~ | StdError:
     let string text = "abcabc"
     let Maybe@(i32) first = text.find("abc")
     let Maybe@(i32) last = text.find_last("abc")
@@ -185,4 +185,4 @@ fn main() i32:
     if (test_find_last_vs_find().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

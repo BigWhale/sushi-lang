@@ -6,7 +6,7 @@ fn main() i32:
 
     if (empty.capacity() != 50):
         println("ERROR: Should start with capacity 50")
-        return Result.Ok(1)
+        return 1
 
     # Shrink empty list
     empty.shrink_to_fit()
@@ -14,11 +14,11 @@ fn main() i32:
     # Should have zero capacity now
     if (empty.capacity() != 0):
         println("ERROR: Empty list should shrink to capacity 0")
-        return Result.Ok(2)
+        return 2
 
     if (not empty.is_empty()):
         println("ERROR: Should still be empty")
-        return Result.Ok(3)
+        return 3
 
     println("shrink_to_fit on empty list passed!")
-    return Result.Ok(0)
+    return 0

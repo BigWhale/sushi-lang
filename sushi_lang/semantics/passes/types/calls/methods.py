@@ -13,8 +13,7 @@ from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
-from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args,\
-    resolve_declared_type
+from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
 
 # A receiver that can answer a method at all. `Own@(T)`, `List@(T)` and `HashMap@(K, V)`
 # are named StructTypes, so the tuple covers them with every other struct.
@@ -351,27 +350,16 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
 
 
 def extension_call_result_type(validator: 'TypeValidator', method):
-    """What a resolved extension call YIELDS: the bare return, or its channel Result.
+    """What a resolved method call YIELDS: the bare return, or its channel Result.
 
-    A `| E` method (ruling 1) returns the interned Result@(ret, E) at every call site;
-    `??` and the chain gate (CE2515) both read that answer. One reader for both method
-    kinds: a perk-implementation method spells its bare return `ret` and an
-    ExtensionMethod spells it `ret_type`, and they yield by the same rule.
+    `resolution.call_yield`, the rule every callee kind reads. A perk-implementation
+    method spells its return `ret` and an ExtensionMethod spells it `ret_type`.
     """
+    from ..resolution import call_yield
     declared = getattr(method, "ret_type", None)
     if declared is None:
         declared = getattr(method, "ret", None)
-    ret = resolve_declared_type(validator, declared)
-    err = getattr(method, "err_type", None)
-    if err is None:
-        return ret
-    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
-    resolved_err = resolve_unknown_type(
-        err, validator.struct_table.by_name, validator.enum_table.by_name)
-    return ensure_result_type_in_table(
-        validator.enum_table, ret, resolved_err,
-        struct_table=validator.struct_table.by_name)
+    return call_yield(validator, declared, getattr(method, "err_type", None))
 
 
 def _unhandled_channel_payload(receiver_type):

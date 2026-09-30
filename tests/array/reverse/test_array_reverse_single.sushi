@@ -1,4 +1,4 @@
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test reverse() on single element - Deep Thought's answer
     let i32[] answer = from([42])
     answer.reverse()
@@ -13,4 +13,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

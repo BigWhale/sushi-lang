@@ -15,12 +15,12 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("setup failed")
-            return Result.Ok(1)
+            return 1
     match run("ln", "-s", target, link):
         Result.Ok(_) -> ~
         Result.Err(_) ->
             println("setup ln failed")
-            return Result.Ok(1)
+            return 1
 
     match is_symlink(target):
         Result.Ok(b) -> println("target: {b}")
@@ -31,8 +31,8 @@ fn main() i32:
 
     match remove(link):
         Result.Ok(_) -> ~
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
     match remove(target):
         Result.Ok(_) -> println("cleanup ok")
         Result.Err(_) -> println("cleanup failed")
-    return Result.Ok(0)
+    return 0

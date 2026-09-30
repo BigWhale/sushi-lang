@@ -9,4 +9,4 @@ unsafe external "C" as libc because "reading the process environment":
 fn main() i32:
     let string v = libc.getenv("SUSHI_NO_SUCH_KEY_42")
     println("got {v}")
-    return Result.Ok(0)
+    return 0

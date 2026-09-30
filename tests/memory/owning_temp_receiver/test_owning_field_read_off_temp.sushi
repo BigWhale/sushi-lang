@@ -13,12 +13,12 @@ struct Row:
     i32 weight
 
 fn make(i32 n) Row:
-    return Result.Ok(Row("mostly harmless", n))
+    return Row("mostly harmless", n)
 
 fn label_len(i32 n) i32:
-    return Result.Ok(make(n)??.label.len())
+    return make(n).label.len()
 
 fn main() i32:
     println(Row("mostly harmless", 2).label)
-    println(label_len(1).realise(0))
-    return Result.Ok(0)
+    println(label_len(1))
+    return 0

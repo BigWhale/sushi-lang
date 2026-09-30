@@ -6,7 +6,7 @@ enum Shade:
     Dim(i32)
     Lit(i32)
 
-fn bump(poke List@(Shade) l) ~:
+fn bump(poke List@(Shade) l) ~ | StdError:
     match l.get(0)??:
         Shade.Dim(poke r) -> r := 7
         Shade.Lit(_) -> println("lit")
@@ -18,4 +18,4 @@ fn main() i32:
     match bump(poke l):
         Result.Ok(_) -> println("ok")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

@@ -4,4 +4,4 @@ fn main() i32:
     while (false):
         let ptr p = 0
         println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

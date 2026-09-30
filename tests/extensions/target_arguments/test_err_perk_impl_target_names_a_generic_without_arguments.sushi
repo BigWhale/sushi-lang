@@ -18,4 +18,4 @@ extend Box@(Cage) with Show:
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
-from sushi_lang.backend.functions.helpers import declared_result_of
+from sushi_lang.backend.generics.result_builder import call_value_type, declared_return_ll
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -47,10 +47,8 @@ class FunctionDeclarations:
             return existing
         symbol = mangle_unit_symbol(unit_name, fn.name)
 
-        # Special handling for main function - it needs C-compatible signature
-        # Main always needs a wrapper because Sushi functions return Result<T>
-        # but C expects int main()
-        # Skip wrapper in library mode (main is just a regular function)
+        # `main` gets the C signature `int main(int, char**)`; the wrapper calls the
+        # program's own main under it. In library mode main is an ordinary function.
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             if self.codegen.main_expects_args:
                 ll_param_tys = [
@@ -70,7 +68,7 @@ class FunctionDeclarations:
         else:
             params = self.codegen.functions.helpers.params_of(fn)
             ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-            ll_ret = self.codegen.types.ll_type(declared_result_of(self.codegen, fn))
+            ll_ret = declared_return_ll(self.codegen, fn)
 
             fnty = ir.FunctionType(ll_ret, ll_param_tys)
             llvm_fn = ir.Function(self.codegen.module, fnty, name=symbol)
@@ -92,7 +90,7 @@ class FunctionDeclarations:
 
         if fn.name != 'main' and fn.ret is not None:
             self.codegen.function_return_types.declare(
-                fn.name, declared_result_of(self.codegen, fn), unit=unit_name)
+                fn.name, call_value_type(self.codegen, fn), unit=unit_name)
 
         return llvm_fn
 
@@ -122,18 +120,7 @@ class FunctionDeclarations:
                 param_types.append(self.codegen.types.ll_type(param.ty))
                 param_names.append(param.name)
 
-        # A channel extension ('| E', ruling 1) has the Result ABI; a bare one keeps
-        # the unwrapped return.
-        from sushi_lang.backend.generics.result_builder import extension_result_of
-        channel = extension_result_of(self.codegen, ext)
-        if channel is not None:
-            ret_type = self.codegen.types.ll_type(channel)
-        elif ext.ret:
-            ret_type = self.codegen.types.ll_type(ext.ret)
-        else:
-            ret_type = ir.VoidType()
-
-        func_type = ir.FunctionType(ret_type, param_types)
+        func_type = ir.FunctionType(declared_return_ll(self.codegen, ext), param_types)
         llvm_fn = ir.Function(self.codegen.module, func_type, name=func_name)
 
         for i, name in enumerate(param_names):

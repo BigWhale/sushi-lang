@@ -20,4 +20,4 @@ fn main() i32:
     else:
         println("Status: error")
 
-    return Result.Ok(0)
+    return 0

@@ -22,8 +22,8 @@ _add(ErrorMessage("CE2505", Severity.ERROR,
     Category.TYPE, "Result@(T, E) values must be explicitly handled before assigning to non-Result variables."))
 
 _add(ErrorMessage("CE2506", Severity.ERROR,
-    "cannot call .realise() on Result@(~) (blank type has no value to extract)",
-    Category.TYPE, "Blank functions return Result@(~) which has no meaningful value. Use if statement to check success/failure instead."))
+    "cannot call .realise() on '{ty}' (a '~' success has no value to extract)",
+    Category.TYPE, "A `~ | E` function answers Result@(~, E): its success carries no value, so a default for it means nothing. Test the outcome with `match` or `.is_ok()`, or propagate it with `??` in a body with a channel. A bare `~` function answers no Result at all (docs/design/error-channel.md). The same rule holds for a Maybe@(~)."))
 
 # Try operator (??) errors (CE25xx continued)
 _add(ErrorMessage("CE2507", Severity.ERROR,

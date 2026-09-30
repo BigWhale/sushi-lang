@@ -3,4 +3,4 @@
 use "helpers/geometry"
 
 public fn corner() Vec:
-    return Result.Ok(Vec(4, 4))
+    return Vec(4, 4)

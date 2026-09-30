@@ -9,5 +9,5 @@
 use "unit"
 
 fn main() i32:
-    println(one().realise(0))
-    return Result.Ok(0)
+    println(one())
+    return 0

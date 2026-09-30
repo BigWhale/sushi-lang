@@ -11,8 +11,8 @@ fn run_test() i32:
 
     let i32[] short = from([k..0])
     println("{short.len()} {short[0]} {short[3]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

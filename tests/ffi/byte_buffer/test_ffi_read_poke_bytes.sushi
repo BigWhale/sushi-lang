@@ -16,4 +16,4 @@ fn main() i32:
     let i32 rc = libc.close(fd)
     buf.truncate(got as i32)
     println("{got}: {buf.to_string()}")
-    return Result.Ok(rc)
+    return rc

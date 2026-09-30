@@ -8,4 +8,4 @@ fn main() i32:
     println("O_RDONLY {O_RDONLY}")
     println("SEEK_SET {SEEK_SET}")
     println("CLOCK_REALTIME {CLOCK_REALTIME}")
-    return Result.Ok(0)
+    return 0

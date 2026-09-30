@@ -18,23 +18,22 @@ extend Point with Displayable:
         return "Point"
 
 fn get_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn get_display@(T: Displayable)(T value) string:
-    return Result.Ok(value.display())
+    return value.display()
 
 fn combine@(T: Hashable + Displayable)(T value) ~:
-    let u64 h = get_hash(value)??
-    let string s = get_display(value)??
+    let u64 h = get_hash(value)
+    let string s = get_display(value)
     println(s)
     println(h)
-    return Result.Ok(~)
 
 fn run_test() i32:
     let Point p = Point(10, 20)
-    combine(p)??
-    return Result.Ok(0)
+    combine(p)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

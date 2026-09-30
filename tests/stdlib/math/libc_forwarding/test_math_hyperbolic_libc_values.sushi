@@ -5,4 +5,4 @@ use <math>
 
 fn main() i32:
     println("{sinh(1000.0)} {cosh(1000.0)} {sinh(-1000.0)} {tanh(0.5)} {hypot(3.0, 4.0)}")
-    return Result.Ok(0)
+    return 0

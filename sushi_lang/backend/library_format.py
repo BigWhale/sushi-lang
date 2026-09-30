@@ -165,8 +165,10 @@ def _skip_source_section(f: BinaryIO, path: str) -> int:
 # from here. 5: every record carries its unit and a source-shipped template its
 # `bindings` (D4). 6: every public perk ships, and a generic-target perk implementation
 # ships as a template (#543). 7: every perk method record carries its signature and
-# receiver mode (#537).
-TEMPLATES_SCHEMA_VERSION = 7
+# receiver mode (#537). 8: every function, helper and method record states `has_channel`,
+# because a signature without `| E` is bare and no longer means `| StdError`
+# (docs/design/error-channel.md).
+TEMPLATES_SCHEMA_VERSION = 8
 
 
 # The shape of a manifest: one row per field a reader relies on, as (record kind, key,
@@ -210,6 +212,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("function", "return_type", "str", "yes"),
     ("function", "params", "[]param", "no"),
     ("function", "type_params", "[]type_param", "no"),
+    ("function", "has_channel", "bool", "yes"),
     ("function", "error_type", "str", "no"),
     ("function", "source", "str", "no"),
     ("function", "unit", "str", "no"),
@@ -217,6 +220,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("helper", "name", "str", "yes"),
     ("helper", "params", "[]param", "no"),
     ("helper", "return_type", "str", "no"),
+    ("helper", "has_channel", "bool", "yes"),
     ("helper", "error_type", "str", "no"),
     ("helper", "unit", "str", "no"),
     ("helper", "link_symbol", "str", "no"),
@@ -271,6 +275,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("method", "return_type", "str", "yes"),
     ("method", "params", "[]param", "no"),
     ("method", "self_mode", "str", "no"),
+    ("method", "has_channel", "bool", "yes"),
     ("method", "error_type", "str", "no"),
     ("method", "doc", "@doc", "no"),
     ("doc", "summary", "str", "no"),
@@ -364,7 +369,10 @@ class LibraryFormat:
     # 4: source-first distribution. SPARE_1 and SPARE_2 become FLAGS and KIND, and a
     #    length-prefixed SOURCE section sits between the metadata and the bitcode.
     #    There is no upgrade shim: Sushi has no users in the wild.
-    VERSION = 4
+    # 5: a signature without `| E` is bare (docs/design/error-channel.md). A v4
+    #    library's bitcode answers a Result from every such function, so CE3509
+    #    rejects it rather than call it with the wrong ABI.
+    VERSION = 5
     FIXED_HEADER_SIZE = 52  # 16 (magic) + 4 (version) + 4 (flags) + 4 (kind) + 16 (spares) + 8 (meta_len)
     MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB sanity limit
 

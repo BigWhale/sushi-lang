@@ -11,4 +11,4 @@ fn main() i32:
     println(triple)
     println(square)
 
-    return Result.Ok(0)
+    return 0

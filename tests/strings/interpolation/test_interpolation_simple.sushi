@@ -2,4 +2,4 @@
 fn main() i32:
   let i32 x = 42
   print("Value: {x}")
-  return Result.Ok(0)
+  return 0

@@ -4,9 +4,9 @@
 fn probe() i32:
     let i32 n = 7
     ##: This block is not the first item in the body, and documents nothing. :##
-    return Result.Ok(n)
+    return n
 
 fn main() i32:
-    let i32 n = probe().realise(0)
+    let i32 n = probe()
     println("{n}")
-    return Result.Ok(0)
+    return 0

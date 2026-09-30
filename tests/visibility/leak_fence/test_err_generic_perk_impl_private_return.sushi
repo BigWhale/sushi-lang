@@ -19,4 +19,4 @@ extend Box@(T) with Peel:
 fn main() i32:
     let Box@(i32) b = Box(7)
     println("{b.peel().code}")
-    return Result.Ok(0)
+    return 0

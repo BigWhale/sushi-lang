@@ -10,4 +10,4 @@ fn main() i32:
         Maybe.Some(v) -> println(v)
         Maybe.None() -> println("missing")
     m.free()
-    return Result.Ok(0)
+    return 0

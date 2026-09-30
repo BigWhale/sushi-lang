@@ -13,4 +13,4 @@ extend i32 bump(poke self) ~:
 fn main() i32:
     GUARD.bump()
     println("{GUARD}")
-    return Result.Ok(0)
+    return 0

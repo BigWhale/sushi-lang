@@ -1,0 +1,7 @@
+use "contract"
+use "boxes"
+
+extend Box with Pinger:
+    fn ping() ~ | StdError:
+        println("pong {self.n}")
+        return Result.Ok(~)

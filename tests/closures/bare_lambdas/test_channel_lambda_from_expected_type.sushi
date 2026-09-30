@@ -1,0 +1,17 @@
+# A lambda has a channel when its expected type says `| E`: here the parameter type. The
+# expression body is then the Ok value, and the call through the value is a Result.
+# EXPECT_STDOUT_EXACT: "ok 4\nerr\n"
+fn parse(i32 x) i32 | StdError:
+    if (x < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x)
+
+fn show(fn(i32) -> i32 | StdError f, i32 x) ~:
+    match f(x):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("err")
+
+fn main() i32:
+    show(|i32 v| parse(v)?? + 1, 3)
+    show(|i32 v| parse(v)?? + 1, -3)
+    return 0

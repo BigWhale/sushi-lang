@@ -8,4 +8,4 @@ enum Shape:
 const Shape S = Shape.Circle("five")
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

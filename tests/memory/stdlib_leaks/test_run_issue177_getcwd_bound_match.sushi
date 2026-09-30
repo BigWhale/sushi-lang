@@ -15,4 +15,4 @@ fn main() i32:
     match r:
         Result.Ok(p) -> println("cwd = {p}")
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0

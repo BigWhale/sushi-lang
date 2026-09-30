@@ -6,4 +6,4 @@ fn main() i32:
     let i32 n = 5
     let Maybe@(peek i32) m = Maybe.Some(peek n)
     println(m.is_some())
-    return Result.Ok(0)
+    return 0

@@ -14,4 +14,4 @@ fn main() i32:
     xs.push(7)
     let i32 v = xs.first_or(0)
     println(v)
-    return Result.Ok(0)
+    return 0

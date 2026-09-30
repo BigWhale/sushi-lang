@@ -11,4 +11,4 @@ fn main() i32:
 
     println("{not yes} {yes and true} {yes xor true} {yes or false}")
     println("{not (n == 5)} {not exists(gone)}")
-    return Result.Ok(0)
+    return 0

@@ -8,7 +8,7 @@ methods that compile away to native code.
 ```sushi
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 This site collects the guided tutorial, the language and standard-library reference, and the

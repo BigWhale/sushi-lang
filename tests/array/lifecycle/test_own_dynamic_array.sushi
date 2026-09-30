@@ -20,4 +20,4 @@ fn main() i32:
     let Own@(i32[]) named = Own.alloc(w)
     println("named={named.get().len()} first={named.get()[0]}")
     named.destroy()
-    return Result.Ok(0)
+    return 0

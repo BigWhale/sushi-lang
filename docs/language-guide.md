@@ -27,17 +27,17 @@ Every Sushi program starts with a `main` function that serves as the entry point
 ```sushi
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 Key points:
 - `fn` declares a function
 - `i32` is the return type (32-bit integer)
-- All functions actually return `Result@(T, E)` - this is Sushi's approach to explicit error handling (more on this later)
+- `main` is bare: it has no error channel, and it returns the exit code itself
 - `println` outputs text with a newline to standard output
-- The `return Result.Ok(0)` convention indicates successful program termination (exit code 0)
+- `return 0` ends the program with exit code 0 (success)
 
-The main function must return an integer type, usually `i32` (the operating system uses it as the exit code; another return type is CE0106). Like all Sushi functions, it must explicitly wrap this value in `Result.Ok()` to indicate successful execution.
+The main function must return a bare integer type, usually `i32` (the operating system uses it as the exit code). Another return type is CE0106, and so is an error channel `| E` on `main`. A `??` in `main` is CE0131: handle each failure in the body with `match` or `.realise(default)`, and return a code.
 
 To read the command line, `main` takes exactly one parameter, `string[] args`. The first element is the program name. No other parameter list is accepted: the type must be `string[]` and the name must be `args`.
 
@@ -56,7 +56,7 @@ fn main() i32:
     # Rebind with :=
     answer := 54  # Wrong answer!
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Important**: Variables must be declared with `let` before you can rebind them with `:=`. This two-step approach makes it clear when a variable is first introduced versus when its value is being changed.
@@ -87,7 +87,7 @@ fn main() i32:
     let u32 mask = 0xFF_FF
 
     println("{tiny} {normal} {huge} {byte} {unsigned} {pi} {precise} {big} {mask}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A bare literal takes its type from the context: the annotation, the parameter, the field or
@@ -108,13 +108,13 @@ var i32 next_id = 0                     # unit-level storage
 
 fn fresh_id() i32:
     next_id := next_id + 1
-    return Result.Ok(next_id)
+    return next_id
 
 fn main() i32:
-    let i32 a = fresh_id().realise(0)
-    let i32 b = fresh_id().realise(0)
+    let i32 a = fresh_id()
+    let i32 b = fresh_id()
     println("{MAX_DEPTH} {PRIMES[2]} {a} {b}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A constant cannot be written (`CE2096`). A `var` is never moved out of: `f(nom v)` or
@@ -134,7 +134,7 @@ compile error (**CE2077**), so a wrong answer never reaches the program:
 fn main() i32:
     let u8 sum = 200 + 100     # CE2077: '+' gives 300, out of range for u8
     println(sum)
-    return Result.Ok(0)
+    return 0
 ```
 
 The answer is a wider type, or an `as` cast when the bit pattern is what you want:
@@ -153,7 +153,7 @@ fn main() i32:
     let u8 b = 100
     let u8 sum = a + b
     println(sum)               # 44
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Type Conversion
@@ -166,7 +166,7 @@ fn main() i32:
     let f64 y = x as f64      # int to float
     let u32 z = y as u32      # float to unsigned int
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Strings
@@ -184,7 +184,7 @@ fn main() i32:
     println("Length: {text.len()}")     # Character count
     println("Size: {text.size()}")      # Byte count
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **String methods:**
@@ -215,28 +215,37 @@ fn main() i32:
     println("Hello {name}, the answer is {answer}")
     println("Next answer: {answer + 1}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Functions and Returns
 
-Functions are the building blocks of Sushi programs. Every function follows a consistent pattern: explicit parameter types, explicit return type, and mandatory `Result.Ok(...)` or `Result.Err(...)` for all returns.
+Functions are the building blocks of Sushi programs. Every function has explicit parameter types and an explicit return type. A function that can fail writes an error channel `| E` after its return type. Then every return spells `Result.Ok(...)` or `Result.Err(...)`. A function with no `| E` is BARE: it returns the value itself.
 
 ### Basic Functions
 
 ```sushi
-fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+use <collections/strings>
+
+fn parse_count(string text) i32 | StdError:  # a channel: the call returns Result@(i32, StdError)
+    if (text.is_empty()):
+        return Result.Err(StdError.Error)
+    return Result.Ok(text.len())
+
+fn add(i32 a, i32 b) i32:  # bare: the call returns i32
+    return a + b
 
 fn greet(string name) ~:  # ~ is "blank" type (no return value)
-    println("Hello, {name}!")
-    return Result.Ok(~)
+    println("Mostly Harmless, {name}!")
 
 fn main() i32:
-    let i32 sum = add(5, 7).realise(0)
+    let i32 sum = add(5, 7)
+    let i32 n = parse_count("42").realise(0)
     greet("Ford")
-    return Result.Ok(0)
+    return 0
 ```
+
+**A bare function is the exception.** Use it seldom: only when the function is total over its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would only force a dead `.realise` or `??` on every caller. Write a channel for everything else. A public function keeps a channel when there is any doubt, because a channel added later changes the signature and breaks every caller and every binary `.slib`. The compiler does not enforce this. See [The error channel is opt-in](design/error-channel.md).
 
 **Function syntax breakdown**:
 - `fn` keyword declares a function
@@ -244,12 +253,14 @@ fn main() i32:
 - Return type: comes after the parameter list
 - `~` ("blank" or "unit" type): used for functions that don't return a meaningful value
 - Body: indented block following the colon
-- Returns: must be `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` is CE2030
+- Returns with a channel: `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` there is CE2030
+- Returns in a bare function: `return value`; `Result.Ok(...)` there is CE2091, and `??` there is CE0131
 - Every path must end with a `return`: a body that can reach its end is CE0107, also for a
-  `~` function (end it with `return Result.Ok(~)`)
+  `~` function with a channel (end it with `return Result.Ok(~)`). A bare `~` function can
+  reach its end
 - A statement after a statement that always ends the path is dead code, and it is CE0140
 
-**The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. You must still wrap it: `return Result.Ok(~)`. This maintains consistency with Sushi's error handling model.
+**The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. A bare `~` function needs no `return`. A `~` function with a channel (`~ | E`) ends with `return Result.Ok(~)`.
 
 ### Multiple Parameters
 
@@ -258,11 +269,10 @@ fn describe(string name, i32 age, bool friendly) ~:
     println("{name} is {age} years old")
     if (friendly):
         println("They're quite friendly!")
-    return Result.Ok(~)
 
 fn main() i32:
     describe("Zaphod", 200, false)
-    return Result.Ok(0)
+    return 0
 ```
 
 **Parameter passing**: every parameter declares a **mode**, and the mode says who frees the value.
@@ -306,12 +316,12 @@ Adds two numbers.
 - Errors: Never, in practice.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 fn main() i32:
-    let i32 sum = add(ANSWER, 1).realise(0)
+    let i32 sum = add(ANSWER, 1)
     println("{sum}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The block attaches to the declaration on the **next line**. A blank line breaks the attachment,
@@ -326,11 +336,10 @@ fn make_tea(u8 strength) ~:
     Makes a cup of tea. A block that is first in a body documents the function.
     :##
     println("{strength}")
-    return Result.Ok(~)
 
 fn main() i32:
     make_tea(7 as u8)
-    return Result.Ok(0)
+    return 0
 ```
 
 Four tags are recognised, and each one is an ordinary Markdown list item:
@@ -368,7 +377,7 @@ fn main() i32:
     else:
         println("Stay calm")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### While Loops
@@ -382,7 +391,7 @@ fn main() i32:
         countdown := countdown - 1
 
     println("Liftoff!")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### For-Each Loops
@@ -397,7 +406,7 @@ fn main() i32:
     foreach(i in 0..3):          # a range: 0 1 2; `0..=3` includes the end
         println(i)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 `foreach` walks an `Iterator@(T)` (`.iter()`, a range, `.keys()`, `.values()`,
@@ -421,19 +430,19 @@ fn main() i32:
 
         println(x)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Error Handling
 
 ### Result@(T, E)
 
-Sushi uses `Result@(T, E)` as its fundamental approach to error handling. Every function in Sushi returns a `Result@(T, E)`, even if you declare the return type as just `T` (then `E` is `StdError`). This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
+Sushi uses `Result@(T, E)` as its fundamental approach to error handling. A function that can fail writes its error type in the signature, `T | E`, and its call returns a `Result@(T, E)`. A function with no `| E` is bare and cannot return an error. There is no default error type. This design choice eliminates entire classes of bugs by making error handling explicit and impossible to ignore.
 
 **The Philosophy**: In many languages, functions can fail silently or throw exceptions that might not be handled. Sushi puts the failure in the type instead: if a function can fail, that failure is part of what it returns, so the compiler can tell you where you have not dealt with it. You must explicitly choose to handle errors or propagate them.
 
 ```sushi
-fn divide(i32 a, i32 b) i32:
+fn divide(i32 a, i32 b) i32 | StdError:
     if (b == 0):
         return Result.Err(StdError.Error)  # Error case
     return Result.Ok(a / b)  # Success case
@@ -448,12 +457,12 @@ fn main() i32:
     else:
         println("Division failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key Concepts**:
-- When you declare a function returning `i32`, it actually returns `Result@(i32, StdError)`
-- Success values must be wrapped: `return Result.Ok(value)`
+- A function declared `i32 | StdError` returns `Result@(i32, StdError)`; a function declared `i32` returns `i32`
+- In a function with a channel, success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
   `.is_err()`; `if (result)` on its own is CE2516
@@ -467,14 +476,14 @@ The `.realise(default)` method provides a safe way to extract values from `Resul
 
 ```sushi
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
 fn main() i32:
     # Unwrap with default value
-    let i32 x = get_value().realise(0)
+    let i32 x = get_value()
     println("Value: {x}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 The name "realise" reflects the operation of "making the value real" by extracting it from the Result wrapper. Unlike unsafe unwrap operations in other languages, `.realise()` always requires a default value, ensuring your code never crashes from unwrapping an error state.
@@ -505,7 +514,7 @@ fn read_config() string | IoError:
 fn main() i32:
     let Result@(string, IoError) config = read_config()
     # Handle config...
-    return Result.Ok(0)
+    return 0
 ```
 
 **How it works**:
@@ -551,7 +560,7 @@ The `??` operator makes error handling code read almost like non-error-handling 
 - `Maybe.None()` - represents the absence of a value
 
 ```sushi
-fn find_first_even(i32[] numbers) Maybe@(i32):
+fn find_first_even(i32[] numbers) Maybe@(i32) | StdError:
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
             return Result.Ok(Maybe.Some(n))
@@ -559,7 +568,7 @@ fn find_first_even(i32[] numbers) Maybe@(i32):
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8])
-    # Functions return Result@(T, E), so find_first_even returns Result@(Maybe@(i32), StdError)
+    # find_first_even writes `| StdError`, so its call returns Result@(Maybe@(i32), StdError)
     let Result@(Maybe@(i32), StdError) result = find_first_even(data)
 
     match result:
@@ -572,7 +581,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Search failed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key Methods on Maybe@(T)**:
@@ -613,7 +622,7 @@ fn main() i32:
     foreach(n in dynamic.iter()):
         println(n)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fixed vs Dynamic**:
@@ -643,7 +652,7 @@ fn main() i32:
     words[1] := "babel fish"        # the old element is freed, the new one adopted
 
     println("{fixed[0]} {words[1]}")
-    return Result.Ok(0)
+    return 0
 ```
 
 An indexed assignment takes ownership of the value, so the rules are the ones every other owning
@@ -663,7 +672,7 @@ fn main() i32:
     let i32[]   head  = from([-1; 1000])  # a thousand, on the heap
 
     println("{tally[9]} {mixed[2]} {table[5]} {head.len()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 **Where the count must be readable depends on the position.** A fixed array's length is
@@ -678,7 +687,7 @@ fn main() i32:
     let i32[] index = from([0..n])        # 0 1 2 3
 
     println("{slots.len()} {index[3]}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The repeated value is a **borrow**, and every slot takes its own copy, so a `string`
@@ -706,7 +715,7 @@ fn main() i32:
         Maybe.Some(name) -> println("First: {name}")
         Maybe.None() -> println("Empty list")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key Features**:
@@ -747,7 +756,7 @@ fn main() i32:
         Maybe.Some(a) -> println("Arthur is {a}")
         Maybe.None() -> println("Not found")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Implementation Details**:
@@ -787,7 +796,7 @@ fn main() i32:
     # Modify fields
     arthur.age := 43
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key features**:
@@ -825,7 +834,7 @@ fn main() i32:
         Status.Done() ->
             println("Completed")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key features**:
@@ -865,12 +874,11 @@ fn handle(Response resp) ~:
         Response.Error(msg) ->
             println("Error: {msg}")
 
-    return Result.Ok(~)
 
 fn main() i32:
     handle(Response.Success(200))
     handle(Response.Error("Not found"))
-    return Result.Ok(0)
+    return 0
 ```
 
 **How matching works**:
@@ -900,11 +908,10 @@ fn handle_file(Result@(File, IoError) result) ~:
         Result.Err(_) ->
             println("Other error")
 
-    return Result.Ok(~)
 
 fn main() i32:
     handle_file(open("/no/such/file", FileMode.Read()))
-    return Result.Ok(0)
+    return 0
 ```
 
 **Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is `CE2107`, because `open()` answers `IoError`.
@@ -914,13 +921,13 @@ fn main() i32:
 ```sushi
 fn describe(i32 n) string:
     match n:
-        0 -> return Result.Ok("zero")
-        42 -> return Result.Ok("the answer")
-        _ -> return Result.Ok("a number")
+        0 -> return "zero"
+        42 -> return "the answer"
+        _ -> return "a number"
 
 fn main() i32:
-    println(describe(42).realise(""))
-    return Result.Ok(0)
+    println(describe(42))
+    return 0
 ```
 
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
@@ -939,25 +946,24 @@ enum Box:
 
 fn take(nom i32[] xs) ~:
     println("took {xs.len()}")
-    return Result.Ok(~)
 
 fn make() Box:
-    return Result.Ok(Box.Rows(from([1, 2, 3])))
+    return Box.Rows(from([1, 2, 3]))
 
 fn main() i32:
-    match make()??:
+    match make():
         Box.Rows(r) -> println("read {r.len()}")     # a borrow: read only
         Box.Empty -> println("empty")
 
-    match make()??:
+    match make():
         Box.Rows(poke r) -> r.push(9)                # a pointer into the payload
         Box.Empty -> println("empty")
 
-    match make()??:
+    match make():
         Box.Rows(nom r) -> take(nom r)               # the arm owns it now
         Box.Empty -> println("empty")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Taking needs a scrutinee the match owns.** `make()??` is a temporary: nothing else will
@@ -986,7 +992,7 @@ fn main() i32:
     println("Number: {data.first}")
     println("Label: {data.second}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **How it works**: The compiler detects that you use `Pair@(i32, string)` and generates a specialized version of the struct for that type combination. There's no runtime overhead - the generated code is as efficient as if you'd written a separate struct manually.
@@ -1011,7 +1017,7 @@ fn main() i32:
     let string msg = "Don't Panic"
     println(msg.shout())
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **How Extension Methods Work**:
@@ -1038,7 +1044,7 @@ extend Vec length_squared() i32:
 fn main() i32:
     let Vec v = Vec.at(3, 4)
     println("{v.length_squared()}")
-    return Result.Ok(0)
+    return 0
 ```
 
 `Vec.at(3, 4)` reads like `List.new()` and `HashMap.new()`, and it is the same rule: a
@@ -1050,22 +1056,24 @@ marker of its own.
 `new` is a legal static name (`extend Box static new(i32 n) Box:`), which is one thing a
 free function cannot be called.
 
-**No `??` in a BARE extension body**: by default an extension method returns a bare
-value, not a `Result@(T, E)` (a `Result.Ok(...)` return is CE2091). A bare body has no
-error channel, so `??` has nothing to propagate into and is rejected with CE0131.
+**No `??` in a BARE extension body**: an extension method with no `| E` is bare, as a
+function with no `| E` is. It returns a bare value, not a `Result@(T, E)` (a `Result.Ok(...)`
+return is CE2091). A bare body has no error channel, so `??` has nothing to propagate into
+and is rejected with CE0131.
 Handle the Result in the body instead -- match on it, or use `.realise(default)`:
 
 ```sushi
 extend i32 tagged() i32:
-    return tag(self).realise(0)   # tag() returns Result@(i32, StdError)
+    return tag(self).realise(0)   # tag() writes `| StdError`, so it returns Result@(i32, StdError)
 ```
 
 The same rule applies to perk implementation methods. A `??` inside a LAMBDA in such a
-body is legal -- the lambda has its own Result channel:
+body is legal when the lambda's type writes `| E` -- the lambda then has its own Result
+channel. A lambda never takes a channel from its body:
 
 ```sushi
 extend i32 fixed() i32:
-    let fn(i32) -> i32 f = |i32 x| tag(x)??   # legal: propagates into the lambda's Result
+    let fn(i32) -> i32 | StdError f = |i32 x| tag(x)??   # legal: propagates into the lambda's Result
     return f(self).realise(0)
 ```
 
@@ -1092,7 +1100,7 @@ fn use_it() i32 | OddError:
 
 fn main() i32:
     println("{use_it().realise(-1)}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A channel method stops a chain until it is handled: `b.checked().other()` is CE2515,
@@ -1122,7 +1130,7 @@ extend Counter with Source:
 fn main() i32:
     let Counter c = Counter(42, false)
     println("{c.read_one().realise(0)}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The contract and the implementation must agree. A contract that declares a channel and
@@ -1147,7 +1155,7 @@ extend i32 pick@(U)(U a, U b) U:
 fn main() i32:
     let i32 plus = 1
     println("{plus.pick(7, 9)}")     # U = i32, from the arguments
-    return Result.Ok(0)
+    return 0
 ```
 
 There is no call-site `@(...)` on a method, so every method-level parameter must be
@@ -1166,7 +1174,7 @@ fn main() i32:
     let Box@(i32) b = Box(42)
     let i32 value = b.unwrap()  # Uses generic extension
     println("Unwrapped: {value}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Extension methods can be generic over generic types, user-defined and built-in alike: the type parameter (`T`) is declared on the receiver type (`Box@(T)`, `List@(T)`), and the compiler instantiates the method for each concrete type used in your program.
@@ -1249,7 +1257,7 @@ use "helpers/geometry" as geo
 fn main() i32:
     let f64 area = geo.circle_area(2.0).realise(0.0)
     println("{area} {geo.MAX_SIDES}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Reach for the alias when two units disagree about a name, or when the reader of a call
@@ -1265,14 +1273,14 @@ use "helpers/geometry" as geo
 
 fn describe(geo.Vec v) string:
     match geo.Sign.Plus:
-        geo.Sign.Plus -> return Result.Ok("north of {v.y}")
-        geo.Sign.Minus -> return Result.Ok("south of {v.y}")
+        geo.Sign.Plus -> return "north of {v.y}"
+        geo.Sign.Minus -> return "south of {v.y}"
 
 fn main() i32:
     let geo.Vec here = geo.Vec(1, 2)
-    let string where = describe(here).realise("nowhere")
+    let string where = describe(here)
     println(where)
-    return Result.Ok(0)
+    return 0
 ```
 
 An interpolation hole cannot hold a string literal, and a `{` in a double-quoted string always
@@ -1285,7 +1293,7 @@ Declare the constant in your own unit and name it bare.
 
 An alias behaves like any other name in the unit. A local variable of the same name
 shadows it, one name cannot hold two namespaces, and the alias is yours alone -- a unit
-that imports yours never sees it. Privacy is unchanged: `geo.helper` where `helper` is
+that imports yours never sees it. Privacy holds behind the dot: `geo.helper` where `helper` is
 private to `geometry` is an error that says so, not one that says the name does not
 exist.
 
@@ -1315,7 +1323,7 @@ return a type you cannot write:
 # geometry.sushi        # shapes.sushi            # main.sushi
 public struct Vec:      use "geometry"            use "shapes"
     f64 x               public fn origin() Vec:   fn main() i32:
-                            return Result.Ok(...)     let Vec v = origin()??
+                            return Vec(...)           let Vec v = origin()
 ```
 
 `main` may call `origin()`, because `origin` is in scope. It may not write `Vec` until it
@@ -1331,7 +1339,7 @@ takes what an import brings and hands it on as the unit's own.
 # geometry.sushi        # shapes.sushi                  # main.sushi
 public struct Vec:      public use "geometry"          use "shapes"
     f64 x               public fn origin() Vec:        fn main() i32:
-                            return Result.Ok(...)          let Vec v = origin()??
+                            return Vec(...)                let Vec v = origin()
 ```
 
 Now `shapes` says "whoever imports me gets `geometry` too", and `main` writes `Vec` with
@@ -1363,11 +1371,9 @@ Sushi's borrow checker ensures that references are always valid and that aliasin
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
-    return Result.Ok(~)
 
 fn display(peek i32 value) ~:
     println("Value: {value}")
-    return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
@@ -1376,7 +1382,7 @@ fn main() i32:
     display(peek count)  # Read-only access
     println("Count: {count}")  # Prints: Count: 2
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Borrowing Rules**:
@@ -1401,11 +1407,10 @@ struct LargeData:
 fn process(poke LargeData data) ~:
     # Can access and modify data.values without copying 4000 bytes
     data.values[0] := 42
-    return Result.Ok(~)
 
 fn read_only(peek LargeData data) i32:
     # Read-only access - cannot modify
-    return Result.Ok(data.values[0])
+    return data.values[0]
 ```
 
 **Reference bindings**: `let poke T x = <place>` and `let peek T x = <place>` bind a pointer into
@@ -1423,7 +1428,7 @@ fn main() i32:
         let poke Ship s = fleet[1]
         s.crew := 42
     println(fleet[1].crew)       # 42
-    return Result.Ok(0)
+    return 0
 ```
 
 The borrow checker runs at compile time (the `borrow` pass of the semantic analysis pipeline), so there's no runtime cost to these safety guarantees.
@@ -1441,11 +1446,10 @@ fn process() ~:
     buf.lines.push("Line 1")
     buf.lines.push("Line 2")
     # buf and buf.lines automatically destroyed when function returns
-    return Result.Ok(~)
 
 fn main() i32:
     process()
-    return Result.Ok(0)
+    return 0
 ```
 
 **How RAII works in Sushi**:
@@ -1481,7 +1485,7 @@ fn main() i32:
     let Guard a = Guard(name: "first")
     let Guard b = Guard(name: "second")
     println("end of main")
-    return Result.Ok(0)
+    return 0
 ```
 
 This prints `end of main`, then `drop second`, then `drop first`. See
@@ -1524,7 +1528,7 @@ fn main() i32:
     else:
         println("End of list")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Why Own@(T) exists**: Without `Own@(T)`, you cannot create recursive types because the compiler needs to know the size of every struct at compile time. A `Node` containing another `Node` would have infinite size. `Own@(T)` breaks the cycle by storing a pointer (fixed size) to heap-allocated data.
@@ -1562,7 +1566,7 @@ fn main() i32:
     match log_it("Mostly Harmless"):
         Result.Ok(_) -> println("logged")
         Result.Err(_) -> println("could not log")
-    return Result.Ok(0)
+    return 0
 ```
 
 Three rules follow from the ownership, and each one is a compile error rather than a
@@ -1598,8 +1602,8 @@ fn emit@(W: Writer)(poke W dst, string line) ~ | IoError:
 
 fn main() i32:
     match emit(poke stdout, "Mostly Harmless\n"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### Buffering is a type you opt into
@@ -1637,8 +1641,8 @@ fn number_lines(string path) ~ | IoError:
 
 fn main() i32:
     match number_lines("large.txt"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 A `BufWriter@(W)` flushes when it drops, but a drop cannot report a failure. `finish()`
@@ -1661,7 +1665,7 @@ fn main() i32:
     match write_report("report.txt", 42):
         Result.Ok(_) -> println("written")
         Result.Err(_) -> println("could not write it")
-    return Result.Ok(0)
+    return 0
 ```
 
 `into_inner()` is the way back out: it flushes, then hands the handle over.

@@ -7,4 +7,4 @@ extend i32 checked_inc() i32 | StdError:
 fn main() i32:
     let i32 one = 1
     one.checked_inc()
-    return Result.Ok(0)
+    return 0

@@ -32,7 +32,12 @@ Perks provide a way to:
   (CE0131). Handle a Result in the body with `match` or `.realise(default)`, or declare
   `| E` on the contract and on every implementation (see
   [Error Channels on Perk Methods](#error-channels-on-perk-methods)). A `??` inside a
-  lambda in the body is legal, because the lambda has its own Result channel
+  lambda in the body is legal when the lambda's type writes `| E`, because the lambda then
+  has its own Result channel
+- The rule is the one for every callable, a free function included: a channel exists only
+  when the signature writes `| E`. A bare function is the exception, and a contract method
+  that can fail, or can gain a failure later, declares `| E`. See
+  [The error channel is opt-in](design/error-channel.md)
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing). The one exception is
   the predefined `Hashable`, which every type with a derived `hash()` satisfies
@@ -143,7 +148,7 @@ fn main() i32:
     let Counter c = Counter(left: 3)
     println(drain(poke c).realise(-1))    # 2 + 1 = 3
     println(drain(poke c).realise(-1))    # the counter is empty: -1
-    return Result.Ok(0)
+    return 0
 ```
 
 ### A generic type may implement a perk
@@ -163,12 +168,12 @@ extend Box@(T) with Show:
         return "boxed {self.item}"
 
 fn render@(S: Show)(S thing) string:
-    return Result.Ok(thing.show())
+    return thing.show()
 
 fn main() i32:
     let Box@(i32) n = Box(7)
-    println(render(n).realise("failed"))
-    return Result.Ok(0)
+    println(render(n))
+    return 0
 ```
 
 A concrete type argument is a **constraint** rather than a parameter name, the same rule
@@ -214,7 +219,7 @@ fn main() i32:
     # Invalid: a struct holding a HashMap has no derived hash and no implementation,
     # so `Container@(Index)` is CE4006
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Enum Constraints
@@ -242,7 +247,7 @@ fn main() i32:
     match t:
         Tagged.One(s) -> println(s.display())
         Tagged.Nothing() -> println("nothing")
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler checks a constraint at each written type. `Tagged@(i32)` is **CE4006**, because
@@ -255,7 +260,7 @@ Perks enable generic functions with constrained type parameters:
 ```sushi
 # Generic function with perk constraint
 fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 struct Point:
     i32 x
@@ -270,10 +275,10 @@ fn main() i32:
     let Point p = Point(10, 20)
 
     # Type inference: T inferred as Point
-    let u64 h = compute_hash(p)??
+    let u64 h = compute_hash(p)
     println(h)  # Prints 30
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Features:**
@@ -318,17 +323,17 @@ struct Point:
     i32 y
 
 fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     # All satisfy Hashable by derivation - no implementation is written
-    let u64 h1 = compute_hash(42)??               # i32
-    let u64 h2 = compute_hash("test")??           # string
-    let u64 h3 = compute_hash(true)??             # bool
-    let u64 h4 = compute_hash(Point(1, 2))??      # a plain struct
+    let u64 h1 = compute_hash(42)               # i32
+    let u64 h2 = compute_hash("test")           # string
+    let u64 h3 = compute_hash(true)             # bool
+    let u64 h4 = compute_hash(Point(1, 2))      # a plain struct
     println("{h1} {h2} {h3} {h4}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Multiple Constraints
@@ -349,7 +354,6 @@ fn process@(T: Hashable + Displayable)(T item) ~:
     let string s = item.display()
     println("Hash: {h}")
     println("Display: {s}")
-    return Result.Ok(~)
 
 struct Point:
     i32 x
@@ -365,8 +369,8 @@ extend Point with Displayable:
 
 fn main() i32:
     let Point p = Point(10, 20)
-    process(p)??
-    return Result.Ok(0)
+    process(p)
+    return 0
 ```
 
 ## Common Patterns
@@ -406,7 +410,6 @@ extend User with Displayable:
 
 fn print_item@(T: Displayable)(T item) ~:
     println(item.display())
-    return Result.Ok(~)
 ```
 
 ### Comparable Pattern
@@ -431,8 +434,8 @@ extend Score with Comparable:
 fn find_max@(T: Comparable)(T a, T b) T:
     let i32 cmp = a.compare(b)
     if (cmp >= 0):
-        return Result.Ok(a)
-    return Result.Ok(b)
+        return a
+    return b
 ```
 
 ### Multiple Perks Pattern
@@ -477,7 +480,7 @@ fn main() i32:
     let i32 cmp = p1.compare(p2)
     println("{h} {cmp}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Perk Visibility

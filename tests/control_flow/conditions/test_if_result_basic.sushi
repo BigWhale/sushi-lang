@@ -1,9 +1,9 @@
 # EXPECT_STDOUT_EXACT: "Success!\n"
-fn get_success() i32:
+fn get_success() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
     if (get_success().is_ok()):
         println("Success!")
 
-    return Result.Ok(0)
+    return 0

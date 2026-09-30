@@ -12,4 +12,4 @@ fn main() i32:
     if (built > "alpha"):
         println("ordered")
 
-    return Result.Ok(0)
+    return 0

@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "PASS: Escaped single quote\n\nPASS: Escaped backslash\n\nPASS: Newline escape\n\nPASS: Tab escape\n\n"
 use <collections/strings>
 
-fn test_escaped_single_quote() ~:
+fn test_escaped_single_quote() ~ | StdError:
     let string s = 'can\'t'
     if (s == "can't"):
         println("PASS: Escaped single quote")
@@ -9,7 +9,7 @@ fn test_escaped_single_quote() ~:
         println("FAIL: Escaped single quote")
     return Result.Ok(~)
 
-fn test_escaped_backslash() ~:
+fn test_escaped_backslash() ~ | StdError:
     let string s = 'path\\file'
     if (s == "path\\file"):
         println("PASS: Escaped backslash")
@@ -17,7 +17,7 @@ fn test_escaped_backslash() ~:
         println("FAIL: Escaped backslash")
     return Result.Ok(~)
 
-fn test_newline() ~:
+fn test_newline() ~ | StdError:
     let string s = 'line1\nline2'
     if (s.contains("\n")):
         println("PASS: Newline escape")
@@ -25,7 +25,7 @@ fn test_newline() ~:
         println("FAIL: Newline escape")
     return Result.Ok(~)
 
-fn test_tab() ~:
+fn test_tab() ~ | StdError:
     let string s = 'col1\tcol2'
     if (s.contains("\t")):
         println("PASS: Tab escape")
@@ -42,4 +42,4 @@ fn main() i32:
         println("")
     if (test_tab().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

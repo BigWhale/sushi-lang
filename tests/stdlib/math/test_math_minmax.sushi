@@ -14,4 +14,4 @@ fn main() i32:
     let f64 min_float = min(x, y)
     println("min(3.14, 2.71) = {min_float}")
 
-    return Result.Ok(0)
+    return 0

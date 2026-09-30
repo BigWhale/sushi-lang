@@ -1,2 +1,2 @@
 public fn answer() i32:
-    return Result.Ok(43)
+    return 43

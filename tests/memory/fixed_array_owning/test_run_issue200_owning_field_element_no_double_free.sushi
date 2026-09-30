@@ -17,4 +17,4 @@ fn main() i32:
     let Holder h = Holder(names: ["xxxxxxxxxxxx{'abcd'}", "xxxxxxxxxxxx{'efgh'}", "xxxxxxxxxxxx{'ijkl'}"])
     let string first = h.names[0]
     println("first = {first}")
-    return Result.Ok(0)
+    return 0

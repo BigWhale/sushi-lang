@@ -31,4 +31,4 @@ fn main() i32:
     let i32 three = halved(8).realise(0)
     if (one + two + three == 4 + 8 + 4):
         println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

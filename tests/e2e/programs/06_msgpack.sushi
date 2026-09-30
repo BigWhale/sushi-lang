@@ -1,11 +1,11 @@
 use <encoding/msgpack>
 use <toolchain/slib>
 
-fn check_decode() bool:
+fn check_decode() bool | StdError:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     match decode(buf):
         Result.Ok(v) ->
-            let string shown = show(v)??
+            let string shown = show(v)
             let string want = '{"a":1,"b":[2]}'
             return Result.Ok(shown == want)
         Result.Err(_) ->
@@ -14,19 +14,19 @@ fn check_decode() bool:
 fn check_missing() bool:
     match read_metadata("e2e_missing_gone.slib"):
         Result.Ok(_) ->
-            return Result.Ok(false)
+            return false
         Result.Err(e) ->
             match e:
                 SlibError.Io(IoError.NotFound) ->
-                    return Result.Ok(true)
+                    return true
                 _ ->
-                    return Result.Ok(false)
+                    return false
 
 fn main() i32:
     let bool decoded = check_decode().realise(false)
-    let bool missing = check_missing().realise(false)
+    let bool missing = check_missing()
     if (decoded and missing):
         println("PASS")
-        return Result.Ok(0)
+        return 0
     println("FAIL")
-    return Result.Ok(1)
+    return 1

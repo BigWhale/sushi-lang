@@ -7,4 +7,4 @@ fn main() i32:
     let string sep = ", "
     let i32[2] nums = [1, 2]
     println(sep.join(nums))
-    return Result.Ok(0)
+    return 0

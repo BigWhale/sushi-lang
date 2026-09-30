@@ -13,4 +13,4 @@ fn main() i32:
     println(ZFIXED_LIT[279])
     println(ZFIXED_LIT[280])
     println(ZFIXED_LIT[287])
-    return Result.Ok(0)
+    return 0

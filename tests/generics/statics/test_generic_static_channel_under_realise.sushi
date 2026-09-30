@@ -22,4 +22,4 @@ extend Box@(T) static holding(nom T item) Box@(T) | StdError:
 fn main() i32:
     let Box@(Cat) c = Box.holding(nom Cat(5)).realise(Box(Cat(0), 0))
     println("{c.first}")
-    return Result.Ok(0)
+    return 0

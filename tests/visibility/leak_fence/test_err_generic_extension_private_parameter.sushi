@@ -15,4 +15,4 @@ fn main() i32:
     let Box@(i32) b = Box(7)
     let Secret s = Secret(3)
     println("{b.weigh(peek s)}")
-    return Result.Ok(0)
+    return 0

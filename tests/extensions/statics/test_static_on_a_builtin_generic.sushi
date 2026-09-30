@@ -13,4 +13,4 @@ fn main() i32:
     let i32 head = l.get(0).realise(0)
     println("{l.len()} {head}")
     l.free()
-    return Result.Ok(0)
+    return 0

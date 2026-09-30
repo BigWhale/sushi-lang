@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: Count substring (ababab.count('ab') = 3)
 use <collections/strings>
 
-fn test_count_single_char() ~:
+fn test_count_single_char() ~ | StdError:
     let string text = "hello"
     let i32 count = text.count("l")
 
@@ -13,7 +13,7 @@ fn test_count_single_char() ~:
 
     return Result.Ok(~)
 
-fn test_count_substring() ~:
+fn test_count_substring() ~ | StdError:
     let string text = "ababab"
     let i32 count = text.count("ab")
 
@@ -24,7 +24,7 @@ fn test_count_substring() ~:
 
     return Result.Ok(~)
 
-fn test_count_non_overlapping() ~:
+fn test_count_non_overlapping() ~ | StdError:
     let string text = "aaa"
     let i32 count = text.count("aa")
 
@@ -35,7 +35,7 @@ fn test_count_non_overlapping() ~:
 
     return Result.Ok(~)
 
-fn test_count_not_found() ~:
+fn test_count_not_found() ~ | StdError:
     let string text = "hello"
     let i32 count = text.count("x")
 
@@ -46,7 +46,7 @@ fn test_count_not_found() ~:
 
     return Result.Ok(~)
 
-fn test_count_empty_needle() ~:
+fn test_count_empty_needle() ~ | StdError:
     let string text = "hello"
     let i32 count = text.count("")
 
@@ -57,7 +57,7 @@ fn test_count_empty_needle() ~:
 
     return Result.Ok(~)
 
-fn test_count_empty_string() ~:
+fn test_count_empty_string() ~ | StdError:
     let string text = ""
     let i32 count = text.count("x")
 
@@ -68,7 +68,7 @@ fn test_count_empty_string() ~:
 
     return Result.Ok(~)
 
-fn test_count_full_match() ~:
+fn test_count_full_match() ~ | StdError:
     let string text = "test"
     let i32 count = text.count("test")
 
@@ -79,7 +79,7 @@ fn test_count_full_match() ~:
 
     return Result.Ok(~)
 
-fn test_count_word() ~:
+fn test_count_word() ~ | StdError:
     let string text = "the cat in the hat"
     let i32 count = text.count("the")
 
@@ -90,7 +90,7 @@ fn test_count_word() ~:
 
     return Result.Ok(~)
 
-fn test_count_repeated() ~:
+fn test_count_repeated() ~ | StdError:
     let string text = "aaaa"
     let i32 count = text.count("a")
 
@@ -101,7 +101,7 @@ fn test_count_repeated() ~:
 
     return Result.Ok(~)
 
-fn test_count_utf8() ~:
+fn test_count_utf8() ~ | StdError:
     let string text = "café café"
     let i32 count = text.count("café")
 
@@ -112,7 +112,7 @@ fn test_count_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_count_emoji() ~:
+fn test_count_emoji() ~ | StdError:
     let string text = "🎉🎊🎉"
     let i32 count = text.count("🎉")
 
@@ -123,7 +123,7 @@ fn test_count_emoji() ~:
 
     return Result.Ok(~)
 
-fn test_count_case_sensitive() ~:
+fn test_count_case_sensitive() ~ | StdError:
     let string text = "Hello hello HELLO"
     let i32 count = text.count("hello")
 
@@ -160,4 +160,4 @@ fn main() i32:
     if (test_count_case_sensitive().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

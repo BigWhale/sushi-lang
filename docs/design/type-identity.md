@@ -52,15 +52,15 @@ A type flows through the compiler being progressively resolved: a field starts a
 structural equality, the *same* type at two different resolution depths is two
 different types.
 
-Sushi hashed on the name but compared on the contents, so those two instances
-hash-matched and compared **unequal** — a silent dict miss, never a crash. That
-produced:
+A hash on the name and a comparison on the contents make those two instances
+hash-match and compare **unequal**. The result is a silent dict miss, never a crash.
+That mix gives these faults:
 
 - `CE2002: cannot assign Own@(Holder) to Own@(Holder)` — one `Own<Holder>`
   interned as a `Maybe` type argument, one from a bare annotation
 - **CE0126** — the same shape for `Result`: a duplicate monomorphization rather
   than a reused one
-- an internal compiler error, because resolution deep-walked struct fields *in order to
+- an internal compiler error, because resolution must deep-walk struct fields *to
   make structural equality agree*, and that walk cycles
 
 All three are one defect. Nominal identity removes the category.
@@ -85,7 +85,7 @@ All three are one defect. Nominal identity removes the category.
 A generic FUNCTION is per unit: its identity is
 `(declaring unit, name, type args)`, and its monomorphized instance takes the
 declaring unit's symbol prefix. A generic TYPE is not: a type's interned name is its
-identity program-wide, so two units still cannot each declare a `Node`. The line is
+identity program-wide, so two units cannot each declare a `Node`. The line is
 this document's to move (phase 2 qualifies the interned name), and a function's
 per-unit identity is a step toward it, not a substitute for it.
 

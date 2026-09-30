@@ -23,8 +23,8 @@ you use into your binary.
 
 ### Time
 
-The `<time>` module gives you POSIX-precision sleep functions. They all return
-`Result@(i32, StdError)` (0 on success, or the remaining microseconds if a signal interrupts the
+The `<time>` module gives you POSIX-precision sleep functions. They all have the `StdError`
+error channel and return `Result@(i32, StdError)` (0 on success, or the remaining microseconds if a signal interrupts the
 sleep), so you unwrap them like any other `Result`. We keep the duration tiny here so the
 program returns almost instantly.
 
@@ -41,9 +41,8 @@ Drive online. Anything is now infinitely probable.
 
 !!! note "No `??` in `main`"
     We unwrap with `.realise(default)` rather than `??`. The `??` operator is wonderful
-    inside ordinary functions, but using it in `main` triggers a CW2511 warning — and a
-    warning means a non-zero compile exit, which we treat as failure. In `main`, prefer
-    `match`, `if (result.is_ok())`, or `.realise(default)`.
+    inside a function with an error channel, but `main` is bare, so `??` in `main` is
+    **CE0131**. In `main`, use `match`, `if (result.is_ok())`, or `.realise(default)`.
 
 ### Math
 
@@ -219,18 +218,20 @@ len = 15
 
 Two things are doing quiet work here. First, the `string` argument is automatically
 marshalled to a C `char*` for the call and the copy is freed at scope exit — no leak.
-Second, and crucially: **externals return raw C values, not `Result`.** That is the single
-exception to Sushi's implicit-`Result` rule. So `libc.strlen(s)` yields a bare `i64`, and
-we *wrap it ourselves* in the `length` safe wrapper. Trying to use `??` directly on a raw
+Second, and crucially: **externals return raw C values, not `Result`.** An external never
+has an error channel. So `libc.strlen(s)` yields a bare `i64`, and
+we *wrap it ourselves* in the `length` safe wrapper. `strlen` cannot fail, so `length` is
+bare; this is one of the few correct uses of the bare form. Trying to use `??` directly on a raw
 external would be a CE2507 error.
 
 !!! note "Wall off the foreign world"
     The guiding rule is *"FFI is not Sushi."* Keep the `unsafe external` block thin, and
-    immediately wrap each foreign call in an ordinary Sushi function that folds the raw
-    value back into a `Result`. After that wrapper, all four guarantees — borrow checking,
-    RAII, `Result`/`Maybe`, and bounds safety — are back in force for callers. A NULL
-    never reaches Sushi as a value: a C function that can answer one is declared
-    `Maybe@(string)` or `Maybe@(ptr)`, and its NULL arrives as `Maybe.None`.
+    immediately wrap each foreign call in an ordinary Sushi function. When the call can
+    fail, the wrapper writes an error channel and folds the raw value into a `Result`.
+    After that wrapper, all four guarantees — borrow checking, RAII, `Result`/`Maybe`, and
+    bounds safety — are back in force for callers. A NULL never reaches Sushi as a value:
+    a C function that can answer one is declared `Maybe@(string)` or `Maybe@(ptr)`, and
+    its NULL arrives as `Maybe.None`.
 
 The unsafe block is also the *only* place a bare `...` variadic is allowed, which is how
 you bind C's variadic functions like `printf`:
@@ -360,7 +361,7 @@ answer() = 42
 - A native variadic parameter `...T name` collects trailing arguments into an owned `T[]`;
   zero arguments is valid, and it must be the last parameter.
 - FFI lets you call C from inside an `unsafe external "C" as <ns> because "<reason>"` block;
-  externals return **raw** C values (the one exception to implicit `Result`), so you wrap
+  externals return **raw** C values and never have an error channel, so you wrap
   them in a safe Sushi function — and `string` arguments are marshalled and freed for you.
 - C varargs (`printf`-style bare `...`) are bound only inside the unsafe external block,
   kept strictly apart from safe native `...T` variadics.

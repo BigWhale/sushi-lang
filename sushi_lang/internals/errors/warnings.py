@@ -10,12 +10,11 @@ from sushi_lang.internals.errors.registry import (
 
 
 _add(ErrorMessage("CW2001", Severity.WARNING,
-    "unused Result@(T) value (use .realise() or if statement to handle the result)",
-    Category.TYPE, "Result@(T) values should be explicitly handled to avoid losing error information."))
+    "unused '{ty}' value (handle it with match, .realise(default), or '??' in a body with a channel)",
+    Category.TYPE, "A call to a function with a '| E' channel answers a Result@(T, E), and a statement that drops it loses the error. Handle it with `match`, take the value with `.realise(default)`, or propagate it with `??` in a body that has a channel itself. A `~ | E` result is exempt: there is no value to lose, and the error is still the caller's to ignore. Until the bare-function change the text named `Result@(T)` (the implicit StdError channel, now CE2062) and advised an `if` on the Result (CE2516 since #522)."))
 
-_add(ErrorMessage("CW2511", Severity.WARNING,
-    "?? operator used in main function (consider explicit error handling for clarity)",
-    Category.TYPE, "While ?? works in main, explicit error handling with .realise(), if statements, or match expressions makes error behavior clearer at the program entry point."))
+# CW2511 ("?? operator used in main function") was RETIRED by the bare-function change
+# (docs/design/error-channel.md): `main` is bare, so a `??` in its body is CE0131.
 
 # CW2409 (re-borrowing as poke, WARNING) was deleted: its only trigger was forwarding a
 # whole poke parameter to a poke argument -- the composition idiom the borrow model
@@ -130,7 +129,7 @@ _add(ErrorMessage("CW7005", Severity.WARNING,
     "'{name}' declares an error arm, and no '- Errors:' tag says when it fails",
     Category.DOCS, "A function written `fn f() T | E` names its own error type, so the "
                    "author chose to have more than one way to fail and the reader needs "
-                   "to know which. A function on the implicit StdError arm is not asked. "
+                   "to know which. A function that writes no '| E' is not asked. "
                    "A declaration with NO block is CW7002 instead."))
 
 _add(ErrorMessage("CW7006", Severity.WARNING,

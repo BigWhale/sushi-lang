@@ -21,6 +21,6 @@ fn main() i32:
   # let i32 final = subtract(temp2, 1)  # 15
 
   if (result == 15):
-    return Result.Ok(0)
+    return 0
   else:
-    return Result.Ok(1)
+    return 1

@@ -32,7 +32,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 │ MAGIC (16 bytes): 🍣SUSHILIB🍣 (UTF-8)                      │
 │   0xF0 0x9F 0x8D 0xA3 "SUSHILIB" 0xF0 0x9F 0x8D 0xA3        │
 ├─────────────────────────────────────────────────────────────┤
-│ VERSION (4 bytes): uint32 LE (current: 4)                   │
+│ VERSION (4 bytes): uint32 LE (current: 5)                   │
 ├─────────────────────────────────────────────────────────────┤
 │ FLAGS (4 bytes): uint32 LE (bit 0: source blob compressed)  │
 ├─────────────────────────────────────────────────────────────┤
@@ -56,8 +56,7 @@ the opt-in (`--lib-kind binary`) and is bound to the platform that built it.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Fixed header size:** 52 bytes (before variable-length sections). Version 4 claimed two
-reserved fields for `FLAGS` and `KIND`, so the header did not change size.
+**Fixed header size:** 52 bytes (before variable-length sections).
 
 **Endianness:** Little-endian (matches x86-64/ARM64 targets)
 
@@ -80,20 +79,13 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 
 ### Version
 
-4-byte unsigned integer (little-endian). Current version: `4`.
+4-byte unsigned integer (little-endian). Current version: `5`.
 
-Used for forward compatibility checks. A reader accepts version 4 only; anything else is
+Used for forward compatibility checks. A reader accepts version 5 only; anything else is
 **CE3509**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
-so an older `.slib` is rejected rather than read with a guess.
-
-- **Version 3** added the per-parameter `mode` field (`borrow` / `nom` / `peek` / `poke`),
-  which carries who frees each argument across the boundary. A version-2 file states no
-  mode, so its parameters cannot be told apart from unmarked ones. See
-  `docs/design/borrow-model.md`.
-- **Version 4** made source the primary payload. `SPARE_1` and `SPARE_2` became `FLAGS` and
-  `KIND`, and a length-prefixed source section joined the container between the metadata and
-  the bitcode. The manifest gained `library_version`, `requires_compiler`, `kind` and
-  `units`.
+so a file of another version is rejected rather than read with a guess. A file of another
+version can have a different ABI in its bitcode, and a reader must not call it with the wrong
+ABI. Rebuild the library.
 
 ### Flags
 
@@ -120,7 +112,7 @@ before it unpacks any MessagePack.
 ### Reserved Fields
 
 16 bytes of reserved space (SPARE_3 and SPARE_4) for future extensions, such as checksums
-or additional section offsets. Both must be zero in version 4.
+or additional section offsets. Both must be zero in version 5.
 
 ### Metadata Section
 
@@ -176,10 +168,9 @@ is the authority, and the index is a cache of it.
     # `public`. A generic function, struct or enum is filtered out of them and routes
     # to "templates" instead: a generic is not a concrete callable, and listing one
     # here would hand the consumer a signature with unresolved type parameters. An
-    # unmarked declaration is not API and goes to "not_exported" instead -- protocol
-    # 2.1, and the reason an older `.slib` has to be rebuilt.
+    # unmarked declaration is not API and goes to "not_exported" instead.
     #
-    # Protocol 2.2 adds two keys, and they answer different questions. `unit` names the
+    # Two keys answer different questions. `unit` names the
     # unit that DECLARED the record, and every record carries it: a consumer binding
     # `use <lib/foo/bar> as f` binds the alias to the unit `bar`, and for a binary
     # library the manifest is the only place that can say which unit a name came from.
@@ -206,14 +197,19 @@ is the authority, and the index is a cache of it.
     # symbol's `doc.params`. So does a private or closure-path record: a private symbol
     # is not part of the documented API.
 
-    # A SIGNATURE is three keys, built by one function (`signature_record`) so the
+    # A SIGNATURE is four keys, built by one function (`signature_record`) so the
     # concrete record, the generic record and the closure record cannot drift apart.
-    # `error_type` is absent when the declaration does not spell one: the default is
-    # StdError, and a record that named the default would claim the author wrote it.
+    # `has_channel` is REQUIRED on every function, helper and method record (templates
+    # schema 8): a reader never guesses a channel from an absent key. It is true when
+    # the declaration writes `| E` or returns an explicit `Result@(T, E)`, and false
+    # when the callable is bare (`docs/design/error-channel.md`). There is no default
+    # error type. `error_type` is present only when the declaration writes `| E`; an
+    # explicit `Result@(T, E)` return carries its arms in `return_type`.
     #
     #   SIG = {
     #       "params": [{"name": str, "type": str, "mode": str}],
     #       "return_type": str,
+    #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str          # If the declaration says `| E`
     #   }
     #
@@ -347,20 +343,10 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 7,                  # Templates schema version. 5: every
-                                       #   closure record is one per (unit, name),
-                                       #   and a source-shipped template carries
-                                       #   `bindings`. A binary .slib with an older
-                                       #   schema is refused (CE3512) and must be
-                                       #   rebuilt: its bare-name records can bind a
-                                       #   template to another unit's body silently.
-                                       #   6: every public perk ships, and a
-                                       #   generic-target perk implementation ships
-                                       #   as a template (`generic_perk_impls`).
-                                       #   7: every perk method record carries
-                                       #   its signature and receiver mode, on the
-                                       #   contract and on both kinds of
-                                       #   implementation. The one constant is
+        "version": 8,                  # Templates schema version. A binary or
+                                       #   hybrid .slib with another schema is
+                                       #   refused (CE3512) and must be rebuilt.
+                                       #   The one constant is
                                        #   `TEMPLATES_SCHEMA_VERSION` in
                                        #   `backend/library_format.py`
 
@@ -379,7 +365,7 @@ is the authority, and the index is a cache of it.
                 "free_perks": [str],   # Perk names from type-param bounds
                 "private": bool,       # Present (true) for closure-shipped helpers
                 "doc": DOC,            # If documented, and never when private
-                "bindings": {str: str} # v5: every free name in `source`
+                "bindings": {str: str} # Every free name in `source`
                                        #   the producer's closure resolved, mapped to
                                        #   its link symbol. The consumer re-parses
                                        #   the source and binds each named call to
@@ -397,7 +383,7 @@ is the authority, and the index is a cache of it.
 
         # Perk DEFINITIONS: every PUBLIC perk (it is API, whether or not a constraint
         # names it), plus any perk an exported template names in a constraint
-        # or implements. Each method is a record (v7): its signature, its
+        # or implements. Each method is a record: its signature, its
         # receiver mode when the contract declares `peek self` / `poke self`, and its
         # own block -- so `--lib-info` prints a contract as the methods that satisfy it.
         #
@@ -411,7 +397,7 @@ is the authority, and the index is a cache of it.
             {"name": str, "unit": str, "source": str, "methods": [METHOD], "doc": DOC}
         ],
 
-        # Concrete perk IMPLEMENTATIONS of those perks (v3). Bodies live in
+        # Concrete perk IMPLEMENTATIONS of those perks. Bodies live in
         # the bitcode (weak linkage); the record carries signatures (source)
         # and symbol names for declare-and-link at the consumer.
         "perk_impls": [
@@ -425,7 +411,7 @@ is the authority, and the index is a cache of it.
             }
         ],
 
-        # Generic-target perk IMPLEMENTATIONS (v6): `extend Box@(T) with Show`
+        # Generic-target perk IMPLEMENTATIONS: `extend Box@(T) with Show`
         # is a TEMPLATE. It names no instantiation, so there is no symbol to declare
         # and link: it ships as source alone, and the consumer cuts one copy per
         # instantiation of `Box` it names, exactly as for its own template. The
@@ -444,12 +430,12 @@ is the authority, and the index is a cache of it.
             }
         ],
 
-        # Export closure (v4): private symbols exported generics transitively
+        # Export closure: private symbols exported generics transitively
         # reference. Concrete helpers ship as signature records (definitions
         # carry external linkage in the bitcode); constants and types ship with
         # source -- the consumer needs a constant's value for compile-time
         # evaluation, and a type's shape to register it before a monomorphized
-        # template body names it. Every record is one per (unit, name) (v5):
+        # template body names it. Every record is one per (unit, name):
         # two of the library's own units may each ship a private `helper`, and
         # each record names its unit.
         "private_functions": [
@@ -504,7 +490,7 @@ is the authority, and the index is a cache of it.
 
 ## The two symbol keys
 
-Protocol 2.2 gives a record two ways to name where it came from, and neither substitutes
+The protocol gives a record two ways to name where it came from, and neither substitutes
 for the other.
 
 **`unit` says whose declaration this is.** Every record carries it. A Sushi symbol is
@@ -550,11 +536,11 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | CE3505 | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
 | CE3506 | Source section truncated |
 | CE3508 | Invalid magic bytes (not a valid `.slib` file) |
-| CE3509 | Unsupported format version |
+| CE3509 | Unsupported format version (a container other than version 5) |
 | CE3510 | Metadata section truncated |
 | CE3511 | Bitcode section truncated |
 | CE3507 | The bitcode of a binary or hybrid library does not link |
-| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, or the templates schema is older than version 7 |
+| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, or a binary or hybrid library's templates schema is not version 8 |
 | CE3513 | File exceeds maximum size (1GB) |
 | CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | CE3516 | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
@@ -651,7 +637,7 @@ without keeping either blob.
 ### Writing
 
 1. Write 16-byte magic
-2. Write 4-byte version (4)
+2. Write 4-byte version (5)
 3. Write 4-byte flags (0), then 4-byte kind
 4. Write 16 bytes of zeros (reserved)
 5. Serialize metadata to MessagePack

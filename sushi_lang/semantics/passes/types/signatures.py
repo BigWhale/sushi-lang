@@ -7,6 +7,7 @@ from sushi_lang.semantics.typesys import (
     BuiltinType, UnknownType, EnumType
 )
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.channel import callable_text, has_channel
 from sushi_lang.semantics.generics.results import (
     is_builtin_wrapper_enum, signature_result_arms)
 from sushi_lang.semantics.generics.types import TypeParameter
@@ -71,8 +72,8 @@ def validate_error_channel(self, ret, err_type, span) -> None:
     `fn f() Result@(i32, Bad):` with a struct error compiled while `fn f() i32 | Bad:`
     was refused (#668). `signature_result_arms` is the one derivation of the arms a
     signature answers -- an explicit Result is its own two arms, anything else is
-    wrapped with the spelled `| E` or with `StdError` -- so reading the Err arm off it
-    is what makes the short form sugar in the checker too.
+    wrapped with the spelled `| E`, and a bare signature has none -- so reading the Err
+    arm off it is what makes the short form sugar in the checker too.
 
     The rule: the arm must be an ENUM. A struct, a primitive, an array and a function
     type are CE2084. A built-in WRAPPER is an enum by representation and not by intent,
@@ -85,8 +86,7 @@ def validate_error_channel(self, ret, err_type, span) -> None:
     if err_type is not None:
         validate_type_name(self, err_type, span)
 
-    arms = signature_result_arms(
-        ret, err_type, self.enum_table.by_name.get("StdError"))
+    arms = signature_result_arms(ret, err_type)
     if arms is None:
         return
     err_arm = arms[1]
@@ -110,11 +110,42 @@ def validate_error_channel(self, ret, err_type, span) -> None:
         self.err.emit(er.ERR.CE2086, span, type_name=display_type(err_arm))
 
 
+def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> None:
+    """The state every body validates under: a function, a method and a lifted lambda.
+
+    `channel_result` is the interned Result the body answers, or None for a BARE body
+    (docs/design/error-channel.md). `validate_return_statement` and the `??` check read
+    this state and nothing else, so the three kinds of body have one rule.
+    """
+    from .resolution import channel_result
+    self.body_name = callable_text(name, kind)
+    self.body_return_type = ret
+    validate_error_channel(self, ret, err_type, err_span)
+    self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
+    self.variable_types = {}
+    self.destroyed_arrays = [set()]
+
+
+def _leave_body(self) -> None:
+    self.body_name = None
+    self.body_return_type = None
+    self.channel_result = None
+    self.in_synthesized_body = False
+
+
+def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
+    """CE0107: a body that answers a value or a Result reaches its end with no `return`.
+
+    A bare `~` body answers nothing, so it may end (#824, #845).
+    """
+    if (ret != BuiltinType.BLANK or channel) and not block_always_returns(self, body):
+        self.err.emit(er.ERR.CE0107, span, callable=self.body_name)
+
+
 def validate_function(self, func: FuncDef) -> None:
-    """Validate types within a function."""
+    """Validate types within a function, or within a lambda the lift pass made one."""
+    from sushi_lang.semantics.passes.lift import is_lifted_lambda
     self.current_function = func
-    self.in_extension_context = False  # Normal functions are never extension/perk bodies
-    self.extension_channel_result = None
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(func, "is_library_template", False)))
     self.in_synthesized_body = bool(getattr(func, "is_synthesized", False))
@@ -122,28 +153,20 @@ def validate_function(self, func: FuncDef) -> None:
     # of many copies of one source (#648). Set on every entry, so an ordinary body
     # clears what a transplanted or copied one set.
     self.reporter.enter_body(func)
-    self.extension_method_name = None
-    self.extension_return_type = None
-    self.variable_types = {}  # Reset for each function
-    self.destroyed_arrays = [set()]  # Reset for each function with initial scope
+    kind = "lambda" if is_lifted_lambda(func) else "function"
+    _enter_body(self, func, func.name, kind, func.ret, func.err_type,
+                func.err_span or func.ret_span)
 
     validate_and_register_parameters(self, func.params)
 
     validate_type_name(self, func.ret, func.ret_span)
-    validate_error_channel(self, func.ret, func.err_type,
-                           func.err_span or func.ret_span)
 
     self._validate_block(func.body)
     reject_dead_statements(self, func.body)
-
-    # A `~` function returns too (#824), and so does a lifted lambda (#845): a body
-    # that reached its end answered a Result.Err that no source wrote.
-    if not block_always_returns(self, func.body):
-        from sushi_lang.semantics.passes.lift import is_lifted_lambda
-        callable_text = "lambda" if is_lifted_lambda(func) else f"function '{func.name}'"
-        self.err.emit(er.ERR.CE0107, func.name_span, callable=callable_text)
+    _reject_fall_off(self, func.body, func.ret, has_channel(func), func.name_span)
 
     self.current_function = None
+    _leave_body(self)
 
 
 def _self_registration_type(target_type, self_mode):
@@ -197,38 +220,19 @@ def _register_self(self, target_type, self_mode) -> None:
 
 
 def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
-    """One method body, in the state a BARE-return body validates under.
+    """One method body, under the state every body validates under.
 
     An extension method and a perk-implementation method differ in one thing only: where
     the target type comes from -- the declaration itself, or the `extend X with P` header.
     """
-    self.current_function = None  # A method is not a function, but the logic is shared.
-    self.in_extension_context = True  # Dedicated flag: this body returns a bare value.
+    self.current_function = None
     self.in_library_body = self.in_library_unit
     self.in_synthesized_body = synthesized
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.
     self.reporter.enter_body(method)
-    self.extension_method_name = method.name
-    self.extension_return_type = method.ret  # Checked in validate_return_statement.
-    self.variable_types = {}
-    self.destroyed_arrays = [set()]
-
-    # A `| E` extension (ruling 1) validates under its CHANNEL: the interned
-    # Result@(ret, E) that `??` propagates into and that `Result.Err(e)` constructs.
-    # Both constructors are spelled against it, as in a free function (#848).
-    self.extension_channel_result = None
-    err_ty = method.err_type
-    if err_ty is not None:
-        from sushi_lang.semantics.generics.results import ensure_result_type_in_table
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-        validate_error_channel(self, method.ret, err_ty,
-                               method.err_span or method.name_span)
-        resolved_err = resolve_unknown_type(
-            err_ty, self.struct_table.by_name, self.enum_table.by_name)
-        self.extension_channel_result = ensure_result_type_in_table(
-            self.enum_table, method.ret, resolved_err,
-            struct_table=self.struct_table.by_name)
+    _enter_body(self, method, method.name, "method", method.ret, method.err_type,
+                method.err_span or method.name_span)
 
     _register_self(self, target_type, getattr(method, "self_mode", None))
 
@@ -238,18 +242,9 @@ def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
 
     self._validate_block(method.body)
     reject_dead_statements(self, method.body)
+    _reject_fall_off(self, method.body, method.ret, has_channel(method), method.name_span)
 
-    # A method with a `| E` channel answers a Result, as a fn does, so a `~` body that
-    # reaches its end is refused too (#845). A bare `~` method has no Result to answer.
-    answers_result = method.ret != BuiltinType.BLANK or method.err_type is not None
-    if answers_result and not block_always_returns(self, method.body):
-        self.err.emit(er.ERR.CE0107, method.name_span,
-                      callable=f"method '{method.name}'")
-
-    self.in_extension_context = False
-    self.in_synthesized_body = False
-    self.extension_method_name = None
-    self.extension_channel_result = None
+    _leave_body(self)
 
 
 def validate_extension_method(self, ext: ExtendDef) -> None:

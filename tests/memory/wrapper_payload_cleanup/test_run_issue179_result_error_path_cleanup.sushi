@@ -10,7 +10,7 @@
 enum MyErr:
     Boom
 
-fn mk() string:
+fn mk() string | StdError:
     return Result.Ok("xxxxxxxxxxxx{'abcd'}")
 
 fn fails() i32 | MyErr:
@@ -28,4 +28,4 @@ fn main() i32:
     match probe():
         Result.Ok(v) -> println("v = {v}")
         Result.Err(_) -> println("err taken")
-    return Result.Ok(0)
+    return 0

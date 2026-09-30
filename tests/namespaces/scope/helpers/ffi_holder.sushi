@@ -4,4 +4,4 @@ unsafe external "C" as libc because "the platform's own strlen":
     fn strlen(string s) i64 = "strlen"
 
 public fn measured(string s) i32:
-    return Result.Ok(libc.strlen(s) as i32)
+    return libc.strlen(s) as i32

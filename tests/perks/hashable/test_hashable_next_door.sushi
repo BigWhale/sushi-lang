@@ -6,9 +6,9 @@
 use "helpers/hashable_far"
 
 fn fingerprint@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     let Far f = Far(4)
-    println(fingerprint(f).realise(0 as u64) == f.hash())
-    return Result.Ok(0)
+    println(fingerprint(f) == f.hash())
+    return 0

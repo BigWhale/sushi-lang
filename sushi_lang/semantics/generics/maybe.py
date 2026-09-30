@@ -61,7 +61,7 @@ def _validate_maybe_realise(
     t_type = some_variant.associated_types[0]
 
     if t_type == BuiltinType.BLANK:
-        er.emit(reporter, er.ERR.CE2506, call.loc)
+        er.emit(reporter, er.ERR.CE2506, call.loc, ty=display_type(maybe_type))
         return
 
     default_arg = call.args[0]

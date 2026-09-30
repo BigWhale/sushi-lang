@@ -27,5 +27,5 @@ public fn touch() i32:
     let Kept k = Kept(1)
     let Gear g = Gear.Low
     match g:
-        Gear.Low -> return Result.Ok(k.n + hidden_counter + 40)
-        Gear.High -> return Result.Ok(0)
+        Gear.Low -> return k.n + hidden_counter + 40
+        Gear.High -> return 0

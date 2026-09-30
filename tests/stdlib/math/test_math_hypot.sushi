@@ -10,26 +10,26 @@ fn main() i32:
 
     # Verify hypot(3, 4) = 5 (classic Pythagorean triple)
     if (abs(hypot_3_4 - 5.0) > 0.0001):
-        return Result.Ok(1)
+        return 1
 
     # Verify hypot(5, 12) = 13 (another Pythagorean triple)
     if (abs(hypot_5_12 - 13.0) > 0.0001):
-        return Result.Ok(2)
+        return 2
 
     # Verify hypot(1, 1) = sqrt(2)
     let f64 sqrt_2 = sqrt(2.0)
     if (abs(hypot_1_1 - sqrt_2) > 0.0001):
-        return Result.Ok(3)
+        return 3
 
     # Verify hypot(0, 5) = 5
     if (abs(hypot_0_5 - 5.0) > 0.0001):
-        return Result.Ok(4)
+        return 4
 
     # Verify hypot is symmetric: hypot(x, y) = hypot(y, x)
     let f64 h1 = hypot(2.5, 7.3)
     let f64 h2 = hypot(7.3, 2.5)
     if (abs(h1 - h2) > 0.0001):
-        return Result.Ok(5)
+        return 5
 
     # Verify hypot matches manual calculation
     let f64 x = 6.0
@@ -37,6 +37,6 @@ fn main() i32:
     let f64 manual = sqrt(x * x + y * y)
     let f64 result = hypot(x, y)
     if (abs(manual - result) > 0.0001):
-        return Result.Ok(6)
+        return 6
 
-    return Result.Ok(0)
+    return 0

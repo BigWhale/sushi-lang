@@ -11,8 +11,8 @@ extend Box@(T) with Show:
     fn show() string:
         return "box"
 
-public fn make_box(i32 v) Box@(i32):
+public fn make_box(i32 v) Box@(i32) | StdError:
     return Result.Ok(Box(v))
 
 public fn wrap@(T)(nom T v) Box@(T):
-    return Result.Ok(Box(v))
+    return Box(v)

@@ -5,12 +5,12 @@
 # not accidentally invoke the user's add__thunk.
 # EXPECT_STDOUT_EXACT: "11\n"
 fn add(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn add__thunk(i32 x, i32 y) i32:
-    return Result.Ok(x + y)
+    return x + y
 
 fn main() i32:
     let fn(i32) -> i32 f = add
-    println(f(10).realise(0))
-    return Result.Ok(0)
+    println(f(10))
+    return 0

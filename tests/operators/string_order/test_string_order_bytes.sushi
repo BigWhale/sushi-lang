@@ -17,4 +17,4 @@ fn main() i32:
     if (ascii < accented):
         println("non-ascii-last")
 
-    return Result.Ok(0)
+    return 0

@@ -4,7 +4,7 @@
 # accident of `current_function is None`, which told the user to change the
 # return type -- and no return spelling can satisfy that.
 # EXPECT_ERROR_CODE: CE0131
-fn tag(i32 n) i32:
+fn tag(i32 n) i32 | StdError:
     return Result.Ok(n)
 
 extend i32 fixed() i32:
@@ -12,4 +12,4 @@ extend i32 fixed() i32:
 
 fn main() i32:
     println("{8.fixed()}")
-    return Result.Ok(0)
+    return 0

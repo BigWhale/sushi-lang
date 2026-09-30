@@ -15,4 +15,4 @@ fn main() i32:
     match arr.get(0):
         Maybe.Some(b) -> println("len = {b.data.len()}")
         Maybe.None() -> println("none")
-    return Result.Ok(0)
+    return 0

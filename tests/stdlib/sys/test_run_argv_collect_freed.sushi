@@ -19,4 +19,4 @@ fn main() i32:
     match run("true", a, b):
         Result.Ok(_) -> println("collected ok")
         Result.Err(_) -> println("collected err")
-    return Result.Ok(0)
+    return 0

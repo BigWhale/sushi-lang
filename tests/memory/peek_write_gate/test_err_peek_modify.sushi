@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2408
 # peek is read-only, modification should fail
 
-fn try_modify(peek i32 x) ~:
+fn try_modify(peek i32 x) ~ | StdError:
     # ERROR: Cannot modify through peek reference
     x := x + 1
     return Result.Ok(~)
@@ -11,4 +11,4 @@ fn main() i32:
     let i32 num = 42
     println(num)
     let Result@(~, StdError) result = try_modify(peek num)
-    return Result.Ok(0)
+    return 0

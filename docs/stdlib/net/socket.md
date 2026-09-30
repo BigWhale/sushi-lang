@@ -62,7 +62,7 @@ fn main() i32:
             sock_close(fd).realise(-1)
         Result.Err(_) -> println("could not listen")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `sock_tcp_connect(string host, i32 port) i32 | NetError`

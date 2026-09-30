@@ -9,4 +9,4 @@ fn main() i32:
     let i32 before = TAU
     TAU := TAU + 1
     println("{before} {TAU}")
-    return Result.Ok(0)
+    return 0

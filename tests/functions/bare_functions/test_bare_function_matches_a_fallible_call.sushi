@@ -1,0 +1,17 @@
+# A bare function that calls a fallible one handles the error itself, here with
+# `match`, and stays bare.
+# EXPECT_STDOUT_EXACT: "3\n0\n"
+fn parse(i32 x) i32 | StdError:
+    if (x < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x)
+
+fn or_zero(i32 x) i32:
+    match parse(x):
+        Result.Ok(n) -> return n
+        Result.Err(_) -> return 0
+
+fn main() i32:
+    println(or_zero(3))
+    println(or_zero(-3))
+    return 0

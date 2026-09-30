@@ -6,13 +6,12 @@
 # EXPECT_NO_LEAKS: true
 
 fn mk() string:
-    return Result.Ok("xxxxxxxxxxxx{'abcd'}")
+    return "xxxxxxxxxxxx{'abcd'}"
 
 fn probe() ~:
-    let string v = mk().realise("fallback")
+    let string v = mk()
     println("v = {v}")
-    return Result.Ok(~)
 
 fn main() i32:
     probe()
-    return Result.Ok(0)
+    return 0

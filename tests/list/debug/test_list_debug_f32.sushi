@@ -9,4 +9,4 @@ fn main() i32:
     println("=== List@(f32) Debug ===")
     floats.debug()
 
-    return Result.Ok(0)
+    return 0

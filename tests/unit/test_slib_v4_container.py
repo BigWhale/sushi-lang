@@ -1,4 +1,4 @@
-"""The `.slib` container at VERSION 4: a source section beside the bitcode.
+"""The `.slib` container since VERSION 4 (now 5): a source section beside the bitcode.
 
 Version 4 claims two of the reserved header fields as FLAGS and KIND, so the fixed
 52-byte header does not change size, and adds a length-prefixed SOURCE section between
@@ -21,8 +21,8 @@ SOURCE = {
 }
 
 
-def test_the_container_version_is_4():
-    assert LibraryFormat.VERSION == 4
+def test_the_container_version_is_5():
+    assert LibraryFormat.VERSION == 5
 
 
 def test_the_fixed_header_is_still_52_bytes():
@@ -98,7 +98,7 @@ def test_the_compression_flag_is_always_written_as_zero(tmp_path):
                         b"", source=SOURCE)
 
     raw = path.read_bytes()
-    assert struct.unpack("<I", raw[16:20])[0] == 4     # VERSION
+    assert struct.unpack("<I", raw[16:20])[0] == 5     # VERSION
     assert struct.unpack("<I", raw[20:24])[0] == 0     # FLAGS
 
 

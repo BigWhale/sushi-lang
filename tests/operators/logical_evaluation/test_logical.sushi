@@ -12,5 +12,5 @@ fn main() i32:
   let bool complex = result_and or result_or or result_not_a or result_not_b
 
   if (complex):
-    return Result.Ok(0)
-  return Result.Ok(1)  # Should not reach here)
+    return 0
+  return 1  # Should not reach here)

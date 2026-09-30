@@ -21,4 +21,4 @@ fn main() i32:
     # This should work: Point implements Hashable
     let Container@(Point) c = Container(Point(10, 20))
     println(c.value.x)
-    return Result.Ok(0)
+    return 0

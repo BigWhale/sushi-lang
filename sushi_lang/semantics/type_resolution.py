@@ -194,6 +194,12 @@ def parse_type_string(
             referent = parse_type_string(type_str[len(word):], struct_table, enum_table)
             return ReferenceType(referenced_type=referent, mutability=mode)
 
+    # Before the array branch: a function type's return may end with "[]".
+    if type_str.startswith("fn(") or type_str.startswith("fn ("):
+        from sushi_lang.semantics.generics.type_strings import parse_function_type_string
+        return parse_function_type_string(
+            type_str, lambda text: parse_type_string(text, struct_table, enum_table))
+
     primitives = {
         "i8": BuiltinType.I8,
         "i16": BuiltinType.I16,

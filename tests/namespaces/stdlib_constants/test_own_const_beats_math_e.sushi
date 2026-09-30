@@ -8,4 +8,4 @@ const f64 E = 1.5
 
 fn main() i32:
     println("{E}")
-    return Result.Ok(0)
+    return 0

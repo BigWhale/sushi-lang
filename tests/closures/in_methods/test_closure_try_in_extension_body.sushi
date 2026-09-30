@@ -4,13 +4,13 @@
 # test_err_try_in_lambda_in_extension_body.sushi until #399 landed).
 # EXPECT_STDOUT_EXACT: "9\n"
 fn tag(i32 n) i32:
-    return Result.Ok(n)
+    return n
 
 extend i32 fixed() i32:
-    let fn(i32) -> i32 f = |i32 x| tag(x)??
-    let i32 r = f(self).realise(0)
+    let fn(i32) -> i32 f = |i32 x| tag(x)
+    let i32 r = f(self)
     return r + 1
 
 fn main() i32:
     println("{8.fixed()}")
-    return Result.Ok(0)
+    return 0

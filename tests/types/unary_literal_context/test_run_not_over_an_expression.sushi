@@ -19,4 +19,4 @@ fn main() i32:
     let i8 negated = -(1 + 2)
     println("{negated}")
 
-    return Result.Ok(0)
+    return 0

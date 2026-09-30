@@ -14,4 +14,4 @@ fn main() i32:
     let ptr second = p.offset(8)
     println(second.load_i64(0))
     libc.free(p)
-    return Result.Ok(0)
+    return 0

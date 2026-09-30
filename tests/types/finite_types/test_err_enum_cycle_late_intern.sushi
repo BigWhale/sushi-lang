@@ -14,5 +14,5 @@ enum B:
 fn main() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
-    let i32 n = xs.map(|i32 x| x > 0).realise(List.new()).len()
-    return Result.Ok(n)
+    let i32 n = xs.map(|i32 x| x > 0).len()
+    return n

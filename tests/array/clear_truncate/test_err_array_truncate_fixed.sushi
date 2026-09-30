@@ -4,4 +4,4 @@
 fn main() i32:
     let i32[3] f = [1, 2, 3]
     f.truncate(1)
-    return Result.Ok(0)
+    return 0

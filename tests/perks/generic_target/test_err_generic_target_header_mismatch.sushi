@@ -18,4 +18,4 @@ fn main() i32:
     let Box@(string) b = Box("x")
     let Box@(bool) c = Box(true)
     println("{a.v} {b.v} {c.v}")
-    return Result.Ok(0)
+    return 0

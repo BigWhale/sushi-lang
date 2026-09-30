@@ -8,4 +8,4 @@ fn main() i32:
     let u32 accumulator = 0x34
     accumulator := accumulator | (byte << 8)
     println("{accumulator}")
-    return Result.Ok(0)
+    return 0

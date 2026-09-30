@@ -6,6 +6,6 @@ fn main() i32:
 
   # This should fail - mixed i8 and i64
   if (small < large):
-    return Result.Ok(0)
+    return 0
 
-  return Result.Ok(1)
+  return 1

@@ -9,4 +9,4 @@ extend Vec static at() Vec:
 fn main() i32:
     let Vec v = Vec.at()
     println("{v.x}")
-    return Result.Ok(0)
+    return 0

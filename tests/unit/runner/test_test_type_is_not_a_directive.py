@@ -20,7 +20,7 @@ def test_metadata_has_no_test_type_field():
 
 def test_a_test_type_line_is_an_unknown_directive(tmp_path):
     path = tmp_path / "test_probe.sushi"
-    path.write_text("# TEST_TYPE: runtime\n\nfn main() i32:\n    return Result.Ok(0)\n")
+    path.write_text("# TEST_TYPE: runtime\n\nfn main() i32:\n    return 0\n")
 
     errors = parse_test_metadata(path).directive_errors
 

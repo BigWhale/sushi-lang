@@ -2,7 +2,7 @@
 # freezes `h`, so a `push` on `h` in the body is refused (#1014).
 # EXPECT_ERROR_CODE: CE2412
 
-fn main() i32:
+fn run() i32 | StdError:
     let List@(i32[]) h = List.new()
     h.push(from([1, 2, 3]))
     foreach(x in h.get(0)??.iter()):
@@ -10,3 +10,8 @@ fn main() i32:
             h.push(from([4]))
     println(h.len())
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1

@@ -2,7 +2,7 @@
 # Test clone() method for dynamic arrays
 # This test verifies that clone creates independent deep copies
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test 1: Basic clone using rebind pattern
     let i32[] arr1 = from([1, 2, 3])
     let i32[] arr2 = new()
@@ -70,4 +70,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

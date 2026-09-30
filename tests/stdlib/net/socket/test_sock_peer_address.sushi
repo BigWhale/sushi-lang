@@ -32,4 +32,4 @@ fn main() i32:
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 
-    return Result.Ok(0)
+    return 0

@@ -4,7 +4,7 @@
 # Test multi-line array literals and function calls
 
 
-fn test_multiline_strings() ~:
+fn test_multiline_strings() ~ | StdError:
     println("Test 1: Multi-line string array")
     let string[] names = from([
         "Argle",
@@ -16,7 +16,7 @@ fn test_multiline_strings() ~:
     println("Last: {names.get(2)??}")
     return Result.Ok(~)
 
-fn test_multiline_integers() ~:
+fn test_multiline_integers() ~ | StdError:
     println("Test 2: Multi-line integer array")
     let i32[] numbers = from([
         10,
@@ -40,10 +40,9 @@ fn test_multiline_from() ~:
     ])
     let string text = data.to_string()
     println("Byte array as string: {text}")
-    return Result.Ok(~)
 
 fn add_three(i32 a, i32 b, i32 c) i32:
-    return Result.Ok(a + b + c)
+    return a + b + c
 
 fn test_multiline_function_call() ~:
     println("Test 4: Multi-line function call")
@@ -51,9 +50,8 @@ fn test_multiline_function_call() ~:
         10,
         20,
         30
-    ).realise(0)
+    )
     println("Result: {result}")
-    return Result.Ok(~)
 
 fn complex_function(
     i32 first,
@@ -61,22 +59,21 @@ fn complex_function(
     string name
 ) i32:
     println("Complex function called with: {first}, {second}, {name}")
-    return Result.Ok(first + second)
+    return first + second
 
 fn test_multiline_function_params() ~:
     println("Test 5: Multi-line function parameters")
-    let i32 result = complex_function(100, 200, "test").realise(0)
+    let i32 result = complex_function(100, 200, "test")
     println("Result: {result}")
-    return Result.Ok(~)
 
-fn test_nested_multiline() ~:
+fn test_nested_multiline() ~ | StdError:
     println("Test 6: Nested multi-line constructs")
     let i32[3] temp_arr = [30, 40, 50]
     let i32 result = add_three(
         10,
         20,
         temp_arr.get(0)??
-    ).realise(0)
+    )
     println("Nested result: {result}")
     return Result.Ok(~)
 
@@ -85,9 +82,8 @@ fn test_empty_multiline() ~:
     let string[] empty = from([
     ])
     println("Empty array length: {empty.len()}")
-    return Result.Ok(~)
 
-fn test_single_element_multiline() ~:
+fn test_single_element_multiline() ~ | StdError:
     println("Test 8: Single element multi-line array")
     let i32[] single = from([
         42
@@ -105,7 +101,6 @@ fn test_mixed_multiline() ~:
     ])
     println("Single-line length: {arr1.len()}")
     println("Multi-line length: {arr2.len()}")
-    return Result.Ok(~)
 
 fn test_multiline_booleans() ~:
     println("Test 10: Multi-line boolean array")
@@ -116,9 +111,8 @@ fn test_multiline_booleans() ~:
         false
     ])
     println("Boolean array length: {flags.len()}")
-    return Result.Ok(~)
 
-fn test_multiline_fixed_array() ~:
+fn test_multiline_fixed_array() ~ | StdError:
     println("Test 11: Multi-line fixed-size array")
     let i32[5] fixed = [
         1,
@@ -145,4 +139,4 @@ fn main() i32:
     test_multiline_fixed_array()
 
     println("All multi-line tests completed!")
-    return Result.Ok(0)
+    return 0

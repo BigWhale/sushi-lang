@@ -10,32 +10,32 @@ enum State:
 fn step(State s, i32 progress) State:
     match s:
         State.Idle ->
-            return Result.Ok(State.Running(progress))
+            return State.Running(progress)
         State.Running(p) ->
             if (p + progress >= 100):
-                return Result.Ok(State.Done(p + progress))
-            return Result.Ok(State.Running(p + progress))
+                return State.Done(p + progress)
+            return State.Running(p + progress)
         State.Done(total) ->
-            return Result.Ok(State.Done(total))
+            return State.Done(total)
 
 fn main() i32:
     let State s1 = State.Idle()
-    let State s2 = step(s1, 40).realise(State.Idle())
-    let State s3 = step(s2, 40).realise(State.Idle())
-    let State s4 = step(s3, 30).realise(State.Idle())
+    let State s2 = step(s1, 40)
+    let State s3 = step(s2, 40)
+    let State s4 = step(s3, 30)
 
     match s4:
         State.Done(total) ->
             println("Done: {total}")
             if (total != 110):
                 println("FAIL: expected 110 got {total}")
-                return Result.Ok(1)
+                return 1
         State.Running(p) ->
             println("FAIL: still running at {p}")
-            return Result.Ok(1)
+            return 1
         State.Idle ->
             println("FAIL: still idle")
-            return Result.Ok(1)
+            return 1
 
     println("State machine: all passed")
-    return Result.Ok(0)
+    return 0

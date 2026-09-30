@@ -11,4 +11,4 @@ fn main() i32:
                 break
             _ -> println(x)
     println(a.len())
-    return Result.Ok(0)
+    return 0

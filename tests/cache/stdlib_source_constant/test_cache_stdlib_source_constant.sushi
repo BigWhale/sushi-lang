@@ -9,4 +9,4 @@ use <fixture/limits>
 
 fn main() i32:
     println("{LIMIT}")
-    return Result.Ok(0)
+    return 0

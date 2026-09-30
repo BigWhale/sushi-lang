@@ -2,7 +2,7 @@
 # EXPECT_STDOUT_CONTAINS: PASS: pad_right basic test
 use <collections/strings>
 
-fn test_pad_left_basic() ~:
+fn test_pad_left_basic() ~ | StdError:
     let string text = "hello"
     let string result = text.pad_left(10, " ")
 
@@ -13,7 +13,7 @@ fn test_pad_left_basic() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_no_padding_needed() ~:
+fn test_pad_left_no_padding_needed() ~ | StdError:
     let string text = "hello"
     let string result = text.pad_left(5, " ")
 
@@ -24,7 +24,7 @@ fn test_pad_left_no_padding_needed() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_already_longer() ~:
+fn test_pad_left_already_longer() ~ | StdError:
     let string text = "hello world"
     let string result = text.pad_left(5, " ")
 
@@ -35,7 +35,7 @@ fn test_pad_left_already_longer() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_multi_char_pad() ~:
+fn test_pad_left_multi_char_pad() ~ | StdError:
     let string text = "hi"
     let string result = text.pad_left(6, "=")
 
@@ -46,7 +46,7 @@ fn test_pad_left_multi_char_pad() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_utf8() ~:
+fn test_pad_left_utf8() ~ | StdError:
     let string text = "café"
     let string result = text.pad_left(8, " ")
 
@@ -57,7 +57,7 @@ fn test_pad_left_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_utf8_pad_char() ~:
+fn test_pad_left_utf8_pad_char() ~ | StdError:
     let string text = "hi"
     let string result = text.pad_left(5, "•")
 
@@ -68,7 +68,7 @@ fn test_pad_left_utf8_pad_char() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_zero_width() ~:
+fn test_pad_left_zero_width() ~ | StdError:
     let string text = "hello"
     let string result = text.pad_left(0, " ")
 
@@ -79,7 +79,7 @@ fn test_pad_left_zero_width() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_basic() ~:
+fn test_pad_right_basic() ~ | StdError:
     let string text = "hello"
     let string result = text.pad_right(10, " ")
 
@@ -90,7 +90,7 @@ fn test_pad_right_basic() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_no_padding_needed() ~:
+fn test_pad_right_no_padding_needed() ~ | StdError:
     let string text = "hello"
     let string result = text.pad_right(5, " ")
 
@@ -101,7 +101,7 @@ fn test_pad_right_no_padding_needed() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_already_longer() ~:
+fn test_pad_right_already_longer() ~ | StdError:
     let string text = "hello world"
     let string result = text.pad_right(5, " ")
 
@@ -112,7 +112,7 @@ fn test_pad_right_already_longer() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_multi_char_pad() ~:
+fn test_pad_right_multi_char_pad() ~ | StdError:
     let string text = "hi"
     let string result = text.pad_right(6, "-")
 
@@ -123,7 +123,7 @@ fn test_pad_right_multi_char_pad() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_utf8() ~:
+fn test_pad_right_utf8() ~ | StdError:
     let string text = "café"
     let string result = text.pad_right(8, " ")
 
@@ -134,7 +134,7 @@ fn test_pad_right_utf8() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_utf8_pad_char() ~:
+fn test_pad_right_utf8_pad_char() ~ | StdError:
     let string text = "hi"
     let string result = text.pad_right(5, "★")
 
@@ -145,7 +145,7 @@ fn test_pad_right_utf8_pad_char() ~:
 
     return Result.Ok(~)
 
-fn test_pad_both_center_effect() ~:
+fn test_pad_both_center_effect() ~ | StdError:
     let string text = "center"
     let string left = text.pad_left(9, " ")
     let string both = left.pad_right(12, " ")
@@ -157,7 +157,7 @@ fn test_pad_both_center_effect() ~:
 
     return Result.Ok(~)
 
-fn test_pad_left_emoji() ~:
+fn test_pad_left_emoji() ~ | StdError:
     let string text = "test"
     let string result = text.pad_left(8, "🎉")
 
@@ -168,7 +168,7 @@ fn test_pad_left_emoji() ~:
 
     return Result.Ok(~)
 
-fn test_pad_right_emoji() ~:
+fn test_pad_right_emoji() ~ | StdError:
     let string text = "test"
     let string result = text.pad_right(8, "🎊")
 
@@ -213,4 +213,4 @@ fn main() i32:
     if (test_pad_right_emoji().is_ok()):
         println("")
 
-    return Result.Ok(0)
+    return 0

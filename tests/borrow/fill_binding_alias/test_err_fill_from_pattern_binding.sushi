@@ -11,4 +11,4 @@ fn main() i32:
         Maybe.Some(v) -> b.fill(v)
         Maybe.None -> println("none")
     println(b[2])
-    return Result.Ok(0)
+    return 0

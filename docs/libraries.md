@@ -107,19 +107,26 @@ default for all of them. A `public var` is storage that a consumer can read and 
 
 # This function can be called from programs that use this library
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 # This function is internal to the library
 fn helper(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 public fn double_add(i32 a, i32 b) i32:
-    let i32 sum = add(a, b)??
-    return Result.Ok(helper(sum)??)
+    let i32 sum = add(a, b)
+    return helper(sum)
 
 # Storage that a consumer can read and write
 public var i32 calls = 0
 ```
+
+`add`, `helper` and `double_add` are BARE: they write no `| E`, so a call yields the `i32`
+and takes no `??` or `.realise`. A bare function is the exception, not the default style. It
+is correct here because the functions are pure arithmetic and will stay so. A PUBLIC function
+keeps a channel (`| E`) when there is any doubt: a channel added later changes the signature,
+and that breaks every caller and every binary `.slib`. The compiler does not enforce this.
+`docs/design/error-channel.md` carries the rule.
 
 A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
 is internal, and a consumer that calls it hears `CE3005` exactly as it does for a concrete
@@ -157,7 +164,7 @@ struct Cursor:                      # a decoder detail; not in the manifest
     i32 at
 
 public fn make_point(i32 x, i32 y) Point:
-    return Result.Ok(Point(x, y))
+    return Point(x, y)
 ```
 
 Three consequences worth knowing:
@@ -188,9 +195,9 @@ To use a library, add a `use` statement with the `lib/` prefix:
 use <lib/mathutils>
 
 fn main() i32:
-    let i32 result = add(10, 20).realise(0)
+    let i32 result = add(10, 20)     # add is bare: the call yields the i32
     println("10 + 20 = {result}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The compiler will:
@@ -210,7 +217,7 @@ use <lib/utils>
 
 fn main() i32:
     # Functions from both libraries are available
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Library Search Path
@@ -438,6 +445,15 @@ confusing error deep inside library source you never wrote.
 The escape is `--ignore-compiler-version`, for an author testing a library forward against a
 new compiler. It is build-wide and obviously temporary, on purpose.
 
+### The format versions
+
+The file itself carries two more versions: the container version (`5`) and the templates
+schema version (`8`). A signature without `| E` is bare (`docs/design/error-channel.md`).
+Every function, helper and method record in the manifest states `has_channel`, and the field
+is required. A library of another version is refused: its container version is **CE3509**,
+and the templates schema of a binary or hybrid library is **CE3512**. Rebuild the library
+with the current compiler. `docs/library-format.md` carries the rows.
+
 ## Symbol Resolution
 
 ### Two-Phase Linking
@@ -493,13 +509,13 @@ is API you have to keep; everything you leave unmarked you can change:
 public const i32 SCALE = 2
 
 public fn calculate(i32 x) i32:
-    return Result.Ok(internal_helper(x)??)
+    return internal_helper(x)
 
 struct Work:
     i32 at
 
 fn internal_helper(i32 x) i32:
-    return Result.Ok(x * SCALE)
+    return x * SCALE
 ```
 
 `zlib` is the example the rule is for: 38 functions and 13 types and constants, of which 6
@@ -569,13 +585,13 @@ use <lib/mylib>
 
 fn main() i32:
     # Test cases
-    let i32 r1 = add(1, 2).realise(-1)
+    let i32 r1 = add(1, 2)
     if (r1 != 3):
         println("FAIL: add(1, 2) = {r1}, expected 3")
-        return Result.Ok(1)
+        return 1
 
     println("All tests passed")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Limitations
@@ -609,7 +625,7 @@ Current limitations of the library system:
    (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib` boundaries.
 
    The library producer ships a re-parsable source template in the `.slib` `templates`
-   section (templates version 7); the consumer re-parses it, registers it alongside its own
+   section (templates version 8); the consumer re-parses it, registers it alongside its own
    definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk

@@ -14,6 +14,6 @@ fn main() i32:
         let i32 pi_int = pi_val as i32
         result := result + pi_int
         # result should be 100 + 3 = 103
-        return Result.Ok(result)
+        return result
 
-    return Result.Ok(0)
+    return 0

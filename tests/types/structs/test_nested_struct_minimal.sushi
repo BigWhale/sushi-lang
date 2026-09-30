@@ -31,4 +31,4 @@ fn main() i32:
     println("BUG: RAII cleanup will try to free the same memory twice!")
     println("Expected: segfault or double-free detected")
 
-    return Result.Ok(0)
+    return 0

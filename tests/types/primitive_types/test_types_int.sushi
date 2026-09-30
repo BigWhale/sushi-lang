@@ -5,4 +5,4 @@ fn main() i32:
   let i32 w = x * 2 - y / 5
   let i32 result = z + w
   let i32 expected = 118
-  return Result.Ok(result - expected)
+  return result - expected

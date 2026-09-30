@@ -7,4 +7,4 @@ var i32 b = a
 
 fn main() i32:
     println("{b}")
-    return Result.Ok(0)
+    return 0

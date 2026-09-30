@@ -6,4 +6,4 @@ const string BOOK = "{HEAD} Harmless"
 
 fn main() i32:
     println(BOOK)
-    return Result.Ok(0)
+    return 0

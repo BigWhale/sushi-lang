@@ -6,7 +6,7 @@ use "helpers/relay3" as r
 
 fn main() i32:
     let fn(string) -> i32 f = plain
-    println(f("abc").realise(0))
+    println(f("abc"))
     let fn(string) -> i32 g = r.plain
-    println(g("abc").realise(0))
-    return Result.Ok(0)
+    println(g("abc"))
+    return 0

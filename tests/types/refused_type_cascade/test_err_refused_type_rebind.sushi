@@ -6,4 +6,4 @@ fn main() i32:
     let Iterator@(i32) it = a.iter()
     it := a.iter()
     println(it)
-    return Result.Ok(0)
+    return 0

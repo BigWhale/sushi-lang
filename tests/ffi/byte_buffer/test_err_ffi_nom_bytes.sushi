@@ -5,4 +5,4 @@ unsafe external "C" as libc because "probe":
     fn write(i32 fd, nom u8[] buf, i64 n) i64 = "write"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

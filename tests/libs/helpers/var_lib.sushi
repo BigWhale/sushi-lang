@@ -6,8 +6,7 @@ var i32 secret = 40
 
 public fn hit() ~:
     hits := hits + 1
-    return Result.Ok(~)
 
 public fn secret_plus(i32 n) i32:
     secret := secret + n
-    return Result.Ok(secret)
+    return secret

@@ -38,20 +38,20 @@ fn main() i32:
     println("======================")
 
     # Use functions from mathlib.sushi (imported as source)
-    # .realise(default) safely unwraps Result.Ok or returns default on error
-    let i32 sum = add(10, 20).realise(0)
+    # add and multiply are bare (no `| E`), so each call returns the i32 directly
+    let i32 sum = add(10, 20)
     println("add(10, 20) = {sum}")
 
-    let i32 product = multiply(7, 8).realise(0)
+    let i32 product = multiply(7, 8)
     println("multiply(7, 8) = {product}")
 
-    let i32 fact = factorial(5).realise(0)
+    let i32 fact = factorial(5)
     println("factorial(5) = {fact}")
 
-    let i32 doubled = double(21).realise(0)
+    let i32 doubled = double(21)
     println("double(21) = {doubled}")
 
     println("")
     println("All library functions work correctly!")
 
-    return Result.Ok(0)
+    return 0

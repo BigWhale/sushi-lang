@@ -7,4 +7,4 @@ struct Point:
 
 fn main() i32:
     let Point p = Point(10, true)
-    return Result.Ok(0)
+    return 0

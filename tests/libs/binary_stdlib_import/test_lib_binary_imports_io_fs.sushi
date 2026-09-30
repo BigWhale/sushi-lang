@@ -8,6 +8,6 @@ use <io/fs>
 use <lib/fs_user_bin_lib>
 
 fn main() i32:
-    match stdout.write("{answer().realise(0)}\n"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+    match stdout.write("{answer()}\n"):
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

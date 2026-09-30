@@ -245,7 +245,9 @@ class FunctionMonomorphizer:
             generic.err_type, substitution
         ) if getattr(generic, "err_type", None) else None
 
+        from sushi_lang.semantics.channel import has_channel
         concrete_func = copy.copy(generic)
+        concrete_func.written_channel = has_channel(generic)
         concrete_func.name = mangled_name
         concrete_func.params = concrete_params
         concrete_func.ret = concrete_ret
@@ -302,15 +304,9 @@ class FunctionMonomorphizer:
             # are properly monomorphized even if they weren't detected by InstantiationCollector
             signature_instantiations = set()
 
-            if concrete_func.ret:
-                if hasattr(concrete_func, 'err_type') and concrete_func.err_type:
-                    err_type = concrete_func.err_type
-                else:
-                    err_type = self.monomorphizer.enum_table.by_name.get("StdError") if self.monomorphizer.enum_table else None
-
-                if err_type:
-                    result_type_args = (concrete_func.ret, err_type)
-                    signature_instantiations.add(("Result", result_type_args))
+            if concrete_func.ret and concrete_func.err_type is not None:
+                signature_instantiations.add(
+                    ("Result", (concrete_func.ret, concrete_func.err_type)))
 
             extract_type_instantiations(concrete_func.ret, signature_instantiations)
             for param in concrete_func.params:

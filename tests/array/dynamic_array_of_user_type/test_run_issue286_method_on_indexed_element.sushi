@@ -39,4 +39,4 @@ fn main() i32:
 
     let E[] es = from([E.A, E.B(2)])
     println("enum: {es[1].hash() == es[1].hash()}")
-    return Result.Ok(0)
+    return 0

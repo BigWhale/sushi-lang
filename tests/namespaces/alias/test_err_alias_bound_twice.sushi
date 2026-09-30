@@ -5,4 +5,4 @@ use "helpers/geo" as geo
 use "helpers/own_math" as geo
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

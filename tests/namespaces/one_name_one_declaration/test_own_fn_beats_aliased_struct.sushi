@@ -4,9 +4,9 @@
 use "helpers/shapes" as sh
 
 fn box() i32:
-    return Result.Ok(4)
+    return 4
 
 fn main() i32:
     let sh.box b = sh.box(2)
-    println(box().realise(0) + b.n)
-    return Result.Ok(0)
+    println(box() + b.n)
+    return 0

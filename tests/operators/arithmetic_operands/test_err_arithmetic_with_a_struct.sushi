@@ -9,4 +9,4 @@ fn main() i32:
     let Point b = Point(2)
     let Point c = a * b
     println("{c.x}")
-    return Result.Ok(0)
+    return 0

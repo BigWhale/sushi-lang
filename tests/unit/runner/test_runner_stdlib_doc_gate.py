@@ -26,7 +26,7 @@ UNDOCUMENTED = """\
 ##: A synthetic module for the doc-block gate. :##
 
 public fn undocumented_answer() i32:
-    return Result.Ok(42)
+    return 42
 """
 
 DOCUMENTED = """\
@@ -38,7 +38,7 @@ Gives the answer to life, the universe and everything.
 - Returns: The answer.
 :##
 public fn documented_answer() i32:
-    return Result.Ok(42)
+    return 42
 """
 
 

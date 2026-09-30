@@ -7,8 +7,8 @@ use "helpers/liba"
 use "helpers/libb"
 
 fn run() f64:
-    return Result.Ok(sine(1.0)??)
+    return sine(1.0)
 
 fn main() i32:
-    println("{run().realise(0.0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

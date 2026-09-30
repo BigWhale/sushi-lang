@@ -42,7 +42,7 @@ fn main() i32:
         Result.Ok(a) -> println("{a.text()} is private: {a.is_private()}")
         Result.Err(_) -> println("not an address")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **What is refused, and why it matters.** A leading zero in a dotted quad is refused, exactly as `inet_pton` refuses it — so `010.0.0.1` is not an address here and can never be read as octal. A zone identifier (`fe80::1%eth0`) is refused. A trailing character is a refusal rather than an ignored suffix, so `1.2.3.4a` does not quietly become `1.2.3.4`.

@@ -5,10 +5,10 @@
 use <io/path>
 
 fn main() i32:
-    println(normalize("a//b").realise("?"))
-    println(normalize("/a/./b/../c").realise("?"))
-    println(normalize("./a").realise("?"))
-    println(normalize("../x").realise("?"))
-    println(normalize("").realise("?"))
-    println(normalize("/..").realise("?"))
-    return Result.Ok(0)
+    println(normalize("a//b"))
+    println(normalize("/a/./b/../c"))
+    println(normalize("./a"))
+    println(normalize("../x"))
+    println(normalize(""))
+    println(normalize("/.."))
+    return 0

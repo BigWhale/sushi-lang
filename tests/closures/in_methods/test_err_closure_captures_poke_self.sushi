@@ -7,11 +7,11 @@ struct Counter:
 
 extend Counter bump(poke self) ~:
     let fn(i32) -> i32 f = |i32 x| x + self.n
-    let i32 r = f(1).realise(0)
+    let i32 r = f(1)
     self.n := r
 
 fn main() i32:
     let Counter c = Counter(0)
     c.bump()
     println("{c.n}")
-    return Result.Ok(0)
+    return 0

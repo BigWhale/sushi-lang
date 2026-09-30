@@ -8,4 +8,4 @@ fn main() i32:
     let Container c = Container(arr.clone())  # Explicit clone
     println(arr.len())  # arr is still valid
     println(c.numbers.len())
-    return Result.Ok(0)
+    return 0

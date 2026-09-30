@@ -11,4 +11,4 @@ fn main() i32:
     print("B-")
     stdout.write("C")
     println("")
-    return Result.Ok(0)
+    return 0

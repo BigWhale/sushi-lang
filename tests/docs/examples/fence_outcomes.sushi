@@ -12,12 +12,12 @@ Doubles a number.
 - Returns: Twice `n`.
 - Example: a plain fence is compiled and run, and a non-zero exit is a failure.
 ```sushi
-let i32 d = doubled(21)??
+let i32 d = doubled(21)
 println("{d}")
 ```
 :##
 public fn doubled(i32 n) i32:
-    return Result.Ok(n * 2)
+    return n * 2
 
 ##:
 Adds up every number below a bound.
@@ -26,7 +26,7 @@ Adds up every number below a bound.
 - Returns: The sum.
 - Example: a `no_run` fence is compiled and never run, because the loop is long.
 ```sushi no_run
-let i32 total = summed(100_000_000)??
+let i32 total = summed(100_000_000)
 println("{total}")
 ```
 :##
@@ -34,7 +34,7 @@ public fn summed(i32 rounds) i32:
     let i32 total = 0
     foreach(i in 0..rounds):
         total := total + i
-    return Result.Ok(total)
+    return total
 
 ##:
 Opens a connection on a port.
@@ -48,7 +48,7 @@ println("{fd}")
 ```
 :##
 public fn connect(i32 port) i32:
-    return Result.Ok(port)
+    return port
 
 ##:
 Adds one to a number.
@@ -62,4 +62,4 @@ println("{incremented(s)}")
 ```
 :##
 public fn incremented(i32 n) i32:
-    return Result.Ok(n + 1)
+    return n + 1

@@ -8,7 +8,7 @@ extend i32 with Display:
     fn display() string:
         return "i:{self}"
 
-fn show@(...Ts: Display)(...Ts args) ~:
+fn show@(...Ts: Display)(...Ts args) ~ | StdError:
     let i32 other = 1
     expand(a in other):
         println(a.display())
@@ -17,4 +17,4 @@ fn show@(...Ts: Display)(...Ts args) ~:
 fn main() i32:
     if (show(1, 2)):
         println("done")
-    return Result.Ok(0)
+    return 0

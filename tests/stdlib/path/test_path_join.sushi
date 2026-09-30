@@ -4,9 +4,9 @@
 use <io/path>
 
 fn main() i32:
-    println(join("a", "b").realise("?"))
-    println(join("a/", "b").realise("?"))
-    println(join("a", "/b").realise("?"))
-    println(join("", "b").realise("?"))
-    println(join("a", "").realise("?"))
-    return Result.Ok(0)
+    println(join("a", "b"))
+    println(join("a/", "b"))
+    println(join("a", "/b"))
+    println(join("", "b"))
+    println(join("a", ""))
+    return 0

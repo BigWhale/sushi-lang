@@ -11,4 +11,4 @@ extend Box@(Drop) g() i32:
 fn main() i32:
     let Box@(i32) b = Box(1)
     println("{b.g()}")
-    return Result.Ok(0)
+    return 0

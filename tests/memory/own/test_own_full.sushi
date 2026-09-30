@@ -8,4 +8,4 @@ fn main() i32:
     let i32 value = ptr.get()
     println("Value: {value}")
     let i32 expected = 42
-    return Result.Ok(value - expected)
+    return value - expected

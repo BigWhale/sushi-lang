@@ -9,11 +9,10 @@ fn fill() ~:
     table.push(1)
     table.push(2)
     table.push(3)
-    return Result.Ok(~)
 
 fn main() i32:
     fill()
     foreach(poke r in table.iter()):
         r := r * 2
     println("{table[0]} {table[1]} {table[2]}")
-    return Result.Ok(0)
+    return 0

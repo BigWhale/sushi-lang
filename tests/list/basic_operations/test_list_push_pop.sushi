@@ -8,7 +8,7 @@ fn main() i32:
     # Test initial state
     if (not numbers.is_empty()):
         println("ERROR: List should start empty")
-        return Result.Ok(1)
+        return 1
 
     # Push elements
     numbers.push(10)
@@ -19,31 +19,31 @@ fn main() i32:
     let i32 size = numbers.len()
     if (size != 3):
         println("ERROR: Expected size 3, got {size}")
-        return Result.Ok(2)
+        return 2
 
     # Pop elements
     match numbers.pop():
         Maybe.Some(val) ->
             if (val != 30):
                 println("ERROR: Expected 30, got {val}")
-                return Result.Ok(3)
+                return 3
         Maybe.None() ->
             println("ERROR: Pop should return Some(30)")
-            return Result.Ok(4)
+            return 4
 
     match numbers.pop():
         Maybe.Some(val) ->
             if (val != 20):
                 println("ERROR: Expected 20, got {val}")
-                return Result.Ok(5)
+                return 5
         Maybe.None() ->
             println("ERROR: Pop should return Some(20)")
-            return Result.Ok(6)
+            return 6
 
     # Check size after pops
     if (numbers.len() != 1):
         println("ERROR: Expected size 1 after 2 pops")
-        return Result.Ok(7)
+        return 7
 
     println("Push/pop tests passed!")
-    return Result.Ok(0)
+    return 0

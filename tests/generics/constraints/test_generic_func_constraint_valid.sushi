@@ -10,19 +10,19 @@ extend Point with Hashable:
         return 42 as u64
 
 fn compute_hash@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn run_test() i32:
     let Point p = Point(10, 20)
 
     # This should compile successfully - Point implements Hashable
     # Note: Phase 3 validates constraint satisfaction during monomorphization
-    let u64 hash_value = compute_hash(p)??
+    let u64 hash_value = compute_hash(p)
     if (hash_value != 42 as u64):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

@@ -8,4 +8,4 @@ fn main() i32:
     println(neg)
     let i64 inverted = ~neg
     println(inverted)
-    return Result.Ok(0)
+    return 0

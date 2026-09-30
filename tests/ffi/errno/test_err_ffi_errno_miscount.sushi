@@ -5,4 +5,4 @@ unsafe external "C" as libc because "probe":
 
 fn main() i32:
     let i32 code = errno(1)
-    return Result.Ok(code)
+    return code

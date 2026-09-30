@@ -17,4 +17,4 @@ fn main() i32:
     match probe("share_after_close.txt"):
         Result.Ok(text) -> println("{text}")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

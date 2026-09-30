@@ -3,7 +3,7 @@
 **Status: DECIDED and SHIPPED** (2026-08-15 and 2026-08-16). The reference subsystem is part
 of the ownership model. Every mechanism in this document is enforced and has tests.
 
-> **The parameter-mode rule is SUPERSEDED by `docs/design/borrow-model.md`** (ruled
+> **The parameter-mode rule is in `docs/design/borrow-model.md`** (ruled
 > 2026-08-16). That document owns the mode rule: an unmarked parameter is a borrow for every
 > kind of callee, `nom` takes ownership, and a mode is marked at both ends or neither. Where
 > sections 1 to 5 here state a mode rule, `borrow-model.md` wins. This document owns the
@@ -216,7 +216,7 @@ span is the second location of the relational diagnostic. Three consequences:
 
 **A borrow cannot be consumed.** The ownership table's `(BORROWED, MOVE)` cell rejects, and
 that is the whole implementation: `type_class_of` derefs a reference to its referent, so
-all twelve consuming positions answer the same way with no per-sink work. The code is CE2411
+all fifteen consuming positions answer the same way with no per-sink work. The code is CE2411
 and the escape is `.clone()`, which is total over types.
 
 **An owner is frozen while a borrow of it lives.** CE2412, reported NLL-style: the owner is
@@ -274,7 +274,7 @@ unbound owning temporary.
 
 ## 9. Not designed
 
-Each of these is a rejection today, and each is lifted separately when its feature is
+Each of these is a rejection, and each is lifted separately when its feature is
 designed:
 
 - **Lifetimes.** Nothing relates a borrow to the value it names, which is why a borrow

@@ -5,7 +5,7 @@ unsafe external "C" as libc because "intentional public ptr exposure":
 
 public fn grab() ptr:
     let ptr p = libc.malloc(8 as i64)
-    return Result.Ok(p)
+    return p
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

@@ -5,12 +5,12 @@
 use <collections/strings>
 
 fn word(string s) string:
-    return Result.Ok(s.s(0, 8))
+    return s.s(0, 8)
 
 fn look(bool b) i32:
     if (b):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0
 
 fn main() i32:
     let string a = "manifest x"
@@ -21,4 +21,4 @@ fn main() i32:
             hits := hits + 1
         i := i + 1
     println(hits)
-    return Result.Ok(0)
+    return 0

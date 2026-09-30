@@ -3,4 +3,4 @@ use <sys/env>
 
 fn main() i32:
     let string val = getenv(42).realise("default")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ unsafe external "C" as raw because "naming a generated symbol this build never l
 fn main() i32:
     let string s = "abcd"
     println("{raw.slen(s)}")
-    return Result.Ok(0)
+    return 0

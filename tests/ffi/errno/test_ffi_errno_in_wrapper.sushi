@@ -22,4 +22,4 @@ fn main() i32:
         Result.Ok(_) -> println("removed")
         Result.Err(RemoveError.Missing) -> println("missing")
         Result.Err(RemoveError.Other(code)) -> println("errno {code}")
-    return Result.Ok(0)
+    return 0

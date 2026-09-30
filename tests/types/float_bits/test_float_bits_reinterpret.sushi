@@ -25,4 +25,4 @@ fn main() i32:
     let f64 rt = f64.from_bits(e.to_bits())
     println("roundtrip={rt}")
 
-    return Result.Ok(0)
+    return 0

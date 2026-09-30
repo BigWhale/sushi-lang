@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
-from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, DynamicArrayType, EnumType
+from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, DynamicArrayType
 from sushi_lang.backend.ownership import relinquish
 from sushi_lang.internals.errors import raise_internal_error, InternalCompilerError
 
@@ -16,28 +16,6 @@ def callee_owns_param(param) -> bool:
     """Does the CALLEE own this parameter, and therefore free it at scope exit?"""
     from sushi_lang.semantics.param_modes import param_mode
     return param_mode(param).consumes
-
-
-def declared_result_of(codegen: 'LLVMCodegen', fn: FuncDef) -> EnumType:
-    """The Result a function returns: the interned enum, else the one `T | E` implies.
-
-    A spelled `Result@(T, E)` return arrives as the resolve pass's stamp (#857); the
-    declaration keeps the type as written, so it is never read here.
-    """
-    from sushi_lang.semantics.generics.results import is_result_enum
-    from sushi_lang.semantics.passes.collect.functions import is_explicit_result_type
-    from sushi_lang.backend.generics.result_builder import implicit_result_of
-    if is_result_enum(fn.resolved_result):
-        return fn.resolved_result
-    if isinstance(fn.ret, EnumType) and is_result_enum(fn.ret):
-        return fn.ret
-    result = None
-    if not is_explicit_result_type(fn.ret):
-        result = implicit_result_of(codegen, fn)
-    if result is None:
-        raise InternalCompilerError(
-            "CE0015", message=f"{fn.name}: no Result type for return type {fn.ret!r}")
-    return result
 
 
 class FunctionHelpers:
@@ -74,25 +52,23 @@ class FunctionHelpers:
         return extension_symbol(target_type_name, ext.name,
                                 getattr(ext, "method_type_args", None) or ())
 
-    def emit_default_return(self, fn: FuncDef) -> None:
-        """Refuse a function body that left its last block open (#849).
+    def emit_fall_off(self, fn: FuncDef | ExtendDef) -> None:
+        """Close a body that left its last block open: one rule for every callable.
 
-        CE0107 refuses a body that can reach its end, and the `if` and `match` emitters
-        leave no merge block that no arm branches to. So no program arrives here, and
-        there is no implicit `Result.Ok(~)` or `Result.Err` to emit.
+        CE0107 refuses every body that answers a value or a Result and can reach its end,
+        and the `if` and `match` emitters leave no merge block that no arm branches to
+        (#849). So only a BARE `~` body arrives here, and it returns the blank value.
+        There is no implicit `Result.Ok(~)` or `Result.Err` to emit.
         """
-        raise InternalCompilerError(
-            "CE0015", message=f"{fn.name}: the body left its last block open with no return")
-
-    def emit_default_return_for_extension(self, ret_type: Ty | None) -> None:
-        """Emit default return value for extension method without explicit return."""
-        if ret_type is None:
-            return
+        from sushi_lang.backend.generics.result_builder import channel_result_of
+        if channel_result_of(self.codegen, fn) is not None or fn.ret is None:
+            raise InternalCompilerError(
+                "CE0015", message=f"{fn.name}: the body left its last block open with no return")
 
         from sushi_lang.backend.statements import utils
         utils.emit_scope_cleanup(self.codegen)
 
-        value_llvm_type = self.codegen.types.ll_type(ret_type)
+        value_llvm_type = self.codegen.types.ll_type(fn.ret)
         zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
         self.codegen.builder.ret(zero_value)
 

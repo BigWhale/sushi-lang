@@ -8,4 +8,4 @@ fn main() i32:
     let i32 one = 1
     let i32 two = one.checked_inc().realise(0)
     println("{two}")
-    return Result.Ok(0)
+    return 0

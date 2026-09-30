@@ -6,16 +6,16 @@ struct Triple@(T, U, V):
     V c
 
 fn triple@(T, U, V)(T a, U b, V c) Triple@(T, U, V):
-    return Result.Ok(Triple(a, b, c))
+    return Triple(a, b, c)
 
 fn pair@(A, B)(A first, B second) Triple@(A, B, A):
-    return Result.Ok(Triple(first, second, first))
+    return Triple(first, second, first)
 
 fn main() i32:
-    let Triple@(i32, bool, f64) t = triple(1, true, 2.5).realise(Triple(0, false, 0.0))
+    let Triple@(i32, bool, f64) t = triple(1, true, 2.5)
     if (t.a != 1 or t.b != true or t.c != 2.5):
-        return Result.Ok(1)
-    let Triple@(f64, i32, f64) q = pair(2.5, 7).realise(Triple(0.0, 0, 0.0))
+        return 1
+    let Triple@(f64, i32, f64) q = pair(2.5, 7)
     if (q.a != 2.5 or q.b != 7 or q.c != 2.5):
-        return Result.Ok(2)
-    return Result.Ok(0)
+        return 2
+    return 0

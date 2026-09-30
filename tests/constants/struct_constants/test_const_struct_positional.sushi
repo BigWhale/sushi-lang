@@ -11,4 +11,4 @@ const Handle OUT = Handle(1, false)
 
 fn main() i32:
     println("{OUT.fd} {OUT.owned}")
-    return Result.Ok(0)
+    return 0

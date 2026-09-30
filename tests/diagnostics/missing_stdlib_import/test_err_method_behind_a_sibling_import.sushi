@@ -12,4 +12,4 @@ use <collections/hashmap>
 fn main() i32:
     let string s = "mostly"
     println(s.upper())
-    return Result.Ok(0)
+    return 0

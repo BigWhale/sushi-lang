@@ -7,4 +7,4 @@ struct Box:
 fn main() i32:
     let Box b = Box.build()
     println("{b.x}")
-    return Result.Ok(0)
+    return 0

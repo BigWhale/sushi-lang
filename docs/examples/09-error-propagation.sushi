@@ -14,27 +14,27 @@
 # The ?? operator is syntactic sugar that makes error handling more ergonomic.
 
 fn get_answer() i32:
-    # Simple function that always succeeds
-    return Result.Ok(42)
+    # A bare function (no `| E`): it always succeeds and returns the value itself
+    return 42
 
-fn might_fail(bool succeed) i32:
+fn might_fail(bool succeed) i32 | StdError:
     # Conditionally returns success or failure based on parameter
     if (succeed):
         return Result.Ok(100)
 
     return Result.Err(StdError.Error)
 
-fn calculate_with_propagation(bool succeed) i32:
+fn calculate_with_propagation(bool succeed) i32 | StdError:
     # Demonstrates ?? operator chaining multiple fallible operations
     # If might_fail returns Err, ?? propagates it immediately and
     # this function returns that Result.Err(...) without executing further code
     let i32 value = might_fail(succeed)??
 
     # This line only executes if might_fail succeeded
-    # If get_answer returns Err, ?? propagates that error too
-    let i32 answer = get_answer()??
+    # get_answer is bare, so its call returns the i32 and takes no ??
+    let i32 answer = get_answer()
 
-    # Only reaches here if both operations succeeded
+    # Only reaches here if might_fail succeeded
     return Result.Ok(value + answer)
 
 fn main() i32:
@@ -47,5 +47,5 @@ fn main() i32:
     let i32 result2 = calculate_with_propagation(false).realise(-1)
     println("Failure case: {result2}")  # Prints: -1
 
-    return Result.Ok(0)
+    return 0
 

@@ -6,4 +6,4 @@ use <lib/var_bin_lib>
 
 fn main() i32:
     println("{secret}")
-    return Result.Ok(0)
+    return 0

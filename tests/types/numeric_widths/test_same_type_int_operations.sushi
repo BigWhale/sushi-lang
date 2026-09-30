@@ -18,6 +18,6 @@ fn main() i32:
 
   if (sum == 15 and diff == 5 and prod == 50 and quot == 2 and rem == 0):
     if (gt and lt and eq and neq):
-      return Result.Ok(0)
+      return 0
 
-  return Result.Ok(1)
+  return 1

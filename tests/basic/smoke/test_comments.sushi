@@ -14,4 +14,4 @@ fn main() i32:  # Comment after function header
 # Comment with no indentation in the middle of function
   # Back to indented comment
   let i32 expected = 43
-  return Result.Ok(x - expected)  # Final comment
+  return x - expected  # Final comment

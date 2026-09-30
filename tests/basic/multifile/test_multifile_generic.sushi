@@ -8,6 +8,6 @@
 use "helpers/generic_exports"
 
 fn main() i32:
-    let i32 v = helper_val().realise(0)
+    let i32 v = helper_val()
     println("{v}")
-    return Result.Ok(0)
+    return 0

@@ -11,4 +11,4 @@ fn main(string[] args) i32:
     let string a = args.get(1).realise("none")
     let string b = args.get(2).realise("none")
     println("Args: {a} - {b}")
-    return Result.Ok(0)
+    return 0

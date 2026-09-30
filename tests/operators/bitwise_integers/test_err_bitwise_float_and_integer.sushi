@@ -8,4 +8,4 @@ fn main() i32:
     let i32 b = 2
     let f64 mixed = a & b
     println("{mixed}")
-    return Result.Ok(0)
+    return 0

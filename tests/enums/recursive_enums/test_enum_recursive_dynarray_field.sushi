@@ -15,21 +15,21 @@ enum MsgValue:
 fn sum_value(MsgValue v) i32:
     match v:
         MsgValue.Int(n) ->
-            return Result.Ok(n)
+            return n
         MsgValue.Arr(items) ->
             let i32 total = 0
             foreach(child in items.iter()):
-                total := total + sum_value(child.clone()).realise(0)
-            return Result.Ok(total)
+                total := total + sum_value(child.clone())
+            return total
 
 fn run_test() i32:
     let MsgValue leaf_a = MsgValue.Arr(from([MsgValue.Int(1), MsgValue.Int(2)]))
     let MsgValue leaf_b = MsgValue.Arr(from([MsgValue.Int(3), MsgValue.Int(4)]))
     let MsgValue root = MsgValue.Arr(from([leaf_a, leaf_b]))
-    let i32 s = sum_value(root).realise(-1)
+    let i32 s = sum_value(root)
     println("{s}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    let i32 r = run_test()
+    return r

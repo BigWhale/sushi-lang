@@ -2,5 +2,5 @@ public struct Vec:
     i32 y
     i32 x
 
-public fn make() Vec:
+public fn make() Vec | StdError:
     return Result.Ok(Vec(x: 3, y: 4))

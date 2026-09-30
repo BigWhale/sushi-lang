@@ -5,10 +5,10 @@
 fn f(u8 t) string:
     match t:
         300 ->
-            return Result.Ok("impossible")
+            return "impossible"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(f(7).realise("err"))
-    return Result.Ok(0)
+    println(f(7))
+    return 0

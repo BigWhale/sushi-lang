@@ -63,4 +63,4 @@ fn main() i32:
     println(ff[0])
     println(fd[0])
 
-    return Result.Ok(0)
+    return 0

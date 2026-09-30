@@ -9,6 +9,6 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    println("{it.fold(xs, 0, |i32 a, i32 b| a + b).realise(-1)}")
+    println("{it.fold(xs, 0, |i32 a, i32 b| a + b)}")
     xs.free()
-    return Result.Ok(0)
+    return 0

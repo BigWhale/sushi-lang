@@ -18,14 +18,14 @@ enum Pair:
 fn test_multiple_own(Pair p) i32:
     match p:
         Pair.Both(Own(a), Own(b)) ->
-            return Result.Ok(a + b)
+            return a + b
         Pair.Single(Own(x)) ->
-            return Result.Ok(x)
+            return x
         Pair.Empty() ->
-            return Result.Ok(0)
+            return 0
 
 fn main() i32:
     # Test multiple Own patterns
     let Pair p = Pair.Empty()
-    let i32 result = test_multiple_own(p).realise(-1)
-    return Result.Ok(result)
+    let i32 result = test_multiple_own(p)
+    return result

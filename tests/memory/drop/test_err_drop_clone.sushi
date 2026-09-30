@@ -12,4 +12,4 @@ fn main() i32:
     let Handle h = Handle(3)
     let Handle t = h.clone()
     println("{h.id} {t.id}")
-    return Result.Ok(0)
+    return 0

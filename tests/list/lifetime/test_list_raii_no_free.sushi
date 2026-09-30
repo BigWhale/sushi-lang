@@ -11,9 +11,9 @@ fn build() i32:
     data.push(20)
     data.push(30)
     # No data.free() / data.destroy(): RAII must clean up at scope exit.
-    return Result.Ok(data.len())
+    return data.len()
 
 fn main() i32:
-    let i32 n = build().realise(-1)
+    let i32 n = build()
     println("count: {n}")
-    return Result.Ok(0)
+    return 0

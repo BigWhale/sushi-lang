@@ -5,4 +5,4 @@ use <net/tcp>
 fn main() i32:
     let TcpListener l = tcp_listen("127.0.0.1", 0, 1).realise(TcpListener(-1))
     let TcpStream s = tcp_connect("127.0.0.1", 1).realise(TcpStream(-1))
-    return Result.Ok(0)
+    return 0

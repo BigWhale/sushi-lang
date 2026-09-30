@@ -26,17 +26,14 @@ fn increment_count(poke i32 counter) ~:
     # Modify the referenced variable in-place
     # The caller's variable is directly updated
     counter := counter + 1
-    return Result.Ok(~)
 
 fn double_value(poke i32 value) ~:
     # Another example of in-place modification via reference
     value := value * 2
-    return Result.Ok(~)
 
 # Read-only function using peek - cannot modify the value
 fn display_value(peek i32 value) ~:
     println("Current value: {value}")
-    return Result.Ok(~)
 
 fn main() i32:
     let i32 towels = 0
@@ -64,5 +61,5 @@ fn main() i32:
     println("Still can use towels: {towels}")
     println("Still can use answer: {answer}")
 
-    return Result.Ok(0)
+    return 0
 

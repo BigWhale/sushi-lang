@@ -23,4 +23,4 @@ fn main() i32:
     println("{p.load_u8(16)} {p.load_u16(18)} {p.load_u32(20)} {p.load_u64(24)}")
     println("{p.load_f32(32)} {p.load_f64(40)}")
     libc.free(p)
-    return Result.Ok(0)
+    return 0

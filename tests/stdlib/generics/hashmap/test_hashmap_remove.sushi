@@ -35,4 +35,4 @@ fn main() i32:
     if (map.contains_key("alice")):
         println("alice still exists")
 
-    return Result.Ok(0)
+    return 0

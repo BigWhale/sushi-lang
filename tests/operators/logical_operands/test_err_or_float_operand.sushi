@@ -4,4 +4,4 @@ fn main() i32:
     let f64 f = 0.5
     let bool b = f or false
     println("{b}")
-    return Result.Ok(0)
+    return 0

@@ -197,7 +197,7 @@ class FuncDef(Node):
     body: "Block"
     is_public: bool = False
     type_params: Optional[List[BoundedTypeParam]] = None
-    err_type: Optional[Type] = None  # Error type for Result<T, E> (None = StdError default)
+    err_type: Optional[Type] = None  # The `| E` channel; None is a bare function
     name_span: Optional[Span] = None
     ret_span: Optional[Span] = None
     # Where the channel is WRITTEN. An extension and a perk contract both keep it, and
@@ -232,6 +232,10 @@ class FuncDef(Node):
     # A spelled `Result@(T, E)` return as the interned enum, stamped by the resolve
     # pass (#857). `ret` keeps the type as written for the typecheck pass.
     resolved_result: Optional[Type] = None
+    # Whether the WRITTEN signature has a channel, on a copy whose `ret` a substitution
+    # may have made a Result (a monomorphized instance, a lifted lambda). None on a
+    # written declaration, which `channel.has_channel` reads directly.
+    written_channel: Optional[bool] = None
 
 
 @dataclass(slots=True)
@@ -329,6 +333,8 @@ class ExtendDef(Node):
     # The unit that declared the template of a monomorphized copy (#1064). The copy is
     # checked in that unit's scope and defined in that unit's module. None on a written one.
     home_unit: Optional[str] = None
+    # Whether the template's WRITTEN signature has a channel; see `FuncDef`.
+    written_channel: Optional[bool] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:

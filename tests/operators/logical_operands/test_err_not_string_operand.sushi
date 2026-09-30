@@ -5,4 +5,4 @@ fn main() i32:
     let string s = "x"
     let bool b = not s
     println("{b}")
-    return Result.Ok(0)
+    return 0

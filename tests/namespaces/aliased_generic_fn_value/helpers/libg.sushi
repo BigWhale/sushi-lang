@@ -1,3 +1,3 @@
 public fn gen@(T)(T x) i32:
     let u64 h = x.hash()
-    return Result.Ok(7 + (h & 0) as i32)
+    return 7 + (h & 0) as i32

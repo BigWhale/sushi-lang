@@ -48,4 +48,4 @@ fn main() i32:
     let u64 hash_small = small.hash()
     println("f64 hash(2.2250738585072014e-308) = {hash_small}")
 
-    return Result.Ok(0)
+    return 0

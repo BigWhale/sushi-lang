@@ -15,4 +15,4 @@ fn main() i32:
     match b:
         Box.Big -> println(1)
         Box.Huge -> println(2)
-    return Result.Ok(0)
+    return 0

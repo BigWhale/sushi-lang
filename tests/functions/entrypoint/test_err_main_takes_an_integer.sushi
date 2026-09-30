@@ -3,4 +3,4 @@
 # EXPECT_ERROR_CODE: CE0138
 fn main(i32 x) i32:
     println("x {x}")
-    return Result.Ok(x)
+    return x

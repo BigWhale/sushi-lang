@@ -15,4 +15,4 @@ fn main() i32:
     let i32 right_neg = c >> 2
     println(right_neg)  # Should be -2 (sign-extended)
 
-    return Result.Ok(0)
+    return 0

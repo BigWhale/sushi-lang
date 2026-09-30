@@ -7,4 +7,4 @@ const i8 FLIPPED = SMALLEST / -1
 
 fn main() i32:
     println(FLIPPED)
-    return Result.Ok(0)
+    return 0

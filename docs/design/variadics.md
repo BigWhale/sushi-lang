@@ -26,7 +26,6 @@ Sushi, contradicting the bounds-checked / RAII / no-null safety model.
 fn log_all(string prefix, ...i32 values) ~:
     foreach(v in values.iter()):
         println("{prefix}: {v}")
-    return Result.Ok(~)
 
 # Extern: bare trailing ... after at least one fixed parameter
 unsafe external "C" as libc because "formatted output via libc":
@@ -35,7 +34,7 @@ unsafe external "C" as libc because "formatted output via libc":
 fn main() i32:
     log_all("nums", 1, 2, 3)     # values = [1, 2, 3]
     log_all("empty")             # values = []  (zero variadic args allowed)
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Semantics
@@ -57,8 +56,8 @@ fn main() i32:
   consuming variadic spelling (`nom ...T`) is deferred — see `docs/design/borrow-model.md` S7.
 - **Extern lowering.** The extern declaration lowers to an LLVM `var_arg=True` declaration. Trailing
   arguments undergo C default-argument promotion: `i8`/`i16`/`bool` → `i32`, `f32` → `f64`; `string`
-  is marshalled to a `char*` and freed at scope exit on every path; `ptr` is passed as-is. Externs
-  remain the single exception to implicit `Result` wrapping (they return raw C values).
+  is marshalled to a `char*` and freed at scope exit on every path; `ptr` is passed as-is. An extern
+  returns the raw C value and never a `Result` (an extern has no error channel).
 - **Extern requires ≥1 fixed parameter** — the C ABI needs a named argument for `va_start`.
 
 ## Diagnostics
@@ -90,13 +89,13 @@ fn sum(...i32 nums) i32:
     let i32 total = 0
     foreach(n in nums.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])
-    let i32 s = sum(xs...).realise(0)   # bloom: xs is MOVED into the variadic slot
+    let i32 s = sum(xs...)   # bloom: xs is MOVED into the variadic slot
     println("sum = {s}")                # sum = 6
-    return Result.Ok(0)
+    return 0
 ```
 
 Semantics:
@@ -157,12 +156,11 @@ extend bool with Display:
 fn print_all@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
-    return Result.Ok(~)
 
 fn main() i32:
     print_all(42, "hi", true)   # monomorphizes print_all__i32_string_bool.pack3
     print_all()                 # arity-0 allowed; expand body runs 0 times
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Semantics

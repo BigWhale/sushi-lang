@@ -4,4 +4,4 @@ use "helpers/test_multifile_helper"
 fn main() i32:
     # This should fail - private_function is not public
     let Result@(i32, StdError) result = private_function()
-    return Result.Ok(0)
+    return 0

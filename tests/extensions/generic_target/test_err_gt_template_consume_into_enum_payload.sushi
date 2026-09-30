@@ -12,7 +12,7 @@ fn run_test() i32:
     let string base = "marvin"
     let Box@(string) b = Box("{base} the robot")
     println(b.peeked().realise("none"))
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

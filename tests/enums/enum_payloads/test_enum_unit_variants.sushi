@@ -11,13 +11,13 @@ enum Direction:
 fn direction_name(Direction d) string:
     match d:
         Direction.North ->
-            return Result.Ok("north")
+            return "north"
         Direction.South ->
-            return Result.Ok("south")
+            return "south"
         Direction.East ->
-            return Result.Ok("east")
+            return "east"
         Direction.West ->
-            return Result.Ok("west")
+            return "west"
 
 fn main() i32:
     let Direction d1 = Direction.North()
@@ -25,10 +25,10 @@ fn main() i32:
     let Direction d3 = Direction.South()
     let Direction d4 = Direction.West()
 
-    let string n1 = direction_name(d1).realise("?")
-    let string n2 = direction_name(d2).realise("?")
-    let string n3 = direction_name(d3).realise("?")
-    let string n4 = direction_name(d4).realise("?")
+    let string n1 = direction_name(d1)
+    let string n2 = direction_name(d2)
+    let string n3 = direction_name(d3)
+    let string n4 = direction_name(d4)
 
     println("{n1} {n2} {n3} {n4}")
-    return Result.Ok(0)
+    return 0

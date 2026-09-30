@@ -10,4 +10,4 @@ fn main() i32:
     let poke i32 c = counter
     c := 7
     println("{counter}")
-    return Result.Ok(0)
+    return 0

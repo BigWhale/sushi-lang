@@ -9,6 +9,6 @@ fn main() i32:
 
     let string a = "abc"
     let string b = "de"
-    println("{a.len()} {width(b).realise(0)}")
+    println("{a.len()} {width(b)}")
 
-    return Result.Ok(0)
+    return 0

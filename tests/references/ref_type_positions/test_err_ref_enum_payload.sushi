@@ -11,4 +11,4 @@ fn main() i32:
     match r:
         Ref.Borrowed(v) -> println(v)
         Ref.Empty -> println("empty")
-    return Result.Ok(0)
+    return 0

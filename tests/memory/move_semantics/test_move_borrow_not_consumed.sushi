@@ -6,15 +6,15 @@
 # EXPECT_NO_LEAKS: true
 
 fn peek_len(peek i32[] arr) i32:
-    return Result.Ok(arr.len())
+    return arr.len()
 
 fn main() i32:
     let i32[] data = from([7, 8, 9])
-    let i32 first = peek_len(peek data).realise(-1)
+    let i32 first = peek_len(peek data)
     println("a={first}")
     # Not moved -- borrowing leaves data usable.
-    let i32 second = peek_len(peek data).realise(-1)
+    let i32 second = peek_len(peek data)
     println("b={second}")
     # Direct access after borrows still works.
     println("direct={data.len()}")
-    return Result.Ok(0)
+    return 0

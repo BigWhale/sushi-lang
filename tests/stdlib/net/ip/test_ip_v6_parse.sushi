@@ -29,4 +29,4 @@ fn main() i32:
                 refused := refused + 1
     println("rejected {refused}")
 
-    return Result.Ok(0)
+    return 0

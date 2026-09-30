@@ -13,4 +13,4 @@ fn main() i32:
             Result.Ok(nom out) -> out.writeln("Mostly Harmless")
             Result.Err(_) -> println("share failed")
     println("still here")
-    return Result.Ok(0)
+    return 0

@@ -11,28 +11,28 @@ struct Acc:
 # Recursive private helper: proves the closure walk terminates on cycles.
 fn countdown(i32 n) i32:
     if (n <= 0):
-        return Result.Ok(0)
-    return Result.Ok(countdown(n - 1)??)
+        return 0
+    return countdown(n - 1)
 
 # Concrete private helper pulling in the const, the struct, and the recursion.
 fn scale_up(i32 x) i32:
     let Acc a = Acc(x * SCALE)
-    let i32 z = countdown(2)??
-    return Result.Ok(a.total + z)
+    let i32 z = countdown(2)
+    return a.total + z
 
 # Generic private helper: ships as a template flagged private.
 fn pick_first@(T)(nom T a, nom T b) T:
     let T chosen = b
     chosen := a
-    return Result.Ok(chosen)
+    return chosen
 
 public fn compute@(T)(nom T a, nom T b) T:
-    let i32 boost = scale_up(2)??
+    let i32 boost = scale_up(2)
     # The private struct is used directly in this template body, so the
     # consumer's monomorphized instance references it too (it ships in the
     # concrete struct section and registers at the consumer).
     let Acc acc = Acc(boost)
-    let T chosen = pick_first(nom a, nom b.clone())??
+    let T chosen = pick_first(nom a, nom b.clone())
     if (acc.total == 6):
-        return Result.Ok(chosen)
-    return Result.Ok(b)
+        return chosen
+    return b

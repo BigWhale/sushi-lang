@@ -1,4 +1,4 @@
-fn safe_divide(i32 a, i32 b) i32:
+fn safe_divide(i32 a, i32 b) i32 | StdError:
     if (b == 0):
         return Result.Err(StdError.Error)
     return Result.Ok(a / b)
@@ -19,4 +19,4 @@ fn main() i32:
     let i32 fallback = safe_divide(10, 0).realise(-1)
     println("With a default: {fallback}")
 
-    return Result.Ok(0)
+    return 0

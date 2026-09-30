@@ -1,2 +1,2 @@
 public fn gen@(T)(T x) T:
-    return Result.Ok(x)
+    return x

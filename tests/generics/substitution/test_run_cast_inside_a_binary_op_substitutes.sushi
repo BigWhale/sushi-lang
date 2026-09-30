@@ -6,9 +6,9 @@
 
 fn bump@(T)(i32 v) i64:
     let i64 a = (v as T) + 1
-    return Result.Ok(a)
+    return a
 
 fn main() i32:
-    let i64 out = bump@(i64)(5).realise(0)
+    let i64 out = bump@(i64)(5)
     println("{out}")
-    return Result.Ok(0)
+    return 0

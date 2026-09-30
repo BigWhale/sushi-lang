@@ -4,9 +4,9 @@
 
 
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
 fn main() i32:
-    let i32 x = get_value().realise(0)
+    let i32 x = get_value()
     println("x = {x}")
-    return Result.Ok(0)
+    return 0

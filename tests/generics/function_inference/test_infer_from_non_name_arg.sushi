@@ -13,16 +13,16 @@ struct Pair@(T, U):
     U second
 
 fn get_first@(A, B)(Pair@(A, B) p) A:
-    return Result.Ok(p.first.clone())
+    return p.first.clone()
 
 fn run() i32:
     let Pair@(i32, string) p = Pair(42, "test")
-    let i32 first = get_first(p.clone())??
+    let i32 first = get_first(p.clone())
     println(first)
-    return Result.Ok(first)
+    return first
 
 fn main() i32:
-    let i32 rc = run().realise(99)
+    let i32 rc = run()
     if (rc == 42):
-        return Result.Ok(0)
-    return Result.Ok(1)
+        return 0
+    return 1

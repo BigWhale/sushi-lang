@@ -8,4 +8,4 @@ fn main() i32:
   # Test len() with arguments (should fail)
   print(text.len(5))
 
-  return Result.Ok(0)
+  return 0

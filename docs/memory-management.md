@@ -48,11 +48,10 @@ fn process() ~:
     numbers.push(5)
 
     # numbers automatically freed here (scope exit)
-    return Result.Ok(~)
 
 fn main() i32:
     process()  # No manual cleanup needed
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Structs with Dynamic Fields
@@ -69,7 +68,6 @@ fn process() ~:
     )
 
     # Both buf.lines and buf.numbers automatically freed
-    return Result.Ok(~)
 ```
 
 ### Nested Structures
@@ -90,7 +88,6 @@ fn build_tree() ~:
     # Automatic recursive cleanup:
     # 1. t.nodes freed
     # 2. Each Node's children freed
-    return Result.Ok(~)
 ```
 
 ## Move Semantics
@@ -148,7 +145,7 @@ fn main() i32:
     let Buffer other = buf  # buf moved to other
     # println(buf.data.len())  # ERROR CE2405: buf was moved
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **A struct with a `string` field is a MOVE type too -- even when the string is a literal:**
@@ -165,14 +162,13 @@ fn main() i32:
     # println(a.name)
 
     println(b.name)
-    return Result.Ok(0)
+    return 0
 ```
 
 **A non-literal `string` moves on its own, with no struct involved:**
 ```sushi
 fn consume(nom string s) ~:
     println(s)
-    return Result.Ok(~)
 
 fn main() i32:
     let string name = "world"
@@ -186,7 +182,7 @@ fn main() i32:
     consume(nom name)
     println(name)  # still OK -- consume() got an independent, ownerless value
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **A type that DECLARES a resource moves, whatever its fields say.** Most types own HEAP,
@@ -204,7 +200,6 @@ extend Ticket with Drop:
 
 fn take(nom Ticket t) ~:
     println("using ticket {t.seat}")
-    return Result.Ok(~)
 
 fn main() i32:
     let Ticket a = Ticket(7)
@@ -213,7 +208,7 @@ fn main() i32:
 
     let Ticket b = Ticket(9)
     println("holding {b.seat}")
-    return Result.Ok(0)  # b drops here: "ticket 9 returned"
+    return 0  # b drops here: "ticket 9 returned"
 ```
 
 `Drop` needs no import. Four rules go with it:
@@ -249,7 +244,7 @@ fn main() i32:
     let Point q = p  # p copied to q -- Point owns no heap
     println(p.x)  # OK: p still valid
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **A `string` bound from a literal is the one exception that copies despite owning-heap being a
@@ -261,7 +256,7 @@ fn main() i32:
     println(s1)  # OK: s1 still valid
     println(s2)  # OK: s2 still valid
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Reading Through a Borrow, Without Consuming
@@ -286,7 +281,7 @@ fn main() i32:
     println(other.inner)
     println(w.inner)           # OK: w still owns and still has its value
 
-    return Result.Ok(0)
+    return 0
 ```
 
 A marked `nom w.inner` is not a borrow. It is a field take, and it spends `w` (see
@@ -298,8 +293,8 @@ binds `x` as a borrow of `w`, not an independent copy -- see
 
 ### Taking a Field Out
 
-A field read is a borrow, and that left one thing unspellable: handing a handle back **out** of the
-value that holds it. `nom` marks the take:
+A field read is a borrow, so a read cannot hand a handle back **out** of the value that holds it.
+A take does this, and `nom` marks it:
 
 ```sushi
 use <io/fs>
@@ -321,7 +316,7 @@ fn main() i32:
     match run():
         Result.Ok(_) -> println("done")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 The marker is legal in three positions: a `let` initializer, a `return`, and a `nom` call argument
@@ -361,7 +356,7 @@ fn main() i32:
 
     words[0] := words[1].clone()   # OK: an independent copy
 
-    return Result.Ok(0)
+    return 0
 ```
 
 An element can never be moved *out* of an array -- that is what the `CE2411` above is saying,
@@ -391,31 +386,31 @@ plain call leaves the argument usable:
 
 ```sushi
 fn total(i32[] arr) i32:
-    return Result.Ok(arr.len())
+    return arr.len()
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
-    println(total(data).realise(-1))
+    println(total(data))
 
     println(data.len())  # OK: data is still yours
-    return Result.Ok(0)
+    return 0
 ```
 
 To hand the value over, write **`nom`** on the parameter and again at the call site:
 
 ```sushi
 fn eat(nom i32[] arr) i32:
-    return Result.Ok(arr.len())
+    return arr.len()
     # arr is freed here -- the callee is the owner
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
-    println(eat(nom data).realise(-1))
+    println(eat(nom data))
 
     # ERROR CE2405: cannot borrow moved variable 'data'
     # println(data.len())
 
-    return Result.Ok(0)
+    return 0
 ```
 
 The marker is written at **both** ends, or at neither. That is what keeps a consume visible where
@@ -466,7 +461,6 @@ The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model
 fn borrow(peek i32[] arr) ~:
     println("Length: {arr.len()}")
     # arr is not owned here, so it is not freed
-    return Result.Ok(~)
 
 fn main() i32:
     let i32[] data = from([1, 2, 3])
@@ -474,7 +468,7 @@ fn main() i32:
 
     println(data.len())  # OK: data still valid
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Solution: Clone
@@ -482,7 +476,6 @@ fn main() i32:
 ```sushi
 fn eat(nom i32[] a) ~:
     println("ate {a.len()} elements")
-    return Result.Ok(~)
 
 fn main() i32:
     let i32[] original = from([1, 2, 3])
@@ -492,7 +485,7 @@ fn main() i32:
 
     println(original.len())  # OK: original still valid
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## References and Borrowing
@@ -519,17 +512,17 @@ Use `peek` when you only need to read data:
 ```sushi
 fn add_one(peek i32 x) i32:
     let i32 val = x
-    return Result.Ok(val + 1)
+    return val + 1
 
 fn main() i32:
     let i32 num = 42
 
-    let i32 result = add_one(peek num).realise(0)
+    let i32 result = add_one(peek num)
 
     println("Original: {num}")    # OK: num not moved
     println("Result: {result}")   # 43
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Mutable References (poke)
@@ -539,7 +532,6 @@ Use `poke` when you need to modify the borrowed value:
 ```sushi
 fn increment(poke i32 counter) ~:
     counter := counter + 1
-    return Result.Ok(~)
 
 fn main() i32:
     let i32 count = 0
@@ -549,7 +541,7 @@ fn main() i32:
 
     println("Count: {count}")  # 2
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Borrowing Struct Fields
@@ -561,7 +553,6 @@ struct Config:
 
 fn update_port(poke i32 p) ~:
     p := p + 100
-    return Result.Ok(~)
 
 fn main() i32:
     let Config cfg = Config(port: 8080, host: "localhost")
@@ -571,7 +562,7 @@ fn main() i32:
 
     println("Port: {cfg.port}")  # 8180
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Nested Struct Fields
@@ -587,7 +578,6 @@ struct Rectangle:
 
 fn move_x(poke i32 coord) ~:
     coord := coord + 10
-    return Result.Ok(~)
 
 fn main() i32:
     let Rectangle rect = Rectangle(
@@ -600,7 +590,7 @@ fn main() i32:
 
     println("X: {rect.top_left.x}")  # 10
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Array References
@@ -610,17 +600,17 @@ fn sum_array(peek i32[] numbers) i32:
     let i32 total = 0
     foreach(n in numbers.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 
 fn main() i32:
     let i32[] data = from([1, 2, 3, 4, 5])
 
-    let i32 sum = sum_array(peek data).realise(0)  # Zero-cost borrow
+    let i32 sum = sum_array(peek data)  # Zero-cost borrow
 
     println("Sum: {sum}")
     println("Array: {data.len()}")  # data still valid
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Borrow Rules
@@ -631,14 +621,14 @@ The compiler enforces these rules at compile time:
 
 ```sushi
 fn read_both(peek i32 a, peek i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 fn main() i32:
     let i32 x = 42
     # Multiple peek borrows of the same variable OK
-    let i32 sum = read_both(peek x, peek x).realise(0)
+    let i32 sum = read_both(peek x, peek x)
     println(sum)  # 84
-    return Result.Ok(0)
+    return 0
 ```
 
 2. **Only one `poke` borrow at a time**
@@ -648,7 +638,7 @@ fn main() i32:
     let i32 x = 42
     # ERROR CE2403: x already has an active poke borrow
     # bad_func(poke x, poke x)
-    return Result.Ok(0)
+    return 0
 ```
 
 3. **Cannot mix `peek` and `poke`**
@@ -658,20 +648,20 @@ fn main() i32:
     let i32 x = 42
     # ERROR CE2407: cannot have peek and poke borrows simultaneously
     # mixed_func(peek x, poke x)
-    return Result.Ok(0)
+    return 0
 ```
 
 4. **`poke` coerces to `peek`**
 
 ```sushi
 fn read_only(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let i32 x = 42
     # OK: poke can be passed where peek is expected
-    let i32 val = read_only(poke x).realise(0)
-    return Result.Ok(0)
+    let i32 val = read_only(poke x)
+    return 0
 ```
 
 5. **Cannot move a value in the statement that borrows it**
@@ -683,7 +673,6 @@ borrowed and also handed to a position that takes ownership:
 fn both(peek string a, nom string b) ~:
     println(a)
     println(b)
-    return Result.Ok(~)
 
 fn main() i32:
     let string word = "Harmless"
@@ -692,7 +681,7 @@ fn main() i32:
     # both(peek s, nom s)
 
     both(peek s, nom s.clone())   # OK: the owning position gets its own value
-    return Result.Ok(0)
+    return 0
 ```
 
 After the statement, the borrow has ended: `use_ref(poke num)` followed by `num := 50` is legal.
@@ -701,16 +690,16 @@ After the statement, the borrow has ended: `use_ref(poke num)` followed by `num 
 
 ```sushi
 fn add_one(peek i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn main() i32:
     # ERROR CE2404: cannot borrow '(5 + 3)': expression has no stable address
-    # let i32 x = add_one(peek (5 + 3)).realise(0)
+    # let i32 x = add_one(peek (5 + 3))
 
     let i32 temp = 5 + 3          # OK: a variable has an address
-    let i32 x = add_one(peek temp).realise(0)
+    let i32 x = add_one(peek temp)
     println(x)
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Borrowed `let` Bindings
@@ -727,7 +716,7 @@ fn main() i32:
     let string x = w.inner  # x borrows w.inner -- no copy, no error
     println(x)
     println(w.inner)  # w still owns it
-    return Result.Ok(0)
+    return 0
 ```
 
 The borrow lasts to the end of the block that declared it. Two things are checked while it is live:
@@ -748,7 +737,7 @@ fn main() i32:
     # println(x)
 
     println(x)  # OK as long as w is not touched while x is still used
-    return Result.Ok(0)
+    return 0
 ```
 
 2. **Consuming the binding itself is `CE2411`**, exactly like consuming a `match`/`foreach` binding
@@ -762,7 +751,7 @@ fn main() i32:
 
 **A `let` may also declare a reference *type***: `let poke T x = <place>` binds a
 pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
-mutation path a bare `Own@(T)` local had none of -- and `let peek T x = <place>` is the
+mutation path into the payload of a bare `Own@(T)` local -- and `let peek T x = <place>` is the
 read-only twin. The binding is block-scoped and freezes its owner exactly as the implicit
 borrow above does (`CE2412`); one `poke` binding of an owner at a time (`CE2403`), a `peek`
 beside a live `poke` is `CE2407`, a write through a `peek` binding is `CE2408`, and
@@ -783,7 +772,7 @@ fn main() i32:
 
     let peek Wrapper view = w.get()        # read-only; `inner`'s block has ended
     println("{view.items.len()}")          # 1
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Other Freezes (`CE2412`)
@@ -810,7 +799,7 @@ fn main() i32:
         # c.push(x)
     c.push(2)                  # OK: the loop has ended
     println(c.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Pattern Bindings
@@ -843,11 +832,10 @@ enum Msg:
     Count(i32)
 
 fn make() Msg:
-    return Result.Ok(Msg.Text("fresh"))
+    return Msg.Text("fresh")
 
 fn eat(nom string s) ~:
     println(s)
-    return Result.Ok(~)
 
 fn main() i32:
     let Msg c = Msg.Count(1)
@@ -855,7 +843,7 @@ fn main() i32:
         Msg.Count(poke n) -> n := n + 1       # writes into c
         Msg.Text(_) -> println("text")
 
-    match make().realise(Msg.Count(0)):       # a temporary: the match owns it
+    match make():       # a temporary: the match owns it
         Msg.Text(nom s) -> eat(nom s)
         Msg.Count(_) -> println("count")
 
@@ -864,7 +852,7 @@ fn main() i32:
         Msg.Text(nom s) -> eat(nom s)
         Msg.Count(n) -> println(n)
     # a later `match m:` is ERROR CE2405: m was moved
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `??` Spends a Named Wrapper
@@ -891,7 +879,7 @@ fn main() i32:
     # let List@(string) mine = log
     let List@(string) mine = log.clone()  # OK: an independent value
     println(mine.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Recursive Types
@@ -924,7 +912,7 @@ fn main() i32:
     let Tree first = root.kids.get(0).realise(Tree(0, List.new()))
     println("first child: {first.value}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 `Node[] kids` works the same way, built with `from([...])`. When `root` goes out of scope its
@@ -954,7 +942,7 @@ fn main() i32:
         IntList.Nil ->
             println("Empty")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Accessing Owned Values
@@ -970,7 +958,7 @@ fn main() i32:
     let Node node = owned.get()
     println("Value: {node.value}")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Destroying Owned Values
@@ -985,7 +973,7 @@ fn main() i32:
     # Manually destroy
     owned.destroy()
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Note:** Owned values are automatically cleaned up via RAII if not manually destroyed.
@@ -1010,7 +998,7 @@ fn main() i32:
     let Own@(i32) copied = outer.get()            # copied BORROWS from outer; no allocation
     let i32 value = copied.get()                  # reading through a borrow is free
     println(value)                                # 42
-    return Result.Ok(0)
+    return 0
 ```
 
   `copied` above does not own an independent copy of `inner` -- it is a live borrow of `outer`, so
@@ -1020,7 +1008,6 @@ fn main() i32:
 ```sushi
 fn sink(nom Own@(i32) x) ~:
     println(x.get())
-    return Result.Ok(~)
 
 fn main() i32:
     let Own@(i32) inner = Own.alloc(42)
@@ -1031,7 +1018,7 @@ fn main() i32:
     # sink(nom copied)
 
     sink(nom copied.clone())  # OK: an independent copy
-    return Result.Ok(0)
+    return 0
 ```
 
   This is what makes nested owners such as `Own@(Own@(T))` safe without an implicit copy at every
@@ -1056,7 +1043,7 @@ fn main() i32:
     arr.push(10)
     println("After push: {arr.len()}")  # 1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### .destroy() - Free and Invalidate
@@ -1071,7 +1058,7 @@ fn main() i32:
     # ERROR CE2406: use of destroyed variable 'arr'
     # println(arr.len())
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### When to Use Manual Cleanup
@@ -1112,7 +1099,7 @@ fn main() i32:
     map.destroy()
     # map.len()  # ERROR CE2406
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Best Practices
@@ -1124,7 +1111,7 @@ fn main() i32:
 fn process() ~:
     let i32[] data = from([1, 2, 3])
     # ... use data ...
-    return Result.Ok(~)  # data freed automatically
+    return ~  # data freed automatically
 ```
 
 ### 2. Use References for Large Data
@@ -1135,7 +1122,7 @@ fn sum(peek i32[] numbers) i32:
     let i32 total = 0
     foreach(n in numbers.iter()):
         total := total + n
-    return Result.Ok(total)
+    return total
 ```
 
 ### 3. Clone Only When Necessary
@@ -1152,7 +1139,7 @@ let i32[] copy = original.clone()  # Explicit cost
 # Good: Caller takes ownership
 fn create_array() i32[]:
     let i32[] arr = from([1, 2, 3])
-    return Result.Ok(arr)  # Ownership moved to caller
+    return arr  # Ownership moved to caller
 ```
 
 ### 5. Let the Signature Document the Transfer
@@ -1162,7 +1149,7 @@ The mode says who frees, so there is nothing left for a comment to claim:
 ```sushi
 fn consume(nom i32[] arr) ~:
     # arr is freed at the end of this function -- `nom` says so, at both ends
-    return Result.Ok(~)
+    return ~
 ```
 
 ## Memory Safety Guarantees

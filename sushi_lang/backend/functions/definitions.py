@@ -36,7 +36,7 @@ class FunctionDefinitions:
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
-            helpers.emit_default_return(fn)
+            helpers.emit_fall_off(fn)
 
         helpers.end_function()
 
@@ -51,11 +51,6 @@ class FunctionDefinitions:
         # A method's parameters obey the same modes as any callable's -- a `nom` one is
         # OWNED by the body and leaks unless registered (borrow-model.md S1).
         helpers.begin_function(llvm_fn, ext)
-
-        # A channel body ('| E') spells both constructors (#848); only the fall-off path,
-        # which CE0107 keeps unreachable, reads the channel here.
-        from sushi_lang.backend.generics.result_builder import extension_result_of
-        self.codegen.current_extension_result = extension_result_of(self.codegen, ext)
 
         # A moded receiver (#327) registers its full ReferenceType -- the single fact
         # `is_reference_parameter` keys on, so every deref/write consumer treats `self`
@@ -92,16 +87,7 @@ class FunctionDefinitions:
         self.codegen.statements.emit_block(ext.body)
 
         if self.codegen.builder.block.terminator is None:
-            channel = self.codegen.current_extension_result
-            if channel is not None:
-                from sushi_lang.backend.generics.result_builder import build_err_from_return_type
-                from sushi_lang.backend.statements import utils
-                utils.emit_scope_cleanup(self.codegen)
-                self.codegen.builder.ret(
-                    build_err_from_return_type(self.codegen, channel, None))
-            else:
-                helpers.emit_default_return_for_extension(ext.ret)
+            helpers.emit_fall_off(ext)
 
-        self.codegen.current_extension_result = None
         helpers.end_function()
         return llvm_fn

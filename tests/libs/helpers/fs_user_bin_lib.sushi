@@ -5,4 +5,4 @@
 use <io/fs>
 
 public fn answer() i32:
-    return Result.Ok(42)
+    return 42

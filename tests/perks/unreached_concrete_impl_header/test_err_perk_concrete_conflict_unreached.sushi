@@ -18,4 +18,4 @@ extend Box@(i32) with Sz:
 fn main() i32:
     let Box@(string) b = Box("x")
     println(b.v)
-    return Result.Ok(0)
+    return 0

@@ -5,11 +5,11 @@ use "helpers/lib3"
 use <collections/strings>
 
 fn one(string s) i32:
-    return Result.Ok(s.len() - s.len() + 1)
+    return s.len() - s.len() + 1
 
 fn main() i32:
     let fn(string) -> i32 f = one
-    println(f("abc").realise(0))
+    println(f("abc"))
     f := plain
-    println(f("abc").realise(0))
-    return Result.Ok(0)
+    println(f("abc"))
+    return 0

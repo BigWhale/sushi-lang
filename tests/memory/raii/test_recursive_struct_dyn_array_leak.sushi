@@ -34,7 +34,7 @@ fn run_test() i32:
                 count := count + 1
     println("nodes={count}")
 
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(99))
+    return run_test()

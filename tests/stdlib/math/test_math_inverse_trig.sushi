@@ -20,40 +20,40 @@ fn main() i32:
 
     # Verify asin(0) = 0
     if (abs(asin_0) > 0.0001):
-        return Result.Ok(1)
+        return 1
 
     # Verify asin(1) = PI/2
     if (abs(asin_1 - PI / 2.0) > 0.0001):
-        return Result.Ok(2)
+        return 2
 
     # Verify acos(0) = PI/2
     if (abs(acos_0 - PI / 2.0) > 0.0001):
-        return Result.Ok(3)
+        return 3
 
     # Verify acos(1) = 0
     if (abs(acos_1) > 0.0001):
-        return Result.Ok(4)
+        return 4
 
     # Verify atan(0) = 0
     if (abs(atan_0) > 0.0001):
-        return Result.Ok(5)
+        return 5
 
     # Verify atan(1) = PI/4
     if (abs(atan_1 - PI / 4.0) > 0.0001):
-        return Result.Ok(6)
+        return 6
 
     # Verify atan2(1, 1) = PI/4
     if (abs(atan2_1_1 - PI / 4.0) > 0.0001):
-        return Result.Ok(7)
+        return 7
 
     # Verify atan2(1, 0) = PI/2
     if (abs(atan2_1_0 - PI / 2.0) > 0.0001):
-        return Result.Ok(8)
+        return 8
 
     # Verify round-trip: sin(asin(x)) = x
     let f64 x = 0.5
     let f64 roundtrip = sin(asin(x))
     if (abs(roundtrip - x) > 0.0001):
-        return Result.Ok(9)
+        return 9
 
-    return Result.Ok(0)
+    return 0

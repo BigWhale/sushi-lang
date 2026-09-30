@@ -13,4 +13,4 @@ fn main() i32:
     let string s = "{base} harmless"
     let Label l = Label.wrap(nom s)
     println(l.text)
-    return Result.Ok(0)
+    return 0

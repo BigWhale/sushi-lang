@@ -10,9 +10,9 @@ fn write_one(string path) bool:
         Result.Ok(nom f) ->
             f.write("x")
             f.close()
-            return Result.Ok(true)
+            return true
         Result.Err(_) ->
-            return Result.Ok(false)
+            return false
 
 fn main() i32:
     let string dir = "/tmp/sushi_read_dir_three"
@@ -20,15 +20,15 @@ fn main() i32:
         Result.Ok(_) -> ~
         Result.Err(_) ->
             println("setup mkdir failed")
-            return Result.Ok(1)
+            return 1
     let string[] names = from(["a.txt", "b.txt", "c.txt"])
     # The path binds to a local first: an interpolated temp in argument
     # position leaks today (pre-existing, found while writing this batch).
     foreach(n in names.iter()):
         let string p = "/tmp/sushi_read_dir_three/{n}"
-        if (not write_one(p).realise(false)):
+        if (not write_one(p)):
             println("setup open failed")
-            return Result.Ok(1)
+            return 1
 
     match read_dir(dir):
         Result.Ok(entries) ->
@@ -40,8 +40,8 @@ fn main() i32:
         let string p = "/tmp/sushi_read_dir_three/{n}"
         match remove(p):
             Result.Ok(_) -> ~
-            Result.Err(_) -> return Result.Ok(1)
+            Result.Err(_) -> return 1
     match rmdir(dir):
         Result.Ok(_) -> println("cleanup ok")
         Result.Err(_) -> println("cleanup failed")
-    return Result.Ok(0)
+    return 0

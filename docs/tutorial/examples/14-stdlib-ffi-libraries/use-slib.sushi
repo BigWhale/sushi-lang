@@ -2,10 +2,10 @@
 use <lib/guidelib>
 
 fn main() i32:
-    let i32 sum = add(40, 2).realise(0)
-    let i32 ans = answer().realise(0)
+    let i32 sum = add(40, 2)
+    let i32 ans = answer()
 
     println("add(40, 2) = {sum}")
     println("answer() = {ans}")
 
-    return Result.Ok(0)
+    return 0

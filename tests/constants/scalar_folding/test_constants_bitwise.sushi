@@ -19,28 +19,28 @@ const u32 NOT_MASK = ~(0x00 as u32)
 fn main() i32:
     # Verify bitwise results
     if (FLAGS_A != 1 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (FLAGS_B != 2 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (FLAGS_C != 4 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (FLAGS_ALL != 7 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (FLAGS_AND != 15 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (FLAGS_XOR != 240 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (SHIFT_LEFT != 256 as u32):
-        return Result.Err(StdError.Error)
+        return 1
     if (SHIFT_RIGHT != 64 as u32):
-        return Result.Err(StdError.Error)
+        return 1
 
     # Bitwise NOT on a u32 constant, printed as well as compared: a const reference
     # has to read its own declared type to format unsigned.
     println(NOT_MASK)
     if (NOT_MASK != 4294967295 as u32):
-        return Result.Err(StdError.Error)
+        return 1
 
     println("All bitwise constant tests passed")
-    return Result.Ok(0)
+    return 0
 

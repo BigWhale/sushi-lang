@@ -33,4 +33,4 @@ fn main() i32:
     println("Maybe.Some(Point(10, 20)) hash: {h5}")
 
     println("All generic Maybe@(T) enum hashes computed!")
-    return Result.Ok(0)
+    return 0

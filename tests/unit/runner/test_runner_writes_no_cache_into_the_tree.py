@@ -22,13 +22,13 @@ PROGRAM = (
     "\n"
     "fn main() i32:\n"
     "    say()\n"
-    "    return Result.Ok(0)\n"
+    "    return 0\n"
 )
 
 UNIT = (
     "public fn say() ~:\n"
     '    println("{word}")\n'
-    "    return Result.Ok(~)\n"
+    "    return ~\n"
 )
 
 

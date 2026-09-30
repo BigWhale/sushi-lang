@@ -28,10 +28,10 @@ perk Loud:
     fn shout() string
 
 fn helper() i32:
-    return Result.Ok(1)
+    return 1
 
 fn lonely() i32:
-    return Result.Ok(helper()??)
+    return helper()
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

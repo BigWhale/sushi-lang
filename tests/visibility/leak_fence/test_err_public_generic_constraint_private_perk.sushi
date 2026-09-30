@@ -7,8 +7,8 @@ perk Loud:
     fn shout() i32
 
 public fn loudest@(T: Loud)(T x) i32:
-    return Result.Ok(x.shout())
+    return x.shout()
 
 fn main() i32:
     println("0")
-    return Result.Ok(0)
+    return 0

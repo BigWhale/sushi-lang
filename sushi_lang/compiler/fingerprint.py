@@ -299,8 +299,10 @@ def _enum_signature(enum) -> str:
 
 
 def _perk_signature(perk) -> str:
+    """Each contract method as a caller sees it: parameters, return, channel."""
     methods = ",".join(
         f"{m.name}({_params_signature(m.params)})->{str(m.ret) if m.ret else '~'}"
+        f"{f'|{m.err_type}' if m.err_type else ''}"
         for m in perk.methods
     )
     return f"{perk.name}{_type_params_signature(perk)}{{{methods}}}"

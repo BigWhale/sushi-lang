@@ -1,8 +1,8 @@
 # EXPECT_ERROR_CODE: CE2009
-fn add(i32 a, i32 b) i32:
+fn add(i32 a, i32 b) i32 | StdError:
   return Result.Ok(a + b)
 
-fn greet(string name) string:
+fn greet(string name) string | StdError:
   return Result.Ok(name)
 
 fn main() i32:
@@ -15,4 +15,4 @@ fn main() i32:
   # No arguments when some expected
   let string result3 = greet()  # Missing string argument
 
-  return Result.Ok(result1)
+  return result1

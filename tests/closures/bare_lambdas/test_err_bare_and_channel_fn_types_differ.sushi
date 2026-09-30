@@ -1,0 +1,10 @@
+# The channel is part of a function type: a function with `| StdError` is not a value of
+# the bare type `fn(i32) -> i32`.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+fn parse(i32 x) i32 | StdError:
+    return Result.Ok(x)
+
+fn main() i32:
+    let fn(i32) -> i32 f = parse
+    println(f(1))
+    return 0

@@ -80,7 +80,7 @@ def validate_result_realise_method_with_validator(
 
     from sushi_lang.semantics.typesys import BuiltinType
     if t_type == BuiltinType.BLANK:
-        er.emit(reporter, er.ERR.CE2506, call.loc)
+        er.emit(reporter, er.ERR.CE2506, call.loc, ty=display_type(result_type))
         return
 
     default_arg = call.args[0]
@@ -181,16 +181,16 @@ def _names_an_unbuilt_instance(ty: Type, structs: dict, enums: dict) -> bool:
                                              through_declarations=False))
 
 
-def signature_result_arms(ret_type: Optional[Type], err_type: Optional[Type],
-                          std_error: Optional[Type]) -> Optional[tuple[Type, Type]]:
-    """The Ok and Err arm a call to a signature yields, or None when there is nothing to intern.
+def signature_result_arms(ret_type: Optional[Type],
+                          err_type: Optional[Type]) -> Optional[tuple[Type, Type]]:
+    """The Ok and Err arm a call to a signature yields, or None when it answers no Result.
 
     ONE derivation, read by the typecheck pass and by the backend's declaration of a
     library function, so a call is typed and declared as the same Result (#541). An
-    explicit `Result@(T, E)` return is its own two arms and is never wrapped again;
-    any other return is wrapped with the spelled `| E`, or with `StdError` when the
-    signature says none. None means the caller decides: no return type, a return that
-    is already the interned enum, or a `Result` reference with the wrong arity.
+    explicit `Result@(T, E)` return is its own two arms and is never wrapped again; any
+    other return is wrapped with the spelled `| E`. None is a BARE signature (no `| E`,
+    docs/design/error-channel.md), a return that is already the interned enum, or a
+    `Result` reference with the wrong arity.
     """
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
@@ -200,10 +200,9 @@ def signature_result_arms(ret_type: Optional[Type], err_type: Optional[Type],
         if len(ret_type.type_args) == 2:
             return ret_type.type_args[0], ret_type.type_args[1]
         return None
-    err = err_type if err_type is not None else std_error
-    if err is None:
+    if err_type is None:
         return None
-    return ret_type, err
+    return ret_type, err_type
 
 
 def ensure_result_type_in_table(

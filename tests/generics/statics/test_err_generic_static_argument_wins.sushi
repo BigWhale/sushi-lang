@@ -11,4 +11,4 @@ extend Cage@(T) static holding(T item) Cage@(T):
 fn main() i32:
     let Cage@(bool) c = Cage.holding(9)
     println("{c.item}")
-    return Result.Ok(0)
+    return 0

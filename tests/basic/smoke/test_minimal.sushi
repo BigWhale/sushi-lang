@@ -1,4 +1,4 @@
 # A compile-only claim: the smallest program compiles, links and runs. The run asserts exit 0 and nothing more.
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

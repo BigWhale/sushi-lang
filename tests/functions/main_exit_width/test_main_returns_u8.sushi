@@ -2,4 +2,4 @@
 # A main that returns u8 exits with the value, widened with zero extension.
 
 fn main() u8:
-    return Result.Ok(200)
+    return 200

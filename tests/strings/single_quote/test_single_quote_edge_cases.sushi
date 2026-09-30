@@ -3,7 +3,7 @@
 
 use <collections/strings>
 
-fn test_empty() ~:
+fn test_empty() ~ | StdError:
     let string s = ''
     if (s.is_empty()):
         println("PASS: Empty single-quote string")
@@ -11,7 +11,7 @@ fn test_empty() ~:
         println("FAIL: Empty string")
     return Result.Ok(~)
 
-fn test_single_char() ~:
+fn test_single_char() ~ | StdError:
     let string s = 'x'
     if (s.len() == 1):
         println("PASS: Single character")
@@ -19,7 +19,7 @@ fn test_single_char() ~:
         println("FAIL: Single character")
     return Result.Ok(~)
 
-fn test_long_string() ~:
+fn test_long_string() ~ | StdError:
     let string s = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     if (s.len() == 64):
         println("PASS: Very long string")
@@ -27,7 +27,7 @@ fn test_long_string() ~:
         println("FAIL: Long string")
     return Result.Ok(~)
 
-fn test_whitespace() ~:
+fn test_whitespace() ~ | StdError:
     let string s = '   \t\n  '
     if (s.len() > 0):
         println("PASS: All whitespace")
@@ -35,7 +35,7 @@ fn test_whitespace() ~:
         println("FAIL: Whitespace string")
     return Result.Ok(~)
 
-fn test_special_chars() ~:
+fn test_special_chars() ~ | StdError:
     let string s = '!@#$%^&*()_+-=[]{}|;:,.<>?/'
     if (s.len() > 20):
         println("PASS: Special characters")
@@ -54,4 +54,4 @@ fn main() i32:
         println("")
     if (test_special_chars().is_ok()):
         println("")
-    return Result.Ok(0)
+    return 0

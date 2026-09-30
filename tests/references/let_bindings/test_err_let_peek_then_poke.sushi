@@ -8,4 +8,4 @@ fn main() i32:
     let poke i32 a = x
     a := 1
     println("{p}")
-    return Result.Ok(0)
+    return 0

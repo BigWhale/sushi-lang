@@ -1,0 +1,12 @@
+public fn make() fn(i32) -> i32:
+    return |i32 x| x + 1
+
+public fn make_checked() Result@(fn(i32) -> i32, StdError):
+    return Result.Ok(|i32 x| x + 2)
+
+public fn make_fallible() fn(i32) -> i32 | StdError:
+    let fn(i32) -> i32 | StdError f = |i32 x|:
+        if (x < 0):
+            return Result.Err(StdError.Error)
+        return Result.Ok(x + 3)
+    return f

@@ -15,7 +15,7 @@ fn main() i32:
         Result.Ok(nom w) -> w.write("Mostly Harmless")
         Result.Err(_) ->
             println("open failed")
-            return Result.Ok(1)
+            return 1
 
     match open("contract_seek_probe.txt", FileMode.Read()):
         Result.Ok(nom r) ->
@@ -26,4 +26,4 @@ fn main() i32:
         Result.Err(_) -> println("reopen failed")
 
     remove("contract_seek_probe.txt").realise(0)
-    return Result.Ok(0)
+    return 0

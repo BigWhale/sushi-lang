@@ -9,4 +9,4 @@ fn main() i32:
     let Bag b = Bag("towel")
     let i32 v = b.label.len
     println("{v}")
-    return Result.Ok(0)
+    return 0

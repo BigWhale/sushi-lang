@@ -14,6 +14,6 @@ fn main() i32:
     let ValidKey p = ValidKey(1, 2)
     map.insert(p, "test")
     if (map.len() != 1 or not map.contains_key(ValidKey(1, 2))):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

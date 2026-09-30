@@ -16,8 +16,8 @@ fn mixed() i32:
     l.push(Res("b-in-list"))
     let Res c = Res("c")
     println("{a.name} {c.name} {l.len()}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 m = mixed().realise(1)
-    return Result.Ok(m)
+    let i32 m = mixed()
+    return m

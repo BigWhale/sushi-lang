@@ -24,27 +24,27 @@ fn main() i32:
     match do_io(1):
         Result.Ok(_) ->
             println("FAIL: Should have gotten error")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             error_count := error_count + 1
 
     match do_io(2):
         Result.Ok(_) ->
             println("FAIL: Should have gotten error")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             error_count := error_count + 1
 
     match do_io(3):
         Result.Ok(_) ->
             println("FAIL: Should have gotten error")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             error_count := error_count + 1
 
     if (error_count == 3):
         println("PASS: Wildcard error pattern works")
-        return Result.Ok(0)
+        return 0
     else:
         println("FAIL: Wrong error count")
-        return Result.Ok(1)
+        return 1

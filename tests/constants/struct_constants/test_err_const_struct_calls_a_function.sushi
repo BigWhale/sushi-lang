@@ -6,9 +6,9 @@ struct Handle:
     i32 fd
 
 fn pick() i32:
-    return Result.Ok(1)
+    return 1
 
 const Handle OUT = Handle(pick())
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

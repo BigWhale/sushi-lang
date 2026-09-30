@@ -69,10 +69,15 @@ def test_reference_and_pointer_recursion():
     assert display_type(PointerType(pointee_type=lst)) == "List@(i32)*"
 
 
-def test_function_type_arrow_and_stderr_hidden():
-    stderr = EnumType(name="StdError", variants=())
-    fn = FunctionType(param_types=(GenericTypeRef("List", (I32,)),), ok_type=I32, err_type=stderr)
+def test_function_type_arrow_and_bare_has_no_arm():
+    fn = FunctionType(param_types=(GenericTypeRef("List", (I32,)),), ok_type=I32, err_type=None)
     assert display_type(fn) == "fn(List@(i32)) -> i32"
+
+
+def test_function_type_shows_std_error_when_written():
+    stderr = EnumType(name="StdError", variants=())
+    fn = FunctionType(param_types=(), ok_type=I32, err_type=stderr)
+    assert display_type(fn) == "fn() -> i32 | StdError"
 
 
 def test_function_type_shows_non_stderr_error():

@@ -20,4 +20,4 @@ extend Handle with Drop:
 fn main() i32:
     let Handle h = Handle(1)
     println("{h.id}")
-    return Result.Ok(0)
+    return 0

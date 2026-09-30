@@ -9,8 +9,8 @@ fn run_test() i32:
     let i32 k = 4
     let i32[] mixed = from([-1, 0..k, 99])
     println("{mixed.len()} {mixed[0]} {mixed[1]} {mixed[2]} {mixed[3]} {mixed[4]} {mixed[5]}")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    let i32 result = run_test()
+    return result

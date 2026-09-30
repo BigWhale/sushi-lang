@@ -4,16 +4,16 @@
 # EXPECT_STDOUT_EXACT: "Result: 84\n"
 
 fn apply(fn(i32) -> i32 f, i32 x) i32:
-  let i32 r = f(x)??
-  return Result.Ok(r)
+  let i32 r = f(x)
+  return r
 
 fn double(i32 x) i32:
-  return Result.Ok(x * 2)
+  return x * 2
 
 fn main() i32:
   let fn(i32) -> i32 g = double
-  let i32 out = apply(g, 42).realise(0)
+  let i32 out = apply(g, 42)
   if (out != 84):
-    return Result.Ok(1)
+    return 1
   println("Result: {out}")
-  return Result.Ok(0)
+  return 0

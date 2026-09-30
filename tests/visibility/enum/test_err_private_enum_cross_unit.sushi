@@ -9,4 +9,4 @@ fn main() i32:
     let Secret s = Secret.Hidden
     match s:
         Secret.Hidden -> println("hidden")
-    return Result.Ok(0)
+    return 0

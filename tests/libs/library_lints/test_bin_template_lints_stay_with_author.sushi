@@ -8,5 +8,5 @@
 use <lib/lint_bin_tpl_lib>
 
 fn main() i32:
-    println(count_three(5).realise(0))
-    return Result.Ok(0)
+    println(count_three(5))
+    return 0

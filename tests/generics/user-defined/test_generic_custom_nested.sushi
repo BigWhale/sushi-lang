@@ -22,6 +22,6 @@ fn main() i32:
     if (first_val.is_ok()):
         if (second_val.is_some()):
             println("Success")
-            return Result.Ok(0)
+            return 0
 
-    return Result.Ok(1)
+    return 1

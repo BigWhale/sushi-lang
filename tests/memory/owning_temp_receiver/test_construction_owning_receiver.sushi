@@ -13,4 +13,4 @@ struct Row:
 fn main() i32:
     let i32 w = Row("mostly harmless", 2).weight
     println(w)
-    return Result.Ok(0)
+    return 0

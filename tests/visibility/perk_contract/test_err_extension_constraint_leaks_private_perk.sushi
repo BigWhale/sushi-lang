@@ -9,4 +9,4 @@ use "helpers/leaky"
 fn main() i32:
     let Safe s = Safe(3)
     println("{s.unlock(s)}")
-    return Result.Ok(0)
+    return 0

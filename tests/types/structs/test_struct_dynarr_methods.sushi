@@ -9,4 +9,4 @@ fn main() i32:
     c.numbers.push(4)
     c.numbers.push(5)
     println(c.numbers.len())
-    return Result.Ok(0)
+    return 0

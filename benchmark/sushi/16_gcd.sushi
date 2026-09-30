@@ -5,12 +5,12 @@ fn gcd(i32 a, i32 b) i32:
         let i32 t = x % y
         x := y
         y := t
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let i64 total = 0
     foreach(i in 1..1200):
         foreach(j in 1..1200):
-            total := total + (gcd(i, j).realise(0) as i64)
+            total := total + (gcd(i, j) as i64)
     println(total)
-    return Result.Ok(0)
+    return 0

@@ -7,4 +7,4 @@ fn main() i32:
   print(msg)
   print(empty)
   print(quote)
-  return Result.Ok(0)
+  return 0

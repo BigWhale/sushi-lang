@@ -6,4 +6,4 @@ const i32 NOT_AN_ELEMENT = ANSWER[0]
 
 fn main() i32:
     println("{NOT_AN_ELEMENT}")
-    return Result.Ok(0)
+    return 0

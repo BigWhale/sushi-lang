@@ -12,7 +12,7 @@ use <lib/override_lib>
 
 # This function overrides the library's get_value()
 fn get_value() i32:
-    return Result.Ok(500)
+    return 500
 
 fn main() i32:
     # library_only() should work - it's only in the library
@@ -22,14 +22,14 @@ fn main() i32:
             println("library_only() = {lib_val}")
             if (lib_val != 42):
                 println("FAIL: Expected library_only() = 42")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: library_only() returned error")
-            return Result.Ok(1)
+            return 1
 
     # Note: use_value() from the library still calls the LIBRARY's get_value()
     # because the library was compiled with its own internal reference.
     # Main's get_value() only shadows at the linker level for new calls.
 
     println("All override tests passed")
-    return Result.Ok(0)
+    return 0

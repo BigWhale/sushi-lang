@@ -10,15 +10,15 @@ struct Crate:
     string label
 
 fn is_heavy(Crate c) bool:
-    return Result.Ok(c.weight > 5)
+    return c.weight > 5
 
 fn run() i32:
     let List@(Crate) xs = List.new()
     xs.push(Crate(2, "light"))
     xs.push(Crate(9, "heavy"))
-    let List@(Crate) heavy = xs.filter(is_heavy)??
-    return Result.Ok(heavy.len())
+    let List@(Crate) heavy = xs.filter(is_heavy)
+    return heavy.len()
 
 fn main() i32:
-    println("{run().realise(-1)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

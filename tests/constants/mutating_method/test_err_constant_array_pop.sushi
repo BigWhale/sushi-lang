@@ -6,4 +6,4 @@ const i32[3] A = [1, 2, 3]
 
 fn main() i32:
     A.pop()
-    return Result.Ok(0)
+    return 0

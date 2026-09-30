@@ -9,10 +9,10 @@ struct Index:
     HashMap@(i32, string) slots
 
 fn fingerprint@(T: Hashable)(T value) u64:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     let Index ix = Index(HashMap.new())
-    let u64 h = fingerprint(ix).realise(0 as u64)
+    let u64 h = fingerprint(ix)
     println(h)
-    return Result.Ok(0)
+    return 0

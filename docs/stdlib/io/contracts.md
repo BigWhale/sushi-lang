@@ -148,7 +148,7 @@ fn main() i32:
     match slurp("/no/such/file"):
         Result.Ok(text) -> println(text)
         Result.Err(_) -> println("Mostly Harmless: no such file")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Examples
@@ -167,8 +167,8 @@ fn greet@(W: Writer)(poke W dst, string who) ~ | IoError:
 
 fn main() i32:
     match greet(poke stdout, "world"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 `stdout` is a `File` unit variable, so the console goes through the contract like any
@@ -188,7 +188,7 @@ fn copy_text@(R: Reader, W: Writer)(poke R src, poke W dst) ~ | IoError:
 
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Limitations

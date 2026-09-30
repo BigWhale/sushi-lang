@@ -15,4 +15,4 @@ fn main() i32:
     println("{l.empty_now()}")
     let List@(i32) e = List.new()
     println("{e.empty_ch().realise(false)}")
-    return Result.Ok(0)
+    return 0

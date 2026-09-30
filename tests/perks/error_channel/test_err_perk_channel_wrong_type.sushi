@@ -16,4 +16,4 @@ extend Counter with Source:
 fn main() i32:
     let Counter c = Counter(1)
     println("{c.read_one().realise(0)}")
-    return Result.Ok(0)
+    return 0

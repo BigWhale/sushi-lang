@@ -9,4 +9,4 @@ fn main() i32:
     foreach(poke r in xs.iter()):
         xs.push(9)
         r := r + 1
-    return Result.Ok(0)
+    return 0

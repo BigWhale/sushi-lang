@@ -9,23 +9,23 @@ fn main() i32:
             f.write("test content")
             f.close()
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     match rename("/tmp/test_rename_old.txt", "/tmp/test_rename_new.txt"):
         Result.Ok(_) -> println("Renamed")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
     if (exists("/tmp/test_rename_old.txt")):
         println("ERROR: Old file should not exist")
-        return Result.Ok(1)
+        return 1
 
     if (not exists("/tmp/test_rename_new.txt")):
         println("ERROR: New file should exist")
-        return Result.Ok(1)
+        return 1
 
     match remove("/tmp/test_rename_new.txt"):
         Result.Ok(_) -> println("Cleaned")
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Err(_) -> return 1
 
     println("OK: rename() works")
-    return Result.Ok(0)
+    return 0

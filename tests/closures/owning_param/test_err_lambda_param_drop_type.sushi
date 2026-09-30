@@ -10,4 +10,4 @@ extend Ticket with Drop:
 
 fn main() i32:
     let fn(Ticket) -> i32 f = |Ticket t| 1
-    return Result.Ok(0)
+    return 0

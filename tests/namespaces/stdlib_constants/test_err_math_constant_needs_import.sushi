@@ -4,4 +4,4 @@
 # EXPECT_ERROR_CODE: CE1001
 fn main() i32:
     println("{PI}")
-    return Result.Ok(0)
+    return 0

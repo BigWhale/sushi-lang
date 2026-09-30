@@ -11,4 +11,4 @@ struct Point:
 fn main() i32:
     let Point p = Point(1, 2)
     let i32 r = libc.printf("%d\n", p)
-    return Result.Ok(0)
+    return 0

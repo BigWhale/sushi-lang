@@ -8,4 +8,4 @@ use "helpers/generic_ext_unit"
 fn main() i32:
     let Crate@(i32) c = Crate(21)
     println("{c.doubled_len()}")
-    return Result.Ok(0)
+    return 0

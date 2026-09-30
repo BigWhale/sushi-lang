@@ -1,0 +1,5 @@
+use "contract"
+use "boxes"
+
+public fn call_it() ~:
+    Box(7).ping()

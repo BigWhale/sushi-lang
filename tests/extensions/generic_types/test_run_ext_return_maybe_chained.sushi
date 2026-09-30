@@ -38,7 +38,7 @@ fn run_test() i32:
     println(8.halved().expect("boom"))
     println("{8.halved().is_some()}")
     println(7.boxed().realise(P(0)).n)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    return Result.Ok(run_test().realise(9))
+    return run_test()

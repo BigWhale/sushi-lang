@@ -10,4 +10,4 @@ fn main() i32:
     foreach(n in numbers.iter()):
         println(n)
 
-    return Result.Ok(0)
+    return 0

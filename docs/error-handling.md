@@ -7,6 +7,8 @@ Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)
 ## Table of Contents
 
 - [Philosophy](#philosophy)
+- [The Rule: A Channel Is Written](#the-rule-a-channel-is-written)
+  - [A Bare Function Is the Exception](#a-bare-function-is-the-exception)
 - [Result@(T, E)](#resultt-e)
   - [Error Type Syntax](#error-type-syntax)
   - [Standard Error Enums](#standard-error-enums)
@@ -17,40 +19,81 @@ Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)
 - [Error Propagation](#error-propagation)
 - [Error Channels on Methods](#error-channels-on-methods)
 - [Patterns and Best Practices](#patterns-and-best-practices)
+- [Traps Are Not Errors](#traps-are-not-errors)
 - [Error Codes](#error-codes)
 
 ## Philosophy
 
 Sushi makes errors explicit and impossible to ignore:
 
-1. **All functions return `Result@(T, E)`** - Errors are part of the type system with explicit error types
+1. **A function that can fail says so** - Its signature writes the error channel `| E`, and the call returns `Result@(T, E)`
 2. **Compiler-enforced handling** - Cannot ignore errors accidentally
 3. **No exceptions** - Control flow is always visible
 4. **Type-safe error propagation** - Error types must match for propagation
 5. **Zero runtime cost** - Compiles to efficient LLVM code
 
-## Result@(T, E)
+## The Rule: A Channel Is Written
 
-All functions implicitly return `Result@(T, E)` where:
-- `T` is the declared return type (success value)
-- `E` is the error type (defaults to `StdError` if not specified)
-
-> **The one exception: foreign functions.** Functions declared in an
-> `unsafe external "C"` block (the FFI) are **not** wrapped in `Result`. A C
-> function returns a raw value with no error channel, so `libc.strlen(s)` yields
-> a plain `i64` and cannot be used with `??` or `.realise()` (that is a clean
-> `CE2507` type error). The safe-wrapper pattern restores Result-clean Sushi
-> around the raw call. See [Foreign Function Interface](ffi.md).
-
-### Error Type Syntax
-
-#### Implicit with Default Error (StdError)
+A callable has an error channel only when its signature writes `| E`, or when it returns
+an explicit `Result@(T, E)`. The rule is the same for a free function, an extension or
+perk method, a lambda and a function type. There is no default error type.
 
 ```sushi
-fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
-# Actually returns Result@(i32, StdError)
+use <collections/strings>
+
+fn parse(string text) i32 | StdError:    # a channel: the call returns Result@(i32, StdError)
+    if (text.is_empty()):
+        return Result.Err(StdError.Error)
+    return Result.Ok(text.len())
+
+fn double(i32 x) i32:                    # bare: the call returns i32
+    return x * 2
+
+fn main() i32:
+    let i32 n = parse("42").realise(0)
+    return double(n) - 4
 ```
+
+- A body with a channel spells both constructors: `return Result.Ok(x)` and
+  `return Result.Err(e)`. A bare `return x` there is **CE2030**.
+- A BARE body returns the value itself. `return Result.Ok(...)` and `return Result.Err(...)`
+  are **CE2091**, and a `??` is **CE0131**. A bare function that calls a fallible one
+  handles the error in its body (`match`, `.realise(default)`), or its signature writes
+  `| E`.
+- The call of a bare function returns the value. `??` on it is **CE2507**, and `.realise`
+  on it is **CE2008**, because the value is not a `Result`.
+- A body that returns a value, or a Result, ends in a `return` on every path (**CE0107**).
+  A bare `~` body returns nothing and can reach its end.
+- A function declared in an `unsafe external "C"` block (the FFI) is bare too. A C
+  function returns a raw value, so `libc.strlen(s)` yields a plain `i64`. See
+  [Foreign Function Interface](ffi.md).
+
+A function that writes no `| E` has no error channel, and there is no default error type.
+The decision record is [The error channel is opt-in](design/error-channel.md).
+
+### A Bare Function Is the Exception
+
+A bare function is the exception. It is not the default style. Show the channel form
+first, and use the bare form seldom.
+
+Use a bare function only when it is needed: the function is total over its inputs and will
+stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would
+only force a dead `.realise` or `??` on every caller.
+
+Write a channel for everything else: a function that does I/O, parses, allocates on a size
+it is given, or can gain a failure later. The reason for a public function is the ABI: a
+channel added later changes the signature, and that breaks every caller and every binary
+`.slib`. A public function keeps a channel when there is any doubt.
+
+The compiler does not enforce this rule. There is no lint.
+
+## Result@(T, E)
+
+A function with a channel returns `Result@(T, E)`, where:
+- `T` is the declared return type (success value)
+- `E` is the error type that the signature writes
+
+### Error Type Syntax
 
 #### Custom Error Type with | Syntax
 
@@ -128,12 +171,13 @@ extend i32 half_checked() i32 | OddError:
     return Result.Ok(self / 2)          # `return self / 2` is CE2030
 ```
 
-A method with NO channel is the other way round: it returns the value itself, and both
-constructors are refused there (**CE2091**). See
-[Error Channels on Methods](#error-channels-on-methods).
+A body with NO channel is the other way round: it returns the value itself, and both
+constructors are refused there (**CE2091**). The rule is the same for a function, a lambda
+and a method. See [Error Channels on Methods](#error-channels-on-methods).
 
-A body that can reach its end with no `return` is **CE0107**. This includes a `~` function,
-a `| E` method and a lambda block body: a `~` body ends with `return Result.Ok(~)`. A
+A body that can reach its end with no `return` is **CE0107**. This includes a `~` function
+with a channel, a `| E` method and a lambda block body with a channel: such a `~` body ends
+with `return Result.Ok(~)`. A BARE `~` body returns nothing and can reach its end. A
 statement after a statement that always ends the path (a `return` in every branch) is
 **CE0140**.
 
@@ -147,7 +191,7 @@ fn main() i32:
     let i32 x = divide(10, 2).realise(0)   # x = 5
     let i32 y = divide(10, 0).realise(-1)  # y = -1 (error case)
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Key points:**
@@ -159,7 +203,7 @@ fn main() i32:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
-fn main() i32 | MathError:
+fn main() i32:
     let Result@(i32, MathError) result = divide(10, 2)
 
     if (result.is_ok()):
@@ -167,11 +211,11 @@ fn main() i32 | MathError:
         let i32 value = result.realise(0)
         println("Result: {value}")
     else:
-        # Error case
+        # Error case: main is bare, so it returns an exit code
         println("Division failed")
-        return Result.Err(MathError.DivisionByZero)
+        return 1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **A condition is a bool, and nothing else is one.** A `Result@(T, E)` and a `Maybe@(T)`
@@ -204,14 +248,14 @@ fn main() i32:
     # println("{pts.get(0).x}")        # CE2106 -- 'Maybe@(Point)' has no field 'x'
     let Point first = pts.get(0).realise(Point(0, 0))
     println("{first.x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 #### Using Pattern Matching
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
-fn main() i32 | MathError:
+fn main() i32:
     match divide(10, 2):
         Result.Ok(value) ->
             println("Result: {value}")
@@ -220,7 +264,7 @@ fn main() i32 | MathError:
         Result.Err(e) ->
             println("Other error")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Result Methods
@@ -273,7 +317,7 @@ See [Result@(T, E) API Reference](stdlib/result.md) for complete method document
 ### Compiler Enforcement
 
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -290,7 +334,7 @@ fn main() i32:
     # WARNING CW2001: Unused Result@(T, E) value
     # get_value()  # Must handle result
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Maybe@(T)
@@ -300,10 +344,12 @@ fn main() i32:
 ### Creating Maybe Values
 
 ```sushi
-# Value present
-return Result.Ok(Maybe.Some(value))
+# In a bare function that returns Maybe@(T)
+return Maybe.Some(value)     # value present
+return Maybe.None()          # value absent
 
-# Value absent
+# In a function with a channel, `Maybe@(T) | E`
+return Result.Ok(Maybe.Some(value))
 return Result.Ok(Maybe.None())
 ```
 
@@ -360,12 +406,12 @@ match find_value():
 fn find_first_even(i32[] numbers) Maybe@(i32):
     foreach(n in numbers.iter()):
         if (n % 2 == 0):
-            return Result.Ok(Maybe.Some(n))
-    return Result.Ok(Maybe.None())
+            return Maybe.Some(n)
+    return Maybe.None()
 
 fn main() i32:
     let i32[] data = from([1, 3, 5, 8, 9])
-    let Maybe@(i32) result = find_first_even(data).realise(Maybe.None())
+    let Maybe@(i32) result = find_first_even(data)
 
     match result:
         Maybe.Some(value) ->
@@ -373,7 +419,7 @@ fn main() i32:
         Maybe.None() ->
             println("No even numbers")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Result vs Maybe
@@ -417,7 +463,7 @@ fn main() i32:
         Result.Err(_) ->
             println("Could not read the config")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Error Propagation
@@ -473,7 +519,7 @@ For `Maybe@(T)`:
 ### Chaining Operations
 
 ```sushi
-fn process() i32:
+fn process() i32 | StdError:
     let i32 step1 = calculate()??
     let i32 step2 = validate(step1)??
     let i32 step3 = transform(step2)??
@@ -487,7 +533,7 @@ Stops at first error and returns immediately.
 The `??` operator automatically cleans up resources on error:
 
 ```sushi
-fn process_with_cleanup(bool succeed) i32:
+fn process_with_cleanup(bool succeed) i32 | StdError:
     let i32[] data = from([1, 2, 3])
 
     # If might_fail() returns Err:
@@ -515,11 +561,11 @@ something -- a string, an array, a handle, in EITHER arm -- the `??` spends the 
 ```sushi
 use <collections/strings>
 
-fn make() string:
+fn make() string | StdError:
     let string base = "Mostly"
     return Result.Ok(base.concat(" Harmless"))
 
-fn run() string:
+fn run() string | StdError:
     let Result@(string, StdError) r = make()
     let string got = r??          # `r` is spent here; `got` owns the buffer
     return Result.Ok(got)         # a mention of `r` after this line is CE2405
@@ -528,7 +574,7 @@ fn main() i32:
     match run():
         Result.Ok(s) -> println(s)
         Result.Err(_) -> println("err")
-    return Result.Ok(0)
+    return 0
 ```
 
 A `Result` that owns nothing (`Result@(i32, StdError)`) is copied out of, and the local
@@ -556,13 +602,13 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 It is the same `??`, in one more position: the error types must match exactly (CE2511),
-the loop's own scope is cleaned up on the way out, and it warns in `main` (CW2511) like
-any other.
+the loop's own scope is cleaned up on the way out, and it is refused in `main` (CE0131),
+because `main` is bare.
 
 Drop the marker and the item is the plain `Result`, which is what lets a body report one
 failure and carry on:
@@ -582,8 +628,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
@@ -593,7 +639,7 @@ A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE251
 ```sushi
 use <collections/strings>
 
-fn find_and_parse(string text) i32:
+fn find_and_parse(string text) i32 | StdError:
     # If find() returns None, ?? propagates as Err
     let i32 pos = text.find("x")??
     return Result.Ok(pos * 2)
@@ -607,7 +653,7 @@ fn main() i32:
     let i32 result2 = find_and_parse("hello world").realise(-1)
     println("Not found: {result2}")  # Not found: -1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### Compile-Time Safety
@@ -616,7 +662,7 @@ fn main() i32:
 # ERROR CE2507: Using ?? on non-Result/non-Maybe type
 # let i32 x = 5??
 
-# ERROR CE0131: ?? in a BARE extension method (no `| E`), which has no Result to return
+# ERROR CE0131: ?? in a BARE body (no `| E`), which has no Result to return
 extend i32 squared() i32:
     # let i32 x = might_fail()??  # Not allowed here; declare `| E` on the method instead
     return self * self
@@ -636,45 +682,47 @@ fn outer() i32 | ErrorB:
     return Result.Ok(0)
 ```
 
-### Warning: Avoid ?? in main()
+### `main` Is Bare
 
-Using `??` in the `main()` function generates a compiler warning (CW2511) and is highly discouraged:
+`main` returns the exit code of the program. It is bare: it returns an integer type
+(`return 0`), and it has no error channel. A `| E` on `main`, or a `Result@(T, E)` return,
+is **CE0106**. A `??` in `main` is **CE0131**, as in every bare body. Handle each failure in
+the body with `match` or `.realise(default)`, and return a code:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
 fn main() i32:
-    # ⚠️ Warning CW2511: ?? operator used in main function
-    # let i32 x = risky()??
+    # let i32 x = risky()??        # CE0131: main is bare
 
-    # Instead, use explicit error handling:
     match risky():
         Result.Ok(x) ->
             println("Success: {x}")
         Result.Err(e) ->
             println("Error occurred")
+            return 1
 
-    return Result.Ok(0)
+    return 0
 ```
 
-### An Infallible Helper Shares Its Caller's Error Channel
+### A Total Helper Can Be Bare
 
-A helper that cannot fail still declares the caller's error type, or `??` does not
-compose through it (CE2511). This is by design: the error arm is part of the signature,
-and the signature is where a reader learns which channel a call sits on. Name the
-channel, return only `Result.Ok`, and say so in a comment:
+A private helper that cannot fail, and will not gain a failure, can be bare. The caller
+uses the value directly: no `??` and no `.realise` (a `??` on it is **CE2507**). The bare
+helper composes with a caller of any channel:
 
 ```sushi
 enum LexError:
     BadByte(i32)
 
-# It cannot fail; it shares the LexError channel so ?? composes in the caller.
-fn at(peek u8[] src, i32 i) u8 | LexError:
+fn at(peek u8[] src, i32 i) u8:
     if (i < 0 or i >= src.len()):
-        return Result.Ok(0)
-    return Result.Ok(src[i])
+        return 0
+    return src[i]
 
 fn first_byte(u8[] src) i32 | LexError:
-    let u8 c = at(peek src, 0)??
+    let u8 c = at(peek src, 0)
+    if (c == 0):
+        return Result.Err(LexError.BadByte(0))
     return Result.Ok(c as i32)
 
 fn main() i32:
@@ -682,18 +730,19 @@ fn main() i32:
     match first_byte(bytes):
         Result.Ok(v) -> println("{v}")
         Result.Err(_) -> println("error")
-    return Result.Ok(0)
+    return 0
 ```
 
-The cost is one word per signature, and `<encoding/msgpack>` pays it throughout: its
-infallible helpers carry `| MpError` so the fallible ones compose over them. A helper
-shared between two modules with different error types takes a wrapper in one of them.
+A helper that CAN fail declares the error type of its caller, or `??` does not compose
+through it (**CE2511**). Keep a channel on a public helper when there is any doubt (see
+[A Bare Function Is the Exception](#a-bare-function-is-the-exception)).
 
 ## Error Channels on Methods
 
-An extension method and a perk method return a BARE value by default: no `Result`, no
-`Result.Ok(...)` in the body (**CE2091**), and no `??` in the body (**CE0131**). Handle a
-Result inside such a body with `match` or `.realise(default)`.
+An extension method and a perk method follow the rule of a function. With no `| E`, the
+method is BARE: no `Result`, no `Result.Ok(...)` in the body (**CE2091**), and no `??` in
+the body (**CE0131**). Handle a Result inside such a body with `match` or
+`.realise(default)`.
 
 A method that can fail declares an error channel `| E`, as a function does. Then:
 
@@ -719,7 +768,7 @@ extend i32 quarter_checked() i32 | OddError:
 fn main() i32:
     println(12.quarter_checked().realise(-1))    # 3
     println(6.quarter_checked().realise(-1))     # 3 is odd: -1
-    return Result.Ok(0)
+    return 0
 ```
 
 A method chain stops at a channel that is still unhandled. `n.half_checked().squared()` is
@@ -746,7 +795,7 @@ match text.find("x"):
 ### 2. Early Return on Error
 
 ```sushi
-fn validate_input(i32 x) i32:
+fn validate_input(i32 x) i32 | StdError:
     if (x < 0):
         return Result.Err(StdError.Error())
     if (x > 100):
@@ -769,7 +818,7 @@ fn read_input() string | IoError:
     let File f = open("input.txt", FileMode.Read())??
     return Result.Ok(f.read_all()??)
 
-fn process_pipeline() string:
+fn process_pipeline() string | StdError:
     let string raw = ""
     match read_input():
         Result.Ok(text) -> raw := text.clone()          # the one conversion point
@@ -786,12 +835,12 @@ fn process_pipeline() string:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
-fn low_level() i32:
+fn low_level() i32 | StdError:
     # Just propagate
     let i32 x = risky_operation()??
     return Result.Ok(x)
 
-fn mid_level() i32:
+fn mid_level() i32 | StdError:
     # Just propagate
     let i32 y = low_level()??
     return Result.Ok(y * 2)
@@ -805,9 +854,9 @@ fn main() i32:
         println("Success: {value}")
     else:
         println("Pipeline failed")
-        return Result.Err(StdError.Error())
+        return 1
 
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 5. Result@(Maybe@(T), E) for Three States
@@ -815,7 +864,7 @@ fn main() i32:
 ```sushi
 use <collections/hashmap>
 
-fn lookup(HashMap@(string, i32) map, string key, bool corrupted) Maybe@(i32):
+fn lookup(HashMap@(string, i32) map, string key, bool corrupted) Maybe@(i32) | StdError:
     # Three possible states:
     # 1. Found value: Ok(Some(value))
     # 2. Key not found: Ok(None)  - not an error
@@ -832,7 +881,7 @@ fn main() i32:
         Result.Ok(Maybe.None) -> println("No such key")
         Result.Err(_) -> println("The map is damaged")
     map.free()
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 6. Avoid Silent Failures
@@ -841,10 +890,10 @@ fn main() i32:
 ```sushi
 # Bad: Silently returns default
 fn get_config() string:
-    return Result.Ok(load().realise("default"))
+    return load().realise("default")
 
 # Good: Caller decides how to handle
-fn load_config() string:
+fn load_config() string | StdError:
     let string data = load()??  # Forward the loaded value
     return Result.Ok(data)
 
@@ -856,32 +905,43 @@ fn main() i32:
     else:
         println("Using default config")
 
-    return Result.Ok(0)
+    return 0
 ```
+
+## Traps Are Not Errors
+
+A runtime error is a defect, not an error: RE2020 for an index out of bounds, RE2021 for a
+failed allocation, and the other `RExxxx` codes. A trap stops the program. A bare function
+can trap exactly as a function with a channel can, and a channel does not catch a trap. Use
+the checked form when the failure is data: `.get(i)` returns `Maybe@(T)`, and `arr[i]`
+traps.
 
 ## Error Codes
 
 Common error codes related to error handling:
 
+- **CE0106**: `main` returns a type that is not a bare integer, or declares a channel
 - **CE0107**: A body can reach its end with no `return`
-- **CE0131**: `??` in a bare extension or perk method (no `| E`)
+- **CE0131**: `??` in a bare body: a function, a method, a lambda or `main` (no `| E`)
 - **CE0133**: A perk implementation and its contract declare different error channels
 - **CE0140**: A statement after a statement that always ends the path
+- **CE2008**: `.realise()` on the call of a bare function (the value is not a Result)
 - **CE2009**: `.realise()` wrong argument count (the code of every miscount)
 - **CE2030**: A bare `return value` in a body that answers a Result
 - **CE2050**: `Result.Err()` with no error value
 - **CE2085**: `| E` together with an explicit `Result@(T, E)` return type
-- **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare method (no `| E`)
+- **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare body: a function, a method or a lambda (no `| E`)
 - **CE2106**: A field read on a `Result` or a `Maybe` (take the value first)
 - **CE2503**: `.realise()` default type mismatch
 - **CE2505**: Assigning a `Result@(T, E)` to a non-Result without handling
-- **CE2507**: Using `??` on a non-Result, non-Maybe type
+- **CE2507**: Using `??` on a non-Result, non-Maybe type, the call of a bare function included
 - **CE2511**: `??` with an error type that differs from the function's error type
 - **CE2515**: A method chain continues past an unhandled channel
 - **CE2516**: A `Result` or a `Maybe` used as a condition
 - **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
 - **CW2001**: Unused `Result@(T, E)` value (warning)
-- **CW2511**: `??` in `main()` (warning)
+
+`main` is bare, so a `??` in `main()` is CE0131.
 
 ---
 

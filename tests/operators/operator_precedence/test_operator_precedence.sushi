@@ -28,4 +28,4 @@ fn main() i32:
     let bool g = true xor false and true or !false
     println(g)  # true xor ((false and true) or (!false))
 
-    return Result.Ok(0)
+    return 0

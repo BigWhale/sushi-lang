@@ -20,14 +20,14 @@ fn main() i32:
             println("used_function() = {result}")
             if (result != 42):
                 println("FAIL: Expected used_function() = 42")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
             println("FAIL: used_function() returned error")
-            return Result.Ok(1)
+            return 1
 
     # The unused functions should be eliminated by dead code elimination.
     # If they weren't, the binary would be larger, but we can't measure that here.
     # This test mainly verifies partial library usage works correctly.
 
     println("All dead code tests passed")
-    return Result.Ok(0)
+    return 0

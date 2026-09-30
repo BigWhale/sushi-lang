@@ -9,21 +9,21 @@ fn main() i32:
             f.writeln("Hello, World!")
             f.close()
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     match file_size("/tmp/size_test.txt"):
         Result.Ok(size) ->
             if (size != 14 as i64):
                 println("ERROR: Expected size 14, got {size}")
-                return Result.Ok(1)
+                return 1
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     match file_size("/tmp/nonexistent_12345.txt"):
         Result.Err(_) -> println("OK: Correctly returns Err for non-existent file")
         Result.Ok(s) ->
             println("ERROR: Should return Err, got Ok({s})")
-            return Result.Ok(1)
+            return 1
 
     println("OK: file_size() works correctly")
-    return Result.Ok(0)
+    return 0

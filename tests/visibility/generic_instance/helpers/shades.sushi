@@ -3,4 +3,4 @@ struct Shade:
 
 public fn shade_tone() i32:
     let Shade s = Shade(9)
-    return Result.Ok(s.tone)
+    return s.tone

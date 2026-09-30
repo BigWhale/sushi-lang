@@ -7,4 +7,4 @@
 
 fn main() i32:
     let i32 x = true
-    return Result.Ok(0)
+    return 0

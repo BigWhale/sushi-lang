@@ -6,7 +6,7 @@
 
 use <collections/strings>
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let string src = "abcdefghij"
     let string[] arr = from(["x", "y"])
     arr.fill(src.s(2, 5))
@@ -16,4 +16,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

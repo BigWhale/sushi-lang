@@ -15,12 +15,12 @@ extend Holder Red() i32:
 
 fn tell(Color c) i32:
     match c:
-        Color.Red -> return Result.Ok(1)
-        Color.Green -> return Result.Ok(2)
+        Color.Red -> return 1
+        Color.Green -> return 2
 
 fn main() i32:
     let Color c = Color.Red()
-    println(tell(c).realise(0))
+    println(tell(c))
     let Holder Color = Holder(7)
     println(Color.Red())
-    return Result.Ok(0)
+    return 0

@@ -18,8 +18,8 @@ from _harness import TESTS_DIR, run_single, detail
 import enhanced_test_runner
 from test_metadata import parse_test_metadata
 
-MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
-USES_LIB = 'use <lib/dep>\n\nfn main() i32:\n    println("{N}")\n    return Result.Ok(0)\n'
+MAIN = 'use "dep"\n\nfn main() i32:\n    println("{N}")\n    return 0\n'
+USES_LIB = 'use <lib/dep>\n\nfn main() i32:\n    println("{N}")\n    return 0\n'
 DEP = "public const i32 N = 1\n"
 NORI = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 

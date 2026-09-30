@@ -7,4 +7,4 @@ fn main() i32:
 
     println("Created list with floats")
 
-    return Result.Ok(0)
+    return 0

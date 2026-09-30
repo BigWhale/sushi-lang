@@ -4,10 +4,10 @@
 fn f(i32 n) string:
     match n:
         _ ->
-            return Result.Ok("other")
+            return "other"
         1 ->
-            return Result.Ok("one")
+            return "one"
 
 fn main() i32:
-    println(f(1).realise("err"))
-    return Result.Ok(0)
+    println(f(1))
+    return 0

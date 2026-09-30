@@ -17,4 +17,4 @@ fn main() i32:
     else:
         map.insert("b", 2)
     println("done")
-    return Result.Ok(0)
+    return 0

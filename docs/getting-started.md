@@ -179,7 +179,7 @@ Create a file named `hello.sushi`:
 ```sushi
 fn main() i32:
     println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### 2. Compile It
@@ -210,9 +210,8 @@ fn main() i32:
 ```
 - Every Sushi program starts with a `main` function
 - It returns `i32` (a 32-bit integer)
-- Every function returns a `Result@(T, E)`. A function that declares only `i32` returns
-  `Result@(i32, StdError)`. For `main`, the compiler takes the integer out of the Result and
-  gives it to the shell as the exit code.
+- `main` is bare: it has no error channel, and the integer that it returns goes to the shell
+  as the exit code
 
 ```sushi
     println("Mostly Harmless")
@@ -222,10 +221,12 @@ fn main() i32:
 - Full UTF-8 Unicode support: `println("Hello 🌍!")`
 
 ```sushi
-    return Result.Ok(0)
+    return 0
 ```
-- Explicit error handling: a function returns `Result.Ok(value)` for success
-- Or `Result.Err(error)` for failure, for example `Result.Err(StdError.Error)`
+- `return 0` ends the program with the exit code 0
+- Explicit error handling: a function that can fail writes `| E` in its signature. It
+  returns `Result.Ok(value)` for success, or `Result.Err(error)` for failure, for example
+  `Result.Err(StdError.Error)`
 - A Result that you do not use gives a warning (CW2001)
 
 ## Compilation Options
@@ -282,7 +283,7 @@ Let's write a program that demonstrates error handling:
 Create `calculator.sushi`:
 
 ```sushi
-fn divide(i32 numerator, i32 denominator) i32:
+fn divide(i32 numerator, i32 denominator) i32 | StdError:
     if (denominator == 0):
         println("Error: Cannot divide by zero!")
         return Result.Err(StdError.Error)
@@ -306,7 +307,7 @@ fn main() i32:
     else:
         println("Second division failed (as expected)")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 Compile and run:

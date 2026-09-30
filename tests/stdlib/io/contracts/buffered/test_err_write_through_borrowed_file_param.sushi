@@ -10,5 +10,5 @@ fn banner(File out) ~ | IoError:
 
 fn main() i32:
     match banner(stdout):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

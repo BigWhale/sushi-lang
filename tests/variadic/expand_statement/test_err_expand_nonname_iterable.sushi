@@ -9,10 +9,10 @@ extend i32 with Display:
     fn display() string:
         return "i:{self}"
 
-fn helper() i32:
+fn helper() i32 | StdError:
     return Result.Ok(1)
 
-fn show@(...Ts: Display)(...Ts args) ~:
+fn show@(...Ts: Display)(...Ts args) ~ | StdError:
     expand(a in helper()):
         println(a.display())
     return Result.Ok(~)
@@ -20,4 +20,4 @@ fn show@(...Ts: Display)(...Ts args) ~:
 fn main() i32:
     if (show(1, 2)):
         println("done")
-    return Result.Ok(0)
+    return 0

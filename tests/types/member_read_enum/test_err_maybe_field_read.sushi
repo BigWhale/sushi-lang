@@ -9,4 +9,4 @@ struct Point:
 fn main() i32:
     let Point[] pts = from([Point(11, 22), Point(33, 44)])
     println("{pts.get(0).x}")
-    return Result.Ok(0)
+    return 0

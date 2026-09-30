@@ -16,4 +16,4 @@ var Point corner = Point(BASE / 10 - 1, 4)
 
 fn main() i32:
     println("{answer} {tag} {corner.x} {corner.y}")
-    return Result.Ok(0)
+    return 0

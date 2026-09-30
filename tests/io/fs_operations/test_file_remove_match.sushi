@@ -13,13 +13,13 @@ fn main() i32:
             println("Create: Success")
         Result.Err(_) ->
             println("Create: Failed")
-            return Result.Ok(1)
+            return 1
 
     match remove(test_file):
         Result.Ok(_) ->
             println("Remove: Success")
         Result.Err(_) ->
             println("Remove: Failed")
-            return Result.Ok(2)
+            return 2
 
-    return Result.Ok(0)
+    return 0

@@ -7,11 +7,11 @@
 
 fn eat(nom string owned) i32:
     println("owned: {owned}")
-    return Result.Ok(1)
+    return 1
 
 fn main() i32:
     let string base = "Ford"
     let string s = "{base} Prefect"
     let fn(nom string) -> i32 g = eat
-    println(g(s).realise(-1))
-    return Result.Ok(0)
+    println(g(s))
+    return 0

@@ -12,5 +12,5 @@ fn main() i32:
             match shape:
                 Shape.Circle(r) -> println("circle {r}")
                 Shape.Square(side) -> println("{side}")
-        Result.Err(_) -> return Result.Ok(1)
-    return Result.Ok(0)
+        Result.Err(_) -> return 1
+    return 0

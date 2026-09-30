@@ -8,4 +8,4 @@ fn main() i32:
     let i32 n = 10
     let i32 d = n.doubled_up()
     println("{d}")
-    return Result.Ok(0)
+    return 0

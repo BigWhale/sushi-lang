@@ -159,4 +159,4 @@ fn main() i32:
     println("")
     println("=== All Math Tests Completed ===")
 
-    return Result.Ok(0)
+    return 0

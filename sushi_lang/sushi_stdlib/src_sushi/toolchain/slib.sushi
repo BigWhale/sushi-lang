@@ -2,7 +2,7 @@
 A reader for a `.slib` library, written in Sushi.
 
 The module reads the fixed 52-byte little-endian header, the MessagePack metadata map
-and the section lengths of a version-4 `.slib` file. It reads the length of a payload
+and the section lengths of a version-5 `.slib` file. It reads the length of a payload
 section, and never the payload itself. The three readers walk one header with one
 error enum, so each gives the same fault for a damaged file:
 
@@ -37,7 +37,7 @@ const i32 VERSION_AT = 16
 const i32 METADATA_LENGTH_AT = 44
 
 ##: The container version that this reader reads. :##
-const u64 CONTAINER_VERSION = 4
+const u64 CONTAINER_VERSION = 5
 
 ##: The length of the field before each payload section that gives its length, in bytes. :##
 const u64 LENGTH_FIELD_SIZE = 8
@@ -66,7 +66,7 @@ public enum SlibError:
     Io(IoError)
     ##: The 16 magic bytes at the start of the file do not match. :##
     BadMagic()
-    ##: The header gives a container version that is not 4. :##
+    ##: The header gives a container version that is not 5. :##
     BadVersion(u32)
     ##: A section ends too early: the section, the bytes it needs, and the bytes that the file has. :##
     Truncated(SlibSection, u64, u64)
@@ -121,13 +121,12 @@ The caller makes sure that the buffer holds the bytes.
 - Parameter off: The index of the first byte.
 - Parameter nbytes: The number of bytes to read, 8 or fewer.
 - Returns: The integer.
-- Errors: This function does not fail.
 :##
-fn le_uint(peek u8[] h, i32 off, i32 nbytes) u64 | SlibError:
+fn le_uint(peek u8[] h, i32 off, i32 nbytes) u64:
     let u64 acc = 0
     foreach(i in 0..nbytes):
         acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
-    return Result.Ok(acc)
+    return acc
 
 ##:
 Opens a file to read bytes.
@@ -223,10 +222,10 @@ fn read_header(poke File f, u64 total) u64 | SlibError:
         return Result.Err(SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, total))
     let u8[] rest = read_part(poke f, HEADER_SIZE - first, total - first, SlibSection.Metadata())??
     header.extend(rest)
-    let u64 version = le_uint(peek header, VERSION_AT, 4)??
+    let u64 version = le_uint(peek header, VERSION_AT, 4)
     if (version != CONTAINER_VERSION):
         return Result.Err(SlibError.BadVersion(version as u32))
-    return Result.Ok(le_uint(peek header, METADATA_LENGTH_AT, 8)??)
+    return Result.Ok(le_uint(peek header, METADATA_LENGTH_AT, 8))
 
 ##:
 Reads and decodes the metadata blob.
@@ -246,7 +245,7 @@ fn read_blob(poke File f, u64 mlen, u64 left) MsgValue | SlibError:
 ##:
 Reads the lengths of the two payload sections, and steps over the source section.
 
-A version-4 container has a length-prefixed source section between the metadata and
+A container (version 4 and later) has a length-prefixed source section between the metadata and
 the bitcode. Thus the reader steps over the source section to get to the bitcode
 length. The source length is compared with what is left of the file, and the bitcode
 length is not.
@@ -260,12 +259,12 @@ length is not.
 fn read_sections(poke File f, poke u64 left) SlibSizes | SlibError:
     let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Source())??
     left := left - LENGTH_FIELD_SIZE
-    let u64 slen = le_uint(peek src_field, 0, 8)??
+    let u64 slen = le_uint(peek src_field, 0, 8)
     skip_part(poke f, slen, left, SlibSection.Source())??
     left := left - slen
     let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Bitcode())??
     left := left - LENGTH_FIELD_SIZE
-    let u64 bclen = le_uint(peek bc_field, 0, 8)??
+    let u64 bclen = le_uint(peek bc_field, 0, 8)
     return Result.Ok(SlibSizes(slen, bclen))
 
 ##:
@@ -337,7 +336,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[114] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -371,6 +370,7 @@ const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('function', 'return_type', 'str', Presence.Required()),
     SchemaRow('function', 'params', '[]param', Presence.Optional()),
     SchemaRow('function', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('function', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('function', 'error_type', 'str', Presence.Optional()),
     SchemaRow('function', 'source', 'str', Presence.Optional()),
     SchemaRow('function', 'unit', 'str', Presence.Optional()),
@@ -378,6 +378,7 @@ const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('helper', 'name', 'str', Presence.Required()),
     SchemaRow('helper', 'params', '[]param', Presence.Optional()),
     SchemaRow('helper', 'return_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('helper', 'error_type', 'str', Presence.Optional()),
     SchemaRow('helper', 'unit', 'str', Presence.Optional()),
     SchemaRow('helper', 'link_symbol', 'str', Presence.Optional()),
@@ -432,6 +433,7 @@ const SchemaRow[111] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('method', 'return_type', 'str', Presence.Required()),
     SchemaRow('method', 'params', '[]param', Presence.Optional()),
     SchemaRow('method', 'self_mode', 'str', Presence.Optional()),
+    SchemaRow('method', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('method', 'error_type', 'str', Presence.Optional()),
     SchemaRow('method', 'doc', '@doc', Presence.Optional()),
     SchemaRow('doc', 'summary', 'str', Presence.Optional()),
@@ -456,32 +458,30 @@ Gives the schema word for the kind of a value.
 
 - Parameter v: The value.
 - Returns: `str`, `bool`, `map`, `list`, `nil`, or `other`.
-- Errors: This function does not fail.
 :##
-fn value_kind(MsgValue v) string | SlibError:
+fn value_kind(MsgValue v) string:
     match v:
-        MsgValue.Str(_) -> return Result.Ok("str")
-        MsgValue.Bool(_) -> return Result.Ok("bool")
-        MsgValue.Map(_, _) -> return Result.Ok("map")
-        MsgValue.Arr(_) -> return Result.Ok("list")
-        MsgValue.Nil() -> return Result.Ok("nil")
-        _ -> return Result.Ok("other")
+        MsgValue.Str(_) -> return "str"
+        MsgValue.Bool(_) -> return "bool"
+        MsgValue.Map(_, _) -> return "map"
+        MsgValue.Arr(_) -> return "list"
+        MsgValue.Nil() -> return "nil"
+        _ -> return "other"
 
 ##:
 Gives the words for a scalar schema type, as a reason says them.
 
 - Parameter spec: The schema type: `str`, `bool`, `map` or `list`.
 - Returns: The words.
-- Errors: This function does not fail.
 :##
-fn type_words(string spec) string | SlibError:
+fn type_words(string spec) string:
     if (spec == "str"):
-        return Result.Ok("a string")
+        return "a string"
     if (spec == "bool"):
-        return Result.Ok("a bool")
+        return "a bool"
     if (spec == "map"):
-        return Result.Ok("a map")
-    return Result.Ok("a list")
+        return "a map"
+    return "a list"
 
 ##:
 Finds the first field of a record that does not agree with the rows of its kind.
@@ -490,28 +490,27 @@ Finds the first field of a record that does not agree with the rows of its kind.
 - Parameter kind: The record kind of the rows to use.
 - Parameter where: The path of the record, or `""` for the top of the manifest.
 - Returns: The reason, or `Maybe.None()` when the record agrees.
-- Errors: This function does not fail.
 :##
-fn record_fault(MsgValue rec, string kind, string where) Maybe@(string) | SlibError:
+fn record_fault(MsgValue rec, string kind, string where) Maybe@(string):
     foreach(r in 0..SLIB_MANIFEST_SCHEMA.len()):
         let SchemaRow row = SLIB_MANIFEST_SCHEMA[r]
         if (row.kind == kind):
             let string name = row.key.clone()
             if (where != ""):
                 name := "{where}.{row.key}"
-            match map_index(rec, row.key).realise(Maybe.None()):
+            match map_index(rec, row.key):
                 Maybe.Some(at) ->
                     match rec:
                         MsgValue.Map(_, vals) ->
-                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)??
+                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)
                             if (fault.is_some()):
-                                return Result.Ok(fault)
+                                return fault
                         _ ->
-                            return Result.Ok(Maybe.Some("field '{name}' is not a map"))
+                            return Maybe.Some("field '{name}' is not a map")
                 Maybe.None() ->
-                    if (is_required(rec, row.presence)??):
-                        return Result.Ok(Maybe.Some("missing required field '{name}'"))
-    return Result.Ok(Maybe.None())
+                    if (is_required(rec, row.presence)):
+                        return Maybe.Some("missing required field '{name}'")
+    return Maybe.None()
 
 ##:
 Tells if a record must hold a field that it does not hold.
@@ -519,16 +518,15 @@ Tells if a record must hold a field that it does not hold.
 - Parameter rec: The record. It is a map.
 - Parameter presence: The presence of the field in its row.
 - Returns: True when the record must hold the field.
-- Errors: This function does not fail.
 :##
-fn is_required(MsgValue rec, Presence presence) bool | SlibError:
+fn is_required(MsgValue rec, Presence presence) bool:
     match presence:
         Presence.Required() ->
-            return Result.Ok(true)
+            return true
         Presence.Optional() ->
-            return Result.Ok(false)
+            return false
         Presence.RequiredWhen(flag) ->
-            return Result.Ok(map_get_bool(rec, flag).realise(Maybe.None()).realise(false))
+            return map_get_bool(rec, flag).realise(false)
 
 ##:
 Finds why a value does not have a schema type.
@@ -537,18 +535,17 @@ Finds why a value does not have a schema type.
 - Parameter spec: The schema type.
 - Parameter name: The path of the value.
 - Returns: The reason, or `Maybe.None()` when the value has the type.
-- Errors: This function does not fail.
 :##
-fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibError:
-    let string kind = value_kind(v)??
+fn value_fault(MsgValue v, string spec, string name) Maybe@(string):
+    let string kind = value_kind(v)
     if (spec == "nstr"):
         if (kind == "nil" or kind == "str"):
-            return Result.Ok(Maybe.None())
-        return Result.Ok(Maybe.Some("field '{name}' is not a string"))
+            return Maybe.None()
+        return Maybe.Some("field '{name}' is not a string")
     if (spec == "str" or spec == "bool" or spec == "map" or spec == "list"):
         if (kind == spec):
-            return Result.Ok(Maybe.None())
-        return Result.Ok(Maybe.Some("field '{name}' is not {type_words(spec)??}"))
+            return Maybe.None()
+        return Maybe.Some("field '{name}' is not {type_words(spec)}")
     if (spec == "strs" or spec.starts_with("[]")):
         let string item_spec = "str"
         if (spec != "strs"):
@@ -556,30 +553,30 @@ fn value_fault(MsgValue v, string spec, string name) Maybe@(string) | SlibError:
         match v:
             MsgValue.Arr(items) ->
                 foreach(i in 0..items.len()):
-                    let Maybe@(string) fault = value_fault(items[i], item_spec, "{name}[{i}]")??
+                    let Maybe@(string) fault = value_fault(items[i], item_spec, "{name}[{i}]")
                     if (fault.is_some()):
-                        return Result.Ok(fault)
-                return Result.Ok(Maybe.None())
+                        return fault
+                return Maybe.None()
             _ ->
-                return Result.Ok(Maybe.Some("field '{name}' is not a list"))
+                return Maybe.Some("field '{name}' is not a list")
     if (kind != "map"):
-        return Result.Ok(Maybe.Some("field '{name}' is not a map"))
+        return Maybe.Some("field '{name}' is not a map")
     if (spec.starts_with("@")):
-        return Result.Ok(record_fault(v, spec.s(1, spec.len()), name)??)
+        return record_fault(v, spec.s(1, spec.len()), name)
     let string value_spec = "@{spec.s(2, spec.len())}"
     match v:
         MsgValue.Map(keys, vals) ->
             foreach(i in 0..keys.len()):
                 match keys[i]:
                     MsgValue.Str(k) ->
-                        let Maybe@(string) fault = value_fault(vals[i], value_spec, "{name}.{k}")??
+                        let Maybe@(string) fault = value_fault(vals[i], value_spec, "{name}.{k}")
                         if (fault.is_some()):
-                            return Result.Ok(fault)
+                            return fault
                     _ ->
-                        return Result.Ok(Maybe.Some("field '{name}' has a key that is not a string"))
+                        return Maybe.Some("field '{name}' has a key that is not a string")
         _ ->
-            return Result.Ok(Maybe.Some("field '{name}' is not a map"))
-    return Result.Ok(Maybe.None())
+            return Maybe.Some("field '{name}' is not a map")
+    return Maybe.None()
 
 ##:
 Makes sure that a metadata map has the shape of a manifest.
@@ -590,10 +587,10 @@ The Python reader makes the same check with the same rows, and gives the same re
 - Errors: `SlibError.Invalid` with the reason for the first field that is wrong.
 :##
 public fn check_manifest(MsgValue meta) ~ | SlibError:
-    let string kind = value_kind(meta)??
+    let string kind = value_kind(meta)
     if (kind != "map"):
         return Result.Err(SlibError.Invalid("the metadata is not a map"))
-    match record_fault(meta, "manifest", "")??:
+    match record_fault(meta, "manifest", ""):
         Maybe.Some(nom reason) ->
             return Result.Err(SlibError.Invalid(reason))
         Maybe.None() ->

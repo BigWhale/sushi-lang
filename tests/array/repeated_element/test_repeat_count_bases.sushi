@@ -15,4 +15,4 @@ fn main() i32:
     foreach(i in 0..8):
         b := b + EXPR_COUNT[i]
     println(b)
-    return Result.Ok(0)
+    return 0

@@ -3,4 +3,4 @@
 # EXPECT_STDERR_CONTAINS: "assignment to undeclared variable 'x'"
 fn main() i32:
   x := 42  # x was never declared with let
-  return Result.Ok(x)
+  return x

@@ -9,4 +9,4 @@ fn main() i32:
     match Slot.Empty():
         Slot.Full(v) -> println(v)
         Slot.Empty -> println(0)
-    return Result.Ok(0)
+    return 0

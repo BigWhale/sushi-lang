@@ -15,4 +15,4 @@ fn main() i32:
     xs.push(Handle(1))
     xs.push(Handle(2))
     println("{xs.len()}")
-    return Result.Ok(0)
+    return 0

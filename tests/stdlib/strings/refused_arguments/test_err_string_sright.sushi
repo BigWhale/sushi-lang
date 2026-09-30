@@ -5,4 +5,4 @@ fn main() i32:
     let string s = "test"
     # Error: sright() requires exactly 1 argument (n)
     let string right = s.sright()
-    return Result.Ok(0)
+    return 0

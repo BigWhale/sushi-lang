@@ -15,4 +15,4 @@ extend Pallet with Quiet:
 fn main() i32:
     let Pallet p = Pallet(2)
     println(p.hush())
-    return Result.Ok(0)
+    return 0

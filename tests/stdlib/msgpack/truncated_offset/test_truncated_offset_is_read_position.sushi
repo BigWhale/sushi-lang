@@ -12,11 +12,11 @@ fn check(u8[] buf) i32:
             println("Truncated({off})")
         _ ->
             println("other")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    check(from([0xc4, 0x05, 0x01])).realise(1)
-    check(from([0xa3, 0x61])).realise(1)
-    check(from([0x92, 0xa5, 0x61, 0x62])).realise(1)
-    check(from([0xcd, 0x01])).realise(1)
-    return Result.Ok(0)
+    check(from([0xc4, 0x05, 0x01]))
+    check(from([0xa3, 0x61]))
+    check(from([0x92, 0xa5, 0x61, 0x62]))
+    check(from([0xcd, 0x01]))
+    return 0

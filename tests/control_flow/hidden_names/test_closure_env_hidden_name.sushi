@@ -8,6 +8,6 @@ fn main() i32:
     let i32 k = 5
     let fn(i32) -> i32 f = |i32 x|:
         let i32 __closure_env = 7
-        return Result.Ok(x + k + __closure_env)
-    println(f(1).realise(0))
-    return Result.Ok(0)
+        return x + k + __closure_env
+    println(f(1))
+    return 0

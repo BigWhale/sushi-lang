@@ -15,6 +15,6 @@ fn main() i32:
     if (double_maybe.is_some()):
         if (double_result.is_ok()):
             println("Double wrapped")
-            return Result.Ok(0)
+            return 0
 
-    return Result.Ok(1)
+    return 1

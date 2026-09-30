@@ -15,27 +15,27 @@ fn main() i32:
     let TcpListener listener = listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
     if (listener.fd < 0):
         println("listen failed")
-        return Result.Ok(1)
+        return 1
     if (not listener.set_timeout(5000).is_ok()):
         println("listener set_timeout failed")
-        return Result.Ok(1)
+        return 1
 
     let i32 port = listener.local_port().realise(-1)
     let TcpStream client = connect("127.0.0.1", port).realise(TcpStream(-1))
     if (client.fd < 0):
         println("connect failed")
-        return Result.Ok(1)
+        return 1
     if (not client.set_timeouts(5000, 5000).is_ok()):
         println("client set_timeouts failed")
-        return Result.Ok(1)
+        return 1
 
     let TcpStream served = listener.accept().realise(TcpStream(-1))
     if (served.fd < 0):
         println("accept failed")
-        return Result.Ok(1)
+        return 1
     if (not served.set_timeouts(5000, 5000).is_ok()):
         println("served set_timeouts failed")
-        return Result.Ok(1)
+        return 1
     println("accepted")
 
     let u8[] greeting = "Mostly Harmless".to_bytes()
@@ -60,4 +60,4 @@ fn main() i32:
         Result.Ok(_) -> println("closed")
         Result.Err(_) -> println("close failed")
 
-    return Result.Ok(0)
+    return 0

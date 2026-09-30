@@ -10,4 +10,4 @@ fn main() i32:
             # Actually just test that foreach works and count remains 0
             break
     # If we never incremented count, return 0 (success)
-    return Result.Ok(count)
+    return count

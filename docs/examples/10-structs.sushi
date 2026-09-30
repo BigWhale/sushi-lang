@@ -57,5 +57,5 @@ fn main() i32:
     println("Capacity: {heart_of_gold.crew_capacity}")
     println("Has improbability drive: {heart_of_gold.improbability_drive}")
 
-    return Result.Ok(0)
+    return 0
 

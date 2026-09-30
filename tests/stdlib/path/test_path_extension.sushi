@@ -4,9 +4,9 @@
 use <io/path>
 
 fn main() i32:
-    println(extension("a/b.txt").realise("?"))
-    println(extension("archive.tar.gz").realise("?"))
-    println(extension(".bashrc").realise("?"))
-    println(extension("no_ext").realise("?"))
-    println(extension("dir.d/plain").realise("?"))
-    return Result.Ok(0)
+    println(extension("a/b.txt"))
+    println(extension("archive.tar.gz"))
+    println(extension(".bashrc"))
+    println(extension("no_ext"))
+    println(extension("dir.d/plain"))
+    return 0

@@ -27,7 +27,7 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("Failed to open file for writing")
-            return Result.Ok(1)
+            return 1
 
     # Test reading from the file
     let Result@(File, IoError) read_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
@@ -44,7 +44,7 @@ fn main() i32:
             f.close()
         Result.Err(_) ->
             println("Failed to open file for reading")
-            return Result.Ok(1)
+            return 1
 
     # Test is_open
     let Result@(File, IoError) check_result = open("/tmp/sushi_test_file.txt", FileMode.Read())
@@ -57,4 +57,4 @@ fn main() i32:
             println("Failed")
 
     println("File I/O tests complete!")
-    return Result.Ok(0)
+    return 0

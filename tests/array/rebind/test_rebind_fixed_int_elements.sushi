@@ -25,6 +25,6 @@ fn main() i32:
 
     # The neighbours must be unchanged.
     if (a32[0] != 1 or a32[2] != 3):
-        return Result.Ok(1)
+        return 1
 
-    return Result.Ok(0)
+    return 0

@@ -7,15 +7,15 @@ enum Color:
     Green()
 
 fn id_of@(T)(T a) T:
-    return Result.Ok(a)
+    return a
 
 fn run() i32:
-    let Color c = id_of(Color.Red())??
+    let Color c = id_of(Color.Red())
     match c:
         Color.Red() -> println("red")
         Color.Green() -> println("green")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 rc = run().realise(1)
-    return Result.Ok(rc)
+    let i32 rc = run()
+    return rc

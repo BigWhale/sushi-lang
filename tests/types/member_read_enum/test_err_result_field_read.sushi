@@ -5,10 +5,10 @@ struct Point:
     i32 x
     i32 y
 
-fn make() Point:
+fn make() Point | StdError:
     return Result.Ok(Point(11, 22))
 
 fn main() i32:
     let i32 v = make().x
     println("{v}")
-    return Result.Ok(0)
+    return 0

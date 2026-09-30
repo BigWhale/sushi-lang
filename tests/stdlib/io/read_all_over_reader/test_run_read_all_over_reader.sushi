@@ -69,4 +69,4 @@ fn main() i32:
         Result.Ok(_) -> println("missing: read")
         Result.Err(_) -> println("missing: IoError")
     remove_all(PATH)
-    return Result.Ok(code)
+    return code

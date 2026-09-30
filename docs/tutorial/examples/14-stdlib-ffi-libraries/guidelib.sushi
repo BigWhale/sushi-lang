@@ -3,7 +3,7 @@
 
 # Public functions form the library's API.
 public fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 
 public fn answer() i32:
-    return Result.Ok(42)
+    return 42

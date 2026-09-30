@@ -45,5 +45,5 @@ fn main() i32:
     let f64 val8 = r8.realise(2.71)
     println("f64 Err: {val8}")
 
-    return Result.Ok(0)
+    return 0
 

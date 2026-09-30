@@ -13,4 +13,4 @@ fn main() i32:
     let string s = "hi"
     let i32 bad = s.to_str()
     println(bad)
-    return Result.Ok(0)
+    return 0

@@ -15,4 +15,4 @@ fn main() i32:
     match work():
         Result.Ok(_) -> println("done")
         Result.Err(_) -> println("werr")
-    return Result.Ok(0)
+    return 0

@@ -5,15 +5,15 @@
 
 fn setup_system() i32:
     println("System initialized")
-    return Result.Ok(42)
+    return 42
 
 fn process_data() string:
     println("Processing")
-    return Result.Ok("completed")
+    return "completed"
 
 fn do_cleanup() i32:
     println("Cleanup done")
-    return Result.Ok(0)
+    return 0
 
 extend i32 double() i32:
     return self * 2
@@ -22,11 +22,11 @@ extend string announce() string:
     println(self)
     return self.clone()
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test basic function calls as statements (return values discarded)
-    setup_system().realise(0)
-    process_data().realise("Slartibartfast")
-    do_cleanup().realise(0)
+    setup_system()
+    process_data()
+    do_cleanup()
 
     # Test method calls as statements
     let i32 number = 5
@@ -64,4 +64,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

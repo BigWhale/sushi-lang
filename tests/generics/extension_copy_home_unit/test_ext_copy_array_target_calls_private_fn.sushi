@@ -3,13 +3,13 @@
 use "helpers/ecopy_cst"
 
 fn plain(i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 extend T[] firstish() i32:
-    return plain(self.len()).realise(0)
+    return plain(self.len())
 
 fn main() i32:
     let i32[] a = from([5, 6, 7])
     println(a.firstish())
-    println(tick(1).realise(0))
-    return Result.Ok(0)
+    println(tick(1))
+    return 0

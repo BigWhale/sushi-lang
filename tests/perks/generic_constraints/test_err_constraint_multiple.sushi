@@ -28,4 +28,4 @@ fn main() i32:
     # This should fail with CE4006 (NoHash has no derived hash)
     let Container@(NoHash) bad = Container(NoHash(HashMap.new()))
 
-    return Result.Ok(0)
+    return 0

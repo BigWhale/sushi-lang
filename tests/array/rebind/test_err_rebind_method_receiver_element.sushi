@@ -12,4 +12,4 @@ extend Board mark() i32:
 fn main() i32:
     let Board b = Board([0, 0, 0])
     let i32 n = b.mark()
-    return Result.Ok(n - 1)
+    return n - 1

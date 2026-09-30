@@ -16,11 +16,11 @@ extend Box@(T) with Show:
         return "box"
 
 fn wrap@(T)(nom T v) Box@(T):
-    return Result.Ok(Box(v))
+    return Box(v)
 
 fn show_it@(S: Show)(S s) string:
-    return Result.Ok(s.show())
+    return s.show()
 
 fn main() i32:
-    println(show_it(wrap(nom "towel").realise(Box("none"))).realise("?"))
-    return Result.Ok(0)
+    println(show_it(wrap(nom "towel")))
+    return 0

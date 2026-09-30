@@ -9,4 +9,4 @@ fn main() i32:
     foreach(x in l.iter()):
         println(x)
         l.clear()
-    return Result.Ok(0)
+    return 0

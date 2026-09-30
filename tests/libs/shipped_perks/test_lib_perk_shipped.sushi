@@ -15,10 +15,10 @@ extend i32 with Ord:
         return self > other
 
 fn run_test() i32:
-    let i32 m = max_of(3, 5)??
-    return Result.Ok(m)
+    let i32 m = max_of(3, 5)
+    return m
 
 fn main() i32:
-    let i32 result = run_test().realise(99)
+    let i32 result = run_test()
     println(result)
-    return Result.Ok(0)
+    return 0

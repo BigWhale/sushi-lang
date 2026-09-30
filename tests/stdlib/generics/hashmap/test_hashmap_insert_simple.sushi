@@ -16,7 +16,7 @@ fn main() i32:
 
     if (size != 1):
         println("ERROR: Expected size 1, got {size}")
-        return Result.Ok(1)
+        return 1
 
     println("Insert test passed!")
-    return Result.Ok(0)
+    return 0

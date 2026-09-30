@@ -4,7 +4,7 @@
 
 fn noop@(T)(T x) ~:
     # Intentionally not using parameter to test minimal generic function
-    return Result.Ok(~)
+    return ~
 
 fn main() i32:
     # Test with different types - all should compile and run
@@ -12,4 +12,4 @@ fn main() i32:
     noop("test")
     noop(3.14)
     noop(true)
-    return Result.Ok(0)
+    return 0

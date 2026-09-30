@@ -205,13 +205,13 @@ def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
 
 
 def reject_try_in_body(reporter, body: Any, context: str) -> None:
-    """Reject every `??` in an extension or perk method body (CE0131, #398).
+    """Reject every `??` in a BARE function or method body (CE0131, #398).
 
-    These bodies return a bare value (CE2091), so a `??` has nothing to
-    propagate into. The rule is structural, so the collect pass owns it: the walk sees
-    the DECLARATION, fires once per occurrence, and covers a template nobody
-    instantiates. The walk SKIPS lambda subtrees: a lambda has
-    its own Result channel, so a `??` inside one is legal (#399).
+    A bare body returns the value (CE2091), so a `??` has nothing to propagate into
+    (docs/design/error-channel.md). The rule is structural, so the collect pass owns it:
+    the walk sees the DECLARATION, fires once per occurrence, and covers a template
+    nobody instantiates. The walk SKIPS lambda subtrees: a lambda's channel is its own
+    and comes from its type, so the typecheck pass judges a `??` inside one (#399).
     """
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.ast import Lambda, Node, TryExpr
@@ -223,8 +223,8 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          node.loc, context=context) \
-                .help("handle the Result in the body: match on it, or use "
-                      ".realise(default)").emit()
+                .help("handle the Result or the Maybe in the body (match, "
+                      ".realise(default)), or write '| E' in the signature").emit()
         return True
 
     walk_nodes(body, refuse_a_try)

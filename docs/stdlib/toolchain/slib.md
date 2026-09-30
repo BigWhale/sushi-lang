@@ -12,16 +12,18 @@ library whose manifest shape is checked. It mirrors the Python reader of `--lib-
 use <toolchain/slib>
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Overview
 
 `toolchain/slib` is a **Sushi-source** standard-library module. It reads the fixed
-52-byte little-endian header and the MessagePack metadata map of a version-4 `.slib`
+52-byte little-endian header and the MessagePack metadata map of a version-5 `.slib`
 library (see [Library Format](../../library-format.md)). The metadata comes back as a
 [`MsgValue`](../encoding/msgpack.md) tree. The reader stops after the metadata blob; it
-reads the length of a payload section, never the payload.
+reads the length of a payload section, never the payload. A container of another version
+is `SlibError.BadVersion`. A version-4 library is refused, because its records do not say
+which callables are bare.
 
 The module imports `<io/fs>`, `<encoding/msgpack>` and `<collections/strings>`. It
 re-exports `<io/error>` (`public use`), so
@@ -34,7 +36,7 @@ carries.
 public enum SlibError:
     Io(IoError)                         # the open or a read failed; the IoError names the cause
     BadMagic()                          # the 16 magic bytes do not match
-    BadVersion(u32)                     # header version is not 4
+    BadVersion(u32)                     # header version is not 5
     Truncated(SlibSection, u64, u64)    # the section, the bytes it needs, the bytes left
     TooLarge(u64)                       # the file is larger than 1 GiB; the file size
     Decode(MpError)                     # the metadata blob does not decode
@@ -69,13 +71,13 @@ validated, the same as the Python reader.
 use <encoding/msgpack>
 use <toolchain/slib>
 
-fn library_name(string path) string:
+fn library_name(string path) string | StdError:
     match read_metadata(path):
         Result.Ok(meta) ->
-            let Maybe@(MsgValue) found = map_get(meta, "library_name")??
+            let Maybe@(MsgValue) found = map_get(meta, "library_name")
             match found:
                 Maybe.Some(v) ->
-                    return Result.Ok(show(v)??)
+                    return Result.Ok(show(v))
                 Maybe.None() ->
                     return Result.Ok("missing")
         Result.Err(_) ->
@@ -83,12 +85,12 @@ fn library_name(string path) string:
 
 fn main() i32:
     println(library_name("mylib.slib").realise("error"))
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `sizes(string path) SlibSizes | SlibError`
 
-The length of both payload sections, in one pass over the file. A version-4 container
+The length of both payload sections, in one pass over the file. A version-5 container
 puts a length-prefixed source section between the metadata and the bitcode, so a reader
 steps over the source to reach the bitcode length. A source library records no bitcode,
 and a binary one no source.
@@ -102,7 +104,7 @@ fn main() i32:
             println("source {sizes.source}, bitcode {sizes.bitcode}")
         Result.Err(_) ->
             println("read error")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `bitcode_size(string path) u64 | SlibError`
@@ -124,23 +126,25 @@ use <toolchain/slib>
 fn describe(string path) string:
     match read_library(path):
         Result.Ok(library) ->
-            return Result.Ok("source {library.sizes.source}, bitcode {library.sizes.bitcode}")
+            return "source {library.sizes.source}, bitcode {library.sizes.bitcode}"
         Result.Err(SlibError.Truncated(_, need, have)) ->
-            return Result.Ok("truncated: needs {need} bytes, has {have}")
+            return "truncated: needs {need} bytes, has {have}"
         Result.Err(SlibError.Invalid(reason)) ->
-            return Result.Ok("not a manifest: {reason}")
+            return "not a manifest: {reason}"
         Result.Err(_) ->
-            return Result.Ok("cannot read {path}")
+            return "cannot read {path}"
 
 fn main() i32:
-    println(describe("mylib.slib").realise("error"))
-    return Result.Ok(0)
+    println(describe("mylib.slib"))
+    return 0
 ```
 
 ### `check_manifest(MsgValue meta) ~ | SlibError`
 
 Check that a metadata map has the shape of a manifest: every required field is present
-and has its type. The Python reader checks the same rows (`MANIFEST_SCHEMA` in
+and has its type. Every function, helper and method record must state `has_channel`, a
+`bool` that says whether the callable has an error channel. The Python reader checks the
+same rows (`MANIFEST_SCHEMA` in
 `sushi_lang/backend/library_format.py`) and gives the same reason, as
 `SlibError.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
 partial map still reads.
@@ -153,29 +157,29 @@ use <toolchain/slib>
 fn classify(string path) string:
     match read_metadata(path):
         Result.Ok(_) ->
-            return Result.Ok("ok")
+            return "ok"
         Result.Err(e) ->
             match e:
                 SlibError.Io(IoError.NotFound) ->
-                    return Result.Ok("no such file: {path}")
+                    return "no such file: {path}"
                 SlibError.Io(_) ->
-                    return Result.Ok("cannot read {path}")
+                    return "cannot read {path}"
                 SlibError.BadMagic() ->
-                    return Result.Ok("not a .slib library")
+                    return "not a .slib library"
                 SlibError.BadVersion(v) ->
-                    return Result.Ok("unsupported version {v}")
+                    return "unsupported version {v}"
                 SlibError.Truncated(_, need, have) ->
-                    return Result.Ok("truncated file: needs {need} bytes, has {have}")
+                    return "truncated file: needs {need} bytes, has {have}"
                 SlibError.TooLarge(size) ->
-                    return Result.Ok("file too large: {size} bytes")
+                    return "file too large: {size} bytes"
                 SlibError.Decode(_) ->
-                    return Result.Ok("metadata does not decode")
+                    return "metadata does not decode"
                 SlibError.Invalid(reason) ->
-                    return Result.Ok("not a manifest: {reason}")
+                    return "not a manifest: {reason}"
 
 fn main() i32:
-    println(classify("missing.slib").realise("error"))    # no such file: missing.slib
-    return Result.Ok(0)
+    println(classify("missing.slib"))    # no such file: missing.slib
+    return 0
 ```
 
 A directory opens, and its first read fails, so it is `Io(IoError.IsDirectory)`. A file

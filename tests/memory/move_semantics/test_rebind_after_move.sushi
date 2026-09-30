@@ -14,13 +14,11 @@
 
 fn take(string s) ~:
     println(s)
-    return Result.Ok(~)
 
 fn eat(i32[] a) ~:
     println(a.len())
-    return Result.Ok(~)
 
-fn go() ~:
+fn go() ~ | StdError:
     let string y = "yy"
     let string s = "m-{y}"
     take(s)
@@ -38,5 +36,5 @@ fn go() ~:
 fn main() i32:
     let Result@(~, StdError) r = go()
     if (r.is_ok()):
-        return Result.Ok(0)
-    return Result.Ok(1)
+        return 0
+    return 1

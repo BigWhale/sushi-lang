@@ -33,4 +33,4 @@ fn main() i32:
                         Result.Err(_) -> println("read: other")
                 Result.Err(_) -> println("accept failed")
         Result.Err(_) -> println("connect failed")
-    return Result.Ok(0)
+    return 0

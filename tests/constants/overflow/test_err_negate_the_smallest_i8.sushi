@@ -6,4 +6,4 @@ const i8 NEGATED = -SMALLEST
 
 fn main() i32:
     println(NEGATED)
-    return Result.Ok(0)
+    return 0

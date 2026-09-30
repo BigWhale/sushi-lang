@@ -12,11 +12,11 @@ struct Pair@(A, B):
     A first
     Box@(B) second
 
-fn wrap@(B)(nom B x) Pair@(i32, B):
+fn wrap@(B)(nom B x) Pair@(i32, B) | StdError:
     return Result.Ok(Pair(7, Box(x)))
 
 fn main() i32:
     match wrap(nom "towel"):
         Result.Ok(p) -> println("{p.first} {p.second.v}")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

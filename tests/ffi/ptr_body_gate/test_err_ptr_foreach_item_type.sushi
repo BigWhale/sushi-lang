@@ -3,4 +3,4 @@
 fn main() i32:
     foreach(ptr p in 0..1):
         println("Mostly Harmless")
-    return Result.Ok(0)
+    return 0

@@ -5,6 +5,6 @@
 use "helpers/inferred_arity_pair" as ap
 
 fn main() i32:
-    let i32 n = ap.pair@(i32)(1, 2, 3).realise(0)
+    let i32 n = ap.pair@(i32)(1, 2, 3)
     println("{n}")
-    return Result.Ok(0)
+    return 0

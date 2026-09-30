@@ -22,7 +22,7 @@ struct Tree:
     i32 value
     List@(Tree) kids
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Two children, each with two of their own: 1 + 2 + (2 * 2) = 7 nodes,
     # 7 List buffers to free. Counted below as root + kids + grandkids = 6 visited.
     let List@(Tree) a_kids = List.new()
@@ -56,4 +56,4 @@ fn run_test() i32:
     return Result.Ok(0)
 
 fn main() i32:
-    return Result.Ok(run_test().realise(99))
+    return run_test().realise(99)

@@ -15,5 +15,5 @@ fn main() i32:
     let i32 base = 3
     foreach(poke f in fs.iter()):
         let fn(i32) -> i32 g = f.clone()
-        println(g(base).realise(0))
-    return Result.Ok(0)
+        println(g(base))
+    return 0

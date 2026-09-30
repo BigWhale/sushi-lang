@@ -4,14 +4,14 @@
 # one place at a time would reach the same place.
 
 fn shr_i32(i32 value, i32 places) i32:
-    return Result.Ok(value >> places)
+    return value >> places
 
 fn main() i32:
     println("Mostly Harmless")
 
-    println("{shr_i32(-2, 32).realise(0)}")
-    println("{shr_i32(100, 32).realise(0)}")
-    println("{shr_i32(-2, 200).realise(0)}")
-    println("{shr_i32(100, 200).realise(0)}")
+    println("{shr_i32(-2, 32)}")
+    println("{shr_i32(100, 32)}")
+    println("{shr_i32(-2, 200)}")
+    println("{shr_i32(100, 200)}")
 
-    return Result.Ok(0)
+    return 0

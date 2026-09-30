@@ -16,4 +16,4 @@ fn main() i32:
         Result.Ok(_) -> println("ok")
         Result.Err(e.SpelledErr.Bad) -> println("bad")
         Result.Err(e.SpelledErr.Worse) -> println("worse")
-    return Result.Ok(0)
+    return 0

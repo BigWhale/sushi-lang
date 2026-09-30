@@ -26,19 +26,19 @@ fn main() i32:
             println("Entry filed.")
         Result.Err(IoError.PermissionDenied()) ->
             println("Permission denied")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             println("Failed to write entry")
-            return Result.Ok(1)
+            return 1
 
     match read_entry("/tmp/guide_entry.txt"):
         Result.Ok(content) ->
             println("Entry reads: {content}")
         Result.Err(IoError.NotFound()) ->
             println("Entry not found")
-            return Result.Ok(1)
+            return 1
         Result.Err(_) ->
             println("Failed to read entry")
-            return Result.Ok(1)
+            return 1
 
-    return Result.Ok(0)
+    return 0

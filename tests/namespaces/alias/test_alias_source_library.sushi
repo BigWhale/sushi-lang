@@ -6,4 +6,4 @@ use <lib/runtime_lib> as rt
 fn main() i32:
     rt.greet("Ford")
     rt.say_goodbye()
-    return Result.Ok(0)
+    return 0

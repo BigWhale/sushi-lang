@@ -2,11 +2,11 @@
 # The call infers T from its argument, and the instance returns the value it was given.
 
 fn identity@(T)(T x) T:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    if (identity(42).realise(0) != 42):
-        return Result.Ok(1)
-    if (identity(true).realise(false) != true):
-        return Result.Ok(2)
-    return Result.Ok(0)
+    if (identity(42) != 42):
+        return 1
+    if (identity(true) != true):
+        return 2
+    return 0

@@ -238,7 +238,7 @@ def test_a_stored_instance_with_an_unresolved_nested_name_is_not_a_divergence():
         ok_type=BuiltinType.I32,
         err_type=UnknownType("StdError"),
     )
-    name = "Result<fn(i32) -> i32, StdError>"
+    name = "Result<fn(i32) -> i32 | StdError, StdError>"
     enums.by_name[name] = EnumType(
         name=name,
         variants=(

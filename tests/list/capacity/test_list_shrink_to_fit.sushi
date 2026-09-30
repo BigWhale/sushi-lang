@@ -12,7 +12,7 @@ fn main() i32:
 
     if (data.capacity() != 100):
         println("ERROR: Initial capacity should be 100")
-        return Result.Ok(1)
+        return 1
 
     # Shrink to exact size
     data.shrink_to_fit()
@@ -23,21 +23,21 @@ fn main() i32:
     if (cap != len):
         println("ERROR: Capacity should equal length after shrink_to_fit")
         println("  Capacity: {cap}, Length: {len}")
-        return Result.Ok(2)
+        return 2
 
     if (len != 3):
         println("ERROR: Length should still be 3")
-        return Result.Ok(3)
+        return 3
 
     # Elements should still be accessible
     match data.get(0):
         Maybe.Some(val) ->
             if (val != 10):
                 println("ERROR: Element corruption after shrink")
-                return Result.Ok(4)
+                return 4
         Maybe.None() ->
             println("ERROR: Should find element at index 0")
-            return Result.Ok(5)
+            return 5
 
     println("shrink_to_fit tests passed!")
-    return Result.Ok(0)
+    return 0

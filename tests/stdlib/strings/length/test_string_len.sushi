@@ -30,4 +30,4 @@ fn main() i32:
     let string s5 = "👋"
     println(s5.len())  # Should print: 1
 
-    return Result.Ok(0)
+    return 0

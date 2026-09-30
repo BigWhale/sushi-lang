@@ -10,4 +10,4 @@ extend ~ with Loud:
         return 1
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

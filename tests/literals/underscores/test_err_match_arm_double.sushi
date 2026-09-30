@@ -5,10 +5,10 @@
 fn classify(i32 n) string:
     match n:
         1__0 ->
-            return Result.Ok("ten")
+            return "ten"
         _ ->
-            return Result.Ok("other")
+            return "other"
 
 fn main() i32:
-    println(classify(10).realise("err"))
-    return Result.Ok(0)
+    println(classify(10))
+    return 0

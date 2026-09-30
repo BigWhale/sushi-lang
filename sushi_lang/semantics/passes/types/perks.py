@@ -124,32 +124,52 @@ def validate_template_header(validator, impl: ExtendWithDef) -> None:
         _reject_template_name_conflicts(validator, impl)
 
 
-def _channel_phrase(err_type) -> str:
+def _answer(sig) -> tuple:
+    """What a signature answers: (has a channel, the value arm, the error arm).
+
+    `T | E` is sugar for `Result@(T, E)`, so both spellings give the same answer, and
+    a bare signature answers its return with no error arm. The channel is read by the
+    one predicate (docs/design/error-channel.md).
+    """
+    from sushi_lang.semantics.channel import has_channel
+    from sushi_lang.semantics.generics.results import signature_result_arms
+    if not has_channel(sig):
+        return False, sig.ret, None
+    arms = signature_result_arms(sig.ret, getattr(sig, "err_type", None))
+    if arms is None:
+        return True, sig.ret, None
+    return True, arms[0], arms[1]
+
+
+def _channel_phrase(answer: tuple) -> str:
     """How a signature's error channel reads in a diagnostic, present or absent."""
-    if err_type is None:
+    if not answer[0]:
         return "no error channel"
+    if answer[2] is None:
+        return "an error channel"
     from sushi_lang.semantics.generics.type_display import display_type
-    return f"the error channel '| {display_type(err_type)}'"
+    return f"the error channel '| {display_type(answer[2])}'"
 
 
 def _reject_channel_mismatch(impl: FuncDef, required: PerkMethodSignature,
                              perk_def: PerkDef, reporter: Reporter) -> bool:
-    """CE0133: the implementation's `| E` must be the contract's `| E` (ruling R1).
+    """CE0133: the implementation's channel must be the contract's channel (ruling R1).
 
     Relational in both directions -- a contract that declares a channel the
     implementation omits, and an implementation that invents one the contract has
-    not got, are the same mismatch read from opposite ends.
+    not got, are the same mismatch read from opposite ends. Either spelling of the
+    channel counts, `| E` or an explicit `Result@(T, E)`.
     """
-    impl_err = getattr(impl, "err_type", None)
-    required_err = getattr(required, "err_type", None)
-    if impl_err == required_err:
+    impl_answer = _answer(impl)
+    required_answer = _answer(required)
+    if (impl_answer[0], impl_answer[2]) == (required_answer[0], required_answer[2]):
         return False
 
     diag = er.emit_with(
         reporter, er.ERR.CE0133,
         getattr(impl, "name_span", None) or getattr(impl, "loc", None),
-        name=impl.name, found=_channel_phrase(impl_err), perk=perk_def.name,
-        expected=_channel_phrase(required_err))
+        name=impl.name, found=_channel_phrase(impl_answer), perk=perk_def.name,
+        expected=_channel_phrase(required_answer))
     contract_span = (getattr(required, "name_span", None)
                      or getattr(required, "loc", None))
     if contract_span is not None:
@@ -171,13 +191,15 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
         if impl_param.ty != req_param.ty:
             return False
 
-    if impl.ret != required.ret:
+    impl_answer = _answer(impl)
+    required_answer = _answer(required)
+    if impl_answer[1] != required_answer[1]:
         return False
 
     # The channel is part of the signature (ruling R1). `_reject_channel_mismatch`
     # owns the diagnostic; the predicate stays total so no other reader of it can
     # call a mismatched pair a match.
-    if getattr(impl, "err_type", None) != getattr(required, "err_type", None):
+    if (impl_answer[0], impl_answer[2]) != (required_answer[0], required_answer[2]):
         return False
 
     return True

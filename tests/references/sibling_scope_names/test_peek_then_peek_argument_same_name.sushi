@@ -5,7 +5,7 @@
 use <collections/strings>
 
 fn look(peek string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let string[] xs = from(["ab", "c"])
@@ -13,6 +13,6 @@ fn main() i32:
         let peek string e = xs[0]
         println(e)
     foreach(e in xs.iter()):
-        let i32 n = look(peek e).realise(0)
+        let i32 n = look(peek e)
         println(n)
-    return Result.Ok(0)
+    return 0

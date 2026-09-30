@@ -5,8 +5,8 @@
 fn run() i32:
     let Own@(i32) boxed = Own.alloc(42)
     let fn(i32) -> i32 f = |i32 x| x + boxed.get()
-    return Result.Ok(f(8)??)
+    return f(8)
 
 fn main() i32:
-    println(run().realise(-1))
-    return Result.Ok(0)
+    println(run())
+    return 0

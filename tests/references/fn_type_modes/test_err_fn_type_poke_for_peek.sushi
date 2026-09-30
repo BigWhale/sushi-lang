@@ -12,11 +12,11 @@
 # EXPECT_ERROR_CODE: CE2002
 fn poker(poke i32 x) i32:
     x := 999
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let fn(peek i32) -> i32 g = poker
     let i32 n = 1
-    let i32 r = g(peek n).realise(0)
+    let i32 r = g(peek n)
     println("r: {r} n: {n}")
-    return Result.Ok(0)
+    return 0

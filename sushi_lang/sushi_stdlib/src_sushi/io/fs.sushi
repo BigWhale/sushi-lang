@@ -119,7 +119,7 @@ public fn remove_all(string path) ~ | FileError:
         if (is_dir(path)):
             let string[] names = read_dir(path)??
             foreach(name in names.iter()):
-                let string full = join(path, name).realise("")
+                let string full = join(path, name)
                 remove_all(full)??
             rmdir(path)??
             return Result.Ok(~)
@@ -136,7 +136,7 @@ Collects the regular files under one directory into the accumulator.
 fn walk_into(string dir, poke string[] acc) ~ | FileError:
     let string[] names = read_dir(dir)??
     foreach(name in names.iter()):
-        let string full = join(dir, name).realise("")
+        let string full = join(dir, name)
         if (is_dir(full)):
             if (not is_symlink(full)??):
                 walk_into(full, poke acc)??

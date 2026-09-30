@@ -1,6 +1,6 @@
 """Resolve a `Type` from its string representation."""
 
-from typing import Any
+from typing import Any, Callable
 import re
 
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
@@ -49,8 +49,13 @@ def split_type_arguments(text: str, sep: str = ",") -> list[str]:
     return parts
 
 
-def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
-    """Resolve a first-class function type string: "fn(P0, P1, ...) -> T [| E]"."""
+def parse_function_type_string(type_str: str, resolve: Callable[[str], Type]) -> Type:
+    """Read a first-class function type string: "fn(P0, P1, ...) -> T [| E]".
+
+    The one reader of the spelling. `resolve` reads each component type, so the
+    table-backed reader here and the manifest reader (`type_resolution.parse_type_string`)
+    share it.
+    """
     from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
     from sushi_lang.semantics.typesys import FunctionType
 
@@ -73,7 +78,7 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
 
     pipe_parts = split_type_arguments(rest, "|")
     ret_str = pipe_parts[0].strip()
-    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else "StdError"
+    err_str = pipe_parts[1].strip() if len(pipe_parts) > 1 else None
 
     # A `nom` parameter is spelled with the marker, which is not part of any type name.
     # `str(FunctionType)` writes it, so reading one back must accept it -- it used to reach
@@ -82,11 +87,11 @@ def _resolve_function_type_from_string(type_str: str, tables: Any) -> Type:
     param_texts = [p for p in split_type_arguments(params_str) if p]
     nom_flags = [text.startswith("nom ") for text in param_texts]
     param_types = tuple(
-        resolve_type_from_string(text[4:] if flag else text, tables)
+        resolve(text[4:] if flag else text)
         for text, flag in zip(param_texts, nom_flags, strict=True)
     )
-    ok_type = resolve_type_from_string(ret_str, tables)
-    err_type = resolve_type_from_string(err_str, tables)
+    ok_type = resolve(ret_str)
+    err_type = None if err_str is None else resolve(err_str)
     return FunctionType(
         param_types=param_types, ok_type=ok_type, err_type=err_type,
         param_modes=normalize_modes(param_types, [
@@ -102,7 +107,8 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     # First-class function type: must be handled before the array branch (its return
     # type may legitimately end with "[]", which the array regex would misparse).
     if type_str.startswith("fn(") or type_str.startswith("fn ("):
-        return _resolve_function_type_from_string(type_str, tables)
+        return parse_function_type_string(
+            type_str, lambda text: resolve_type_from_string(text, tables))
 
     if '[' in type_str and type_str.endswith(']'):
         match = re.match(r'^(.+)\[(\d*)\]$', type_str)

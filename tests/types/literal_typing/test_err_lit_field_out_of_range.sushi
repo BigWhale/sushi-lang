@@ -4,4 +4,4 @@ struct P:
   u8 x
 fn main() i32:
   let P p = P(300)
-  return Result.Ok(0)
+  return 0

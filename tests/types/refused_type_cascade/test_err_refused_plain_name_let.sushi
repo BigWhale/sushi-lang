@@ -4,4 +4,4 @@
 fn main() i32:
     let Nope x = 5
     println(x)
-    return Result.Ok(0)
+    return 0

@@ -6,6 +6,6 @@
 use "helpers/own_gen"
 
 fn main() i32:
-    let i32 a = own_use().realise(0)
+    let i32 a = own_use()
     println("{a}")
-    return Result.Ok(0)
+    return 0

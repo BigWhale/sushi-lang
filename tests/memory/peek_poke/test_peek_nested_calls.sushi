@@ -4,10 +4,10 @@
 # Two levels of nesting with same variable
 # EXPECT_NO_LEAKS: true
 
-fn inner_read(peek i32 x) i32:
+fn inner_read(peek i32 x) i32 | StdError:
     return Result.Ok(x * 2)
 
-fn outer_read(peek i32 x) i32:
+fn outer_read(peek i32 x) i32 | StdError:
     # x is already borrowed via peek, now we pass it again as peek
     # Also access x directly to avoid CW1003 warning
     let i32 local_val = x
@@ -23,6 +23,6 @@ fn main() i32:
 
     # 21 * 2 = 42
     if (val == 42):
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

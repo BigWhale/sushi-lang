@@ -12,12 +12,12 @@ extend Horn with Loud:
         return self.pitch
 
 fn noise@(T: geo.Loud)(T thing) i32:
-    return Result.Ok(thing.shout())
+    return thing.shout()
 
 fn run() i32:
     let Horn h = Horn(5)
-    return Result.Ok(noise(h)??)
+    return noise(h)
 
 fn main() i32:
-    println("{run().realise(0)}")
-    return Result.Ok(0)
+    println("{run()}")
+    return 0

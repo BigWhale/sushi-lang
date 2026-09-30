@@ -48,4 +48,4 @@ fn main() i32:
         Shade.Dim(poke r) -> r := 24
         Shade.Lit(_) -> println("lit")
     println("{G.s.val()}")
-    return Result.Ok(0)
+    return 0

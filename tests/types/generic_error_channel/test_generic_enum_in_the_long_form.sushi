@@ -11,4 +11,4 @@ fn main() i32:
     match halved(4):
         Result.Ok(n) -> println("ok {n}")
         Result.Err(_) -> println("unexpected")
-    return Result.Ok(0)
+    return 0

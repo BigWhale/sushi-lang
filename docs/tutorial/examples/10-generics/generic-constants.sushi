@@ -18,8 +18,8 @@ fn lookup(string key) i32:
             println("filled the cache")
         Maybe.Some(_) -> println("read the cache")
     match cache:
-        Maybe.Some(m) -> return Result.Ok(m.get(key).realise(-1))
-        Maybe.None -> return Result.Ok(-1)
+        Maybe.Some(m) -> return m.get(key).realise(-1)
+        Maybe.None -> return -1
 
 fn main() i32:
     println("{ANSWER.first} {ANSWER.second} {NO_LIMIT.is_none()}")
@@ -28,6 +28,6 @@ fn main() i32:
     let Pair@(string, i32) q = p.clone()
     println("a clone hashes like the original: {p.hash() == q.hash()}")
 
-    println(lookup("answer").realise(0))
-    println(lookup("answer").realise(0))
-    return Result.Ok(0)
+    println(lookup("answer"))
+    println(lookup("answer"))
+    return 0

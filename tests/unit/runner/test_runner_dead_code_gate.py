@@ -32,7 +32,7 @@ Gives the answer to life, the universe and everything.
 - Returns: The answer.
 :##
 fn forgotten_answer() i32:
-    return Result.Ok(42)
+    return 42
 
 ##:
 Gives a number.
@@ -40,7 +40,7 @@ Gives a number.
 - Returns: The number.
 :##
 public fn live_answer() i32:
-    return Result.Ok(7)
+    return 7
 """
 
 LIVE_MODULE = """\
@@ -52,7 +52,7 @@ Gives the answer to life, the universe and everything.
 - Returns: The answer.
 :##
 fn private_answer() i32:
-    return Result.Ok(42)
+    return 42
 
 ##:
 Gives the answer through a private helper.
@@ -60,15 +60,15 @@ Gives the answer through a private helper.
 - Returns: The answer.
 :##
 public fn public_answer() i32:
-    return Result.Ok(private_answer()??)
+    return private_answer()
 """
 
 DEAD_PROGRAM = """\
 fn forgotten() i32:
-    return Result.Ok(42)
+    return 42
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
 """
 
 

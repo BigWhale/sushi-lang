@@ -1,0 +1,16 @@
+# A SOURCE library keeps the channel of each function: `double` is bare at the consumer
+# and `checked` answers a Result.
+# BUILD_LIB: bare_src_lib.sushi
+# EXPECT_STDOUT_EXACT: "8\nok 3\nerr\n"
+use <lib/bare_src_lib>
+
+fn show(Result@(i32, StdError) r) ~:
+    match r:
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("err")
+
+fn main() i32:
+    println(double(4))
+    show(checked(3))
+    show(checked(-3))
+    return 0

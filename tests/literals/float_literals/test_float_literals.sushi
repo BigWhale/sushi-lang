@@ -12,6 +12,6 @@ fn main() i32:
     validation_count := validation_count + 1
 
   if (validation_count == 2):
-    return Result.Ok(0)  # All tests passed)
+    return 0  # All tests passed)
   else:
-    return Result.Ok(validation_count)  # Return count for debugging)
+    return validation_count  # Return count for debugging)

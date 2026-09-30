@@ -1,0 +1,9 @@
+# CE2091 in a bare `~` body names the form that body takes: `return ~`, or no return.
+# EXPECT_ERROR_CODES_EXACT: CE2091
+# EXPECT_STDERR_CONTAINS: "('return ~' in a '~' body)"
+fn tick() ~:
+    return Result.Ok(~)
+
+fn main() i32:
+    tick()
+    return 0

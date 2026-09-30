@@ -6,11 +6,11 @@
 # EXPECT_STDOUT_CONTAINS: "ok = true"
 # EXPECT_NO_LEAKS: true
 
-fn make() string:
+fn make() string | StdError:
     let string a = "mostly"
     return Result.Ok("{a} harmless")
 
 fn main() i32:
     let Result@(string, StdError) r = make()
     println("ok = {r.is_ok()}")
-    return Result.Ok(0)
+    return 0

@@ -15,6 +15,13 @@ example `<io/fs>` and `<io/buf>`). The combinators are ordinary generic function
 with your program. Nothing is generated unless you
 actually call one, so an unused `use` costs nothing.
 
+The combinators are **bare**: a call gives the value itself, not a `Result`, so there is no
+`??` after `map`, `filter` or `fold`. They take bare function types (`fn(T) -> U`), so the
+function that you give them is bare too. A function with a channel, `fn(T) -> U | E`, is a
+different type, and the call is refused (**CE2006**). A bare function is the exception in
+Sushi, and the combinators are a correct use of it: they are total over their inputs.
+[The error channel](../design/error-channel.md) gives the rule.
+
 ## map — transform every element
 
 `map(xs, f)` applies `f` to each element of a `List@(T)` and collects the results into a new
@@ -106,11 +113,11 @@ The two `nom` markers are why: the closure captures both functions, so it become
 and `compose` declares that. `map`, `filter` and `fold` only *call* their function argument, so
 they borrow it and take no marker.
 
-## The method form — chain with `??`
+## The method form — chain the calls
 
 Each combinator also exists as an **extension method** on `List@(T)` and on `T[]`. A
-method declares the error channel `| StdError`, so a call yields a `Result` — handle
-each link with `??` and the chain reads left to right:
+method is bare, so a call gives the value, and the next link calls directly on it. The
+chain reads left to right:
 
 ```sushi
 --8<-- "docs/tutorial/examples/19-higher-order-combinators/method-chain.sushi"
@@ -122,8 +129,7 @@ Output:
 84
 ```
 
-Leave a `??` out and the compiler stops you with CE2515, spelling the fix: an unhandled
-`Result` has no `.filter()`, its payload does. On a `T[]` receiver the collecting
+`tab_total` is bare too, so it returns `total` directly. On a `T[]` receiver the collecting
 methods return a `List` — a dynamic array has no empty generic constructor to fill.
 
 ## Two things to know
@@ -149,19 +155,19 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 
     ```sushi
     let fn(i32) -> i32 id = identity   # fixes the instantiation
-    let List@(i32) same = map(xs, id).realise(List.new())
+    let List@(i32) same = map(xs, id)
     ```
 
 ## What you learned
 
 - `use <collections/iter>` brings in `map`, `filter`, `fold` — as methods on `List@(T)`
   and `T[]` AND as free functions — plus `compose`.
-- The method form declares the `| StdError` channel: chain with `??`
-  (`xs.map(f)??.filter(p)??.fold(0, g)??`), and CE2515 catches a link you forgot to handle.
+- The combinators are bare, in both forms: chain the method calls directly
+  (`xs.map(f).filter(p).fold(0, g)`), with no `??`.
 - `collections/iter` is a Sushi-source standard-library module; the combinators
   monomorphize like any generic and cost nothing when unused.
-- Each combinator takes a `fn(...)` value: a lambda (capturing or not) or a plain function
-  reference.
+- Each combinator takes a bare `fn(...)` value: a lambda (capturing or not) or a plain
+  function reference. A function with a channel does not fit (**CE2006**).
 - `compose` returns a closure that captures and calls the two functions you give it.
 - `map` and `fold` borrow each element, `filter` clones the kept elements, and `fold`
   clones `init` once. So an owning element or accumulator type (`string`) works in both

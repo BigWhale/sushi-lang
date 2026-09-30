@@ -7,4 +7,4 @@ struct Box@(T):
 fn main() i32:
     let Box@(Box@(i32)) nested = Box(Box(100))
     println(nested.value.value)
-    return Result.Ok(0)
+    return 0

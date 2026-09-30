@@ -11,4 +11,4 @@ fn main() i32:
     let f64 pi = 3.14
     let u32 b = pi.to_bits()
     println(b)
-    return Result.Ok(0)
+    return 0

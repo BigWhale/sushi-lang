@@ -12,9 +12,8 @@ fn show(string text) ~:
             let bool literal = u.host_is_ipv6_literal()
             println("host {u.host} port {u.port} literal {literal}")
         Result.Err(_) -> println("{text} refused")
-    return Result.Ok(~)
 
 fn main() i32:
     show("http://[::1]:8080/x")
     show("http://example.com:80/")
-    return Result.Ok(0)
+    return 0

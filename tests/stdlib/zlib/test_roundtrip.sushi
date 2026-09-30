@@ -16,7 +16,7 @@ fn check(string name, u8[] data) ~ | ZError:
     let u8[] back = zlib_uncompress(packed)??
     let i32 ok = 0
     if (back.len() == data.len()):
-        if (adler32(back).realise(0) == adler32(data).realise(1)):
+        if (adler32(back) == adler32(data)):
             ok := 1
     let i32 smaller = 0
     if (packed.len() < data.len()):
@@ -76,4 +76,4 @@ fn run_test() i32 | ZError:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

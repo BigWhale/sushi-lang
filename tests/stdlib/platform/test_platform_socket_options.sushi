@@ -17,7 +17,7 @@ unsafe external "C" as libc because "checking the socket options against the hos
     fn send(i32 s, u8[] buf, i64 n, i32 flags) i64 = "send"
     fn close(i32 s) i32 = "close"
 
-fn fill_timeval(ptr tv, i64 seconds, i64 micros) ~:
+fn fill_timeval(ptr tv, i64 seconds, i64 micros) ~ | StdError:
     tv.store_i64(0, seconds)
     if (TIMEVAL_USEC_BYTES == 4):
         tv.store_i32(TIMEVAL_USEC_OFFSET, micros as i32)
@@ -27,8 +27,8 @@ fn fill_timeval(ptr tv, i64 seconds, i64 micros) ~:
 
 fn micros_of(ptr tv) i64:
     if (TIMEVAL_USEC_BYTES == 4):
-        return Result.Ok(tv.load_i32(TIMEVAL_USEC_OFFSET) as i64)
-    return Result.Ok(tv.load_i64(TIMEVAL_USEC_OFFSET))
+        return tv.load_i32(TIMEVAL_USEC_OFFSET) as i64
+    return tv.load_i64(TIMEVAL_USEC_OFFSET)
 
 fn read_int(i32 s, i32 name) i32:
     let ptr value = libc.calloc(1, 4)
@@ -39,10 +39,10 @@ fn read_int(i32 s, i32 name) i32:
     libc.free(value)
     libc.free(length)
     if (rc != 0):
-        return Result.Ok(-1)
-    return Result.Ok(read)
+        return -1
+    return read
 
-fn timeout_round_trip(i32 s, i32 name) bool:
+fn timeout_round_trip(i32 s, i32 name) bool | StdError:
     let ptr tv = libc.calloc(1, TIMEVAL_SIZE as i64)
     fill_timeval(tv, 2, 500000)??
     let i32 set = libc.setsockopt(s, SOL_SOCKET, name, tv, TIMEVAL_SIZE as u32)
@@ -50,7 +50,7 @@ fn timeout_round_trip(i32 s, i32 name) bool:
     let ptr length = libc.calloc(1, 4)
     length.store_u32(0, TIMEVAL_SIZE as u32)
     let i32 got = libc.getsockopt(s, SOL_SOCKET, name, back, length)
-    let bool same = set == 0 and got == 0 and back.load_i64(0) == 2 and micros_of(back).realise(0) == 500000
+    let bool same = set == 0 and got == 0 and back.load_i64(0) == 2 and micros_of(back) == 500000
     libc.free(tv)
     libc.free(back)
     libc.free(length)
@@ -61,14 +61,14 @@ fn main() i32:
     let ptr one = libc.calloc(1, 4)
     one.store_i32(0, 1)
     let i32 reuse = libc.setsockopt(s, SOL_SOCKET, SO_REUSEADDR, one, 4)
-    let i32 f1 = expect_true("SO_REUSEADDR", reuse == 0 and read_int(s, SO_REUSEADDR).realise(0) != 0).realise(1)
-    let i32 f2 = expect("SO_ERROR", read_int(s, SO_ERROR).realise(-1) as i64, 0).realise(1)
-    let i32 f3 = expect_true("SO_RCVTIMEO", timeout_round_trip(s, SO_RCVTIMEO).realise(false)).realise(1)
-    let i32 f4 = expect_true("SO_SNDTIMEO", timeout_round_trip(s, SO_SNDTIMEO).realise(false)).realise(1)
+    let i32 f1 = expect_true("SO_REUSEADDR", reuse == 0 and read_int(s, SO_REUSEADDR) != 0)
+    let i32 f2 = expect("SO_ERROR", read_int(s, SO_ERROR) as i64, 0)
+    let i32 f3 = expect_true("SO_RCVTIMEO", timeout_round_trip(s, SO_RCVTIMEO).realise(false))
+    let i32 f4 = expect_true("SO_SNDTIMEO", timeout_round_trip(s, SO_SNDTIMEO).realise(false))
     let i32 nosig = 0
     if (SO_NOSIGPIPE != 0):
         nosig := libc.setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, one, 4)
-    let i32 f5 = expect("SO_NOSIGPIPE", nosig as i64, 0).realise(1)
+    let i32 f5 = expect("SO_NOSIGPIPE", nosig as i64, 0)
     let i64 sent = libc.send(s, from([0 as u8]), 1, MSG_NOSIGNAL)
     let i32 c1 = libc.close(s)
 
@@ -79,10 +79,10 @@ fn main() i32:
     let u8[] buf = from([0; 8])
     let i64 got = libc.recv(u, poke buf, 8, 0)
     let i32 code = errno()
-    let i32 f6 = expect_true("the timeout expires", filled and set == 0 and got == -1).realise(1)
-    let i32 f7 = expect("EAGAIN", code as i64, EAGAIN as i64).realise(1)
+    let i32 f6 = expect_true("the timeout expires", filled and set == 0 and got == -1)
+    let i32 f7 = expect("EAGAIN", code as i64, EAGAIN as i64)
     let i32 c2 = libc.close(u)
-    let i32 f8 = expect_true("send without SIGPIPE", sent == -1).realise(1)
+    let i32 f8 = expect_true("send without SIGPIPE", sent == -1)
     libc.free(short)
     libc.free(one)
-    return Result.Ok(f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + c1 + c2)
+    return f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + c1 + c2

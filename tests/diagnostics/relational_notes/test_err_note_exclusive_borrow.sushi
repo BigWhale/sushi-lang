@@ -4,9 +4,8 @@
 
 fn two_pokes(poke i32 a, poke i32 b) ~:
     a := b
-    return Result.Ok(~)
 
 fn main() i32:
     let i32 x = 42
-    two_pokes(poke x, poke x)??
-    return Result.Ok(0)
+    two_pokes(poke x, poke x)
+    return 0

@@ -1,0 +1,15 @@
+# The combinators of <collections/iter> are bare: they take a bare function and the
+# call yields the value, with no `??`.
+# EXPECT_STDOUT_EXACT: "3 18\n"
+# EXPECT_STDERR_EMPTY: true
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let List@(i32) doubled = xs.map(|i32 x| x * 2)
+    let List@(i32) big = doubled.filter(|i32 x| x > 2)
+    let i32 sum = big.fold(0, |i32 acc, i32 x| acc + x)
+    println("{big.len()} {sum}")
+    doubled.destroy()
+    big.destroy()
+    return 0

@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "Got hello\n"
 
-fn returns_string() string:
+fn returns_string() string | StdError:
     return Result.Ok("hello")
 
 fn main() i32:
@@ -9,4 +9,4 @@ fn main() i32:
             println("Got {val}")
         Result.Err(_) ->
             println("Error")
-    return Result.Ok(0)
+    return 0

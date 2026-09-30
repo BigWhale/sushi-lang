@@ -24,4 +24,4 @@ fn main() i32:
         Result.Err(e) ->
             match e:
                 Fail.Reason(why) -> println("err: {why}")
-    return Result.Ok(0)
+    return 0

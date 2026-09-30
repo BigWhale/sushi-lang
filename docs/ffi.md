@@ -133,7 +133,7 @@ fn main() i32:
         Maybe.Some(v) -> println("set: {v}")
         Maybe.None -> println("not set")
     println(libc.strtol("42", Maybe.None, 10))
-    return Result.Ok(0)
+    return 0
 ```
 
 A plain `string` or `ptr` return is the declaration "C never answers NULL here". The
@@ -146,11 +146,12 @@ A `Maybe.None` argument marshals nothing and registers nothing for the scope-exi
 free. A trailing variadic argument cannot be a `Maybe` (`CE5005`): it has no declared
 type to say how to marshal one.
 
-### Return types and the Result-exemption
+### Return types: an external function is bare
 
-Sushi's universal rule is that **every `fn` implicitly returns `Result@(T, E)`**.
-External functions are the **single exception**: a C function returns a raw value
-with no error channel and cannot construct a Sushi `Result` across the ABI.
+A Sushi function has an error channel only when its signature writes `| E` (see
+[The error channel is opt-in](design/error-channel.md)). An external function is always
+bare: a C function returns a raw value with no error channel and cannot construct a Sushi
+`Result` across the ABI.
 
 ```sushi
 fn strlen(string s) i64 = "strlen"   # returns raw i64, NOT Result@(i64, StdError)
@@ -160,8 +161,7 @@ fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result@(~)
 
 Because `libc.strlen(s)` yields a plain `i64`, you **cannot** apply `??` or
 `.realise()` to it - it is not a `Result`/`Maybe`. Attempting `libc.strlen(s)??`
-is a clean type error (**`CE2507`**). This is not an ad-hoc carve-out: externals
-live in a separate list and never reach the implicit-Result wrapping at all.
+is a clean type error (**`CE2507`**), as it is on the call of any bare function.
 
 ### String auto-marshalling (and the no-leak contract)
 
@@ -281,8 +281,9 @@ coloring.
 ## The safe-wrapper pattern
 
 The four guarantees are restored in a hand-written wrapper. The wrapper is
-ordinary Sushi (so it *does* follow the implicit-`Result` rule), and it marshals
-data, folds C sentinels into `Result`, and manages pointer lifetimes:
+ordinary Sushi (so it follows the error-channel rule of every function), and it
+marshals data, folds C sentinels into `Result`, and manages pointer lifetimes. A wrapper
+that can fail writes `| E`. A wrapper over a total C function, as below, can be bare:
 
 ```sushi
 unsafe external "C" as libc because "string length via libc strlen":
@@ -290,12 +291,12 @@ unsafe external "C" as libc because "string length via libc strlen":
 
 # Safe wrapper - normal Sushi, upholds all four guarantees again.
 fn length(string s) i64:
-    return Result.Ok(libc.strlen(s))
+    return libc.strlen(s)
 
 fn main() i32:
-    let i64 n = length("Mostly Harmless").realise(0 as i64)
+    let i64 n = length("Mostly Harmless")
     println("len = {n}")
-    return Result.Ok(0)
+    return 0
 ```
 
 The boundary is sharp: **raw, exempt, namespaced foreign calls inside
@@ -330,7 +331,7 @@ fn main() i32:
         Result.Ok(_) -> println("removed")
         Result.Err(RemoveError.Missing) -> println("missing")
         Result.Err(RemoveError.Other(code)) -> println("errno {code}")
-    return Result.Ok(0)
+    return 0
 ```
 
 Three rules apply:
@@ -349,15 +350,14 @@ A wrapper that restores RAII for a foreign handle looks like:
 ```sushi
 fn close_handle(ptr h) ~:
     libc.free(h)            # guarantee 2 (RAII) restored by hand
-    return Result.Ok(~)
 ```
 
-A wrapper may also *return* the handle it acquired - `ptr` flows through the
-implicit `Result` wrapping (and through `Maybe@(ptr)`) like any other value:
+A wrapper may also *return* the handle it acquired - `ptr` flows through a
+`Result` (and through `Maybe@(ptr)`) like any other value:
 
 <!-- docs-sweep: skip (uses the unsafe external block declared earlier on the page) -->
 ```sushi
-fn grab() ptr:
+fn grab() ptr | StdError:
     let ptr p = libc.malloc(8 as i64)
     return Result.Ok(p)
 
@@ -365,7 +365,7 @@ fn main() i32:
     match grab():
         Result.Ok(p) -> libc.free(p)
         Result.Err(_) -> println("alloc failed")
-    return Result.Ok(0)
+    return 0
 ```
 
 Holding a `ptr` is the safe half of the FFI contract (it cannot be dereferenced
@@ -396,17 +396,16 @@ struct Buffer:
     i64 size
 
 fn open_buffer(i64 n) Buffer:
-    return Result.Ok(Buffer(libc.malloc(n), n))
+    return Buffer(libc.malloc(n), n)
 
 fn close_buffer(Buffer b) ~:
     libc.free(b.raw)
-    return Result.Ok(~)
 
 public fn scratch_size(i64 n) i64:
-    let Buffer b = open_buffer(n)??
+    let Buffer b = open_buffer(n)
     let i64 size = b.size
-    close_buffer(b)??
-    return Result.Ok(size)
+    close_buffer(b)
+    return size
 ```
 
 `Buffer`, `open_buffer` and `close_buffer` are private, so their `ptr` is
@@ -461,7 +460,7 @@ fn main() i32:
     let i64 nanos = ts.load_i64(8)
     println("{seconds}.{nanos}")
     libc.free(ts)
-    return Result.Ok(rc)
+    return rc
 ```
 
 Every access is unaligned-safe (`align 1`): a byte offset says nothing about
@@ -490,7 +489,7 @@ fn main() i32:
     match libc.environ:
         Maybe.Some(_) -> println("the process has an environment")
         Maybe.None -> println("no environment")
-    return Result.Ok(0)
+    return 0
 ```
 
 - **The type** is a number, `bool`, `ptr` or `Maybe@(ptr)`, and anything else is

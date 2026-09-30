@@ -192,7 +192,7 @@ use <lib/mylib>
 
 fn main() i32:
     # Library functions/types are now available
-    return Result.Ok(0)
+    return 0
 ```
 
 See [Libraries](libraries.md) for complete documentation.
@@ -564,7 +564,7 @@ A warning makes the compiler exit 1; an error makes it exit 2.
 fn main() i32:
     # ERROR CE1001: use of undeclared identifier 'x'
     println(x)
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Declare variable with `let` before use.
@@ -577,7 +577,7 @@ fn main() i32:
     # ERROR CE1002: assignment to undeclared variable 'count'
     count := 5
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Declare with `let` first (`let i32 count = 0`) before rebinding with `:=`.
@@ -594,7 +594,7 @@ fn main() i32:
     # ERROR CE2406: use of destroyed variable 'arr'
     println(arr.len())
 
-    return Result.Ok(0)
+    return 0
 ```
 
 The one use gives two diagnostics: CE2024 from the array rule and CE2406 from the borrow
@@ -610,7 +610,7 @@ every other callee. `.realise()` is one example.
 
 <!-- docs-sweep: error CE2009 -->
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -619,7 +619,7 @@ fn main() i32:
     # ERROR CE2009: wrong number of arguments: 'Result@(i32, StdError).realise' expects 1, got 0
     let i32 x = r.realise()
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Provide default value: `r.realise(0)`.
@@ -628,7 +628,7 @@ fn main() i32:
 
 <!-- docs-sweep: error CE2503 -->
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
@@ -637,7 +637,7 @@ fn main() i32:
     # ERROR CE2503: realise() default type mismatch: expected 'i32', got 'string'
     let i32 x = r.realise("wrong")
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Use correct type: `r.realise(0)`.
@@ -649,14 +649,14 @@ the code names the fix:
 
 <!-- docs-sweep: error CE2505 -->
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
     # ERROR CE2505: cannot assign Result@(T, E) to non-Result variable without handling
     let i32 x = get_value()
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Use `.realise()`: `let i32 x = get_value().realise(0)`.
@@ -665,25 +665,32 @@ fn main() i32:
 
 <!-- docs-sweep: error CE2507 -->
 ```sushi
-fn main() i32:
+fn run() i32 | StdError:
     let i32 x = 5
 
     # ERROR CE2507: ?? operator requires Result@(T, E), Maybe@(T), or result-like enum
     let i32 y = x??
 
     return Result.Ok(0)
+
+fn main() i32:
+    match run():
+        Result.Ok(code) -> return code
+        Result.Err(_) -> return 1
 ```
 
 **Fix:** Only use `??` with `Result@(T, E)` or `Maybe@(T)`.
 
-#### CE0131: Using ?? in a Bare Extension Method
+#### CE0131: Using ?? in a Bare Body
 
-A bare extension method (one with no `| E` channel) returns its value directly. It has no
-error channel, so `??` cannot propagate an error out of it:
+A callable has an error channel only when its signature writes `| E`, or returns an
+explicit `Result@(T, E)`. A BARE body (a function, an extension or perk method, or a lambda
+with no `| E`) returns its value directly. It has no error channel, so `??` cannot
+propagate an error out of it. `main` is bare, so a `??` in `main` is CE0131 too:
 
 <!-- docs-sweep: error CE0131 -->
 ```sushi
-fn might_fail() i32:
+fn might_fail() i32 | StdError:
     return Result.Ok(4)
 
 extend i32 scaled() i32:
@@ -693,15 +700,17 @@ extend i32 scaled() i32:
 
 fn main() i32:
     println(3.scaled())
-    return Result.Ok(0)
+    return 0
 ```
 
-**Fix:** Give the method an error channel with `| E`. Then `??` is legal in the body, the
-call yields `Result@(T, E)`, and the body spells its success with `return Result.Ok(...)`
-(a bare `return value` in a channel method is CE2030):
+**Fix:** Handle the Result in the body with `match` or `.realise(default)`, or give the
+callable an error channel with `| E`. Then `??` is legal in the body, the call yields
+`Result@(T, E)`, and the body spells its success with `return Result.Ok(...)` (a bare
+`return value` in a channel body is CE2030). In `main`, handle the Result and return an
+exit code, because `main` cannot have a channel (CE0106):
 
 ```sushi
-fn might_fail() i32:
+fn might_fail() i32 | StdError:
     return Result.Ok(4)
 
 extend i32 scaled() i32 | StdError:
@@ -710,15 +719,48 @@ extend i32 scaled() i32 | StdError:
 
 fn main() i32:
     println(3.scaled().realise(0))
+    return 0
+```
+
+#### CE2091: Result Constructor in a Bare Body
+
+A bare body (a function, a lambda, or an extension or perk method with no `| E`) returns
+the value itself. `return Result.Ok(...)` and `return Result.Err(...)` are refused there:
+
+<!-- docs-sweep: error CE2091 -->
+```sushi
+fn double(i32 x) i32:
+    # ERROR CE2091: function 'double' must use a bare 'return <value>'
+    return Result.Ok(x * 2)
+
+fn main() i32:
+    return double(0)
+```
+
+**Fix:** Write `return x * 2`. If the function can fail, write `| E` in its signature, and
+then both constructors are legal.
+
+#### CE0106: main() Must Return a Bare Integer
+
+`main` returns the exit code of the program. It returns a bare integer type and has no
+error channel. A `| E` on `main`, or a `Result@(T, E)` return, is refused:
+
+<!-- docs-sweep: error CE0106 -->
+```sushi
+# ERROR CE0106: main() function must return a bare integer type (i8-i64, u8-u64)
+fn main() i32 | StdError:
     return Result.Ok(0)
 ```
+
+**Fix:** Write `fn main() i32:` and `return 0`. Handle each failure in the body with
+`match` or `.realise(default)`, and return a code for it.
 
 #### CE3007: No main() Function
 
 ```sushi
 # ERROR CE3007: no main() function: an executable needs an entry point
 fn helper(i32 a) i32:
-    return Result.Ok(a + 1)
+    return a + 1
 ```
 
 **Fix:** Add `fn main() i32:`, or compile the unit as a library with `--lib`. A library must
@@ -739,7 +781,7 @@ library it lives in was not linked.
 
 ```sushi
 fn get_value() i32:
-    return Result.Ok(42)
+    return 42
 
 # ERROR CE0108: expression is not a compile-time constant
 const i32 X = get_value()
@@ -798,14 +840,14 @@ let i32 x = 100 / 0
 #### CW2001: Unused Result Value
 
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 fn main() i32:
-    # WARNING CW2001: unused Result@(T) value
+    # WARNING CW2001: unused 'Result@(i32, StdError)' value
     get_value()
 
-    return Result.Ok(0)
+    return 0
 ```
 
 **Fix:** Handle result or explicitly discard:
@@ -826,7 +868,7 @@ fn main() i32:
     # Runtime error: direct indexing out of bounds
     let i32 x = arr[i]
 
-    return Result.Ok(0)
+    return 0
 ```
 
 Direct indexing (`arr[i]`) is checked at runtime and aborts on an out-of-bounds
@@ -891,7 +933,7 @@ the leading comment block. A positive test that prints must state its output wit
 fn main() i32:
     let i32 x = 42
     println("Test passed: {x}")
-    return Result.Ok(0)
+    return 0
 ```
 
 ```bash

@@ -9,4 +9,4 @@ fn main() i32:
     let ptr a = libc.malloc(8 as i64)
     let HashMap@(i32, ptr) map = HashMap.new()
     map.insert(1, a)
-    return Result.Ok(0)
+    return 0

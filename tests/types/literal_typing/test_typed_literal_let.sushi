@@ -9,12 +9,12 @@ fn main() i32:
   let u32 c = 0xFF
   let f32 e = 1.5
   if (a != 200 as u8):
-    return Result.Ok(1)
+    return 1
   if (b != -128 as i8):
-    return Result.Ok(2)
+    return 2
   if (c != 255 as u32):
-    return Result.Ok(3)
+    return 3
   if (e != 1.5 as f32):
-    return Result.Ok(4)
+    return 4
   println("typed literals ok")
-  return Result.Ok(0)
+  return 0

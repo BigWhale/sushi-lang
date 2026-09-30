@@ -15,4 +15,4 @@ fn main() i32:
     items.push(5)
     items.push(6)
     println("{h.items.len()} {h.items[0]}")
-    return Result.Ok(0)
+    return 0

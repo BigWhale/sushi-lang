@@ -6,4 +6,4 @@
 fn main() i32:
     let u32[] a = from([1 as u32])
     println("interp {a.get(0)}")
-    return Result.Ok(0)
+    return 0

@@ -1,0 +1,6 @@
+use "contract"
+use "boxes"
+
+extend Box with Pinger:
+    fn ping() ~:
+        println("ping {self.n}")

@@ -16,4 +16,4 @@ fn main() i32:
     j := j + 1
 
   # sum should be 0+1+2+3+4 = 10
-  return Result.Ok(sum)  # Direct return for validation)
+  return sum  # Direct return for validation)

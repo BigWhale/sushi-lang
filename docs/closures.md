@@ -25,19 +25,19 @@ locals of the function that holds it:
 
 ```sushi
 fn make_adder(i32 n) fn(i32) -> i32:
-    return Result.Ok(|i32 x| x + n)     # captures n by value
+    return |i32 x| x + n     # captures n by value
 
 fn use_adder() i32:
-    let fn(i32) -> i32 add5 = make_adder(5)??
-    return Result.Ok(add5(10)??)        # 15
+    let fn(i32) -> i32 add5 = make_adder(5)
+    return add5(10)        # 15
 
 fn main() i32:
-    println(use_adder().realise(0))
-    return Result.Ok(0)
+    println(use_adder())
+    return 0
 ```
 
 A closure is a `fn(...)`-typed value, the same as a bare function reference. It has the same
-type, the same call syntax and the same `Result` semantics. The difference: a lambda can capture
+type, the same call syntax and the same channel rule. The difference: a lambda can capture
 the variables around it, and you can return or store the value, so it can live longer than the
 scope that made it.
 
@@ -52,7 +52,7 @@ let fn(i32) -> i32 f = |i32 x| x + n
 # block body: a full fn body -- allowed ONLY as a `let` RHS
 let fn(i32) -> i32 g = |i32 x|:
     let i32 y = x * 2
-    return Result.Ok(y + n)
+    return y + n             # the type has no `| E`, so the lambda is bare
 
 # zero parameters: |~|, not ||  (the lexer reads `||` as the `or` operator)
 let fn() -> i32 h = |~| n + 1
@@ -68,27 +68,39 @@ Parameters use the Sushi `type name` form (`|i32 x, string s|`). A **bare-name**
 
 ```sushi
 fn apply(fn(i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(v)??)
+    return f(v)
 
 fn main() i32:
     let i32 scale = 3
-    println(apply(|x| x * scale, 7).realise(0))   # x : i32 inferred from apply's signature -> 21
-    return Result.Ok(0)
+    println(apply(|x| x * scale, 7))   # x : i32 inferred from apply's signature -> 21
+    return 0
 ```
 
-A call through a closure gives a `Result@(T, E)`, the same as a `fn`. Use `??`, `.realise()` or a
-`match` on it. A `Result` is not a condition: `if (f(1))` is CE2516. Use `.is_ok()` to test it.
+A lambda has an error channel only when its TYPE writes `| E`. The type comes from the
+annotation on the lambda or from the expected type (a parameter, a `let`, a field). The compiler
+never reads the channel from the body. A function type without `| E` is bare: `fn(i32) -> i32`
+answers an `i32`. A function type with it, `fn(i32) -> i32 | E`, answers a `Result@(i32, E)`.
+The two types do not convert (CE2002).
 
-- **Expression body.** `|x| e` becomes `return Result.Ok(e)`. The compiler adds the `Ok`.
-- **Block body.** It is a full function body. Every path must end with a `return`: a block body
-  that can reach its end is CE0107. A body that returns `~` ends with `return Result.Ok(~)`.
-  After the closing pipe, the block form can have a `-> T [| E]` annotation, the same as a `fn`
-  declaration.
+A call through a bare closure gives the value. A call through a closure with a channel gives a
+`Result@(T, E)`, the same as a `fn` with a channel: use `??`, `.realise()` or a `match` on it. A
+`Result` is not a condition: `if (f(1))` is CE2516. Use `.is_ok()` to test it.
 
-The expression body wraps its value in `Ok`. Thus a fallible call in an expression body needs its
-own `??`. If the inner `Result` goes out as it is, the wrap makes a
-`Result@(Result@(T, E), E)`, and the types do not agree. For this reason, `compose` is written
-`|x| f(g(x)??)??` and not `|x| f(g(x)??)`.
+- **Expression body.** `|x| e` becomes `return e` when the lambda is bare, and
+  `return Result.Ok(e)` when its type has a channel.
+- **Block body.** It is a full function body, with the rule of a `fn` body. A bare block body
+  returns the value (`return y`), and a `Result.Ok` or `Result.Err` there is CE2091. A block body
+  with a channel spells both constructors. Every path must end with a `return`: a block body that
+  can reach its end is CE0107, except a bare `~` body. A `~` body with a channel ends with
+  `return Result.Ok(~)`. After the closing pipe, the block form can have a `-> T [| E]`
+  annotation, the same as a `fn` declaration.
+- **`??` in a body.** A `??` is legal only in a lambda whose type has a channel. In a bare lambda
+  it is CE0131.
+
+A bare lambda is the usual form for a combinator argument (`xs.map(|i32 x| x * 2)`), because the
+combinators of `<collections/iter>` take bare functions. For other code, remember that a bare
+function is the exception: write a channel when the function can fail, or can gain a failure
+later. `docs/design/error-channel.md` carries the rule.
 
 ## Capture
 
@@ -101,8 +113,8 @@ fn main() i32:
     let i32 a = 3
     let i32 b = 4
     let fn(i32) -> i32 f = |x| x + a + b
-    println(f(10).realise(0))    # 17 -- both a and b captured
-    return Result.Ok(0)
+    println(f(10))    # 17 -- both a and b captured
+    return 0
 ```
 
 A value that owns a resource is captured **by move**. This includes a `string` that owns heap
@@ -114,8 +126,8 @@ environment becomes the only owner, and it frees the value when the closure is f
 fn main() i32:
     let i32[] nums = from([1, 2, 3])
     let fn() -> i32 f = |~| nums.len()   # moves nums into f's environment
-    println(f().realise(0))              # 3
-    return Result.Ok(0)
+    println(f())              # 3
+    return 0
 ```
 
 The compiler refuses two shapes with **CE2094**:
@@ -164,6 +176,8 @@ parameter, the callee gets the environment. `compose(nom g, nom f)` in `<collect
 | **CE2094** | illegal closure capture: a `peek`/`poke` borrow, or an owning container or variadic lambda-parameter type |
 | **CE2093** | a generic function value that no position type solves |
 | **CE0107** | a block-body lambda that can reach its end with no `return` |
+| **CE0131** | a `??` in a lambda whose type has no `| E` |
+| **CE2091** | a `Result.Ok` or `Result.Err` in a bare lambda body |
 | **CE2427** | a `nom` marker on a function-value argument that does not agree with the declared mode of the callee |
 | **CE2092** | function value type mismatch at call-through |
 | **CE2002** | function value assigned to an incompatible function-typed variable |
@@ -186,7 +200,7 @@ These work:
 - A call through a fn-typed struct field, a container get-out, a call result, a parenthesized
   expression and a captured closure value.
 - The method form of the combinators: `use <collections/iter>` gives `.map`, `.filter` and
-  `.fold` as extension methods on `List@(T)` and `T[]`, beside the free functions. You chain them
-  with `??` (`xs.map(f)??.filter(p)??`).
+  `.fold` as extension methods on `List@(T)` and `T[]`, beside the free functions. They are bare,
+  so you chain them directly (`xs.map(f).filter(p)`).
 
 The [design note](design/closures.md) gives the fat-pointer ABI and the implementation anchors.

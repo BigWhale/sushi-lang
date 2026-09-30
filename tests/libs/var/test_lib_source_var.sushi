@@ -12,5 +12,5 @@ fn main() i32:
     println("{hits}")
     hits := hits + 10
     println("{hits}")
-    println("{secret_plus(2).realise(0)}")
-    return Result.Ok(0)
+    println("{secret_plus(2)}")
+    return 0

@@ -1,7 +1,7 @@
 # EXPECT_STDOUT_EXACT: "00011000320304302201002helloworld"
 # EXPECT_RUNTIME_EXIT: 0
 # Test dynamic array push/pop operations
-fn run_test() i32:
+fn run_test() i32 | StdError:
   # Start with empty array
   let i32[] numbers = new()
   print(numbers.len())      # Should print 0
@@ -65,4 +65,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

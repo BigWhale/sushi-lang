@@ -16,17 +16,17 @@ fn test_early_return(bool should_return_early) i32:
 
     if (should_return_early):
         println("Early return - RAII should clean up")
-        return Result.Ok(1)  # Early return - c.numbers should be cleaned up here
+        return 1  # Early return - c.numbers should be cleaned up here
 
     c.numbers.push(30)
     println("Normal path")
-    return Result.Ok(2)  # Normal return - c.numbers should be cleaned up here
+    return 2  # Normal return - c.numbers should be cleaned up here
 
 fn main() i32:
-    let i32 result1 = test_early_return(true).realise(0)
+    let i32 result1 = test_early_return(true)
     println("Result1: {result1}")
 
-    let i32 result2 = test_early_return(false).realise(1)
+    let i32 result2 = test_early_return(false)
     println("Result2: {result2}")
 
-    return Result.Ok(0)
+    return 0

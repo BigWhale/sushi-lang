@@ -30,4 +30,4 @@ fn main() i32:
     match measure(3):
         Result.Ok(n) -> println("{n}")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

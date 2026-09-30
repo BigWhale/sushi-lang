@@ -11,9 +11,9 @@ fn probe(string label, string path) i32:
     match libc.fopen(path, "r"):
         Maybe.Some(f) -> println("{label}: closed {libc.fclose(f)}")
         Maybe.None -> println("{label}: none")
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 a = probe("missing", "/sushi/no/such/file").realise(1)
-    let i32 b = probe("existing", "/dev/null").realise(1)
-    return Result.Ok(a + b)
+    let i32 a = probe("missing", "/sushi/no/such/file")
+    let i32 b = probe("existing", "/dev/null")
+    return a + b

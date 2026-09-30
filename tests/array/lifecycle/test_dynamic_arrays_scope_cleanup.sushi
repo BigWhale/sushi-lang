@@ -1,6 +1,6 @@
 # EXPECT_STDOUT_EXACT: "0050020022012"
 # Test dynamic array automatic cleanup in scopes
-fn run_test() i32:
+fn run_test() i32 | StdError:
   let i32 result = 0
 
   # Test scope cleanup in if blocks
@@ -41,4 +41,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

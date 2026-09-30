@@ -1,0 +1,19 @@
+# A bare lambda may answer a Result as its VALUE: the function type has no `| E`, so the
+# body returns the Result bare, and the combinators take it.
+# EXPECT_STDOUT_EXACT: "2\n-1\n3\n"
+use <collections/iter>
+
+fn half(i32 x) i32 | StdError:
+    if (x % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(x / 2)
+
+fn main() i32:
+    let i32[] xs = from([4, 3])
+    let List@(Result@(i32, StdError)) ys = xs.map(|i32 x| half(x))
+    foreach(r in ys.iter()):
+        println(r.realise(-1))
+    let fn(i32) -> Result@(i32, StdError) g = |i32 x| half(x)
+    println(g(6).realise(-1))
+    ys.destroy()
+    return 0

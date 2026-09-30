@@ -12,25 +12,25 @@ fn main() i32:
         Maybe.Some(val) ->
             if (val != 100):
                 println("ERROR: Expected 100 at index 0, got {val}")
-                return Result.Ok(1)
+                return 1
         Maybe.None() ->
             println("ERROR: Should find element at index 0")
-            return Result.Ok(2)
+            return 2
 
     match nums.get(2):
         Maybe.Some(val) ->
             if (val != 300):
                 println("ERROR: Expected 300 at index 2, got {val}")
-                return Result.Ok(3)
+                return 3
         Maybe.None() ->
             println("ERROR: Should find element at index 2")
-            return Result.Ok(4)
+            return 4
 
     # Out of bounds access
     match nums.get(5):
         Maybe.Some(val) ->
             println("ERROR: Should return None for out of bounds, got {val}")
-            return Result.Ok(5)
+            return 5
         Maybe.None() ->
             println("Correctly returned None for out of bounds")
 
@@ -38,9 +38,9 @@ fn main() i32:
     match nums.get(-1):
         Maybe.Some(val) ->
             println("ERROR: Should return None for negative index, got {val}")
-            return Result.Ok(6)
+            return 6
         Maybe.None() ->
             println("Correctly returned None for negative index")
 
     println("Get tests passed!")
-    return Result.Ok(0)
+    return 0

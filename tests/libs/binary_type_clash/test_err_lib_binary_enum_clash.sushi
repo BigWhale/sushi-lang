@@ -10,4 +10,4 @@ fn main() i32:
     let Mood m = Mood.Sleepy
     match m:
         Mood.Sleepy -> println("sleepy")
-    return Result.Ok(0)
+    return 0

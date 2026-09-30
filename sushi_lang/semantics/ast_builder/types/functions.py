@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.param_modes import ParamMode, normalize_modes
-from sushi_lang.semantics.typesys import FunctionType, UnknownType, Type
+from sushi_lang.semantics.typesys import FunctionType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -45,7 +45,7 @@ def parse_function_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]
         if err_type is None:
             return None
     else:
-        err_type = UnknownType("StdError")
+        err_type = None
 
     return FunctionType(
         param_types=tuple(param_types),

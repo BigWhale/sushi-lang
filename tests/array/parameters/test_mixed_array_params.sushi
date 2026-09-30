@@ -3,31 +3,31 @@
 
 
 fn process_fixed(i32[3] fixed_arr) i32:
-    return Result.Ok(fixed_arr.len())
+    return fixed_arr.len()
 
 # process_dynamic borrows peek so the caller keeps ownership and can pass it again;
 # process_both takes the dynamic array by value (move) as its last use. Fixed-size
 # arrays are value-copied either way.
 fn process_dynamic(peek i32[] dynamic_arr) i32:
-    return Result.Ok(dynamic_arr.len())
+    return dynamic_arr.len()
 
 fn process_both(i32[2] fixed, i32[] dynamic) i32:
-    return Result.Ok(fixed.len() + dynamic.len())
+    return fixed.len() + dynamic.len()
 
 fn main() i32:
     # Test fixed array parameter
     let i32[3] fixed = [1, 2, 3]
-    let i32 fixed_len = process_fixed(fixed).realise(0)
+    let i32 fixed_len = process_fixed(fixed)
     println(fixed_len)  # Should print 3
 
     # Test dynamic array parameter
     let i32[] dynamic = from([10, 20, 30, 40])
-    let i32 dynamic_len = process_dynamic(peek dynamic).realise(0)
+    let i32 dynamic_len = process_dynamic(peek dynamic)
     println(dynamic_len)  # Should print 4
 
     # Test both types
     let i32[2] small_fixed = [100, 200]
-    let i32 total = process_both(small_fixed, dynamic).realise(0)
+    let i32 total = process_both(small_fixed, dynamic)
     println(total)  # Should print 6 (2 + 4)
 
-    return Result.Ok(0)
+    return 0

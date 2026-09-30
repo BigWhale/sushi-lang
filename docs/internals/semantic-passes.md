@@ -69,6 +69,24 @@ Collect global definitions before analyzing function bodies.
    brings are structural and so are decided here: a receiver named in the signature or
    the body is `CE0134`, and a static spelling a variant of the enum it extends is
    `CE2103`. A `static` inside a perk implementation is `CE4014`, in the perk collector.
+7. **The error channel of a written body.** A callable has a channel only when its
+   signature writes `| E` or returns an explicit `Result@(T, E)`; there is no default
+   error type (`docs/design/error-channel.md`). The collect pass emits `CE0131` for a `??`
+   in EVERY bare function and method body: a free function, an extension method and a
+   perk-implementation method (`passes/collect/utils.py`, `functions.py`, `perks.py`).
+   It fires once per declaration and covers a template nobody instantiates. Both
+   spellings at once (`Result@(T, E1) | E2`) is `CE2085`, here too. A lambda takes its
+   channel from its TYPE, which only the `typecheck` pass knows, so the `typecheck` pass
+   emits `CE0131` for a `??` in a bare lambda (`passes/types/expressions.py`).
+
+### One predicate for the channel
+
+`has_channel` (`semantics/channel.py`) is the one question "does this callable answer a
+Result". Every reader asks it: the `collect` pass (`CE0131`, `CE2085`), the `typecheck`
+pass (the body state, the return rule, the `??` channel, `CE0107`, what a call yields),
+the `lift` pass (the desugar of an expression lambda: `return e` when bare,
+`return Result.Ok(e)` with a channel), and the backend. Do not test `err_type` directly:
+an explicit `Result@(T, E)` return has a channel and no `err_type`.
 
 ### Source order decides the holder of a name in one unit
 
@@ -110,7 +128,7 @@ struct Pair@(T, U):   # Register generic struct
     U second
 
 fn add(i32 a, i32 b) i32:  # Register signature
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 **Output**, in `SymbolTables` (`semantics/tables.py`):
@@ -135,8 +153,7 @@ Two facts it has to carry beyond the marker. **A name with no record is public**
 compiler synthesizes types nothing declared (a monomorphized instance, a lifted closure
 environment, `FileMode`), and none of them can carry a source marker. And the table
 remembers the LOSER of every contested name, because a unit that declared a name must
-never be shown its own code measured against somebody else's declaration -- which is what
-"cannot call private function 'helper'" said to the unit that wrote `helper` itself.
+never be shown its own code measured against somebody else's declaration.
 
 The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
 bare constant read, the type funnel for a named type, the collect pass itself for a
@@ -194,7 +211,7 @@ Adds two numbers.
 - Parameter q: CE7001 -- there is no parameter called q.
 :##
 fn add(i32 a, i32 b) i32:
-    return Result.Ok(a + b)
+    return a + b
 ```
 
 Eight errors and one warning, all of them always on. `check_docs` is the entry point:
@@ -418,7 +435,9 @@ The ONE home of main's rule. It checks four things, in this order:
 
 1. an executable carries a `main` -- `CE3007`;
 2. a library carries none -- `CE3501`;
-3. `main` returns an integer type (i8-i64, u8-u64) -- `CE0106`;
+3. `main` returns a BARE integer type (i8-i64, u8-u64), the exit code -- `CE0106`. A
+   `| E` on `main`, or a `Result@(T, E)` return, is `CE0106` too, and a `??` in its body
+   is `CE0131` from the `collect` pass;
 4. `main` takes no parameters or exactly one `string[] args` -- `CE0138`. The answer
    sets `main_expects_args` for the back end.
 
@@ -591,13 +610,13 @@ extend Pair@(T, U) swapped() Pair@(U, T):
     return Pair(self.second.clone(), self.first.clone())
 
 fn first_of@(T, U)(Pair@(T, U) p) T:
-    return Result.Ok(p.first.clone())
+    return p.first.clone()
 
 fn main() i32:
     let Pair@(i32, string) p = Pair(42, "Mostly Harmless")
     let Pair@(string, i32) q = p.swapped()
-    println("{q.first} {q.second} {first_of(p).realise(0)}")
-    return Result.Ok(0)
+    println("{q.first} {q.second} {first_of(p)}")
+    return 0
 ```
 
 **What the program asks for:** the struct instances `Pair@(i32, string)` and
@@ -871,10 +890,10 @@ fn example() i32:
         x := y + 3         # OK: x is in an outer scope
 
     println(y)             # CE1001: use of undeclared identifier 'y'
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
-    return Result.Ok(example().realise(0))
+    return example()
 ```
 
 ## The `typecheck` pass: type validation
@@ -931,9 +950,11 @@ on a foreign value is `CE2507`.
 
 ### Return paths
 
-A body that can reach its end with no `return` is `CE0107`: a `~` function too, a `| E`
-extension or perk method, and a lambda block body. There is no implicit `Result.Ok`. A
-bare `~` extension or perk method has no Result and may reach its end.
+A body that answers a value or a Result and can reach its end with no `return` is
+`CE0107`. The rule is one for a function, a lambda block body and an extension or perk
+method. A `~` body with a channel ends with `return Result.Ok(~)`; nothing adds the
+`Ok`. A BARE `~` body (a function, a method or a lambda) answers nothing and may reach its
+end.
 
 A statement after a statement that always ends the path is `CE0140`: one diagnostic for
 each block, at the first dead statement, with a note at the statement that ends the path.
@@ -942,12 +963,12 @@ each block, at the first dead statement, with a note at the statement that ends 
 ```sushi
 fn sign(i32 x) i32:        # CE0107: the path with x == 0 has no return
     if (x > 0):
-        return Result.Ok(1)
+        return 1
     elif (x < 0):
-        return Result.Ok(-1)
+        return -1
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0
     println("never")       # CE0140: unreachable statement
 ```
 
@@ -965,8 +986,7 @@ fieldless kind answers the empty list, and everything else answers None.
 
 None means the position is not this rule's. A namespace member, a bare enum variant,
 an unresolved name, a generic reference and a receiver the pass could not type all
-belong elsewhere, and a false `CE2106` there would be worse than the internal error it
-replaces.
+belong elsewhere, and a false `CE2106` there would be worse than the `CE0029` backstop.
 
 An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
 `CE2106`. An enum carries variants, and
@@ -1001,7 +1021,7 @@ let i32 y = x + "hello"  # CE2509: operator '+' cannot be used with string types
 
 **Result Handling:**
 ```sushi
-fn get_value() i32:
+fn get_value() i32 | StdError:
     return Result.Ok(42)
 
 # CE2505: cannot assign Result@(T, E) to non-Result variable without handling
@@ -1063,14 +1083,14 @@ the call:
 
 ```sushi
 fn borrow(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 fn main() i32:
     let i32 num = 42
-    let i32 got = borrow(peek num).realise(0)
+    let i32 got = borrow(peek num)
     num := 50              # OK: the borrow ended with the call
     println("{num} {got}")
-    return Result.Ok(0)
+    return 0
 ```
 
 A `let` that reads through an owner is a borrow for the rest of its block. A change to
@@ -1086,21 +1106,21 @@ fn main() i32:
     let i32[] view = w.items
     w.items.push(4)        # CE2412: cannot mutate 'w' while 'view' borrows from it
     println(view.len())
-    return Result.Ok(0)
+    return 0
 ```
 
 3. **A borrow needs a stable address**
 
 ```sushi
 fn func(peek i32 x) i32:
-    return Result.Ok(x)
+    return x
 
 # CE2404: cannot borrow '(5 + 3)': expression has no stable address
-# let i32 x = func(peek (5 + 3)).realise(0)
+# let i32 x = func(peek (5 + 3))
 
 # OK: borrow a variable
 let i32 temp = 5 + 3
-let i32 x = func(peek temp).realise(0)
+let i32 x = func(peek temp)
 ```
 
 4. **Use after a move, use after a destroy**
@@ -1137,11 +1157,9 @@ struct Wrapper:
 
 fn look(i32[] xs) ~:
     println("{xs.len()}")
-    return Result.Ok(~)
 
 fn take(nom i32[] xs) ~:
     println("{xs.len()}")
-    return Result.Ok(~)
 
 fn main() i32:
     let Wrapper w = Wrapper(items: from([1, 2, 3]))
@@ -1150,7 +1168,7 @@ fn main() i32:
     look(borrowed)                # OK: a plain parameter is a borrow too
     take(nom borrowed.clone())    # OK: the callee takes an independent copy
     take(nom borrowed)            # CE2411: cannot consume 'borrowed': another owner keeps this value
-    return Result.Ok(0)
+    return 0
 ```
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`

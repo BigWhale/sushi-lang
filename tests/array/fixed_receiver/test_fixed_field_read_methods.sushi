@@ -7,7 +7,7 @@
 struct Buf:
     i32[3] slots
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let Buf b = Buf(slots: [10, 20, 30])
     println(b.slots.len())
     println(b.slots.get(0)??)
@@ -24,4 +24,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

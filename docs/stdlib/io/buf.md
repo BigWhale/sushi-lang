@@ -55,7 +55,7 @@ fn main() i32:
     match longest_line("/etc/hosts"):
         Result.Ok(n) -> println("longest line {n}")
         Result.Err(_) -> println("could not read it")
-    return Result.Ok(0)
+    return 0
 ```
 
 ## Reading
@@ -129,8 +129,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ### `Lines@(R).next() Maybe@(Result@(string, IoError))`
@@ -162,8 +162,8 @@ fn show(string path) ~ | IoError:
 
 fn main() i32:
     match show("/etc/hosts"):
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 ## Writing
@@ -209,7 +209,7 @@ fn main() i32:
     match write_report("/tmp/report.txt"):
         Result.Ok(_) -> println("written")
         Result.Err(_) -> println("could not write it")
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `into_inner() W | IoError`
@@ -252,8 +252,8 @@ fn run() ~ | IoError:
 
 fn main() i32:
     match run():
-        Result.Ok(_) -> return Result.Ok(0)
-        Result.Err(_) -> return Result.Ok(1)
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
 ```
 
 The extra verbs only a buffer can offer -- `read_line`, `read_all`, `lines`, `fill`,

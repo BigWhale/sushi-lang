@@ -6,4 +6,4 @@ fn main() i32:
     let f64 f = 3000000000.0
     let u32 u = f as u32
     println(u)
-    return Result.Ok(0)
+    return 0

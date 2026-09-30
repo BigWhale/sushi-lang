@@ -17,9 +17,8 @@ extend string with Display:
 fn print_first@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
         println(a.display())
-        return Result.Ok(~)
-    return Result.Ok(~)
+        return ~
 
 fn main() i32:
     print_first(1, "two", "three")
-    return Result.Ok(0)
+    return 0

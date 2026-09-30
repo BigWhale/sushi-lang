@@ -11,8 +11,8 @@ enum Acc:
 
 fn pick(Acc a) i32:
     match a:
-        Acc.Empty -> return Result.Ok(0)
-        Acc.Some(v) -> return Result.Ok(v)
+        Acc.Empty -> return 0
+        Acc.Some(v) -> return v
 
 fn main() i32:
     let Acc p = Acc.Empty
@@ -20,5 +20,5 @@ fn main() i32:
     match p:
         Acc.Empty -> println("e")
         Acc.Some(v) -> println("{v}")
-    let i32 r = pick(q).realise(0)
-    return Result.Ok(r)
+    let i32 r = pick(q)
+    return r

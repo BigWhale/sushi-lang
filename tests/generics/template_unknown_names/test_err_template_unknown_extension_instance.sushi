@@ -11,4 +11,4 @@ extend Box@(T) take(T v) Missing:
 fn main() i32:
     let Box@(i32) b = Box(1)
     println(b.item)
-    return Result.Ok(0)
+    return 0

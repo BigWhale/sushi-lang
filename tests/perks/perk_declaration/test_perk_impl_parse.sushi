@@ -12,5 +12,5 @@ extend Point with Hashable:
 fn main() i32:
     let Point p = Point(1, 2)
     if (p.hash() != 42 as u64):
-        return Result.Ok(1)
-    return Result.Ok(0)
+        return 1
+    return 0

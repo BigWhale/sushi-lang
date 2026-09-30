@@ -11,4 +11,4 @@ fn main() i32:
     p.left.fill(p.right[0])
     println(p.left[0])
     println(p.left[1])
-    return Result.Ok(0)
+    return 0

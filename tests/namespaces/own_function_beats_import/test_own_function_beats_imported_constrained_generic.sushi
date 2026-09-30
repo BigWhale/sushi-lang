@@ -6,8 +6,8 @@ use "helpers/pick_constrained"
 use <collections/strings>
 
 fn pick(string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
-    println(pick("abc").realise(0))
-    return Result.Ok(0)
+    println(pick("abc"))
+    return 0

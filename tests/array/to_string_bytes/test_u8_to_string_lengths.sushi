@@ -20,4 +20,4 @@ fn main() i32:
     let u8[] words = from([77, 111, 115, 116, 108, 121, 32, 72, 97, 114, 109, 108, 101, 115, 115])
     let string m = words.to_string()
     println("mixed: [{m}] {m.len()}")
-    return Result.Ok(0)
+    return 0

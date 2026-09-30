@@ -11,18 +11,18 @@ enum Either@(T, U):
     Right(U)
 
 # Test function with generic return type
-fn test_return_type() Either@(i32, string):
+fn test_return_type() Either@(i32, string) | StdError:
     return Result.Ok(Either.Left(42))
 
 # Test variable with generic type annotation
-fn test_variable_type() i32:
+fn test_variable_type() i32 | StdError:
     let Either@(i32, string) val = Either.Left(99)
     # Test rebinding to avoid unused variable warning
     val := Either.Right("test")
     return Result.Ok(99)
 
 # Test function parameter with generic type
-fn test_parameter_type(Either@(string, i32) param) i32:
+fn test_parameter_type(Either@(string, i32) param) i32 | StdError:
     param := Either.Left("Left")
     match param:
         Either.Left(_) ->
@@ -49,4 +49,4 @@ fn main() i32:
     if (pt_result.is_ok()):
         println("Parameter type test passed")
 
-    return Result.Ok(0)
+    return 0

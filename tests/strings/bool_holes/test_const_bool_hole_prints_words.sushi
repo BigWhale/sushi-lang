@@ -6,4 +6,4 @@ const string LINE = "sure: {YES}, not: {false}"
 
 fn main() i32:
     println(LINE)
-    return Result.Ok(0)
+    return 0

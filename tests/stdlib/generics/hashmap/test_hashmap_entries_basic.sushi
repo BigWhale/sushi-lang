@@ -19,6 +19,6 @@ fn main() i32:
 
     # Should have iterated over all 3 entries
     if (count == 3):
-        return Result.Ok(0)
+        return 0
 
-    return Result.Ok(1)
+    return 1

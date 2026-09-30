@@ -10,7 +10,7 @@ extend Handle with Drop:
     fn drop(poke self) ~:
         println("drop {self.id}")
 
-fn make(i32 id) Handle:
+fn make(i32 id) Handle | StdError:
     return Result.Ok(Handle(id))
 
 fn main() i32:
@@ -18,4 +18,4 @@ fn main() i32:
         Result.Ok(h) -> println("got {h.id}")
         Result.Err(_) -> println("failed")
     println("after")
-    return Result.Ok(0)
+    return 0

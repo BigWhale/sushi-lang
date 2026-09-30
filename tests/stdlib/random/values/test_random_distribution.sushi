@@ -38,4 +38,4 @@ fn main() i32:
 
     println("")
     println("=== Distribution Test Complete ===")
-    return Result.Ok(0)
+    return 0

@@ -8,7 +8,7 @@ extend i32 twice() i32:
 
 fn main() i32:
     let fn(i32) -> i32 f = |i32 x|:
-        return Result.Ok(x)
+        return x
         println("never")
-    println("{f(2).realise(0)} {3.twice()}")
-    return Result.Ok(0)
+    println("{f(2)} {3.twice()}")
+    return 0

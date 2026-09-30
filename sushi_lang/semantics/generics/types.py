@@ -155,7 +155,8 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
             ty,
             param_types=tuple(substitute_type_params(p, substitution) for p in ty.param_types),
             ok_type=substitute_type_params(ty.ok_type, substitution),
-            err_type=substitute_type_params(ty.err_type, substitution),
+            err_type=(None if ty.err_type is None
+                      else substitute_type_params(ty.err_type, substitution)),
         )
 
     else:
@@ -181,14 +182,12 @@ def substituted_call_result(generic_func, type_args) -> Optional[Type]:
     go through the monomorphized copy -- it is not built yet -- so the template's return
     is substituted and wrapped exactly as the declaration wraps it: an explicit
     `Result@(T, E)` is its own two arms, anything else takes the spelled channel, and a
-    signature with none takes `StdError`.
+    BARE signature yields its substituted return (docs/design/error-channel.md).
 
     The PURE substitution is used, so nothing is interned here. A payload whose instance
     does not exist yet comes back as a `GenericTypeRef`, which is what keeps an early
     answer out of the enum table.
     """
-    from sushi_lang.semantics.typesys import UnknownType
-
     substitution = type_param_substitution(generic_func, type_args)
     if substitution is None or generic_func.ret is None:
         return None
@@ -197,9 +196,10 @@ def substituted_call_result(generic_func, type_args) -> Optional[Type]:
     if isinstance(ret, GenericTypeRef) and ret.base_name == "Result":
         return ret
     err = generic_func.err_type
-    err = (substitute_type_params(err, substitution) if err is not None
-           else UnknownType("StdError"))
-    return GenericTypeRef(base_name="Result", type_args=(ret, err))
+    if err is None:
+        return ret
+    return GenericTypeRef(base_name="Result",
+                          type_args=(ret, substitute_type_params(err, substitution)))
 
 
 __all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType",

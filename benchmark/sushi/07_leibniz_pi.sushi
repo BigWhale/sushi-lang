@@ -5,4 +5,4 @@ fn main() i32:
         s := s + sign / (2.0 * (k as f64) + 1.0)
         sign := 0.0 - sign
     println((s * 4.0 * 1000000000.0) as i64)
-    return Result.Ok(0)
+    return 0

@@ -11,24 +11,24 @@
 # EXPECT_NO_LEAKS: true
 
 fn make(i32 m) fn(i32) -> i32:
-    return Result.Ok(|i32 x| x * m)
+    return |i32 x| x * m
 
 fn apply(fn(i32) -> i32 f, i32 v) i32:
-    return Result.Ok(f(v)??)
+    return f(v)
 
-fn direct() ~:
-    println(apply(make(2)??, 6).realise(-1))
-    let fn(i32) -> i32 g = make(3)??
-    println(apply(g, 6).realise(-1))
-    println(apply(|i32 x| x * 4, 6).realise(-1))
+fn direct() ~ | StdError:
+    println(apply(make(2), 6))
+    let fn(i32) -> i32 g = make(3)
+    println(apply(g, 6))
+    println(apply(|i32 x| x * 4, 6))
     return Result.Ok(~)
 
-fn indirect() ~:
+fn indirect() ~ | StdError:
     let fn(fn(i32) -> i32, i32) -> i32 h = apply
-    println(h(make(3)??, 6)??)
-    let fn(i32) -> i32 g = make(9)??
-    println(h(g, 3)??)
-    println(h(|i32 x| x * 6, 6)??)
+    println(h(make(3), 6))
+    let fn(i32) -> i32 g = make(9)
+    println(h(g, 3))
+    println(h(|i32 x| x * 6, 6))
     return Result.Ok(~)
 
 fn main() i32:
@@ -36,5 +36,5 @@ fn main() i32:
     if (a.is_ok()):
         let Result@(~, StdError) b = indirect()
         if (b.is_ok()):
-            return Result.Ok(0)
-    return Result.Ok(1)
+            return 0
+    return 1

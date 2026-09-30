@@ -13,4 +13,4 @@ fn main() i32:
     match TONE:
         Shade.Dim(nom d) -> println(d)
         Shade.Bright(_) -> println("bright")
-    return Result.Ok(0)
+    return 0

@@ -9,4 +9,4 @@ fn main() i32:
     println(head.len())
     println(head[0])
     println(head[999])
-    return Result.Ok(0)
+    return 0

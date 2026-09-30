@@ -18,4 +18,4 @@ fn main() i32:
     match q:
         Point.Empty -> println("e")
         Point.Some(v) -> println("{v}")
-    return Result.Ok(0)
+    return 0

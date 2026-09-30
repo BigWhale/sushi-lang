@@ -19,12 +19,18 @@ combinators are ordinary generic free functions, so they monomorphize through th
 generic pipeline — there is no bitcode, and nothing is emitted unless your program
 actually instantiates a combinator.
 
-The combinators exist in TWO forms. The **method form** declares the `| StdError`
-channel, so each call yields a `Result` and chains with `??`:
+The combinators are **bare**, in both forms: they have no error channel, a call gives the
+value itself, and they take bare function types (`fn(T) -> U`). So the calls chain
+directly, with no `??` after `map`, `filter` or `fold`. A function with a channel,
+`fn(T) -> U | E`, is a different type, and the call is refused (CE2006). A bare function
+is the exception in Sushi; the combinators are bare because each one is total over its
+inputs. [The error channel](../../design/error-channel.md) gives the rule.
+
+The combinators exist in TWO forms. The **method form** chains left to right:
 
 <!-- docs-sweep: skip (fragment; the full program is under Methods below) -->
 ```sushi
-let i32 total = xs.map(|i32 x| x * 2)??.filter(|i32 x| x > 2)??.fold(0, |i32 acc, i32 x| acc + x)??
+let i32 total = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2).fold(0, |i32 acc, i32 x| acc + x)
 ```
 
 The **free functions** stay, and are called as `map(xs, f)`. One unit's
@@ -41,14 +47,14 @@ generic parameter (CE2063) — annotate the parameter or use a function referenc
 
 ## Methods
 
-Each method is an extension with the `| StdError` error channel. On a `T[]` receiver
+Each method is a bare extension method. On a `T[]` receiver
 the collecting methods return a `List` — a dynamic array has no empty generic
 constructor to fill.
 
-### `xs.map@(U)(fn(T) -> U f) -> List@(U) | StdError`
+### `xs.map@(U)(fn(T) -> U f) -> List@(U)`
 
 On `List@(T)` and on `T[]`. Applies `f` to every element, collecting the results into
-a new list. `f`'s error propagates out of the call.
+a new list.
 
 ```sushi
 use <collections/iter>
@@ -57,33 +63,33 @@ fn doubled_sum() i32:
     let List@(i32) xs = List.new()
     xs.push(1)
     xs.push(2)
-    let i32 total = xs.map(|i32 x| x * 2)??.fold(0, |i32 acc, i32 x| acc + x)??
-    return Result.Ok(total)
+    let i32 total = xs.map(|i32 x| x * 2).fold(0, |i32 acc, i32 x| acc + x)
+    return total
 
 fn main() i32:
-    println("{doubled_sum().realise(-1)}")
-    return Result.Ok(0)
+    println("{doubled_sum()}")
+    return 0
 ```
 
-### `xs.filter(fn(T) -> bool pred) -> List@(T) | StdError`
+### `xs.filter(fn(T) -> bool pred) -> List@(T)`
 
 On `List@(T)` and on `T[]`. Keeps the elements for which `pred` answers true, cloning
 each kept element — so an owning element type works.
 
-### `xs.fold@(U)(U init, fn(U, T) -> U f) -> U | StdError`
+### `xs.fold@(U)(U init, fn(U, T) -> U f) -> U`
 
 On `List@(T)` and on `T[]`. Reduces left to right, threading the accumulator through
-`f`.
+`f`. `init` is cloned once, so the accumulator can be an owning type.
 
-### Chaining and the unhandled channel
+### Chaining
 
-A channel method stops the chain until it is handled: `xs.map(f).filter(p)` is CE2515,
-and the diagnostic spells the fix (`xs.map(f)??.filter(p)`). Handle a link with `??`,
-with `match`, or with `.realise(default)`.
+A method call gives the value, so the next link calls on it directly:
+`xs.map(f).filter(p).fold(0, g)`. A `??` after a link is CE2507, because the value is not
+a `Result`.
 
 ## Free functions
 
-### `map@(T, U)(List@(T) xs, fn(T) -> U f) -> List@(U) | StdError`
+### `map@(T, U)(List@(T) xs, fn(T) -> U f) -> List@(U)`
 
 Apply `f` to every element, collecting the results into a new list.
 
@@ -96,12 +102,12 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let List@(i32) ys = map(xs, |i32 x| x * factor).realise(List.new())
+    let List@(i32) ys = map(xs, |i32 x| x * factor)
     println(ys.get(2).realise(-1))    # 30
-    return Result.Ok(0)
+    return 0
 ```
 
-### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T) | StdError`
+### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T)`
 
 Keep the elements for which `pred` returns `true`. Each kept element is a clone.
 
@@ -115,12 +121,12 @@ fn main() i32:
     xs.push(2)
     xs.push(3)
     xs.push(4)
-    let List@(i32) big = filter(xs, |i32 x| x > threshold).realise(List.new())
+    let List@(i32) big = filter(xs, |i32 x| x > threshold)
     println(big.len())    # 2
-    return Result.Ok(0)
+    return 0
 ```
 
-### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U | StdError`
+### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U`
 
 Reduce the list left-to-right, threading `acc` through `f`.
 
@@ -132,9 +138,9 @@ fn main() i32:
     xs.push(1)
     xs.push(2)
     xs.push(3)
-    let i32 total = fold(xs, 100, |i32 acc, i32 x| acc + x).realise(-1)
+    let i32 total = fold(xs, 100, |i32 acc, i32 x| acc + x)
     println(total)    # 106
-    return Result.Ok(0)
+    return 0
 ```
 
 ### `compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) -> fn(T) -> V`
@@ -151,15 +157,15 @@ over one list works.
 use <collections/iter>
 
 fn inc(i32 x) i32:
-    return Result.Ok(x + 1)
+    return x + 1
 
 fn dbl(i32 x) i32:
-    return Result.Ok(x * 2)
+    return x * 2
 
 fn main() i32:
-    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl).realise(dbl)
-    println(incthendouble(10).realise(-1))    # dbl(inc(10)) = 22
-    return Result.Ok(0)
+    let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl)
+    println(incthendouble(10))    # dbl(inc(10)) = 22
+    return 0
 ```
 
 ## See also

@@ -5,7 +5,7 @@
 # Tests Result@(Maybe@(T)) in a realistic scenario
 # "I always thought something was fundamentally wrong with the universe."
 
-fn parse_answer(string s) Maybe@(i32):
+fn parse_answer(string s) Maybe@(i32) | StdError:
     # Parse the Answer to the Ultimate Question
     if (s == "42"):
         return Result.Ok(Maybe.Some(42))
@@ -20,10 +20,10 @@ fn main() i32:
             match inner:
                 Maybe.Some(x) ->
                     println("{x}")
-                    return Result.Ok(0)
+                    return 0
                 Maybe.None() ->
                     println("Not the answer")
-                    return Result.Ok(1)
+                    return 1
         Result.Err(_) ->
             println("Computation error")
-            return Result.Ok(2)
+            return 2

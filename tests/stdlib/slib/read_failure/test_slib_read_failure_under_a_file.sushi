@@ -15,39 +15,39 @@ const string UNDER = "/tmp/sushi_slib_read_failure_under_a_file/plain/x.slib"
 
 fn show_io(IoError e) string:
     match e:
-        IoError.NotFound -> return Result.Ok("NotFound")
-        IoError.PermissionDenied -> return Result.Ok("PermissionDenied")
-        IoError.IsDirectory -> return Result.Ok("IsDirectory")
-        IoError.InvalidInput -> return Result.Ok("InvalidInput")
-        IoError.Os(_) -> return Result.Ok("Os")
-        _ -> return Result.Ok("another IoError")
+        IoError.NotFound -> return "NotFound"
+        IoError.PermissionDenied -> return "PermissionDenied"
+        IoError.IsDirectory -> return "IsDirectory"
+        IoError.InvalidInput -> return "InvalidInput"
+        IoError.Os(_) -> return "Os"
+        _ -> return "another IoError"
 
 fn show_err(SlibError e) string:
     match e:
-        SlibError.Io(io) -> return Result.Ok("Io({show_io(io)??})")
-        _ -> return Result.Ok("another SlibError")
+        SlibError.Io(io) -> return "Io({show_io(io)})"
+        _ -> return "another SlibError"
 
 fn make_plain() bool:
     if (mkdir_all(ROOT, 0o755).is_err()):
-        return Result.Ok(false)
+        return false
     match open(PLAIN, FileMode.WriteB()):
         Result.Ok(nom f) -> f.close()
-        Result.Err(_) -> return Result.Ok(false)
-    return Result.Ok(true)
+        Result.Err(_) -> return false
+    return true
 
 fn main() i32:
     remove_all(ROOT)
-    if (not make_plain().realise(false)):
+    if (not make_plain()):
         println("setup failed")
-        return Result.Ok(1)
+        return 1
     match read_metadata(UNDER):
         Result.Ok(_) -> println("read_metadata: Ok")
-        Result.Err(e) -> println("read_metadata: {show_err(e).realise('')}")
+        Result.Err(e) -> println("read_metadata: {show_err(e)}")
     match sizes(UNDER):
         Result.Ok(_) -> println("sizes: Ok")
-        Result.Err(e) -> println("sizes: {show_err(e).realise('')}")
+        Result.Err(e) -> println("sizes: {show_err(e)}")
     match bitcode_size(UNDER):
         Result.Ok(_) -> println("bitcode_size: Ok")
-        Result.Err(e) -> println("bitcode_size: {show_err(e).realise('')}")
+        Result.Err(e) -> println("bitcode_size: {show_err(e)}")
     remove_all(ROOT)
-    return Result.Ok(0)
+    return 0

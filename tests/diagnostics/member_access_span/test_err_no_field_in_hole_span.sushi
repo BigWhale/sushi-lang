@@ -8,4 +8,4 @@ struct P:
 fn main() i32:
     let P p = P(1)
     println("{p.y}")
-    return Result.Ok(0)
+    return 0

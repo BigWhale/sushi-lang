@@ -11,4 +11,4 @@ fn main() i32:
     let Inner inner = Inner(arr)
     let Outer outer = Outer(inner)
     println(outer.inner.data.len())
-    return Result.Ok(0)
+    return 0

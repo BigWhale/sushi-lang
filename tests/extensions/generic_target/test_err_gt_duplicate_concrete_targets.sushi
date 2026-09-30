@@ -16,4 +16,4 @@ extend Box@(i32) tag() i32:
 fn main() i32:
     let Box@(i32) b = Box(7)
     println(b.tag())
-    return Result.Ok(0)
+    return 0

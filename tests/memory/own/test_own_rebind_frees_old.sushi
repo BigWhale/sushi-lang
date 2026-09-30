@@ -9,8 +9,8 @@ fn run_test() i32:
     let Own@(i32) o = Own.alloc(5)
     o := Own.alloc(7)
     println(o.get())
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
-    let i32 code = run_test().realise(1)
-    return Result.Ok(code)
+    let i32 code = run_test()
+    return code

@@ -8,10 +8,10 @@ struct Box@(T):
     T value
 
 fn unbox(Box@(i32) b) i32:
-    return Result.Ok(b.value)
+    return b.value
 
 fn main() i32:
     let Box@(i32) b = Box(42)
-    let i32 val = unbox(b).realise(0)
+    let i32 val = unbox(b)
     println(val)
-    return Result.Ok(0)
+    return 0

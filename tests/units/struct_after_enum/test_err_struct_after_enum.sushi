@@ -9,4 +9,4 @@ struct Acc:
     i32 m
 
 fn main() i32:
-    return Result.Ok(one().realise(0))
+    return one()

@@ -4,4 +4,4 @@ unsafe external "C" as libc because "probe":
     fn qsort_ints(i32[] xs, i64 n) ~ = "qsort_ints"
 
 fn main() i32:
-    return Result.Ok(0)
+    return 0

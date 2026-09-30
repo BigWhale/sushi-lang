@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals import errors as er
 
 if TYPE_CHECKING:
@@ -82,7 +83,8 @@ class StatementValidator(RecursiveVisitor):
                         return
 
                 # Emit warning for unused Result<T, E> (where T is not blank)
-                er.emit(self.type_validator.reporter, er.ERR.CW2001, node.expr.loc)
+                er.emit(self.type_validator.reporter, er.ERR.CW2001, node.expr.loc,
+                        ty=display_type(expr_type))
 
     def visit_print(self, node: Print) -> None:
         """Validate print statement."""

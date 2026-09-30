@@ -25,4 +25,4 @@ fn main() i32:
     match t5:
         Tree.Leaf() -> println("leaf")
         Tree.Node(_) -> println("node")
-    return Result.Ok(0)
+    return 0

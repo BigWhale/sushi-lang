@@ -3,4 +3,4 @@
 # 4294967298 is 2 to the power 32, plus 2.
 
 fn main() i64:
-    return Result.Ok(4294967298)
+    return 4294967298

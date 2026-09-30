@@ -5,4 +5,4 @@
 # EXPECT_ERROR_CODES_EXACT: CE3517
 # EXPECT_STDERR_CONTAINS: "is not valid TOML"
 public fn towel() i32:
-    return Result.Ok(42)
+    return 42

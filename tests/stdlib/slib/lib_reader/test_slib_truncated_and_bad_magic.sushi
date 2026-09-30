@@ -18,7 +18,6 @@ const string ROOT = "/tmp/sushi_slib_truncated_and_bad_magic"
 fn push_le(poke u8[] out, u64 value, i32 count) ~:
     foreach(i in 0..count):
         out.push(((value >> ((8 * i) as u64)) & 0xff) as u8)
-    return Result.Ok(~)
 
 fn image(u64 meta_len, u64 bitcode_len) u8[]:
     let u8[] meta = from([0x81])
@@ -27,78 +26,77 @@ fn image(u64 meta_len, u64 bitcode_len) u8[]:
     meta.push(0xa4)
     meta.extend("demo".to_bytes())
     let u8[] out = from([0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3])
-    push_le(poke out, 4, 4)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, meta_len, 8)??
+    push_le(poke out, 5, 4)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 8)
+    push_le(poke out, meta_len, 8)
     out.extend(meta)
-    push_le(poke out, 0, 8)??
-    push_le(poke out, bitcode_len, 8)??
-    push_le(poke out, 0, 8)??
-    push_le(poke out, 0, 2)??
-    return Result.Ok(out)
+    push_le(poke out, 0, 8)
+    push_le(poke out, bitcode_len, 8)
+    push_le(poke out, 0, 8)
+    push_le(poke out, 0, 2)
+    return out
 
 fn write_file(string path, peek u8[] bytes) bool:
     match open(path, FileMode.WriteB()):
         Result.Ok(nom out) ->
             out.write_bytes(bytes)
             out.close()
-            return Result.Ok(true)
+            return true
         Result.Err(_) ->
-            return Result.Ok(false)
+            return false
 
 fn plain(SlibError e) string:
     match e:
-        SlibError.BadMagic() -> return Result.Ok("BadMagic")
-        SlibError.Truncated(_, _, _) -> return Result.Ok("Truncated")
-        _ -> return Result.Ok("another SlibError")
+        SlibError.BadMagic() -> return "BadMagic"
+        SlibError.Truncated(_, _, _) -> return "Truncated"
+        _ -> return "another SlibError"
 
 fn section(SlibSection s) string:
     match s:
-        SlibSection.Metadata() -> return Result.Ok("Metadata")
-        SlibSection.Source() -> return Result.Ok("Source")
-        SlibSection.Bitcode() -> return Result.Ok("Bitcode")
+        SlibSection.Metadata() -> return "Metadata"
+        SlibSection.Source() -> return "Source"
+        SlibSection.Bitcode() -> return "Bitcode"
 
 fn fault(SlibError e) string:
     match e:
-        SlibError.BadMagic() -> return Result.Ok("BadMagic")
+        SlibError.BadMagic() -> return "BadMagic"
         SlibError.Truncated(s, expected, actual) ->
-            return Result.Ok("Truncated({section(s)??}, {expected}, {actual})")
-        _ -> return Result.Ok("another SlibError")
+            return "Truncated({section(s)}, {expected}, {actual})"
+        _ -> return "another SlibError"
 
 fn check(string name) ~:
     let string path = "{ROOT}/{name}.slib"
     let string a = "Ok"
     match read_metadata(path):
         Result.Ok(_) -> a := "Ok"
-        Result.Err(e) -> a := plain(e)??
+        Result.Err(e) -> a := plain(e)
     let string b = "Ok"
     match sizes(path):
         Result.Ok(_) -> b := "Ok"
-        Result.Err(e) -> b := plain(e)??
+        Result.Err(e) -> b := plain(e)
     let string c = "Ok"
     match read_library(path):
         Result.Ok(_) -> c := "Ok"
-        Result.Err(e) -> c := fault(e)??
+        Result.Err(e) -> c := fault(e)
     println("{name}: {a} {b} {c}")
-    return Result.Ok(~)
 
 fn run_test() i32:
     if (mkdir_all(ROOT, 0o755).is_err()):
-        return Result.Ok(1)
+        return 1
     let u8[] short = "hello!".to_bytes()
-    write_file("{ROOT}/short.slib", peek short)??
-    let u8[] cut = image(19, 100)??
-    write_file("{ROOT}/cut.slib", peek cut)??
-    let u8[] long = image(1099511627776, 0)??
-    write_file("{ROOT}/long.slib", peek long)??
-    check("short")??
-    check("cut")??
-    check("long")??
+    write_file("{ROOT}/short.slib", peek short)
+    let u8[] cut = image(19, 100)
+    write_file("{ROOT}/cut.slib", peek cut)
+    let u8[] long = image(1099511627776, 0)
+    write_file("{ROOT}/long.slib", peek long)
+    check("short")
+    check("cut")
+    check("long")
     remove_all(ROOT)
-    return Result.Ok(0)
+    return 0
 
 fn main() i32:
     remove_all(ROOT)
-    return Result.Ok(run_test().realise(1))
+    return run_test()

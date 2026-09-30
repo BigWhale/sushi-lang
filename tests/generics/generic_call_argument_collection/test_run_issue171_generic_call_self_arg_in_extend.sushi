@@ -6,12 +6,12 @@
 # EXPECT_STDOUT_EXACT: "42\n"
 
 fn identity@(T)(T value) T:
-    return Result.Ok(value)
+    return value
 
 extend i32 doubled() i32:
-    return identity(self).realise(0) * 2
+    return identity(self) * 2
 
 fn main() i32:
     let i32 n = 21
     println(n.doubled())
-    return Result.Ok(0)
+    return 0

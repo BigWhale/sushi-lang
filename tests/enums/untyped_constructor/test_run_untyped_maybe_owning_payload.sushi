@@ -12,4 +12,4 @@ fn main() i32:
     match Maybe.Some(Maybe.Some(2)):
         Maybe.Some(inner) -> println(inner.realise(0))
         Maybe.None() -> println(0)
-    return Result.Ok(0)
+    return 0

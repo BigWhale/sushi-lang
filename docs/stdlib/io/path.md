@@ -18,21 +18,27 @@ use <io/path>
 
 ## Functions
 
-Each function declares a `string` return, so a call answers `Result@(string, StdError)`.
-No function fails today; `.realise("?")` in the examples takes the value.
+Every function in this module is **bare**: it has no error channel, and a call gives the
+`string` itself. Do not write `??` or `.realise(...)` on a call. A `??` on it is CE2507, and
+a `.realise(...)` on it is CE2008.
+
+A bare function is the exception in Sushi. These functions are bare because each one is
+total over its input and will stay so: a path join cannot fail. A function that does I/O,
+parses or can gain a failure later writes an error channel. [The error
+channel](../../design/error-channel.md) gives the rule.
 
 ### `join(string base, string child) string`
 
-Join two path segments with a single separator. An absolute child replaces the base.
+Join two path segments with a single separator. An absolute child replaces the base. An empty child keeps the base and adds a trailing separator, so the result names a directory.
 
 ```sushi
 use <io/path>
 
 fn main() i32:
-    println(join("src", "main.sushi").realise("?"))   # src/main.sushi
-    println(join("src/", "main.sushi").realise("?"))  # src/main.sushi
-    println(join("src", "/etc/hosts").realise("?"))   # /etc/hosts
-    return Result.Ok(0)
+    println(join("src", "main.sushi"))   # src/main.sushi
+    println(join("src/", "main.sushi"))  # src/main.sushi
+    println(join("src", "/etc/hosts"))   # /etc/hosts
+    return 0
 ```
 
 ### `basename(string path) string`
@@ -43,9 +49,9 @@ The part after the last separator. A path with a trailing separator has an empty
 use <io/path>
 
 fn main() i32:
-    println(basename("/a/b.txt").realise("?"))  # b.txt
-    println(basename("a/").realise("?"))        # (empty)
-    return Result.Ok(0)
+    println(basename("/a/b.txt"))  # b.txt
+    println(basename("a/"))        # (empty)
+    return 0
 ```
 
 ### `dirname(string path) string`
@@ -56,9 +62,9 @@ The part before the last separator, trailing separators stripped. A path with no
 use <io/path>
 
 fn main() i32:
-    println(dirname("/a/b.txt").realise("?"))  # /a
-    println(dirname("/").realise("?"))         # /
-    return Result.Ok(0)
+    println(dirname("/a/b.txt"))  # /a
+    println(dirname("/"))         # /
+    return 0
 ```
 
 ### `extension(string path) string`
@@ -69,22 +75,22 @@ The extension of the last component, without the leading dot. The leading dot of
 use <io/path>
 
 fn main() i32:
-    println(extension("archive.tar.gz").realise("?"))  # gz
-    println(extension(".bashrc").realise("?"))         # (empty)
-    return Result.Ok(0)
+    println(extension("archive.tar.gz"))  # gz
+    println(extension(".bashrc"))         # (empty)
+    return 0
 ```
 
 ### `normalize(string path) string`
 
-Normalize a path lexically: doubled separators collapse, `.` components vanish, and a `..` removes the component before it when one exists. An empty result becomes `.`.
+Normalize a path lexically: doubled separators collapse, `.` components vanish, and a `..` removes the component before it when one exists. A rooted path keeps its root, and a root of exactly two separators stays `//` (the POSIX implementation-defined form). An empty result becomes `.`.
 
 ```sushi
 use <io/path>
 
 fn main() i32:
-    println(normalize("/a/./b/../c").realise("?"))  # /a/c
-    println(normalize("a//b").realise("?"))         # a/b
-    return Result.Ok(0)
+    println(normalize("/a/./b/../c"))  # /a/c
+    println(normalize("a//b"))         # a/b
+    return 0
 ```
 
 ## See also

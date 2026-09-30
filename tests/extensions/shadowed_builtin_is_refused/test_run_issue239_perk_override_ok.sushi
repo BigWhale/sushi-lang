@@ -21,4 +21,4 @@ extend Point with Hashable:
 fn main() i32:
     let Point p = Point(10, 20)
     println(p.hash())
-    return Result.Ok(0)
+    return 0

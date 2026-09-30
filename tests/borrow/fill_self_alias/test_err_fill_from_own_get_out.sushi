@@ -1,7 +1,7 @@
 # An element get-out borrows the slot as an index does, so `a.get(0)??` is refused (#867).
 # EXPECT_ERROR_CODE: CE2430
 
-fn refill(poke string[] a) ~:
+fn refill(poke string[] a) ~ | StdError:
     a.fill(a.get(0)??)
     return Result.Ok(~)
 
@@ -10,4 +10,4 @@ fn main() i32:
     match refill(poke a):
         Result.Ok(_) -> println(a[2])
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

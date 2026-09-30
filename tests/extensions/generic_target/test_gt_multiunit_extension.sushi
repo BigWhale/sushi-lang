@@ -8,4 +8,4 @@ use "helpers/gt_multiunit_helper"
 fn main() i32:
     let Crate@(i32) c = Crate(21)
     println("{c.shown()}")
-    return Result.Ok(0)
+    return 0

@@ -5,21 +5,21 @@
 
 use <encoding/msgpack>
 
-fn lookup(MsgValue m, string key) ~:
-    let Maybe@(MsgValue) found = map_get(m, key)??
+fn lookup(MsgValue m, string key) ~ | StdError:
+    let Maybe@(MsgValue) found = map_get(m, key)
     match found:
         Maybe.Some(v) ->
-            let string shown = show(v)??
+            let string shown = show(v)
             println("{key}={shown}")
         Maybe.None() ->
             println("{key} missing")
     return Result.Ok(~)
 
-fn run_test() i32:
+fn run_test() i32 | StdError:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     match decode(buf):
         Result.Ok(m) ->
-            println(show(m)??)
+            println(show(m))
             lookup(m, "a")??
             lookup(m, "zz")??
         Result.Err(_) ->
@@ -28,4 +28,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 r = run_test().realise(99)
-    return Result.Ok(r)
+    return r

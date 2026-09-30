@@ -19,4 +19,4 @@ fn main() i32:
     let Holder h = Holder(map)
     # map was MOVED into h; h owns and frees it at scope exit (no map.free()).
     println("count = {h.m.len()}")
-    return Result.Ok(0)
+    return 0

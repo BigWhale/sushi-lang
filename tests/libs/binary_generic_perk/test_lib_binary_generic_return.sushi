@@ -8,4 +8,4 @@ fn main() i32:
     match make_box(7):
         Result.Ok(b) -> println("{b.item}")
         Result.Err(_) -> println("no box")
-    return Result.Ok(0)
+    return 0

@@ -14,5 +14,5 @@ fn main() i32:
     let Tally mine = Tally.Empty
     match mine:
         Tally.Empty -> println("empty")
-    println("{lib_tally(1).realise(0)}")
-    return Result.Ok(0)
+    println("{lib_tally(1)}")
+    return 0

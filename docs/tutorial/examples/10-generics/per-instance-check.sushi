@@ -1,8 +1,8 @@
 use <collections/strings>
 
 fn size@(T)(T x) i32:
-    return Result.Ok(x.len())
+    return x.len()
 
 fn main() i32:
-    println("a string has len(): {size('four').realise(0)}")
-    return Result.Ok(0)
+    println("a string has len(): {size('four')}")
+    return 0

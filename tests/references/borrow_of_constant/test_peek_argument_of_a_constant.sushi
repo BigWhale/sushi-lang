@@ -4,11 +4,11 @@
 
 const i32 LIMIT = 10
 
-fn doubled(peek i32 v) i32:
+fn doubled(peek i32 v) i32 | StdError:
     return Result.Ok(v * 2)
 
 fn main() i32:
     match doubled(peek LIMIT):
         Result.Ok(seen) -> println("{seen}")
         Result.Err(_) -> println("failed")
-    return Result.Ok(0)
+    return 0

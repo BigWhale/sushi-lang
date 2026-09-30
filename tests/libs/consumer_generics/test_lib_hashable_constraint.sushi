@@ -13,7 +13,7 @@ struct Point:
 
 fn main() i32:
     let i32 n = 5
-    println(lib_fingerprint(n).realise(0 as u64) == n.hash())
+    println(lib_fingerprint(n) == n.hash())
     let Point p = Point(1, 2)
-    println(lib_fingerprint(p).realise(0 as u64) == p.hash())
-    return Result.Ok(0)
+    println(lib_fingerprint(p) == p.hash())
+    return 0

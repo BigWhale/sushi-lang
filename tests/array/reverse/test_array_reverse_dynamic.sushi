@@ -1,4 +1,4 @@
-fn run_test() i32:
+fn run_test() i32 | StdError:
     # Test reverse() on dynamic array - countdown to Earth destruction
     let i32[] countdown = from([5, 4, 3, 2, 1])
     countdown.reverse()
@@ -19,4 +19,4 @@ fn run_test() i32:
 
 fn main() i32:
     let i32 result = run_test().realise(99)
-    return Result.Ok(result)
+    return result

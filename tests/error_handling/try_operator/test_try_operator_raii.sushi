@@ -9,16 +9,16 @@ fn create_array() i32[]:
     arr.push(1)
     arr.push(2)
     arr.push(3)
-    return Result.Ok(arr)
+    return arr
 
-fn might_fail(bool succeed) i32:
+fn might_fail(bool succeed) i32 | StdError:
     # Direct initialization from function call with ?? operator
-    let i32[] temp = create_array()??  # RAII: must cleanup on error
+    let i32[] temp = create_array()  # RAII: must cleanup on error
     if (succeed):
         return Result.Ok(temp.len())
     return Result.Err(StdError.Error)  # Must free temp before returning via ??
 
-fn caller(bool flag) i32:
+fn caller(bool flag) i32 | StdError:
     let i32 result = might_fail(flag)??  # Another level of propagation
     return Result.Ok(result + 100)
 
@@ -31,4 +31,4 @@ fn main() i32:
     let i32 bad = caller(false).realise(999)
     println("Error handled: {bad}")
 
-    return Result.Ok(0)
+    return 0

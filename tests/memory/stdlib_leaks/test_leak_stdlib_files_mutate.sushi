@@ -17,10 +17,10 @@ fn main() i32:
             f.write("x")
             f.close()
         Result.Err(_) ->
-            return Result.Ok(1)
+            return 1
 
     let i32 rn = rename('/tmp/sushi_leak_mutate_a.txt', '/tmp/sushi_leak_mutate_b.txt').realise(-1)
     let i32 rm = remove('/tmp/sushi_leak_mutate_b.txt').realise(-1)
     let i32 rd = rmdir(dir).realise(-1)
     println("md={md} rn={rn} rm={rm} rd={rd}")
-    return Result.Ok(0)
+    return 0

@@ -7,4 +7,4 @@
 
 fn main() i32:
     println("val {1 +}")
-    return Result.Ok(0)
+    return 0

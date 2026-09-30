@@ -9,10 +9,10 @@ struct Box:
     Inner inner
 
 fn look(peek string s) i32:
-    return Result.Ok(s.len())
+    return s.len()
 
 fn main() i32:
     let Box b = Box(Inner("Mostly Harmless"))
-    let i32 c = look(b.inner.label).realise(0)
+    let i32 c = look(b.inner.label)
     println("{c}")
-    return Result.Ok(0)
+    return 0
