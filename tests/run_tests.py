@@ -715,6 +715,8 @@ CONSUMER_CASES = (
      _put("public struct Box@(T:\n", "templates", "generic_structs", 0, "source")),
     ("a constant source with two declarations", "CE3512",
      _append("\npublic const i32 OTHER = 1\n", "public_constants", 0, "source")),
+    ("a bare function record that states a channel", "CE3512",
+     _put(True, "public_functions", 0, "has_channel")),
 )
 
 
