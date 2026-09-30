@@ -10,8 +10,8 @@ from sushi_lang.internals.errors.registry import (
 
 
 _add(ErrorMessage("CE5001", Severity.ERROR,
-    "external link-name '{symbol}' clashes with a built-in extern of a different signature",
-    Category.FFI, "A compiler built-in already declares this C symbol with a different signature. LLVM only deduplicates identical declarations. Choose a different link-name or match the reserved signature."))
+    "external link-name '{symbol}' is declared with another signature",
+    Category.FFI, "One C symbol has one signature in one program (#1099). Two `unsafe external` declarations of one link name agree only when each position has the SAME C type: each parameter, the return and `var_arg`. `i32` against `u32` does not agree, because `int` and `unsigned int` are two C types, and a C compiler refuses the pair. A fixed signature against a `var_arg` signature does not agree, also when the fixed parameters are equal. Two spellings of one C type agree: `string` and `Maybe@(string)` are both `char*`, `ptr` and `Maybe@(ptr)` are both `void*`, and a link name written as a constant is the name it folds to. Two external variables of one link name must have the same C type, and a function and a variable cannot share one link name. The rule reads every declaration in the program, in each unit and across units, the standard library units written in Sushi included. The built-ins that the compiler declares itself (`malloc`, `free`, `exit`, `strlen`, `strcmp`, `memcmp`, `printf`, `sprintf` and the errno location function) are the first declaration of their names. The back end declares a symbol one time, so before this rule the second declaration called through the first one and computed a wrong value with no diagnostic. The note points at the other declaration. Make the two signatures the same, or remove one declaration."))
 
 _add(ErrorMessage("CE5002", Severity.ERROR,
     "public function '{name}' exposes a foreign `ptr` and cannot appear in a library (.slib) public API",

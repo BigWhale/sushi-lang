@@ -12,20 +12,20 @@ ERRNO_LOCATION_SYMBOLS: dict[str, str] = {
 }
 
 
-# C link-name -> (param types, return type) for the reserved built-in externs. A matching
-# link-name with a DIFFERENT signature is CE5001; an identical one is allowed, since LLVM
-# deduplicates declarations.
+# C link-name -> (param types, return type, var_arg) for the built-in externs that the
+# compiler declares itself. Each one is the first declaration of its link name, so a user
+# declaration of the name must have the same C types (CE5001, #1099).
 RESERVED_EXTERNS: dict[str, tuple] = {
-    "strlen":  ((BuiltinType.STRING,), BuiltinType.I64),
-    "strcmp":  ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
-    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I64), BuiltinType.I32),
-    "sprintf": ((ForeignPtrType(), ForeignPtrType()), BuiltinType.I32),
-    "printf":  ((ForeignPtrType(),), BuiltinType.I32),
-    "malloc":  ((BuiltinType.I64,), ForeignPtrType()),
-    "free":    ((ForeignPtrType(),), BuiltinType.BLANK),
-    "exit":    ((BuiltinType.I32,), BuiltinType.BLANK),
+    "strlen":  ((BuiltinType.STRING,), BuiltinType.I64, False),
+    "strcmp":  ((BuiltinType.STRING, BuiltinType.STRING), BuiltinType.I32, False),
+    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I64), BuiltinType.I32, False),
+    "sprintf": ((ForeignPtrType(), BuiltinType.STRING), BuiltinType.I32, True),
+    "printf":  ((BuiltinType.STRING,), BuiltinType.I32, True),
+    "malloc":  ((BuiltinType.I64,), ForeignPtrType(), False),
+    "free":    ((ForeignPtrType(),), BuiltinType.BLANK, False),
+    "exit":    ((BuiltinType.I32,), BuiltinType.BLANK, False),
     # `errno()` (#1087) declares the platform's location function as a pointer answer.
-    **{symbol: ((), ForeignPtrType()) for symbol in ERRNO_LOCATION_SYMBOLS.values()},
+    **{symbol: ((), ForeignPtrType(), False) for symbol in ERRNO_LOCATION_SYMBOLS.values()},
 }
 
 

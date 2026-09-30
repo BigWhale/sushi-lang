@@ -1,0 +1,8 @@
+# The compiler declares `malloc` itself, and that declaration takes part in the one
+# rule (#1099): a user declaration with another signature does not agree with it.
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as libc because "allocating memory":
+    fn malloc(i32 n) ptr = "malloc"
+
+fn main() i32:
+    return 0

@@ -1,0 +1,14 @@
+# Two declarations of one C symbol in one unit, with other parameter and return
+# types (#1099). The back end declares the symbol one time, so the second
+# declaration would call through the first one.
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as ci because "abs of an int":
+    fn abs(i32 x) i32 = "abs"
+
+unsafe external "C" as cf because "abs, declared with the wrong type":
+    fn abs(f64 x) f64 = "abs"
+
+fn main() i32:
+    println(ci.abs(-3))
+    println(cf.abs(-2.5))
+    return 0

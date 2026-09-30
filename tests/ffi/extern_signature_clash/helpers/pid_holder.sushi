@@ -1,0 +1,6 @@
+# A unit that declares `getpid`, for a second unit to declare it again.
+unsafe external "C" as proc because "reading the process id":
+    fn getpid() i32 = "getpid"
+
+public fn helper_pid() i32:
+    return proc.getpid()

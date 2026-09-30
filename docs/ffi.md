@@ -73,8 +73,18 @@ one LLVM module and a linked library's module is merged into it, so a declaratio
 definition of one name unify: the call enters the program's own body with the declared
 signature, unchecked. A library-*private* body could be run that way from consumer code, and
 with a mismatched signature the return value is read out of the wrong register. Two
-namespaces may still declare the same FOREIGN symbol -- LLVM deduplicates identical
-declarations, and `CE5001` is the rule for a mismatched one.
+namespaces may still declare the same FOREIGN symbol when the two signatures agree, and
+`CE5001` is the rule for two that do not.
+
+One C symbol has one signature in one program (#1099). Two declarations of one link name, in
+one unit or in two, agree only when each parameter, the return and `var_arg` have the SAME C
+type. `i32` against `u32` is `CE5001` (`int` and `unsigned int`), and so is a fixed signature
+against a `var_arg` one. Two spellings of one C type agree: `string` and `Maybe@(string)`
+are `char*`, `ptr` and `Maybe@(ptr)` are `void*`, and a link name written as a constant is
+the name it folds to. The built-ins that the compiler declares itself (`malloc`, `free`,
+`exit`, `strlen`, `strcmp`, `memcmp`, `printf`, `sprintf`, the errno location function) are
+the first declaration of their names, so `fn malloc(i32 n) ptr = "malloc"` is `CE5001` too.
+External variables follow the same rule.
 
 ## Types at the boundary
 
@@ -534,7 +544,7 @@ NULL is declared `Maybe@(ptr)` ([Null at the boundary](#null-at-the-boundary)).
 | Code | Severity | Rule |
 |---|---|---|
 | `CW5001` | warning (exit 1) | A block without `because`. Silenced by adding a reason. |
-| `CE5001` | error | A link-name clashes with a compiler built-in extern of a **different** signature. An identical signature is allowed (LLVM deduplicates). |
+| `CE5001` | error | Two declarations of one link-name (two `unsafe external` declarations, or one and a compiler built-in) have other C types. Two that agree are allowed. |
 | `CE5002` | error | An external - or any public function whose signature exposes a foreign `ptr` - appears in a `.slib` public API. FFI is a private unit detail and cannot propagate through Nori packages. |
 | `CE5003` | error | An external signature uses a non-C-ABI type, or the ABI string is not `"C"`. `Maybe@(string)` and `Maybe@(ptr)` are the two `Maybe` forms it admits. |
 | `CE5004` | error | A variadic external (`...`) declares no fixed parameter. The C ABI needs at least one named argument for `va_start`. |

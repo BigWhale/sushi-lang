@@ -512,7 +512,10 @@ registry text of each RExxxx code (`internals/errors/runtime.py`) is the format 
   each pointer exactly once.
 
 `RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds the reserved built-in symbols
-and their signatures, for the `CE5001` clash check.
+and their signatures. Each one is the first declaration of its name for `CE5001` (#1099).
+`_declare_one` and `_declare_variable` (`runtime/externs/user_externs.py`) reuse a symbol
+that the module holds only when the LLVM type is the same; another type is the internal
+error `CE0143`, because `CE5001` refuses it first.
 
 ## Optimization
 
