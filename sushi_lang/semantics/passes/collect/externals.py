@@ -212,7 +212,7 @@ def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
     """CE5001 for each declaration in one unit whose link name another declaration
     holds with another C shape. It runs after the link names are folded."""
     filename = reporter.filename
-    for block in getattr(program, "externals", None) or ():
+    for block in program.externals:
         for decl in block.decls:
             record = externals.lookup(block.namespace, decl.name)
             if (decl.link_name and _collected(record, decl, filename)
