@@ -1,0 +1,21 @@
+# a container that holds a nested array hashes what it holds: a `List@(i32[][])` and
+# an `Own@(i32[2][3])`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "list=true false\nown=true false\n"
+fn rows(i32 last) List@(i32[][]):
+    let List@(i32[][]) l = List.new()
+    l.push(from([from([1]), from([2, last])]))
+    l.push(from([new()]))
+    return l
+
+fn main() i32:
+    let List@(i32[][]) a = rows(3)
+    let List@(i32[][]) b = rows(3)
+    let List@(i32[][]) c = rows(4)
+    println("list={a.hash() == b.hash()} {a.hash() == c.hash()}")
+    let Own@(i32[2][3]) o1 = Own.alloc([[1, 2], [3, 4], [5, 6]])
+    let Own@(i32[2][3]) o2 = Own.alloc([[1, 2], [3, 4], [5, 6]])
+    let Own@(i32[2][3]) o3 = Own.alloc([[1, 2], [3, 4], [5, 7]])
+    println("own={o1.hash() == o2.hash()} {o1.hash() == o3.hash()}")
+    return 0
