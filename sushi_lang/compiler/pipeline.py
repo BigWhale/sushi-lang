@@ -13,7 +13,7 @@ from sushi_lang.compiler.loader import (
 from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
 from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 from sushi_lang.semantics.units import Unit, UnitManager
@@ -206,29 +206,43 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
     semantic analyzer through the resolver's `loaded_libraries`.
 
     Returns (resolver-or-None, binary import paths), or None when a library failed to
-    load. A library's OWN `use <lib/...>` is not followed -- transitive library
-    dependencies are unsupported, and a consumer states each library it uses.
+    load. A library's `public use <lib/...>` is followed as if the consumer wrote the
+    import (unit-namespaces.md section 8.1, rule 3): a source library's re-parsed
+    statement and a compiled library's `kind: "library"` record alike. A plain `use`
+    in a library is not followed.
     """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.backend.library_format import LibraryFormat, check_manifest
     from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.internals import errors as er
 
-    wanted: set[str] = set()
+    wanted: dict[str, Optional[_ReexportOrigin]] = {}
     for unit in list(unit_manager.units.values()):
         if unit.ast is None or unit.provenance is not None:
             continue
-        wanted.update(u.path for u in unit.ast.uses if u.is_library)
+        wanted.update((u.path, None) for u in unit.ast.uses if u.is_library)
     if not wanted:
         return None, set()
 
     resolver = LibraryResolver()
     binary_imports: set[str] = set()
+    compiled_reexports: dict[str, list[str]] = {}
+    source_units: dict[str, list[str]] = {}
 
-    print(f"Linking {len(wanted)} custom libraries:")
-    for lib_path in sorted(wanted):
+    print("Linking custom libraries:")
+    todo = sorted(wanted)
+    while todo:
+        lib_path = todo.pop(0)
         try:
-            slib_path = resolver.resolve_library(lib_path)
+            try:
+                slib_path = resolver.resolve_library(lib_path)
+            except LibraryError as e:
+                origin = wanted[lib_path]
+                if origin is not None and origin[1] is not None:
+                    e.note_at(origin[0], origin[1], origin[2])
+                elif origin is not None:
+                    e.note(origin[0])
+                raise
             metadata = LibraryFormat.read_metadata_only(slib_path)
             check_manifest(metadata, str(slib_path))
             _check_library_platform(metadata)
@@ -237,13 +251,21 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
             _check_library_templates_version(metadata, lib_path)
 
             if metadata.get("kind") == "source":
-                _inject_library_source(unit_manager, slib_path, metadata, lib_path,
-                                       cache)
+                injected = _inject_library_source(unit_manager, slib_path, metadata,
+                                                  lib_path, cache)
+                reexported = _source_library_reexports(metadata, injected)
+                source_units[lib_path] = [unit.name for unit in injected]
             else:
                 binary_imports.add(lib_path)
                 metadata["library_path"] = str(slib_path)
                 resolver.loaded_libraries[metadata["library_name"]] = metadata
+                reexported = _compiled_library_reexports(metadata)
+                compiled_reexports[lib_path] = [path for path, _ in reexported]
 
+            for path, origin in reexported:
+                if path not in wanted:
+                    wanted[path] = origin
+                    todo.append(path)
             print(f"  - {' / '.join(lib_path.split('/'))}")
         except LibraryError as e:
             er.emit_exception(reporter, e)
@@ -252,11 +274,62 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
             raise
     print()
 
+    _depend_on_compiled_reexports(unit_manager, compiled_reexports, source_units)
     return (resolver if binary_imports else None), binary_imports
 
 
+def _depend_on_compiled_reexports(unit_manager: UnitManager,
+                                  compiled_reexports: dict[str, list[str]],
+                                  source_units: dict[str, list[str]]) -> None:
+    """A unit that imports a compiled library depends on the source units it re-exports.
+
+    A source library's `use` line is an edge of the dependency graph, but a compiled
+    library's record is not text, so its importer gets the edge here: the collect
+    order and the cache key both read the graph.
+    """
+    if not compiled_reexports:
+        return
+    for unit in list(unit_manager.units.values()):
+        if unit.ast is None:
+            continue
+        todo = [use.path for use in unit.ast.uses
+                if use.is_library and use.path in compiled_reexports]
+        seen: set[str] = set()
+        while todo:
+            path = todo.pop()
+            if path in seen:
+                continue
+            seen.add(path)
+            todo.extend(compiled_reexports.get(path, ()))
+            for name in source_units.get(path, ()):
+                if name != unit.name and name not in unit.dependencies:
+                    unit.dependencies.append(name)
+
+
+_ReexportOrigin = tuple[str, Optional[Span], Optional[str]]
+
+
+def _source_library_reexports(metadata: dict, units: list[Unit]
+                              ) -> list[tuple[str, _ReexportOrigin]]:
+    """The libraries a source library's units name in a `public use`, with the note."""
+    name = metadata.get("library_name") or "?"
+    return [(use.path, (f"'{name}' re-exports it with `public use <{use.path}>`",
+                        use.loc, str(unit.file_path)))
+            for unit in units if unit.ast is not None
+            for use in unit.ast.uses if use.is_library and use.is_public]
+
+
+def _compiled_library_reexports(metadata: dict) -> list[tuple[str, _ReexportOrigin]]:
+    """The libraries a compiled library's `reexports` records name, with the note."""
+    from sushi_lang.semantics.library_registry import reexported_libraries
+
+    name = metadata.get("library_name") or "?"
+    return [(path, (f"'{name}' re-exports it with `public use <{path}>`", None, None))
+            for path in reexported_libraries(metadata)]
+
+
 def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata: dict,
-                           lib_path: str, cache: CacheManager) -> None:
+                           lib_path: str, cache: CacheManager) -> list[Unit]:
     """Write a source library's units to disk and add them to the unit table.
 
     The units are materialized rather than kept in memory because the per-unit
@@ -284,6 +357,7 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
     with writing_output(out_dir):
         out_dir.mkdir(parents=True, exist_ok=True)
     own = set(sources)
+    injected: list[Unit] = []
 
     for unit_name, text in sources.items():
         file_path = out_dir / f"{unit_name}.sushi"
@@ -302,6 +376,8 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
                     provenance=provenance)
         unit.dependencies = [f"lib/{lib_name}/{d}" for d in unit.dependencies if d in own]
         unit_manager.units[unit.name] = unit
+        injected.append(unit)
+    return injected
 
 
 def build_stdlib(rebuild: bool = False) -> None:

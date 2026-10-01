@@ -1,0 +1,4 @@
+public use <lib/reex_b>
+
+public fn a_val() i32:
+    return b_val() + 1

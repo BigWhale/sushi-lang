@@ -24,6 +24,16 @@ def manifest_reexports(manifest: dict) -> tuple[dict, ...]:
     return tuple((manifest or {}).get("reexports") or ())
 
 
+def reexported_libraries(manifest: dict) -> tuple[str, ...]:
+    """The `lib/...` paths one compiled library re-exports (#1106).
+
+    The consumer's build loads each one as if it wrote the `use` itself, and links its
+    bitcode, because no unit of the consumer names it.
+    """
+    return tuple(record["path"] for record in manifest_reexports(manifest)
+                 if record.get("kind") == "library" and record.get("path"))
+
+
 @dataclass
 class LibraryMetadata:
     """Pre-parsed library metadata with typed objects."""

@@ -1,0 +1,11 @@
+# A plain `use <lib/reex_b>` in a library stays local: the consumer gets nothing of
+# reex_b, so `b_val` is undefined.
+# BUILD_LIB: reex_b.sushi
+# BUILD_LIB_BINARY: reex_a_plain.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2008
+use <lib/reex_a_plain>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0

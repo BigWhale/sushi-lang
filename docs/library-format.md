@@ -309,10 +309,10 @@ is the authority, and the index is a cache of it.
     #                consumer's build compiles the module and links its bitcode on
     #                the strength of this record alone, because no unit wrote the
     #                import (`_reexported_stdlib_modules`)
-    #   "library" -- another library. `path` is the written `lib/...` path. Limitation
-    #                1 still holds: the consumer states that library for itself, and
-    #                one that does not hears CE2008 at the call, exactly as a source
-    #                library's re-export of one answers
+    #   "library" -- another library. `path` is the written `lib/...` path. The
+    #                consumer's build finds that library on `SUSHI_LIB_PATH` as if a
+    #                unit of its own wrote the import, and links it; a library that is
+    #                not on the path is CE3502 with a note that names this library
     #
     # The whole key is absent when no unit says `public use`, so an ordinary library
     # grows by nothing. An absent key means no re-export.

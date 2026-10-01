@@ -466,6 +466,9 @@ fixture file itself, because the one set of directives describes both steps.
   as a SOURCE `.slib` (`--lib --lib-version 0.0.0 --lib-kind source`), and puts the
   directory that holds it first on `SUSHI_LIB_PATH`. The fixture imports it as
   `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one.
+- The runner builds every `BUILD_LIB`, then every `BUILD_LIB_BINARY`, then every
+  `BUILD_LIB_AT`, each in written order. A library build has the same directory on its
+  `SUSHI_LIB_PATH`, so a library may `use <lib/...>` a library built before it.
 - In a rebuild fixture the library is built again after `v2/` is copied in.
 - A library that does not build fails the fixture.
 - The build has a cache of its own, outside the copy. The version is `0.0.0`, unless a

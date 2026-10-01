@@ -351,7 +351,7 @@ def _reexports_of(unit_name: str, tables: SymbolTables,
     Read off the unit's own AST, so a source library's unit and a bundled stdlib module
     re-export exactly as a user unit does. A unit already on the chain contributes
     nothing a second time, which is what makes a cycle terminate; a unit with no AST --
-    a binary library's -- has no statement to read, and rule 3 refused it at build time.
+    a binary library's -- has no statement to read, and `_binary_reexports` reads its records.
     """
     if units is None or unit_name in visited:
         return ()

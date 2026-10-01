@@ -904,10 +904,18 @@ stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
 `SeekFrom.Start`; `use <io/fs> as fs` gives `fs.IoError`; `use <net/tcp>` alone matches
 `IoError` from a read. The fixtures under `tests/namespaces/reexport/` hold rule 3.
 
+**A library re-exports a library** (#1106). `public use <lib/b>` in a library A is the
+same rule as `public use <io/error>` in `<io/contracts>`. The consumer's build finds B on
+`SUSHI_LIB_PATH` as if the consumer wrote `use <lib/b>`: a source A by its re-parsed
+statement, a compiled A by its `kind: "library"` record (`_resolve_library_imports`,
+`compiler/pipeline.py`, follows both; the monolithic link reads the record through
+`reexported_libraries`). Only a `public use` loads B; a plain `use <lib/b>` in A stays
+local. A B that the consumer also imports for itself is one candidate, because the
+candidates count by declaring unit. A B that is not on the path is CE3502 at the
+consumer, with a note that names A's `public use`.
+
 **What this does not decide.** Whether a `public use` may re-export a single name
-(`public use "geometry".Vec`), and whether a `.slib` consumer may re-export a library
-(rule 3 says not from a binary one; a source one works by construction). Both are open
-until asked for.
+(`public use "geometry".Vec`). It is open until asked for.
 
 ## 9. What the back end needs
 

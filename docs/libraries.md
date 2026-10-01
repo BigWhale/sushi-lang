@@ -94,7 +94,11 @@ kind you build: a source library ships the statement as text and the consumer's 
 reads it, a compiled one ships a `reexports` record per statement and the consumer
 composes the namespace from that. A `public use <io/fs>` hands the module on the same
 way, and the consumer's build compiles the module on the strength of the record even
-where no unit of its own wrote the import.
+where no unit of its own wrote the import. A `public use <lib/other>` hands on another
+library with the same rule: the consumer's build finds `other` on `SUSHI_LIB_PATH` as if
+the consumer wrote `use <lib/other>`, and `other`'s public names are the consumer's to
+write. If `other` is not on the path, the consumer gets CE3502 with a note that names the
+`public use`.
 
 ### Public Declarations
 
@@ -598,11 +602,11 @@ fn main() i32:
 
 Current limitations of the library system:
 
-1. **No transitive dependencies**: If library A depends on library B, you must import both
-   explicitly. A library's own `use <lib/...>` is not followed. A plain `use` in a library
-   exports nothing of the stdlib module or the library it imports, so a consumer states each
-   one for itself. A `public use` in the library hands its public names on (see
-   [Library Kinds](#library-kinds)).
+1. **A plain `use` is not transitive**: If library A depends on library B through a plain
+   `use <lib/b>`, you must import both explicitly. A plain `use` in a library exports
+   nothing of the stdlib module or the library it imports, so a consumer states each one
+   for itself. A `public use <lib/b>` in A loads B in the consumer's build and hands B's
+   public names on, for every library kind (see [Library Kinds](#library-kinds)).
 2. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still
