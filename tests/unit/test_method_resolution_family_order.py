@@ -31,6 +31,7 @@ CANONICAL_ORDER = [
     "PERK",
     "DERIVED_HASH",
     "DERIVED_CLONE",
+    "CONTRACT",
     "FUNCTION_CLONE",
     "PRIMITIVE",
     "EXTENSION",
@@ -42,6 +43,7 @@ CANONICAL_ORDER = [
 TABLE_ROWS = {
     "derived_hash": "DERIVED_HASH",
     "derived_clone": "DERIVED_CLONE",
+    "contract": "CONTRACT",
     "function": "FUNCTION_CLONE",
     "primitive": "PRIMITIVE",
 }
@@ -63,6 +65,7 @@ CODEGEN_MARKERS = {
     "PERK": r"try_emit_perk_method",
     "DERIVED_HASH": r"try_emit_struct_hash",
     "DERIVED_CLONE": r"try_emit_struct_clone",
+    "CONTRACT": r"try_emit_contract_method",
     "FUNCTION_CLONE": r"try_emit_function_clone",
     "PRIMITIVE": r"try_emit_primitive_method",
     "EXTENSION": r"Extension method not found",

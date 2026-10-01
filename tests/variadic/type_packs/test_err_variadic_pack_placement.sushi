@@ -1,9 +1,9 @@
 # A type-pack TYPE-param must be the last type parameter -> CE0117.
 # EXPECT_ERROR_CODE: CE0117
-perk Display:
+perk Render:
     fn display() string
 
-fn f@(...Ts: Display, U)(U first, ...Ts rest) ~:
+fn f@(...Ts: Render, U)(U first, ...Ts rest) ~:
     return ~
 
 fn main() i32:

@@ -66,9 +66,15 @@ class SymbolTables:
     intern_generic_ref: object = None
 
     def __post_init__(self) -> None:
+        from sushi_lang.semantics.generics.contract_walk import perk_override_of
         from sushi_lang.semantics.generics.hashing import hash_override_of
-        self.enums.derived.hash_override = hash_override_of(
-            self.perk_impls, self.generic_perk_impls)
+        from sushi_lang.semantics.passes.collect.perks import PerkCollector
+        derived = self.enums.derived
+        derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls)
+        for perk in (PerkCollector.EQ_PERK, PerkCollector.ORD_PERK,
+                     PerkCollector.DISPLAY_PERK):
+            derived.overrides[perk] = perk_override_of(
+                perk, self.perk_impls, self.generic_perk_impls)
 
     @property
     def derived_methods(self) -> DerivedMethodTable:

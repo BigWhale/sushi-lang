@@ -117,7 +117,7 @@ _NAMES = (
     "alloc", "destroy", "new", "with_capacity", "insert", "remove",
     "contains_key", "is_empty", "tombstone_count", "rehash", "free", "debug",
     "keys", "values", "entries", "iter", "capacity", "reserve", "shrink_to_fit",
-    "hash", "clone", "to_str", "to_bits",
+    "hash", "clone", "to_str", "to_bits", "eq", "compare",
     "load_i32", "store_u8", "load_ptr", "store_ptr", "offset", "to_string",
     "no_such_method", "bump",
 )

@@ -357,6 +357,20 @@ class EnumType:
                 return i
         return None
 
+@dataclass(frozen=True)
+class ReceiverType:
+    """The implementing type, in the contract of a PREDEFINED perk.
+
+    `Eq` and `Ord` compare the receiver with a second value of the same type, and a perk
+    has no `Self`. Only the compiler writes this placeholder (`register_predefined_perks`);
+    the implementation matcher reads it as the target of the implementation. A user
+    perk still cannot name its receiver.
+    """
+
+    def __str__(self) -> str:
+        return "Self"
+
+
 # Union type for all possible types
 # Includes generic types: TypeParameter, GenericTypeRef
 # Note: GenericEnumType is NOT in the Type union - it's a template that produces EnumTypes

@@ -289,8 +289,10 @@ With these limits, every perk method call goes to a known function at compile ti
 - A **perk** is a contract of method signatures. A type opts in with
   `extend Type with Perk:`.
 - Perks are **generic constraints** (`@(T: Perk)`), checked at compile time.
-- `Hashable` is **predefined**, as `Drop` is. Every type with a derived `hash()` satisfies
-  it, and `extend T with Hashable` replaces the derived hash.
+- `Hashable` is **predefined**, as `Drop`, `Eq`, `Ord` and `Display` are. Every type with a
+  derived `hash()` satisfies it, and `extend T with Hashable` replaces the derived hash.
+  The compiler also derives `==` and the order operators (`Eq`, `Ord`) and the text of
+  a struct or enum (`Display`); an `extend T with Eq` implementation overrides them.
 - Perks have no type parameters, no inheritance, no default methods and no statics.
 
 The next chapter is about how Sushi manages memory without a garbage collector: ownership,

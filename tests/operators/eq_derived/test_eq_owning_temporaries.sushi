@@ -1,0 +1,17 @@
+# An operand that is a temporary owning a heap value is freed after the comparison.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+# EXPECT_NO_LEAKS: true
+
+struct User:
+    string name
+    i32[] ids
+
+fn make(string name) User:
+    return User(name.clone(), from([1, 2, 3]))
+
+fn main() i32:
+    let User u = make("zaphod")
+    println(make("zaphod") == u)
+    println(make("trillian") == make("marvin"))
+    return 0

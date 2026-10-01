@@ -1,19 +1,19 @@
 # E2 (#71): a single enum-constructor pack arg. Pack arity 1, element type Color.
 # EXPECT_STDOUT_EXACT: "red\n"
-perk Display:
+perk Render:
     fn display() string
 
 enum Color:
     Red()
     Green()
 
-extend Color with Display:
+extend Color with Render:
     fn display() string:
         match self:
             Color.Red() -> return "red"
             Color.Green() -> return "green"
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 

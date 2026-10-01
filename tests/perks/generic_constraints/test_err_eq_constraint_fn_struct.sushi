@@ -1,0 +1,16 @@
+# A type with no equality does not satisfy `Eq`.
+# EXPECT_ERROR_CODE: CE4006
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn same@(T: Eq)(T a, T b) bool:
+    return a.eq(b)
+
+fn main() i32:
+    if (same(Handler(twice), Handler(twice))):
+        return 1
+    return 0

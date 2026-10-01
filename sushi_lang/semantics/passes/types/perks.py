@@ -1,7 +1,9 @@
 """Perk (trait) validation for Sushi compiler."""
 
 from sushi_lang.semantics.ast import ExtendWithDef, PerkDef, FuncDef, PerkMethodSignature
-from sushi_lang.semantics.typesys import Type
+from typing import Optional
+
+from sushi_lang.semantics.typesys import ReceiverType, Type
 from sushi_lang.semantics.passes.collect import ExtensionTable
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
@@ -98,9 +100,13 @@ def validate_perk_implementation(
             valid = False
             continue
 
-        if not _signatures_match(impl_method, required_sig):
-            er.emit(reporter, er.ERR.CE4004, impl_method.loc,
-                   method=method_name, perk=perk_def.name)
+        if not _signatures_match(impl_method, required_sig, impl.target_type):
+            diag = er.emit_with(reporter, er.ERR.CE4004, impl_method.loc,
+                                method=method_name, perk=perk_def.name)
+            if _names_receiver(required_sig):
+                diag.help(f"'{perk_def.name}' requires "
+                          f"{_contract_spelling(required_sig, impl.target_type)}")
+            diag.emit()
             valid = False
 
     return valid
@@ -178,7 +184,33 @@ def _reject_channel_mismatch(impl: FuncDef, required: PerkMethodSignature,
     return True
 
 
-def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
+def _names_receiver(required: PerkMethodSignature) -> bool:
+    """Does the contract name the implementing type (a predefined perk's `Self`)?"""
+    return any(isinstance(p.ty, ReceiverType) for p in required.params)
+
+
+def _contract_spelling(required: PerkMethodSignature, target: Type) -> str:
+    """The contract as the implementation must write it, with the target filled in."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    params = ", ".join(
+        f"{display_type(target if isinstance(p.ty, ReceiverType) else p.ty)} {p.name}"
+        for p in required.params)
+    return f"fn {required.name}({params}) {display_type(required.ret)}"
+
+
+def _same_param_type(impl_ty, required_ty, target) -> bool:
+    """One parameter against the contract's; the placeholder is the implementation's
+    target, compared by the key both sides file under, since the target may still
+    spell a name that the parameter already resolved (or the other way round)."""
+    if not isinstance(required_ty, ReceiverType):
+        return impl_ty == required_ty
+    from sushi_lang.semantics.passes.collect.perks import _get_type_name
+    return impl_ty == target or (
+        target is not None and _get_type_name(impl_ty) == _get_type_name(target))
+
+
+def _signatures_match(impl: FuncDef, required: PerkMethodSignature,
+                      target: Optional[Type] = None) -> bool:
     """Check if implementation signature matches requirement."""
     # Check receiver mode (#327)
     if getattr(impl, "self_mode", None) != getattr(required, "self_mode", None):
@@ -188,7 +220,7 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature) -> bool:
         return False
 
     for impl_param, req_param in zip(impl.params, required.params, strict=False):
-        if impl_param.ty != req_param.ty:
+        if not _same_param_type(impl_param.ty, req_param.ty, target):
             return False
 
     impl_answer = _answer(impl)

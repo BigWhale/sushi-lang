@@ -146,16 +146,16 @@ A library can export a `printf`-style helper. The library declares the perk too,
 program can implement it:
 
 ```sushi
-public perk Display:
+public perk Render:
     fn display() string
 
-public fn show_all@(...Ts: Display)(...Ts args) ~:
+public fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         println(a.display())
 ```
 
 and a program that `use`s the library monomorphizes it at *its own* call sites, supplying
-`Display` implementations for whatever types it passes.
+`Render` implementations for whatever types it passes.
 
 A variadic parameter, native or pack, is not permitted in a perk method or an extension
 method (`CE0115`). Use a free function. The [Libraries guide](../libraries.md)

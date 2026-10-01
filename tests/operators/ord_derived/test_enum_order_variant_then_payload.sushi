@@ -1,0 +1,20 @@
+# An enum orders by the variant in declaration order, then by the payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\ntrue\ntrue\n"
+
+enum Priority:
+    Low
+    Medium
+    High
+
+enum Job:
+    Batch(i32)
+    Urgent(i32, string)
+
+fn main() i32:
+    println(Priority.Low < Priority.High)
+    println(Job.Batch(99) < Job.Urgent(0, "a"))
+    println(Job.Urgent(1, "b") < Job.Urgent(1, "a"))
+    println(Job.Urgent(1, "a") < Job.Urgent(1, "b"))
+    println(Maybe.Some(1) < Maybe.None)
+    return 0

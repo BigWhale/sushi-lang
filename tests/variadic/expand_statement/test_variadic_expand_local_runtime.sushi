@@ -4,14 +4,14 @@
 # Covers a top-level `let` plus a second cross-referencing `let`, and a `let`
 # inside a nested `if` (own scope, no rename needed). Arity 2.
 # EXPECT_STDOUT_EXACT: "[i:1]\nodd\n[i:2]\neven\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "i:{self}"
 
-fn show_all@(...Ts: Display)(...Ts args) ~:
+fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let string base = a.display()
         let string line = "[{base}]"

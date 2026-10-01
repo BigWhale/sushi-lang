@@ -2,14 +2,14 @@
 # unrolled copy is its own hygiene scope, so the four inner copies each declare
 # their own `t` (#1018).
 # EXPECT_STDOUT_EXACT: "int\nint\nint\nint\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         expand(b in args):
             let string t = b.display()

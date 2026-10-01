@@ -1,10 +1,8 @@
 """Hashability analysis and hash() method registration."""
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Mapping, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
@@ -17,6 +15,7 @@ from sushi_lang.semantics.typesys import (
     UnknownType,
 )
 from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+from sushi_lang.semantics.generics.contract_walk import Override, Walk, decide, perk_override_of
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.internals import errors as er
@@ -69,103 +68,16 @@ CONTAINER_HASH_KINDS: Dict[str, str] = {
 
 #: "Does this type carry a `Hashable` implementation?" -- the override, read at every
 #: held position of the walk.
-HashOverride = Callable[[Type], bool]
+HashOverride = Override
 
 
 def hash_override_of(perk_impls: Any, generic_perk_impls: Any = None) -> HashOverride:
-    """The one override predicate, over the perk-implementation tables (#891).
-
-    An explicit implementation answers, and so does a generic-target template whose
-    copy for this instantiation is not cut yet. The tables fill in place, so the
-    predicate reads them when it is asked and not when it is built.
-    """
-    from sushi_lang.semantics.passes.collect.perks import PerkCollector, _get_type_name
-    hashable = PerkCollector.HASHABLE_PERK
-
-    def overridden(ty: Type) -> bool:
-        type_name = _get_type_name(ty)
-        if type_name is not None and perk_impls.implements(type_name, hashable):
-            return True
-        base = getattr(ty, "generic_base", None)
-        args = getattr(ty, "generic_args", None)
-        if not generic_perk_impls or not base or not args:
-            return False
-        return any(template.impl.perk_name == hashable
-                   and len(template.type_params) == len(args)
-                   for template in generic_perk_impls.templates(base))
-
-    return overridden
+    """The `Hashable` override predicate, over the perk-implementation tables (#891)."""
+    from sushi_lang.semantics.passes.collect.perks import PerkCollector
+    return perk_override_of(PerkCollector.HASHABLE_PERK, perk_impls, generic_perk_impls)
 
 
-@dataclass
-class _Walk:
-    """One hashability walk: where it is, and what it has already decided.
-
-    `on_path` is the DFS path and nothing else. It is what detects RECURSION, and it
-    has to be the path: a type reached twice through two different fields is not
-    recursive, and the copied-per-field set the walk used to carry could not tell the
-    two apart without multiplying the work by the fan-out at every link (#598).
-
-    `decided` is the memo that makes the walk linear. It holds only an answer no cycle
-    took part in -- a "recursive" verdict is true of the PATH that found it and of
-    nothing else, so remembering one would refuse a type that a different reader can
-    hash. `cycles` counts the hits, and an unchanged count over a subtree is what says
-    its answer is the type's own.
-
-    `resolve` maps a WRITTEN name to its table entry, for a reader that runs before the
-    resolve pass: the constraint check in monomorphize asks about a struct whose
-    fields still spell their types (#696). The derive pass runs after that pass and
-    hands over none.
-
-    `overridden` is the `Hashable` override (#891): a held type that implements it is
-    terminal and hashable, and its fields are not read.
-    """
-
-    path: List[str] = field(default_factory=list)
-    on_path: Set[str] = field(default_factory=set)
-    decided: Dict[Tuple[str, str], Tuple[bool, str]] = field(default_factory=dict)
-    cycles: int = 0
-    resolve: Optional[Callable[[Type], Type]] = None
-    overridden: Optional[HashOverride] = None
-
-
-@contextmanager
-def _walking(walk: _Walk, name: str) -> Iterator[None]:
-    """`name` is on the path for the length of this block, and off it after."""
-    walk.on_path.add(name)
-    walk.path.append(name)
-    try:
-        yield
-    finally:
-        walk.path.pop()
-        walk.on_path.discard(name)
-
-
-def _decide(walk: _Walk, kind: str, name: str,
-            verdict: Callable[[], tuple[bool, str]]) -> tuple[bool, str]:
-    """One NAMED type's answer, walked at most once per walk.
-
-    Type identity is nominal, so one name is one type and one answer serves every field
-    that reaches it.
-    """
-    key = (kind, name)
-    remembered = walk.decided.get(key)
-    if remembered is not None:
-        return remembered
-
-    if name in walk.on_path:
-        walk.cycles += 1
-        return False, f"recursive {kind} type: {' -> '.join(walk.path + [name])}"
-
-    hits = walk.cycles
-    with _walking(walk, name):
-        answer = verdict()
-    if walk.cycles == hits:
-        walk.decided[key] = answer
-    return answer
-
-
-def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
+def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
                    resolve: Optional[Callable[[Type], Type]] = None,
                    overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Can a derived hash read a value of `ty`? One reader for every position.
@@ -181,7 +93,7 @@ def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
     `overridden` is asked first: a `Hashable` implementation wins in every position
     and is terminal, so a type that has one is hashable whatever its fields hold.
     """
-    walk = walk if walk is not None else _Walk(resolve=resolve, overridden=overridden)
+    walk = walk if walk is not None else Walk(resolve=resolve, overridden=overridden)
     if walk.resolve is not None:
         ty = walk.resolve(ty)
 
@@ -217,11 +129,11 @@ def hashability_of(ty: Type, walk: Optional[_Walk] = None, *,
     return False, f"unsupported type kind '{kind}'"
 
 
-def can_struct_be_hashed(struct_type: StructType, walk: Optional[_Walk] = None, *,
+def can_struct_be_hashed(struct_type: StructType, walk: Optional[Walk] = None, *,
                          overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if a struct type can have an auto-derived hash method."""
-    walk = walk if walk is not None else _Walk(overridden=overridden)
-    return _decide(walk, "struct", struct_type.name,
+    walk = walk if walk is not None else Walk(overridden=overridden)
+    return decide(walk, "struct", struct_type.name,
                    lambda: _struct_fields_are_hashable(struct_type, walk))
 
 
@@ -237,7 +149,7 @@ def container_hash_kind(ty: Type) -> Optional[str]:
     return CONTAINER_HASH_KINDS.get(base)
 
 
-def _container_content_is_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
+def _container_content_is_hashable(struct_type: StructType, walk: Walk) -> tuple[bool, str]:
     """A container answers from what it HOLDS, with the walk standing on the container."""
     kind = container_hash_kind(struct_type)
     if kind is None:
@@ -255,7 +167,7 @@ def _container_content_is_hashable(struct_type: StructType, walk: _Walk) -> tupl
     return True, "the type it holds is hashable"
 
 
-def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[bool, str]:
+def _struct_fields_are_hashable(struct_type: StructType, walk: Walk) -> tuple[bool, str]:
     """Every field of one struct, with the walk already standing on that struct."""
     if isinstance(struct_type, GenericStructType):
         return False, UNHASHABLE_KINDS["GenericStructType"]
@@ -273,15 +185,15 @@ def _struct_fields_are_hashable(struct_type: StructType, walk: _Walk) -> tuple[b
     return True, "all fields are hashable"
 
 
-def can_enum_be_hashed(enum_type: EnumType, walk: Optional[_Walk] = None, *,
+def can_enum_be_hashed(enum_type: EnumType, walk: Optional[Walk] = None, *,
                        overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if an enum type can have an auto-derived hash method."""
-    walk = walk if walk is not None else _Walk(overridden=overridden)
-    return _decide(walk, "enum", enum_type.name,
+    walk = walk if walk is not None else Walk(overridden=overridden)
+    return decide(walk, "enum", enum_type.name,
                    lambda: _enum_payloads_are_hashable(enum_type, walk))
 
 
-def _enum_payloads_are_hashable(enum_type: EnumType, walk: _Walk) -> tuple[bool, str]:
+def _enum_payloads_are_hashable(enum_type: EnumType, walk: Walk) -> tuple[bool, str]:
     """Every payload of one enum, with the walk already standing on that enum."""
     if isinstance(enum_type, GenericEnumType):
         return False, UNHASHABLE_KINDS["GenericEnumType"]
@@ -295,7 +207,7 @@ def _enum_payloads_are_hashable(enum_type: EnumType, walk: _Walk) -> tuple[bool,
     return True, "all variant types are hashable"
 
 
-def can_array_be_hashed(array_type: Type, walk: Optional[_Walk] = None, *,
+def can_array_be_hashed(array_type: Type, walk: Optional[Walk] = None, *,
                         overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
     """Check if an array type can have an auto-derived hash method.
 
@@ -305,7 +217,7 @@ def can_array_be_hashed(array_type: Type, walk: Optional[_Walk] = None, *,
     if not isinstance(array_type, (ArrayType, DynamicArrayType)):
         return False, f"not an array type: {type(array_type).__name__}"
 
-    walk = walk if walk is not None else _Walk(overridden=overridden)
+    walk = walk if walk is not None else Walk(overridden=overridden)
     element_type = array_type.base_type
 
     if isinstance(element_type, (ArrayType, DynamicArrayType)):

@@ -7,7 +7,7 @@ import llvmlite.ir as ir
 from sushi_lang.backend.constants import ENTRY_KEY_INDICES, ENTRY_STATE_INDICES
 from sushi_lang.semantics.typesys import Type
 from .types import ENTRY_EMPTY, ENTRY_OCCUPIED, emit_key_hash_i32
-from .utils import emit_key_equality_check
+from sushi_lang.backend.types.contracts import emit_value_eq
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
@@ -150,7 +150,7 @@ def emit_find_key(
     def on_occupied(slot: ProbeSlot) -> None:
         entry_key_ptr = builder.gep(slot.entry_ptr, ENTRY_KEY_INDICES, name="entry_key_ptr")
         entry_key = builder.load(entry_key_ptr, name="entry_key")
-        keys_equal = emit_key_equality_check(codegen, key_type, key_value, entry_key)
+        keys_equal = emit_value_eq(codegen, key_value, entry_key, key_type)
         matched["entry_ptr"] = slot.entry_ptr
         matched["entry_key_ptr"] = entry_key_ptr
         builder.cbranch(keys_equal, found_bb, slot.continue_bb)

@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
+from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
 from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
 from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
 from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
@@ -276,6 +277,16 @@ class StructEnumBuiltinInferrer:
         if method is not None:
             return method.return_type
         return None
+
+
+@dataclass
+class ContractMethodInferrer:
+    """Type inferrer for `eq`, `compare` and `to_str`, the derived contract methods."""
+    method_name: str
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_RETURN
+        return CONTRACT_METHOD_RETURN.get(self.method_name)
 
 
 @dataclass
@@ -531,6 +542,25 @@ def _answers_derived_clone(receiver_type, method_name, derived_methods):
             and derived_methods.get_method(receiver_type, "clone") is not None)
 
 
+def _answers_contract(receiver_type, method_name, derived_methods):
+    # `eq`, `compare` and `to_str`: the methods of the three derived contracts. A
+    # primitive has `eq` and `compare` (a bool included, which orders false before
+    # true), and keeps its own `to_str` in the primitive family. A struct or an enum
+    # answers when the contract can read it; an implementation of the contract takes
+    # the call first, because this family yields to a perk.
+    from sushi_lang.semantics.generics.contracts import (
+        DISPLAY, METHOD_CONTRACT, operand_contract, override_of)
+    contract = METHOD_CONTRACT.get(method_name)
+    if contract is None:
+        return False
+    if isinstance(receiver_type, BuiltinType):
+        return contract != DISPLAY and receiver_type != BuiltinType.BLANK
+    if derived_methods is None:
+        return False
+    return operand_contract(receiver_type, contract,
+                            overridden=override_of(derived_methods, contract))[0]
+
+
 def _answers_function(receiver_type, method_name, derived_methods):
     # The perk question finds nothing: a function type is not an extension target
     # (`generics/extension_targets.py:CONCRETE_EXTENSION_TARGETS`), so no perk
@@ -585,6 +615,10 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_clone", beats_perk=False, answers=_answers_derived_clone, arity=DERIVED_CLONE_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="contract", beats_perk=False, answers=_answers_contract,
+    arity=CONTRACT_METHOD_ARITY,
+    infer=lambda _receiver, name, _validator: ContractMethodInferrer(name)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="function", beats_perk=False, answers=_answers_function,
     infer=lambda rt, name, v: FunctionMethodInferrer(rt, name, v)))

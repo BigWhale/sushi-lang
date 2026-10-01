@@ -1,0 +1,15 @@
+# A string held in a type prints in quotes, so that its bounds are visible; a string in
+# a hole of its own prints bare.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "User(name: "Arthur Dent", age: 42)\nArthur Dent\n"
+# EXPECT_NO_LEAKS: true
+
+struct User:
+    string name
+    i32 age
+
+fn main() i32:
+    let User u = User("Arthur Dent", 42)
+    println("{u}")
+    println("{u.name}")
+    return 0

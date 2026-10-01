@@ -1,0 +1,15 @@
+# The derived string form is also the method `to_str`, on every struct and enum.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Point(x: 1, y: 2) 17\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let string s = Point(1, 2).to_str()
+    println("{s} {s.len()}")
+    return 0

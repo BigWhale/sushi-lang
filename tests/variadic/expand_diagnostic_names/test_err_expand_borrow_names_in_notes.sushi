@@ -11,17 +11,17 @@
 # EXPECT_STDERR_CONTAINS: :30:17: error [CE2411]: cannot consume 'xs[0]': another owner keeps this value.
 # EXPECT_STDERR_CONTAINS: note: 'xs' owns this value and still frees it
 # EXPECT_STDERR_CONTAINS: help: clone it to take an independent value: `xs[0].clone()`
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "{self}"
 
 fn eat(nom string s) ~:
     println(s)
 
-fn f@(...Ts: Display)(...Ts args) ~ | StdError:
+fn f@(...Ts: Render)(...Ts args) ~ | StdError:
     expand(a in args):
         let string[] xs = from([a.display()])
         let string first = xs[0]

@@ -1,0 +1,18 @@
+# An array and a `List@(T)` held in a type print their elements in brackets.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Bag(ids: [1, 2, 3], names: ["a", "b"], fixed: [7, 8], empty: [])\n"
+# EXPECT_NO_LEAKS: true
+
+struct Bag:
+    i32[] ids
+    List@(string) names
+    i32[2] fixed
+    List@(i32) empty
+
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("a")
+    names.push("b")
+    let Bag b = Bag(from([1, 2, 3]), names, [7, 8], List.new())
+    println("{b}")
+    return 0

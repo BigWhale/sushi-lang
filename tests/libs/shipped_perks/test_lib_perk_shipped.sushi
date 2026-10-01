@@ -1,5 +1,5 @@
-# Consumer instantiates the library's constrained generic max_of<T: Ord> at
-# T = i32 WITHOUT redeclaring `perk Ord`. The perk DEFINITION ships in the
+# Consumer instantiates the library's constrained generic max_of<T: Greater> at
+# T = i32 WITHOUT redeclaring `perk Greater`. The perk DEFINITION ships in the
 # library's .slib templates section (Phase 2 Step A), so the consumer only has
 # to provide the implementation for its own instantiation type. Proves perk
 # definitions cross the library boundary.
@@ -8,9 +8,9 @@
 
 use <lib/generics_lib>
 
-# No `perk Ord:` here - the contract is shipped by the library. We only supply
+# No `perk Greater:` here - the contract is shipped by the library. We only supply
 # the i32 implementation that the constrained generic requires.
-extend i32 with Ord:
+extend i32 with Greater:
     fn gt(i32 other) bool:
         return self > other
 

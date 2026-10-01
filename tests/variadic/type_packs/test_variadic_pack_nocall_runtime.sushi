@@ -4,14 +4,14 @@
 # lowering (each trailing arg becomes a separate positional argument to the
 # monomorphized fan-out signature) + monomorphization + run.
 # EXPECT_STDOUT_EXACT: "hi\n"
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "int"
 
-fn tagged@(...Ts: Display)(string tag, ...Ts args) ~:
+fn tagged@(...Ts: Render)(string tag, ...Ts args) ~:
     println(tag)
 
 fn main() i32:

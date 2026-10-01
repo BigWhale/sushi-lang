@@ -1,0 +1,8 @@
+# An array is not printed at the top level: a hole or `println` takes a value that has
+# a string form of its own.
+# EXPECT_ERROR_CODE: CE2115
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    println(a)
+    return 0

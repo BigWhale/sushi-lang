@@ -458,10 +458,14 @@ class Return(Stmt):
 @dataclass(slots=True)
 class Print(Stmt):
     value: "Expr"
+    # The struct or enum the value prints through `Display`, stamped by the typecheck
+    # pass; the backend reads it.
+    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class PrintLn(Stmt):
     value: "Expr"
+    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class If(Stmt):
@@ -640,6 +644,9 @@ class StringLit(Node):
 class InterpolatedString(Node):
     """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
+    # For each hole that prints through `Display` (a struct or an enum), its type; None
+    # elsewhere. Stamped by the typecheck pass; the backend reads it.
+    display_types: Optional[List[Optional["Type"]]] = None
 
 @dataclass(slots=True)
 class ArrayElement(Node):
@@ -677,6 +684,9 @@ class BinaryOp(Node):
     op: BinOp
     left: "Expr"
     right: "Expr"
+    # The struct or enum a comparison compares, stamped by the typecheck pass when the
+    # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
+    operand_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Spread(Node):

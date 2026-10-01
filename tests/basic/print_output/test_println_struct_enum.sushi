@@ -1,0 +1,19 @@
+# `print` and `println` write a struct and an enum in the derived string form.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Point(x: 1, y: 2)\nColour.Green\nPoint(x: 3, y: 4)\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Colour:
+    Red
+    Green
+
+fn main() i32:
+    println(Point(1, 2))
+    let Colour c = Colour.Green
+    println(c)
+    print(Point(3, 4))
+    println("")
+    return 0

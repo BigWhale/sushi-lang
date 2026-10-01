@@ -1,0 +1,17 @@
+# A NaN key can be found again: every NaN is one key under the total rule.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\nnan\n"
+
+use <collections/hashmap>
+
+fn zero() f64:
+    return 0.0
+
+fn main() i32:
+    let HashMap@(f64, string) m = HashMap.new()
+    m.insert(zero() / zero(), "nan")
+    m.insert(zero() / zero(), "nan")
+    println(m.len())
+    println(m.get(zero() / zero()).realise("none"))
+    m.free()
+    return 0

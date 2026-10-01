@@ -1,0 +1,11 @@
+# A bool held in a type orders false before true.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+
+struct Flag:
+    bool on
+
+fn main() i32:
+    println(Flag(false) < Flag(true))
+    println(Flag(true) < Flag(false))
+    return 0

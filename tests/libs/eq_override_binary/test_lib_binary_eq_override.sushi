@@ -1,0 +1,15 @@
+# A binary library's `Eq` implementation reaches the consumer: `==` on its type and on
+# a consumer type that holds it both read the implementation.
+# BUILD_LIB_BINARY: eq_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
+use <lib/eq_bin_lib>
+
+struct Pair:
+    Key key
+    i32 n
+
+fn main() i32:
+    println(Key(1, 2) == Key(1, 3))
+    println(Pair(Key(1, 2), 4) == Pair(Key(1, 9), 4))
+    println(Pair(Key(1, 2), 4) == Pair(Key(2, 2), 4))
+    return 0

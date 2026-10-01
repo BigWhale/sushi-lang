@@ -104,55 +104,19 @@ def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> 
         er.emit(reporter, er.ERR.CE2055, span, key_type=display_type(key_type))
 
 
-_EQUALITY_SCALARS = (
-    BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64,
-    BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64,
-    BuiltinType.BOOL, BuiltinType.F32, BuiltinType.F64, BuiltinType.STRING,
-)
+def _key_supports_equality(key_type: Type, validator: Any) -> bool:
+    """Can the probe compare two keys of this type? The `Eq` contract, HELD rule.
 
-
-def _key_supports_equality(key_type: Type, validator: Any, _seen: Optional[set] = None) -> bool:
-    """Can the probe compare two keys of this type?
-
-    Mirrors the kinds `emit_key_equality_check` (backend/generics/hashmap/utils.py)
-    implements; anything it declines here would be a NotImplementedError there. A
-    foreign `ptr` has no identity (CE5010), and `Own`/`List` backing structs carry a
-    raw pointer field, so a key reaching one of those has no equality.
+    The probe compares keys through `emit_value_eq`, which reads an `Eq`
+    implementation first and the derived equality after it, so the rule here is the
+    one that function can emit. A `Hashable` implementation gives a hash and not an
+    equality (#936): the two are separate contracts, and a key needs both.
     """
-    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, EnumType, UnknownType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    if _seen is None:
-        _seen = set()
-
-    if isinstance(key_type, UnknownType):
-        resolved = (validator.struct_table.by_name.get(key_type.name)
-                    or validator.enum_table.by_name.get(key_type.name))
-        if resolved is None:
-            return True
-        key_type = resolved
-
-    if isinstance(key_type, BuiltinType):
-        return key_type in _EQUALITY_SCALARS
-    if isinstance(key_type, StructType):
-        if key_type.name in _seen:
-            return True
-        _seen.add(key_type.name)
-        return all(_key_supports_equality(field_type, validator, _seen)
-                   for _, field_type in key_type.fields)
-    if isinstance(key_type, EnumType):
-        if key_type.name in _seen:
-            return True
-        _seen.add(key_type.name)
-        return all(_key_supports_equality(assoc, validator, _seen)
-                   for variant in key_type.variants
-                   for assoc in variant.associated_types)
-    if isinstance(key_type, (ArrayType, DynamicArrayType)):
-        return _key_supports_equality(key_type.base_type, validator, _seen)
-    if isinstance(key_type, GenericTypeRef):
-        return all(_key_supports_equality(arg, validator, _seen)
-                   for arg in key_type.type_args)
-    return False
+    from sushi_lang.semantics.generics.contracts import EQ, contract_of, override_of
+    from sushi_lang.semantics.passes.resolve import table_resolver
+    resolve = table_resolver(validator.struct_table, validator.enum_table)
+    return contract_of(key_type, EQ, resolve=resolve,
+                       overridden=override_of(validator.derived_methods, EQ))[0]
 
 
 def _validate_hashmap_insert(

@@ -1,0 +1,14 @@
+# A generic struct prints its base name, with no type arguments.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Box(value: 1)\nBox(value: "x")\n"
+# EXPECT_NO_LEAKS: true
+
+struct Box@(T):
+    T value
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("x")
+    println("{a}")
+    println("{b}")
+    return 0

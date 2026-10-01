@@ -1,0 +1,11 @@
+# The argument of `eq` is a value of the receiver's type.
+# EXPECT_ERROR_CODE: CE2006
+
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Point p = Point(1)
+    if (p.eq(1)):
+        return 1
+    return 0

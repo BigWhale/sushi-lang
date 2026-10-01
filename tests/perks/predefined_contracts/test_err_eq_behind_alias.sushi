@@ -1,0 +1,11 @@
+# The predefined perk is importless, like `Hashable`: no unit declares it, so no alias
+# holds it.
+# EXPECT_ERROR_CODE: CE2001
+
+use "helpers/eq_far" as ef
+
+fn same@(T: ef.Eq)(T a, T b) bool:
+    return a.eq(b)
+
+fn main() i32:
+    return 0

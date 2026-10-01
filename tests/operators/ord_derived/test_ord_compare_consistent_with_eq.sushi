@@ -1,0 +1,22 @@
+# A derived `compare` answers 0 exactly where the derived `==` answers true.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true true\nfalse false\ntrue true\nfalse false\n"
+
+struct Mixed:
+    string s
+    f64 f
+    bool b
+
+fn zero() f64:
+    return 0.0
+
+fn check(Mixed x, Mixed y) ~:
+    println("{x.compare(y) == 0} {x == y}")
+
+fn main() i32:
+    let f64 nan = zero() / zero()
+    check(Mixed("a", nan, true), Mixed("a", nan, true))
+    check(Mixed("a", 1.0, true), Mixed("a", 1.0, false))
+    check(Mixed("a", -0.0, false), Mixed("a", 0.0, false))
+    check(Mixed("a", 1.0, false), Mixed("b", 1.0, false))
+    return 0

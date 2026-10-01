@@ -159,14 +159,18 @@ def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter:
                           validator: Optional['TypeValidator']) -> None:
     """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`.
 
-    Equality is the CLOSED comparison set, asked through `has_builtin_equality` so this
-    rule and the `==` operator's (CE2514) cannot drift apart. The element gate comes
-    before the argument check: on a `Point[]` the useful answer is "a Point has no
-    equality", not "the argument is the wrong type".
+    Equality is the `==` operator's rule (CE2514), asked through `has_equality` so the
+    two cannot drift apart: a primitive in the closed set, or a struct or an enum with
+    a derived or implemented `Eq`. The element gate comes before the argument check: on
+    a `Handler[]` the useful answer is "a Handler has no equality", not "the argument is
+    the wrong type".
     """
-    from .expressions import has_builtin_equality
+    from sushi_lang.semantics.generics.contracts import EQ, operand_contract
+    from .expressions import has_equality
 
-    if not has_builtin_equality(array_type.base_type):
+    comparable = (has_equality(validator, array_type.base_type) if validator is not None
+                  else operand_contract(array_type.base_type, EQ)[0])
+    if not comparable:
         er.emit(reporter, er.ERR.CE2100, call.loc, method=call.method,
                 element=display_type(array_type.base_type))
         return

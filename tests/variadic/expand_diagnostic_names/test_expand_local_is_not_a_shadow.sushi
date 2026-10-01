@@ -2,14 +2,14 @@
 # copies of one `let` in the copies of one body, two sibling `expand` bodies that
 # declare one name, and a function local that is declared after the `expand`.
 # EXPECT_STDOUT_EXACT: 1 1\n1 2\n2 1\n2 2\n3\n
-perk Display:
+perk Render:
     fn display() string
 
-extend i32 with Display:
+extend i32 with Render:
     fn display() string:
         return "{self}"
 
-fn f@(...Ts: Display)(...Ts args) ~:
+fn f@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let i32 u = 1
         println("{u} {a.display()}")
