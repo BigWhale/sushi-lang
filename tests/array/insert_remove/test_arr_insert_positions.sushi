@@ -1,0 +1,42 @@
+# `insert` on an `i32[]` at the front, in the middle and at `len` (an append), into a
+# buffer with room and into a full one, `cap == 0` included (`new()` and `from([])`).
+# a loop of inserts at the front grows the buffer past several doublings.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1,2,3,\n0,1,2,3,\n0,1,2,3,4,\n0,1,9,2,3,4,\n7,\n8,\n5,6,\n100 99 0 4950\n"
+fn show(i32[] a) string:
+    let string out = ""
+    foreach(x in a.iter()):
+        out := "{out}{x},"
+    return out
+
+fn main() i32:
+    let i32[] a = from([1, 3])
+    a.insert(1, 2)
+    println(show(a))
+    a.insert(0, 0)
+    println(show(a))
+    a.insert(a.len(), 4)
+    println(show(a))
+    a.insert(2, 9)
+    println(show(a))
+
+    let i32[] n = new()
+    n.insert(0, 7)
+    println(show(n))
+    let i32[] e = from([])
+    e.insert(0, 8)
+    println(show(e))
+    let i32[] t = new()
+    t.insert(0, 6)
+    t.insert(0, 5)
+    println(show(t))
+
+    let i32[] big = new()
+    foreach(i in 0..100):
+        big.insert(0, i)
+    let i32 sum = 0
+    foreach(x in big.iter()):
+        sum := sum + x
+    println("{big.len()} {big[0]} {big[99]} {sum}")
+    return 0

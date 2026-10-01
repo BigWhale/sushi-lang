@@ -1,0 +1,42 @@
+# `insert` and `remove` on a `string[]` and on an array of an owning struct. the element
+# is consumed into the slot, the shift moves ownership with the bytes, `remove` hands the
+# element to the caller, and a discarded `remove` destroys its element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a,b,c,d,\ngot b\na,c,d,\na,d,\nd 2\nr0 r1 r2\nr1 1\nr2 2\n"
+use <collections/strings>
+
+struct Row:
+    string name
+    i32[] cells
+
+fn show(string[] a) string:
+    let string out = ""
+    foreach(x in a.iter()):
+        out := "{out}{x},"
+    return out
+
+fn main() i32:
+    let string[] s = from(["b".clone(), "d".clone()])
+    s.insert(0, "a".clone())
+    let string c = "c".concat("")
+    s.insert(2, c)
+    println(show(s))
+    match s.remove(1):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none")
+    println(show(s))
+    s.remove(1)
+    println(show(s))
+    let string kept = s.remove(1).realise("zz".clone())
+    println("{kept} {kept.len() + s.len()}")
+
+    let Row[] rows = new()
+    foreach(i in 0..3):
+        rows.insert(i, Row("r{i}", from([i, i])))
+    println("{rows[0].name} {rows[1].name} {rows[2].name}")
+    rows.remove(0)
+    println("{rows[0].name} {rows[0].cells[0]}")
+    let Row last = rows.remove(1).realise(Row("none", new()))
+    println("{last.name} {last.cells.len()}")
+    return 0

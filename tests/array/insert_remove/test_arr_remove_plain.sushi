@@ -1,0 +1,47 @@
+# `remove` on an `i32[]` and on an array of a plain struct: the front, the middle and the
+# last slot, and an index out of range (`Maybe.None`, the array does not change).
+# `insert` of a plain struct moves the bytes of the shifted slots.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got 10\n20,30,40,\ngot 30\n20,40,\ngot 40\n20,\nnone 1\nnone 1\nnone 0\n1:2 9:9 3:4\n9:9 3:4\n"
+struct P:
+    i32 x
+    i32 y
+
+fn show(i32[] a) string:
+    let string out = ""
+    foreach(x in a.iter()):
+        out := "{out}{x},"
+    return out
+
+fn main() i32:
+    let i32[] a = from([10, 20, 30, 40])
+    match a.remove(0):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none")
+    println(show(a))
+    match a.remove(1):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none")
+    println(show(a))
+    match a.remove(a.len() - 1):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none")
+    println(show(a))
+    match a.remove(1):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none {a.len()}")
+    match a.remove(-1):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none {a.len()}")
+    let i32[] empty = new()
+    match empty.remove(0):
+        Maybe.Some(v) -> println("got {v}")
+        Maybe.None -> println("none {empty.len()}")
+
+    let P[] ps = from([P(1, 2), P(3, 4)])
+    ps.insert(1, P(9, 9))
+    println("{ps[0].x}:{ps[0].y} {ps[1].x}:{ps[1].y} {ps[2].x}:{ps[2].y}")
+    let P first = ps.remove(0).realise(P(0, 0))
+    println("{ps[0].x}:{ps[0].y} {ps[1].x}:{ps[1].y}")
+    return first.x - 1

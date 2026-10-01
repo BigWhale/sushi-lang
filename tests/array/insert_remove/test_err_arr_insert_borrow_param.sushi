@@ -1,0 +1,11 @@
+# a default parameter is a read-only borrow, so `insert` and `remove` on it are refused;
+# `poke i32[] a` is the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+fn grow(i32[] a) ~:
+    a.insert(0, 1)
+    a.remove(0)
+
+fn main() i32:
+    let i32[] a = from([0])
+    grow(a)
+    return 0

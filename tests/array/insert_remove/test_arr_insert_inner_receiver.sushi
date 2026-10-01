@@ -1,0 +1,33 @@
+# `grid[i].insert(j, v)` and `grid[i].remove(j)` reach the inner array in place: a
+# growth of the INNER buffer writes the new descriptor back into the outer slot. the
+# same on a `string[][]`, where the inner elements own their bytes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 34 0 33\n33 1 2\ngot 5 2\nb,x,c,\nx\n"
+use <collections/strings>
+
+fn main() i32:
+    let i32[][] grid = from([from([1]), new()])
+    foreach(j in 0..33):
+        grid[1].insert(0, j)
+    grid[1].insert(grid[1].len(), 33)
+    println("{grid[0].len()} {grid[1].len()} {grid[1][32]} {grid[1][33]}")
+    grid[1].remove(0)
+    grid[0].insert(1, 2)
+    println("{grid[1].len()} {grid[0][0]} {grid[0][1]}")
+    let i32[][] small = from([from([4, 5, 6])])
+    match small[0].remove(1):
+        Maybe.Some(v) -> println("got {v} {small[0].len()}")
+        Maybe.None -> println("none")
+
+    let string[][] words = from([from(["a".clone(), "c".clone()])])
+    words[0].insert(1, "b".concat(""))
+    words[0].remove(0)
+    words[0].insert(1, "x".clone())
+    let string out = ""
+    foreach(w in words[0].iter()):
+        out := "{out}{w},"
+    println(out)
+    let string taken = words[0].remove(1).realise("none".clone())
+    println(taken)
+    return 0

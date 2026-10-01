@@ -1,0 +1,7 @@
+# `a.insert(0, a[1])` with an owning element consumes a borrow of an element of `a`, which
+# is refused; `a.insert(0, a[1].clone())` is the escape.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+fn main() i32:
+    let string[] a = from(["x".clone(), "y".clone()])
+    a.insert(0, a[1])
+    return a.len()

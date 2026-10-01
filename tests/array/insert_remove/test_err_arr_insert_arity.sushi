@@ -1,0 +1,8 @@
+# `insert` takes an index and an element, and `remove` takes an index.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+fn main() i32:
+    let i32[] a = from([1, 2])
+    a.insert(5)
+    a.remove()
+    a.remove(0, 1)
+    return a.len()

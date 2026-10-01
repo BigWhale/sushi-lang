@@ -1,0 +1,9 @@
+# the index of `insert` and of `remove` is an i32 position, and an i64 value does not
+# convert to it.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+fn main() i32:
+    let i32[] a = from([1, 2])
+    let i64 i = 1
+    a.insert(i, 5)
+    a.remove(i)
+    return a.len()
