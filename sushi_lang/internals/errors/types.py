@@ -381,7 +381,7 @@ _add(ErrorMessage("CE2100", Severity.ERROR,
 
 _add(ErrorMessage("CE2101", Severity.ERROR,
     "invalid element '{element}' in an array extension target",
-    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers -- and a nested array element is not an expressible type at all (Known Limitation 2). Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
+    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers. A nested array element (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused for the same reason, and it is not necessary: `extend T[]` binds `T = i32[]` and applies to an `i32[][]` receiver, and to an `i32[3][]` one with `T = i32[3]`. Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
 
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",

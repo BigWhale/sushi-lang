@@ -988,7 +988,8 @@ class FunctionCollector:
             er.emit_with(self.r, ERR.CE2101, h.target_type_span or h.name_span,
                          element=display_type(element)) \
                 .help("write a bare type-parameter name ('extend T[]') or a plain "
-                      "declared type ('extend i32[]')").emit()
+                      "declared type ('extend i32[]'); 'extend T[]' also applies to a "
+                      "nested array, with T the inner array type").emit()
             return None
 
         if not shape.param_names:

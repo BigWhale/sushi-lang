@@ -61,7 +61,10 @@ another type coexists; a second `map` on the SAME target is the ordinary CE0101.
 A bare undeclared name in the element position of an array target binds a type
 parameter: `extend T[]` applies to every element type. A declared or built-in name is
 concrete: `extend i32[]`, `extend Crate[]`. Anything else in that position — a generic
-instantiation, a nested array — is CE2101.
+instantiation, a nested array — is CE2101. A nested array as the element of a dynamic
+array target (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused because
+`extend T[]` already covers it: `T` binds the inner array type, `i32[]` for an `i32[][]`
+receiver and `i32[3]` for an `i32[3][]` one.
 
 ### 4. Scope: List and T[]; HashMap later
 
