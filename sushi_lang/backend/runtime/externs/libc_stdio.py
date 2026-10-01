@@ -4,8 +4,8 @@ from __future__ import annotations
 import typing
 
 from llvmlite import ir
-from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.platform_detect import get_current_platform
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -40,57 +40,19 @@ class LibCStdio:
 
     def _declare_fd_write(self) -> None:
         """Declare write: ssize_t write(int fd, const void* buf, size_t count)."""
-        fn_ty = ir.FunctionType(
-            self.codegen.types.i64,
-            [self.codegen.i32, self.codegen.i8.as_pointer(), self.codegen.types.i64]
-        )
-        existing = self.codegen.module.globals.get("write")
-        if isinstance(existing, ir.Function):
-            self.fd_write = existing
-        else:
-            self.fd_write = ir.Function(self.codegen.module, fn_ty, name="write")
+        self.fd_write = declare_libc(self.codegen.module, "write")
 
     def _declare_setvbuf(self) -> None:
         """Declare setvbuf: int setvbuf(FILE* stream, char* buf, int mode, size_t size)."""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty, self.codegen.i8.as_pointer(), self.codegen.i32,
-             self.codegen.types.i64]
-        )
-        existing = self.codegen.module.globals.get("setvbuf")
-        if isinstance(existing, ir.Function):
-            self.setvbuf = existing
-        else:
-            self.setvbuf = ir.Function(self.codegen.module, fn_ty, name="setvbuf")
+        self.setvbuf = declare_libc(self.codegen.module, "setvbuf")
 
     def _declare_fprintf(self) -> None:
         """Declare fprintf: int fprintf(FILE* stream, const char* format, ...)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        fn_ty = ir.FunctionType(
-            self.codegen.i32,
-            [file_ptr_ty, self.codegen.i8.as_pointer()],
-            var_arg=True
-        )
-        existing = self.codegen.module.globals.get("fprintf")
-        if isinstance(existing, ir.Function):
-            self.fprintf = existing
-        else:
-            self.fprintf = ir.Function(self.codegen.module, fn_ty, name="fprintf")
+        self.fprintf = declare_libc(self.codegen.module, "fprintf")
 
     def _declare_fwrite(self) -> None:
         """Declare fwrite: size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE* stream)"""
-        file_ptr_ty = self.codegen.i8.as_pointer()
-        size_t_ty = ir.IntType(INT64_BIT_WIDTH)
-        fn_ty = ir.FunctionType(
-            size_t_ty,
-            [self.codegen.i8.as_pointer(), size_t_ty, size_t_ty, file_ptr_ty]
-        )
-        existing = self.codegen.module.globals.get("fwrite")
-        if isinstance(existing, ir.Function):
-            self.fwrite = existing
-        else:
-            self.fwrite = ir.Function(self.codegen.module, fn_ty, name="fwrite")
+        self.fwrite = declare_libc(self.codegen.module, "fwrite")
 
     def _declare_stdio_handles(self) -> None:
         """Declare global variables for stdin, stdout, stderr FILE* handles."""

@@ -1,51 +1,31 @@
 """Reserved built-in extern symbols, and the ones the compiler generates."""
 from __future__ import annotations
 
-from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
+from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
 
-
-#: Where each platform keeps `errno` (#1087): a function that answers an `int*`. The
-#: `errno()` built-in calls the one for the platform it compiles for.
-ERRNO_LOCATION_SYMBOLS: dict[str, str] = {
-    "darwin": "__error",
-    "linux": "__errno_location",
+#: The Sushi type that a C type of the reserved signatures is written as. `size_t` is
+#: `i64`, as the compiler lowers it.
+_SUSHI_TYPE_OF_C: dict[str, Type] = {
+    "void": BuiltinType.BLANK,
+    "int": BuiltinType.I32,
+    "size_t": BuiltinType.I64,
+    "void*": ForeignPtrType(),
 }
 
+#: The libc symbols that are the compiler's own (#1099): a user declaration of one of
+#: them must have the same C types (CE5001). Every other libc symbol that the compiler
+#: declares is independent of a user declaration of the same name.
+RESERVED_NAMES = ("malloc", "free", "exit")
 
-# C link-name -> (param types, return type, var_arg) for the built-in externs that the
-# compiler declares itself. Each one is the first declaration of its link name, so a user
-# declaration of the name must have the same C types (CE5001, #1099).
+# C link-name -> (param types, return type, var_arg), read from the one libc table.
 RESERVED_EXTERNS: dict[str, tuple] = {
-    "strlen":  ((BuiltinType.STRING,), BuiltinType.I64, False),
-    "strcmp":  ((BuiltinType.STRING, BuiltinType.STRING), BuiltinType.I32, False),
-    "memcmp":  ((ForeignPtrType(), ForeignPtrType(), BuiltinType.I64), BuiltinType.I32, False),
-    "sprintf": ((ForeignPtrType(), BuiltinType.STRING), BuiltinType.I32, True),
-    "printf":  ((BuiltinType.STRING,), BuiltinType.I32, True),
-    "malloc":  ((BuiltinType.I64,), ForeignPtrType(), False),
-    "free":    ((ForeignPtrType(),), BuiltinType.BLANK, False),
-    "exit":    ((BuiltinType.I32,), BuiltinType.BLANK, False),
-    "realloc": ((ForeignPtrType(), BuiltinType.I64), ForeignPtrType(), False),
-    # `backend/runtime/externs/libc_stdio.py`. A `FILE*` is a `ptr`.
-    "fprintf": ((ForeignPtrType(), BuiltinType.STRING), BuiltinType.I32, True),
-    "fwrite":  ((ForeignPtrType(), BuiltinType.I64, BuiltinType.I64, ForeignPtrType()),
-                BuiltinType.I64, False),
-    "setvbuf": ((ForeignPtrType(), BuiltinType.STRING, BuiltinType.I32, BuiltinType.I64),
-                BuiltinType.I32, False),
-    # `backend/runtime/externs/libc_ctype.py`: int f(int c).
-    **{symbol: ((BuiltinType.I32,), BuiltinType.I32, False)
-       for symbol in ("toupper", "tolower", "isspace", "isdigit", "isalnum")},
-    # `errno()` (#1087) declares the platform's location function as a pointer answer.
-    **{symbol: ((), ForeignPtrType(), False) for symbol in ERRNO_LOCATION_SYMBOLS.values()},
+    name: (tuple(_SUSHI_TYPE_OF_C[p] for p in LIBC_SIGNATURES[name].params),
+           _SUSHI_TYPE_OF_C[LIBC_SIGNATURES[name].ret],
+           LIBC_SIGNATURES[name].var_arg)
+    for name in RESERVED_NAMES
 }
 
-
-# C link-name -> type for the C globals that the compiler declares itself: the stdio
-# handles of `backend/runtime/externs/libc_stdio.py`, for each platform. A `FILE*` is a
-# `ptr`, and a user external variable of one of these names must be a `ptr` too.
-RESERVED_EXTERN_VARIABLES: dict[str, ForeignPtrType] = {
-    symbol: ForeignPtrType()
-    for symbol in ("stdin", "stdout", "stderr", "__stdinp", "__stdoutp", "__stderrp")
-}
 
 # The generated symbols that live in NO bitcode file: the backend emits them inline
 # into the module it compiles, so the stdlib symbol manifest cannot report them.

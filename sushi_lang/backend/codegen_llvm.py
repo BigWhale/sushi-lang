@@ -15,7 +15,7 @@ from sushi_lang.semantics.ast import ConstDef, ExtendDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
@@ -211,15 +211,7 @@ class LLVMCodegen:
     def _get_malloc_func(self) -> ir.Function:
         """Get or declare malloc function."""
         if self._malloc_func is None:
-            existing = self.module.globals.get("malloc")
-            if isinstance(existing, ir.Function):
-                self._malloc_func = existing
-                return self._malloc_func
-            malloc_type = ir.FunctionType(
-                ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
-                [ir.IntType(INT64_BIT_WIDTH)]                # size_t
-            )
-            self._malloc_func = ir.Function(self.module, malloc_type, name="malloc")
+            self._malloc_func = declare_libc(self.module, "malloc")
         return self._malloc_func
 
     def declare_user_externs(self) -> None:
@@ -230,29 +222,13 @@ class LLVMCodegen:
     def get_free_func(self) -> ir.Function:
         """Get or declare free function."""
         if self._free_func is None:
-            existing = self.module.globals.get("free")
-            if isinstance(existing, ir.Function):
-                self._free_func = existing
-                return self._free_func
-            free_type = ir.FunctionType(
-                ir.VoidType(),                   # void
-                [ir.PointerType(ir.IntType(INT8_BIT_WIDTH))]  # void*
-            )
-            self._free_func = ir.Function(self.module, free_type, name="free")
+            self._free_func = declare_libc(self.module, "free")
         return self._free_func
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
         if self._realloc_func is None:
-            existing = self.module.globals.get("realloc")
-            if isinstance(existing, ir.Function):
-                self._realloc_func = existing
-                return self._realloc_func
-            realloc_type = ir.FunctionType(
-                ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
-                [ir.PointerType(ir.IntType(INT8_BIT_WIDTH)), ir.IntType(INT64_BIT_WIDTH)]  # void*, size_t
-            )
-            self._realloc_func = ir.Function(self.module, realloc_type, name="realloc")
+            self._realloc_func = declare_libc(self.module, "realloc")
         return self._realloc_func
 
     def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:

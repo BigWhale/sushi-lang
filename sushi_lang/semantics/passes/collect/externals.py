@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Set, Tuple, TYPE_CHECKING
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
-from sushi_lang.semantics.externs_manifest import RESERVED_EXTERN_VARIABLES, RESERVED_EXTERNS
+from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
 from sushi_lang.semantics.ffi_boundary import (
     intern_boundary_type, is_byte_buffer, is_c_abi_param, is_c_abi_type, is_c_abi_variable,
     nullable_payload,
@@ -181,9 +181,9 @@ def function_shape(params, ret: Optional[Type], variadic: bool) -> tuple:
 class LinkNames:
     """Every declaration of a C symbol in the program, and the one shape it has (#1099).
 
-    The built-ins that the compiler declares itself (`RESERVED_EXTERNS`,
-    `RESERVED_EXTERN_VARIABLES`) are the first declarations of their names, so a user
-    declaration of `malloc` meets the same rule
+    The three libc symbols that are the compiler's own (`RESERVED_EXTERNS`: `malloc`,
+    `free`, `exit`) are the first declarations of their names, so a user declaration of
+    `malloc` meets the same rule
     as a second user declaration of `abs`.
     """
 
@@ -192,8 +192,6 @@ class LinkNames:
             name: _Declared(function_shape(params, ret, variadic), None, None)
             for name, (params, ret, variadic) in RESERVED_EXTERNS.items()
         }
-        self._first.update({name: _Declared(("var", c_type(ty)), None, None)
-                            for name, ty in RESERVED_EXTERN_VARIABLES.items()})
 
     def admit(self, reporter: Reporter, link_name: str, shape: tuple,
               span: Optional[Span], filename: Optional[str]) -> None:

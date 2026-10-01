@@ -1,7 +1,7 @@
 """POSIX process control function declarations."""
 
 from llvmlite import ir
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_exit, declare_extern
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_exit, declare_libc
 
 _i8_ptr = ir.IntType(8).as_pointer()
 _i32 = ir.IntType(32)
@@ -17,22 +17,22 @@ __all__ = [
 
 def declare_getcwd(module: ir.Module) -> ir.Function:
     """Declare getcwd: char* getcwd(char *buf, size_t size)"""
-    return declare_extern(module, "getcwd", _i8_ptr, [_i8_ptr, _i64])
+    return declare_libc(module, "getcwd")
 
 
 def declare_chdir(module: ir.Module) -> ir.Function:
     """Declare chdir: int chdir(const char *path)"""
-    return declare_extern(module, "chdir", _i32, [_i8_ptr])
+    return declare_libc(module, "chdir")
 
 
 def declare_getpid(module: ir.Module) -> ir.Function:
     """Declare getpid: pid_t getpid(void)"""
-    return declare_extern(module, "getpid", _i32, [])
+    return declare_libc(module, "getpid")
 
 
 def declare_getuid(module: ir.Module) -> ir.Function:
     """Declare getuid: uid_t getuid(void)"""
-    return declare_extern(module, "getuid", _i32, [])
+    return declare_libc(module, "getuid")
 
 
 # ==============================================================================
@@ -48,39 +48,37 @@ def declare_getuid(module: ir.Module) -> ir.Function:
 
 def declare_tmpfile(module: ir.Module) -> ir.Function:
     """Declare tmpfile: FILE* tmpfile(void). Auto-unlinked on fclose."""
-    return declare_extern(module, "tmpfile", _i8_ptr, [])
+    return declare_libc(module, "tmpfile")
 
 
 def declare_fileno(module: ir.Module) -> ir.Function:
     """Declare fileno: int fileno(FILE*)."""
-    return declare_extern(module, "fileno", _i32, [_i8_ptr])
+    return declare_libc(module, "fileno")
 
 
 def declare_waitpid(module: ir.Module) -> ir.Function:
     """Declare waitpid: pid_t waitpid(pid_t pid, int *status, int options)."""
-    return declare_extern(module, "waitpid", _i32, [_i32, _i32.as_pointer(), _i32])
+    return declare_libc(module, "waitpid")
 
 
 def declare_posix_spawnp(module: ir.Module) -> ir.Function:
     """Declare posix_spawnp:"""
-    char_pp = _i8_ptr.as_pointer()
-    return declare_extern(module, "posix_spawnp", _i32,
-                          [_i32.as_pointer(), _i8_ptr, _i8_ptr, _i8_ptr, char_pp, char_pp])
+    return declare_libc(module, "posix_spawnp")
 
 
 def declare_posix_spawn_file_actions_init(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_init(posix_spawn_file_actions_t *)."""
-    return declare_extern(module, "posix_spawn_file_actions_init", _i32, [_i8_ptr])
+    return declare_libc(module, "posix_spawn_file_actions_init")
 
 
 def declare_posix_spawn_file_actions_adddup2(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *, int fd, int newfd)."""
-    return declare_extern(module, "posix_spawn_file_actions_adddup2", _i32, [_i8_ptr, _i32, _i32])
+    return declare_libc(module, "posix_spawn_file_actions_adddup2")
 
 
 def declare_posix_spawn_file_actions_destroy(module: ir.Module) -> ir.Function:
     """Declare int posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *)."""
-    return declare_extern(module, "posix_spawn_file_actions_destroy", _i32, [_i8_ptr])
+    return declare_libc(module, "posix_spawn_file_actions_destroy")
 
 
 def get_environ(module: ir.Module) -> ir.GlobalVariable:

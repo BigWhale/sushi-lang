@@ -7,7 +7,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types, get_st
 from sushi_lang.sushi_stdlib.src.string_helpers import (
     cstr_to_fat_pointer_with_len, emit_checked_malloc,
 )
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern, declare_malloc
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_libc
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 _platform_env = get_platform_module('env')
@@ -24,7 +24,7 @@ def generate_getenv(module: ir.Module) -> None:
     libc_getenv = _platform_env.declare_getenv(module)
     malloc_fn = declare_malloc(module)
 
-    libc_strlen = declare_extern(module, "strlen", i64, [i8_ptr])
+    libc_strlen = declare_libc(module, "strlen")
 
     # Maybe<string> type: {i32 tag, [2 x i64] data} (#300 phase 2)
     # data must hold a string fat pointer (16 bytes -> K=2 i64 words)

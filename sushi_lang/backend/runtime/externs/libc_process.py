@@ -5,6 +5,8 @@ import typing
 
 from llvmlite import ir
 
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
+
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
@@ -24,12 +26,4 @@ class LibCProcess:
 
     def _declare_exit(self) -> None:
         """Declare exit: void exit(int status)"""
-        fn_ty = ir.FunctionType(
-            ir.VoidType(),  # void return
-            [self.codegen.i32]  # int status
-        )
-        existing = self.codegen.module.globals.get("exit")
-        if isinstance(existing, ir.Function):
-            self.exit = existing
-        else:
-            self.exit = ir.Function(self.codegen.module, fn_ty, name="exit")
+        self.exit = declare_libc(self.codegen.module, "exit")
