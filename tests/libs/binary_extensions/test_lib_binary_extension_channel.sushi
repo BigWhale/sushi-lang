@@ -1,0 +1,16 @@
+# A binary library's extension method with a `| E` channel: the call answers a
+# Result whose Err arm is the library's error enum.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "3\nnegative\n"
+use <lib/vec_ext_lib>
+
+fn first_x(Vec v) i32 | VecError:
+    let i32 x = v.checked_x()??
+    return Result.Ok(x)
+
+fn main() i32:
+    println(first_x(Vec.at(3, 4)).realise(-1))
+    match Vec.at(-1, 4).checked_x():
+        Result.Ok(x) -> println(x)
+        Result.Err(VecError.Negative) -> println("negative")
+    return 0

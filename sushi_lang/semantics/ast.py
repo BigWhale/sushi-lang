@@ -339,6 +339,10 @@ class ExtendDef(Node):
     home_unit: Optional[str] = None
     # Whether the template's WRITTEN signature has a channel; see `FuncDef`.
     written_channel: Optional[bool] = None
+    # A template a binary library ships, and how a diagnostic in its body is rendered;
+    # see `FuncDef`. A copy keeps both, so its body may call the library's privates.
+    is_library_template: bool = False
+    library_origin: Optional[Origin] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:

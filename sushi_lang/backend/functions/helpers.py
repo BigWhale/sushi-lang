@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
-from sushi_lang.semantics.typesys import Type as Ty, BuiltinType, DynamicArrayType
+from sushi_lang.semantics.typesys import Type as Ty, DynamicArrayType
 from sushi_lang.backend.ownership import relinquish
 from sushi_lang.internals.errors import raise_internal_error, InternalCompilerError
 
@@ -43,13 +43,9 @@ class FunctionHelpers:
 
     def get_extension_method_name(self, ext: ExtendDef) -> str:
         """Generate unique function name for extension method."""
-        if ext.target_type and isinstance(ext.target_type, BuiltinType):
-            target_type_name = ext.target_type.value
-        else:
-            target_type_name = str(ext.target_type) if ext.target_type else "unknown"
-
-        from sushi_lang.semantics.generics.name_mangling import extension_symbol
-        return extension_symbol(target_type_name, ext.name,
+        from sushi_lang.semantics.generics.name_mangling import (
+            extension_receiver_name, extension_symbol)
+        return extension_symbol(extension_receiver_name(ext.target_type), ext.name,
                                 getattr(ext, "method_type_args", None) or ())
 
     def emit_fall_off(self, fn: FuncDef | ExtendDef) -> None:

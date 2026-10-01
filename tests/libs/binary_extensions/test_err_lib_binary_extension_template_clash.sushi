@@ -1,0 +1,15 @@
+# The consumer declares an extension template that a binary library also ships on
+# the same target. The copies would be one symbol, so this is the duplicate error.
+# BUILD_LIB_BINARY: box_ext_lib.sushi
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'tag'"
+# EXPECT_STDERR_CONTAINS: "library 'box_ext_lib' declares it too"
+use <lib/box_ext_lib>
+
+extend Box@(T) tag() i32:
+    return 0
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.tag())
+    return 0

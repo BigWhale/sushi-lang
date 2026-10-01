@@ -709,6 +709,43 @@ as the consumer's own units are.
   `public use <lib/b>` loads B for the consumer (§5). See `docs/libraries.md`,
   Limitation 1.
 
+### 5.9 Extension methods
+
+A binary or hybrid library exports its extension methods, instance and static. Two
+records carry them, both in `templates`, and every kind writes both.
+
+- **`extensions`** — one record for each CONCRETE extension method: the target `type`,
+  the signature, `self_mode` and `static` when the declaration writes them, the `unit`,
+  and the `link_symbol` that the bitcode defines (`extension_symbol` over
+  `extension_receiver_name`, the one rule that the backend uses to declare the method).
+  The body is in the bitcode, so the record has no source. At the consumer,
+  `LibraryRegistration._register_extensions` reads the signature through the one
+  signature reader (`library_registry.parse_signature`), files an `ExtensionMethod` in the
+  extension table, and gives the backend an `ExtendDef` that it declares and never
+  defines (`library_extensions` in `codegen_llvm.py`).
+- **`generic_extensions`** — one record for each extension TEMPLATE: a generic target
+  (`Box@(T)`), a concrete-instance target (`Box@(i32)`), an array target (`T[]`) and a
+  method type parameter (`pick@(U)`). The record is the same, plus `type_params` and the
+  `source` of the declaration. The template joins the export closure (§5.5), so its body
+  can call a private function of the library through `bindings`. At the consumer,
+  `_register_generic_extensions` re-parses the source and files it through the collect
+  pass's own `FunctionCollector`. The analyzer cuts each copy, and the copy goes to the
+  entry unit, because the template's unit is not a unit of the build (§4.6). The copy
+  carries `is_library_template`, so its body may call the library's privates.
+
+The methods of an implementation of a perk that does NOT ship (a private perk that no
+export names) travel as `extensions` records. The perk hides its contract, and its
+methods stay callable (`docs/design/visibility.md`). An implementation of a predefined
+perk never travels this way.
+
+An extension on a private type that nothing ships is left out: no consumer can name the
+type, and no shipped body names it.
+
+A consumer extension on a binary library's CONCRETE type is filed again after the
+library's types register (`_refile_consumer_extensions`), because the collect pass ran
+before they were in the tables. A method name that the consumer and the library both
+declare on one type is CE0101, the answer that a source library gives.
+
 ## 6. Versions and compatibility
 
 Two version fields, with two different jobs.
@@ -778,6 +815,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. The source path needs no twin for a function, because a source library's units are compiled and each keeps its own scope. The closure ships ONE RECORD PER UNIT -- two library units may each ship a private `helper` -- and each source-shipped template carries a `bindings` map from every free name its body resolved to the producer's link symbol, so a template can never bind to another unit's body |
 | Consumer perk-impl `(type, perk)` == library-shipped perk-impl (**binary**) | local wins, silent, both semantically and at link time (§5.4, §5.7) | a consumer providing its own impl is expected, not an error |
 | Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating CE4007 as a breaking change on every library update |
+| Consumer extension method == library extension method on one target (**binary**) | **CE0101**, hard error, with a note that names the library (§5.9) | the two bodies are one symbol, and a source library gives the same answer |
 | Exported generic references an `unsafe external` namespace | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |
 | Exported generic (transitively) references a `ptr`-exposing private signature | **CE5006** | same rationale as CE5002 — `ptr` is unit-confined. Every kind, as above |
 | Public function/private-closure helper exposes `ptr` in its own signature | **CE5002** | `ptr` cannot appear in any public library signature |
@@ -803,10 +841,10 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `semver` (under `sushi_lang/internals/`) | `Version` + constraint matching. Shared by the library-load path and the Nori resolver (§6.3). |
 | `sushi_lang/compiler/pipeline.py` | Library resolution and the gates: `_check_library_platform` (binary only), `_check_library_compiler_version`, and the shared source-unit injector that both the bundled source stdlib and source libraries use. Also chooses monolithic vs incremental and drives per-unit caching. |
 | `sushi_lang/semantics/library_registry.py` | `LibraryRegistry` — **binary path only**. Pre-parses a raw manifest dict into typed `FuncSig`/`StructType`/`EnumType` objects once, shared by the semantic analyzer and codegen. |
-| `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
-| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
+| `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl`, `serialize_extension`, `serialize_generic_/deserialize_extension` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
+| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
 | `sushi_lang/backend/driver.py` | `LLVMDriver.compile_to_bitcode` (producer: sets `weak_odr` on perk impls, promotes export-closure private fns to `external`), `compile_multi_unit` (drives `TwoPhaseLinker` when libraries are present), `compile_library_to_object` (incremental path: one `.o` per library). |
-| `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, `_declare_library_perk_impl_methods` (consumer: declares, never defines, library symbols). |
+| `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, `_declare_library_perk_impl_methods`, `library_extensions` (consumer: declares, never defines, library symbols). |
 | `sushi_lang/backend/module_linker.py` | `TwoPhaseLinker` — the monolithic-path in-memory IR merge (reachability + priority-ordered symbol resolution). Not library-specific — the main module and stdlib bitcode go through it too. |
 | `sushi_lang/backend/symbol_resolver.py` | `SymbolResolver._choose_definition` — the `MAIN > LIBRARY > STDLIB > RUNTIME` priority table used only by `TwoPhaseLinker`. |
 | `sushi_lang/compiler/fingerprint.py` | `compute_lib_fingerprint` — content hash of a `.slib`, used to cache its compiled object and to invalidate consumers. |

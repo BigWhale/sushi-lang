@@ -32,8 +32,14 @@ def _target_name(target_type: Any) -> Optional[str]:
 
     A type with no name, an array target for one, can never be declared by a
     unit, so the lookup misses. The name is the INTERNAL one; the record's
-    `target` field is the surface spelling, and `display_type` owns that.
+    `target` field is the surface spelling, and `display_type` owns that. A generic
+    target (`Box@(T)`, `Box@(i32)`) answers with its BASE name, because the unit
+    declares `Box` and not one instance of it.
     """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if isinstance(target_type, GenericTypeRef):
+        return target_type.base_name
     return getattr(target_type, "name", None)
 
 

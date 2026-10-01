@@ -430,6 +430,43 @@ is the authority, and the index is a cache of it.
             }
         ],
 
+        # Extension methods, instance and static. A CONCRETE one ships as a signature:
+        # the body is in the bitcode, and the consumer declares `link_symbol` and links
+        # it. The methods of an implementation of a perk that does not ship are records
+        # here too: the contract stays hidden, and each method is an ordinary method of
+        # the type. An extension on a private type that nothing ships is left out. The
+        # whole key is absent when there is no record.
+        #
+        #   EXTENSION = {
+        #       "type": str,           # The target, in the internal spelling: "Vec",
+        #                              #   "i32", "i32[]", "Box<T>", "T[]"
+        #       "name": str,
+        #       **SIG,
+        #       "self_mode": str,      # "peek" | "poke", only when declared
+        #       "static": bool,        # True, only for a static
+        #       "unit": str,           # The unit that declared it
+        #       "doc": DOC             # If documented
+        #   }
+        "extensions": [
+            {**EXTENSION, "link_symbol": str}   # Its symbol in the shipped bitcode
+        ],                                      #   (see "The two symbol keys")
+
+        # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
+        # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
+        # (`pick@(U)`). A template names no instance, so it ships as source, and the
+        # consumer makes one copy for each instance it names. It joins the export
+        # closure, so its body may call a private function of the library. The whole
+        # key is absent when there is no record.
+        "generic_extensions": [
+            {
+                **EXTENSION,
+                "type_params": [{"name": str, "constraints": [str], "is_pack": bool}],
+                                       # The method's own type parameters
+                "source": str,         # The whole `extend ...` declaration
+                "bindings": {str: str} # As for a generic function; absent when empty
+            }
+        ],
+
         # Export closure: private symbols exported generics transitively
         # reference. Concrete helpers ship as signature records (definitions
         # carry external linkage in the bitcode); constants and types ship with
@@ -502,7 +539,10 @@ answer.
 
 **`link_symbol` says what the shipped bitcode calls it**, and only a record with a symbol
 in that bitcode carries one: a public function, and an export-closure private function.
-It is **written by every build and read by the BINARY path alone.**
+It is **written by every build and read by the BINARY path alone.** A concrete extension
+method's record carries one too. Its symbol has no unit in it, as a perk-impl method's
+has not, so the consumer's backend gets the same name from the same rule
+(`extension_receiver_name`), declares it, and links the body from the bitcode.
 
 That asymmetry is the point:
 

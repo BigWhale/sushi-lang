@@ -1,0 +1,34 @@
+public struct Box@(T):
+    T item
+
+public struct Pt:
+    i32 x
+
+fn five() i32:
+    return 5
+
+extend Box@(T) tag() i32:
+    return five()
+
+extend Box@(T) echo(nom T x) T:
+    return x
+
+extend Box@(i32) doubled() i32:
+    return self.item * 2
+
+extend Pt pick@(U)(U a) U:
+    return a
+
+public enum BoxError:
+    Empty
+
+extend Box@(T) static wrap(nom T x) Box@(T):
+    return Box(x)
+
+extend Box@(i32) checked() i32 | BoxError:
+    if (self.item == 0):
+        return Result.Err(BoxError.Empty)
+    return Result.Ok(self.item)
+
+extend Box@(T) put(poke self, nom T x) ~:
+    self.item := x

@@ -109,6 +109,7 @@ class SemanticAnalyzer:
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
+        self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
     def check(self) -> None:
@@ -344,6 +345,7 @@ class SemanticAnalyzer:
         libraries.register(compilation_order)
         self.library_registry = libraries.registry
         self.library_perk_impls = libraries.shipped_perk_impls
+        self.library_extensions = libraries.shipped_extensions
 
     def _build_namespaces(self, compilation_order: list[Unit], all_units: dict) -> None:
         """namespaces: what each unit may write behind a dot."""

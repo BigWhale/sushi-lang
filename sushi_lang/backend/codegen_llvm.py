@@ -153,6 +153,7 @@ class LLVMCodegen:
         # Library-shipped concrete perk impls (C4a): declared only, never
         # defined - the bodies link in from the library bitcode.
         self.library_perk_impls: list['ExtendWithDef'] = []
+        self.library_extensions: list[ExtendDef] = []
 
         self.stdlib_units: set[str] = set()
 
@@ -411,6 +412,8 @@ class LLVMCodegen:
         if self.library_linker is not None:
             self._declare_library_functions()
             self._declare_library_perk_impl_methods()
+            for ext in self.library_extensions:
+                self.functions.emit_extension_method_decl(ext)
 
         for unit in defined:
             if unit.ast is None:

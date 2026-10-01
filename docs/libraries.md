@@ -88,6 +88,15 @@ does **not** buy: a generic cannot be pre-compiled, because monomorphization nee
 consumer's concrete type arguments, so a binary library carries the source text of its
 generics in the index regardless. Binary distribution hides concrete bodies only.
 
+Every kind exports extension methods, instance and static. A consumer calls
+`Vec.at(3, 4)` and `v.sum()` on a binary library's `Vec` as it does on a source
+library's. A concrete method ships as a signature, and its body links from the bitcode.
+A template (`extend Box@(T)`, `extend Box@(i32)`, `extend T[]`, `pick@(U)`) ships as
+source, and the consumer makes its own copies. A method of an implementation of a
+private perk ships as an ordinary method of the type: the contract stays hidden, and the
+method stays callable. A consumer that declares the same method on the same type hears
+`CE0101`, on every kind.
+
 Every kind re-exports. A façade unit that says `public use` on each of the library's
 other units is the way to give a multi-unit library one namespace, and it works whichever
 kind you build: a source library ships the statement as text and the consumer's compiler
@@ -367,6 +376,9 @@ This is useful for:
 - Reading a library's contracts: every public perk prints with its method signatures, and
   `Perk Implementations` lists which types satisfy each one -- a concrete implementation
   and a generic-target template (`extend Box@(T) with Show`) alike
+- Reading the methods a library adds to a type: `Extension Methods` prints one line per
+  method, as it was declared (`extend Vec static at(i32 x, i32 y) Vec`), a template
+  (`extend Box@(T) tag() i32`) beside the concrete ones
 - Seeing what a unit hands on: `Re-exports` prints one line per `public use`, as the
   statement was written, so a façade unit's whole surface reads off the report
 - Verifying platform compatibility
@@ -648,9 +660,17 @@ Current limitations of the library system:
    extension method on the target type already uses one of the impl's method names, the library
    impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
    `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
-   constraints ship; impls of library-internal perks stay internal. A generic-target
+   constraints ship; impls of library-internal perks stay internal as contracts, and
+   their methods ship as ordinary extension methods (below). A generic-target
    implementation (`extend Box@(T) with Show`) ships as a template in
    `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
+
+   **Extension methods also ship**: a concrete extension method (instance or static) is a
+   signature record in `templates.extensions`, with the symbol that the library bitcode
+   defines. The consumer registers the method and declares the symbol. An extension
+   template is a source record in `templates.generic_extensions`, and the consumer makes
+   a copy for each instance it names. A template body may call a private function of the
+   library, through the export closure below.
 
    **Private helpers ship automatically (the export closure)**: a public generic whose body
    references library-private symbols exports: the producer walks the

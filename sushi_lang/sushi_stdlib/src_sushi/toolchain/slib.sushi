@@ -336,7 +336,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[114] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[129] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -366,6 +366,8 @@ const SchemaRow[114] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('templates', 'private_functions', '[]helper', Presence.Optional()),
     SchemaRow('templates', 'constants', '[]closure_constant', Presence.Optional()),
     SchemaRow('templates', 'private_types', '[]private_type', Presence.Optional()),
+    SchemaRow('templates', 'extensions', '[]extension', Presence.Optional()),
+    SchemaRow('templates', 'generic_extensions', '[]extension', Presence.Optional()),
     SchemaRow('function', 'name', 'str', Presence.Required()),
     SchemaRow('function', 'return_type', 'str', Presence.Required()),
     SchemaRow('function', 'params', '[]param', Presence.Optional()),
@@ -436,6 +438,19 @@ const SchemaRow[114] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('method', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('method', 'error_type', 'str', Presence.Optional()),
     SchemaRow('method', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('extension', 'type', 'str', Presence.Required()),
+    SchemaRow('extension', 'name', 'str', Presence.Required()),
+    SchemaRow('extension', 'return_type', 'str', Presence.Required()),
+    SchemaRow('extension', 'params', '[]param', Presence.Optional()),
+    SchemaRow('extension', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('extension', 'self_mode', 'str', Presence.Optional()),
+    SchemaRow('extension', 'static', 'bool', Presence.Optional()),
+    SchemaRow('extension', 'has_channel', 'bool', Presence.Required()),
+    SchemaRow('extension', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('extension', 'unit', 'str', Presence.Optional()),
+    SchemaRow('extension', 'link_symbol', 'str', Presence.Optional()),
+    SchemaRow('extension', 'source', 'str', Presence.Optional()),
+    SchemaRow('extension', 'doc', '@doc', Presence.Optional()),
     SchemaRow('doc', 'summary', 'str', Presence.Optional()),
     SchemaRow('doc', 'body', 'str', Presence.Optional()),
     SchemaRow('doc', 'params', 'map', Presence.Optional()),
