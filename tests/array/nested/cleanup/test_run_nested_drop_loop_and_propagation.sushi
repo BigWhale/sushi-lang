@@ -1,0 +1,45 @@
+# a nested array of `Drop` elements that a loop body declares is destroyed on `break` and
+# on `continue`, and one in a `| E` function is destroyed when `??` propagates an Err.
+# the shapes are `Tok[3][]` and `Tok[][2]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "turn 0\ndrop a0\ndrop b0\ndrop c0\nturn 1\ndrop a1\ndrop b1\ndrop c1\nturn 2\ndrop a2\ndrop b2\ndrop c2\nbreak\ndrop x\ndrop y\nfail\ndrop p\ndrop q\nerr\n"
+struct Tok:
+    string name
+
+extend Tok with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn tok(string n) Tok:
+    return Tok(n.clone())
+
+fn step(bool ok) i32 | StdError:
+    if (ok):
+        return Result.Ok(1)
+    return Result.Err(StdError.Error)
+
+fn run() i32 | StdError:
+    let Tok[][2] g = [from([tok("p")]), from([tok("q")])]
+    println("fail")
+    let i32 v = step(false)??
+    return Result.Ok(v + g.len())
+
+fn main() i32:
+    foreach(i in 0..5):
+        let Tok[3][] g = from([[tok("a{i}"), tok("b{i}"), tok("c{i}")]])
+        println("turn {i}")
+        if (i < 2):
+            continue
+        if (g.len() == 1):
+            break
+    let i32 n = 0
+    while (n < 3):
+        let Tok[][2] h = [from([tok("x")]), from([tok("y")])]
+        n := n + h.len()
+        println("break")
+        break
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return 0

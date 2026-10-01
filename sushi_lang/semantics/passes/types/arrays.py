@@ -56,9 +56,9 @@ class Receiver(Enum):
 class _InternedByTheCaller:
     """Marks a row whose answer is interned by the reader of this table.
 
-    `get`, `first`, `last` and `pop` each answer `Maybe@(T)` and `index_of` answers
+    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)` and `index_of` answers
     `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one owner, and
-    `ArrayMethodInferrer` resolves all five before it reaches this table, so a rule here
+    `ArrayMethodInferrer` resolves all six before it reaches this table, so a rule here
     would be a second answer to a question already answered. The row still carries the
     marker, so no name sits in the table with no decision at all.
     """
@@ -68,18 +68,20 @@ INTERNED_BY_THE_CALLER = _InternedByTheCaller()
 
 
 def _validate_element_argument(call: MethodCall, element_type: Type, reporter: Reporter,
-                               validator: Optional['TypeValidator']) -> None:
+                               validator: Optional['TypeValidator'],
+                               position: int = 0) -> None:
     """The one check for "is this argument an element of this array?" (CE2006)."""
     if validator is None:
         return
-    validator.validate_expression(call.args[0])
-    arg_type = validator.infer_expression_type(call.args[0])
+    argument = call.args[position]
+    validator.validate_expression(argument)
+    arg_type = validator.infer_expression_type(argument)
     if arg_type is None:
         return
     from .compatibility import types_compatible
     if not types_compatible(validator, arg_type, element_type):
-        er.emit(reporter, er.ERR.CE2006, call.args[0].loc,
-                index=1, expected=display_type(element_type), got=display_type(arg_type))
+        er.emit(reporter, er.ERR.CE2006, argument.loc, index=position + 1,
+                expected=display_type(element_type), got=display_type(arg_type))
 
 
 # ------------------------------------------------------------------ an i32 position
@@ -146,13 +148,21 @@ def _an_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
 
 
 def _an_element_to_store(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
-                         validator: Optional['TypeValidator']) -> None:
+                         validator: Optional['TypeValidator'], position: int = 0) -> None:
     """`push(v)`: the element, with the stamp a bare enum variant needs before it is read."""
     if validator is None:
         return
     from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    propagate_types_to_value(validator, call.args[0], array_type.base_type)
-    _validate_element_argument(call, array_type.base_type, reporter, validator)
+    propagate_types_to_value(validator, call.args[position], array_type.base_type)
+    _validate_element_argument(call, array_type.base_type, reporter, validator, position)
+
+
+def _an_index_and_an_element_to_store(call: MethodCall, array_type: ArrayReceiver,
+                                      reporter: Reporter,
+                                      validator: Optional['TypeValidator']) -> None:
+    """`insert(i, v)`: an i32 index, then the element to store."""
+    _an_index(call, array_type, reporter, validator)
+    _an_element_to_store(call, array_type, reporter, validator, position=1)
 
 
 def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -273,6 +283,17 @@ def _the_checked_byte_string(array_type: ArrayReceiver,
                                        struct_table=validator.struct_table.by_name)
 
 
+def _the_checked_insert(array_type: ArrayReceiver,
+                        validator: Optional['TypeValidator']) -> Optional[Type]:
+    """`T[].insert(i, v)`: `Result@(~, StdError)`, through the intern seam."""
+    if validator is None or not isinstance(array_type, DynamicArrayType):
+        return None
+    from sushi_lang.semantics.generics.results import ensure_result_type_in_table
+    std_error = validator.enum_table.by_name.get("StdError")
+    return ensure_result_type_in_table(validator.enum_table, BuiltinType.BLANK, std_error,
+                                       struct_table=validator.struct_table.by_name)
+
+
 def _an_element_iterator(array_type: ArrayReceiver,
                          validator: Optional['TypeValidator']) -> Optional[Type]:
     """`iter()`: an iterator over the element type."""
@@ -328,6 +349,11 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "truncate": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
                           arguments=_an_index),
     "capacity": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.I32)),
+    # The `List@(T)` contract (ruling R3): `insert` answers `Result@(~, StdError)`, and
+    # `remove` answers `Maybe@(T)`, interned by the caller.
+    "insert": ArraySpec(2, Receiver.DYNAMIC, _the_checked_insert,
+                        arguments=_an_index_and_an_element_to_store),
+    "remove": ArraySpec(1, Receiver.DYNAMIC, INTERNED_BY_THE_CALLER, arguments=_an_index),
     "destroy": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
     "free": ArraySpec(0, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK)),
     "iter": ArraySpec(0, Receiver.ANY, _an_element_iterator),
@@ -461,7 +487,7 @@ def get_builtin_array_method_return_type(
     """The type a built-in array method answers, read from its row.
 
     A row marked `INTERNED_BY_THE_CALLER` answers nothing here: `ArrayMethodInferrer` owns
-    the five `Maybe` answers, and resolves them before it reads this table.
+    the six `Maybe` answers, and resolves them before it reads this table.
     """
     spec = _ARRAY_METHODS.get(method_name)
     if spec is None or isinstance(spec.returns, _InternedByTheCaller):

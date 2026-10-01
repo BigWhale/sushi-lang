@@ -1,0 +1,8 @@
+# an inner row of `i32[3][]` is an `i32[3]`, so `m[i].insert(...)` and `m[i].remove(...)`
+# are refused like a fixed receiver at the top level.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+fn main() i32:
+    let i32[3][] m = from([[1, 2, 3]])
+    m[0].insert(0, 4)
+    m[0].remove(0)
+    return m.len()

@@ -1,0 +1,26 @@
+# a nested array as a struct field, in each of the four shapes: read, write and push
+# through the field, and the struct drops every level at scope exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 9 3\n9 6\n3 8\n2 7 5\n"
+struct Sheet:
+    i32[][] cells
+    i32[2][3] fixed
+    i32[3][] rows
+    i32[][2] pair
+
+fn main() i32:
+    let Sheet s = Sheet(from([from([1]), from([2, 3])]), [[1, 2], [3, 4], [5, 6]],
+                        from([[1, 2, 3]]), [from([4]), new()])
+    s.cells[0].push(9)
+    s.cells.push(from([3]))
+    println("{s.cells[0].len()} {s.cells[0][1]} {s.cells.len()}")
+    s.fixed[1][0] := 9
+    println("{s.fixed[1][0]} {s.fixed[2][1]}")
+    s.rows.push([7, 8, 9])
+    s.rows[1][0] := 3
+    println("{s.rows[1][0]} {s.rows[1][1]}")
+    s.pair[1].push(7)
+    s.pair[0][0] := 5
+    println("{s.pair[1].len() + 1} {s.pair[1][0]} {s.pair[0][0]}")
+    return 0

@@ -1,0 +1,17 @@
+# an insert or a remove can move the buffer, so it is refused while a `let` borrow of an
+# element of the receiver, or of the receiver itself, lives.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+fn rows() i32:
+    let i32[][] g = from([from([0]), from([1])])
+    let peek i32[] row = g[0]
+    g.insert(0, from([2]))
+    return row.len()
+
+fn whole() i32:
+    let i32[] a = from([1, 2])
+    let peek i32[] view = a
+    a.remove(0)
+    return view.len()
+
+fn main() i32:
+    return rows() + whole()

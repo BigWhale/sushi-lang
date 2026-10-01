@@ -1,0 +1,11 @@
+# a dynamic array of fixed rows is refused as a HashMap key, with the dynamic-array key
+# error, and so is one two levels down: `i32[2][]` and `i32[][3][2]`.
+# EXPECT_ERROR_CODES_EXACT: CE2058
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32[2][], i32) m = HashMap.new()
+    let HashMap@(i32[][3][2], i32) n = HashMap.new()
+    m.free()
+    n.free()
+    return 0

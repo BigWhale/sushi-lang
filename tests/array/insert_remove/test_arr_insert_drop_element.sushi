@@ -1,0 +1,42 @@
+# a `Drop` element runs `drop()` exactly once: an insert moves the element in with no
+# drop, a shift moves no ownership, a removed element is dropped by its new owner, a
+# refused insert drops the consumed element, and the scope exit drops the rest.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "filled 3\ndrop a\nafter discard\ngot b\ndrop b\ndrop z\nerr\ndrop y\nerr\nend 1\ndrop c\n"
+struct Tok:
+    string name
+
+extend Tok with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn tok(string n) Tok:
+    return Tok(n.clone())
+
+fn discard(poke Tok[] t) ~:
+    t.remove(0)
+
+fn front(poke Tok[] t) ~:
+    match t.remove(0):
+        Maybe.Some(x) -> println("got {x.name}")
+        Maybe.None -> println("none")
+
+fn refuse(poke Tok[] t, i32 at, string n) ~:
+    match t.insert(at, tok(n)):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+
+fn main() i32:
+    let Tok[] t = new()
+    t.insert(0, tok("b"))
+    t.insert(0, tok("a"))
+    t.insert(2, tok("c"))
+    println("filled {t.len()}")
+    discard(poke t)
+    println("after discard")
+    front(poke t)
+    refuse(poke t, 5, "z")
+    refuse(poke t, -1, "y")
+    println("end {t.len()}")
+    return 0

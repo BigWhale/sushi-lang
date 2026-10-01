@@ -19,11 +19,9 @@ from .fixed_addressing import as_fixed_array_address
 
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
-    # Fixed array methods: len, get, first, last, contains, index_of, iter, hash, fill, reverse
-    # Dynamic array methods: len, get, first, last, push, pop, capacity, destroy, free, iter, clone, hash, fill, reverse
-    # u8[] specific methods: to_string
     return method_name in {
         "len", "get", "first", "last", "contains", "index_of", "push", "pop",
+        "insert", "remove",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
         "extend", "extend_range", "s", "ss"
@@ -296,6 +294,27 @@ def emit_dynamic_array_method(
                 element_semantic_type, ConsumingUse.CONTAINER_INSERT,
             )
             return core.emit_dynamic_array_push(codegen, receiver_value, array_struct_type, element_value)
+
+        case "insert":
+            # A container insert, so the element is consumed before the bounds check, as
+            # `List.insert` does (#869).
+            from sushi_lang.backend.generics.container_shift import emit_descriptor_insert
+            from sushi_lang.backend.ownership import ConsumingUse, consume
+            index_value = _index_arg(codegen, expr.args[0])
+            element_value = consume(
+                codegen, expr.args[1], codegen.expressions.emit_expr(expr.args[1]),
+                element_semantic_type, ConsumingUse.CONTAINER_INSERT,
+            )
+            return emit_descriptor_insert(codegen, receiver_value, index_value, element_value,
+                                          element_semantic_type,
+                                          array_struct_type.elements[2].pointee)
+
+        case "remove":
+            from sushi_lang.backend.generics.container_shift import emit_descriptor_remove
+            index_value = _index_arg(codegen, expr.args[0])
+            return emit_descriptor_remove(codegen, receiver_value, index_value,
+                                          element_semantic_type,
+                                          array_struct_type.elements[2].pointee)
 
         case "pop":
             return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type,

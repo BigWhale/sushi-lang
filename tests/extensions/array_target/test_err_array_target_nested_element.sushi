@@ -1,0 +1,9 @@
+# a nested array is not an extension target: `extend T[]` binds `T = i32[]` and covers
+# an `i32[][]` receiver, so a second spelling of the same target is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2101
+# EXPECT_STDERR_CONTAINS: "invalid element 'i32[]' in an array extension target"
+extend i32[][] total() i32:
+    return self.len()
+
+fn main() i32:
+    return 0

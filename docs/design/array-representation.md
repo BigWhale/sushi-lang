@@ -154,6 +154,39 @@ the value is being emitted -- `a[0] := grow(poke a)??` is a legal program -- so 
 first would point into the buffer that `realloc` released. Rust orders `a[i] = v` the same way,
 right operand before place.
 
+## A nested array
+
+An array element can be an array (ruling R1). The suffixes read from LEFT TO RIGHT: a
+suffix applies to the type on its left. The grammar says so with one left-recursive rule
+(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type`,
+`parse_type_string` and `resolve_type_from_string` all peel the LAST suffix.
+
+| Written | Is | Layout |
+|---|---|---|
+| `i32[][]` | a dynamic array of `i32[]` | a descriptor of descriptors |
+| `i32[3][]` | a dynamic array of `i32[3]` | a descriptor; each slot is 12 bytes inline |
+| `i32[][3]` | a fixed array of 3 `i32[]` | 3 descriptors inline |
+| `i32[2][3]` | a fixed array of 3 `i32[2]` | `[3 x [2 x i32]]` |
+
+An index removes the last suffix: for `i32[2][3] m`, `m[i]` is an `i32[2]` and `i` is in
+`0..3`. C reads the other way (`int m[2][3]` is 2 rows of 3), by intent: the Sushi order is
+the order in which the type is built.
+
+No new representation is necessary. A nested array is an ordinary element in a slot: an
+inner `T[]` is its 16-byte descriptor in the slot, and an inner `T[N]` is the whole fixed
+array inline in the slot. The element-generic code (the lifecycle handler table, the
+destructors, `copy_out` per slot, the LLVM type mapping) treats it as any other element.
+
+Two place emitters must give the inner array its ADDRESS, never a spilled copy. A copy
+takes the write or the growth, and the element keeps the old value (or, after a growth, a
+pointer to the freed buffer, which is then freed twice):
+
+- `emit_element_pointer` chains through an `IndexAccess` receiver: for `a[i][j]` it calls
+  itself on `a[i]`, and the address of that element is the base of the second index.
+- `emit_receiver_value` (`backend/expressions/calls/utils.py`) gives an `IndexAccess`
+  receiver whose element is a dynamic array its element address, as the `Name` arm gives
+  its slot. So `a[i].push(x)` grows the inner array in place.
+
 ## The one bulk copy
 
 `extend`, `extend_range`, `s` and `ss` are the same operation with different arguments, so

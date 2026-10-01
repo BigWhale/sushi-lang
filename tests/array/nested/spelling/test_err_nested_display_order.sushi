@@ -1,0 +1,7 @@
+# the inferred type of a nested literal prints in the order it is written: an `i32[2]`
+# row per slot of a dynamic array is `i32[2][]`, and it is not an `i32[3][]`.
+# EXPECT_ERROR_CODE: CE2002
+# EXPECT_STDERR_CONTAINS: "i32[2][]"
+fn main() i32:
+    let i32[3][] g = from([[1, 2], [3, 4]])
+    return g.len()

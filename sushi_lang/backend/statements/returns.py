@@ -30,7 +30,8 @@ def emit_return(codegen: 'LLVMCodegen', stmt: 'Return') -> None:
     # shapes that are not: an extension method's bare `return value`. This position must
     # NOT decide ownership on its own -- marking the source moved before the value was
     # emitted fought the payload position, and the original was cloned AND never freed.
-    value = codegen.expressions.emit_expr(stmt.value)
+    from sushi_lang.backend.types.arrays.addressing import as_array_value
+    value = as_array_value(codegen, codegen.expressions.emit_expr(stmt.value), "returned_array")
     value = _consume_returned_value(codegen, stmt, value)
 
     # ORDERING is the whole reason RETURN is its own position: the value is emitted and

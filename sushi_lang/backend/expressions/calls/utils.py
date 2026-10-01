@@ -255,6 +255,11 @@ def _deref_borrowed_receiver(codegen: 'LLVMCodegen', value: ir.Value, ll_type: i
     return loaded, loaded.type
 
 
+def _element_is_dynamic_array(codegen: 'LLVMCodegen', receiver: IndexAccess) -> bool:
+    from sushi_lang.semantics.typesys import DynamicArrayType
+    return isinstance(stamped_semantic_type(codegen, receiver), DynamicArrayType)
+
+
 def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Value, ir.Type, Optional['Type']]:
     """Emit receiver value with special handling for dynamic arrays and references."""
     from sushi_lang.backend.expressions import type_utils
@@ -298,6 +303,15 @@ def emit_receiver_value(codegen: 'LLVMCodegen', receiver: Expr) -> Tuple[ir.Valu
             struct_type = try_infer_struct_type(codegen, receiver.receiver)
             if struct_type is not None:
                 semantic_type = struct_type.get_field_type(receiver.member)
+    elif isinstance(receiver, IndexAccess) and _element_is_dynamic_array(codegen, receiver):
+        # `a[i].push(x)`: the element has storage, so a mutating method must reach it, as
+        # the Name arm hands over its slot. A spilled copy took the growth, leaked it, and
+        # left the element pointing at the freed buffer.
+        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+        from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
+        receiver_value = emit_element_pointer(codegen, receiver)
+        receiver_type = receiver_value.type.pointee
+        semantic_type = infer_expr_semantic_type(codegen, receiver)
     else:
         receiver_value = codegen.expressions.emit_expr(receiver)
         receiver_type = codegen.types.infer_llvm_type_from_value(receiver_value)

@@ -1,0 +1,29 @@
+# a fixed array of fixed arrays of an equality type is a HashMap KEY: it hashes, and two
+# keys compare element by element at each level, so a key equal by value finds the entry.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10\n20\nnone\n2\n30\ntrue\n1\n7\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32[2][2], i32) m = HashMap.new()
+    m.insert([[1, 2], [3, 4]], 10)
+    m.insert([[1, 2], [3, 5]], 20)
+    let i32[2][2] probe = [[1, 2], [3, 4]]
+    println(m.get(probe).realise(0))
+    println(m.get([[1, 2], [3, 5]]).realise(0))
+    match m.get([[2, 1], [3, 4]]):
+        Maybe.Some(v) -> println(v)
+        Maybe.None -> println("none")
+    m.insert([[1, 2], [3, 4]], 30)
+    println(m.len())
+    println(m.get(probe).realise(0))
+    println(m.contains_key([[1, 2], [3, 5]]))
+    m.remove([[1, 2], [3, 5]])
+    println(m.len())
+    let HashMap@(string[2][2], i32) s = HashMap.new()
+    s.insert([["a", "b"], ["c", "d"]], 7)
+    println(s.get([["a", "b"], ["c", "d"]]).realise(0))
+    m.free()
+    s.free()
+    return 0

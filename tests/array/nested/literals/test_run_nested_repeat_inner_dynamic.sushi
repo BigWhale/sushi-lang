@@ -1,0 +1,14 @@
+# a repeat of an inner dynamic array gives each slot its own copy: a write and a push
+# on one row leave the other rows as they were.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n9 0 0\n1 2 1\n0 5\n"
+fn main() i32:
+    let i32[][] r = from([from([0]); 3])
+    println(r.len())
+    r[0][0] := 9
+    r[1].push(5)
+    println("{r[0][0]} {r[1][0]} {r[2][0]}")
+    println("{r[0].len()} {r[1].len()} {r[2].len()}")
+    println("{r[2][0]} {r[1][1]}")
+    return 0

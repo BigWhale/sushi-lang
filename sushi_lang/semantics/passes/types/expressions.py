@@ -42,6 +42,15 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
         array_runs.const_int_reader(validator.constant_evaluator()),
         validator.reporter)
 
+    # Rows that disagree are measured against the row type their position stamped: a
+    # short row is CE2011 at that row, and not a CE2013 against the first row.
+    from .compatibility import reject_array_size_mismatch, short_rows
+    short = short_rows(validator, expr)
+    for row in short:
+        reject_array_size_mismatch(validator, row.resolved_type, row, row.loc)
+    if short:
+        return
+
     # Check type consistency of all elements (CE2013). A range element compares as the i32
     # it puts in a slot, and not as the Iterator@(i32) it types as (Ruling 4, #478).
     from sushi_lang.semantics.passes.types.inference import infer_array_element_type

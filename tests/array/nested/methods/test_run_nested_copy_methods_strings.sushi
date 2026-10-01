@@ -1,0 +1,24 @@
+# `fill`, `extend`, `extend_range`, `s`, `ss` and `pop` on a `string[][]` give each new
+# row its own copy of the strings, so a write in one row changes no other row.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x w w\nb y\na c\nz c\n2 d\n"
+fn main() i32:
+    let string[][] f = from([new(), new(), new()])
+    f.fill(from(["w"]))
+    f[0][0] := "x"
+    println("{f[0][0]} {f[1][0]} {f[2][0]}")
+    let string[][] src = from([from(["a", "b"]), from(["c"]), from(["d"])])
+    let string[][] e = new()
+    e.extend(src)
+    e.extend_range(src, 1, 1)
+    e[0][0] := "y"
+    println("{src[0][1]} {e[0][0]}")
+    let string[][] head = src.s(0, 2)
+    let string[][] tail = src.ss(1, 2)
+    head[1][0] := "z"
+    println("{src[0][0]} {src[1][0]}")
+    println("{head[1][0]} {tail[0][0]}")
+    let string[] last = src.pop().realise(new())
+    println("{src.len()} {last[0]}")
+    return 0

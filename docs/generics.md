@@ -1023,7 +1023,7 @@ let Box@(bool) b3 = Box(value: true)
 | A template and a concrete target for one method name | `CE0101` |
 | A static on an array target | `CE2104` |
 | A function type as an extension or perk-implementation target | `CE2110` |
-| An array element type is never an array (`i32[][]`) | `CE6001` |
+| A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | `CE2101` |
 | A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
 
 In an extension on a generic **enum** target, a call to a generic free function at the target's

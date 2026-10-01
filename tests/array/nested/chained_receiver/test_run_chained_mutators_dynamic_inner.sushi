@@ -1,0 +1,29 @@
+# Every mutating method on a dynamic inner array, called through a chained index, must
+# change the inner array in place: pop, truncate, fill, reverse, extend, clear.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 3\n2\n9 9\n8 9\n4 7\n0\n1 z\n"
+struct H@(T):
+    T[] rows
+
+fn main() i32:
+    let H@(i32[]) d = H(from([from([1, 2, 3, 4]), from([5])]))
+    let i32 last = d.rows[0].pop().realise(0)
+    println("{last} {d.rows[0].len()}")
+    d.rows[0].truncate(2)
+    println(d.rows[0].len())
+    d.rows[0].fill(9)
+    println("{d.rows[0][0]} {d.rows[0][1]}")
+    d.rows[0][0] := 8
+    d.rows[0].reverse()
+    d.rows[0].reverse()
+    println("{d.rows[0][0]} {d.rows[0][1]}")
+    d.rows[0].extend(from([7, 7]))
+    println("{d.rows[0].len()} {d.rows[0][3]}")
+    d.rows[0].clear()
+    println(d.rows[0].len())
+    let H@(string[]) s = H(from([from(["a", "b"])]))
+    s.rows[0].pop()
+    s.rows[0][0] := "z"
+    println("{s.rows[0].len()} {s.rows[0][0]}")
+    return 0

@@ -1,0 +1,44 @@
+# `insert` and `remove` reach the owner through every writable receiver: a struct field,
+# a `poke` parameter, a `poke` foreach binding, a `let poke` reference and a unit `var`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "field 3 9 2\nparam 3 0 8\nloop 2 2 7 7\nref 3 6\nvar 2 4 1\n"
+struct World:
+    i32[] cells
+
+var i32[] store = new()
+
+fn grow(poke i32[] a, i32 v) ~:
+    a.insert(0, v)
+    a.remove(a.len() - 1)
+
+fn main() i32:
+    let World w = World(from([1, 2]))
+    w.cells.insert(0, 9)
+    w.cells.insert(3, 3)
+    w.cells.remove(1)
+    println("field {w.cells.len()} {w.cells[0]} {w.cells[1]}")
+
+    let i32[] p = from([0, 1, 2])
+    grow(poke p, 8)
+    println("param {p.len()} {p[1]} {p[0]}")
+
+    let i32[][] grid = from([from([1]), from([2])])
+    foreach(poke r in grid.iter()):
+        r.insert(0, 7)
+        r.insert(0, 7)
+        r.remove(0)
+    println("loop {grid[0].len()} {grid[1].len()} {grid[0][0]} {grid[1][0]}")
+
+    let i32[][] rows = from([from([5, 6])])
+    let poke i32[] r = rows[0]
+    r.insert(0, 4)
+    println("ref {r.len()} {r[2]}")
+
+    store.insert(0, 1)
+    store.insert(0, 4)
+    store.insert(0, 3)
+    store.remove(0)
+    println("var {store.len()} {store[0]} {store[1]}")
+    store.destroy()
+    return 0

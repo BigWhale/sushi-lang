@@ -1,0 +1,41 @@
+# a rebind and an overwrite at each depth of `Tok[3][]` and `Tok[][2]` run `drop()` once
+# for each old element, and a `return` from inside a nested block destroys both shapes,
+# in reverse declaration order.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "row\ndrop a\ndrop b\ndrop c\ncell\ndrop d\nrebind fixed\ndrop g\ndrop h\nslot\ndrop i\ncell2\ndrop k\nreturn\ndrop p\ndrop m\ndrop n\ndrop o\n3\ndrop j\ndrop l\ndrop x\ndrop e\ndrop f\n"
+struct Tok:
+    string name
+
+extend Tok with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn tok(string n) Tok:
+    return Tok(n.clone())
+
+fn early() i32:
+    let Tok[3][] g = from([[tok("m"), tok("n"), tok("o")]])
+    let Tok[][2] h = [from([tok("p")]), new()]
+    if (g.len() == 1):
+        if (h.len() == 2):
+            println("return")
+            return 3
+    return 0
+
+fn main() i32:
+    let Tok[3][] g = from([[tok("a"), tok("b"), tok("c")]])
+    println("row")
+    g[0] := [tok("d"), tok("e"), tok("f")]
+    println("cell")
+    g[0][0] := tok("x")
+    let Tok[][2] h = [from([tok("g")]), from([tok("h")])]
+    println("rebind fixed")
+    h := [from([tok("i")]), new()]
+    println("slot")
+    h[0] := from([tok("j")])
+    h[1].push(tok("k"))
+    println("cell2")
+    h[1][0] := tok("l")
+    println(early())
+    return 0

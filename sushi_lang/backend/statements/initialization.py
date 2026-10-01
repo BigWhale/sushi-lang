@@ -39,7 +39,6 @@ def initialize_dynamic_array(
 ) -> None:
     """Initialize dynamic array variable with constructor or expression."""
     from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
-    from llvmlite import ir
     if codegen.dynamic_arrays is None:
         raise_internal_error("CE0014")
 
@@ -65,8 +64,8 @@ def initialize_dynamic_array(
         # `let` off one takes the descriptor here. Reached, and kept on that evidence
         # (#553): `tests/memory/borrowed_read_at_sink/test_field_array_copy_at_let.sushi`,
         # `tests/references/let_bindings/test_let_borrow_escapes.sushi`.
-        if isinstance(val.type, ir.PointerType) and codegen.types.is_dynamic_array_type(val.type.pointee):
-            val = codegen.builder.load(val, name=f"{name}_init_value")
+        from sushi_lang.backend.types.arrays.addressing import as_array_value
+        val = as_array_value(codegen, val, f"{name}_init_value")
 
         # A bare `T[]` binding goes through the same seam as every other `let`. With no
         # decision here, `let b = a` left two registered owners of one buffer.

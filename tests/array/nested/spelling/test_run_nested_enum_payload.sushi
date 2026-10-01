@@ -1,0 +1,25 @@
+# a nested array as an enum payload, in each of the four shapes, read through a
+# pattern binding.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ragged 2 3\nfixed 3 6\nrows 1 3\ncolumns 3 5\n"
+enum Layout:
+    Ragged(i32[][])
+    Fixed(i32[2][3])
+    Rows(i32[3][])
+    Columns(i32[][3])
+
+fn describe(Layout l) ~:
+    match l:
+        Layout.Ragged(d) -> println("ragged {d.len()} {d[1][1]}")
+        Layout.Fixed(m) -> println("fixed {m.len()} {m[2][1]}")
+        Layout.Rows(g) -> println("rows {g.len()} {g[0][2]}")
+        Layout.Columns(f) -> println("columns {f.len()} {f[2][0]}")
+
+fn main() i32:
+    describe(Layout.Ragged(from([from([1]), from([2, 3])])))
+    describe(Layout.Fixed([[1, 2], [3, 4], [5, 6]]))
+    describe(Layout.Rows(from([[1, 2, 3]])))
+    let Layout c = Layout.Columns([from([1]), new(), from([5])])
+    describe(c)
+    return 0

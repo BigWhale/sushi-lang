@@ -1,0 +1,30 @@
+# `insert` and `remove` of a whole row: on `i32[][]` the slot is a descriptor and each
+# inner buffer keeps one owner, so a removed row belongs to the caller; on `i32[3][]`
+# the slot is the inner fixed array, inline.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 1 2 3 4\nrow 2 7\n3 0 3\n9 8 2\n3 4 5 6\n1 2 3 4 5 6 3\n7 8 9 1\n"
+fn main() i32:
+    let i32[][] g = from([from([1]), from([3, 3, 3])])
+    g.insert(1, from([2, 2]))
+    g.insert(g.len(), from([4, 4, 4, 4]))
+    println("{g.len()} {g[0].len()} {g[1].len()} {g[2].len()} {g[3].len()}")
+    let i32[] row = g.remove(1).realise(new())
+    row.push(7)
+    println("row {row.len() - 1} {row[2]}")
+    g[0].push(0)
+    println("{g.len()} {g[0][1]} {g[1].len()}")
+    match g.remove(0):
+        Maybe.Some(r) -> println("9 8 {r.len()}")
+        Maybe.None -> println("none")
+    g.remove(0)
+    g.insert(0, new())
+    g[0].push(5)
+    println("{g.len() + 1} {g[1][3]} {g[0][0]} {g[1].len() + 2}")
+
+    let i32[3][] m = from([[1, 2, 3], [7, 8, 9]])
+    m.insert(1, [4, 5, 6])
+    println("{m[0][0]} {m[0][1]} {m[0][2]} {m[1][0]} {m[1][1]} {m[1][2]} {m.len()}")
+    let i32[3] gone = m.remove(0).realise([0, 0, 0])
+    println("{m[1][0]} {m[1][1]} {m[1][2]} {gone[0]}")
+    return 0

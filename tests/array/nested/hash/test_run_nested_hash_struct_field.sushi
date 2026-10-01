@@ -1,0 +1,29 @@
+# a struct field and an enum payload of a nested array type give the type a derived
+# hash, and that hash reads the nested elements.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ragged=true false\nfixed=true false\npayload=true false\n"
+struct Ragged:
+    i32[][] rows
+
+struct Fixed:
+    i32[2][3] cells
+
+enum Shape:
+    Grid(i32[3][])
+    Empty
+
+fn main() i32:
+    let Ragged r1 = Ragged(from([from([1]), from([2, 3])]))
+    let Ragged r2 = Ragged(from([from([1]), from([2, 3])]))
+    let Ragged r3 = Ragged(from([from([1]), from([2, 4])]))
+    println("ragged={r1.hash() == r2.hash()} {r1.hash() == r3.hash()}")
+    let Fixed f1 = Fixed([[1, 2], [3, 4], [5, 6]])
+    let Fixed f2 = Fixed([[1, 2], [3, 4], [5, 6]])
+    let Fixed f3 = Fixed([[1, 2], [3, 4], [6, 5]])
+    println("fixed={f1.hash() == f2.hash()} {f1.hash() == f3.hash()}")
+    let Shape s1 = Shape.Grid(from([[1, 2, 3]]))
+    let Shape s2 = Shape.Grid(from([[1, 2, 3]]))
+    let Shape s3 = Shape.Grid(from([[3, 2, 1]]))
+    println("payload={s1.hash() == s2.hash()} {s1.hash() == s3.hash()}")
+    return 0

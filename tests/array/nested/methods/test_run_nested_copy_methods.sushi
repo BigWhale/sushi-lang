@@ -1,0 +1,46 @@
+# the methods that copy or move rows of a nested array keep every row with one owner:
+# `pop` moves the row out, `clone` is deep (a write at depth 2 of the clone leaves the
+# original), `fill` gives each slot its own copy, `extend` and `extend_range` copy the
+# source rows, `s` and `ss` own copies of the rows, and `reverse` moves the rows.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 1\n2 1 9\nx a\n1 1 7\n5 9 2\n3 3\n4 2 1\n2 1\nq b\n6 3\n"
+fn main() i32:
+    let i32[][] d = from([from([1, 2]), from([3, 4, 5])])
+    let i32[] got = d.pop().realise(new())
+    println("{got.len()} {d.len()}")
+    let i32[][] c = d.clone()
+    c[0][0] := 9
+    c[0].push(9)
+    println("{d[0].len()} {d[0][0]} {c[0][0]}")
+    let string[][] s = from([from(["a"])])
+    let string[][] t = s.clone()
+    t[0][0] := "x"
+    println("{t[0][0]} {s[0][0]}")
+    let i32[][] f = from([new(), new(), new()])
+    f.fill(from([7]))
+    f[0][0] := 1
+    f[1].push(2)
+    println("{f[0][0]} {f[2].len()} {f[2][0]}")
+    let i32[][] e = from([from([5])])
+    e.extend(d)
+    e.extend_range(c, 0, 1)
+    e[1][0] := 9
+    println("{e.len() + 2} {e[2][0]} {d[0][1]}")
+    let i32[][] grid = from([from([1]), from([2, 2]), from([3, 3, 3]), from([4, 4, 4, 4])])
+    let i32[][] mid = grid.s(1, 3)
+    let i32[][] run = grid.ss(2, 2)
+    mid[1][0] := 8
+    run[0].push(0)
+    println("{grid[2].len()} {grid[2][0]}")
+    grid.reverse()
+    println("{grid[0].len()} {grid[2][0]} {grid[3][0]}")
+    let i32[3][] fx = from([[1, 1, 1], [2, 2, 2]])
+    fx.reverse()
+    println("{fx[0][0]} {fx[1][0]}")
+    let string[][2] sp = [from(["a"]), from(["b"])]
+    let string[][2] sq = sp.clone()
+    sq[0][0] := "q"
+    println("{sq[0][0]} {sp[1][0]}")
+    println("{mid.len() + run.len() + 2} {got[0]}")
+    return 0

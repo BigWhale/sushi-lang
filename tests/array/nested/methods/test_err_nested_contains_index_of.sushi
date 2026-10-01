@@ -1,0 +1,15 @@
+# `contains` and `index_of` on a nested array are refused: the element is an array, and
+# an array has no `==` at the top level. One error for each call, over `i32[][]`,
+# `i32[2][3]` and `string[][]`.
+# EXPECT_ERROR_CODES_EXACT: CE2100
+fn main() i32:
+    let i32[][] d = from([from([1, 2]), from([3])])
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    let string[][] s = from([from(["a"])])
+    let bool a = d.contains(from([3]))
+    let bool b = m.contains([1, 2])
+    let Maybe@(i32) c = s.index_of(from(["a"]))
+    let Maybe@(i32) e = m.index_of([3, 4])
+    if (a or b):
+        return 1
+    return c.realise(0) + e.realise(0)

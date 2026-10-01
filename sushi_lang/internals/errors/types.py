@@ -69,7 +69,7 @@ _add(ErrorMessage("CE2014", Severity.ERROR,
 
 _add(ErrorMessage("CE2015", Severity.ERROR,
     "constant '{name}' cannot use dynamic array type",
-    Category.TYPE, "Constants must use compile-time types. Dynamic arrays are not allowed."))
+    Category.TYPE, "Constants must use compile-time types. A dynamic array is not allowed at any depth of an array type: `i32[]`, `i32[][2]` (a fixed array of dynamic rows) and `i32[2][]` are all refused. A fixed array of fixed rows (`i32[2][3]`) is a constant. A `var` can hold a dynamic array."))
 
 # CE2016 ("method '{method}' expects {expected} argument(s), got {got}") was RETIRED by
 # #799. It answered a miscount on a built-in HashMap, Own, Maybe or Result method, while
@@ -201,9 +201,10 @@ _add(ErrorMessage("CE2050", Severity.ERROR,
     Category.TYPE, "Enum variant constructor must provide exact number of arguments for associated data."))
 
 # CE2051 ("{message}", a hashing limitation) was RETIRED by #804. Its one emit site refused
-# `.hash()` on an array of arrays, and nothing could reach it: `i32[][]` cannot be written,
-# the hashability gate refuses a nested array before a hash is registered, and the array
-# family answers an array's `.hash()` before the derived method is asked.
+# `.hash()` on an array of arrays. A nested array now has a hash: the hashability gate asks
+# the element, the element is an array, and the gate asks its element in turn. The array
+# family answers an array's `.hash()` before the derived method is asked. The number is
+# not reused.
 
 # CE2052 ("recursive enum '{name}' requires Own@(T) indirection") was RETIRED by the ruling
 # on #677 (2026-09-14). The derive pass found an enum cycle in its topological sort and said
@@ -234,7 +235,7 @@ _add(ErrorMessage("CE2055", Severity.ERROR,
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
-    Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
+    Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints, at any depth of an array type: `i32[]`, `i32[2][]` and `i32[][2]` (a fixed array of dynamic rows) are all refused. Use fixed-size arrays instead (e.g., i32[3] instead of i32[]); a fixed array of fixed rows (`i32[2][2]`) is a key."))
 
 # Array indexing errors (CE2056-CE2057)
 _add(ErrorMessage("CE2056", Severity.ERROR,
@@ -380,7 +381,7 @@ _add(ErrorMessage("CE2100", Severity.ERROR,
 
 _add(ErrorMessage("CE2101", Severity.ERROR,
     "invalid element '{element}' in an array extension target",
-    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers -- and a nested array element is not an expressible type at all (Known Limitation 2). Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
+    Category.TYPE, "An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers. A nested array element (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused for the same reason, and it is not necessary: `extend T[]` binds `T = i32[]` and applies to an `i32[][]` receiver, and to an `i32[3][]` one with `T = i32[3]`. Before this code, the generic-element spelling fell through to the concrete path and reported a false CE2001 for a type nobody had to declare."))
 
 _add(ErrorMessage("CE2097", Severity.ERROR,
     "extension method '{name}()' conflicts with the built-in '{type}.{name}()'",

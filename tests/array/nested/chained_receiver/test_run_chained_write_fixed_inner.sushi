@@ -1,0 +1,20 @@
+# An element write through a chained index, `h.rows[i][j] := v`, where `h.rows[i]` is
+# a fixed array, must write the element in place. The write went to a copy of the
+# inner array and was lost.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "99 4\n55 2\n"
+struct H@(T):
+    T[] rows
+
+struct F@(T):
+    T[2] rows
+
+fn main() i32:
+    let H@(i32[2]) h = H(from([[1, 2], [3, 4]]))
+    h.rows[1][0] := 99
+    println("{h.rows[1][0]} {h.rows[1][1]}")
+    let F@(i32[2]) f = F([[1, 2], [3, 4]])
+    f.rows[1][0] := 55
+    println("{f.rows[1][0]} {f.rows[0][1]}")
+    return 0

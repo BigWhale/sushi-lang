@@ -1,0 +1,7 @@
+# a dynamic array in the middle of a three-level type is found: the outer and the inner
+# levels are fixed, and the constant is still refused.
+# EXPECT_ERROR_CODES_EXACT: CE2015
+const i32[2][][3] T = [from([[1, 2]]), from([[3, 4]]), from([[5, 6]])]
+
+fn main() i32:
+    return 0

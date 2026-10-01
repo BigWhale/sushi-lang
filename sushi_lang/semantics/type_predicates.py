@@ -143,6 +143,20 @@ def contains_foreign_ptr(ty: Type, struct_table: Optional[dict] = None,
     )
 
 
+def holds_dynamic_array(ty: Type) -> bool:
+    """A dynamic array at any depth of an array type: `i32[]`, `i32[][2]`, `i32[2][][3]`.
+
+    The walk stays in the array nesting: a struct element is its own declaration.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
+
+    return any(
+        isinstance(reached, DynamicArrayType)
+        for reached in walk_named_types(
+            ty, stop=lambda t: not isinstance(t, (ArrayType, DynamicArrayType))))
+
+
 def first_private_name(ty: Optional[Type], is_private) -> Optional[str]:
     """The first name in `ty` that `is_private` refuses, or None. `ty` itself counts.
 

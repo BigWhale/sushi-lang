@@ -6,7 +6,8 @@ from typing import Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
+from sushi_lang.semantics.type_predicates import holds_dynamic_array
+from sushi_lang.semantics.typesys import BuiltinType
 
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility
@@ -37,7 +38,7 @@ def validate_constant(self, const: ConstDef) -> None:
         return
 
     is_var = isinstance(const, VarDef)
-    if isinstance(const.ty, DynamicArrayType) and not is_var:
+    if not is_var and holds_dynamic_array(const.ty):
         self.err.emit(er.ERR.CE2015, const.type_span, name=const.name)
         return
 

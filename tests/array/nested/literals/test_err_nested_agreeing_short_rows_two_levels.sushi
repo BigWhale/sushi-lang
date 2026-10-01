@@ -1,0 +1,6 @@
+# rows that agree with each other and all miss the declared row type, two levels down,
+# are one mismatch of the whole literal, as one level down.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+fn main() i32:
+    let i32[2][2][2] x = [[[1], [2]], [[3], [4]]]
+    return x.len()

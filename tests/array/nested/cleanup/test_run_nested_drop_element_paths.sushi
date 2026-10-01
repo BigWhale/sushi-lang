@@ -1,0 +1,51 @@
+# a `Drop` element at depth runs `drop()` once per element on every cleanup path:
+# scope exit, a rebind, an element overwrite at both depths, `clear`, `truncate`,
+# `pop` discarded and bound. The order inside one array is the flat array's order, and a
+# discarded `pop` result lives to the scope exit, as on a flat array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "flat 2\ndrop a\ndrop b\nscope 2\ndrop c\ndrop d\ndrop e\nrebind\ndrop f\ndrop g\noverwrite row\ndrop h\noverwrite cell\ndrop j\nclear\ndrop k\ntruncate\ndrop m\npop discarded\npop bound\nbound p\nend\ndrop n\ndrop p\ndrop o\ndrop r\ndrop l\ndrop q\ndrop i\n"
+struct Tok:
+    string name
+
+extend Tok with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn tok(string n) Tok:
+    return Tok(n.clone())
+
+fn flat() ~:
+    let Tok[] f = from([tok("a"), tok("b")])
+    println("flat {f.len()}")
+
+fn scope() ~:
+    let Tok[][] g = from([from([tok("c"), tok("d")]), from([tok("e")])])
+    println("scope {g.len()}")
+
+fn main() i32:
+    flat()
+    scope()
+    let Tok[][] g = from([from([tok("f"), tok("g")])])
+    println("rebind")
+    g := from([from([tok("h")]), from([tok("i")])])
+    println("overwrite row")
+    g[0] := from([tok("j")])
+    println("overwrite cell")
+    g[0][0] := tok("q")
+    let Tok[][] c = from([from([tok("k")]), from([tok("l"), tok("m")])])
+    println("clear")
+    c[0].clear()
+    println("truncate")
+    c[1].truncate(1)
+    let Tok[][] p = from([from([tok("n"), tok("o")]), from([tok("p")])])
+    println("pop discarded")
+    p[0].pop()
+    println("pop bound")
+    let Maybe@(Tok) t = p[1].pop()
+    match t:
+        Maybe.Some(x) -> println("bound {x.name}")
+        Maybe.None -> println("none")
+    println("end")
+    p := from([from([tok("r")])])
+    return 0

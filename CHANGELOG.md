@@ -62,6 +62,19 @@ All notable changes to Sushi Lang will be documented in this file.
 - **A `List@(T)` is a `HashMap` key**, and so is a type with an `Eq` override and a
   `Hashable` override, even when it holds a function value. `0.0` and `-0.0` are one key,
   and a NaN key can be found again.
+- **An array element can be an array, at any depth.** The suffixes read from left to
+  right: a suffix applies to the type on its left. `i32[3][]` is a dynamic array of
+  `i32[3]`, `i32[][3]` is a fixed array of 3 `i32[]`, and `i32[2][3]` is a fixed array of 3
+  `i32[2]`. An index removes the last suffix. That is the reverse of C. A nested array
+  works as a `let`, a parameter, a return, a field, a payload, a container element, a
+  generic argument, a `var` and a library signature. A fixed array of fixed arrays is a
+  constant (`const i32[2][3]`) and a `HashMap` key (`i32[2][2]`). A nested array is not an
+  array extension target (`extend T[][]` is `CE2101`); `extend T[]` covers the nested
+  receiver.
+- **`T[].insert(i, v)` and `T[].remove(i)`.** They have the `List@(T)` contract: `insert`
+  answers `Result@(~, StdError)`, and `remove` answers `Maybe@(T)`. An index out of range
+  is `Err` or `Maybe.None`, and a refused insert destroys its element. `insert` at the
+  length appends. A fixed array has neither method (`CE2023`).
 
 ### Fixed
 
@@ -75,9 +88,24 @@ All notable changes to Sushi Lang will be documented in this file.
 - **`MpError.Truncated` carries one kind of offset.** A str or bin payload shorter than its
   count gave the end of the buffer, and a length prefix gave the read position. Every path
   now gives the offset of the read that could not complete.
+- **A chained index reaches the inner array in place.** A write `a[i][j] := v` and a
+  method `a[i].push(x)` worked on a copy of the inner array, so the change was lost. When
+  the push grew the buffer, the new buffer leaked and the old one was freed twice. A
+  generic field (`T[2] rows` with `T = i32[]`) reached this before nested types existed.
+- **`return nom w.cells` of a `T[]` field compiles.** The function returned the address of
+  the field, and the IR did not verify (an internal error).
+- **A short row of a nested array literal is `CE2011` at that row.** It was `CE2013`
+  against the first row, or `CE2002` plus `CE2013` when the short row was two levels down.
+- **A type that holds a nested array has its derived methods.** A struct field
+  `i32[2][3]` or `i32[][]` had no `.hash()` (`CE2008`) and no derived `==`, `<` or string
+  form. A `HashMap@(i32[2][2], V)` key was `CE2055`.
 
 ### Changed
 
+- **A constant and a `HashMap` key refuse a dynamic array at any depth.** A constant is
+  `CE2015` and a key is `CE2058` for `i32[]`, `i32[2][]` and `i32[][2]`. A
+  `const i32[][2]` was `CE0108`, which named an AST class (`DynamicArrayFrom`), and a key
+  `i32[][2]` was `CE2055`.
 - **`CE2514` and `CE2035` carry a note.** When a type holds something with no equality, no
   order or no string form, a note names the field: `no derived Eq: field 'f' -> a function
   value`. `CE2055` reads the `Eq` contract, and `contains` and `index_of` read it too

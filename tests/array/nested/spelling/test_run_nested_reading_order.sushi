@@ -1,0 +1,21 @@
+# the array suffixes read left to right (ruling R1): a suffix applies to the type on
+# its left, and an index removes the LAST suffix. So `i32[2][3]` is 3 rows of `i32[2]`,
+# and `i32[][3]` is 3 dynamic rows. This is the reverse of C, by intent.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 2 5\n3 2 1 3 6\n2 3 6\n2 1 2 3\n4 3 2 7\n2 2 1 3\n"
+fn main() i32:
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    println("{m.len()} {m[0].len()} {m[2][0]}")
+    let i32[][3] f = [from([1, 2]), from([3]), from([4, 5, 6])]
+    println("{f.len()} {f[0].len()} {f[1].len()} {f[2].len()} {f[2][2]}")
+    let i32[3][] g = from([[1, 2, 3], [4, 5, 6]])
+    println("{g.len()} {g[0].len()} {g[1][2]}")
+    let i32[][] d = from([from([1]), from([2, 3])])
+    println("{d.len()} {d[0].len()} {d[1].len()} {d[1][1]}")
+    let i32[2][3][4] t = [[[0; 2]; 3]; 4]
+    t[3][2][1] := 7
+    println("{t.len()} {t[0].len()} {t[0][0].len()} {t[3][2][1]}")
+    let i32[][2][] w = from([[from([1]), from([2, 3])], [from([4]), from([5])]])
+    println("{w.len()} {w[0].len()} {w[0][0].len()} {w[0][1][1]}")
+    return 0

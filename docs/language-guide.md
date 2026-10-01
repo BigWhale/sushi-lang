@@ -630,7 +630,7 @@ fn main() i32:
 - **Dynamic arrays** (`T[]`): Size can change at runtime, heap-allocated, supports push/pop operations. The `from([...])` function converts a fixed array literal to a dynamic array.
 
 **Array methods**: `.len()`, `.get()`, `.first()`, `.last()`, `.contains()`, `.index_of()`,
-`.push()`, `.pop()`, `.fill()`, `.reverse()`, `.clear()`, `.truncate()`, `.clone()`, `.iter()`,
+`.push()`, `.pop()`, `.insert()`, `.remove()`, `.fill()`, `.reverse()`, `.clear()`, `.truncate()`, `.clone()`, `.iter()`,
 `.hash()`, and the bulk copies `.extend(src)`, `.extend_range(src, start, count)`,
 `.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
 
@@ -693,6 +693,22 @@ fn main() i32:
 The repeated value is a **borrow**, and every slot takes its own copy, so a `string`
 works and the source stays yours. A range yields `i32`. See the
 [Language Reference](language-reference.md#a-repeated-element) for the full rules.
+
+**Arrays of arrays**: an array element can be an array. Read the suffixes from left to
+right: `i32[3][]` is a dynamic array of `i32[3]`, and `i32[2][3]` is a fixed array of 3
+`i32[2]`. That is the reverse of C. An index removes the last suffix, and a chained index
+writes into the inner array in place:
+
+```sushi
+fn main() i32:
+    let i32[][] grid = from([from([1, 2]), from([3])])
+    grid[1].push(4)
+    grid[0][1] := 20
+    println("{grid.len()} {grid[0][1]} {grid[1][1]}")   # 2 20 4
+    return 0
+```
+
+See [Array Types](language-reference.md#array-types) for the full order table.
 
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or strings are properly freed. A dynamic array owns heap, so it MOVES: `let i32[] b = a` hands the buffer to `b`. Passing it to an unmarked parameter is a borrow, and the caller keeps it; only a `nom` parameter takes it (`f(nom a)`, and a later use of `a` is `CE2405`).
 

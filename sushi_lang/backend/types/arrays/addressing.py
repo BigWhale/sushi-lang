@@ -41,3 +41,16 @@ def as_array_address(codegen: 'LLVMCodegen', value: ir.Value,
     slot = entry_alloca(codegen.builder, array_struct_type or value.type, name="array_addr_slot")
     codegen.builder.store(value, slot)
     return slot
+
+
+def as_array_value(codegen: 'LLVMCodegen', value: ir.Value, name: str) -> ir.Value:
+    """A dynamic array as its descriptor VALUE: the inverse of `as_array_address`.
+
+    A field read yields a GEP to the descriptor (array-representation.md), so a position
+    that hands the array on by value -- a `let`, a `return` -- loads it here. Any other
+    value is returned unchanged.
+    """
+    if (isinstance(value.type, ir.PointerType)
+            and codegen.types.is_dynamic_array_type(value.type.pointee)):
+        return codegen.builder.load(value, name=name)
+    return value

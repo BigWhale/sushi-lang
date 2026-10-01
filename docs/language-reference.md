@@ -218,6 +218,31 @@ of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, 
 the empty literal there is `CE2111`. Declare the array first (`let i32[] xs = from([])`)
 and use the name.
 
+**Nested arrays:** an array element can be an array. The suffixes read from LEFT TO RIGHT:
+a suffix applies to the type on its left.
+
+| Written | Is | Layout |
+|---|---|---|
+| `i32[][]` | a dynamic array of `i32[]` | a descriptor of descriptors |
+| `i32[3][]` | a dynamic array of `i32[3]` | a descriptor; each slot is 12 bytes inline |
+| `i32[][3]` | a fixed array of 3 `i32[]` | 3 descriptors inline |
+| `i32[2][3]` | a fixed array of 3 `i32[2]` | `[3 x [2 x i32]]` |
+
+An index removes the LAST suffix. For `i32[2][3] m`, `m[i]` is an `i32[2]`, `i` is in
+`0..3`, and `m[i][j]` has `j` in `0..2`. **C reads the other way**: in C, `int m[2][3]` is
+2 rows of 3. In Sushi, `i32[2][3]` is 3 rows of 2.
+
+```sushi
+fn main() i32:
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    let i32[][] d = from([from([1]), from([2, 3])])
+    let i32[2][] g = from([[1, 2], [3, 4]])
+    d[0].push(9)
+    m[2][0] := 7
+    println("{m.len()} {m[0].len()} {m[2][0]} {d[0][1]} {g[1][1]}")   # 3 2 7 9 4
+    return 0
+```
+
 ### Function Types
 
 A function type describes a first-class function value (a bare function pointer). The return
@@ -961,9 +986,9 @@ loop head, why the protocol is not a perk, and why a line iterator's stop is sti
 See [Standard Library](standard-library.md) for complete array API.
 
 **An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
-range bound, and the index or count argument of a built-in method (`get`, `insert`,
-`remove`, `reserve`, `truncate`, `s`, `ss`, `extend_range`, `List.with_capacity`). A bare
-literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
+range bound, and the index or count argument of a built-in method: `get`, `insert` and
+`remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
+`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
 method argument), and it needs `as i32`: nothing widens, and a float is refused.
 
 ### Fixed Arrays
@@ -1187,6 +1212,10 @@ The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for 
 index past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
 first. The assignment takes ownership of the value, so an owned source is moved (later use
 is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
+
+On a nested array, a chained index is a place too. `grid[i][j] := v` writes into the inner
+array in place, and a method on `grid[i]` (`grid[i].push(v)`) changes that inner array, not
+a copy of it. Each index in the chain is bounds-checked.
 
 The write must be able to reach the owner. It is rejected through a `peek` parameter
 (**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
@@ -1546,7 +1575,9 @@ arguments.
 - `extend Box@(T)` applies to every instantiation, and `extend Box@(i32)` only to
   `Box@(i32)`. A target that mixes the two, `extend Pair@(i32, U)`, is `CE2098`.
 - An array target binds its element: `extend T[]` applies to every array, and
-  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`.
+  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`,
+  a nested array (`extend T[][]`, `extend i32[3][]`) included. `extend T[]` covers a nested
+  receiver: `T` is `i32[]` for an `i32[][]`.
 - A function type is not a target (`CE2110`).
 
 A built-in method wins over an extension method: an extension method with the name of a
@@ -2476,8 +2507,19 @@ fn main() i32:
     return 0
 ```
 
+A fixed array of fixed arrays is a constant too. Read it with a chained index:
+
+```sushi
+const i32[2][3] TABLE = [[1, 2], [3, 4], [5, 6]]
+
+fn main() i32:
+    println("{TABLE.len()} {TABLE[0].len()} {TABLE[2][1]}")   # 3 2 6
+    return 0
+```
+
 **Restrictions:**
-- Array must be fixed-size (`T[N]`), not dynamic (`T[]`)
+- Array must be fixed-size (`T[N]`) at every depth. A dynamic array anywhere in the type
+  (`i32[]`, `i32[2][]`, `i32[][2]`) is **CE2015**
 - All elements must be compile-time constant expressions
 - **Immutable**: `.fill()`, `.reverse()` and `PRIMES[0] := 9` all write to their receiver, so each
   of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local

@@ -1,0 +1,14 @@
+# a short inner row is measured against the declared row type, not against the first
+# row: a short first row, a row of a dynamic outer array, a row two levels down, and a
+# row of a parameter argument each give one CE2011 at that row.
+# EXPECT_ERROR_CODES_EXACT: CE2011
+# EXPECT_STDERR_CONTAINS: "array literal has 1 elements but declared type expects 2"
+# EXPECT_STDERR_CONTAINS: "array literal has 3 elements but declared type expects 2"
+fn rows(i32[2][2] m) i32:
+    return m.len()
+
+fn main() i32:
+    let i32[2][3] first = [[1], [2, 3], [4, 5]]
+    let i32[2][] dynamic = from([[1, 2], [3, 4, 5]])
+    let i32[2][2][2] deep = [[[1, 2], [3, 4]], [[5, 6], [7]]]
+    return rows([[1, 2], [3]]) + first.len() + dynamic.len() + deep.len()

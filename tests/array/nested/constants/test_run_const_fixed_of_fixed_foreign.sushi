@@ -1,0 +1,11 @@
+# a public fixed-of-fixed constant of another unit reads flat and behind an alias.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6 3 2\n4 3\n"
+use "helpers/nested_grid_consts"
+use "helpers/nested_grid_consts" as g
+
+fn main() i32:
+    println("{GRID[2][1]} {GRID.len()} {GRID[0].len()}")
+    println("{g.GRID[1][1]} {g.GRID[1][0]}")
+    return 0

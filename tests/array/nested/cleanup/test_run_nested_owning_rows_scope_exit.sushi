@@ -1,0 +1,35 @@
+# an owning struct element at depth is destroyed at scope exit and on every return:
+# `Row[][]`, `Row[3][]` and `Row[][2]`, with an early and a late return.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a 3\nc 1\nf 2\n1\n5\n9\n"
+struct Row:
+    string name
+    i32[] cells
+
+fn row(string n, i32 k) Row:
+    return Row(n.clone(), from([0; k]))
+
+fn dyn_dyn() ~:
+    let Row[][] g = from([from([row("a", 3), row("b", 1)]), from([row("c", 1)])])
+    println("{g[0][0].name} {g[0][0].cells.len()}")
+    println("{g[1][0].name} {g[1][0].cells.len()}")
+
+fn fixed_in_dyn() ~:
+    let Row[3][] g = from([[row("d", 1), row("e", 1), row("f", 2)]])
+    println("{g[0][2].name} {g[0][2].cells.len()}")
+
+fn early(bool go) i32:
+    let Row[][2] g = [from([row("g", 1)]), from([row("h", 2), row("i", 3)])]
+    if (go):
+        return g[0].len()
+    return g[1][1].cells.len() + 2
+
+fn main() i32:
+    dyn_dyn()
+    fixed_in_dyn()
+    println(early(true))
+    println(early(false))
+    let Row[3][] h = from([[row("j", 4), row("k", 5), row("l", 9)]])
+    println(h[0][2].cells.len())
+    return 0

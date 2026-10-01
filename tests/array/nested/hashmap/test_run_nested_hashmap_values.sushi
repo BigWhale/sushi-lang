@@ -1,0 +1,36 @@
+# a nested array is a HashMap VALUE: `HashMap@(string, i32[][])` and
+# `HashMap@(i32, i32[2][3])`, through insert, get, overwrite, remove and free.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 3\n1 9\n1\n6\n5 0\n1\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32[][]) d = HashMap.new()
+    d.insert("a", from([from([1, 2]), from([3, 4, 5])]))
+    d.insert("b", from([from([6])]))
+    match d.get("a"):
+        Maybe.Some(g) -> println("{g.len()} {g[1].len()}")
+        Maybe.None -> println("none")
+    d.insert("a", from([from([9])]))
+    match d.get("a"):
+        Maybe.Some(g) -> println("{g.len()} {g[0][0]}")
+        Maybe.None -> println("none")
+    match d.remove("b"):
+        Maybe.Some(g) -> println(g[0].len())
+        Maybe.None -> println("none")
+    let HashMap@(i32, i32[2][3]) m = HashMap.new()
+    m.insert(1, [[1, 2], [3, 4], [5, 6]])
+    m.insert(2, [[0, 0], [0, 0], [0, 0]])
+    match m.get(1):
+        Maybe.Some(g) -> println(g[2][1])
+        Maybe.None -> println("none")
+    m.insert(1, [[5, 5], [5, 5], [5, 5]])
+    let i32[2][3] z = m.remove(2).realise([[7, 7], [7, 7], [7, 7]])
+    match m.get(1):
+        Maybe.Some(g) -> println("{g[0][0]} {z[1][1]}")
+        Maybe.None -> println("none")
+    println(m.len())
+    d.free()
+    m.free()
+    return 0

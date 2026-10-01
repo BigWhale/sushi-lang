@@ -1,0 +1,31 @@
+# A chained index reaches its element in place through every address-taking position:
+# a `poke` parameter, a `let poke` reference, and a `poke self` extension on the inner
+# array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 3\n9\n2 1\n"
+struct H@(T):
+    T[] rows
+
+fn set_fixed(poke H@(i32[2]) h) ~:
+    h.rows[0][1] := 7
+    h.rows[1][0] := 3
+
+fn grow_rows(poke H@(i32[]) d) ~:
+    d.rows[0].push(1)
+
+extend i32[] bump(poke self) ~:
+    self.push(1)
+
+fn main() i32:
+    let H@(i32[2]) h = H(from([[1, 2], [3, 4]]))
+    set_fixed(poke h)
+    println("{h.rows[0][1]} {h.rows[1][0]}")
+    let poke i32 cell = h.rows[1][1]
+    cell := 9
+    println(h.rows[1][1])
+    let H@(i32[]) d = H(from([new(), from([5])]))
+    grow_rows(poke d)
+    d.rows[0].bump()
+    println("{d.rows[0].len()} {d.rows[0][1]}")
+    return 0

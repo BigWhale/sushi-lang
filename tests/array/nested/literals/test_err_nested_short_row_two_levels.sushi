@@ -1,0 +1,9 @@
+# a short row two levels down is refused at that row, and nothing more: in `x` the rows
+# of the first block are short, in `y` the rows of the second block. Each short row is
+# measured against the row type of its position.
+# EXPECT_ERROR_CODES_EXACT: CE2011
+# EXPECT_STDERR_CONTAINS: "array literal has 1 elements but declared type expects 2"
+fn main() i32:
+    let i32[2][2][2] x = [[[1], [2]], [[3, 4], [5, 6]]]
+    let i32[2][2][2] y = [[[1, 2], [3, 4]], [[5], [6]]]
+    return x.len() + y.len()

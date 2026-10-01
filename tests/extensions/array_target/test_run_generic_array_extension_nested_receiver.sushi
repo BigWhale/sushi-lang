@@ -1,0 +1,19 @@
+# `extend T[]` applies to a nested receiver: `T` binds the inner array type, `i32[]`
+# for an `i32[][]` and `i32[3]` for an `i32[3][]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 3\n3 6\n"
+extend T[] rows() i32:
+    return self.len()
+
+extend T[] last_row() T:
+    return self[self.len() - 1].clone()
+
+fn main() i32:
+    let i32[][] d = from([from([1]), from([2, 3, 4])])
+    let i32[] tail = d.last_row()
+    println("{d.rows()} {tail.len()}")
+    let i32[3][] g = from([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    let i32[3] bottom = g.last_row()
+    println("{g.rows()} {bottom[2] - 3}")
+    return 0

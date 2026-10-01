@@ -10,7 +10,7 @@ Four questions, each a separate way the set can go wrong:
 
 1. the membership predicate answers from the table and from nothing else;
 2. every row says what its method ANSWERS, and the answer arrives -- measured at the END
-   state, through `ArrayMethodInferrer`, because five rows are interned by that caller and
+   state, through `ArrayMethodInferrer`, because six rows are interned by that caller and
    a check of the table alone would pass while the caller answered nothing;
 3. the backend's own `is_builtin_array_method` claims exactly the table's names;
 4. the backend's two dispatch `match` statements hold exactly one arm per name, and its
@@ -37,12 +37,12 @@ from sushi_lang.semantics.passes.types.arrays import (
 # What the module carried on the day the table replaced the three lists. A count is not a
 # rule, so these are not asserted as a target -- they are the control that says the reader
 # below found something to read.
-MEASURED_NAMES = 24
+MEASURED_NAMES = 26
 MEASURED_FIXED_ARMS = 13
 
-# The five whose answer is a `Maybe@(T)` the CALLER interns (`ArrayMethodInferrer`), and
+# The six whose answer is a `Maybe@(T)` the CALLER interns (`ArrayMethodInferrer`), and
 # which therefore carry the sentinel rather than a rule of their own.
-INTERNED_NAMES = {"get", "first", "last", "pop", "index_of"}
+INTERNED_NAMES = {"get", "first", "last", "pop", "remove", "index_of"}
 
 
 # --------------------------------------------------------------------------- the table
@@ -73,7 +73,7 @@ def test_every_row_is_complete(name):
     assert spec.returns is not None
 
 
-def test_the_sentinel_is_used_by_exactly_the_five_interned_names():
+def test_the_sentinel_is_used_by_exactly_the_six_interned_names():
     """It may not spread: a row that carries it answers nothing of its own."""
     carried = {name for name, spec in _ARRAY_METHODS.items()
                if spec.returns is INTERNED_BY_THE_CALLER}

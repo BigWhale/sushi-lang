@@ -1,0 +1,32 @@
+# a nested array as a return type, in each of the four shapes and at three levels.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 3\n3 6\n2 6\n3 5\n2 1\n"
+fn ragged() i32[][]:
+    return from([from([1]), from([2, 3])])
+
+fn grid() i32[2][3]:
+    return [[1, 2], [3, 4], [5, 6]]
+
+fn rows() i32[3][]:
+    let i32[3][] g = from([[1, 2, 3]])
+    g.push([4, 5, 6])
+    return g
+
+fn columns() i32[][3]:
+    return [from([1]), from([2, 3]), from([4, 5])]
+
+fn cube() i32[][][]:
+    return from([from([from([1])]), from([new()])])
+
+fn main() i32:
+    let i32[][] d = ragged()
+    println("{d.len()} {d[1][1]}")
+    let i32[2][3] m = grid()
+    println("{m.len()} {m[2][1]}")
+    println("{rows().len()} {rows()[1][2]}")
+    let i32[][3] f = columns()
+    println("{f.len()} {f[2][1]}")
+    let i32[][][] c = cube()
+    println("{c.len()} {c[0][0][0]}")
+    return 0

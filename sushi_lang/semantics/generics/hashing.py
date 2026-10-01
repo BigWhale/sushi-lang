@@ -220,9 +220,6 @@ def can_array_be_hashed(array_type: Type, walk: Optional[Walk] = None, *,
     walk = walk if walk is not None else Walk(overridden=overridden)
     element_type = array_type.base_type
 
-    if isinstance(element_type, (ArrayType, DynamicArrayType)):
-        return False, "nested array type (arrays of arrays not supported)"
-
     can_hash, reason = hashability_of(element_type, walk)
     if not can_hash:
         return False, f"element -> {reason}"

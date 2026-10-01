@@ -1,0 +1,8 @@
+# a `let peek` of an inner row freezes the outer array while it lives: a push to the
+# outer array could move the row.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+fn main() i32:
+    let i32[][] a = from([from([1, 2]), from([3])])
+    let peek i32[] r = a[0]
+    a.push(from([4]))
+    return r.len()

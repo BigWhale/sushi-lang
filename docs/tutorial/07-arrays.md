@@ -196,9 +196,37 @@ ss(3, 2): 10 20
 s(5, 99): 30 40 20 30
 ```
 
-!!! note "No arrays of arrays"
-    An array element cannot be an array: `i32[][]` is not a type in Sushi. Use an array of
-    structs when you need rows of values.
+## Arrays of arrays
+
+An array element can be an array. Read the suffixes from **left to right**: each suffix
+applies to the type on its left.
+
+| Written | Is |
+|---|---|
+| `i32[][]` | a dynamic array of `i32[]` |
+| `i32[3][]` | a dynamic array of `i32[3]` |
+| `i32[][3]` | a fixed array of 3 `i32[]` |
+| `i32[2][3]` | a fixed array of 3 `i32[2]` |
+
+An index removes the last suffix. So for `i32[2][3] grid`, `grid[i]` is an `i32[2]` row and
+`i` goes from 0 to 2.
+
+```sushi
+--8<-- "docs/tutorial/examples/07-arrays/nested.sushi"
+```
+
+Output:
+
+```
+rows: 3, columns: 2
+bottom right: 42
+ragged rows: 3, first row: 1 7
+```
+
+!!! note "C reads the other way"
+    In C, `int grid[2][3]` is 2 rows of 3. In Sushi, `i32[2][3]` is 3 rows of 2. The
+    Sushi order lets you read a type as you build it: start with an `i32[2]`, then make 3
+    of them.
 
 ## What you learned
 
@@ -213,6 +241,8 @@ s(5, 99): 30 40 20 30
   fixed; its contents are not.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,
   and `foreach(x in arr.iter()):` is how you loop.
+- An array element can be an array. The suffixes read from left to right, so `i32[2][3]`
+  is 3 rows of `i32[2]`.
 - `[value; count]` and a range fill many slots of a literal. `.extend`, `.extend_range`,
   `.s` and `.ss` copy many elements at once.
 

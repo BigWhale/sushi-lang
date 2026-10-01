@@ -106,7 +106,9 @@ The semantic walk (`semantics/generics/contracts.py`) answers two questions.
 - **`contract_of` is the held rule.** May a derived method read a value of this type as a
   field, a payload or an element? An array, a `List@(T)` and an `Own@(T)` answer from what
   they hold: element by element, with the length breaking a tie (a prefix is less), and an
-  `Own@(T)` by its payload. A `HashMap@(K, V)`, a `ptr`, a function value, a closure and an
+  `Own@(T)` by its payload. A nested array is an array of arrays and takes the same walk
+  at each level, so a struct field `i32[2][3]` or `i32[][]` compares, orders and prints
+  row by row. A `HashMap@(K, V)`, a `ptr`, a function value, a closure and an
   iterator have no contract, and neither has a type that holds one. A note names the field:
   `no derived Eq: field 'f' -> a function value`.
 - **`operand_contract` is the top-level rule**, for an operator, a hole, `println`, a method
