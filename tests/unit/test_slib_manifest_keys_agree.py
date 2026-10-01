@@ -97,6 +97,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "_register_generic_types"): {
         "record": "generic_type", "manifest": "manifest"},
     (REGISTRY, "manifest_reexports"): {},
+    (REGISTRY, "reexported_libraries"): {"record": "reexport"},
     (REGISTRY, Y + "register_library"): {
         "manifest": "manifest", "templates": "templates", "func_info": "function",
         "record": "not_exported"},
