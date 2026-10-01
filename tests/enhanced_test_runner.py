@@ -682,7 +682,10 @@ class TestRunner:
 
         A BUILD_LIB or BUILD_LIB_BINARY library goes to the directory the runner puts on
         SUSHI_LIB_PATH; a BUILD_LIB_AT library goes where the fixture says, inside the copy.
-        BUILD_LIB_BINARY builds `--lib-kind binary`, the others `--lib-kind source`. Each
+        BUILD_LIB_BINARY builds `--lib-kind binary`, the others `--lib-kind source`. The
+        builds run in that order, in written order inside each directive, and each sees
+        the directory on its own SUSHI_LIB_PATH, so a library may import one built
+        before it. Each
         build has a cache outside the copy, so a library build leaves nothing in it but the
         `.slib`. The version is 0.0.0, unless a `nori.toml` in the directory the build
         starts in states one: the compiler reads that file alone and refuses a second
@@ -696,6 +699,9 @@ class TestRunner:
                    for source in metadata.build_libs_binary]
         builds += [("BUILD_LIB_AT", "source", source, workspace.root / target)
                    for source, target in metadata.build_libs_at]
+        env = {**os.environ, "NO_COLOR": "1"}
+        env["SUSHI_LIB_PATH"] = os.pathsep.join(
+            [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
         for directive, kind, source, target in builds:
             target.parent.mkdir(parents=True, exist_ok=True)
             stated = (workspace.home / "nori.toml").is_file()
@@ -704,7 +710,7 @@ class TestRunner:
                 ["--lib", *version, "--lib-kind", kind,
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
-                cwd=workspace.home, env={**os.environ, "NO_COLOR": "1"}, timeout=60)
+                cwd=workspace.home, env=env, timeout=60)
             if done.returncode != 0:
                 return (f"✗ Compilation: {directive} {source} failed with exit "
                         f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
