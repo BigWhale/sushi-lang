@@ -1,0 +1,29 @@
+# `extend`, `extend_range` and `insert` grow a `T[]` from no buffer after `free()`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 2\n10 20\n4 4\n30 40\n1 1\n5\n"
+
+fn main() i32:
+    let i32[] src = from([10, 20, 30, 40])
+
+    let i32[] a = from([1, 2, 3])
+    a.free()
+    a.extend(src.s(0, 2))
+    println("{a.len()} {a.capacity()}")
+    println("{a[0]} {a[1]}")
+
+    let i32[] b = from([9])
+    b.free()
+    b.extend_range(src, 0, 4)
+    println("{b.len()} {b.capacity()}")
+    b.free()
+    b.extend_range(src, 2, 2)
+    println("{b[0]} {b[1]}")
+
+    let i32[] c = from([7, 8])
+    c.free()
+    match c.insert(0, 5):
+        Result.Ok(_) -> println("{c.len()} {c.capacity()}")
+        Result.Err(_) -> println("refused")
+    println(c[0])
+    return 0

@@ -265,12 +265,10 @@ def emit_dynamic_array_truncate(codegen: 'LLVMCodegen', array_value: ir.Value,
 
 def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
                            element_semantic_type: 'Type') -> ir.Value:
-    """Emit code to free all elements of a dynamic array and reset to empty state."""
+    """Destroy every element, free the buffer, and leave the `new()` descriptor `{0, 0, null}`."""
     from sushi_lang.backend.expressions import memory
-    from sushi_lang.backend.memory.heap import emit_malloc
 
     zero = ir.Constant(codegen.types.i32, 0)
-    initial_capacity = ir.Constant(codegen.types.i32, 8)
 
     len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
     cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
@@ -297,15 +295,9 @@ def emit_dynamic_array_free(codegen: 'LLVMCodegen', array_value: ir.Value, array
         void_ptr = codegen.builder.bitcast(old_data_ptr, ir.PointerType(codegen.types.i8), name="void_ptr")
         memory.emit_free_call(codegen, void_ptr)
 
-    element_size = memory.get_element_size_constant(codegen, element_type)
-    new_total_size = codegen.builder.mul(initial_capacity, element_size, name="new_total_size")
-    new_data_ptr = emit_malloc(codegen, codegen.builder, new_total_size)
-
-    typed_new_data_ptr = codegen.builder.bitcast(new_data_ptr, ir.PointerType(element_type), name="typed_new_data_ptr")
-
     codegen.builder.store(zero, len_ptr)
-    codegen.builder.store(initial_capacity, cap_ptr)
-    codegen.builder.store(typed_new_data_ptr, data_ptr_ptr)
+    codegen.builder.store(zero, cap_ptr)
+    codegen.builder.store(null_ptr, data_ptr_ptr)
 
     return ir.Constant(codegen.types.i32, 0)
 

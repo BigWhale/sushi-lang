@@ -1,0 +1,16 @@
+# A `T[]` of an owning element destroys each element at `free()`, keeps no buffer, and
+# grows again from no buffer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0 0\n2\nmostly harmless\n"
+use <collections/strings>
+
+fn main() i32:
+    let string[] words = from(["towel".s(0, 5), "babel".s(0, 5)])
+    words.free()
+    println("{words.len()} {words.capacity()}")
+    words.push("mostly".s(0, 6))
+    words.push("harmless".s(0, 8))
+    println(words.len())
+    println("{words[0]} {words[1]}")
+    return 0
