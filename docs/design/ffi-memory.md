@@ -77,10 +77,10 @@ a declaration and a stdlib row, so a unit's own `fn errno` wins over it. It is c
 only in a unit that declares an `unsafe external` block (`CE5014`), the same confinement
 as `ptr`: only a C call can leave an errno behind.
 
-The platform symbols (`__error` on macOS, `__errno_location` on Linux) live in the
-compiler, in `ERRNO_LOCATION_SYMBOLS` (`semantics/externs_manifest.py`). They are
-reserved externs of the signature `() -> ptr`, so a user block that declares one with that
-signature shares the declaration, and another signature is `CE5001`. The errno NUMBERS
+The platform symbols (`__error` on macOS, `__errno_location` on Linux) are in the libc
+table, `LIBC_SIGNATURES` (`sushi_stdlib/src/libc_declarations.py`), as `int* (void)`, and
+`declare_errno_location` selects the one for the platform. A user block that declares one
+of them has its own declaration, independent of the compiler's (#1099). The errno NUMBERS
 differ per platform and are in `<sys/platform>`. The order rule of the generators applies
 to a Sushi wrapper too: read `errno()` directly after the failed call
 (`docs/design/stdlib-syscall-layer.md`).

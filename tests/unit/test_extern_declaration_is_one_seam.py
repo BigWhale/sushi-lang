@@ -222,3 +222,133 @@ def test_a_declaration_beside_a_definition_is_matched():
               '    func = ir.Function(module, ty, name="sushi_abs_f64")\n'
               '    func.append_basic_block("entry")\n')
     assert offences_in(source) == [(2, "ir.Function intrinsic with no body")]
+
+
+# The libc table (#1099). Every libc symbol that the compiler declares has ONE signature,
+# in `LIBC_SIGNATURES`, and is declared through `declare_libc`. The line between libc and
+# not libc is the name: an `llvm.` prefix is an LLVM intrinsic and an `llvm_` prefix is a
+# compiler helper whose body the compiler emits; both go to `declare_extern` directly.
+# A name that is not a literal goes to `declare_extern` only from the seam module and
+# from the user-extern declarer, where the name is the user's link name.
+
+BACKEND = SRC.parents[1] / "backend"
+NOT_LIBC_PREFIXES = ("llvm.", "llvm_")
+VARIABLE_NAME_MODULES = {
+    SRC / SEAM_MODULE,
+    BACKEND / "runtime" / "externs" / "user_externs.py",
+}
+
+
+def _scanned_files() -> list[Path]:
+    return sorted([*SRC.rglob("*.py"), *BACKEND.rglob("*.py")])
+
+
+def _called(node: ast.AST, name: str) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return ((isinstance(func, ast.Name) and func.id == name)
+            or (isinstance(func, ast.Attribute) and func.attr == name))
+
+
+def _name_argument(call: ast.Call, position: int) -> ast.AST | None:
+    for keyword in call.keywords:
+        if keyword.arg == "name":
+            return keyword.value
+    return call.args[position] if len(call.args) > position else None
+
+
+def _literal_prefix(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if (isinstance(node, ast.JoinedStr) and node.values
+            and isinstance(node.values[0], ast.Constant)):
+        return str(node.values[0].value)
+    return None
+
+
+def libc_offences_in(source: str, path: Path) -> list[tuple[int, str]]:
+    """Every libc declaration in one module that does not go through the libc table."""
+    from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
+
+    found: list[tuple[int, str]] = []
+    in_seam = path == SRC / SEAM_MODULE
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and _is_ir_function_call(node) and not in_seam:
+            arg = _name_argument(node, 2)
+            if isinstance(arg, ast.Constant) and arg.value in LIBC_SIGNATURES:
+                found.append((node.lineno, f"ir.Function of the libc symbol {arg.value}"))
+        if isinstance(node, ast.Call) and _called(node, "declare_extern"):
+            prefix = _literal_prefix(_name_argument(node, 1))
+            if prefix is None:
+                if path not in VARIABLE_NAME_MODULES:
+                    found.append((node.lineno, "declare_extern of a name that is not a literal"))
+            elif not prefix.startswith(NOT_LIBC_PREFIXES):
+                found.append((node.lineno, f"declare_extern of {prefix!r}: use declare_libc"))
+        if isinstance(node, ast.Call) and _called(node, "declare_libc"):
+            arg = _name_argument(node, 1)
+            if isinstance(arg, ast.Constant):
+                if arg.value not in LIBC_SIGNATURES:
+                    found.append((node.lineno, f"{arg.value!r} is not in LIBC_SIGNATURES"))
+            elif not in_seam:
+                found.append((node.lineno, "declare_libc of a name that is not a literal"))
+    return sorted(found)
+
+
+def test_every_libc_declaration_reads_the_table():
+    offending = {
+        path.relative_to(SRC.parents[1]).as_posix(): hits
+        for path in _scanned_files()
+        if (hits := libc_offences_in(path.read_text(), path))
+    }
+    assert not offending, (
+        "declare a libc symbol with libc_declarations.declare_libc, from LIBC_SIGNATURES: "
+        + "; ".join(f"{f}:{line} {kind}" for f, hits in offending.items()
+                    for line, kind in hits))
+
+
+def test_every_table_entry_lowers():
+    from sushi_lang.sushi_stdlib.src.libc_declarations import (
+        LIBC_SIGNATURES, libc_function_type,
+    )
+    for name in LIBC_SIGNATURES:
+        libc_function_type(name)
+
+
+def test_the_reserved_signatures_are_read_from_the_table():
+    from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS, RESERVED_NAMES
+    from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
+
+    assert set(RESERVED_EXTERNS) == set(RESERVED_NAMES) == {"malloc", "free", "exit"}
+    assert set(RESERVED_NAMES) <= set(LIBC_SIGNATURES)
+
+
+_LIBC_SPELLINGS = [
+    'def f(module):\n'
+    '    return ir.Function(module, ty, name="write")\n',
+    'def f(module):\n'
+    '    return declare_extern(module, "write", i64, [i32, p, i64])\n',
+    'def f(module, name):\n'
+    '    return declare_extern(module, name, i64, [i32, p, i64])\n',
+    'def f(module):\n'
+    '    return declare_libc(module, "not_in_the_table")\n',
+]
+
+_NOT_LIBC_SPELLINGS = [
+    'def f(module):\n'
+    '    return declare_extern(module, "llvm_strlen", i32, [p])\n',
+    'def f(module, t):\n'
+    '    return declare_extern(module, f"llvm.fabs.{t}", f, [f])\n',
+    'def f(module):\n'
+    '    return declare_libc(module, "write")\n',
+    'def f(module, name):\n'
+    '    return declare_libc(module, "stat", name)\n',
+]
+
+
+def test_every_libc_spelling_is_matched():
+    where = BACKEND / "example.py"
+    for source in _LIBC_SPELLINGS:
+        assert libc_offences_in(source, where), source
+    for source in _NOT_LIBC_SPELLINGS:
+        assert not libc_offences_in(source, where), (source, libc_offences_in(source, where))

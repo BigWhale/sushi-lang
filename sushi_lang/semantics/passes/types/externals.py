@@ -127,7 +127,6 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
     """
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.const_eval import ConstantEvaluator, is_string_constant
-    from sushi_lang.semantics.passes.collect.externals import reject_reserved_clash
 
     evaluator = ConstantEvaluator(reporter, tables.constants, unit_name,
                                   tables.namespaces.get, tables.structs,
@@ -154,7 +153,6 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
             sig = tables.externals.lookup(block.namespace, decl.name)
             if sig is not None:
                 sig.link_name = decl.link_name
-                reject_reserved_clash(reporter, decl, sig)
 
 
 def reject_external_naming_a_defined_symbol(

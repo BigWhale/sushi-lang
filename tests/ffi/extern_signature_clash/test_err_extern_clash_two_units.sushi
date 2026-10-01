@@ -1,0 +1,12 @@
+# Two units declare one C symbol with other signatures (#1099). One program has
+# one signature for a C symbol, so the pair is an error across units too.
+# EXPECT_ERROR_CODE: CE5001
+use "helpers/int_abs_holder"
+
+unsafe external "C" as cf because "abs, declared with the wrong type":
+    fn abs(f64 x) f64 = "abs"
+
+fn main() i32:
+    println(int_abs(-3))
+    println(cf.abs(-2.5))
+    return 0

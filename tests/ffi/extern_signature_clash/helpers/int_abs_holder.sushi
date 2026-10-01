@@ -1,0 +1,6 @@
+# A unit that declares `abs` with the C signature, for a second unit to clash with.
+unsafe external "C" as ci because "abs of an int":
+    fn abs(i32 x) i32 = "abs"
+
+public fn int_abs(i32 x) i32:
+    return ci.abs(x)

@@ -511,8 +511,16 @@ registry text of each RExxxx code (`internals/errors/runtime.py`) is the format 
 - Each marshalled `char*` goes on a list of its scope in `ScopeManager`. Scope exit frees
   each pointer exactly once.
 
-`RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds the reserved built-in symbols
-and their signatures, for the `CE5001` clash check.
+`RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds `malloc`, `free` and `exit`,
+read from the libc table. Each one is the first declaration of its name for `CE5001` (#1099).
+The compiler's declarations of a libc symbol and a user's declarations of it are
+independent (#1099). Every libc signature that the compiler declares is in one table,
+`LIBC_SIGNATURES` (`sushi_stdlib/src/libc_declarations.py`), and the generators and the
+runtime declare through `declare_libc`. A call goes through the type of its own
+declaration: when the module already holds the symbol with another function type,
+`declare_extern` gives a bitcast of it to the caller's type. `_declare_one` and
+`_declare_variable` (`runtime/externs/user_externs.py`) do the same for a user
+declaration.
 
 ## Optimization
 

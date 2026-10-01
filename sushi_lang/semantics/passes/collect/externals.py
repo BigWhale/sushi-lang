@@ -5,9 +5,13 @@ from typing import Any, Dict, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
 from sushi_lang.semantics.externs_manifest import RESERVED_EXTERNS
-from sushi_lang.semantics.ffi_boundary import intern_boundary_type
+from sushi_lang.semantics.ffi_boundary import (
+    intern_boundary_type, is_byte_buffer, is_c_abi_param, is_c_abi_type, is_c_abi_variable,
+    nullable_payload,
+)
+from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program, ExternalBlock, ExternalDecl
@@ -144,45 +148,93 @@ class ExternalCollector:
             diag.emit()
             return
 
-        # CE5001: clash with a reserved built-in extern of a DIFFERENT signature.
-        self._check_reserved_clash(decl, sig)
-
         self.externals.add(sig)
 
-    def _check_reserved_clash(self, decl: 'ExternalDecl', sig: ExternalSig) -> None:
-        reject_reserved_clash(self.r, decl, sig)
+
+@dataclass(frozen=True)
+class _Declared:
+    """The first declaration of a link name: its C shape, and where it is written."""
+    shape: tuple
+    span: Optional[Span]
+    filename: Optional[str]
 
 
-def reject_reserved_clash(reporter: Reporter, decl: 'ExternalDecl', sig: ExternalSig) -> None:
-    """CE5001: a link name a compiler built-in declares, with another signature.
+def c_type(ty: Optional[Type]) -> str:
+    """The C type a Sushi type crosses the boundary as. Two spellings of one C type
+    give one answer: a `string` and a `Maybe@(string)` are both `char*`."""
+    if ty is None or ty == BuiltinType.BLANK:
+        return "void"
+    ty = nullable_payload(ty) or ty
+    if ty == BuiltinType.STRING:
+        return "char*"
+    if isinstance(ty, ForeignPtrType):
+        return "void*"
+    if is_byte_buffer(ty):
+        return "uint8_t*"
+    return display_type(ty)
 
-    A link name written as a constant is empty at collection, and the `ffi-clash` step
-    asks again once it has folded the name (#1089).
+
+def function_shape(params, ret: Optional[Type], variadic: bool) -> tuple:
+    return ("fn", tuple(c_type(p) for p in params), c_type(ret), variadic)
+
+
+class LinkNames:
+    """Every declaration of a C symbol in the program, and the one shape it has (#1099).
+
+    The three libc symbols that are the compiler's own (`RESERVED_EXTERNS`: `malloc`,
+    `free`, `exit`) are the first declarations of their names, so a user declaration of
+    `malloc` meets the same rule
+    as a second user declaration of `abs`.
     """
-    reserved = RESERVED_EXTERNS.get(sig.link_name)
-    if reserved is None:
-        return
-    reserved_params, reserved_ret = reserved
-    if not _abi_compatible(sig, reserved_params, reserved_ret):
-        er.emit(reporter, er.ERR.CE5001, decl.name_span or decl.loc, symbol=sig.link_name)
+
+    def __init__(self) -> None:
+        self._first: Dict[str, _Declared] = {
+            name: _Declared(function_shape(params, ret, variadic), None, None)
+            for name, (params, ret, variadic) in RESERVED_EXTERNS.items()
+        }
+
+    def admit(self, reporter: Reporter, link_name: str, shape: tuple,
+              span: Optional[Span], filename: Optional[str]) -> None:
+        """CE5001: a second declaration of `link_name` with another C shape."""
+        first = self._first.setdefault(link_name, _Declared(shape, span, filename))
+        if first.shape == shape:
+            return
+        diag = er.emit_with(reporter, er.ERR.CE5001, span, symbol=link_name)
+        if first.span is None:
+            diag.note("the compiler declares this symbol itself, with another signature")
+        else:
+            diag.note_at("the other declaration of this symbol", first.span, first.filename)
+        diag.emit()
 
 
-def _abi_compatible(sig: ExternalSig, reserved_params, reserved_ret) -> bool:
-    """True if `sig` and the reserved signature lower to the same C declaration."""
-    from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType
+def reject_disagreeing_link_names(reporter: Reporter, program: 'Program',
+                                  externals: ExternalTable, link_names: LinkNames) -> None:
+    """CE5001 for each declaration in one unit whose link name another declaration
+    holds with another C shape. It runs after the link names are folded."""
+    filename = reporter.filename
+    for block in getattr(program, "externals", None) or ():
+        for decl in block.decls:
+            record = externals.lookup(block.namespace, decl.name)
+            if (decl.link_name and _collected(record, decl, filename)
+                    and _crosses(decl)):
+                shape = function_shape([p.ty for p in decl.params], decl.ret, decl.is_variadic)
+                link_names.admit(reporter, decl.link_name, shape,
+                                 decl.name_span or decl.loc, filename)
+        for var in block.variables:
+            record = externals.lookup_variable(block.namespace, var.name)
+            if (var.link_name and _collected(record, var, filename)
+                    and is_c_abi_variable(var.ty)):
+                link_names.admit(reporter, var.link_name, ("var", c_type(var.ty)),
+                                 var.name_span or var.loc, filename)
 
-    def abi_key(ty):
-        if isinstance(ty, ForeignPtrType):
-            return "i8*"
-        if isinstance(ty, BuiltinType) and ty == BuiltinType.STRING:
-            return "i8*"
-        return ty
 
-    if abi_key(sig.ret_type) != abi_key(reserved_ret):
-        return False
-    # `sig.param_types` holds only the fixed params (a trailing `...` is not a
-    # param), so a variadic binding's fixed params must match the reserved fixed
-    # params; the `...` then covers the built-in's var_arg.
-    sig_params = tuple(abi_key(p) for p in sig.param_types)
-    reserved_keys = tuple(abi_key(p) for p in reserved_params)
-    return sig_params == reserved_keys
+def _crosses(decl: 'ExternalDecl') -> bool:
+    """False for a signature that CE5003 refused: it has no C shape to compare."""
+    return (all(is_c_abi_param(p.ty) for p in decl.params)
+            and (decl.ret is None or is_c_abi_type(decl.ret)))
+
+
+def _collected(record, decl, filename: Optional[str]) -> bool:
+    """False for a declaration that CE0101 refused: the table holds another one."""
+    return (record is not None and record.name_span == decl.name_span
+            and record.filename == filename)

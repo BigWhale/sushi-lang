@@ -1,0 +1,12 @@
+# `i32` and `u32` are two C types, `int` and `unsigned int`. Two declarations of one
+# symbol that differ only in the sign of a parameter do not agree (#1099).
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as a because "abs of an int":
+    fn abs(i32 x) i32 = "abs"
+
+unsafe external "C" as b because "abs, declared unsigned":
+    fn abs(u32 x) i32 = "abs"
+
+fn main() i32:
+    println(a.abs(-3))
+    return 0

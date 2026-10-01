@@ -5,6 +5,8 @@ import typing
 
 from llvmlite import ir
 
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
+
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
@@ -30,34 +32,22 @@ class LibCCType:
         self._declare_isdigit()
         self._declare_isalnum()
 
-    def _declare_ctype_func(self, name: str) -> ir.Function:
-        """Helper to declare ctype function: int func(int c)."""
-        existing_global = self.codegen.module.globals.get(name)
-        if isinstance(existing_global, ir.Function):
-            setattr(self, name, existing_global)
-            return existing_global
-
-        fn_ty = ir.FunctionType(self.codegen.i32, [self.codegen.i32])
-        func = ir.Function(self.codegen.module, fn_ty, name=name)
-        setattr(self, name, func)
-        return func
-
     def _declare_toupper(self) -> None:
         """Declare toupper: int toupper(int c)"""
-        self.toupper = self._declare_ctype_func("toupper")
+        self.toupper = declare_libc(self.codegen.module, "toupper")
 
     def _declare_tolower(self) -> None:
         """Declare tolower: int tolower(int c)"""
-        self.tolower = self._declare_ctype_func("tolower")
+        self.tolower = declare_libc(self.codegen.module, "tolower")
 
     def _declare_isspace(self) -> None:
         """Declare isspace: int isspace(int c)"""
-        self.isspace = self._declare_ctype_func("isspace")
+        self.isspace = declare_libc(self.codegen.module, "isspace")
 
     def _declare_isdigit(self) -> None:
         """Declare isdigit: int isdigit(int c)"""
-        self.isdigit = self._declare_ctype_func("isdigit")
+        self.isdigit = declare_libc(self.codegen.module, "isdigit")
 
     def _declare_isalnum(self) -> None:
         """Declare isalnum: int isalnum(int c)"""
-        self.isalnum = self._declare_ctype_func("isalnum")
+        self.isalnum = declare_libc(self.codegen.module, "isalnum")
