@@ -25,8 +25,6 @@ SEMANTICS = PACKAGE / "semantics"
 ALLOWED = {
     ("passes/lift.py", "__lambda_"): "a lifted function name, guarded by _claim_index",
     ("passes/lift.py", "__closure_env_"): "an environment struct name, guarded by _claim_index",
-    ("externs_manifest.py", "__error"): "a C link symbol (errno on macOS), not a local",
-    ("externs_manifest.py", "__errno_location"): "a C link symbol (errno on Linux), not a local",
 }
 
 MONOMORPHIZE = SEMANTICS / "generics" / "monomorphize"

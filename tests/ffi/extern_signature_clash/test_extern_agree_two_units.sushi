@@ -1,0 +1,11 @@
+# Two units may each declare one C symbol when the two signatures agree (#1099).
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_RUNTIME_EXIT: 0
+use "helpers/pid_holder"
+
+unsafe external "C" as sys because "reading the process id":
+    fn getpid() i32 = "getpid"
+
+fn main() i32:
+    println(sys.getpid() == helper_pid())
+    return 0

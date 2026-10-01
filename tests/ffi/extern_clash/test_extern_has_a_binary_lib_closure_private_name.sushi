@@ -1,0 +1,15 @@
+# A private function that a binary library's export closure ships emits
+# `clash_bin_lib$toupper` (#1098), so an extern with the link name `toupper`
+# reaches the C function.
+# BUILD_LIB_BINARY: clash_bin_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n65\n"
+use <lib/clash_bin_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn toupper(i32 c) i32 = "toupper"
+
+fn main() i32:
+    println(shout(nom 7))
+    println(libc.toupper(97))
+    return 0

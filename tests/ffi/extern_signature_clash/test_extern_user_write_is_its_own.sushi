@@ -1,0 +1,10 @@
+# A user declaration of `write` with a wrong count type is the user's own (#1099). The
+# compiler declares `write` for `println`, and its calls keep the compiler's signature.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "writing to a descriptor":
+    fn write(i32 fd, string buf, i32 n) i32 = "write"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

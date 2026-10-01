@@ -15,7 +15,7 @@ from sushi_lang.semantics.ast import ConstDef, ExtendDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
-from sushi_lang.backend.constants import INT8_BIT_WIDTH, INT64_BIT_WIDTH
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
@@ -26,7 +26,7 @@ from sushi_lang.backend.memory.print_frames import PrintFrames
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol, mangle_unit_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -214,15 +214,7 @@ class LLVMCodegen:
     def _get_malloc_func(self) -> ir.Function:
         """Get or declare malloc function."""
         if self._malloc_func is None:
-            existing = self.module.globals.get("malloc")
-            if isinstance(existing, ir.Function):
-                self._malloc_func = existing
-                return self._malloc_func
-            malloc_type = ir.FunctionType(
-                ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
-                [ir.IntType(INT64_BIT_WIDTH)]                # size_t
-            )
-            self._malloc_func = ir.Function(self.module, malloc_type, name="malloc")
+            self._malloc_func = declare_libc(self.module, "malloc")
         return self._malloc_func
 
     def declare_user_externs(self) -> None:
@@ -233,29 +225,13 @@ class LLVMCodegen:
     def get_free_func(self) -> ir.Function:
         """Get or declare free function."""
         if self._free_func is None:
-            existing = self.module.globals.get("free")
-            if isinstance(existing, ir.Function):
-                self._free_func = existing
-                return self._free_func
-            free_type = ir.FunctionType(
-                ir.VoidType(),                   # void
-                [ir.PointerType(ir.IntType(INT8_BIT_WIDTH))]  # void*
-            )
-            self._free_func = ir.Function(self.module, free_type, name="free")
+            self._free_func = declare_libc(self.module, "free")
         return self._free_func
 
     def get_realloc_func(self) -> ir.Function:
         """Get or declare realloc function."""
         if self._realloc_func is None:
-            existing = self.module.globals.get("realloc")
-            if isinstance(existing, ir.Function):
-                self._realloc_func = existing
-                return self._realloc_func
-            realloc_type = ir.FunctionType(
-                ir.PointerType(ir.IntType(INT8_BIT_WIDTH)),  # void*
-                [ir.PointerType(ir.IntType(INT8_BIT_WIDTH)), ir.IntType(INT64_BIT_WIDTH)]  # void*, size_t
-            )
-            self._realloc_func = ir.Function(self.module, realloc_type, name="realloc")
+            self._realloc_func = declare_libc(self.module, "realloc")
         return self._realloc_func
 
     def create_string_constant(self, name: str, value: str) -> ir.GlobalVariable:
@@ -525,7 +501,7 @@ class LLVMCodegen:
             result_type = call_value_type(self, func_sig)
             ll_ret = declared_return_ll(self, func_sig)
 
-            symbol = getattr(func_sig, "link_symbol", None) or name
+            symbol = emitted_symbol(name, None, getattr(func_sig, "link_symbol", None))
             llvm_fn = self.module.globals.get(symbol)
             if llvm_fn is None:
                 llvm_fn = ir.Function(self.module, ir.FunctionType(ll_ret, param_types),
@@ -593,7 +569,7 @@ class LLVMCodegen:
         no initializer.
         """
         global_var = ir.GlobalVariable(
-            self.module, llvm_type, name=symbol or mangle_unit_symbol(unit_name, name))
+            self.module, llvm_type, name=emitted_symbol(name, unit_name, symbol))
         if storage:
             if value is None:
                 global_var.linkage = 'external'
@@ -653,13 +629,17 @@ class LLVMCodegen:
         if const_value is None:
             return  # Skip non-constant expressions
 
+        # A library constant's copy takes the symbol of the unit that declared it, so
+        # it never takes the name of a function in the unit that holds the copy (#1101).
+        symbol_unit = const.home_unit or unit_name
         initializer = self._materialize_constant(
-            const_value, mangle_unit_symbol(unit_name, f".str_data.{const.name}"))
+            const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"))
         if initializer is None:
             return  # Skip unsupported types
 
         self._register_global_constant(
-            const.name, self.types.ll_type(const.ty), initializer, unit_name)
+            const.name, self.types.ll_type(const.ty), initializer, unit_name,
+            symbol=mangle_unit_symbol(symbol_unit, const.name))
 
     def _evaluate_constant_expression(self, expr, expected_type=None,
                                       unit_name=None) -> Optional["ConstantValue"]:
@@ -713,9 +693,9 @@ def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
     The set is `semantics/externs_manifest.py`'s: one list, read here for linkage and
     by CE5013 to refuse an `unsafe external` that names one (#472).
     """
-    from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
+    from sushi_lang.semantics.externs_manifest import INLINE_RUNTIME_SYMBOLS
 
-    for name in GENERATED_INLINE_SYMBOLS:
+    for name in INLINE_RUNTIME_SYMBOLS:
         fn = module.globals.get(name)
         if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
             fn.linkage = "linkonce_odr"

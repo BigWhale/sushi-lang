@@ -128,7 +128,9 @@ class SemanticAnalyzer:
             libraries     library symbol registration            _register_libraries               library_registration.py
             namespaces    `use ... as`, one table per unit       _build_namespaces                 passes/namespaces.py
             ffi-clash     link-name constants, then an extern    _check_ffi_clash                  passes/types/externals.py
-                          naming a defined symbol
+                          naming a defined symbol, then two                                        passes/collect/externals.py
+                          declarations of one C symbol with
+                          other C types (CE5001)
             entrypoint    main(): it exists, returns i32         _check_entrypoint                 here
             instantiate   generic instantiation collection       _collect_instantiations           generics/instantiate/
             monomorphize  generic -> concrete                    _monomorphize                     generics/monomorphize/
@@ -360,7 +362,7 @@ class SemanticAnalyzer:
 
     def _check_ffi_clash(self, compilation_order: list[Unit]) -> None:
         """ffi-clash: fold the link-name constants (#1089), then an extern naming a symbol
-        this build defines (CE5013)."""
+        this build defines (CE5013), then two declarations of one symbol (CE5001)."""
         # An `unsafe external` may name a FOREIGN symbol, never one this build defines
         # (#470). It reads the whole program's symbols, the linked libraries included, so
         # it cannot run with the per-unit extern validation above -- the registry does
@@ -376,6 +378,20 @@ class SemanticAnalyzer:
             reject_external_naming_a_defined_symbol(
                 unit_reporter, unit.ast, self.tables, self.library_registry,
                 self.generated_symbols)
+            self._merge_unit(unit_reporter)
+
+        # One C symbol has one signature in the program (#1099). The names of every unit
+        # are folded by now, and the built-ins are the first declaration of their names.
+        from sushi_lang.semantics.passes.collect.externals import (
+            LinkNames, reject_disagreeing_link_names,
+        )
+        link_names = LinkNames()
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_disagreeing_link_names(unit_reporter, unit.ast, self.tables.externals,
+                                          link_names)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],

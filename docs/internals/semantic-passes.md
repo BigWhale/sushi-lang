@@ -190,9 +190,11 @@ variable (`var`) also takes an empty container (`List.new()`, `from([])`).
 
 `semantics/passes/collect/externals.py` builds an `ExternalTable` from each
 `unsafe external "C"` block: a namespace-keyed map of `ExternalSig` (Sushi name,
-link name, param/return types). It rejects duplicate names within a namespace and
-emits `CE5001` when a link-name clashes with a `RESERVED_EXTERNS` built-in of a
-different signature. The table is exposed as `collector.externals` and threaded
+link name, param/return types). It rejects duplicate names within a namespace. The
+same module holds `LinkNames` and `reject_disagreeing_link_names`, which the `ffi-clash`
+step runs over every unit after it folds the link names: two declarations of one link
+name with other C types are `CE5001`, and each `RESERVED_EXTERNS` built-in is the first
+declaration of its name (#1099). The table is exposed as `collector.externals` and threaded
 into the scope pass, the type validator, and the backend.
 
 The C-ABI allowlist check (`CE5003`) and the `CW5001` four-guarantee warning live

@@ -248,6 +248,10 @@ class ConstDef(Node):
     type_span: Optional[Span] = None
     doc: Optional[DocBlock] = None
     public_span: Optional[Span] = None
+    # The library unit that declared a constant a library ships as source. The
+    # consumer's copy of the global takes its symbol from this unit, not from the
+    # unit that holds the copy; None for a constant this program declares.
+    home_unit: Optional[str] = None
 
 
 @dataclass(slots=True)

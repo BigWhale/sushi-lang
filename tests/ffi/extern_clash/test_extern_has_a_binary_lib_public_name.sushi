@@ -1,0 +1,14 @@
+# A binary library's public `abs` emits `clash_bin_lib$abs` (#1098), so an extern
+# with the link name `abs` reaches the C function and not the library body.
+# BUILD_LIB_BINARY: clash_bin_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3995\n5\n"
+use <lib/clash_bin_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn abs(i32 n) i32 = "abs"
+
+fn main() i32:
+    println(abs(-5))
+    println(libc.abs(-5))
+    return 0

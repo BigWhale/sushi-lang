@@ -1,0 +1,13 @@
+# The link name spells the symbol of a private function that a binary library's
+# export closure ships (#1098), so the extern names a symbol that this build defines.
+# BUILD_LIB_BINARY: clash_bin_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/clash_bin_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn toupper(i32 c) i32 = "clash_bin_lib$toupper"
+
+fn main() i32:
+    println(shout(nom 7))
+    println(libc.toupper(97))
+    return 0

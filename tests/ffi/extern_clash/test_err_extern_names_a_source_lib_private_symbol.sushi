@@ -1,0 +1,13 @@
+# The link name spells the symbol that a source library's private function emits
+# (#1098). The unit is compiled into this build, so it defines the symbol.
+# BUILD_LIB: clash_src_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/clash_src_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn tolower(i32 c) i32 = "lib$clash_src_lib$clash_src_lib$tolower"
+
+fn main() i32:
+    println(abs(1))
+    println(libc.tolower(65))
+    return 0

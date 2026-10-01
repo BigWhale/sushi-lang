@@ -1,0 +1,22 @@
+# A link name written as a constant behind an alias and the same name written as a
+# literal are one symbol, and the two declarations agree (#1099).
+# EXPECT_STDOUT_EXACT: "0 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <sys/platform> as platform
+
+unsafe external "C" as libc because "reading file metadata":
+    fn malloc(i64 n) ptr = "malloc"
+    fn free(ptr p) ~ = "free"
+    fn stat(string path, ptr buf) i32 = platform.STAT_SYMBOL
+
+unsafe external "C" as again because "reading file metadata again":
+    fn stat(string path, ptr buf) i32 = platform.STAT_SYMBOL
+
+fn main() i32:
+    let ptr buf = libc.malloc(platform.STAT_SIZE as i64)
+    let i32 first = libc.stat("/dev/null", buf)
+    let i32 second = again.stat("/dev/null", buf)
+    println("{first} {second}")
+    libc.free(buf)
+    return 0

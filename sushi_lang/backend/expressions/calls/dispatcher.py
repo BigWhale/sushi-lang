@@ -326,9 +326,9 @@ def _try_emit_external_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
                     for arg, param_ty in zip(expr.args[:num_fixed], sig.param_types,
                                              strict=True)]
 
-    params = list(llvm_fn.args)
-    fixed_args = [codegen.utils.cast_for_param(v, p.type)
-                  for v, p in zip(emitted_args, params, strict=True)]
+    params = list(llvm_fn.function_type.args)
+    fixed_args = [codegen.utils.cast_for_param(v, param_ty)
+                  for v, param_ty in zip(emitted_args, params, strict=True)]
 
     # Marshal the TRAILING variadic arguments. There is no declared target type,
     # so apply C default-argument promotion by hand against the emitted value's

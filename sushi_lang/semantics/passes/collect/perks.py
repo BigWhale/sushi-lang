@@ -17,7 +17,7 @@ from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
-from .utils import reject_reference_in, reject_try_in_body
+from .utils import reject_reference_in, reject_try_in_body, reject_variadic_param
 
 
 @dataclass
@@ -373,12 +373,7 @@ class PerkCollector:
         # The pack half is unreachable today, but the guard must match its
         # documented contract and stay correct by construction (#246).
         for method in perk.methods or []:
-            for p in method.params or []:
-                if p.is_variadic or p.is_pack:
-                    er.emit(self.r, ERR.CE0115,
-                            p.name_span or name_span,
-                            context="a perk method")
-                    break
+            reject_variadic_param(self.r, method.params, name_span, "a perk method")
 
         # A perk method that promises to RETURN a borrow is the same unsound shape as a
         # plain function returning one (CE2417, #314): the implementation would hand out a
@@ -611,6 +606,10 @@ class PerkCollector:
         # point at it (#542, ruling R1).
         if self._reject_static_in_impl(impl, perk_name):
             return False
+
+        for method in impl.methods or []:
+            reject_variadic_param(self.r, method.params,
+                                  method.name_span or impl.loc, "a perk method")
 
         perk_name_span: Optional[Span] = impl.perk_name_span or impl.loc
         target_type: Optional[Type] = impl.target_type

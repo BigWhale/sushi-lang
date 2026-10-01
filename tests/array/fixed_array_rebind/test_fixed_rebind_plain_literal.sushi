@@ -1,0 +1,9 @@
+# A rebind of a plain fixed array from a literal stores the new value in the slot.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 5 6\n"
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    a := [4, 5, 6]
+    println("{a[0]} {a[1]} {a[2]}")
+    return 0

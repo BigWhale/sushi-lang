@@ -1,0 +1,14 @@
+# A rebind in a loop replaces the value on each pass, and frees each old value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 0\n1 2\n2 4\n3 6\nlast: n-3 n-6\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32[2] a = [0, 0]
+    let string[2] s = ["n-0", "n-0"]
+    foreach(i in 0..4):
+        a := [i, i * 2]
+        s := ["n-{i}", "n-{i * 2}"]
+        println("{a[0]} {a[1]}")
+    println("last: {s[0]} {s[1]}")
+    return 0

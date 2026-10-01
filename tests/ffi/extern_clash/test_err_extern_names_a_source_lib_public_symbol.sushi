@@ -1,0 +1,13 @@
+# The link name spells the symbol that a source library's public function emits
+# (#1098), so the extern names a symbol that this build defines.
+# BUILD_LIB: clash_src_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/clash_src_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn abs(i32 n) i32 = "lib$clash_src_lib$clash_src_lib$abs"
+
+fn main() i32:
+    println(abs(-5))
+    println(libc.abs(-5))
+    return 0

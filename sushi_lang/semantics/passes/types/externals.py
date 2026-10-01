@@ -11,6 +11,7 @@ from sushi_lang.semantics.ffi_boundary import (
     nullable_payload,
 )
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 from .arguments import check_arguments
 
@@ -31,27 +32,68 @@ def validate_external_signatures(reporter: Reporter, program: 'Program') -> None
         _emit_block_warning(reporter, block)
 
 
+# The kept kinds that emit a symbol in the library bitcode. A generic function, a struct
+# and an enum emit none of that name.
+_KEPT_KINDS_WITH_A_SYMBOL = frozenset({"function", "constant", "variable"})
+
+
+def _kept_symbols(lib) -> set[str]:
+    """The symbols that a library's kept declarations emit.
+
+    A kept record carries a name and a kind, and no unit. The manifest lists the
+    library's units, so each unit's symbol of the name is a candidate. For a library
+    with one unit, that is the exact symbol.
+    """
+    units = lib.raw_manifest.get("units") or [lib.name]
+    return {emitted_symbol(name, unit)
+            for name, kind in lib.not_exported.items()
+            if kind in _KEPT_KINDS_WITH_A_SYMBOL
+            for unit in units}
+
+
+def _declaration_emitting(symbol: str, table):
+    """The collected function or constant whose emitted symbol is `symbol`, or None.
+
+    Two units may each declare a `helper`, and the flat view holds one of them, so
+    the walk also reads each unit's own view. A binary library's function carries its
+    `link_symbol`, and a library's unit variable carries it on its declaration.
+    """
+    candidates = [*table.by_name.values(),
+                  *(sig for own in table.by_unit.values() for sig in own.values())]
+    for sig in candidates:
+        link_symbol = (getattr(sig, "link_symbol", None)
+                       or getattr(getattr(sig, "decl", None), "link_symbol", None))
+        if symbol == emitted_symbol(sig.name, sig.unit_name, link_symbol):
+            return sig
+    return None
+
+
 def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Optional[tuple]:
     """Where this build defines `symbol`, as (note, span, filename). None if nowhere.
+
+    A function row and the constant row compare the symbol that the declaration EMITS
+    (`<unit>$<name>`, or a binary library's `link_symbol`), not its Sushi name (#1098).
 
     Ordered by how much the answer can say. A library record carries no span, so its
     note is a plain fact; a declaration this program holds carries its own file and
     line, which makes the diagnostic relational.
     """
     if registry is not None:
-        kept = registry.get_all_not_exported().get(symbol)
-        if kept is not None:
-            return (f"library '{kept[0]}' declares it and does not export it", None, None)
+        for lib in registry.get_all_libraries().values():
+            if symbol in _kept_symbols(lib):
+                return (f"library '{lib.name}' declares it and does not export it",
+                        None, None)
 
-        shipped = registry.get_all_private_functions().get(symbol)
-        if shipped is not None:
-            return (f"library '{shipped[0]}' ships it in its export closure", None, None)
+        for lib_name, shipped in registry.get_all_private_functions().values():
+            if symbol == emitted_symbol(shipped.name, None, shipped.link_symbol):
+                return (f"library '{lib_name}' ships it in its export closure", None, None)
 
         for lib in registry.get_all_libraries().values():
-            if symbol in lib.functions:
+            if any(symbol == emitted_symbol(sig.name, None, sig.link_symbol)
+                   for sig in lib.functions.values()):
                 return (f"library '{lib.name}' exports it", None, None)
 
-    sig = tables.funcs.by_name.get(symbol)
+    sig = _declaration_emitting(symbol, tables.funcs)
     if sig is not None:
         if sig.name_span is not None:
             return ("defined here", sig.name_span, sig.filename)
@@ -59,8 +101,11 @@ def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Opti
         # compiler synthesized, not one the user wrote.
         return ("this program defines it", None, None)
 
-    if symbol in tables.constants.by_name:
-        return ("this program defines a constant of that name", None, None)
+    const = _declaration_emitting(symbol, tables.constants)
+    if const is not None:
+        if const.name_span is not None:
+            return ("the constant is defined here", const.name_span, const.filename)
+        return ("this program defines a constant that emits it", None, None)
 
     # The generated half: a symbol the stdlib generators emit, or one the backend
     # emits inline. No semantic table holds either, so both arrive as names (#472).
@@ -82,7 +127,6 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
     """
     from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.const_eval import ConstantEvaluator, is_string_constant
-    from sushi_lang.semantics.passes.collect.externals import reject_reserved_clash
 
     evaluator = ConstantEvaluator(reporter, tables.constants, unit_name,
                                   tables.namespaces.get, tables.structs,
@@ -109,7 +153,6 @@ def fold_link_names(reporter: Reporter, program: 'Program', tables, unit_name) -
             sig = tables.externals.lookup(block.namespace, decl.name)
             if sig is not None:
                 sig.link_name = decl.link_name
-                reject_reserved_clash(reporter, decl, sig)
 
 
 def reject_external_naming_a_defined_symbol(

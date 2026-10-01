@@ -1,0 +1,22 @@
+# The implementation on a GENERIC target is a template, and it is filed before the
+# concrete registration. A native `...T` in its method is CE0115 too (#1100).
+# EXPECT_ERROR_CODE: CE0115
+
+perk Adder:
+    fn add_all(i32[] xs) i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Adder:
+    fn add_all(...i32 xs) i32:
+        let i32 t = 0
+        foreach(x in xs.iter()):
+            t := t + x
+        return t
+
+fn main() i32:
+    let Box@(i32) b = Box(5)
+    let i32[] a = from([1, 2])
+    println(b.add_all(a))
+    return 0

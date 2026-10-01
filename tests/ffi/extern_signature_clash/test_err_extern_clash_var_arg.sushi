@@ -1,0 +1,12 @@
+# A fixed signature and a `var_arg` signature of one symbol do not agree, also
+# when the fixed parameters are equal (#1099).
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as a because "opening a file":
+    fn open(string path, i32 flags, ...) i32 = "open"
+
+unsafe external "C" as b because "opening a file, with no mode":
+    fn open(string path, i32 flags) i32 = "open"
+
+fn main() i32:
+    println(a.open("/dev/null", 0))
+    return 0

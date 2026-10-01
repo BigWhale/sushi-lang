@@ -230,6 +230,22 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
     walk_nodes(body, refuse_a_try)
 
 
+def reject_variadic_param(reporter, params: Iterable[Param],
+                          fallback: Optional[Span], context: str) -> bool:
+    """CE0115: a method is never variadic, so a `...T` or a `...Ts` parameter is refused.
+
+    One rule for the three method positions: an extension method, a perk contract
+    method and a perk implementation method (#1100). Answers True when it refused one.
+    """
+    from sushi_lang.internals import errors as er
+
+    for p in params or ():
+        if p.is_variadic or p.is_pack:
+            er.emit(reporter, er.ERR.CE0115, p.name_span or fallback, context=context)
+            return True
+    return False
+
+
 def reject_self_in_body(reporter, body: Any, name: str) -> None:
     """Reject every mention of `self` in a STATIC method body (CE0134, #542).
 

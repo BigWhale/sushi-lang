@@ -1,0 +1,15 @@
+# A parameter is a borrow, so a rebind that takes an owning fixed array from it is the
+# consuming use of a borrow. The escape is `.clone()`.
+# EXPECT_ERROR_CODE: CE2411
+
+fn replace(string[2] src) i32:
+    let string prefix = "pre"
+    let string[2] a = ["{prefix}-x", "{prefix}-y"]
+    a := src
+    println(a[0])
+    return 0
+
+fn main() i32:
+    let string prefix = "pre"
+    let string[2] b = ["{prefix}-p", "{prefix}-q"]
+    return replace(b)

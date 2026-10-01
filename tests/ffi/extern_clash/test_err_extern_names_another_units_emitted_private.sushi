@@ -1,0 +1,13 @@
+# The link name spells the symbol that a private function of another unit emits
+# (#1098). The function is private, but the build still defines its symbol.
+# EXPECT_ERROR_CODE: CE5013
+
+use "helpers/prog_helper"
+
+unsafe external "C" as raw because "naming the symbol of a private of another unit":
+    fn hidden(i32 n) i32 = "helpers$prog_helper$kept"
+
+fn main() i32:
+    println("{shown(3)}")
+    println("{raw.hidden(7)}")
+    return 0

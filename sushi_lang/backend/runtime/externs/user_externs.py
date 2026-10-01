@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
 from sushi_lang.semantics.ffi_boundary import is_byte_buffer, nullable_payload
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -53,22 +54,25 @@ def declare_user_externs(codegen: 'LLVMCodegen', external_table: 'ExternalTable'
             codegen.external_vars[(namespace, name)] = (_declare_variable(codegen, var), var)
 
 
-def _declare_variable(codegen: 'LLVMCodegen', var) -> ir.GlobalVariable:
-    """Declare (or reuse) a C global variable (#1090): no initializer, so `external`."""
+def _declare_variable(codegen: 'LLVMCodegen', var) -> ir.Value:
+    """Declare a C global variable (#1090): no initializer, so `external`.
+
+    When the module already holds the symbol with another type (the compiler declares
+    the stdio handles), the read goes through a bitcast to this declaration's type
+    (#1099).
+    """
+    ty = _abi_return_type(codegen, var.ty)
     existing = codegen.module.globals.get(var.link_name)
-    if isinstance(existing, ir.GlobalVariable):
+    if existing is None:
+        return ir.GlobalVariable(codegen.module, ty, name=var.link_name)
+    if isinstance(existing, ir.GlobalVariable) and existing.value_type == ty:
         return existing
-    return ir.GlobalVariable(codegen.module, _abi_return_type(codegen, var.ty),
-                             name=var.link_name)
+    return existing.bitcast(ty.as_pointer())
 
 
-def _declare_one(codegen: 'LLVMCodegen', sig: 'ExternalSig') -> ir.Function:
-    """Declare (or reuse) the LLVM function for a single foreign signature."""
-    existing = codegen.module.globals.get(sig.link_name)
-    if isinstance(existing, ir.Function):
-        return existing
-
+def _declare_one(codegen: 'LLVMCodegen', sig: 'ExternalSig'):
+    """The callee of a single foreign signature, with the type of this declaration."""
     ret_ll = _abi_return_type(codegen, sig.ret_type)
     param_lls = [_abi_param_type(codegen, ty) for ty in sig.param_types]
-    fn_ty = ir.FunctionType(ret_ll, param_lls, var_arg=getattr(sig, "is_variadic", False))
-    return ir.Function(codegen.module, fn_ty, name=sig.link_name)
+    return declare_extern(codegen.module, sig.link_name, ret_ll, param_lls,
+                          var_arg=getattr(sig, "is_variadic", False))

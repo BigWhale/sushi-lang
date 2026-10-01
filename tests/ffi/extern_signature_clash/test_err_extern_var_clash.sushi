@@ -1,0 +1,11 @@
+# Two external variables of one C symbol with other types do not agree (#1099).
+# EXPECT_ERROR_CODE: CE5001
+unsafe external "C" as a because "reading getopt state":
+    var i32 optind = "optind"
+
+unsafe external "C" as b because "reading getopt state, declared wide":
+    var i64 optind = "optind"
+
+fn main() i32:
+    println(a.optind)
+    return 0

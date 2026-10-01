@@ -2,14 +2,14 @@
 from __future__ import annotations
 from llvmlite import ir
 
-from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern, declare_math
 
 
 def _forward_f64(module: ir.Module, llvm_name: str, sushi_name: str, arg_names: tuple) -> None:
     """Emit a `sushi_<name>` wrapper that forwards to an f64 LLVM intrinsic or libc function."""
     f64 = ir.DoubleType()
     sig = ir.FunctionType(f64, [f64] * len(arg_names))
-    callee = declare_extern(module, llvm_name, f64, [f64] * len(arg_names))
+    callee = declare_math(module, llvm_name, len(arg_names))
 
     func = ir.Function(module, sig, name=sushi_name)
     for arg, name in zip(func.args, arg_names, strict=True):

@@ -1,0 +1,15 @@
+# A consumer function beside a binary library's public constant of the same
+# name. A fn and a const of one name coexist across units, so each needs a
+# symbol of its own.
+# BUILD_LIB_BINARY: clib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "77\n"
+
+use <lib/clib>
+
+fn LIMIT() i32:
+    return 77
+
+fn main() i32:
+    println("{LIMIT()}")
+    return 0
