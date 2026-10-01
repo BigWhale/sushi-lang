@@ -74,12 +74,13 @@ def _render_signature(func: dict, p: Palette) -> str:
 
     ONE renderer, so a template prints what a concrete function prints. A generic used
     to print `(template)` where its parameters belong, which is why its `- Parameter`
-    tags were stored and never rendered.
+    tags were stored and never rendered. An extension method prints the same
+    signature after its target, with no `fn`.
     """
     generic = _render_type_params(func.get('type_params'))
     params = _render_params(func.get('params') or [], func.get('self_mode'))
     name = f"{p.bold}{func['name']}{p.reset}"
-    line = f"fn {name}{generic}({params}) {_surface(func['return_type'])}"
+    line = f"{name}{generic}({params}) {_surface(func['return_type'])}"
     # A record with no `error_type` is bare, or spells its Result in `return_type`, so it
     # prints no arm either.
     error = func.get('error_type')
@@ -336,7 +337,7 @@ def _reexport_line(record: dict, p: Palette) -> str:
 
 
 def _function_line(func: dict, p: Palette) -> str:
-    return f"  {_render_signature(func, p)}"
+    return f"  fn {_render_signature(func, p)}"
 
 
 def _constant_line(const: dict, p: Palette) -> str:
@@ -375,7 +376,12 @@ def _impl_line(impl: dict, p: Palette) -> str:
 
 
 def _method_line(method: dict, p: Palette) -> str:
-    return f"    {_render_signature(method, p)}"
+    return f"    fn {_render_signature(method, p)}"
+
+
+def _extension_line(ext: dict, p: Palette) -> str:
+    static = "static " if ext.get('static') else ""
+    return f"  extend {_surface(ext['type'])} {static}{_render_signature(ext, p)}"
 
 
 def _foreign_line(claim: dict, p: Palette) -> str:
@@ -449,6 +455,10 @@ _SECTIONS: tuple[_Section, ...] = (
     # wants one list, and `extend Box@(T) with Show` answers for every `Box` (#537).
     _Section("Perk Implementations", ("perk_impls", "generic_perk_impls"), _impl_line,
              in_templates=True, members=("methods", _method_line)),
+    # The methods a consumer can call on a type, the concrete ones and then the
+    # templates, in ONE section, as the perk implementations above.
+    _Section("Extension Methods", ("extensions", "generic_extensions"), _extension_line,
+             in_templates=True),
     _Section("Foreign Extensions", ("foreign_extensions",), _foreign_line, doc=None),
     _Section("Dependencies", ("dependencies",), _dependency_line, doc=None),
 )

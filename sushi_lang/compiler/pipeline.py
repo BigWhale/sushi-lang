@@ -533,6 +533,7 @@ def codegen_for(analyzer: SemanticAnalyzer,
     cg.library_linker = library_linker
     cg.library_registry = analyzer.library_registry
     cg.library_perk_impls = analyzer.library_perk_impls
+    cg.library_extensions = analyzer.library_extensions
     # Section 8's ladder, as the back end has to walk it: a bare callee is resolved
     # through the same per-unit scope the typecheck pass accepted it under, and a
     # constant's initializer through the aliases of the unit that wrote it (#561).

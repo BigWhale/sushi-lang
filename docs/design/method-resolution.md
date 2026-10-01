@@ -441,9 +441,12 @@ outnumbers a static call 22 to 1 (10,469 to 479).
 - **No static in a perk.** A perk has no `Self`, so a contract cannot hold a
   constructor. CE4014.
 - **No overloading.** A name has one home; both collisions above are refusals.
-- **No export through a BINARY `.slib`.** A binary library ships no extension method at
-  all, instance or static, so this limit is not particular to a static. A
-  SOURCE `.slib` ships the declaration as text and a static exports through it.
+
+A static exports through every library kind, as an instance method does. A SOURCE
+`.slib` ships the declaration as text. A BINARY or HYBRID `.slib` ships an `extensions`
+record (the signature, `static`, and the symbol that its bitcode defines) for a concrete
+method, and a `generic_extensions` record (the source) for a template
+(`docs/library-format.md`).
 
 ## A perk method and an extension method differ in one thing
 

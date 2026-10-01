@@ -591,6 +591,17 @@ Writes the signature of one function record, concrete or generic.
 - Returns: The signature.
 :##
 fn render_signature(MsgValue f, Opts o) string:
+    let string callable = render_callable(f, o)
+    return "fn {callable}"
+
+##:
+Writes the signature of one function record with no `fn`, as an extension prints it.
+
+- Parameter f: The function or extension record.
+- Parameter o: The options of the run.
+- Returns: The signature.
+:##
+fn render_callable(MsgValue f, Opts o) string:
     let string bare = get_str(f, "name")
     let string name = "{o.bold}{bare}{o.reset}"
     let string generic = render_type_params(f)
@@ -598,9 +609,9 @@ fn render_signature(MsgValue f, Opts o) string:
     let string ret = to_surface(get_str(f, "return_type"))
     let string err = get_str(f, "error_type")
     if (err == ""):
-        return "fn {name}{generic}({params}) {ret}"
+        return "{name}{generic}({params}) {ret}"
     let string serr = to_surface(err)
-    return "fn {name}{generic}({params}) {ret} | {serr}"
+    return "{name}{generic}({params}) {ret} | {serr}"
 
 ##:
 Prints one section of function records.
@@ -1107,6 +1118,65 @@ fn print_perk_impls(MsgValue templates, Opts o) ~:
     println("")
 
 ##:
+Prints one array of extension method records.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter key: The key to find.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
+fn print_extensions_at(MsgValue templates, string key, bool pending, Opts o) bool:
+    match templates:
+        MsgValue.Map(_, vals) ->
+            match map_index(templates, key):
+                Maybe.Some(at) -> return print_extension_records(vals[at], pending, o)
+                Maybe.None() -> return pending
+        _ ->
+            return pending
+
+##:
+Prints each extension method record, with its doc record.
+
+- Parameter exts: The array of extension method records.
+- Parameter pending: True when the record before this one printed a block.
+- Parameter o: The options of the run.
+- Returns: True when the last record printed a block.
+:##
+fn print_extension_records(MsgValue exts, bool pending, Opts o) bool:
+    match exts:
+        MsgValue.Arr(items) ->
+            let bool p = pending
+            foreach(e in items.iter()):
+                p := open_record(p)
+                let string target = to_surface(get_str(e, "type"))
+                let string marker = ""
+                if (get_bool(e, "static")):
+                    marker := "static "
+                let string sig = render_callable(e, o)
+                println("  extend {target} {marker}{sig}")
+                p := print_doc(e, "    ", o)
+            return p
+        _ ->
+            return pending
+
+##:
+Prints the concrete and the template extension methods, in one section.
+
+- Parameter templates: The `templates` map, or `Nil` when the library has none.
+- Parameter o: The options of the run.
+:##
+fn print_extensions(MsgValue templates, Opts o) ~:
+    let i32 concrete_n = len_at(templates, "extensions")
+    let i32 generic_n = len_at(templates, "generic_extensions")
+    if (not section("Extension Methods", concrete_n + generic_n, o)):
+        return ~
+    let bool pending = false
+    pending := print_extensions_at(templates, "extensions", pending, o)
+    pending := print_extensions_at(templates, "generic_extensions", pending, o)
+    println("")
+
+##:
 Prints the section of the types that the library extends and does not declare.
 
 - Parameter meta: The metadata map.
@@ -1284,6 +1354,7 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_generic_named(templates, "generic_enums", "Generic Enums", "enum", o)
     print_perks(templates, o)
     print_perk_impls(templates, o)
+    print_extensions(templates, o)
     print_foreign_extensions(meta, o)
 
 ##:
