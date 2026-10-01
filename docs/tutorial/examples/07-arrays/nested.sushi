@@ -1,0 +1,14 @@
+fn main() i32:
+    # Three rows, and each row is an i32[2]. Read the suffixes from left to right.
+    let i32[2][3] grid = [[1, 2], [3, 4], [5, 6]]
+    println("rows: {grid.len()}, columns: {grid[0].len()}")
+    grid[2][1] := 42
+    println("bottom right: {grid[2][1]}")
+
+    # Rows of different lengths: a dynamic array of dynamic arrays.
+    let i32[][] ragged = from([from([1]), from([2, 3])])
+    ragged[0].push(7)
+    ragged.push(from([4, 5, 6]))
+    println("ragged rows: {ragged.len()}, first row: {ragged[0][0]} {ragged[0][1]}")
+
+    return 0

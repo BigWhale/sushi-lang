@@ -218,6 +218,31 @@ of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, 
 the empty literal there is `CE2111`. Declare the array first (`let i32[] xs = from([])`)
 and use the name.
 
+**Nested arrays:** an array element can be an array. The suffixes read from LEFT TO RIGHT:
+a suffix applies to the type on its left.
+
+| Written | Is | Layout |
+|---|---|---|
+| `i32[][]` | a dynamic array of `i32[]` | a descriptor of descriptors |
+| `i32[3][]` | a dynamic array of `i32[3]` | a descriptor; each slot is 12 bytes inline |
+| `i32[][3]` | a fixed array of 3 `i32[]` | 3 descriptors inline |
+| `i32[2][3]` | a fixed array of 3 `i32[2]` | `[3 x [2 x i32]]` |
+
+An index removes the LAST suffix. For `i32[2][3] m`, `m[i]` is an `i32[2]`, `i` is in
+`0..3`, and `m[i][j]` has `j` in `0..2`. **C reads the other way**: in C, `int m[2][3]` is
+2 rows of 3. In Sushi, `i32[2][3]` is 3 rows of 2.
+
+```sushi
+fn main() i32:
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    let i32[][] d = from([from([1]), from([2, 3])])
+    let i32[2][] g = from([[1, 2], [3, 4]])
+    d[0].push(9)
+    m[2][0] := 7
+    println("{m.len()} {m[0].len()} {m[2][0]} {d[0][1]} {g[1][1]}")   # 3 2 7 9 4
+    return 0
+```
+
 ### Function Types
 
 A function type describes a first-class function value (a bare function pointer). The return
