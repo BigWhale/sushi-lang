@@ -1,0 +1,10 @@
+# The compiler declares `toupper` as `int (int)`. A user declaration of it with other
+# types is not compared with the compiler's, and its calls use its own type (#1099).
+# EXPECT_STDOUT_EXACT: "65\n"
+# EXPECT_RUNTIME_EXIT: 0
+unsafe external "C" as libc because "changing the case of a letter":
+    fn toupper(u8 c) u8 = "toupper"
+
+fn main() i32:
+    println(libc.toupper(97))
+    return 0

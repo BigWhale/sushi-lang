@@ -461,13 +461,3 @@ _add(ErrorMessage("CE0142", Severity.ERROR,
     "the key read the file again, so a file that changed after the parse stored the old "
     "object under the key of the new text, and a file that was gone left the source out "
     "of the key with no diagnostic (#1062)."))
-
-_add(ErrorMessage("CE0143", Severity.ERROR,
-    "the back end holds another declaration of the C symbol '{symbol}'",
-    Category.INTERNAL,
-    "The back end declares each C symbol one time, and an `unsafe external` declaration "
-    "of a symbol that the module already holds reuses it. The two LLVM types must be the "
-    "same, because CE5001 refuses two declarations of one symbol that have other C types. "
-    "A reuse with another type is a compiler fault: the call would go through the other "
-    "signature and compute a wrong value. Before #1099 the back end reused the first "
-    "declaration with no check."))
