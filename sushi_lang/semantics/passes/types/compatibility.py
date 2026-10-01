@@ -79,7 +79,9 @@ def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:
     Rows that agree with each other and not with the declared type are one mismatch of
     the whole literal (CE2002). Rows that disagree are measured one by one against the row
     type their position stamped, so a short FIRST row is not the one the others are
-    compared with (CE2011 at that row, not CE2013 at each of the others).
+    compared with (CE2011 at that row, not CE2013 at each of the others). A measured row
+    of the right size is measured again one level down, because its own rows can agree
+    with each other and still miss the row type of their position.
     """
     if not isinstance(literal, ArrayLiteral) or len(literal.elements) < 2:
         return []
@@ -87,17 +89,26 @@ def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:
                  for element in literal.elements]
     if all(ty == row_types[0] for ty in row_types):
         return []
-    short = []
+    short: list[ArrayLiteral] = []
     for element in literal.elements:
-        row = element.value
-        if isinstance(row, ArrayLiteral) and isinstance(row.resolved_type, ArrayType):
-            runs = array_runs.read_runs(
-                row.elements,
-                array_runs.const_int_reader(validator.constant_evaluator()),
-                Reporter())
-            if runs is not None and array_runs.expanded_length(runs) != row.resolved_type.size:
-                short.append(row)
+        _measure_row(validator, element.value, short)
     return short
+
+
+def _measure_row(validator: 'TypeValidator', row: Expr, short: list[ArrayLiteral]) -> None:
+    """Add `row` to `short` when it misses its stamped size; else measure its own rows."""
+    if not (isinstance(row, ArrayLiteral) and isinstance(row.resolved_type, ArrayType)):
+        return
+    runs = array_runs.read_runs(
+        row.elements, array_runs.const_int_reader(validator.constant_evaluator()),
+        Reporter())
+    if runs is None:
+        return
+    if array_runs.expanded_length(runs) != row.resolved_type.size:
+        short.append(row)
+        return
+    for element in row.elements:
+        _measure_row(validator, element.value, short)
 
 
 def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayType,
