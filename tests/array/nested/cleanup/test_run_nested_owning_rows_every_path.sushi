@@ -1,0 +1,62 @@
+# an owning struct element (a `string` and an `i32[]` field) at depth leaks nothing on
+# any cleanup path: `break`, `continue`, `??`, a rebind, an overwrite at both depths,
+# `clear`, `truncate`, and `pop` discarded and bound, over `Row[][]`, `Row[3][]` and
+# `Row[][2]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\nerr\nq 1\nr 2\n0 1\nz 4\n7\n"
+struct Row:
+    string name
+    i32[] cells
+
+fn row(string n, i32 k) Row:
+    return Row(n.clone(), from([7; k]))
+
+fn step(bool ok) i32 | StdError:
+    if (ok):
+        return Result.Ok(1)
+    return Result.Err(StdError.Error)
+
+fn run() i32 | StdError:
+    let Row[][] g = from([from([row("a", 2)])])
+    let Row[3][] f = from([[row("b", 1), row("c", 1), row("d", 1)]])
+    let Row[][2] h = [from([row("e", 1)]), new()]
+    let i32 v = step(false)??
+    return Result.Ok(v + g.len() + f.len() + h.len())
+
+fn main() i32:
+    let i32 turns = 0
+    foreach(i in 0..6):
+        let Row[][] g = from([from([row("l{i}", i)])])
+        let Row[3][] f = from([[row("m", 1), row("n", 2), row("o", 3)]])
+        let Row[][2] h = [from([row("p", 1)]), from([row("p", 2)])]
+        if (i % 2 == 0):
+            continue
+        turns := turns + g.len() + f.len() + h.len() - 3
+        if (i == 5):
+            break
+    println(turns)
+    match run():
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    let Row[][] g = from([from([row("a", 1)])])
+    g := from([from([row("q", 1)]), from([row("x", 3)])])
+    g[1] := from([row("r", 2)])
+    println("{g[0][0].name} {g[0][0].cells.len()}")
+    println("{g[1][0].name} {g[1][0].cells.len()}")
+    let Row[3][] f = from([[row("b", 1), row("c", 1), row("d", 1)]])
+    f[0] := [row("s", 1), row("t", 1), row("u", 1)]
+    f[0][1] := row("v", 1)
+    let Row[][2] h = [from([row("w", 1), row("y", 2)]), from([row("z", 4), row("k", 1)])]
+    h[0].clear()
+    h[1].truncate(1)
+    h[1][0] := row("z", 4)
+    println("{h[0].len()} {h[1].len()}")
+    let Maybe@(Row) last = h[1].pop()
+    match last:
+        Maybe.Some(r) -> println("{r.name} {r.cells.len()}")
+        Maybe.None -> println("none")
+    g[0].pop()
+    h := [from([row("j", 1)]), new()]
+    println(f[0][1].cells[0])
+    return 0

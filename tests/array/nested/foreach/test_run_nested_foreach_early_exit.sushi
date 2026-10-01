@@ -1,0 +1,27 @@
+# a `break` and a `return` out of the inner loop of a nested `foreach` leave both arrays
+# whole and leak nothing, over `i32[][]` and `string[][]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n4\n2 1\nfound c\n-1\n"
+fn find(string[][] s, string w) i32:
+    let i32 i = 0
+    foreach(row in s.iter()):
+        foreach(x in row.iter()):
+            if (x == w):
+                println("found {x}")
+                return i
+        i := i + 1
+    return -1
+
+fn main() i32:
+    let i32[][] d = from([from([1, 2, 3]), from([4, 5])])
+    foreach(row in d.iter()):
+        foreach(x in row.iter()):
+            println(x)
+            break
+    let string[][] s = from([from(["a", "b"]), from(["c"])])
+    println("{s[0].len()} {s[1].len()}")
+    let i32 at = find(s, "c")
+    if (at == 1):
+        println(find(s, "q"))
+    return 0

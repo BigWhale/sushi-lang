@@ -1,0 +1,34 @@
+# the read methods of a nested array answer a borrow of the row: `get`, `first` and
+# `last` in a `Maybe`, on `i32[][]`, `string[][]`, `i32[3][]` and `i32[2][3]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 5\n1 3\nnone\nb c\n6 2\n5\n4 2\n"
+fn main() i32:
+    let i32[][] d = from([from([1, 2]), from([3, 4, 5])])
+    match d.get(1):
+        Maybe.Some(row) -> println("{d[0].len()} {row[2]}")
+        Maybe.None -> println("none")
+    match d.first():
+        Maybe.Some(row) -> println("{row[0]} {d.last().realise(new()).len()}")
+        Maybe.None -> println("none")
+    match d.get(7):
+        Maybe.Some(row) -> println(row.len())
+        Maybe.None -> println("none")
+    let string[][] s = from([from(["a", "b"]), from(["c"])])
+    match s.first():
+        Maybe.Some(row) ->
+            match s.last():
+                Maybe.Some(tail) -> println("{row[1]} {tail[0]}")
+                Maybe.None -> println("none")
+        Maybe.None -> println("none")
+    let i32[3][] f = from([[1, 2, 3], [4, 5, 6]])
+    match f.last():
+        Maybe.Some(row) -> println("{row[2]} {f.len()}")
+        Maybe.None -> println("none")
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    match m.get(2):
+        Maybe.Some(row) -> println(row[0])
+        Maybe.None -> println("none")
+    let i32[2] top = m.first().realise([0, 0])
+    println("{m.get(1).realise([0, 0])[1]} {top[1]}")
+    return 0

@@ -1,0 +1,32 @@
+# `foreach` over a nested array binds each row as a borrow, and a nested `foreach` walks
+# the row: `i32[][]`, `i32[3][]`, `i32[2][3]` and `string[][]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "15 5\n15\n3\n7\n11\na\nb\nc\n2 3\n"
+fn main() i32:
+    let i32[][] d = from([from([1, 2, 3]), from([4, 5])])
+    let i32 total = 0
+    let i32 cells = 0
+    foreach(row in d.iter()):
+        foreach(x in row.iter()):
+            total := total + x
+        cells := cells + row.len()
+    println("{total} {cells}")
+    let i32[3][] f = from([[1, 2, 3], [4, 5, 0]])
+    let i32 sum = 0
+    foreach(row in f.iter()):
+        foreach(x in row.iter()):
+            sum := sum + x
+    println(sum)
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    foreach(row in m.iter()):
+        println(row[0] + row[1])
+    let string[][] s = from([from(["a", "b"]), from(["c"])])
+    foreach(row in s.iter()):
+        foreach(w in row.iter()):
+            println(w)
+    let i32 rows = 0
+    foreach(row in d.iter()):
+        rows := rows + row.len() - row.len() + 1
+    println("{rows} {m.len()}")
+    return 0
