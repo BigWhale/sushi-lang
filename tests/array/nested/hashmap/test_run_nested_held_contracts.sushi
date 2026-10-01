@@ -1,0 +1,18 @@
+# a nested array HELD in a struct takes part in the derived equality, order and string
+# form, element by element at each level, as a flat array does.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true false false\ntrue false true 0\nG(m: [[1, 2], [3, 4]], d: [[1], [2, 3]])\n"
+struct G:
+    i32[2][2] m
+    i32[][] d
+
+fn main() i32:
+    let G a = G([[1, 2], [3, 4]], from([from([1]), from([2, 3])]))
+    let G b = G([[1, 2], [3, 4]], from([from([1]), from([2, 3])]))
+    let G c = G([[1, 2], [3, 5]], from([from([1]), from([2, 3])]))
+    let G e = G([[1, 2], [3, 4]], from([from([1]), from([2, 4])]))
+    println("{a == b} {a == c} {a == e}")
+    println("{a < c} {c < a} {a < e} {a.compare(b)}")
+    println(a)
+    return 0

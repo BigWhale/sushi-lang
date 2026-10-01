@@ -85,8 +85,8 @@ def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> 
         return
 
     reporter = validator.reporter
-    from sushi_lang.semantics.typesys import DynamicArrayType
-    if isinstance(key_type, DynamicArrayType):
+    from sushi_lang.semantics.type_predicates import holds_dynamic_array
+    if holds_dynamic_array(key_type):
         er.emit(reporter, er.ERR.CE2058, span, key_type=display_type(key_type))
         return
 

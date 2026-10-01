@@ -235,7 +235,7 @@ _add(ErrorMessage("CE2055", Severity.ERROR,
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
-    Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints. Use fixed-size arrays instead (e.g., i32[3] instead of i32[])."))
+    Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints, at any depth of an array type: `i32[]`, `i32[2][]` and `i32[][2]` (a fixed array of dynamic rows) are all refused. Use fixed-size arrays instead (e.g., i32[3] instead of i32[]); a fixed array of fixed rows (`i32[2][2]`) is a key."))
 
 # Array indexing errors (CE2056-CE2057)
 _add(ErrorMessage("CE2056", Severity.ERROR,

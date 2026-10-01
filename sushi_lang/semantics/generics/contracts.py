@@ -115,8 +115,6 @@ def contract_of(ty: Type, contract: str, walk: Optional[Walk] = None, *,
         return False, refusal
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):
-        if isinstance(ty.base_type, (ArrayType, DynamicArrayType)):
-            return False, "a nested array type"
         answer, reason = contract_of(ty.base_type, contract, walk)
         return (True, "the element is") if answer else (False, f"element -> {reason}")
 

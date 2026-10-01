@@ -1,0 +1,9 @@
+# a dynamic array at any depth of a fixed key is refused as a HashMap key, with the
+# dynamic-array key error: `i32[][2]` holds two dynamic rows.
+# EXPECT_ERROR_CODES_EXACT: CE2058
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32[][2], i32) m = HashMap.new()
+    m.free()
+    return 0

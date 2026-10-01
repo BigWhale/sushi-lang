@@ -191,6 +191,8 @@ Supported types:
 - **Structs** (each field has a hash and an equality test)
 - **Enums** (each payload has a hash and an equality test)
 - **`List@(T)`** of a key type, and a struct that holds one.
+- **A fixed array of fixed arrays** of a key type (`i32[2][2]`): the keys compare row by
+  row.
 
 The equality test is the predefined perk `Eq`: an `extend K with Eq` implementation, or else
 the equality that the compiler derives from what the key holds. A `Hashable` override and
@@ -200,8 +202,9 @@ can be found again. The hash of every NaN is the same.
 
 **Not supported:**
 
-- A dynamic array (`i32[]`, `string[]`): **CE2058**. A dynamic array has no equality test
-  at the top level. Use a fixed array, or a `List@(T)`.
+- A dynamic array (`i32[]`, `string[]`) at any depth of an array type (`i32[2][]`,
+  `i32[][2]`): **CE2058**. A dynamic array has no equality test at the top level. Use a
+  fixed array, or a `List@(T)`.
 - A type with no equality test: **CE2055**. That is a function value, a `ptr`, a
   `HashMap@(K, V)`, and a type that holds one, unless the type implements `Eq`.
   A note names the field.
