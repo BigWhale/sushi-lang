@@ -69,7 +69,7 @@ _add(ErrorMessage("CE2014", Severity.ERROR,
 
 _add(ErrorMessage("CE2015", Severity.ERROR,
     "constant '{name}' cannot use dynamic array type",
-    Category.TYPE, "Constants must use compile-time types. Dynamic arrays are not allowed."))
+    Category.TYPE, "Constants must use compile-time types. A dynamic array is not allowed at any depth of an array type: `i32[]`, `i32[][2]` (a fixed array of dynamic rows) and `i32[2][]` are all refused. A fixed array of fixed rows (`i32[2][3]`) is a constant. A `var` can hold a dynamic array."))
 
 # CE2016 ("method '{method}' expects {expected} argument(s), got {got}") was RETIRED by
 # #799. It answered a miscount on a built-in HashMap, Own, Maybe or Result method, while

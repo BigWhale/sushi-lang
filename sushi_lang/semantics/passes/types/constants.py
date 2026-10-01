@@ -6,7 +6,7 @@ from typing import Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
+from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType, Type
 
 from .utils import validate_type_name
 from .compatibility import validate_assignment_compatibility
@@ -27,6 +27,15 @@ def assignment_span(const: ConstDef) -> Optional[Span]:
     return Span(name.line, name.col, value.end_line, value.end_col)
 
 
+def _holds_dynamic_array(ty: Type) -> bool:
+    """A dynamic array at any depth of an array type: `i32[]`, `i32[][2]`, `i32[2][][3]`."""
+    from sushi_lang.semantics.type_walk import walk_named_types
+    return any(
+        isinstance(reached, DynamicArrayType)
+        for reached in walk_named_types(
+            ty, stop=lambda t: not isinstance(t, (ArrayType, DynamicArrayType))))
+
+
 def validate_constant(self, const: ConstDef) -> None:
     """Validate a constant definition."""
     validate_type_name(self, const.ty, const.type_span)
@@ -37,7 +46,7 @@ def validate_constant(self, const: ConstDef) -> None:
         return
 
     is_var = isinstance(const, VarDef)
-    if isinstance(const.ty, DynamicArrayType) and not is_var:
+    if not is_var and _holds_dynamic_array(const.ty):
         self.err.emit(er.ERR.CE2015, const.type_span, name=const.name)
         return
 

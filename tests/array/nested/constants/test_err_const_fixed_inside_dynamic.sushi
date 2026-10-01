@@ -1,0 +1,6 @@
+# a dynamic array of fixed rows is a dynamic array, and a constant cannot hold one.
+# EXPECT_ERROR_CODES_EXACT: CE2015
+const i32[2][] E = from([[1, 2], [3, 4]])
+
+fn main() i32:
+    return 0

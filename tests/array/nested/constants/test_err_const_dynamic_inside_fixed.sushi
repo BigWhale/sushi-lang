@@ -1,0 +1,7 @@
+# a constant cannot hold a dynamic array at any depth: an `i32[]` in each slot of a
+# fixed array is the same refusal as an `i32[]` constant.
+# EXPECT_ERROR_CODES_EXACT: CE2015
+const i32[][2] D = [from([1]), from([2])]
+
+fn main() i32:
+    return 0
