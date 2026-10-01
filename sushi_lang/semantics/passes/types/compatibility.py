@@ -10,7 +10,7 @@ from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicAr
 from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from .inference import infer_dynamic_array_from_type
+from .inference import infer_array_element_type, infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -41,6 +41,11 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
         if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):
             return
 
+    # CE2011 spoke at a short row (`validate_array_literal`); a CE2002 would pile on.
+    literal = value_expr.elements if isinstance(value_expr, DynamicArrayFrom) else value_expr
+    if short_rows(validator, literal):
+        return
+
     if isinstance(declared_type, DynamicArrayType):
         if isinstance(value_expr, DynamicArrayNew):
             return
@@ -66,6 +71,33 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
         if declared_span:
             b.note_at("declared here", declared_span)
         b.emit()
+
+
+def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:
+    """The rows of a literal whose rows DISAGREE that miss their stamped row size. Silent.
+
+    Rows that agree with each other and not with the declared type are one mismatch of
+    the whole literal (CE2002). Rows that disagree are measured one by one against the row
+    type their position stamped, so a short FIRST row is not the one the others are
+    compared with (CE2011 at that row, not CE2013 at each of the others).
+    """
+    if not isinstance(literal, ArrayLiteral) or len(literal.elements) < 2:
+        return []
+    row_types = [infer_array_element_type(validator, element.value)
+                 for element in literal.elements]
+    if all(ty == row_types[0] for ty in row_types):
+        return []
+    short = []
+    for element in literal.elements:
+        row = element.value
+        if isinstance(row, ArrayLiteral) and isinstance(row.resolved_type, ArrayType):
+            runs = array_runs.read_runs(
+                row.elements,
+                array_runs.const_int_reader(validator.constant_evaluator()),
+                Reporter())
+            if runs is not None and array_runs.expanded_length(runs) != row.resolved_type.size:
+                short.append(row)
+    return short
 
 
 def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayType,
