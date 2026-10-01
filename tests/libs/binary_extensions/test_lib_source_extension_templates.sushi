@@ -1,0 +1,11 @@
+# The same templates over a SOURCE build of the library. The two kinds must agree.
+# BUILD_LIB: box_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "5 9 18 5 2.5\n"
+use <lib/box_ext_lib>
+
+fn main() i32:
+    let Box@(i32) b = Box(9)
+    let Box@(string) s = Box("b")
+    let Pt p = Pt(1)
+    println("{b.tag()} {b.echo(nom 9)} {b.doubled()} {s.tag()} {p.pick(2.5)}")
+    return 0

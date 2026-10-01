@@ -1,0 +1,10 @@
+# A binary library's perk implementations: one of a public perk, one of a private
+# perk. A private perk hides the contract, and the method it provides stays callable.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "12 99\n"
+use <lib/vec_ext_lib>
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.area()} {v.hidden()}")
+    return 0

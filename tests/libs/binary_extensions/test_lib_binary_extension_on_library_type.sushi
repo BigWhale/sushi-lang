@@ -1,0 +1,13 @@
+# The consumer extends a concrete type that a binary library exports. The type
+# enters the tables after the collect pass, and the method must be filed all the same.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "107 7\n"
+use <lib/vec_ext_lib>
+
+extend Vec total() i32:
+    return self.x + self.y + 100
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.total()} {v.sum()}")
+    return 0
