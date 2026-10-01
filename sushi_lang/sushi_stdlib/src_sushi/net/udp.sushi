@@ -8,7 +8,8 @@ struct is a typed name for a descriptor and carries nothing else.
 A datagram socket has no peer of its own, so every send names its destination
 and every receive answers with a Datagram: the bytes, and who sent them. That
 is not an ergonomic choice -- an unconnected socket cannot be asked afterwards,
-because the sender exists only at the instant its datagram arrives.
+because the sender exists only at the instant its datagram arrives. The
+sender's address leaves this module as an IpAddr, through Datagram.peer().
 
 A socket OWNS its descriptor. UdpSocket implements the Drop perk, so it moves
 to exactly one owner and closes itself when that owner leaves scope. Handing a
@@ -27,6 +28,7 @@ time round.
 use <net/socket>
 public use <net/error>
 public use <net/handle>
+public use <net/ip>
 
 ##:
 One bound UDP socket.
@@ -94,6 +96,18 @@ receive: the bytes did arrive.
 :##
 extend UdpSocket recv_from(i32 max) Datagram | NetError:
     return Result.Ok(sock_udp_recv_from(self.fd, max)??)
+
+##:
+The sender of a datagram, as an address.
+
+It parses the peer_ip field. A sender that recv_from() could not render left
+that field empty, and this answers an error for it.
+
+- Returns: The address the datagram came from.
+- Errors: NetError.InvalidAddress, when the field holds no address.
+:##
+extend Datagram peer() IpAddr | NetError:
+    return Result.Ok(parse_ip(self.peer_ip)??)
 
 ##:
 The port a socket actually bound.

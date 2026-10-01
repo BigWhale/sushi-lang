@@ -14,7 +14,7 @@ The import brings `NetError`, the channel `resolve` answers: the module re-expor
 
 ## Overview
 
-`net/dns` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It is `sock_dns_resolve` from `<net/socket>` with `parse_ip` from `<net/ip>` over each answer, so a caller is handed `IpAddr` and never a string it has to read for itself.
+`net/dns` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it. It is `sock_dns_resolve` from `<net/socket>` with `parse_ip` from `<net/ip>` over each answer, so a caller is handed `IpAddr` and never a string it has to read for itself. This is the one rule of the net modules: every address that leaves them is an `IpAddr`, the peer of a `TcpStream` and the sender of a `Datagram` too.
 
 An answer the parser cannot read is **dropped** rather than failing the call, so one unusual family does not lose the usable answers.
 

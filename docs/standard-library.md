@@ -350,7 +350,9 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 - UDP sockets, DNS resolution, IP addresses and URL splitting
 - `<net/tcp>`, `<net/udp>`, `<net/dns>` and `<net/ip>` re-export `<net/error>`, so
   `NetError` comes with each of them. `<net/tcp>` and `<net/udp>` also re-export
-  `<net/handle>` (`close_socket`)
+  `<net/handle>` (`close_socket`) and `<net/ip>` (`IpAddr`)
+- Every address that leaves the net modules is an `IpAddr`: `resolve()`,
+  `TcpStream.peer_ip()` and `Datagram.peer()`
 - See the pages in the [Networking](#networking) list above
 
 ### Process (`use <sys/process>`)

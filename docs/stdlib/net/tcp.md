@@ -10,7 +10,7 @@
 use <net/tcp>
 ```
 
-The import brings `NetError`, the channel the constructors and the domain methods answer, and `IoError`, the channel the contract methods answer: the module re-exports [`<net/error>`](error.md) and [`<io/contracts>`](../io/contracts.md), so a unit that matches on an error writes no second line.
+The import brings `NetError`, the channel the constructors and the domain methods answer, and `IoError`, the channel the contract methods answer: the module re-exports [`<net/error>`](error.md) and [`<io/contracts>`](../io/contracts.md), so a unit that matches on an error writes no second line. It also re-exports [`<net/ip>`](ip.md), so `IpAddr` and its methods (`.text()`, `.is_loopback()`) come with it: the peer address is an `IpAddr`.
 
 ## Overview
 
@@ -131,9 +131,9 @@ There is no `recv` beside it. One read on a socket is the contract's `read_bytes
 
 Bound how long a call may wait. **Set these before anything blocks.** Without them a read waits for as long as the peer stays silent.
 
-### `s.peer_ip()`, `s.peer_port()`, `s.local_port()`, `l.local_port()`
+### `s.peer_ip() IpAddr | NetError`, `s.peer_port()`, `s.local_port()`, `l.local_port()`
 
-Who is at each end. All four carry the `| NetError` channel. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
+Who is at each end. All four carry the `| NetError` channel. Every address that leaves the net modules is an [`IpAddr`](ip.md), so `peer_ip()` answers one and `.text()` gives its canonical text. No resolver is asked. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
 
 ### `s.is_open() bool` and `l.is_open() bool`
 

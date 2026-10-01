@@ -25,6 +25,7 @@ use <collections/strings>
 public use <io/contracts>
 public use <net/error>
 public use <net/handle>
+public use <net/ip>
 use <net/socket>
 
 ##:
@@ -286,16 +287,18 @@ extend TcpStream recv_exact(i32 count) u8[] | NetError:
     return Result.Ok(out)
 
 ##:
-The address of the peer at the other end, as text.
+The address of the peer at the other end.
 
-The text is numeric and no resolver is asked, so this makes no network
-request.
+No resolver is asked, so this makes no network request. Call .text() on the
+answer for the canonical text.
 
 - Returns: The peer's address.
-- Errors: NetError, when the stream has no peer.
+- Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
+  when the kernel gave an address that <net/ip> cannot read.
 :##
-extend TcpStream peer_ip() string | NetError:
-    return Result.Ok(sock_peer_ip(self.fd)??)
+extend TcpStream peer_ip() IpAddr | NetError:
+    let string text = sock_peer_ip(self.fd)??
+    return Result.Ok(parse_ip(text)??)
 
 ##:
 The port of the peer at the other end.
