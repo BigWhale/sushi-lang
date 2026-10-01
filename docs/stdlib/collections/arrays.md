@@ -306,6 +306,54 @@ match arr.pop():
 let i32 last = arr.pop().realise(-1)   # or a default
 ```
 
+### `.insert(i32 index, T element) -> Result@(~, StdError)`
+
+Put the element at `index` and move the elements from `index` on one slot to the right.
+`0 <= index <= len` is `Ok`, and `index == len` appends. Any other index is `Err`
+(`StdError.Error`), and the array does not change. This is the `List@(T).insert()`
+contract.
+
+The element is CONSUMED, as `.push()` consumes it. The insert takes it BEFORE it checks the
+index, so a refused insert destroys the element; nothing leaks. A full buffer grows by
+doubling first. A fixed array cannot grow, so a `T[N]` receiver is **CE2023**, the same
+refusal as `.push()`.
+
+```sushi
+fn fill(poke i32[] arr) ~ | StdError:
+    arr.insert(1, 2)??               # [1, 2, 3]
+    arr.insert(arr.len(), 4)??       # [1, 2, 3, 4]: an append
+    return Result.Ok(~)
+
+fn main() i32:
+    let i32[] arr = from([1, 3])
+    let bool done = fill(poke arr).is_ok()
+    match arr.insert(9, 0):          # index past len
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("refused: {done} {arr.len()}")
+    return 0
+```
+
+### `.remove(i32 index) -> Maybe@(T)`
+
+Take the element at `index` out, and move the elements after it one slot to the left.
+`Maybe.Some(element)` hands the element's ownership to the caller. An index out of range
+answers `Maybe.None()`, and nothing moves. This is the `List@(T).remove()` contract, and
+the same `Maybe` shape as `.pop()`. A `T[N]` receiver is **CE2023**.
+
+```sushi
+fn main() i32:
+    let string[] words = from(["a".clone(), "b".clone(), "c".clone()])
+    match words.remove(1):
+        Maybe.Some(w) -> println("removed {w}")   # words is ["a", "c"]
+        Maybe.None() -> println("no such index")
+    let string last = words.remove(1).realise("none".clone())
+    println("{last} {words.len()}")
+    return 0
+```
+
+On an array of arrays the slot is the inner array: `grid.remove(0)` hands a whole row to the
+caller, and `grid[i].insert(j, v)` inserts into row `i` in place.
+
 ### `.clear() -> ~` and `.truncate(i32 n) -> ~`
 
 `.truncate(n)` keeps the first `n` elements and destroys the rest; `.clear()` is
@@ -474,7 +522,7 @@ match bad.to_string_checked():
 - Size determined at runtime
 - RAII cleanup with recursive element destruction
 - Move semantics (ownership transfer)
-- Can grow with `.push()`
+- Can grow with `.push()`, `.insert()` and `.extend()`
 
 ## Safe vs Unsafe Access
 
@@ -502,6 +550,8 @@ arr[0] := 42
 - **Extend** (`.extend()`, `.extend_range()`, `.s()`, `.ss()`): O(n) with ONE allocation -- a
   `memcpy` for a plain element type, one clone per slot for an owning one
 - **Pop** (`.pop()`): O(1)
+- **Insert / Remove** (`.insert()`, `.remove()`): O(n), one `memmove` of the slots after the
+  index
 - **Fill** (`.fill()`): O(n)
 - **Reverse** (`.reverse()`): O(n)
 - **Hash** (`.hash()`): O(n)

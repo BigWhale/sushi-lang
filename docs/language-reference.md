@@ -986,9 +986,9 @@ loop head, why the protocol is not a perk, and why a line iterator's stop is sti
 See [Standard Library](standard-library.md) for complete array API.
 
 **An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
-range bound, and the index or count argument of a built-in method (`get`, `insert`,
-`remove`, `reserve`, `truncate`, `s`, `ss`, `extend_range`, `List.with_capacity`). A bare
-literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
+range bound, and the index or count argument of a built-in method: `get`, `insert` and
+`remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
+`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
 method argument), and it needs `as i32`: nothing widens, and a float is refused.
 
 ### Fixed Arrays
