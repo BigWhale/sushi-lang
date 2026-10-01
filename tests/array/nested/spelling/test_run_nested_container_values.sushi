@@ -1,0 +1,27 @@
+# a nested array as a `List` element and as a `HashMap` value, written in the type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 2 3\n3 6\n2 4\n"
+use <collections/hashmap>
+
+fn run() i32 | StdError:
+    let List@(i32[][]) l = List.new()
+    l.push(from([from([1]), from([2, 3])]))
+    l.push(from([new()]))
+    let i32[][] first = l.get(0)??
+    println("{l.len()} {first.len()} {first[1][1]}")
+    let List@(i32[2][3]) fixed = List.new()
+    fixed.push([[1, 2], [3, 4], [5, 6]])
+    let i32[2][3] m = fixed.get(0)??
+    println("{m.len()} {m[2][1]}")
+    let HashMap@(string, i32[2][]) h = HashMap.new()
+    h.insert("a", from([[1, 2], [3, 4]]))
+    let i32[2][] g = h.get("a")??
+    println("{g.len()} {g[1][1]}")
+    h.free()
+    l.destroy()
+    fixed.destroy()
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(1)

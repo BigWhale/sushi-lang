@@ -1,0 +1,45 @@
+# a nested array as a parameter, in each of the four modes: a borrow reads, `peek`
+# reads, `poke` writes and pushes in place, `nom` takes the value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 3 6\n5 6\n9 3 8\n2\n3 7 4\n"
+fn total(i32[][] d) i32:
+    let i32 sum = 0
+    foreach(row in d.iter()):
+        foreach(x in row.iter()):
+            sum := sum + x
+    return sum
+
+fn corner(peek i32[2][3] m) i32:
+    return m[2][1]
+
+fn rows(i32[][3] f) i32:
+    return f[2].len()
+
+fn grow(poke i32[][] d) ~:
+    d[0].push(9)
+    d[1][0] := 8
+    d.push(from([3]))
+
+fn bump(poke i32[2][3] m) ~:
+    m[0][0] := 9
+
+fn eat(nom i32[3][] g) i32:
+    return g.len()
+
+fn swallow(nom i32[][3] f) i32:
+    return f[1][0]
+
+fn main() i32:
+    let i32[][] d = from([from([1]), from([2])])
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    let i32[][3] f = [from([1]), from([7]), from([4, 5, 6])]
+    println("{total(d)} {rows(f)} {corner(peek m)}")
+    grow(poke d)
+    println("{d.len() + 2} {d[0].len() + 4}")
+    bump(poke m)
+    println("{m[0][0]} {d[2][0]} {d[1][0]}")
+    let i32[3][] g = from([[1, 2, 3], [4, 5, 6]])
+    println(eat(nom g))
+    println("{d.len()} {swallow(nom f)} {m[1][1]}")
+    return 0

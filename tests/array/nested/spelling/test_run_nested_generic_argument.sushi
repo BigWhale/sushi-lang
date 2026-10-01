@@ -1,0 +1,28 @@
+# a written nested array as a generic argument: a generic struct, a generic function
+# with explicit and with inferred type arguments, and a pair of two nested shapes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 3\n3 6\n2 4\n2 3\n"
+struct Box@(T):
+    T value
+
+struct Pair@(T, U):
+    T first
+    U second
+
+fn wrap@(T)(nom T x) Box@(T):
+    return Box(x)
+
+fn count@(T)(peek T[] xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let Box@(i32[][]) b = Box(from([from([1]), from([2, 3])]))
+    println("{b.value.len()} {b.value[1][1]}")
+    let Box@(i32[2][3]) w = wrap@(i32[2][3])(nom [[1, 2], [3, 4], [5, 6]])
+    println("{w.value.len()} {w.value[2][1]}")
+    let i32[2][][] g = from([from([[1, 2]]), from([[3, 4]])])
+    println("{count(peek g)} {g[1][0][1]}")
+    let Pair@(i32[][3], i32[3][]) p = Pair([from([1]), from([2]), from([3])], from([[1, 2, 3]]))
+    println("{p.first[1].len() + 1} {p.second[0][2]}")
+    return 0

@@ -1,0 +1,36 @@
+# a nested array as a `Result` and a `Maybe` payload: the `| E` channel, an explicit
+# `Result@(T, E)`, `??`, `.realise(default)` and a `match`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 3\n3 6\n1 0\nsome 2 4\nnone\n"
+fn load(bool ok) i32[][] | StdError:
+    if (not ok):
+        return Result.Err(StdError.Error)
+    return Result.Ok(from([from([1]), from([2, 3])]))
+
+fn grid() Result@(i32[2][3], StdError):
+    return Result.Ok([[1, 2], [3, 4], [5, 6]])
+
+fn find(bool ok) Maybe@(i32[3][]):
+    if (ok):
+        return Maybe.Some(from([[1, 2, 3], [4, 5, 6]]))
+    return Maybe.None
+
+fn run() i32 | StdError:
+    let i32[][] d = load(true)??
+    println("{d.len()} {d[1][1]}")
+    let i32[2][3] m = grid()??
+    println("{m.len()} {m[2][1]}")
+    let i32[][] e = load(false).realise(from([new()]))
+    println("{e.len()} {e[0].len()}")
+    match find(true):
+        Maybe.Some(g) -> println("some {g.len()} {g[1][0]}")
+        Maybe.None -> println("none")
+    let Maybe@(i32[3][]) n = find(false)
+    match n:
+        Maybe.Some(g) -> println("some {g.len()}")
+        Maybe.None -> println("none")
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(1)

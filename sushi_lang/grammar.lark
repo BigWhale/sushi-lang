@@ -130,9 +130,13 @@ continue_stmt: CONTINUE _NEWLINE
 
 ?type: BORROW_MODE type -> reference_t
      | FN "(" [fn_param_types] ")" "->" type ["|" type] -> fn_type_t
-     | atom_type "[" array_size "]" -> array_t
-     | atom_type "[" "]" -> dynamic_array_t
+     | array_type
      | atom_type
+
+# The array suffixes read left to right: a suffix applies to the type on its left, so
+# `i32[2][3]` is a fixed array of 3 `i32[2]` (docs/design/array-representation.md).
+?array_type: (array_type | atom_type) "[" array_size "]" -> array_t
+           | (array_type | atom_type) "[" "]" -> dynamic_array_t
 
 ?atom_type: "i8" -> i8_t
           | "i16" -> i16_t

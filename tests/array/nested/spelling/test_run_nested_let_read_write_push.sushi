@@ -1,0 +1,26 @@
+# a `let` of each nested shape, with a nested literal, then a read, a write and a push
+# through each level.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "9 2\n1 8 3\n3 7\n4 2 9\n2 1 4\n"
+fn main() i32:
+    let i32[][] d = from([from([1]), from([2, 3])])
+    d[1][0] := 9
+    d[0].push(2)
+    println("{d[1][0]} {d[0][1]}")
+    d.push(from([1, 8, 3]))
+    println("{d[2][0]} {d[2][1]} {d[2][2]}")
+    let i32[2][] g = from([[1, 2], [3, 4]])
+    g[1][1] := 7
+    g.push([5, 6])
+    println("{g.len()} {g[1][1]}")
+    let i32[][2] f = [from([1, 2]), new()]
+    f[1].push(4)
+    f[1].push(2)
+    f[0][1] := 9
+    println("{f[1][0]} {f[1][1]} {f[0][1]}")
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    m[2][0] := 2
+    m[0] := [1, 4]
+    println("{m[2][0]} {m[0][0]} {m[0][1]}")
+    return 0

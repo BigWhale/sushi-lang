@@ -1,0 +1,26 @@
+# a written nested array through a `let poke` row, a `foreach(poke ...)` row, a deep
+# `.clone()` and a rebind of a fixed nested local.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 9 4 2\n2\n7\n4\n"
+fn bump(poke i32[][] d) ~:
+    let poke i32[] r = d[1]
+    r.push(4)
+
+fn main() i32:
+    let i32[][] d = from([from([1]), from([2, 3])])
+    let i32[][] c = d.clone()
+    c[1][0] := 9
+    bump(poke d)
+    foreach(poke row in d.iter()):
+        row.push(5)
+    println("{d[1][0]} {c[1][0]} {d[1].len()} {d[0].len()}")
+    let i32[][] e = from([new(), from([])])
+    println(e.len())
+    let i32[2][3] m = [[1, 2], [3, 4], [5, 6]]
+    m := [[0, 0], [0, 0], [0, 7]]
+    println(m[2][1])
+    let i32[][2] f = [from([1]), from([2])]
+    f := [from([3]), from([4])]
+    println(f[1][0])
+    return 0

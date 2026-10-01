@@ -1,0 +1,19 @@
+# a nested array as a unit variable, from an empty container: a push of a row and a
+# push into a row reach the storage. no leak directive: a `var` is never destroyed, so
+# its buffers are live at exit, by design.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1 9\n1 6\n"
+var i32[][] rows = new()
+var i32[3][] cells = from([])
+
+fn fill() ~:
+    rows.push(from([1]))
+    rows.push(new())
+    rows[1].push(9)
+    cells.push([4, 5, 6])
+
+fn main() i32:
+    fill()
+    println("{rows.len()} {rows[1].len()} {rows[1][0]}")
+    println("{cells.len()} {cells[0][2]}")
+    return 0
