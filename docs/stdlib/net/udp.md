@@ -10,7 +10,7 @@
 use <net/udp>
 ```
 
-The import brings `NetError`, the channel every method answers: the module re-exports [`<net/error>`](error.md), so a unit that matches on an error writes no second line.
+The import brings `NetError`, the channel every method answers: the module re-exports [`<net/error>`](error.md), so a unit that matches on an error writes no second line. It also re-exports [`<net/ip>`](ip.md), so `IpAddr` and its methods come with it: `dg.peer()` answers the sender as an `IpAddr`.
 
 ## Overview
 
@@ -37,6 +37,8 @@ public struct Datagram:
     string peer_ip
     i32 peer_port
 ```
+
+The `peer_ip` field is the sender's numeric text, as the receive rendered it. Every address that leaves the net modules is an [`IpAddr`](ip.md), so read the sender through `dg.peer()` (below) and not through the field.
 
 ## Constructor
 
@@ -68,7 +70,9 @@ fn exchange() ~ | NetError:
     a.send_to(greeting, "127.0.0.1", port_b)??
 
     match b.recv_from(64):
-        Result.Ok(dg) -> println("{dg.peer_ip} said {dg.data.to_string()}")
+        Result.Ok(dg) ->
+            let IpAddr sender = dg.peer()??
+            println("{sender.text()} said {dg.data.to_string()}")
         Result.Err(_) -> println("nothing arrived")
 
     a.close()??
@@ -80,6 +84,10 @@ fn main() i32:
         Result.Ok(_) -> return 0
         Result.Err(_) -> return 1
 ```
+
+### `dg.peer() IpAddr | NetError`
+
+The sender of a datagram, as an `IpAddr`. It parses the `peer_ip` field. A sender that `recv_from` could not render left the field empty, and `peer()` answers `NetError.InvalidAddress` for it.
 
 ### `s.local_port() i32 | NetError`, `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError`, `s.close(nom self) ~ | NetError`
 
