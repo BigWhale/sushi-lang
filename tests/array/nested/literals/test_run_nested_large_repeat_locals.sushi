@@ -1,0 +1,13 @@
+# a large nested repeat literal in a local: a 64 x 64 `i32[64][64]` grid, and 1000
+# dynamic rows `[from([0]); 1000]`, each row with its own buffer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 1 64\n7 0 1 1000\n"
+fn main() i32:
+    let i32[64][64] g = [[1; 64]; 64]
+    g[3][5] := 7
+    println("{g[3][5]} {g[63][63]} {g[0].len()}")
+    let i32[][1000] r = [from([0]); 1000]
+    r[3].push(7)
+    println("{r[3][1]} {r[999][0]} {r[4].len()} {r.len()}")
+    return 0

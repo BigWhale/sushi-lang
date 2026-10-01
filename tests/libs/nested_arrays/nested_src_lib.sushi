@@ -1,0 +1,56 @@
+##: A library with a nested array in each public position. :##
+
+##: A 2 x 3 table of constants. :##
+public const i32[2][3] TABLE = [[1, 2], [3, 4], [5, 6]]
+
+##: A grid of dynamic rows and a fixed block. :##
+public struct Grid:
+    i32[][] rows
+    i32[2][3] block
+
+##:
+Builds a grid with `n` rows of growing length.
+
+- Parameter n: The row count.
+- Returns: The grid.
+:##
+public fn make_grid(i32 n) Grid:
+    let i32[][] rows = new()
+    foreach(i in 0..n):
+        rows.push(from([i; i + 1]))
+    return Grid(rows, TABLE)
+
+##:
+Adds every cell of a nested array.
+
+- Parameter g: The rows.
+- Returns: The sum.
+:##
+public fn total(i32[][] g) i32:
+    let i32 sum = 0
+    foreach(row in g.iter()):
+        foreach(x in row.iter()):
+            sum := sum + x
+    return sum
+
+##:
+Answers the rows of a fixed block, as dynamic rows.
+
+- Parameter m: The block.
+- Returns: The rows.
+:##
+public fn rows_of(i32[2][3] m) i32[2][]:
+    let i32[2][] out = new()
+    foreach(row in m.iter()):
+        out.push(row)
+    return out
+
+##:
+Appends one cell to each row.
+
+- Parameter g: The rows.
+- Parameter v: The cell.
+:##
+public fn grow(poke string[][] g, string v) ~:
+    foreach(poke row in g.iter()):
+        row.push(v.clone())
