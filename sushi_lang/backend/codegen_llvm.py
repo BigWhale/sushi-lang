@@ -26,7 +26,7 @@ from sushi_lang.backend.memory.print_frames import PrintFrames
 from sushi_lang.backend.expressions import ExpressionEmitter
 from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol, mangle_unit_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -519,7 +519,7 @@ class LLVMCodegen:
             result_type = call_value_type(self, func_sig)
             ll_ret = declared_return_ll(self, func_sig)
 
-            symbol = getattr(func_sig, "link_symbol", None) or name
+            symbol = emitted_symbol(name, None, getattr(func_sig, "link_symbol", None))
             llvm_fn = self.module.globals.get(symbol)
             if llvm_fn is None:
                 llvm_fn = ir.Function(self.module, ir.FunctionType(ll_ret, param_types),
@@ -587,7 +587,7 @@ class LLVMCodegen:
         no initializer.
         """
         global_var = ir.GlobalVariable(
-            self.module, llvm_type, name=symbol or mangle_unit_symbol(unit_name, name))
+            self.module, llvm_type, name=emitted_symbol(name, unit_name, symbol))
         if storage:
             if value is None:
                 global_var.linkage = 'external'
@@ -711,9 +711,9 @@ def _set_linkonce_odr_on_inline_runtime(module: ir.Module) -> None:
     The set is `semantics/externs_manifest.py`'s: one list, read here for linkage and
     by CE5013 to refuse an `unsafe external` that names one (#472).
     """
-    from sushi_lang.semantics.externs_manifest import GENERATED_INLINE_SYMBOLS
+    from sushi_lang.semantics.externs_manifest import INLINE_RUNTIME_SYMBOLS
 
-    for name in GENERATED_INLINE_SYMBOLS:
+    for name in INLINE_RUNTIME_SYMBOLS:
         fn = module.globals.get(name)
         if fn is not None and isinstance(fn, ir.Function) and not fn.is_declaration:
             fn.linkage = "linkonce_odr"

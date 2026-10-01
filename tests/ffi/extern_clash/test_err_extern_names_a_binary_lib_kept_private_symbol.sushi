@@ -1,0 +1,14 @@
+# The link name spells the symbol of a private function that a binary library
+# keeps (#1098). The bitcode defines that symbol, and the call ran the library's
+# private body with no ABI check.
+# BUILD_LIB_BINARY: clash_bin_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/clash_bin_lib>
+
+unsafe external "C" as libc because "a C function with the name of a library function":
+    fn tolower(i32 c) i32 = "clash_bin_lib$tolower"
+
+fn main() i32:
+    println(abs(1))
+    println(libc.tolower(65))
+    return 0

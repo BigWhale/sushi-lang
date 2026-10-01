@@ -33,9 +33,16 @@ RESERVED_EXTERNS: dict[str, tuple] = {
 # into the module it compiles, so the stdlib symbol manifest cannot report them.
 # Unlike RESERVED_EXTERNS above, these may never be declared at all -- their real
 # signature is the compiler's business and an `unsafe external` naming one is CE5013
-# (#472). `backend/codegen_llvm.py` reads the same set to give them linkonce_odr.
-GENERATED_INLINE_SYMBOLS: frozenset[str] = frozenset({
+# (#472). `backend/codegen_llvm.py` reads the runtime half to give it linkonce_odr.
+INLINE_RUNTIME_SYMBOLS: frozenset[str] = frozenset({
     "llvm_strlen",
     "llvm_strcmp",
     "utf8_char_count",
 })
+
+# The body of the program's `main`: the C `main` is a wrapper that calls it
+# (`backend/functions/main_wrapper.py`). It stays internal, so it is not a runtime
+# symbol, but the build defines it (#1098).
+USER_MAIN_SYMBOL = "user_main"
+
+GENERATED_INLINE_SYMBOLS: frozenset[str] = INLINE_RUNTIME_SYMBOLS | {USER_MAIN_SYMBOL}

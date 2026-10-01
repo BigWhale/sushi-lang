@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef
+from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 from sushi_lang.semantics.typesys import Type as Ty
 from sushi_lang.backend import enum_utils
 from sushi_lang.internals.errors import raise_internal_error
@@ -131,7 +132,7 @@ class MainFunctionWrapper:
         ll_ret = declared_return_ll(self.codegen, fn)
 
         fnty = ir.FunctionType(ll_ret, ll_param_tys)
-        user_main = ir.Function(self.codegen.module, fnty, name="user_main")
+        user_main = ir.Function(self.codegen.module, fnty, name=USER_MAIN_SYMBOL)
         user_main.linkage = 'internal'
 
         for i, (pname, _) in enumerate(params):

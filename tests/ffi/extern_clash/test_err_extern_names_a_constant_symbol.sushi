@@ -1,0 +1,13 @@
+# A constant emits a global `<unit>$NAME`, so a link name that spells that symbol
+# names a symbol that this build defines (#1098).
+# EXPECT_ERROR_CODE: CE5013
+
+const i32 LIMIT = 7
+
+unsafe external "C" as raw because "naming the symbol of a constant":
+    fn limit() i32 = "test_err_extern_names_a_constant_symbol$LIMIT"
+
+fn main() i32:
+    println("{LIMIT}")
+    println("{raw.limit()}")
+    return 0

@@ -1,0 +1,10 @@
+# The back end emits the body of `main` as `user_main`, and no semantic table holds
+# that name (#1098). The reserved set of inline symbols answers for it.
+# EXPECT_ERROR_CODE: CE5013
+
+unsafe external "C" as raw because "naming the symbol of the body of main":
+    fn body() i32 = "user_main"
+
+fn main() i32:
+    println("reached")
+    return 0

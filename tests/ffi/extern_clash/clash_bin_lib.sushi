@@ -1,0 +1,17 @@
+# A binary library with three functions named as C functions (#1098): a public
+# function, a private function that the export closure ships, and a kept private.
+# Each one returns a value that the C function does not, so a fixture can see
+# which body a call reaches.
+
+public fn abs(i32 n) i32:
+    return tolower(n) + 1000
+
+fn toupper(i32 c) i32:
+    return c + 2000
+
+fn tolower(i32 c) i32:
+    return c + 3000
+
+public fn shout@(T)(nom T x) T:
+    let i32 marker = toupper(0)
+    return x
