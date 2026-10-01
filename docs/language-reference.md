@@ -1213,6 +1213,10 @@ index past the end of a fixed array, **CE2056** for a negative one). An owning e
 first. The assignment takes ownership of the value, so an owned source is moved (later use
 is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
 
+On a nested array, a chained index is a place too. `grid[i][j] := v` writes into the inner
+array in place, and a method on `grid[i]` (`grid[i].push(v)`) changes that inner array, not
+a copy of it. Each index in the chain is bounds-checked.
+
 The write must be able to reach the owner. It is rejected through a `peek` parameter
 (**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
 `poke self` (**CE2421**), an unmarked parameter (**CE2422**), a `let` binding that borrows
@@ -1571,7 +1575,9 @@ arguments.
 - `extend Box@(T)` applies to every instantiation, and `extend Box@(i32)` only to
   `Box@(i32)`. A target that mixes the two, `extend Pair@(i32, U)`, is `CE2098`.
 - An array target binds its element: `extend T[]` applies to every array, and
-  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`.
+  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`,
+  a nested array (`extend T[][]`, `extend i32[3][]`) included. `extend T[]` covers a nested
+  receiver: `T` is `i32[]` for an `i32[][]`.
 - A function type is not a target (`CE2110`).
 
 A built-in method wins over an extension method: an extension method with the name of a
@@ -2501,8 +2507,19 @@ fn main() i32:
     return 0
 ```
 
+A fixed array of fixed arrays is a constant too. Read it with a chained index:
+
+```sushi
+const i32[2][3] TABLE = [[1, 2], [3, 4], [5, 6]]
+
+fn main() i32:
+    println("{TABLE.len()} {TABLE[0].len()} {TABLE[2][1]}")   # 3 2 6
+    return 0
+```
+
 **Restrictions:**
-- Array must be fixed-size (`T[N]`), not dynamic (`T[]`)
+- Array must be fixed-size (`T[N]`) at every depth. A dynamic array anywhere in the type
+  (`i32[]`, `i32[2][]`, `i32[][2]`) is **CE2015**
 - All elements must be compile-time constant expressions
 - **Immutable**: `.fill()`, `.reverse()` and `PRIMES[0] := 9` all write to their receiver, so each
   of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local

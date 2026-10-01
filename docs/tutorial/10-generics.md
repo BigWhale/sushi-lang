@@ -587,7 +587,7 @@ These limits are true today. Each one has a diagnostic.
 | A static on an array target | CE2104 | Use a free function |
 | A variadic `...T` parameter in an extension or perk method | CE0115 | Use a free function |
 | Pack forwarding `inner(xs...)`, pack indexing, tuples | CE2060 and others | Use `expand` in the function that holds the pack |
-| An array of arrays, `i32[][]` | CE6001 (parse error) | Use a struct that holds the inner array |
+| A nested array as an array target, `extend T[][]` | CE2101 | Write `extend T[]`: `T` is then the inner array type |
 
 A perk also has no inheritance, no default method bodies and no `Self` type
 ([Chapter 11](11-perks-and-extensions.md)).

@@ -160,6 +160,10 @@ Compute hash of array contents.
 let u64 h = arr.hash()
 ```
 
+A nested array hashes level by level. A fixed array and a dynamic array of the same
+elements hash alike, at each level, so `[[1, 2], [3, 4]]` as an `i32[2][2]` and as an
+`i32[][]` give one hash.
+
 **Limitation:** The element type must have a hash. An array whose element has no hash
 (today, `ptr[]`) is CE0052.
 

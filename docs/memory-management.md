@@ -90,6 +90,10 @@ fn build_tree() ~:
     # 2. Each Node's children freed
 ```
 
+A nested array follows the same rule. An `i32[][]` frees each inner array, then the
+outer buffer. An `i32[3][]` holds its rows inline, so only the outer buffer is freed. An
+owning element at any depth (a `string[][]`) is destroyed with its row.
+
 ## Move Semantics
 
 Move-ness is **compositional** and answers one question: **does this type own heap that RAII must
@@ -358,6 +362,9 @@ fn main() i32:
 
     return 0
 ```
+
+A chained index on a nested array is the same sink, one level down: `grid[i][j] := v` frees
+the old element of row `i` and moves `v` into that row, in place.
 
 An element can never be moved *out* of an array -- that is what the `CE2411` above is saying,
 at every sink -- so an array owns every one of its elements for its whole life. That invariant

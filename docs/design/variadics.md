@@ -42,9 +42,9 @@ fn main() i32:
 - **Element type** is a single concrete `T` (homogeneous). Reference element types (`peek`/`poke`)
   are rejected with `CE0114`. A dynamic-array element `...T[]` is allowed: each trailing array
   argument is *moved* (not copied) into the synthesized array-of-arrays, so there is no double-free.
-  Only the individual-args call form (`total(a, b)`) is reachable in practice, since a true
-  `i32[][]` source value cannot be constructed in surface syntax — see "Spread / forwarding
-  (bloom)" below for the array-of-`T` case.
+  The callee sees an `i32[][]` for `...i32[]`. Both call forms work: the individual arguments
+  (`total(a, b)`) and a bloom of an `i32[][]` variable (`total(rows...)`) — see "Spread /
+  forwarding (bloom)" below.
 - **Zero trailing arguments** is valid; the native callee receives an empty `T[]`.
 - **Native ownership.** The call site synthesizes a `T[]`, which is moved into the callee; the
   callee owns and destroys it via the normal dynamic-array RAII path. The LLVM function itself stays
@@ -115,10 +115,10 @@ Semantics:
 - **Only into `...T`.** Blooming into a non-variadic parameter is `CE0120` — there is no fixed-arity
   spread.
 
-`...T[]` combined with bloom is a degenerate case: since a true `i32[][]` (array of dynamic arrays)
-value cannot be constructed in surface syntax, `rows...` blooming into a `...i32[]` parameter is
-moot in practice — that variadic form is only reachable via individual array arguments
-(`total(a, b)`), each moved in per element (see Semantics above).
+`...T[]` combined with bloom is an ordinary case: an `i32[][]` variable `rows` blooms into a
+`...i32[]` parameter (`total(rows...)`), and the outer array moves in whole, its inner arrays
+with it. The individual-argument form (`total(a, b)`) moves each array in per element (see
+Semantics above).
 
 ## Deferred (additive)
 
