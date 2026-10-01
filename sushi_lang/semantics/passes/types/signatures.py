@@ -226,7 +226,8 @@ def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
     the target type comes from -- the declaration itself, or the `extend X with P` header.
     """
     self.current_function = None
-    self.in_library_body = self.in_library_unit
+    self.in_library_body = (self.in_library_unit
+                            or bool(getattr(method, "is_library_template", False)))
     self.in_synthesized_body = synthesized
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.

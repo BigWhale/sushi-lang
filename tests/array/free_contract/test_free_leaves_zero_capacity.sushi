@@ -1,0 +1,13 @@
+# `free()` on a `T[]` leaves the empty descriptor that `new()` gives: length 0 and
+# capacity 0, with no buffer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0 0\n0 0\n"
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    a.free()
+    println("{a.len()} {a.capacity()}")
+    let i32[] b = new()
+    println("{b.len()} {b.capacity()}")
+    return 0

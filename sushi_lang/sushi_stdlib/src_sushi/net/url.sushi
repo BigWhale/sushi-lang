@@ -3,10 +3,11 @@ net/url -- a Url split into its RFC 3986 parts, pure Sushi.
 
 The module ships as bundled .sushi source and is merged as a compilation unit
 when imported (`use <net/url>`). The split is LEXICAL: no name lookup, no
-percent decoding, and no address validation. A host is kept as written, so a
-caller that wants an IpAddr hands u.host to <net/ip> itself -- which is why
-this module deliberately does not import that one, and a program that only
-parses URLs never compiles the IPv6 parser.
+percent decoding, and no address validation. A host is kept as written, and
+it can be a name as well as an address, so it is text and not an IpAddr. A
+caller that wants an IpAddr hands u.host to <net/ip> itself. This module does
+not import that one, so a program that only parses URLs does not compile the
+IPv6 parser.
 
 The query is the raw text after `?` rather than a list of pairs. Whether `&`
 or `;` separates them, and what a repeated key means, is the caller's policy

@@ -1,0 +1,13 @@
+# A binary library's extension templates with each receiver shape: a static on a
+# generic target, a `| E` channel on a concrete-instance target, and `poke self`.
+# BUILD_LIB_BINARY: box_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "6\n-1\n"
+use <lib/box_ext_lib>
+
+fn main() i32:
+    let Box@(i32) b = Box.wrap(nom 4)
+    b.put(nom 6)
+    println(b.checked().realise(-1))
+    let Box@(i32) z = Box(0)
+    println(z.checked().realise(-1))
+    return 0

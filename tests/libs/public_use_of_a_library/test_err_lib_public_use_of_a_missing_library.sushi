@@ -1,0 +1,13 @@
+# reex_a_far re-exports a library that the consumer cannot find. A library build starts
+# one directory above the copy, so `<lib/fixture/dep/reex_b>` finds reex_b there; the
+# consumer starts in the copy, where that path does not exist.
+# BUILD_LIB_AT: reex_b.sushi -> dep/reex_b.slib
+# BUILD_LIB_AT: reex_a_far.sushi -> reex_a_far.slib
+# RUN_IN_FIXTURE_DIR
+# EXPECT_ERROR_CODES_EXACT: CE3502
+# EXPECT_STDERR_CONTAINS: "public use <lib/fixture/dep/reex_b>"
+use <lib/reex_a_far>
+
+fn main() i32:
+    println("{a_val()}")
+    return 0

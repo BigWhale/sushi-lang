@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import (
-        DocBlock, FuncDef, PerkDef, StructDef, EnumDef, ExtendWithDef, Program,
+        DocBlock, FuncDef, PerkDef, StructDef, EnumDef, ExtendDef, ExtendWithDef, Program,
     )
 
 # The two tags that are singletons, and the only two that reach a record as their own
@@ -107,7 +107,7 @@ def type_string(ty) -> str:
     return "~" if ty is None else str(ty)
 
 
-def signature_record(func: "FuncDef") -> dict:
+def signature_record(func: "FuncDef | ExtendDef") -> dict:
     """The signature half of a function record: the parameters, the return, the error arm.
 
     ONE builder, for the concrete record and the generic one alike. A generic used to
@@ -279,6 +279,55 @@ def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict
         # target's type parameters, exactly as the template's source spells them.
         "methods": [method_record(m) for m in impl.methods],
     }, impl)
+
+
+def method_receiver_record(record: dict, method) -> dict:
+    """`record` plus the receiver fields a method declares: `self_mode` and `static`.
+
+    Each key is present only when the declaration writes it, so a record never claims
+    a marker the author did not write.
+    """
+    self_mode = getattr(method, "self_mode", None)
+    if self_mode is not None:
+        record["self_mode"] = self_mode
+    if getattr(method, "is_static", False):
+        record["static"] = True
+    return record
+
+
+def serialize_extension(ext: "ExtendDef") -> dict:
+    """The manifest record of one CONCRETE extension method: its target and signature.
+
+    The body is in the bitcode, so the record carries no source. The consumer builds
+    the method from the signature and declares the symbol that the library defines.
+    """
+    return with_doc(method_receiver_record({
+        "type": type_string(ext.target_type),
+        "name": ext.name,
+        **signature_record(ext),
+    }, ext), ext)
+
+
+def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
+    """The manifest record of one extension TEMPLATE: the record, and its source.
+
+    A generic target (`Box@(T)`, `Box@(i32)`), an array target (`T[]`) and a method
+    type parameter (`pick@(U)`) all name no single instance, so the consumer re-parses
+    the source and cuts one copy per instance it names, as for its own template.
+    """
+    record = serialize_extension(ext)
+    record["type_params"] = _type_param_records(ext)
+    record["source"] = slice_decl_source(ext, source_text)
+    return record
+
+
+def deserialize_extension(record: dict) -> "Program":
+    """Re-parse the source of an extension TEMPLATE record: one `extend` declaration."""
+    what = f"extension method '{record.get('type')} {record.get('name')}'"
+    program = parse_one_declaration(record.get("source") or "", what)
+    if len(program.extensions or []) + len(program.generic_extensions or []) != 1:
+        raise TemplateSourceError(f"the source of {what} is not an extension method")
+    return program
 
 
 class TemplateSourceError(ValueError):

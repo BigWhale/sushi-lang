@@ -1,0 +1,16 @@
+# The consumer declares an extension method that a binary library also declares on
+# the same type. The two bodies would be one symbol, so this is the duplicate
+# error that a source library gives too.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_ERROR_CODE: CE0101
+# EXPECT_STDERR_CONTAINS: "extension method 'sum' for 'Vec'"
+# EXPECT_STDERR_CONTAINS: "library 'vec_ext_lib' declares it too"
+use <lib/vec_ext_lib>
+
+extend Vec sum() i32:
+    return 0
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println(v.sum())
+    return 0

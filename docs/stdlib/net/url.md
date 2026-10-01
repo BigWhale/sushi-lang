@@ -14,7 +14,7 @@ use <net/url>
 
 `net/url` is a **Sushi-source** standard-library module: it ships as bundled `.sushi` source and is merged as a compilation unit when you import it.
 
-The split is **lexical** and stops there: no name lookup, no percent decoding, and no address validation. A host is kept as written, so a caller that wants an `IpAddr` hands `u.host` to `<net/ip>` itself — which is why this module deliberately does not import that one, and why a program that only parses URLs never compiles the IPv6 parser.
+The split is **lexical** and stops there: no name lookup, no percent decoding, and no address validation. A host is kept as written, and it can be a name as well as an address, so it is text and not an `IpAddr`. A caller that wants an `IpAddr` hands `u.host` to `<net/ip>` itself. This module does not import that one, so a program that only parses URLs does not compile the IPv6 parser.
 
 ## Types
 

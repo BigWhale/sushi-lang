@@ -148,7 +148,9 @@ The plain report is the API surface: one line per symbol, plus a parameter's `no
 beside its type, which is the one mode a type cannot spell for itself. A perk prints with
 each method's signature, receiver mode included (`fn read(poke self, u8[] buf) i32 |
 IoError`), and `Perk Implementations` lists every type that implements it, a generic-target
-template (`extend Box@(T) with Show`) beside the concrete ones.
+template (`extend Box@(T) with Show`) beside the concrete ones. `Extension Methods` lists
+each extension method as it was declared (`extend Vec static at(i32 x, i32 y) Vec`), the
+templates beside the concrete ones.
 
 `--docs` prints each symbol's documentation block under its signature. It is opt-in
 because prose is what makes a report long -- a library of forty documented functions runs

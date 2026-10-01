@@ -1,0 +1,11 @@
+# A binary library's extension method that takes `poke self`. The library body
+# writes through a pointer, so the consumer's declaration must carry the mode.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "27\n"
+use <lib/vec_ext_lib>
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    v.grow(10)
+    println(v.sum())
+    return 0

@@ -78,6 +78,18 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **`.free()` on a dynamic array gives back its buffer and allocates nothing.** It left
+  an 8-slot buffer (`capacity()` was 8), which leaked on a unit-level `var`. It now
+  leaves the empty array, as `new()` does, and a later `push` grows from it.
+- **A library's `public use <lib/b>` re-exports B.** The consumer's build loads B from
+  `SUSHI_LIB_PATH` as if it wrote `use <lib/b>`, for every library kind. A source
+  library's own body could not find B's names before. A plain `use` in a library stays
+  local, and a missing B is `CE3502` with a note at the `public use`.
+- **A binary or hybrid library exports its extension methods.** Instance methods,
+  statics and templates travel in the manifest, and so do the methods of an
+  implementation of a private perk; `--lib-info` lists them. They were dropped with no
+  warning before. A consumer's own extension that clashes with one is `CE0101`.
+
 - **A temporary string given to an `unsafe external` function is freed.** The marshalled
   `char*` was freed at scope exit, but the Sushi string it was copied from had no owner,
   so `libc.strlen("{n}")` leaked it.
@@ -101,6 +113,10 @@ All notable changes to Sushi Lang will be documented in this file.
   form. A `HashMap@(i32[2][2], V)` key was `CE2055`.
 
 ### Changed
+
+- **A peer address is an `IpAddr`.** `TcpStream.peer_ip()` answers `IpAddr | NetError`,
+  and `Datagram.peer()` reads the sender as an `IpAddr`. `<net/tcp>` and `<net/udp>`
+  re-export `<net/ip>`, so `use <net/tcp>` alone names `IpAddr`. Print one with `.text()`.
 
 - **A constant and a `HashMap` key refuse a dynamic array at any depth.** A constant is
   `CE2015` and a key is `CE2058` for `i32[]`, `i32[2][]` and `i32[][2]`. A

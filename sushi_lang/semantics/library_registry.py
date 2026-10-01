@@ -24,6 +24,69 @@ def manifest_reexports(manifest: dict) -> tuple[dict, ...]:
     return tuple((manifest or {}).get("reexports") or ())
 
 
+def reexported_libraries(manifest: dict) -> tuple[str, ...]:
+    """The `lib/...` paths one compiled library re-exports (#1106).
+
+    The consumer's build loads each one as if it wrote the `use` itself, and links its
+    bitcode, because no unit of the consumer names it.
+    """
+    return tuple(record["path"] for record in manifest_reexports(manifest)
+                 if record.get("kind") == "library" and record.get("path"))
+
+
+def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
+                    owner: str | None = None,
+                    lib_path: Path | str | None = None) -> 'FuncSig':
+    """One manifest signature record as a `FuncSig`: the ONE reader of a signature.
+
+    A function, a closure helper and an extension method all carry the same four keys
+    (`signature_record`), so they are read here and nowhere else.
+
+    A record states its channel twice: `has_channel`, and the `error_type` and
+    `return_type` it implies. A record whose two answers disagree is damaged, CE3512.
+    That the field is there at all is `check_manifest`'s rule, not this reader's.
+    """
+    from sushi_lang.internals.diagnostics import SushiError
+    from sushi_lang.semantics.channel import has_channel
+    from sushi_lang.semantics.param_modes import ParamMode
+    from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
+    from sushi_lang.semantics.type_resolution import parse_type_string
+
+    func_name = func_info["name"]
+    params = [
+        Param(name=p["name"], ty=parse_type_string(p["type"], struct_table, enum_table),
+              name_span=None, type_span=None, index=idx,
+              is_nom=p.get("mode") == ParamMode.NOM.value)
+        for idx, p in enumerate(func_info.get("params", []))
+    ]
+    ret_type = parse_type_string(func_info.get("return_type", "~"), struct_table, enum_table)
+    # The channel the declaration spelled (`| E`, #541). Absent is a bare function, or an
+    # explicit Result return that carries its arms in `return_type`.
+    err_type_str = func_info.get("error_type")
+    err_type = (parse_type_string(err_type_str, struct_table, enum_table)
+                if err_type_str else None)
+
+    sig = FuncSig(
+        name=func_name,
+        loc=None,
+        name_span=None,
+        ret_type=ret_type,
+        ret_span=None,
+        params=params,
+        is_public=owner is None,
+        unit_name=owner,
+        err_type=err_type,
+        link_symbol=func_info.get("link_symbol"),
+    )
+    stated = func_info.get("has_channel")
+    if stated is not None and stated != has_channel(sig):
+        raise SushiError(
+            "CE3512", path=str(lib_path),
+            reason=f"function '{func_name}' states has_channel {str(stated).lower()}, "
+                   "and its error_type and return_type say otherwise")
+    return sig
+
+
 @dataclass
 class LibraryMetadata:
     """Pre-parsed library metadata with typed objects."""
@@ -158,69 +221,10 @@ class LibraryRegistry:
         `owner` names the library for a record that is NOT part of its API: the export
         closure ships it so the library's own bodies can call it, and the signature says
         so, so that the CE3005 gate answers for it like any other private function.
-
-        A record states its channel twice: `has_channel`, and the `error_type` and
-        `return_type` it implies. A record whose two answers disagree is damaged, CE3512.
-        That the field is there at all is `check_manifest`'s rule, not this reader's.
         """
-        from sushi_lang.internals.diagnostics import SushiError
-        from sushi_lang.semantics.channel import has_channel
-        from sushi_lang.semantics.param_modes import ParamMode
-        from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
-        from sushi_lang.semantics.type_resolution import parse_type_string
-
-        result = {}
-        for func_info in func_list:
-            func_name = func_info["name"]
-
-            params = []
-            for idx, p in enumerate(func_info.get("params", [])):
-                param_type = parse_type_string(
-                    p["type"],
-                    self._struct_table,
-                    self._enum_table
-                )
-                params.append(Param(
-                    name=p["name"],
-                    ty=param_type,
-                    name_span=None,
-                    type_span=None,
-                    index=idx,
-                    is_nom=p.get("mode") == ParamMode.NOM.value,
-                ))
-
-            ret_type_str = func_info.get("return_type", "~")
-            ret_type = parse_type_string(
-                ret_type_str,
-                self._struct_table,
-                self._enum_table
-            )
-            # The channel the declaration spelled (`| E`, #541). Absent is a bare function,
-            # or an explicit Result return that carries its arms in `return_type`.
-            err_type_str = func_info.get("error_type")
-            err_type = (parse_type_string(err_type_str, self._struct_table, self._enum_table)
-                        if err_type_str else None)
-
-            result[func_name] = FuncSig(
-                name=func_name,
-                loc=None,
-                name_span=None,
-                ret_type=ret_type,
-                ret_span=None,
-                params=params,
-                is_public=owner is None,
-                unit_name=owner,
-                err_type=err_type,
-                link_symbol=func_info.get("link_symbol"),
-            )
-            stated = func_info.get("has_channel")
-            if stated is not None and stated != has_channel(result[func_name]):
-                raise SushiError(
-                    "CE3512", path=str(lib_path),
-                    reason=f"function '{func_name}' states has_channel {str(stated).lower()}, "
-                           "and its error_type and return_type say otherwise")
-
-        return result
+        return {func_info["name"]: parse_signature(func_info, self._struct_table,
+                                                   self._enum_table, owner, lib_path)
+                for func_info in func_list}
 
     def get_library(self, lib_name: str) -> LibraryMetadata | None:
         """Get pre-parsed library metadata by name."""

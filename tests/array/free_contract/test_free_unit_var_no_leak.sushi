@@ -1,0 +1,13 @@
+# `free()` on a unit-level `var` gives back its only buffer. A `var` is never destroyed
+# at exit, so a buffer that `free()` keeps is a leak.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n"
+
+var i32[] store = new()
+
+fn main() i32:
+    store.push(1)
+    store.free()
+    println(store.len())
+    return 0

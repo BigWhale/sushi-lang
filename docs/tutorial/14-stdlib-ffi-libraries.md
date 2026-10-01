@@ -345,7 +345,7 @@ answer() = 42
     the central **Omakase** repository at `omakase.lubica.net`. The default `.slib` holds
     source text, so it is portable, and its generic functions and types work in the
     program that imports it. A `--lib-kind binary` library is not portable across
-    platforms (`CE3504`) and exports no extension methods. A library has no transitive
+    platforms (`CE3504`). A library has no transitive
     dependencies. See the
     [libraries guide](../libraries.md)
     for the details.

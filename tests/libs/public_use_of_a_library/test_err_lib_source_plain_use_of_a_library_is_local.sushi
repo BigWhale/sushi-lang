@@ -1,0 +1,12 @@
+# The source twin: the consumer loads reex_b behind an alias, so the library body
+# compiles, but a plain `use` hands nothing on and the bare `b_val` is undefined.
+# BUILD_LIB: reex_b.sushi
+# BUILD_LIB: reex_a_plain.sushi
+# EXPECT_ERROR_CODE: CE2008
+use <lib/reex_a_plain>
+use <lib/reex_b> as rb
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0

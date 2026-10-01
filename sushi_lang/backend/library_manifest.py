@@ -11,7 +11,7 @@ from sushi_lang.semantics.library_templates import (
 )
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
-from sushi_lang.semantics.ast import Node, VarDef
+from sushi_lang.semantics.ast import ExtendDef, Node, VarDef
 from sushi_lang.semantics.generics.contracts import CONTRACTS
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 
@@ -23,6 +23,10 @@ if TYPE_CHECKING:
 # The predefined perks whose implementation overrides a derived method. A library
 # ships its implementations of them although it declares none of them.
 OVERRIDABLE_PREDEFINED_PERKS = frozenset({PerkCollector.HASHABLE_PERK, *CONTRACTS})
+
+# Every perk the compiler predefines. An implementation of one is never an ordinary
+# method of its type, so it never travels as an extension record.
+PREDEFINED_PERKS = OVERRIDABLE_PREDEFINED_PERKS | {PerkCollector.DROP_PERK}
 
 
 def own_units(units: list['Unit']) -> list['Unit']:
@@ -143,6 +147,23 @@ def _written_types(value) -> Iterator:
         return
     for slot in slots:
         yield from _written_types(getattr(value, slot))
+
+
+def _extension_target_name(target_type) -> str | None:
+    """The declared type name an extension target names: the element of an array."""
+    element = getattr(target_type, "base_type", None)
+    return getattr(element if element is not None else target_type, "name", None)
+
+
+def _binding_key(node, unit: str) -> tuple[str, str]:
+    """The key of one exported template's bindings map: its unit and its name.
+
+    An extension template is keyed by its target as well, because a unit may declare
+    a function `tag` beside an extension method `tag`, and each has its own body.
+    """
+    if isinstance(node, ExtendDef):
+        return unit, f"{type_string(node.target_type)}.{node.name}"
+    return unit, node.name
 
 
 class _ScopedIndex:
@@ -617,7 +638,7 @@ class LibraryManifestGenerator:
 
         for node, _source, unit_name in exported:
             _walk(node, node, unit_name,
-                  bindings.setdefault((unit_name, node.name), {}))
+                  bindings.setdefault(_binding_key(node, unit_name), {}))
             if rejected:
                 break
 
@@ -640,11 +661,16 @@ class LibraryManifestGenerator:
         referenced_perks: set[str] = set()
         generic_functions, generic_structs, generic_enums, exported = (
             self._generic_templates(own, referenced_perks))
+        generic_extensions = self._generic_extension_templates(own, exported)
 
         # Walk the export closure: collect transitive private dependencies
         # (shipping them below) and reject un-shippable references (CE5006).
         closure = self._compute_export_closure(units, exported)
         shipped = self._closure_records(closure, generic_functions, referenced_perks)
+        for record, node in generic_extensions:
+            resolved = closure["bindings"].get(_binding_key(node, record["unit"]))
+            if resolved:
+                record["bindings"] = resolved
 
         generic_perk_impls, template_keys = self._generic_perk_impl_templates(
             own, referenced_perks)
@@ -654,7 +680,7 @@ class LibraryManifestGenerator:
         perk_impls = self._concrete_perk_impls(
             own, shipped_perks | OVERRIDABLE_PREDEFINED_PERKS, template_keys)
 
-        return {
+        templates = {
             "version": TEMPLATES_SCHEMA_VERSION,
             "generic_functions": generic_functions,
             "generic_structs": generic_structs,
@@ -664,6 +690,14 @@ class LibraryManifestGenerator:
             "generic_perk_impls": generic_perk_impls,
             **shipped,
         }
+        # Absent when the library declares no extension method, so a library without
+        # one grows by nothing.
+        extensions = self._concrete_extensions(own, shipped, shipped_perks, template_keys)
+        if extensions:
+            templates["extensions"] = extensions
+        if generic_extensions:
+            templates["generic_extensions"] = [record for record, _ in generic_extensions]
+        return templates
 
     def _generic_templates(self, own: list['Unit'], referenced_perks: set[str]):
         """The public generic functions and every generic struct and enum, as templates.
@@ -702,6 +736,94 @@ class LibraryManifestGenerator:
                     records.append(record)
                     referenced_perks.update(record.get("free_perks", []))
         return functions, structs, enums, exported
+
+    def _generic_extension_templates(self, own: list['Unit'],
+                                     exported: list) -> list[tuple[dict, ExtendDef]]:
+        """Every extension TEMPLATE of the library's own units, with its declaration.
+
+        Each one joins `exported`, so the export closure ships what its body names and
+        binds each private function it calls (D4), as for a generic function.
+        """
+        from sushi_lang.semantics.library_templates import serialize_generic_extension
+
+        records: list[tuple[dict, ExtendDef]] = []
+        for unit in own:
+            if unit.ast is None:
+                continue
+            source = self._source(unit)
+            for ext in unit.ast.generic_extensions or []:
+                exported.append((ext, source, unit.name))
+                record = serialize_generic_extension(ext, source)
+                record["unit"] = unit.name
+                records.append((record, ext))
+        return records
+
+    def _concrete_extensions(self, own: list['Unit'], shipped: dict,
+                             shipped_perks: set[str],
+                             template_keys: set[tuple[str, str]]) -> list[dict]:
+        """Every CONCRETE extension method a consumer can reach, as a signature record.
+
+        The body is in the bitcode, so the record names the symbol the library defines.
+        An extension on a private type that nothing ships is left out: no consumer can
+        name the type, and no shipped body names it.
+
+        The methods of an implementation of a perk that does not ship travel here too.
+        The perk hides its CONTRACT, and the methods stay callable
+        (`docs/design/visibility.md`); the consumer has no contract to register them
+        under, so each one is an ordinary method of the type.
+        """
+        from sushi_lang.semantics.library_templates import (
+            impl_method_symbol, method_record, serialize_extension)
+        from sushi_lang.semantics.passes.collect.perks import _get_type_name
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.generics.name_mangling import (
+            extension_receiver_name, extension_symbol)
+
+        kept = self._kept_type_names(own, shipped)
+        records: list[dict] = []
+        for unit in own:
+            if unit.ast is None:
+                continue
+            for ext in unit.ast.extensions:
+                if _extension_target_name(ext.target_type) in kept:
+                    continue
+                record = serialize_extension(ext)
+                record["unit"] = unit.name
+                record["link_symbol"] = extension_symbol(
+                    extension_receiver_name(ext.target_type), ext.name)
+                records.append(record)
+            for impl in unit.ast.perk_impls:
+                if (impl.perk_name in shipped_perks
+                        or impl.perk_name in PREDEFINED_PERKS
+                        or isinstance(impl.target_type, GenericTypeRef)
+                        or getattr(impl, "is_synthesized", False)):
+                    continue
+                type_name = _get_type_name(impl.target_type)
+                if type_name is None or type_name in kept:
+                    continue
+                base_name = getattr(impl.target_type, "generic_base", None) or type_name
+                if (base_name, impl.perk_name) in template_keys:
+                    continue
+                for method in impl.methods:
+                    records.append({
+                        **method_record(method),
+                        "type": type_name,
+                        "unit": unit.name,
+                        "link_symbol": impl_method_symbol(type_name, method.name),
+                    })
+        return records
+
+    def _kept_type_names(self, own: list['Unit'], shipped: dict) -> set[str]:
+        """The private types of the library that no closure record ships."""
+        shipped_types = {r["name"] for r in shipped.get("private_types", [])}
+        kept: set[str] = set()
+        for unit in own:
+            if unit.ast is None:
+                continue
+            for decls in (unit.ast.structs, unit.ast.enums):
+                kept.update(d.name for d in decls
+                            if not d.is_public and d.name not in shipped_types)
+        return kept
 
     def _closure_records(self, closure: dict, generic_functions: list[dict],
                          referenced_perks: set[str]) -> dict:

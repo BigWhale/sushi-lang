@@ -44,7 +44,7 @@ fn main() i32:
         Result.Err(_) -> println("server recv_exact failed")
 
     match client.peer_ip():
-        Result.Ok(ip) -> println("peer ip {ip}")
+        Result.Ok(ip) -> println("peer ip {ip.text()}")
         Result.Err(_) -> println("peer_ip failed")
 
     let i32 client_peer = client.peer_port().realise(-1)

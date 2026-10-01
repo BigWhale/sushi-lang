@@ -1,0 +1,10 @@
+# A BINARY library exports its extension methods: an instance method and a static.
+# The consumer calls both, as it does for a source library.
+# BUILD_LIB_BINARY: vec_ext_lib.sushi
+# EXPECT_STDOUT_EXACT: "7\n"
+use <lib/vec_ext_lib>
+
+fn main() i32:
+    let Vec v = Vec.at(3, 4)
+    println("{v.sum()}")
+    return 0

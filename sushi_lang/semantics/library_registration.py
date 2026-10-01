@@ -24,13 +24,13 @@ from sushi_lang.semantics.library_templates import (
     TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
     parse_one_declaration)
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
-from sushi_lang.semantics.generics.type_display import display_type_name
+from sushi_lang.semantics.generics.type_display import display_type, display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.visibility import TYPE_KINDS, DeclOrigin, reject_library_clash
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import ExtendWithDef, Program
+    from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, Program
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.units import Unit
@@ -103,6 +103,9 @@ class LibraryRegistration:
         # The concrete perk implementations a library ships: registered here for the
         # constraint checks and dispatch, declared and never defined by the backend.
         self.shipped_perk_impls: list['ExtendWithDef'] = []
+        # The concrete extension methods a library ships, for the same two readers: the
+        # tables, and the backend, which declares each one and never defines it.
+        self.shipped_extensions: list[ExtendDef] = []
         # The type names a consumer declaration took from a library (#761, #814, #902):
         # a binary library's export or export closure here, a source library's private
         # unit type or a seeded private template in the collect pass. The library's
@@ -184,6 +187,7 @@ class LibraryRegistration:
                              build_units)
         self._register_types("enums", "enum", LibraryRegistry.get_all_enums,
                              build_units)
+        self._refile_consumer_extensions(compilation_order)
         self._register_functions()
         self._register_private_functions(build_units)
         self._register_not_exported()
@@ -191,6 +195,8 @@ class LibraryRegistration:
         self._register_private_types(build_units)
         self._register_perk_impls()
         self._register_generic_perk_impls()
+        self._register_extensions(build_units)
+        self._register_generic_extensions(build_units)
         self._register_generic_functions(build_units)
 
     def signatures(self) -> Iterator['FuncSig']:
@@ -633,6 +639,163 @@ class LibraryRegistration:
                 # The snippet parsed and the collector still filed nothing: say so, or
                 # the user later gets "no such method" on a perk the library implements.
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
+
+    def _function_collector(self, reporter: Reporter, unit_name: Optional[str],
+                            unit_file: Optional[str]):
+        """The collect pass's `FunctionCollector`, over this program's own tables."""
+        from sushi_lang.semantics.passes.collect.functions import FunctionCollector
+
+        tables = self.tables
+        collector = FunctionCollector(
+            reporter, funcs=tables.funcs, generic_funcs=tables.generic_funcs,
+            extensions=tables.extensions, generic_extensions=tables.generic_extensions,
+            structs=tables.structs, enums=tables.enums,
+            generic_structs=tables.generic_structs, generic_enums=tables.generic_enums,
+            is_declared_type=DeclaredTypeNamer(
+                structs=tables.structs, enums=tables.enums,
+                generic_structs=tables.generic_structs,
+                generic_enums=tables.generic_enums, perks=tables.perks))
+        collector.current_unit_name = unit_name
+        collector.current_unit_file = unit_file
+        return collector
+
+    def _refile_consumer_extensions(self, compilation_order: list['Unit']) -> None:
+        """File each extension the build writes on a binary library's concrete type.
+
+        The collect pass ran before the library's types were in the tables, so it found
+        no target and filed nothing: the method was undefined at every call. The
+        library's own extension methods register after this, so a name both declare on
+        one type is the duplicate that a source library gives.
+        """
+        from sushi_lang.semantics.typesys import UnknownType
+
+        if self.registry is None:
+            return
+        library_types = (set(self.registry.get_all_structs())
+                         | set(self.registry.get_all_enums()))
+        if not library_types:
+            return
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            late = [ext for ext in unit.ast.extensions
+                    if isinstance(ext.target_type, UnknownType)
+                    and ext.target_type.name in library_types]
+            if not late:
+                continue
+            collector = self._function_collector(
+                self.reporter, unit.name, str(unit.file_path))
+            for ext in late:
+                collector.refile_extension(ext)
+
+    def _register_extensions(self, build_units: set[str]) -> None:
+        """Register the CONCRETE extension methods the libraries ship.
+
+        A record is a signature, because the body is in the library's bitcode: the
+        method enters the extension table, and its declaration goes to the backend,
+        which declares the symbol and never defines it. The types are read against a
+        copy of the tables taken AFTER the private types, so a method on a type the
+        export closure ships resolves too.
+
+        A method name the consumer already declares on the same type is CE0101, as for
+        a source library: the two bodies would be one symbol.
+        """
+        from sushi_lang.semantics.ast import Block, ExtendDef, Param
+        from sushi_lang.semantics.library_registry import parse_signature
+        from sushi_lang.semantics.passes.collect.functions import ExtensionMethod
+        from sushi_lang.semantics.type_resolution import parse_type_string
+
+        struct_table, enum_table = self._type_tables()
+        extensions = self.tables.extensions
+        for lib_name, _manifest, record in self._template_records("extensions"):
+            lib_file = self._library_file(lib_name)
+            target = parse_type_string(record["type"], struct_table, enum_table)
+            sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file)
+            existing = extensions.get_method(target, sig.name)
+            if existing is not None:
+                if existing.unit_name in build_units:
+                    self._reject_extension_clash(lib_name, existing.name_span,
+                                                 existing.filename, sig.name, target)
+                continue
+
+            unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+            self_mode = record.get("self_mode")
+            is_static = bool(record.get("static", False))
+            extensions.add_method(ExtensionMethod(
+                target_type=target, name=sig.name, ret_type=sig.ret_type,
+                params=sig.params, self_mode=self_mode, filename=lib_file,
+                unit_name=unit, err_type=sig.err_type, is_static=is_static))
+            self.shipped_extensions.append(ExtendDef(
+                loc=None, target_type=target, name=sig.name,
+                params=[Param(name=p.name, ty=p.ty, is_nom=p.is_nom) for p in sig.params],
+                ret=sig.ret_type, body=Block(loc=None, statements=[]),
+                self_mode=self_mode,
+                err_type=sig.err_type, is_static=is_static))
+
+    def _register_generic_extensions(self, build_units: set[str]) -> None:
+        """Register the extension TEMPLATES the libraries ship.
+
+        A template names no instance, so it ships as source: it is re-parsed, its
+        calls are bound to the producer's symbols (D4), and the collect pass's own
+        `FunctionCollector` files it, so one function files every template. Each copy
+        is cut by the analyzer, as for the consumer's own template, and goes home to the
+        entry unit, because the template's unit is not a unit of this build.
+
+        A method the consumer already declares on the same target is CE0101, as for a
+        source library: the library's copies and the consumer's would be one symbol.
+        """
+        from sushi_lang.semantics.library_templates import deserialize_extension
+
+        for lib_name, manifest, record in self._template_records("generic_extensions"):
+            label = f"<template:{lib_name}:{record.get('type')} {record.get('name')}>"
+            try:
+                program = deserialize_extension(record)
+            except TemplateSourceError as e:
+                raise SushiError("CE3512", path=self._library_file(lib_name),
+                                 reason=str(e)) from e
+            source = record.get("source") or ""
+            bindings = record.get("bindings") or {}
+            for ext in [*program.extensions, *program.generic_extensions]:
+                if bindings:
+                    apply_template_bindings(ext.body, bindings)
+                ext.is_library_template = True
+                ext.library_origin = Origin(
+                    filename=label, source=source,
+                    provenance=(f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
+                                f"ships this template; it is monomorphized here because "
+                                f"of `use <lib/{lib_name}>`"))
+
+            reporter = Reporter(source=source, filename=label)
+            collector = self._function_collector(
+                reporter, f"lib/{lib_name}/{record.get('unit') or lib_name}", label)
+            collector.collect_extensions(program)
+            if any(d.code == "CE0101" for d in reporter.items):
+                self._reject_template_clash(lib_name, record["name"], build_units)
+
+    def _reject_template_clash(self, lib_name: str, method: str,
+                               build_units: set[str]) -> None:
+        """CE0101 at the consumer's template that a library template of one name meets."""
+        for declarations in self.tables.generic_extensions.by_type.values():
+            for (name, _key), existing in declarations.items():
+                if name == method and existing.unit_name in build_units:
+                    self._reject_extension_clash(lib_name, existing.name_span,
+                                                 existing.filename, method, None)
+                    return
+
+    def _reject_extension_clash(self, lib_name: str, span, filename, method: str,
+                                target) -> None:
+        """CE0101: the consumer and a binary library declare one extension method.
+
+        The library's declaration has no file the consumer can see, so the note names
+        the library in prose, as CE3011 does for a type.
+        """
+        name = (f"extension method '{method}' for '{display_type(target)}'"
+                if target is not None else f"extension method '{method}'")
+        er.emit_with(self.reporter, er.ERR.CE0101, span, filename, name=name) \
+            .note(f"library '{lib_name}' declares it too") \
+            .help("a method is found on the receiver's type, so no alias can choose "
+                  "between the two; rename one of them") \
+            .emit()
 
     def _register_generic_functions(self, build_units: set[str]) -> None:
         """Register the generic function templates the libraries ship."""
