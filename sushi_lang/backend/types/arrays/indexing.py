@@ -75,6 +75,10 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         # face): the field arrives by value and dies at `.type.pointee` unless it goes
         # through the same seam as the else-arm.
         array_slot = field_ptr if field_ptr is not None else address_of_value()
+    elif isinstance(expr.array, IndexAccess):
+        # An element that is itself an array (`a[i][j]`) has storage of its own: its
+        # address, never a spilled copy that a write or a growth would land on.
+        array_slot = emit_element_pointer(codegen, expr.array)
     else:
         # A chained or temporary array (`o.get()[0]`, `from([1, 2])[0]`).
         array_slot = address_of_value()
