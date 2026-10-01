@@ -1,0 +1,7 @@
+# a write to an element of a row of a constant is a write to the constant.
+# EXPECT_ERROR_CODES_EXACT: CE2096
+const i32[2][3] M = [[1, 2], [3, 4], [5, 6]]
+
+fn main() i32:
+    M[0][1] := 9
+    return 0

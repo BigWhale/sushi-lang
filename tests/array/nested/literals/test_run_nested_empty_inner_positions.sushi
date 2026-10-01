@@ -1,0 +1,27 @@
+# an empty inner `from([])` or `new()` takes its element type from the position of the
+# outer literal: a `let`, a struct field, a parameter and a return. Each empty row is a
+# real `i32[]`, so a push into it works.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let 2 0 1 7\nfield 2 0 9\nparam 3 0 0 2\nreturn 2 0 0 5\n"
+struct Wall:
+    i32[][] rows
+
+fn shape(i32[][] d) string:
+    return "{d.len()} {d[0].len()} {d[1].len()} {d[2].len()}"
+
+fn make() i32[][]:
+    return from([from([]), new()])
+
+fn main() i32:
+    let i32[][] d = from([new(), from([1])])
+    d[0].push(7)
+    println("let {d.len()} {d[1].len() - 1} {d[0].len()} {d[0][0]}")
+    let Wall w = Wall(from([from([]), from([2])]))
+    w.rows[0].push(9)
+    println("field {w.rows.len()} {w.rows[1][0] - 2} {w.rows[0][0]}")
+    println("param {shape(from([new(), from([]), from([3, 4])]))}")
+    let i32[][] m = make()
+    m[1].push(5)
+    println("return {m.len()} {m[0].len()} {m[1].len() - 1} {m[1][0]}")
+    return 0

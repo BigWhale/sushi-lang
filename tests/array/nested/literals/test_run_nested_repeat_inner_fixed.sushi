@@ -1,0 +1,13 @@
+# a repeat of an inner fixed array fills each slot with its own row, in a fixed outer
+# array and in a dynamic one: a write to one row leaves the others at zero.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0 4 0 0 0 0\n3 0 0 8\n"
+fn main() i32:
+    let i32[2][3] g = [[0, 0]; 3]
+    g[1][0] := 4
+    println("{g[0][0]} {g[1][0]} {g[2][0]} {g[0][1]} {g[1][1]} {g[2][1]}")
+    let i32[2][] d = from([[0, 0]; 3])
+    d[2][1] := 8
+    println("{d.len()} {d[0][1]} {d[1][1]} {d[2][1]}")
+    return 0

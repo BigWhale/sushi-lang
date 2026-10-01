@@ -1,0 +1,9 @@
+# an element of the wrong type in an inner row is refused at the inner level, and an
+# inner dynamic row of the wrong element type is refused at the row.
+# EXPECT_ERROR_CODES_EXACT: CE2013
+# EXPECT_STDERR_CONTAINS: "expected i32, got string"
+# EXPECT_STDERR_CONTAINS: "expected i32[], got string[]"
+fn main() i32:
+    let i32[2][2] m = [[1, 2], [3, "x"]]
+    let i32[][] d = from([from([1]), from(["a"])])
+    return m.len() + d.len()

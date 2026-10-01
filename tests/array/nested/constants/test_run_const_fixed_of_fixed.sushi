@@ -1,0 +1,21 @@
+# a fixed array of fixed rows is a constant: each element reads through a chained
+# index, both levels answer `.len()`, and the read methods work on a row and on the
+# whole constant.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 2 3 4 5 6\n3 2\ntrue false 1\n5 6\n4 6\ntrue\n"
+const i32[2][3] M = [[1, 2], [3, 4], [5, 6]]
+
+fn row_sum(i32[2] row) i32:
+    return row[0] + row[1]
+
+fn main() i32:
+    println("{M[0][0]} {M[0][1]} {M[1][0]} {M[1][1]} {M[2][0]} {M[2][1]}")
+    println("{M.len()} {M[1].len()}")
+    println("{M[1].contains(4)} {M[1].contains(5)} {M[0].index_of(2).realise(-1)}")
+    println("{M[2].first().realise(0)} {M[2].last().realise(0)}")
+    let i32[2] middle = M.get(1).realise([0, 0])
+    println("{middle[1]} {row_sum(M[1]) - 1}")
+    let i32[2][3] copy = M
+    println("{copy.hash() == M.hash()}")
+    return 0
