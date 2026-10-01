@@ -1,0 +1,38 @@
+# A TCP peer address is an IpAddr. With only `use <net/tcp>`, the caller names
+# the type and calls .text() on it. Loopback only.
+# EXPECT_STDOUT_EXACT: "client peer 127.0.0.1\nclient peer is v4 true\nserved peer 127.0.0.1\nserved peer is loopback true\n"
+# EXPECT_NO_LEAKS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+
+fn main() i32:
+    let TcpListener listener = listen("127.0.0.1", 0, 8).realise(TcpListener(-1))
+    if (listener.fd < 0):
+        println("listen failed")
+        return 1
+    if (not listener.set_timeout(5000).is_ok()):
+        println("listener set_timeout failed")
+        return 1
+
+    let i32 port = listener.local_port().realise(-1)
+    let TcpStream client = connect("127.0.0.1", port).realise(TcpStream(-1))
+    if (client.fd < 0):
+        println("connect failed")
+        return 1
+    let TcpStream served = listener.accept().realise(TcpStream(-1))
+    if (served.fd < 0):
+        println("accept failed")
+        return 1
+
+    match client.peer_ip():
+        Result.Ok(ip) ->
+            let IpAddr a = ip
+            println("client peer {a.text()}")
+            println("client peer is v4 {a.is_v4()}")
+        Result.Err(_) -> println("client peer_ip failed")
+
+    let IpAddr served_peer = served.peer_ip().realise(IpAddr.V4(0))
+    println("served peer {served_peer.text()}")
+    println("served peer is loopback {served_peer.is_loopback()}")
+    return 0
