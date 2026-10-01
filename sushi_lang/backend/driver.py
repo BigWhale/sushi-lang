@@ -150,6 +150,10 @@ class LLVMDriver:
                         stdlib_units.add(use_stmt.path)
 
         library_linker = cg.library_linker
+        if library_linker is not None:
+            from sushi_lang.semantics.library_registry import reexported_libraries
+            for manifest in list(library_linker.loaded_libraries.values()):
+                library_paths.update(reexported_libraries(manifest))
         if library_linker is not None and library_paths:
             from sushi_lang.backend.module_linker import TwoPhaseLinker
 

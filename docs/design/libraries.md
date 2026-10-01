@@ -362,9 +362,11 @@ re-exported declares nothing of its own, so no `public_functions` record can nam
 a re-exported STDLIB module has to reach the consumer's build at all -- a source
 library's `use <io/fs>` does that by being text in the build, and a compiled one has only
 the record, so `_reexported_stdlib_modules` reads it and both the source-module injection
-and the bitcode link line take it. A re-exported LIBRARY is limitation 1 unchanged: the
-consumer states that library for itself, and one that does not hears CE2008 at the call
--- the same answer a source library's re-export of one gives.
+and the bitcode link line take it. A re-exported LIBRARY follows the same rule (#1106):
+`_resolve_library_imports` loads it as if the consumer wrote the import -- from a source
+library's re-parsed statement and from a compiled library's `kind: "library"` record --
+and the link line takes it (`reexported_libraries`). A library that is not on the path is
+CE3502 with a note that names the `public use`.
 
 The `templates` section carries its own `"version"` (`TEMPLATES_SCHEMA_VERSION`,
 `8`, in `backend/library_format.py`), which is independent of the container version.
@@ -702,9 +704,10 @@ as the consumer's own units are.
   TEMPLATES instead (`_generic_perk_impl_templates`), and the
   consumer instantiates them like any other template.
 - **v1 native `...T` variadics** as public functions — CE0116, §5.1.
-- **Transitive library dependencies** — if library A's source itself does `use <lib/b>`,
-  a consumer of A still needs its own `use <lib/b>` statement; nothing auto-propagates.
-  See `docs/libraries.md`, Limitation 1.
+- **A plain `use` of another library** — if library A's source does a plain
+  `use <lib/b>`, a consumer of A still needs its own `use <lib/b>` statement. A
+  `public use <lib/b>` loads B for the consumer (§5). See `docs/libraries.md`,
+  Limitation 1.
 
 ## 6. Versions and compatibility
 

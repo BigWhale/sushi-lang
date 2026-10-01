@@ -2026,6 +2026,10 @@ gives `sh.Vec` and `sh.area` alike. The rules:
 - A `public use` that hands on nothing public warns (`CW3005`).
 - Every kind of `.slib` carries a `public use`: a source library ships the statement as
   text, a binary or hybrid one ships a manifest record of it.
+- A `public use <lib/b>` in a library loads `b` in the consumer's build, as if the
+  consumer wrote `use <lib/b>`. A plain `use <lib/b>` in a library stays local. If `b` is
+  not on `SUSHI_LIB_PATH`, the consumer gets `CE3502` with a note that names the
+  `public use`.
 
 The standard library uses it: `use <io/fs>` alone brings `IoError`, `FileError` and
 `SeekFrom`, because `<io/fs>` re-exports `<io/contracts>` and that re-exports `<io/error>`.
