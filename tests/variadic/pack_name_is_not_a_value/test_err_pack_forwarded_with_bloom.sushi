@@ -1,0 +1,26 @@
+# A type pack is used only through `expand`, so `inner(args...)` is one CE0144 at the
+# pack name, and the call gives no CE2060, CE1001 or CE0120 (#1109).
+# EXPECT_ERROR_CODES_EXACT: CE0144
+# EXPECT_STDERR_CONTAINS: 'args' is a type pack
+
+perk Show:
+    fn show() string
+
+extend i32 with Show:
+    fn show() string:
+        return "i32"
+
+extend bool with Show:
+    fn show() string:
+        return "bool"
+
+fn inner@(...Ts: Show)(...Ts args) ~:
+    expand(a in args):
+        println(a.show())
+
+fn outer@(...Ts: Show)(...Ts args) ~:
+    inner(args...)
+
+fn main() i32:
+    outer(1, true)
+    return 0

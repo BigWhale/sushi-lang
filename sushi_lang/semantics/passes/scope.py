@@ -86,6 +86,9 @@ class ScopeAnalyzer:
         # Loop-nesting depth for the current function. break/continue are only
         # legal when this is > 0 (CE1003); reset to 0 across nested functions.
         self._loop_depth: int = 0
+        # The written type-pack names of the instance being checked; the typecheck pass
+        # says CE0144 at a use of one (#1109).
+        self._pack_names: Tuple[str, ...] = ()
         # The collected function tables, concrete and generic. The function rung reads
         # them through this unit's scope, as the typecheck pass does (#1013).
         self.function_tables = function_tables
@@ -317,6 +320,8 @@ class ScopeAnalyzer:
             if not self._is_unit_variable(name):
                 self.err.emit(er.ERR.CE1002, usage_span, name=name)
             return
+        if name in self._pack_names:
+            return
         diagnostic = self.err.emit_with(er.ERR.CE1001, usage_span, name=name)
         help_line = self._declared_elsewhere(name)
         if help_line is not None:
@@ -414,6 +419,7 @@ class ScopeAnalyzer:
         # ordinary body clears what a transplanted or copied one set.
         self.reporter.enter_body(func)
         self._push_scope()
+        self._pack_names = func.pack_names
 
         # A plain function has no receiver; a stale flag from a previously checked
         # `poke self` method must not make `self := v` legal here (#327).
@@ -441,6 +447,7 @@ class ScopeAnalyzer:
 
     def _check_extension_body(self, ext: ExtendDef) -> None:
         self._push_scope()
+        self._pack_names = ()
 
         # Add implicit 'self' parameter first - this is the receiver of the method
         # It should not be declared explicitly by the user. A `poke self` receiver

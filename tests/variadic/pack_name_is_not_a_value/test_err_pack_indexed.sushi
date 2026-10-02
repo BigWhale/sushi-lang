@@ -1,0 +1,18 @@
+# A type pack has no index, so `args[0]` is one CE0144 at the pack name, and not
+# CE1001 (#1109).
+# EXPECT_ERROR_CODES_EXACT: CE0144
+# EXPECT_STDERR_CONTAINS: 'args' is a type pack
+
+perk Show:
+    fn show() string
+
+extend i32 with Show:
+    fn show() string:
+        return "i32"
+
+fn first@(...Ts: Show)(...Ts args) string:
+    return args[0].show()
+
+fn main() i32:
+    println(first(1, 2))
+    return 0

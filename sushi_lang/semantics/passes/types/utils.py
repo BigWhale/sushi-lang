@@ -415,8 +415,12 @@ def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
     """Reject any bloom spread `arr...` argument in a context that is never variadic."""
     from sushi_lang.semantics.ast import Spread
     found = False
+    from .arguments import names_a_type_pack
     for arg in args:
-        if isinstance(arg, Spread):
+        if isinstance(arg, Spread) and names_a_type_pack(validator, arg.value):
+            validator.validate_expression(arg)
+            found = True
+        elif isinstance(arg, Spread):
             er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
                     message="bloom argument 'arr...' is only allowed as the last argument "
                             "of a call to a variadic '...T' function")

@@ -28,7 +28,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Call, Expr, Spread
+from sushi_lang.semantics.ast import Call, Expr, Name, Spread
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
@@ -102,14 +102,35 @@ def check_arguments(
     return arity_ok
 
 
+def names_a_type_pack(validator: 'TypeValidator', expr: Expr) -> bool:
+    """Is `expr` the bare name of a type pack of the instance being checked (#1109)?"""
+    func = validator.current_function
+    return (isinstance(expr, Name) and func is not None
+            and expr.id in func.pack_names and expr.id not in validator.variable_types)
+
+
+def reject_type_pack_value(validator: 'TypeValidator', expr: Expr) -> bool:
+    """CE0144 for a type-pack name used as a value. True when it was refused."""
+    if not isinstance(expr, Name) or not names_a_type_pack(validator, expr):
+        return False
+    er.emit_with(validator.reporter, er.ERR.CE0144, expr.loc, name=expr.id).help(
+        f"walk a pack with `expand(a in {expr.id}):`; pack forwarding and pack "
+        "indexing are not supported").emit()
+    return True
+
+
 def reject_misplaced_spread(validator: 'TypeValidator', arg: Expr) -> bool:
     """Refuse a bloom spread `arr...` in a position that is never variadic (CE0120).
 
     The inner expression is still validated, so nothing downstream reads an unwalked
-    argument. Answers True when the argument was refused.
+    argument. Answers True when the argument was refused. A bloomed type pack is
+    CE0144 alone, which the walk of the inner name says.
     """
     if not isinstance(arg, Spread):
         return False
+    if names_a_type_pack(validator, arg.value):
+        validator.validate_expression(arg)
+        return True
     er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
             message="bloom argument 'arr...' is only allowed as the last argument "
                     "of a call to a variadic '...T' function")

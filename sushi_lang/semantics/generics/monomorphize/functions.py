@@ -341,6 +341,8 @@ class FunctionMonomorphizer:
             # Which source this body is a copy of. Every copy carries the template's
             # spans, so the reporter tells a fault in the shared source once (#648).
             concrete_func.instance_of = generic_func.name
+            concrete_func.pack_names = tuple(
+                p.name for p in generic_func.params if p.is_pack)
 
             from sushi_lang.semantics.generics.synthesis import register_synthesized_function
             register_synthesized_function(
