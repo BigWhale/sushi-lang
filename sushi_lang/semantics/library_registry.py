@@ -34,6 +34,28 @@ def reexported_libraries(manifest: dict) -> tuple[str, ...]:
                  if record.get("kind") == "library" and record.get("path"))
 
 
+def manifest_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """One library's `dependencies` records: `{"path", "kind", ...}` each (#1120).
+
+    The ONE reader of the key. A `stdlib` record is a `use <module>` of the library's
+    own units; a `library` record is a `use <lib/...>`, plain or public, with the
+    `library_name` and the `library_version` that the library's build found.
+    """
+    return tuple((manifest or {}).get("dependencies") or ())
+
+
+def library_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """The `library` records of `dependencies`: what the consumer's build must load."""
+    return tuple(record for record in manifest_dependencies(manifest)
+                 if record.get("kind") == "library" and record.get("path"))
+
+
+def stdlib_dependencies(manifest: dict) -> tuple[str, ...]:
+    """The stdlib module paths of `dependencies`."""
+    return tuple(record["path"] for record in manifest_dependencies(manifest)
+                 if record.get("kind") == "stdlib" and record.get("path"))
+
+
 def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
                     owner: str | None = None,
                     lib_path: Path | str | None = None) -> 'FuncSig':
@@ -109,7 +131,8 @@ class LibraryMetadata:
     not_exported: dict[str, str] = field(default_factory=dict)
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
-    dependencies: list[str] = field(default_factory=list)
+    # The `dependencies` records (#1120): every module and library the units use.
+    dependencies: tuple[dict, ...] = ()
     # What each of the library's units re-exports (#585): the target of every
     # `public use`, keyed by the unit that wrote it. A compiled library ships no text
     # for the `namespaces` pass to read the statement from.
@@ -145,7 +168,7 @@ class LibraryRegistry:
             name=lib_name,
             path=lib_path,
             platform=manifest.get("platform", "unknown"),
-            dependencies=manifest.get("dependencies", []),
+            dependencies=manifest_dependencies(manifest),
             reexports=manifest_reexports(manifest),
             raw_manifest=manifest,
         )

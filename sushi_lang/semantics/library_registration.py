@@ -19,7 +19,7 @@ import sushi_lang.internals.errors as er
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.library_registry import LibraryRegistry
+from sushi_lang.semantics.library_registry import LibraryRegistry, reexported_libraries
 from sushi_lang.semantics.library_templates import (
     TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
     parse_one_declaration)
@@ -42,6 +42,8 @@ class LoadedLibraries(Protocol):
     A Protocol and not the class, because semantics must not import backend.
     """
     loaded_libraries: dict[str, dict]
+    # The `library_name` that each `lib/...` path of the graph found (#1120).
+    library_names: dict[str, str]
 
 
 # Where a private type the export closure ships can land in the snippet's tables, what
@@ -188,7 +190,7 @@ class LibraryRegistration:
         self._register_types("enums", "enum", LibraryRegistry.get_all_enums,
                              build_units)
         self._refile_consumer_extensions(compilation_order)
-        self._register_functions()
+        self._register_functions(self._dependency_only(compilation_order))
         self._register_private_functions(build_units)
         self._register_not_exported()
         self._register_constants(compilation_order)
@@ -370,12 +372,58 @@ class LibraryRegistration:
                 owner = lib.name
         return owner
 
-    def _register_functions(self) -> None:
+    def _dependency_only(self, compilation_order: list['Unit']) -> set[str]:
+        """The compiled libraries the build loaded for another library's body alone.
+
+        A library is NAMED when a unit of the consumer imports it, or when a library
+        that is named re-exports it, transitively: a source library through its
+        `public use` text, a compiled one through its `reexports` records. Every other
+        loaded library is in the build only because a library uses it (#1120), so its
+        names reach the units whose own scope holds it and no other.
+        """
+        if self.registry is None:
+            return set()
+        loaded = set(self.registry.get_all_libraries())
+        names = getattr(self.linker, "library_names", None) or {}
+        public_uses: dict[str, list[str]] = {}
+        named: list[str] = []
+        for unit in compilation_order:
+            if unit.ast is None:
+                continue
+            parts = unit.name.split("/")
+            owner = parts[1] if unit.provenance is not None and parts[0] == "lib" \
+                and len(parts) > 2 else None
+            for use in unit.ast.uses:
+                if not (use.is_library and use.library_name):
+                    continue
+                if owner is None and unit.provenance is None:
+                    named.append(use.library_name)
+                elif owner is not None and use.is_public:
+                    public_uses.setdefault(owner, []).append(use.library_name)
+        for lib_name, manifest in self._manifests():
+            public_uses.setdefault(lib_name, []).extend(
+                names[path] for path in reexported_libraries(manifest) if path in names)
+        seen: set[str] = set()
+        while named:
+            name = named.pop()
+            if name not in seen:
+                seen.add(name)
+                named.extend(public_uses.get(name, ()))
+        return loaded - seen
+
+    def _register_functions(self, dependency_only: set[str]) -> None:
         """Register the libraries' public functions into the function table.
 
         The registry's `_parse_functions` is the ONE reader of a manifest signature. A
         second builder lived here and read `return_type` alone, so a binary library's
         `| E` was typed StdError at every consumer (#541).
+
+        A library that the build loaded for another library's body alone gives the
+        consumer no name (#1120): each of its functions is also filed under the
+        `lib/<library>/<unit>` that declares it, so it is a name only where the unit's
+        scope holds that unit. A NAMED library's functions stay in scope everywhere,
+        because a template copy of the library goes home to the entry unit and calls
+        them from there.
         """
         if self.registry is None:
             return
@@ -384,6 +432,16 @@ class LibraryRegistration:
             if func_name not in funcs.by_name:
                 funcs.by_name[func_name] = func_sig
                 funcs.order.append(func_name)
+        for library in self.registry.get_all_libraries().values():
+            if library.name not in dependency_only:
+                continue
+            manifest = library.raw_manifest or {}
+            for record in manifest.get("public_functions", []) or []:
+                sig = library.functions.get(record["name"])
+                if sig is None:
+                    continue
+                unit = f"lib/{library.name}/{record.get('unit') or library.name}"
+                funcs.by_unit.setdefault(unit, {})[record["name"]] = sig
 
     def _register_private_functions(self, build_units: set[str]) -> None:
         """Register the export-closure private helpers (C4b/C5).
@@ -716,6 +774,9 @@ class LibraryRegistration:
                 if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
                                                  existing.filename, sig.name, target)
+                else:
+                    self._reject_library_extension_clash(
+                        existing.unit_name or "?", lib_name, lib_file, sig.name, target)
                 continue
 
             unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
@@ -774,13 +835,22 @@ class LibraryRegistration:
 
     def _reject_template_clash(self, lib_name: str, method: str,
                                build_units: set[str]) -> None:
-        """CE0101 at the consumer's template that a library template of one name meets."""
+        """CE0101 at the template, of the consumer or of another library, that a library
+        template of one name meets."""
+        other = None
         for declarations in self.tables.generic_extensions.by_type.values():
             for (name, _key), existing in declarations.items():
-                if name == method and existing.unit_name in build_units:
+                if name != method:
+                    continue
+                if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
                                                  existing.filename, method, None)
                     return
+                if not (existing.unit_name or "").startswith(f"lib/{lib_name}/"):
+                    other = existing.unit_name
+        if other is not None:
+            self._reject_library_extension_clash(
+                other, lib_name, self._library_file(lib_name), method, None)
 
     def _reject_extension_clash(self, lib_name: str, span, filename, method: str,
                                 target) -> None:
@@ -794,6 +864,26 @@ class LibraryRegistration:
         er.emit_with(self.reporter, er.ERR.CE0101, span, filename, name=name) \
             .note(f"library '{lib_name}' declares it too") \
             .help("a method is found on the receiver's type, so no alias can choose "
+                  "between the two; rename one of them") \
+            .emit()
+
+    def _reject_library_extension_clash(self, first_unit: str, lib_name: str,
+                                        lib_file: str, method: str, target) -> None:
+        """CE0101: two compiled libraries declare one extension method on one type.
+
+        The bodies are two definitions of one symbol, and which one the link keeps
+        depends on the build mode, so the second record is refused and not skipped
+        (#1120). Neither declaration has a file the consumer can see, so a note names
+        each library in prose.
+        """
+        parts = first_unit.split("/")
+        first = parts[1] if len(parts) > 2 and parts[0] == "lib" else first_unit
+        name = (f"extension method '{method}' for '{display_type(target)}'"
+                if target is not None else f"extension method '{method}'")
+        er.emit_with(self.reporter, er.ERR.CE0101, None, lib_file, name=name) \
+            .note(f"library '{first}' declares it") \
+            .note(f"library '{lib_name}' declares it too") \
+            .help("a method is found on the receiver's type, so no import can choose "
                   "between the two; rename one of them") \
             .emit()
 

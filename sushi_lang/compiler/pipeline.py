@@ -1,6 +1,7 @@
 """Multi-file compilation orchestration."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 import errno
 import os
@@ -110,25 +111,28 @@ def _check_library_templates_version(metadata: dict, lib_path: str) -> None:
                     f"{TEMPLATES_SCHEMA_VERSION} (rebuild the library)"))
 
 
-def _reexported_stdlib_modules(library_linker) -> set[str]:
-    """The stdlib modules a loaded COMPILED library's units re-export (#585).
+def _compiled_stdlib_modules(library_linker) -> set[str]:
+    """The stdlib modules a loaded COMPILED library's units use or re-export.
 
-    `public use <io/fs>` makes the module's public names the library unit's own, so a
-    consumer of that unit writes `open()` and `File` without importing the module
-    itself. A source library brings that about by being text -- its `use` line is in
-    the consumer's build and the walk over unit ASTs finds it. A compiled library has
-    only the manifest record, so the consumer's build has to read it to compile the
-    module and link its bitcode; without that the names the library handed on resolve
-    to nothing, which is the silence CE3514 used to refuse the statement over.
+    A source library brings its modules about by being text -- its `use` line is in the
+    consumer's build and the walk over unit ASTs finds it. A compiled library has only
+    its manifest: the `reexports` records (#585) and the `dependencies` records (#1120).
+    A re-exported module's names reach the consumer, and a used module is LOADED with
+    no name given: a public struct of the library can hold a `File`, so the type has to
+    resolve and the module's bitcode has to be on the link line. Visibility stays the
+    unit's, as for a library dependency.
     """
     if library_linker is None:
         return set()
-    from sushi_lang.semantics.library_registry import manifest_reexports
+    from sushi_lang.semantics.library_registry import (
+        manifest_reexports, stdlib_dependencies)
 
-    return {record["path"]
-            for manifest in library_linker.loaded_libraries.values()
-            for record in manifest_reexports(manifest)
-            if record.get("kind") == "stdlib" and record.get("path")}
+    modules: set[str] = set()
+    for manifest in library_linker.loaded_libraries.values():
+        modules.update(record["path"] for record in manifest_reexports(manifest)
+                       if record.get("kind") == "stdlib" and record.get("path"))
+        modules.update(stdlib_dependencies(manifest))
+    return modules
 
 
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
@@ -140,13 +144,13 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
         platform_key, platform_source, resolve_source_stdlib_path,
     )
 
-    reexported = _reexported_stdlib_modules(library_linker)
+    compiled = _compiled_stdlib_modules(library_linker)
 
     def _needed(units) -> set:
         needed = set()
         paths = [use_stmt.path for unit in units if unit.ast is not None
                  for use_stmt in unit.ast.uses if use_stmt.is_stdlib]
-        for path in [*paths, *reexported]:
+        for path in [*paths, *compiled]:
             if path in SOURCE_STDLIB_MODULES:
                 needed.add(path)
                 continue
@@ -194,138 +198,283 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
             )
 
 
+_Origin = tuple[str, Optional[Span], Optional[str]]
+
+
+@dataclass
+class _Wanted:
+    """One `use <lib/...>` of the graph: the path, how it was reached, what it expects.
+
+    `expected` is the version a library recorded for the path, with the note that says
+    which library recorded it. The consumer's own `use` expects nothing.
+    """
+    path: str
+    origin: _Origin
+    expected: Optional[tuple[str, str]] = None
+
+
+@dataclass
+class _Loaded:
+    """One library of the graph, by its stamped name: the version, and how it came in."""
+    version: str
+    slib_path: Path
+    origin: _Origin
+
+    def found(self) -> tuple[str, _Origin]:
+        """The version, and the note that says which path reached it and where."""
+        text, span, filename = self.origin
+        return self.version, (f"{text}, and the search finds {self.version} at "
+                              f"{self.slib_path}", span, filename)
+
+
+def _add_origin_note(error: SushiError, origin: _Origin) -> None:
+    text, span, filename = origin
+    if span is not None:
+        error.note_at(text, span, filename)
+    else:
+        error.note(text)
+
+
+def _two_versions(name: str, first: tuple[str, _Origin],
+                  second: tuple[str, _Origin]) -> SushiError:
+    """CE3519: one library at two versions in one graph, with the path to each."""
+    from sushi_lang.backend.library_errors import LibraryError
+
+    error = LibraryError("CE3519", lib=name, first=first[0], second=second[0])
+    _add_origin_note(error, first[1])
+    _add_origin_note(error, second[1])
+    return error
+
+
+def _check_expected(name: str, loaded: _Loaded, wanted: _Wanted) -> None:
+    """Refuse a dependency record whose version is not the one the graph holds."""
+    if wanted.expected is None:
+        return
+    version, recorded_by = wanted.expected
+    if version != loaded.version:
+        raise _two_versions(name, (version, (recorded_by, None, None)), loaded.found())
+
+
+def _consumer_wants(unit_manager: UnitManager) -> list[_Wanted]:
+    """Every `use <lib/...>` that a unit of the consumer writes, in written order."""
+    wants = []
+    for unit in list(unit_manager.units.values()):
+        if unit.ast is None or unit.provenance is not None:
+            continue
+        for use in unit.ast.uses:
+            if use.is_library:
+                note = (f"'{unit.name}' imports it with `{_spelled(use)}`",
+                        use.loc, str(unit.file_path))
+                wants.append(_Wanted(use.path, note))
+    return wants
+
+
+def _spelled(use) -> str:
+    return f"{'public ' if use.is_public else ''}use <{use.path}>"
+
+
 def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
                              ignore_compiler_version: bool,
                              cache: CacheManager) -> tuple[LibraryResolver | None, set[str]] | None:
-    """Resolve every `use <lib/...>`, injecting source libraries as ordinary units.
+    """Load the whole library graph: every `use <lib/...>`, transitively (#1120).
 
-    A source library is not linked, registered or monomorphized through the library
-    registry: its units join the consumer's unit table and the ordinary passes compile
-    them, so a private helper stays private through `func.is_public` and there is no
-    export closure to compute. A binary library keeps the old path and reaches the
-    semantic analyzer through the resolver's `loaded_libraries`.
+    LOADING is transitive. A library records every `use <lib/...>` that its units write,
+    plain or public, and the build loads each one, so a library's body has what it
+    calls. VISIBILITY is not: the `namespaces` pass gives a unit the names of what it
+    imports itself and of what a `public use` hands on, and nothing that a plain `use`
+    of a library loaded.
 
-    Returns (resolver-or-None, binary import paths), or None when a library failed to
-    load. A library's `public use <lib/...>` is followed as if the consumer wrote the
-    import (unit-namespaces.md section 8.1, rule 3): a source library's re-parsed
-    statement and a compiled library's `kind: "library"` record alike. A plain `use`
-    in a library is not followed.
+    A library is identified by the `library_name` stamped into its `.slib`. Two paths to
+    one library load it once; two versions of one library are CE3519. A source library
+    is injected as ordinary units; a compiled one reaches the analyzer through the
+    resolver's `loaded_libraries`, and its bitcode is linked once.
+
+    Every `use <lib/...>` of every unit is then stamped with the name and the version it
+    found. Returns (resolver-or-None, compiled import paths), or None when a library
+    failed to load.
     """
     from sushi_lang.backend.library_errors import LibraryError
     from sushi_lang.backend.library_format import LibraryFormat, check_manifest
     from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.internals import errors as er
 
-    wanted: dict[str, Optional[_ReexportOrigin]] = {}
-    for unit in list(unit_manager.units.values()):
-        if unit.ast is None or unit.provenance is not None:
-            continue
-        wanted.update((u.path, None) for u in unit.ast.uses if u.is_library)
-    if not wanted:
+    todo = _consumer_wants(unit_manager)
+    if not todo:
         return None, set()
 
     resolver = LibraryResolver()
     binary_imports: set[str] = set()
-    compiled_reexports: dict[str, list[str]] = {}
+    compiled_dependencies: dict[str, list[str]] = {}
     source_units: dict[str, list[str]] = {}
+    names: dict[str, str] = {}
+    loaded: dict[str, _Loaded] = {}
 
     print("Linking custom libraries:")
-    todo = sorted(wanted)
     while todo:
-        lib_path = todo.pop(0)
+        wanted = todo.pop(0)
         try:
+            known = names.get(wanted.path)
+            if known is not None:
+                _check_expected(known, loaded[known], wanted)
+                continue
             try:
-                slib_path = resolver.resolve_library(lib_path)
+                slib_path = resolver.resolve_library(wanted.path)
             except LibraryError as e:
-                origin = wanted[lib_path]
-                if origin is not None and origin[1] is not None:
-                    e.note_at(origin[0], origin[1], origin[2])
-                elif origin is not None:
-                    e.note(origin[0])
+                _add_origin_note(e, wanted.origin)
                 raise
             metadata = LibraryFormat.read_metadata_only(slib_path)
             check_manifest(metadata, str(slib_path))
+            name = metadata["library_name"]
+            version = metadata["library_version"]
+            names[wanted.path] = name
+            if name in loaded:
+                first = loaded[name]
+                if first.version != version:
+                    raise _two_versions(name, first.found(),
+                                        _Loaded(version, slib_path, wanted.origin).found())
+                _check_expected(name, first, wanted)
+                continue
+            loaded[name] = _Loaded(version, slib_path, wanted.origin)
+            _check_expected(name, loaded[name], wanted)
             _check_library_platform(metadata)
-            _check_library_compiler_version(metadata, lib_path,
+            _check_library_compiler_version(metadata, wanted.path,
                                             ignore=ignore_compiler_version)
-            _check_library_templates_version(metadata, lib_path)
+            _check_library_templates_version(metadata, wanted.path)
 
             if metadata.get("kind") == "source":
                 injected = _inject_library_source(unit_manager, slib_path, metadata,
-                                                  lib_path, cache)
-                reexported = _source_library_reexports(metadata, injected)
-                source_units[lib_path] = [unit.name for unit in injected]
+                                                  wanted.path, cache)
+                dependencies = _source_library_dependencies(metadata, injected)
+                source_units[wanted.path] = [unit.name for unit in injected]
             else:
-                binary_imports.add(lib_path)
+                binary_imports.add(wanted.path)
                 metadata["library_path"] = str(slib_path)
-                resolver.loaded_libraries[metadata["library_name"]] = metadata
-                reexported = _compiled_library_reexports(metadata)
-                compiled_reexports[lib_path] = [path for path, _ in reexported]
+                resolver.loaded_libraries[name] = metadata
+                dependencies = _compiled_library_dependencies(metadata)
+                compiled_dependencies[wanted.path] = [w.path for w in dependencies]
 
-            for path, origin in reexported:
-                if path not in wanted:
-                    wanted[path] = origin
-                    todo.append(path)
-            print(f"  - {' / '.join(lib_path.split('/'))}")
+            todo.extend(dependencies)
+            print(f"  - {' / '.join(wanted.path.split('/'))}")
         except LibraryError as e:
             er.emit_exception(reporter, e)
             return None
-        except SushiError:
-            raise
     print()
 
-    _depend_on_compiled_reexports(unit_manager, compiled_reexports, source_units)
+    resolver.library_names = dict(names)
+    _stamp_library_uses(unit_manager, names, loaded)
+    _depend_on_compiled_libraries(unit_manager, compiled_dependencies, source_units,
+                                  names)
     return (resolver if binary_imports else None), binary_imports
 
 
-def _depend_on_compiled_reexports(unit_manager: UnitManager,
-                                  compiled_reexports: dict[str, list[str]],
-                                  source_units: dict[str, list[str]]) -> None:
-    """A unit that imports a compiled library depends on the source units it re-exports.
+def _stamp_library_uses(unit_manager: UnitManager, names: dict[str, str],
+                        loaded: dict[str, _Loaded]) -> None:
+    """Stamp each `use <lib/...>` with the name and the version of what it found."""
+    for unit in unit_manager.units.values():
+        if unit.ast is None:
+            continue
+        for use in unit.ast.uses:
+            name = names.get(use.path) if use.is_library else None
+            if name is not None:
+                use.library_name = name
+                use.library_version = loaded[name].version
+
+
+def _depend_on_compiled_libraries(unit_manager: UnitManager,
+                                  compiled_dependencies: dict[str, list[str]],
+                                  source_units: dict[str, list[str]],
+                                  names: dict[str, str]) -> None:
+    """A unit that imports a compiled library depends on the source units it loads.
 
     A source library's `use` line is an edge of the dependency graph, but a compiled
     library's record is not text, so its importer gets the edge here: the collect
-    order and the cache key both read the graph.
+    order and the cache key both read the graph. Paths are compared through the
+    library NAME they found, so two paths to one library are one edge.
     """
-    if not compiled_reexports:
+    if not compiled_dependencies:
         return
+    by_name: dict[str, list[str]] = {}
+    for path, units in source_units.items():
+        by_name.setdefault(names[path], []).extend(units)
+    compiled_by_name = {names[path]: [names[dep] for dep in deps if dep in names]
+                        for path, deps in compiled_dependencies.items()}
     for unit in list(unit_manager.units.values()):
         if unit.ast is None:
             continue
-        todo = [use.path for use in unit.ast.uses
-                if use.is_library and use.path in compiled_reexports]
+        todo = [names[use.path] for use in unit.ast.uses
+                if use.is_library and names.get(use.path) in compiled_by_name]
         seen: set[str] = set()
         while todo:
-            path = todo.pop()
-            if path in seen:
+            name = todo.pop()
+            if name in seen:
                 continue
-            seen.add(path)
-            todo.extend(compiled_reexports.get(path, ()))
-            for name in source_units.get(path, ()):
-                if name != unit.name and name not in unit.dependencies:
-                    unit.dependencies.append(name)
+            seen.add(name)
+            todo.extend(compiled_by_name.get(name, ()))
+            for unit_name in by_name.get(name, ()):
+                if unit_name != unit.name and unit_name not in unit.dependencies:
+                    unit.dependencies.append(unit_name)
 
 
-_ReexportOrigin = tuple[str, Optional[Span], Optional[str]]
+def _recorded_versions(metadata: dict) -> dict[str, str]:
+    """The version a library's build found for each `lib/...` path it uses."""
+    from sushi_lang.semantics.library_registry import library_dependencies
+
+    return {record["path"]: record["library_version"]
+            for record in library_dependencies(metadata)
+            if record.get("library_version")}
 
 
-def _source_library_reexports(metadata: dict, units: list[Unit]
-                              ) -> list[tuple[str, _ReexportOrigin]]:
-    """The libraries a source library's units name in a `public use`, with the note."""
+def _source_library_dependencies(metadata: dict, units: list[Unit]) -> list[_Wanted]:
+    """Every `use <lib/...>` of a source library's units, plain or public, with the note.
+
+    The statement is in the text, so the note points at it. The version comes from the
+    manifest record, which a library built before #1120 does not carry.
+    """
     name = metadata.get("library_name") or "?"
-    return [(use.path, (f"'{name}' re-exports it with `public use <{use.path}>`",
-                        use.loc, str(unit.file_path)))
-            for unit in units if unit.ast is not None
-            for use in unit.ast.uses if use.is_library and use.is_public]
+    versions = _recorded_versions(metadata)
+    wants = []
+    for unit in units:
+        if unit.ast is None:
+            continue
+        for use in unit.ast.uses:
+            if not use.is_library:
+                continue
+            note = (f"'{name}' needs it, with `{_spelled(use)}`", use.loc,
+                    str(unit.file_path))
+            version = versions.get(use.path)
+            expected = None if version is None else (
+                version, f"'{name}' was built against {version}, with `{_spelled(use)}`")
+            wants.append(_Wanted(use.path, note, expected))
+    return wants
 
 
-def _compiled_library_reexports(metadata: dict) -> list[tuple[str, _ReexportOrigin]]:
-    """The libraries a compiled library's `reexports` records name, with the note."""
-    from sushi_lang.semantics.library_registry import reexported_libraries
+def _compiled_library_dependencies(metadata: dict) -> list[_Wanted]:
+    """Every library a compiled library's manifest records, with the note.
+
+    A `dependencies` record states the version; a `reexports` record of a library built
+    before the dependencies were recorded states only the path.
+    """
+    from sushi_lang.semantics.library_registry import (
+        library_dependencies, reexported_libraries)
 
     name = metadata.get("library_name") or "?"
-    return [(path, (f"'{name}' re-exports it with `public use <{path}>`", None, None))
-            for path in reexported_libraries(metadata)]
+    reexported = reexported_libraries(metadata)
+    wants = []
+    seen: set[str] = set()
+    for record in library_dependencies(metadata):
+        path = record["path"]
+        spelled = f"{'public ' if path in reexported else ''}use <{path}>"
+        version = record.get("library_version")
+        expected = None if not version else (
+            version, f"'{name}' was built against {version}, with `{spelled}`")
+        wants.append(_Wanted(path, (f"'{name}' needs it, with `{spelled}`", None, None),
+                             expected))
+        seen.add(path)
+    for path in reexported:
+        if path not in seen:
+            wants.append(_Wanted(
+                path, (f"'{name}' needs it, with `public use <{path}>`", None, None)))
+    return wants
 
 
 def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata: dict,
@@ -449,11 +598,11 @@ def _stdlib_units(compilation_order: list[Unit], library_linker,
                   reporter: Reporter) -> set[str] | None:
     """Every stdlib module the program links, built and resolved (CE3006 when unknown).
 
-    A compiled library's re-exported module joins the set for the same reason the
-    injection reads it (#585): the consumer names the module's symbols, so the module's
-    bitcode has to be on the link line even where no unit wrote the import.
+    A compiled library's re-exported or used module joins the set for the same reason
+    the injection reads it (#585, #1120): the module's symbols are named, so its bitcode
+    has to be on the link line even where no unit of the build wrote the import.
     """
-    stdlib_units = _reexported_stdlib_modules(library_linker)
+    stdlib_units = _compiled_stdlib_modules(library_linker)
     for unit in compilation_order:
         if unit.ast:
             for use_stmt in unit.ast.uses:
