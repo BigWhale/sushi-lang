@@ -49,6 +49,24 @@ def split_type_arguments(text: str, sep: str = ",") -> list[str]:
     return parts
 
 
+def strip_grouping(text: str) -> str:
+    """`(T)` is `T`: the parentheses around a function element of an array (#1128)."""
+    while text.startswith("(") and text.endswith(")") and _closing_paren(text) == len(text) - 1:
+        text = text[1:-1].strip()
+    return text
+
+
+def _closing_paren(text: str) -> int:
+    """The index of the `)` that closes the `(` at index 0, or -1."""
+    depth = 0
+    for index, char in enumerate(text):
+        depth += char == "("
+        depth -= char == ")"
+        if depth == 0:
+            return index
+    return -1
+
+
 def parse_function_type_string(type_str: str, resolve: Callable[[str], Type]) -> Type:
     """Read a first-class function type string: "fn(P0, P1, ...) -> T [| E]".
 
@@ -102,7 +120,7 @@ def parse_function_type_string(type_str: str, resolve: Callable[[str], Type]) ->
 
 def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     """Resolve a type from its string representation."""
-    type_str = type_str.strip()
+    type_str = strip_grouping(type_str.strip())
 
     # First-class function type: must be handled before the array branch (its return
     # type may legitimately end with "[]", which the array regex would misparse).

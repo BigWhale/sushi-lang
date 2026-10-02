@@ -1,0 +1,24 @@
+# `foreach` over an array of function values, and the type as a parameter (#1128).
+# EXPECT_STDOUT_EXACT: "4\n6\n9\n19\n"
+# EXPECT_STDERR_EMPTY: true
+fn inc(i32 x) i32:
+    return x + 1
+
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn sq(i32 x) i32:
+    return x * x
+
+fn total((fn(i32) -> i32)[] fs, i32 v) i32:
+    let i32 sum = 0
+    foreach(f in fs.iter()):
+        sum := sum + f(v)
+    return sum
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([inc, dbl, sq])
+    foreach(f in fs.iter()):
+        println(f(3))
+    println(total(fs, 3))
+    return 0

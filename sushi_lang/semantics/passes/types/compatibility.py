@@ -26,51 +26,43 @@ def validate_assignment_compatibility(validator: 'TypeValidator', declared_type:
                                    declared_span, value_span)
 
 
-def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
+def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> bool:
     """CE2002 alone: the value has been validated already.
 
     Split from the validation because a caller can have a better code for the SAME
     binding and still owes the value its own diagnostics -- an unhandled `Result` is
     CE2505, and the call that produced it may hold a wrong argument the reader needs
-    to see (#535).
+    to see (#535). Answers whether a diagnostic refused the binding.
     """
     if declared_type is None:
-        return
+        return False
 
     if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
         if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):
-            return
+            return True
 
     # CE2011 spoke at a short row (`validate_array_literal`); a CE2002 would pile on.
     literal = value_expr.elements if isinstance(value_expr, DynamicArrayFrom) else value_expr
     if short_rows(validator, literal):
-        return
+        return True
 
-    if isinstance(declared_type, DynamicArrayType):
-        if isinstance(value_expr, DynamicArrayNew):
-            return
-        elif isinstance(value_expr, DynamicArrayFrom):
-            inferred_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
-            if inferred_type is None:
-                return  # Error already reported or empty array
-            if not types_compatible(validator, inferred_type, declared_type):
-                b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-                       got=display_type(inferred_type), expected=display_type(declared_type))
-                if declared_span:
-                    b.note_at("declared here", declared_span)
-                b.emit()
-            return
-
-    value_type = validator.infer_expression_type(value_expr)
+    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayNew):
+        return False
+    if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayFrom):
+        value_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
+    else:
+        value_type = validator.infer_expression_type(value_expr)
     if value_type is None:
-        return  # Can't validate without inferred type
+        return False  # Error already reported, or no type to compare
 
-    if not types_compatible(validator, value_type, declared_type):
-        b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-               got=display_type(value_type), expected=display_type(declared_type))
-        if declared_span:
-            b.note_at("declared here", declared_span)
-        b.emit()
+    if types_compatible(validator, value_type, declared_type):
+        return False
+    b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
+           got=display_type(value_type), expected=display_type(declared_type))
+    if declared_span:
+        b.note_at("declared here", declared_span)
+    b.emit()
+    return True
 
 
 def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:

@@ -1,0 +1,13 @@
+# `push` on an array of function values, a lambda included (#1128).
+# EXPECT_STDOUT_EXACT: "3\n8\n"
+# EXPECT_STDERR_EMPTY: true
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([inc])
+    fs.push(inc)
+    fs.push(|i32 x| x * 4)
+    println(fs.len())
+    println(fs[2](2))
+    return 0

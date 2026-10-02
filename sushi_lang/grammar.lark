@@ -132,11 +132,16 @@ continue_stmt: CONTINUE _NEWLINE
      | FN "(" [fn_param_types] ")" "->" type ["|" type] -> fn_type_t
      | array_type
      | atom_type
+     | paren_type
 
 # The array suffixes read left to right: a suffix applies to the type on its left, so
 # `i32[2][3]` is a fixed array of 3 `i32[2]` (docs/design/array-representation.md).
-?array_type: (array_type | atom_type) "[" array_size "]" -> array_t
-           | (array_type | atom_type) "[" "]" -> dynamic_array_t
+# A function type takes a suffix only in parentheses: `(fn(i32) -> i32)[]` is an array
+# of function values, and `fn(i32) -> i32[]` returns an `i32[]` (#1128).
+?array_type: (array_type | atom_type | paren_type) "[" array_size "]" -> array_t
+           | (array_type | atom_type | paren_type) "[" "]" -> dynamic_array_t
+
+?paren_type: "(" type ")"
 
 ?atom_type: "i8" -> i8_t
           | "i16" -> i16_t

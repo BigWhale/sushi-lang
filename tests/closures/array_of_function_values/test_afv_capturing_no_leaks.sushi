@@ -1,0 +1,21 @@
+# An array of function values owns each closure environment, and destroys it (#1128).
+# EXPECT_STDOUT_EXACT: "17\n5\n3\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let string tag = "Mostly Harmless"
+    let string other = "abc"
+    let (fn(i32) -> i32)[] fs = from([|i32 x| x + tag.len()])
+    fs.push(inc)
+    fs.push(|i32 x| x + other.len())
+    println(fs[0](2))
+    println(fs[2](2))
+    println(fs.len())
+    let (fn(i32) -> i32)[2] fixed = [inc, |i32 x| x + 1]
+    println(fixed[1](1))
+    return 0

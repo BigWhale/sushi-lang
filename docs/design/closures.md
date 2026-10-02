@@ -76,8 +76,16 @@ A function type mirrors the function-declaration return/error syntax:
 - `fn(i32) -> i32 | MathError` — an error channel: a call yields `Result@(i32, MathError)`.
 - `fn() -> ~` — no parameters, blank return.
 
-Collections of functions use the generic form: `List@(fn(i32) -> i32)` (a raw array of function
-pointers is not expressible — the `[]` in `fn() -> T[]` binds to the return type).
+An array of function values puts the function type in parentheses: `(fn(i32) -> i32)[]` is a
+dynamic array and `(fn(i32) -> i32)[3]` is a fixed array. Without parentheses, the `[]` in
+`fn() -> T[]` binds to the return type, so `fn(i32) -> i32[]` is a function that returns `i32[]`.
+Parentheses around a function type are legal in every type position, and they do not change the
+type: `List@((fn(i32) -> i32))` is `List@(fn(i32) -> i32)`. The grammar rule is
+`paren_type: "(" type ")"`, and it is inlined, so the AST builder never sees it. `display_type`
+and `str()` put the parentheses back around a function element of an array, so the two types
+never print alike, and the manifest reader takes them off again (`strip_grouping`). A function
+value is a four-word closure that can own its environment, so an array of function values is an
+array of an owning element: each slot is destroyed with the array.
 
 **Channel-transparent call.** A Sushi `fn` with a channel lowers to `Result@(T, E)(params)`, and
 a bare `fn` lowers to `T(params)`. Calling through a function value therefore yields what a direct

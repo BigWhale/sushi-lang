@@ -257,6 +257,13 @@ fn(i32, string) -> bool        # two parameters
 fn() -> ~                      # no parameters, blank return
 ```
 
+An array of function values puts the function type in parentheses: `(fn(i32) -> i32)[]` is a
+dynamic array, and `(fn(i32) -> i32)[3]` is a fixed array. Without the parentheses, an array
+suffix belongs to the return type, so `fn(i32) -> i32[]` is a function that returns `i32[]`.
+Parentheses around a function type are legal in every type position and do not change the
+type: `List@((fn(i32) -> i32))` is `List@(fn(i32) -> i32)`. A diagnostic prints the
+parentheses around a function element of an array.
+
 A function with a channel that returns a function type writes the explicit form,
 `fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type
 belongs to that function type, so `fn make() fn(i32) -> i32 | StdError:` is a bare function
