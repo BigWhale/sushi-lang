@@ -306,6 +306,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("reexport", "kind", "str", "no"),
     ("not_exported", "name", "str", "yes"),
     ("not_exported", "kind", "str", "no"),
+    ("not_exported", "unit", "str", "no"),
     ("foreign_extension", "type", "str", "yes"),
     ("foreign_extension", "method", "str", "yes"),
 )

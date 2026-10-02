@@ -74,7 +74,11 @@ name), and a binary library's function emits the symbol its manifest records. So
 may have the name of the C function it calls (`fn sin(f64 x) f64` beside `= "sin"`), and a
 user function named `getpid` does not break another unit's extern of `getpid`. A link name
 that spells an emitted symbol (`= "geo$vec$f"`) is still `CE5013`, and so is `user_main`,
-the symbol of the body of `main`.
+the symbol of the body of `main`. A monomorphized instance of a generic emits a symbol too,
+and the rule sees it: `ident@(i32)` of the unit `inst` emits `inst$ident__i32`, and an
+instance of a binary library's template emits `gen__i32` with no prefix. A private
+declaration that a binary library keeps emits the symbol of the unit that keeps it, and only
+that symbol is refused.
 
 The reason is that there is no link step left to keep the two apart. A program's units share
 one LLVM module and a linked library's module is merged into it, so a declaration and a

@@ -609,7 +609,9 @@ The consumer's own call resolves to the consumer's declaration, with the consume
 signature. There is no single winner of a function name, so nothing is dropped and
 nothing is booked as a loser. Shadowing an export is legal but rarely intended, so
 **CW3002** says so, and `use <lib/flib> as fl` puts the export behind a dot and the shadow
-away.
+away. The warning is the same for every library kind (#1103): for a binary or a hybrid
+library, the `libraries` step reads the export from the manifest, which lists every public
+function and template.
 
 For a TYPE, a public name of a SOURCE library stays the plain duplicate (CE0004 / CE2046);
 a public concrete type of a BINARY library is **CE3011**, because the consumer cannot see

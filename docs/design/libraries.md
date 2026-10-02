@@ -133,7 +133,7 @@ authority, and the index is a cache of it.
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
-| `not_exported` | what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
+| `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
 | `dependencies` | the libraries this library imports. `--lib-info` lists them; no consumer resolves them, so a consumer states every library it needs with its own `use` (§5.8) |
 
@@ -820,7 +820,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 
 | Situation | Rule | Why |
 |---|---|---|
-| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. `docs/design/visibility.md` §9.1 |
+| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so, for every library kind | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. A binary or hybrid library warns from its manifest, in the `libraries` step, for a public function and a public template alike (#1103). `docs/design/visibility.md` §9.1 |
 | Consumer TYPE name == public library type (**source**) | **CE0004** / **CE2046**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own. The library's units are compilation units here, so the collect pass answers at the declaration and a note points at the library's |
 | Consumer TYPE name == public library type (**binary**) | **CE3011**, hard error | the same rule, and the same answer a source library's PRIVATE type gets, for the same reason: the consumer cannot SEE the declaration that holds the name, so the head line names the library instead of pointing a note at a file the consumer does not have. The `libraries` step refuses it, where the manifest meets the collected tables. The consumer keeps its own type in its tables |
 | Consumer TYPE name == library-PRIVATE type or private generic template (**source** and **binary**) | **CE3011**, hard error, and the analysis stops after it | type identity is nominal, so one name is one shape even where the consumer cannot see the library's declaration. Renaming is the only move, and `docs/design/type-identity.md` phase 2 is what would lift it |

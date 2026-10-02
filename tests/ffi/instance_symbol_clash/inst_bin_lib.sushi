@@ -1,0 +1,5 @@
+# A library with one public generic (#1113). A consumer's instance of a BINARY
+# build's template takes the bare symbol `inst_gen__i32`.
+
+public fn inst_gen@(T)(nom T x) T:
+    return x

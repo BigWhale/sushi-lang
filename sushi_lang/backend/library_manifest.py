@@ -354,7 +354,7 @@ class LibraryManifestGenerator:
         return public_funcs
 
     def _extract_not_exported(self, units: list['Unit'], templates: dict) -> list[dict]:
-        """Name what the library declares and keeps -- a name, and its kind (#469).
+        """Name what the library declares and keeps -- a name, its kind and its unit (#469).
 
         The export closure ships the privates a public generic's body needs, and those
         carry a signature the consumer registers. A private no template names ships
@@ -363,6 +363,9 @@ class LibraryManifestGenerator:
         instead, so no signature, body or source travels here.
 
         Each private is named in exactly ONE place: the closure, or this list.
+
+        A record is keyed by (unit, name), because two units may each keep a `helper`
+        (#1112). The unit tells CE5013 which symbol the bitcode defines.
         """
         summary = templates.get("closure_summary") or {}
         shipped = (set(summary.get("private_functions", []))
@@ -370,7 +373,7 @@ class LibraryManifestGenerator:
                    | set(summary.get("private_types", []))
                    | set(summary.get("constants", [])))
 
-        kept: dict[str, str] = {}
+        kept: dict[tuple[str, str], str] = {}
         for unit in own_units(units):
             if unit.ast is None:
                 continue
@@ -381,7 +384,7 @@ class LibraryManifestGenerator:
                 # now, and neither is a name a consumer can write.
                 if getattr(func, "is_synthesized", False):
                     continue
-                kept[func.name] = (
+                kept[(unit.name, func.name)] = (
                     "generic_function" if func.type_params else "function"
                 )
             # A type and a constant are kept the same way, and for the same reason: the
@@ -390,15 +393,17 @@ class LibraryManifestGenerator:
             # this library does make.
             for struct_def in unit.ast.structs:
                 if not struct_def.is_public and struct_def.name not in shipped:
-                    kept[struct_def.name] = "struct"
+                    kept[(unit.name, struct_def.name)] = "struct"
             for enum_def in unit.ast.enums:
                 if not enum_def.is_public and enum_def.name not in shipped:
-                    kept[enum_def.name] = "enum"
+                    kept[(unit.name, enum_def.name)] = "enum"
             for const in unit.ast.constants:
                 if not const.is_public and const.name not in shipped:
-                    kept[const.name] = "variable" if isinstance(const, VarDef) else "constant"
+                    kept[(unit.name, const.name)] = (
+                        "variable" if isinstance(const, VarDef) else "constant")
 
-        return [{"name": name, "kind": kept[name]} for name in sorted(kept)]
+        return [{"name": name, "kind": kept[(unit, name)], "unit": unit}
+                for unit, name in sorted(kept, key=lambda key: (key[1], key[0]))]
 
     def _extract_foreign_extensions(self, units: list['Unit']) -> list[dict]:
         """The foreign types this library claims methods on, in declaration order."""

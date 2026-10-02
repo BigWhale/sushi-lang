@@ -1,0 +1,5 @@
+fn helper(i32 n) i32:
+    return n + 20
+
+public fn from_twin_b(i32 n) i32:
+    return helper(n)

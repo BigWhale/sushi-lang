@@ -154,6 +154,10 @@ class SemanticAnalyzer:
         into the extension table. It is the `monomorphize` stage's tail and both ends of
         its placement -- after `derive`, before `shadowing` -- are load-bearing.
 
+        `ffi-clash` has a second half with no row of its own: `_check_instance_clash`
+        runs CE5013 over the monomorphized function instances, directly after
+        `monomorphize`, because no instance exists before it (#1113).
+
         `semantics/const_eval.py` is NOT a pass. THREE callers reach it as a helper: the
         AST BUILDER, which reads a fixed array's size while the unit is parsed (Known
         Limitation 12) and keeps a constant table of its own for it; the `typecheck`
@@ -207,6 +211,7 @@ class SemanticAnalyzer:
         instantiations = self._collect_instantiations(compilation_order, libraries)
         monomorphizer, concrete_extension_defs = self._monomorphize(
             compilation_order, instantiations)
+        self._check_instance_clash(compilation_order)
 
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
         # as CE2095 does below. CE4006 stands at the type that named the refused
@@ -394,6 +399,24 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             reject_disagreeing_link_names(unit_reporter, unit.ast, self.tables.externals,
                                           link_names)
+            self._merge_unit(unit_reporter)
+
+    def _check_instance_clash(self, compilation_order: list[Unit]) -> None:
+        """ffi-clash, the instance half: an extern naming a monomorphized instance (CE5013).
+
+        It runs after `monomorphize`, because no instance exists before it (#1113).
+        """
+        from sushi_lang.semantics.passes.types.externals import (
+            monomorphized_instances, reject_external_naming_an_instance,
+        )
+        instances = monomorphized_instances(compilation_order, self.tables.funcs)
+        if not instances:
+            return
+        for unit in compilation_order:
+            if unit.ast is None or not getattr(unit.ast, "externals", None):
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],

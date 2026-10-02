@@ -1,0 +1,7 @@
+# A library of three units (#1112). Only `kept_unit_a` keeps a private `helper`,
+# so the library bitcode defines `kept_unit_a$helper` and no `kept_unit_b$helper`.
+use "kept_unit_a"
+use "kept_unit_b"
+
+public fn both(i32 n) i32:
+    return from_a(n) + from_b(n)

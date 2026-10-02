@@ -326,6 +326,29 @@ def library_clash_origin(
     return origin
 
 
+def warn_shadowed_export(
+    reporter: Reporter,
+    name: str,
+    name_span: Optional[Span],
+    filename: Optional[str],
+    *,
+    owner: Optional[str],
+    export_span: Optional[Span] = None,
+    export_filename: Optional[str] = None,
+) -> None:
+    """CW3002: a consumer function takes the name of a function that a library exports.
+
+    The one emitter for every library kind (#1103). The collect pass calls it for a
+    source library, and the `libraries` step calls it for a binary or a hybrid
+    library. A manifest record has no span, so its warning has no note.
+    """
+    diagnostic = er.emit_with(reporter, er.ERR.CW3002, name_span, filename=filename,
+                              name=name, kind="function", owner=owner)
+    if export_span is not None and export_filename is not None:
+        diagnostic = diagnostic.note_at("exported here", export_span, export_filename)
+    diagnostic.emit()
+
+
 def taken_by_a_library(
     owner_unit: Optional[str],
     *,

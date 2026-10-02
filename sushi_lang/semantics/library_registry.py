@@ -95,6 +95,9 @@ class LibraryMetadata:
     path: Path
     platform: str
     functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    # The unit that exports each public function, as `lib/<library>/<unit>`: the name
+    # a source library's injected unit has. CW3002 names it (#1103).
+    export_units: dict[str, str] = field(default_factory=dict)
     # Export-closure private helpers (C4b/C5): signature-only records whose
     # definitions link from the library bitcode. Kept separate from
     # `functions` because the consumer applies clash (CE5007), not
@@ -107,6 +110,10 @@ class LibraryMetadata:
     # enum and a constant. A type is the one the type funnel asks about, because a kept
     # type reaches no table and "unknown type" was the wrong word for it.
     not_exported: dict[str, str] = field(default_factory=dict)
+    # The same records as (unit, name, kind), one for each unit that keeps the name
+    # (#1112). CE5013 reads the unit to know which symbol the bitcode defines. The unit
+    # is None for a record of a library that was built before the record had one.
+    kept: tuple[tuple[str | None, str, str], ...] = ()
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
     dependencies: list[str] = field(default_factory=list)
@@ -158,6 +165,10 @@ class LibraryRegistry:
 
         metadata.functions = self._parse_functions(manifest.get("public_functions", []),
                                                    lib_path=lib_path)
+        metadata.export_units = {
+            func_info["name"]: f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            for func_info in manifest.get("public_functions", []) or []
+        }
 
         # Keyed (unit, name): two of the library's own units may each ship a
         # private `helper`, and each record names its unit (#494). The key wears the
@@ -169,10 +180,13 @@ class LibraryRegistry:
             parsed = self._parse_functions([func_info], owner=unit, lib_path=lib_path)
             metadata.private_functions[(unit, func_info["name"])] = parsed[func_info["name"]]
 
+        kept_records = manifest.get("not_exported", []) or []
         metadata.not_exported = {
-            record["name"]: record.get("kind", "function")
-            for record in manifest.get("not_exported", []) or []
+            record["name"]: record.get("kind", "function") for record in kept_records
         }
+        metadata.kept = tuple(
+            (record.get("unit"), record["name"], record.get("kind", "function"))
+            for record in kept_records)
 
         self._libraries[lib_name] = metadata
         return metadata

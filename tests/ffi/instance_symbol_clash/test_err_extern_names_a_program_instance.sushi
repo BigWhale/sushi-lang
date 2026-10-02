@@ -1,0 +1,13 @@
+# The link name is the symbol of an instance of the program's own generic
+# (#1113): `ident@(i32)` emits `<unit>$ident__i32`.
+# EXPECT_ERROR_CODE: CE5013
+unsafe external "C" as raw because "naming an instance":
+    fn g(i32 x) i32 = "test_err_extern_names_a_program_instance$ident__i32"
+
+fn ident@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    println(ident(nom 3))
+    println(raw.g(4))
+    return 0
