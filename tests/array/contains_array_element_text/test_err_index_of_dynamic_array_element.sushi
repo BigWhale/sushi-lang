@@ -1,0 +1,9 @@
+# A dynamic array element gets the same text from `index_of` (#1116).
+# EXPECT_ERROR_CODES_EXACT: CE2100
+# EXPECT_STDERR_CONTAINS: "an array has no '==' at the top level"
+
+fn main() i32:
+    let i32[][] rows = from([from([1, 2])])
+    let i32[] needle = from([1, 2])
+    println(rows.index_of(needle).realise(-1))
+    return 0
