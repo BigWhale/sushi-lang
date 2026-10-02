@@ -10,7 +10,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType, ForeignPtrType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
-    reject_private_kept, reject_private_type)
+    name_was_refused, reject_private_kept, reject_private_type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Param, Expr
@@ -179,8 +179,9 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             return
         # A binary library's kept type reaches no table at all, so "unknown" was the
         # wrong word for it (#469, the type half).
-        if reject_private_kept(validator, type_obj.name, span,
-                               kinds=_KEPT_TYPE_KINDS):
+        # A name CE1005 refused in this unit is that one fault (#1102).
+        if (reject_private_kept(validator, type_obj.name, span, kinds=_KEPT_TYPE_KINDS)
+                or name_was_refused(validator, type_obj.name)):
             return
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:

@@ -149,6 +149,15 @@ class VisibilityTable:
     # candidate a written name could mean and points at each declaration.
     contested: dict[tuple[str, str], list[DeclOrigin]] = field(default_factory=dict)
 
+    # The names a unit declared a second time under another kind, keyed (unit, name).
+    # CE1005 or CE0006 refused that declaration, and a use that finds nothing under the
+    # name is the same fault, so it gives no second diagnostic (#1102).
+    refused: set[tuple[Optional[str], str]] = field(default_factory=set)
+
+    def refused_by(self, unit: Optional[str], name: str) -> bool:
+        """Did `unit` declare `name` a second time, and lose the declaration?"""
+        return (unit, name) in self.refused
+
     def record(self, origin: DeclOrigin) -> None:
         """Remember a declaration. The FIRST one wins, as every symbol table does.
 

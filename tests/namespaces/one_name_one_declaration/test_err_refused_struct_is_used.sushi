@@ -1,0 +1,17 @@
+# A struct that CE1005 refused is the one fault (#1102): a parameter, a `let` and a
+# construction that name it give no CE2001 and no CE2008.
+# EXPECT_ERROR_CODES_EXACT: CE1005
+# EXPECT_STDERR_CONTAINS: struct 'Crate' already declared in this unit as a constant
+
+const i32 Crate = 3
+
+struct Crate:
+    i32 weight
+
+fn weigh(Crate c) i32:
+    return c.weight
+
+fn main() i32:
+    let Crate c = Crate(4)
+    println(weigh(c))
+    return 0
