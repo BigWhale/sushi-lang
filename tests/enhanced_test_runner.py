@@ -2,6 +2,7 @@
 """Enhanced test runner for the Sushi language compiler."""
 
 import atexit
+from collections import Counter
 import io
 import re
 import subprocess
@@ -43,9 +44,9 @@ _NUMERIC = re.compile(r"-?\d+")
 _DIAGNOSTIC_CODE = re.compile(r"\b(?:error|warning) \[(C[EW]\d{4})\]")
 
 
-def diagnostic_codes(stderr: str) -> set:
-    """Every distinct diagnostic code the compiler printed."""
-    return set(_DIAGNOSTIC_CODE.findall(stderr or ""))
+def diagnostic_codes(stderr: str) -> Counter:
+    """Each diagnostic code the compiler printed, with the number of times it printed it."""
+    return Counter(_DIAGNOSTIC_CODE.findall(stderr or ""))
 
 # Why a leak assertion was not evaluated. A skip is never a pass, so the reason has to
 # survive as far as the summary; these constants are what _check_leaks records and what
@@ -1012,14 +1013,16 @@ class TestRunner:
                 + f"\nSTDERR: {stderr.strip()}"
             )
         if metadata.expect_error_codes_exact is not None:
-            expected = set(metadata.expect_error_codes_exact)
+            expected = Counter(metadata.expect_error_codes_exact)
             printed = diagnostic_codes(stderr)
             if printed != expected:
+                differ = "".join(
+                    f"\n  {code}: expected {expected[code]}, printed {printed[code]}"
+                    for code in sorted(expected.keys() | printed.keys())
+                    if expected[code] != printed[code])
                 return False, (
-                    "✗ Compilation: the diagnostic codes are not the exact set"
-                    f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
-                    f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
-                    f"\nSTDERR: {stderr.strip()}"
+                    "✗ Compilation: the diagnostic codes are not the exact multiset"
+                    f"{differ}\nSTDERR: {stderr.strip()}"
                 )
         return True, "✓ Compilation: diagnostics matched"
 

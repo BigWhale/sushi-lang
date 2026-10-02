@@ -224,13 +224,14 @@ compilation failed but *which* diagnostic fired.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
 - It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
-  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the set.
+  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
 
 #### EXPECT_ERROR_CODES_EXACT
 
-Asserts the WHOLE set of diagnostic codes the compiler printed, warnings included, for a
-`test_err_*` / `test_warn_*` test. A code that is missing fails the test, and so does a
-code that is printed and not listed.
+Asserts the WHOLE multiset of diagnostic codes the compiler printed, warnings included,
+for a `test_err_*` / `test_warn_*` test. A code that is missing fails the test, a code
+that is printed and not listed fails it, and so does a code that is printed more times
+or fewer times than it is listed.
 
 ```sushi
 # EXPECT_ERROR_CODES_EXACT: CE2009
@@ -238,10 +239,14 @@ code that is printed and not listed.
 ```
 
 - A comma/space separated list; the directive may be repeated, and the lists add up
-- It compares SETS: a code printed twice is listed once
+- It compares MULTISETS (#1060): `CE0112` means exactly one CE0112, and
+  `CE0112, CE0112` means two. A warning is counted the same way. A code that the
+  compiler prints twice for one fault is a duplicate diagnostic: do not list it twice
+  to make the fixture pass
 - A code is read from the head of each diagnostic (`error [CE1001]`,
   `warning [CW1001]`); a code inside a message or a note does not count
-- The failure names each missing code and each code that was not expected
+- The failure names each code whose count is different, with both counts
+  (`CE0112: expected 1, printed 2`)
 
 ### Advanced Metadata Directives
 
