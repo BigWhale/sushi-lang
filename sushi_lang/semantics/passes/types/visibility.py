@@ -26,7 +26,8 @@ __all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
            "reject_out_of_scope_perk", "reject_out_of_scope_type",
            "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
-           "reject_private_type", "type_is_contested", "type_name_is_contested"]
+           "reject_private_type", "type_is_contested", "type_name_is_contested",
+           "name_was_refused"]
 
 
 # Which kinds one written type name could be. `struct` and `enum` share one namespace,
@@ -168,6 +169,16 @@ def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
     if table is None:
         return False
     return table.contested_by(kind, name, validator.current_unit_name)
+
+
+def name_was_refused(validator: 'TypeValidator', name: str) -> bool:
+    """Did the unit being validated declare `name` a second time, under another kind?
+
+    CE1005 (or CE0006) refused that declaration, so a use of the name that finds
+    nothing is the same fault and gives no second diagnostic (#1102).
+    """
+    table = getattr(validator, "visibility", None)
+    return table is not None and table.refused_by(validator.current_unit_name, name)
 
 
 def type_name_is_contested(validator: 'TypeValidator', name: str) -> bool:

@@ -247,6 +247,9 @@ class FuncDef(Node):
     # The `lib/<library>/<unit>` whose scope the names of this body resolve in: a copy
     # of a compiled library's template, which lands in a unit of the consumer (#1120).
     scope_unit: Optional[str] = None
+    # The written type-pack parameters of the template this body is an instance of. The
+    # copy fans each one out, so the name is no local; a use outside `expand` is CE0144.
+    pack_names: Tuple[str, ...] = ()
 
 
 @dataclass(slots=True)

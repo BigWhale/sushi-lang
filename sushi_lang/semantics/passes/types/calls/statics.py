@@ -280,6 +280,10 @@ def _refuse_unstamped_generic(validator: 'TypeValidator', call) -> bool:
         declarations = validator.generic_extension_table.declarations(base, call.method)
         if not any(getattr(d, "is_static", False) for d in declarations):
             return False
+    # The declared type of this position was refused (CE2001): that is the one fault.
+    from sushi_lang.semantics.passes.types.propagation import holds_declared_type
+    if holds_declared_type(validator, call):
+        return True
 
     unsolved = _unreached_type_params(validator, call, base)
     spelled = _spell_names(unsolved)

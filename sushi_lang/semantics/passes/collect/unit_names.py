@@ -56,8 +56,9 @@ def _declared(program: Program) -> Iterator[_Declared]:
 class RefusedDeclarations:
     """The declarations of one unit that lost their name to an earlier one."""
 
-    def __init__(self, nodes: Optional[List[object]] = None) -> None:
-        self._ids = {id(node) for node in nodes or ()}
+    def __init__(self, nodes: Optional[List[_Declared]] = None) -> None:
+        self._ids = {id(decl.node) for decl in nodes or ()}
+        self.names = frozenset(decl.name for decl in nodes or ())
 
     def admits(self, node: object) -> bool:
         return id(node) not in self._ids
@@ -67,13 +68,13 @@ def claim_unit_names(reporter: Reporter, program: Program,
                      filename: Optional[str]) -> RefusedDeclarations:
     """Refuse every later declaration of a name an earlier one of another kind holds."""
     holders: dict[str, _Declared] = {}
-    refused: List[object] = []
+    refused: List[_Declared] = []
     for decl in sorted(_declared(program), key=lambda d: (d.span.line, d.span.col)):
         holder = holders.setdefault(decl.name, decl)
         if holder is decl or holder.family == decl.family:
             continue
         _reject(reporter, decl, holder, filename)
-        refused.append(decl.node)
+        refused.append(decl)
     return RefusedDeclarations(refused)
 
 

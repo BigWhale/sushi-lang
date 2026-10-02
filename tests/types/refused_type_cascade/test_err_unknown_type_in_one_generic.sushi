@@ -1,0 +1,8 @@
+# An unknown name inside one generic type is one CE2001, for the name; the outer type gives no second one.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+# EXPECT_STDERR_CONTAINS: unknown type 'Nope'
+
+fn main() i32:
+    let Maybe@(Nope) x = Maybe.None
+    println(x.is_some())
+    return 0

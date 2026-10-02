@@ -292,8 +292,11 @@ def _rewrite_slot(value, cap_names: set):
 
 
 def _env_access(name_node: Name) -> MemberAccess:
+    # The call-site `nom` marker rides on the argument node, so the read keeps it (#1130).
     return MemberAccess(
         receiver=Name(id=ENV_PARAM_NAME, loc=name_node.loc),
         member=name_node.id,
         loc=name_node.loc,
+        nom_marked=name_node.nom_marked,
+        nom_span=name_node.nom_span,
     )

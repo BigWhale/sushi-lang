@@ -1,5 +1,5 @@
 # A variadic generic call walks each argument once, the fixed ones and the pack alike.
-# EXPECT_ERROR_CODES_EXACT: CE0112
+# EXPECT_ERROR_CODES_EXACT: CE0112, CE0112
 fn lead@(H, ...Ts)(H a, ...Ts rest) H:
     return a
 

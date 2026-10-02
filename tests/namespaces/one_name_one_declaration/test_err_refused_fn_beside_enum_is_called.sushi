@@ -1,0 +1,14 @@
+# A call of a function that CE1005 refused beside an enum of the same name gives no
+# CE2008 (#1102).
+# EXPECT_ERROR_CODES_EXACT: CE1005
+# EXPECT_STDERR_CONTAINS: function 'Colour' already declared in this unit as an enum
+
+enum Colour:
+    Red
+
+fn Colour() i32:
+    return 4
+
+fn main() i32:
+    println(Colour())
+    return 0

@@ -1,7 +1,7 @@
 # Two sibling `expand`s over one pack rename `a` and `b` to the same hidden names.
 # Each diagnostic names its own written variable, because the record of the written
 # name sits on each renamed node and not on the hidden name.
-# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2411
 # EXPECT_STDERR_CONTAINS: cannot consume 'a'
 # EXPECT_STDERR_CONTAINS: `a.clone()`
 # EXPECT_STDERR_CONTAINS: cannot consume 'b'

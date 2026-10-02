@@ -1,0 +1,13 @@
+# A call of a function that CE1005 refused gives no second diagnostic (#1102): the
+# refused declaration is the one fault, so the call is not CE2008.
+# EXPECT_ERROR_CODES_EXACT: CE1005
+# EXPECT_STDERR_CONTAINS: function 'depth' already declared in this unit as a constant
+
+const i32 depth = 3
+
+fn depth() i32:
+    return 4
+
+fn main() i32:
+    println("{depth()}")
+    return 0

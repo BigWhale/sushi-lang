@@ -1,7 +1,7 @@
 # a short inner row is measured against the declared row type, not against the first
 # row: a short first row, a row of a dynamic outer array, a row two levels down, and a
 # row of a parameter argument each give one CE2011 at that row.
-# EXPECT_ERROR_CODES_EXACT: CE2011
+# EXPECT_ERROR_CODES_EXACT: CE2011, CE2011, CE2011, CE2011
 # EXPECT_STDERR_CONTAINS: "array literal has 1 elements but declared type expects 2"
 # EXPECT_STDERR_CONTAINS: "array literal has 3 elements but declared type expects 2"
 fn rows(i32[2][2] m) i32:

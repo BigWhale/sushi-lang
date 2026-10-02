@@ -1,6 +1,6 @@
 # a bare foreach binding is a read-only view of the row, so `insert` and `remove` on it
 # are refused; `foreach(poke r in ...)` is the escape.
-# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_ERROR_CODES_EXACT: CE2414, CE2414
 fn main() i32:
     let i32[][] g = from([from([0])])
     foreach(r in g.iter()):

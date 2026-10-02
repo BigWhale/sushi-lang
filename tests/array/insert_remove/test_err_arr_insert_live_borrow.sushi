@@ -1,6 +1,6 @@
 # an insert or a remove can move the buffer, so it is refused while a `let` borrow of an
 # element of the receiver, or of the receiver itself, lives.
-# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_ERROR_CODES_EXACT: CE2412, CE2412
 fn rows() i32:
     let i32[][] g = from([from([0]), from([1])])
     let peek i32[] row = g[0]

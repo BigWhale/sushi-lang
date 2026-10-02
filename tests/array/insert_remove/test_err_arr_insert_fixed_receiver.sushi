@@ -1,6 +1,6 @@
 # a fixed array cannot grow or leave a hole, so `insert` and `remove` on a `T[N]`
 # receiver are refused with the rule `push` and `pop` follow.
-# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_ERROR_CODES_EXACT: CE2023, CE2023
 fn main() i32:
     let i32[3] a = [1, 2, 3]
     a.insert(0, 4)

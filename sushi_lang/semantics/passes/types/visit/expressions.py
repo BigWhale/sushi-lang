@@ -313,6 +313,9 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         if node.id in tv.variable_types:
             return
+        from sushi_lang.semantics.passes.types.arguments import reject_type_pack_value
+        if reject_type_pack_value(tv, node):
+            return
         const_sig = tv.const_sig(node.id)
         if const_sig is not None:
             # The one place a bare constant is validated, so the one place the fence

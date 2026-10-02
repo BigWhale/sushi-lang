@@ -1,6 +1,6 @@
 # a constant is read-only storage, so `insert` and `remove` on one are refused before the
 # receiver kind is read.
-# EXPECT_ERROR_CODES_EXACT: CE2096
+# EXPECT_ERROR_CODES_EXACT: CE2096, CE2096
 const i32[3] TABLE = [1, 2, 3]
 
 fn main() i32:
