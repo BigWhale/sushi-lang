@@ -27,7 +27,8 @@ from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type, display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
-from sushi_lang.semantics.visibility import TYPE_KINDS, DeclOrigin, reject_library_clash
+from sushi_lang.semantics.visibility import (
+    TYPE_KINDS, DeclOrigin, reject_library_clash, warn_shadowed_export)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, Program
@@ -183,12 +184,14 @@ class LibraryRegistration:
         if self.registry is None and self.linker is None:
             return
         build_units = {u.name for u in compilation_order}
+        # A unit with a provenance arrived from a source library or the stdlib.
+        consumer_units = {u.name for u in compilation_order if u.provenance is None}
         self._register_types("structs", "struct", LibraryRegistry.get_all_structs,
                              build_units)
         self._register_types("enums", "enum", LibraryRegistry.get_all_enums,
                              build_units)
         self._refile_consumer_extensions(compilation_order)
-        self._register_functions()
+        self._register_functions(consumer_units)
         self._register_private_functions(build_units)
         self._register_not_exported()
         self._register_constants(compilation_order)
@@ -197,7 +200,7 @@ class LibraryRegistration:
         self._register_generic_perk_impls()
         self._register_extensions(build_units)
         self._register_generic_extensions(build_units)
-        self._register_generic_functions(build_units)
+        self._register_generic_functions(build_units, consumer_units)
 
     def signatures(self) -> Iterator['FuncSig']:
         """Every signature a loaded library's manifest declares: the public API, and
@@ -370,20 +373,40 @@ class LibraryRegistration:
                 owner = lib.name
         return owner
 
-    def _register_functions(self) -> None:
+    def _register_functions(self, consumer_units: set[str]) -> None:
         """Register the libraries' public functions into the function table.
 
         The registry's `_parse_functions` is the ONE reader of a manifest signature. A
         second builder lived here and read `return_type` alone, so a binary library's
-        `| E` was typed StdError at every consumer (#541).
+        `| E` was typed StdError at every consumer (#541). A consumer function of the
+        same name keeps the name, and CW3002 says so, as for a source library (#1103).
         """
         if self.registry is None:
             return
         funcs = self.tables.funcs
         for func_name, func_sig in self.registry.get_all_functions().items():
-            if func_name not in funcs.by_name:
+            existing = funcs.by_name.get(func_name)
+            if existing is None:
                 funcs.by_name[func_name] = func_sig
                 funcs.order.append(func_name)
+            elif existing.unit_name in consumer_units:
+                self._warn_shadowed_export(existing, self._export_unit(func_name))
+
+    def _export_unit(self, func_name: str) -> str:
+        """The unit that exports a public function, as `lib/<library>/<unit>`.
+
+        The LAST library that exports the name, as `get_all_functions` merges them.
+        """
+        owner = func_name
+        if self.registry is not None:
+            for lib in self.registry.get_all_libraries().values():
+                owner = lib.export_units.get(func_name, owner)
+        return owner
+
+    def _warn_shadowed_export(self, existing, owner: str) -> None:
+        """CW3002 at the consumer declaration that shadows a library export."""
+        warn_shadowed_export(self.reporter, existing.name, existing.name_span,
+                             existing.filename, owner=owner)
 
     def _register_private_functions(self, build_units: set[str]) -> None:
         """Register the export-closure private helpers (C4b/C5).
@@ -797,24 +820,27 @@ class LibraryRegistration:
                   "between the two; rename one of them") \
             .emit()
 
-    def _register_generic_functions(self, build_units: set[str]) -> None:
+    def _register_generic_functions(self, build_units: set[str],
+                                    consumer_units: set[str]) -> None:
         """Register the generic function templates the libraries ship."""
         generic_funcs = self.tables.generic_funcs
         for lib_name, manifest, record in self._template_records("generic_functions"):
             func_name = record["name"]
             template_unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
             existing = generic_funcs.by_name.get(func_name)
-            # A CONSUMER's declaration wins silently, but an export-closure PRIVATE
-            # template must keep its name: shadowing it would change what the
-            # library's other bodies call (CE5007). A declaration from ANOTHER library
-            # unit is neither: the two coexist, each under its unit (#494/#495), so the
-            # walk falls through to registration.
+            # A CONSUMER's declaration wins, and CW3002 says so (#1103), but an
+            # export-closure PRIVATE template must keep its name: shadowing it would
+            # change what the library's other bodies call (CE5007). A declaration from
+            # ANOTHER library unit is neither: the two coexist, each under its unit
+            # (#494/#495), so the walk falls through to registration.
             if existing is not None and \
                     getattr(existing, "unit_name", None) in build_units:
                 if record.get("private"):
                     er.emit(self.reporter, er.ERR.CE5007,
                             getattr(existing, "name_span", None),
                             lib=lib_name, name=func_name)
+                elif existing.unit_name in consumer_units:
+                    self._warn_shadowed_export(existing, template_unit)
                 continue
             if generic_funcs.by_unit.get(template_unit, {}).get(func_name):
                 continue

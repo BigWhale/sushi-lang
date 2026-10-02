@@ -38,6 +38,7 @@ from sushi_lang.semantics.visibility import (
     VisibilityTable,
     library_clash_origin,
     record_declaration,
+    warn_shadowed_export,
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
@@ -616,14 +617,9 @@ class FunctionCollector:
         Legal, and rarely intended. The reader of the call site cannot see which of the
         two declarations answers it, so the compiler says which one does.
         """
-        diagnostic = er.emit_with(
-            self.r, ERR.CW3002, name_span,
-            filename=self.current_unit_file,
-            name=name, kind=clash.kind, owner=clash.unit_name,
-        )
-        if clash.name_span is not None and clash.filename is not None:
-            diagnostic = diagnostic.note_at("exported here", clash.name_span, clash.filename)
-        diagnostic.emit()
+        warn_shadowed_export(self.r, name, name_span, self.current_unit_file,
+                             owner=clash.unit_name, export_span=clash.name_span,
+                             export_filename=clash.filename)
 
     @staticmethod
     def _drop(table, name: str) -> None:

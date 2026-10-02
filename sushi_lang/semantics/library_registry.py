@@ -95,6 +95,9 @@ class LibraryMetadata:
     path: Path
     platform: str
     functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    # The unit that exports each public function, as `lib/<library>/<unit>`: the name
+    # a source library's injected unit has. CW3002 names it (#1103).
+    export_units: dict[str, str] = field(default_factory=dict)
     # Export-closure private helpers (C4b/C5): signature-only records whose
     # definitions link from the library bitcode. Kept separate from
     # `functions` because the consumer applies clash (CE5007), not
@@ -158,6 +161,10 @@ class LibraryRegistry:
 
         metadata.functions = self._parse_functions(manifest.get("public_functions", []),
                                                    lib_path=lib_path)
+        metadata.export_units = {
+            func_info["name"]: f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            for func_info in manifest.get("public_functions", []) or []
+        }
 
         # Keyed (unit, name): two of the library's own units may each ship a
         # private `helper`, and each record names its unit (#494). The key wears the
