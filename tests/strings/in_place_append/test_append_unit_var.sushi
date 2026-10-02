@@ -1,0 +1,16 @@
+# A unit variable appends in place too. It is never destroyed at exit, so the leak check
+# reads the program's own allocations alone.
+# EXPECT_STDOUT_EXACT: "x0;x1;x2;\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+var string log = ""
+
+fn note(i32 i) ~:
+    log := log.concat("x{i};")
+
+fn main() i32:
+    foreach(i in 0..3):
+        note(i)
+    println(log)
+    return 0

@@ -155,3 +155,27 @@ representation: every string operation reads `size`, and a C boundary copies thr
 `emit_to_cstr`, which writes its own NUL. `u8[].to_string()` still copies and still
 writes a NUL, which nothing needs. `s[i] := v` is refused (`CE2113`): a literal's `data`
 is in `.rodata`, and a string is immutable in every other position too.
+
+## Update (2026-10-02): `s := s.concat(x)` appends in place
+
+`concat` copies both operands into a new buffer of the exact size. A loop of
+`s := s.concat(x)` therefore copied the whole string at every step, and was quadratic: 50k
+appends to a 289 KB string copied about 7 GB, which took 240 ms.
+
+The rebind frees the old value right after the copy. So the backend
+(`_emit_string_append_rebind`, `backend/statements/variables.py`) recognizes the one form
+where the receiver is the target, and calls the generated `string_append` instead:
+
+- When the old value's `owned` bit is 1, the buffer goes to `realloc` and `x` is copied
+  to its end. This is the same rule that the destructor uses, so the buffer that the
+  general path would free is the buffer that grows. When `x` points into the old buffer,
+  it is read at its new address.
+- When the bit is 0 (a literal, or the copy that a borrowed parameter holds), the bytes
+  are copied, as `concat` does. The result owns its buffer, so the next append grows it.
+
+The target is a local, a unit variable or a `poke` reference. A local that a move may
+have emptied (a static move or a drop flag) takes the general path. The representation
+does not change: there is no capacity field, so the growth relies on `realloc`, which
+extends a large block in place on macOS and on glibc. Other forms (`s := "{s}{x}"`, a
+chain of two `concat` calls) still copy; a `string[]` and one `join` is the linear
+spelling for them.

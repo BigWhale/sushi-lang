@@ -1,0 +1,20 @@
+# A rebind of a borrowed parameter does not grow the caller's buffer: the copy the body
+# holds owns nothing, so the first append copies it.
+# EXPECT_STDOUT_EXACT: "11\nhello-world\n13\nhello-world\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn grow(string x) i32:
+    x := x.concat("!")
+    x := x.concat("!")
+    return x.size()
+
+fn main() i32:
+    let string s = "hello"
+    s := s.concat("-world")
+    println(s.size())
+    println(s)
+    println(grow(s))
+    println(s)
+    return 0

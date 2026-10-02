@@ -1,0 +1,14 @@
+# `s := s.concat(x)` appends in place when `s` owns its buffer: one million appends must
+# finish well inside the timeout. A copy of the whole string at every step is quadratic
+# and does not.
+# EXPECT_STDOUT_EXACT: "2000000\n"
+# EXPECT_RUNTIME_EXIT: 0
+# TIMEOUT_SECONDS: 5
+use <collections/strings>
+
+fn main() i32:
+    let string s = ""
+    foreach(_ in 0..1000000):
+        s := s.concat("ab")
+    println(s.size())
+    return 0

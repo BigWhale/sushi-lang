@@ -4,6 +4,7 @@ from .basic import (
     emit_string_size,
     emit_string_len,
     emit_string_concat,
+    emit_string_append,
 )
 from .slice import (
     emit_string_ss,
@@ -54,6 +55,7 @@ __all__ = [
     'emit_string_size',
     'emit_string_len',
     'emit_string_concat',
+    'emit_string_append',
     'emit_string_ss',
     'emit_string_sleft',
     'emit_string_sright',

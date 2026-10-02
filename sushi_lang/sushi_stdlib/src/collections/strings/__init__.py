@@ -22,6 +22,7 @@ from .methods.basic import (
     emit_string_size,
     emit_string_len,
     emit_string_concat,
+    emit_string_append,
 )
 from .methods.convert import (
     emit_string_to_bytes,
@@ -201,6 +202,7 @@ def generate_module_ir() -> ir.Module:
     emit_string_len(module)
     # Note: is_empty is NOT included - it's an inline intrinsic in compiler/is_empty.py
     emit_string_concat(module)
+    emit_string_append(module)
 
     emit_string_to_bytes(module)
     emit_string_split(module)

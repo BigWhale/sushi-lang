@@ -1,0 +1,16 @@
+# The argument may be the receiver itself, or a part of it: the bytes are read after the
+# buffer grows.
+# EXPECT_STDOUT_EXACT: "abababab\nabababababab\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn main() i32:
+    let string s = "ab"
+    s := s.concat("")
+    s := s.concat(s)
+    s := s.concat(s)
+    println(s)
+    s := s.concat(s.s(0, 4))
+    println(s)
+    return 0
