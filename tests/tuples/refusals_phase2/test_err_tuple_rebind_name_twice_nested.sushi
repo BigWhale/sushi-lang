@@ -1,0 +1,8 @@
+# A nested target counts too: one name twice anywhere in the target is refused.
+# EXPECT_ERROR_CODES_EXACT: CE6109
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    ((a, b), a) := ((2, 3), 4)
+    return a + b

@@ -1,0 +1,31 @@
+# The right side of a destructuring rebind is any tuple value: a call, a realised channel
+# result, and an owning call whose new values replace and destroy the old ones.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 1\n0 0\nn3 3\nn4 4\n"
+use <math>
+
+fn divmod(i32 a, i32 b) (i32, i32) | MathError:
+    if (b == 0):
+        return Result.Err(MathError.DivisionByZero)
+    return Result.Ok((a / b, a % b))
+
+fn make(i32 n) (string, i32[]):
+    let i32[] items = from([0; n])
+    return ("n{n}", items)
+
+fn main() i32:
+    let i32 q = 0
+    let i32 r = 0
+    (q, r) := divmod(10, 3).realise((0, 0))
+    println("{q} {r}")
+    (q, r) := divmod(1, 0).realise((0, 0))
+    println("{q} {r}")
+    let string seed = "old"
+    let string name = "{seed}"
+    let i32[] items = from([0])
+    (name, items) := make(3)
+    println("{name} {items.len()}")
+    (name, items) := make(4)
+    println("{name} {items.len()}")
+    return 0

@@ -1,0 +1,11 @@
+# One field twice in the target of a destructuring rebind is refused.
+# EXPECT_ERROR_CODES_EXACT: CE6109
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    (p.x, p.x) := (3, 4)
+    return p.x

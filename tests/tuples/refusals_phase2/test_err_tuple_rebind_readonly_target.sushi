@@ -1,0 +1,11 @@
+# A target is a place a plain `:=` takes: a `peek` parameter is read-only.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+
+fn reset(peek i32 x, poke i32 y) ~:
+    (x, y) := (0, 0)
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    reset(peek a, poke b)
+    return a + b

@@ -1,0 +1,19 @@
+# A destructuring rebind in a one-statement match arm and in a block arm.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 3\n0 0\n"
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    let Maybe@(i32) m = Maybe.Some(3)
+    match m:
+        Maybe.Some(n) -> (a, b) := (b, n)
+        Maybe.None -> (a, b) := (0, 0)
+    println("{a} {b}")
+    let Maybe@(i32) none = Maybe.None()
+    match none:
+        Maybe.Some(n) -> (a, b) := (n, n)
+        Maybe.None ->
+            (a, b) := (0, 0)
+    println("{a} {b}")
+    return 0

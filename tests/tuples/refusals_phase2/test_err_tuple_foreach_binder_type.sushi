@@ -1,0 +1,8 @@
+# A typed foreach binder takes the type of its element.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn main() i32:
+    let (i32, string)[] pairs = from([(1, "a")])
+    foreach((i32 a, i32 b) in pairs.iter()):
+        println(a + b)
+    return 0

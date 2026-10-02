@@ -1,0 +1,13 @@
+# A foreach destructure inside a lambda body.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10\n"
+
+fn main() i32:
+    let fn(i32) -> i32 weigh = |i32 n|:
+        let (i32, i32)[] xs = from([(1, 2), (n, 4)])
+        let i32 total = 0
+        foreach((a, b) in xs.iter()):
+            total := total + a * b
+        return total
+    println(weigh(2))
+    return 0

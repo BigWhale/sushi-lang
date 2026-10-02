@@ -1,0 +1,27 @@
+# Each target of a destructuring rebind is any place a plain `:=` takes: a name, a field,
+# an element of a dynamic or a fixed array, a tuple element and a unit variable.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "9 1\n20 10\n4 3\n3 2 1\n5\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+var i32 calls = 0
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    (p.x, p.y) := (p.y, p.x)
+    let i32[] xs = from([10, 20])
+    (xs[0], xs[1]) := (xs[1], xs[0])
+    let (i32, i32) t = (3, 4)
+    (t.0, t.1) := (t.1, t.0)
+    let i32[3] fixed = [1, 2, 3]
+    (fixed[0], fixed[2]) := (fixed[2], fixed[0])
+    (calls, p.x) := (5, 9)
+    println("{p.x} {p.y}")
+    println("{xs[0]} {xs[1]}")
+    println("{t.0} {t.1}")
+    println("{fixed[0]} {fixed[1]} {fixed[2]}")
+    println(calls)
+    return 0

@@ -1,0 +1,14 @@
+# The items of `.iter()` are borrowed, so each binder borrows, and consuming one is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn eat(nom string s) i32:
+    println(s)
+    return 1
+
+fn main() i32:
+    let List@((string, i32)) xs = List.new()
+    xs.push(("a", 1))
+    foreach((name, n) in xs.iter()):
+        println(eat(nom name) + n)
+    xs.free()
+    return 0

@@ -1,0 +1,8 @@
+# A foreach destructure element takes no mode (decision D1).
+# EXPECT_ERROR_CODES_EXACT: CE6107
+
+fn main() i32:
+    let (i32, i32)[] pairs = from([(1, 2)])
+    foreach((peek i32 a, b) in pairs.iter()):
+        println(a + b)
+    return 0

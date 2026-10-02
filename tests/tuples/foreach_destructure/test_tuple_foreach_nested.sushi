@@ -1,0 +1,14 @@
+# A nested foreach destructure splits a tuple element of the item too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "origin 0 0\nfar 3 4\n"
+
+fn main() i32:
+    let string seed = "f"
+    let List@(((i32, i32), string)) marks = List.new()
+    marks.push(((0, 0), "origin"))
+    marks.push(((3, 4), "{seed}ar"))
+    foreach(((x, y), name) in marks.iter()):
+        println("{name} {x} {y}")
+    marks.free()
+    return 0

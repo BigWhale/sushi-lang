@@ -1,0 +1,14 @@
+# A destructuring rebind from a borrowed tuple cannot move an owning element out of it:
+# one diagnostic for each element, as for `a := p.0` and `b := p.1`.
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2411
+
+fn take((string, string) p) i32:
+    let string a = ""
+    let string b = ""
+    (a, b) := p
+    println("{a} {b}")
+    return 0
+
+fn main() i32:
+    let (string, string) t = ("x", "y")
+    return take(t)

@@ -1,0 +1,11 @@
+# A destructuring rebind from an owned local spends it, so a later use is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+fn main() i32:
+    let string seed = "s"
+    let (string, string) t = ("{seed}x", "{seed}y")
+    let string a = ""
+    let string b = ""
+    (a, b) := t
+    println(t.0)
+    return 0

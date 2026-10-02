@@ -1,0 +1,21 @@
+# A foreach destructure inside a function that borrows the List: the caller keeps it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "13\ntrillian\n"
+use <collections/strings>
+
+fn letters(List@((string, string)) names) i32:
+    let i32 total = 0
+    foreach((first, last) in names.iter()):
+        total := total + first.len() + last.len()
+    return total
+
+fn main() i32:
+    let string seed = "tri"
+    let List@((string, string)) names = List.new()
+    names.push(("{seed}llian", "mcm"))
+    names.push(("ar", ""))
+    println(letters(names))
+    println(names.get(0).realise(("", "")).0)
+    names.free()
+    return 0

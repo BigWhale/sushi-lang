@@ -1,0 +1,18 @@
+# An owning value written to a field, an array element and a tuple element destroys the
+# old value of each place, as a plain `:=` does.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "snew sa sc su\n"
+
+struct Named:
+    string name
+    i32 n
+
+fn main() i32:
+    let string seed = "s"
+    let Named who = Named("{seed}old", 1)
+    let string[] names = from(["{seed}a", "{seed}b"])
+    let (string, i32) t = ("{seed}t", 0)
+    (who.name, names[1], t.0) := ("{seed}new", "{seed}c", "{seed}u")
+    println("{who.name} {names[0]} {names[1]} {t.0}")
+    return 0
