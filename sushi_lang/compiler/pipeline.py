@@ -205,12 +205,12 @@ _Origin = tuple[str, Optional[Span], Optional[str]]
 class _Wanted:
     """One `use <lib/...>` of the graph: the path, how it was reached, what it expects.
 
-    `expected` is the version a library recorded for the path, with the note that says
+    `recorded_version` is the version a library recorded for the path, with the note that says
     which library recorded it. The consumer's own `use` expects nothing.
     """
     path: str
     origin: _Origin
-    expected: Optional[tuple[str, str]] = None
+    recorded_version: Optional[tuple[str, str]] = None
 
 
 @dataclass
@@ -248,9 +248,9 @@ def _two_versions(name: str, first: tuple[str, _Origin],
 
 def _check_expected(name: str, loaded: _Loaded, wanted: _Wanted) -> None:
     """Refuse a dependency record whose version is not the one the graph holds."""
-    if wanted.expected is None:
+    if wanted.recorded_version is None:
         return
-    version, recorded_by = wanted.expected
+    version, recorded_by = wanted.recorded_version
     if version != loaded.version:
         raise _two_versions(name, (version, (recorded_by, None, None)), loaded.found())
 

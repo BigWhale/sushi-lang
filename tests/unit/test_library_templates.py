@@ -27,7 +27,7 @@ def test_register_library_generic_function_guards_missing_templates():
         {"mathlib": {"library_name": "mathlib"}}
     )
 
-    libraries._register_generic_functions(set())
+    libraries._register_generic_functions(set(), set())
 
     assert libraries.tables.generic_funcs.by_name == {}
 
