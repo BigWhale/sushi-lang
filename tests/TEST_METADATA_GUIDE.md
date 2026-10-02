@@ -224,13 +224,14 @@ compilation failed but *which* diagnostic fired.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
 - It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
-  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the set.
+  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
 
 #### EXPECT_ERROR_CODES_EXACT
 
-Asserts the WHOLE set of diagnostic codes the compiler printed, warnings included, for a
-`test_err_*` / `test_warn_*` test. A code that is missing fails the test, and so does a
-code that is printed and not listed.
+Asserts the WHOLE multiset of diagnostic codes the compiler printed, warnings included,
+for a `test_err_*` / `test_warn_*` test. A code that is missing fails the test, a code
+that is printed and not listed fails it, and so does a code that is printed more times
+or fewer times than it is listed.
 
 ```sushi
 # EXPECT_ERROR_CODES_EXACT: CE2009
@@ -238,10 +239,14 @@ code that is printed and not listed.
 ```
 
 - A comma/space separated list; the directive may be repeated, and the lists add up
-- It compares SETS: a code printed twice is listed once
+- It compares MULTISETS (#1060): `CE0112` means exactly one CE0112, and
+  `CE0112, CE0112` means two. A warning is counted the same way. A code that the
+  compiler prints twice for one fault is a duplicate diagnostic: do not list it twice
+  to make the fixture pass
 - A code is read from the head of each diagnostic (`error [CE1001]`,
   `warning [CW1001]`); a code inside a message or a note does not count
-- The failure names each missing code and each code that was not expected
+- The failure names each code whose count is different, with both counts
+  (`CE0112: expected 1, printed 2`)
 
 ### Advanced Metadata Directives
 
@@ -467,9 +472,9 @@ fixture file itself, because the one set of directives describes both steps.
   directory that holds it first on `SUSHI_LIB_PATH`. The fixture imports it as
   `use <lib/geolib>`. `BUILD_LIB_BINARY` builds a binary one, and `BUILD_LIB_HYBRID`
   a hybrid one.
-- The runner builds every `BUILD_LIB`, `BUILD_LIB_BINARY` and `BUILD_LIB_HYBRID` in the
-  order the fixture writes them, whatever the directive, and then every `BUILD_LIB_AT`
-  in written order. A library build has the same directory on its `SUSHI_LIB_PATH`, so
+- The runner builds every `BUILD_LIB`, `BUILD_LIB_BINARY`, `BUILD_LIB_HYBRID` and
+  `BUILD_LIB_WARNS` in the order the fixture writes them, whatever the directive, and
+  then every `BUILD_LIB_AT` in written order. A library build has the same directory on its `SUSHI_LIB_PATH`, so
   a library may `use <lib/...>` a library built before it. Write a dependency above the
   library that uses it.
 - `# BUILD_LIB: apub.sushi -> a.slib` builds the source as `a.slib`, so the library name
@@ -479,8 +484,9 @@ fixture file itself, because the one set of directives describes both steps.
   first `.slib`. The two forms combine: `b.sushi -> c.slib @ 0.2.0`.
 - The three directives take both forms. A form names one source.
 - In a rebuild fixture the library is built again after `v2/` is copied in.
-- A library that does not build fails the fixture. A build with a warning (exit 1)
-  is a build: a library that extends a type it does not declare gets CW3003.
+- A library that does not build fails the fixture. A build must exit 0: a build with a
+  warning (exit 1) fails the fixture too. Use `BUILD_LIB_WARNS` for a library that must
+  build with a warning.
 - The build has a cache of its own, outside the copy. The version is `0.0.0`, unless a
   `nori.toml` beside the library source states one.
 
@@ -513,6 +519,25 @@ fixture file itself, because the one set of directives describes both steps.
 - The library goes to the same directory, and the build, the version, the rebuild and
   a failed build are as for `BUILD_LIB`. Do not name one file in two directives.
 - There is no hybrid form of `BUILD_LIB_AT`.
+
+#### BUILD_LIB_WARNS
+
+```sushi
+# BUILD_LIB_WARNS: geolib.sushi -> CW3003
+# BUILD_LIB_WARNS: other.sushi -> CW3003, CW1001
+# BUILD_LIB_WARNS: third.sushi binary -> CW3003
+```
+
+- As `BUILD_LIB`, but the build must exit 1, and the SET of warning codes in its stderr
+  must be equal to the named set (#1122). A missing code or a code that is not named
+  fails the fixture, and so does a build that exits 0. Use it for a library that extends
+  a type it does not declare (CW3003): that is a correct library, with a warning.
+- The library goes to the same directory as a `BUILD_LIB` library. It is a SOURCE
+  `.slib`, unless a kind word follows the source: `binary` or `hybrid` (or `source`).
+  It builds in written order with the other three directives.
+- The value is one source, an optional kind word, `->`, and one or more `CW` codes,
+  comma or space separated. There is no `-> name.slib` form and no `@ version` form.
+  Any other value fails the fixture.
 
 #### BUILD_LIB_AT
 

@@ -74,9 +74,13 @@ class TestMetadata:
     build_libs_binary: Optional[List[str]] = None
     # Hybrid `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
     build_libs_hybrid: Optional[List[str]] = None
-    # Every BUILD_LIB, BUILD_LIB_BINARY and BUILD_LIB_HYBRID as (kind, source, `.slib`
-    # file name, version or None), in written order: the order the runner builds them in.
-    library_builds: Optional[List[Tuple[str, str, str, Optional[str]]]] = None
+    # Source `.slib` files that must build with exit 1 and exactly these warning codes.
+    build_libs_warns: Optional[List[Tuple[str, List[str]]]] = None
+    # Every BUILD_LIB, BUILD_LIB_BINARY, BUILD_LIB_HYBRID and BUILD_LIB_WARNS as (kind,
+    # source, `.slib` file name, version or None, warning codes or None), in written
+    # order: the order the runner builds them in.
+    library_builds: Optional[List[Tuple[str, str, str, Optional[str],
+                                        Optional[List[str]]]]] = None
     # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
     stdlib_modules: Optional[Dict[str, str]] = None
     # Source `.slib` files built at a path inside the copy: (source, target), both relative.
@@ -116,6 +120,8 @@ class TestMetadata:
             self.build_libs_binary = []
         if self.build_libs_hybrid is None:
             self.build_libs_hybrid = []
+        if self.build_libs_warns is None:
+            self.build_libs_warns = []
         if self.library_builds is None:
             self.library_builds = []
         if self.stdlib_modules is None:
@@ -327,8 +333,31 @@ def _library_build(field_name: str, kind: str):
         else:
             pairs = [(name, f"{Path(name).stem}.slib") for name in _split(source)]
         getattr(metadata, field_name).extend(name for name, _ in pairs)
-        metadata.library_builds.extend((kind, name, slib, version) for name, slib in pairs)
+        metadata.library_builds.extend((kind, name, slib, version, None)
+                                       for name, slib in pairs)
     return handle
+
+
+_WARNING_CODE = re.compile(r"CW\d{4}")
+
+
+LIBRARY_KINDS = ("source", "binary", "hybrid")
+
+
+def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    """`x.sushi -> CW3003`, or `x.sushi binary -> CW3003` for another library kind."""
+    head, sep, codes = _unquote(value).partition('->')
+    words, codes = _split(head), _split(codes)
+    kind = words[1] if len(words) == 2 else "source"
+    if (not sep or len(words) not in (1, 2) or kind not in LIBRARY_KINDS or not codes
+            or not all(_WARNING_CODE.fullmatch(code) for code in codes)):
+        metadata.directive_errors.append(
+            "BUILD_LIB_WARNS takes `<source> [source|binary|hybrid] -> <warning code>"
+            f"[, <warning code>...]`, not {value!r}")
+        return
+    metadata.build_libs_warns.append((words[0], codes))
+    metadata.library_builds.append(
+        (kind, words[0], f"{Path(words[0]).stem}.slib", None, codes))
 
 
 def _build_lib_at(metadata: TestMetadata, value: str, test_file: Path) -> None:
@@ -399,6 +428,7 @@ VALUED_DIRECTIVES = {
     'BUILD_LIB': _library_build('build_libs', 'source'),
     'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
     'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),
+    'BUILD_LIB_WARNS': _build_lib_warns,
     'STDLIB_MODULE': _stdlib_module,
     'BUILD_LIB_AT': _build_lib_at,
     'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),
