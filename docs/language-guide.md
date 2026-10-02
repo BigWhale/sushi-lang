@@ -939,7 +939,30 @@ fn main() i32:
 status, a configuration) is a struct, because a struct names its fields. There are no
 named tuple elements, and there is no tuple constant.
 
-A destructure in a `foreach` and a swap with `(a, b) := (b, a)` are not supported yet.
+A `foreach` destructures each item, and a tuple on the left of `:=` rebinds more than one
+place at once:
+
+```sushi
+fn main() i32:
+    let (string, i32)[] scores = from([("arthur", 42), ("ford", 7)])
+    foreach((name, score) in scores.iter()):     # one name per element of each item
+        println("{name}: {score}")
+
+    let i32 a = 0
+    let i32 b = 1
+    foreach(_ in 0..10):
+        (a, b) := (b, a + b)                     # the right side first, then a, then b
+    println(a)                                   # 55
+    return 0
+```
+
+- **A `foreach` destructure** follows the rules of a `let` destructure. The binders of a
+  borrowed item (`.iter()`) borrow, and the binders of an owned item (a `next()` iterator)
+  own
+- **A destructuring rebind** takes any tuple value on the right. Each target is a place
+  that `:=` takes: a name, a field, an array element or a tuple element. The whole right
+  side is evaluated first, so `(a, b) := (b, a)` is a swap, and an owning swap moves the
+  values and frees nothing
 
 ## Pattern Matching
 

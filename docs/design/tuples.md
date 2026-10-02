@@ -1,12 +1,12 @@
 # Design: Tuples
 
-**Status:** phase 1 is implemented: the tuple type in every type position, the tuple
-literal, element access (`.N`, `.N.M`), the element write and the element take, the `let`
-destructure, the derived contracts, generic inference through a tuple, the `| E` return,
-the `.slib` round trip and the `--lib-info` report. Phase 2 (the `foreach` destructure and
-the destructuring rebind) and phase 3 (tuple patterns in a `match`) are not implemented yet.
-The grammar of all three phases is in place; the builder refuses the shapes of phases 2 and 3
-with **CE6108** until they are implemented.
+**Status:** phases 1 and 2 are implemented. Phase 1: the tuple type in every type
+position, the tuple literal, element access (`.N`, `.N.M`), the element write and the
+element take, the `let` destructure, the derived contracts, generic inference through a
+tuple, the `| E` return, the `.slib` round trip and the `--lib-info` report. Phase 2: the
+`foreach` destructure and the destructuring rebind. Phase 3 (tuple patterns in a `match`)
+is not implemented yet. The grammar of all three phases is in place; the builder refuses
+the shapes of phase 3 with **CE6108** until they are implemented.
 
 ## 1. Why
 
@@ -50,7 +50,7 @@ fn main() i32:
 | Element read, write, take | `t.0`, `t.0.1`, `t.0 := v`, `nom t.0` | 1 |
 | `let` destructure | `let (i32 a, string b) = f()`, `let (a, _) = f()`, `let ((a, b), c) = g()` | 1 |
 | `foreach` destructure | `foreach((k, v) in pairs.iter()):` | 2 |
-| Destructuring rebind | `(a, b) := (b, a)` | 2 |
+| Destructuring rebind | `(a, b) := (b, a)`, `(p.x, xs[0]) := f()` | 2 |
 | `match` on a tuple | `match (x, y):` / `(Maybe.Some(a), _) ->` | 3 |
 
 What is not in the surface, by design:
@@ -98,8 +98,9 @@ file of the corpus parses to the tree it had before.
   `fn(A) -> (B, C) | E` keeps the rule that a `| E` after a function type is that type's.
 
 The grammar of phases 2 and 3 is in place: `foreach_destructure`, `tuple_pattern` (and a
-literal inside a pattern item), and a tuple literal as a rebind target. The builder refuses
-each with **CE6108** until its phase gives it a meaning.
+literal inside a pattern item), and a tuple literal as a rebind target. Phase 2 gave the
+`foreach` destructure and the rebind target their meaning (section 5a). The builder refuses
+a tuple pattern and a literal inside a pattern with **CE6108** until phase 3.
 
 ## 4. Representation (rulings 1 and 2)
 
@@ -186,6 +187,60 @@ them in one place (S10e).
 **Ruling 3** (phase 3). `match (a, b):` matches in place: a tuple-literal scrutinee builds
 no tuple.
 
+## 5a. The `foreach` destructure and the destructuring rebind (phase 2)
+
+Both shapes are desugared in the AST builder to the `let` destructure, so there is one rule
+for the split and no pass has a second implementation of it.
+
+**The `foreach` destructure.** `foreach((k, v) in xs.iter()):` binds the item under a
+hidden name (`#fe_itemN`) and opens the body with `let (k, v) = #fe_itemN`, as the `??`
+binder opens it with `let x = #fe_itemN??`. The `let` takes the item by the rule of
+`let x = item`, so the ownership of each binder follows from the item: the items of
+`.iter()` are borrows, so the binders borrow; a `next()` protocol item is owned by the
+iteration, so the binders own it and the body may hand them away. The binders are locals of
+the body, so the scope exit destroys them at the end of each iteration, at a `break` and at
+a `return`. The span of the `let` is the element list in the loop head, so a note of a
+binder points there.
+
+**The destructuring rebind** (rulings 13 and 16). `(a, b) := v` becomes three statements:
+
+```
+let (#rb0, #rb1) = v       # a let destructure into hidden binders
+a := #rb0                  # a plain rebind of each place, from left to right
+b := #rb1
+```
+
+- The whole right side is evaluated by the `let`, before the first assignment (ruling 13).
+  Each place is then assigned in source order, and an index expression in a place is
+  evaluated when its place is assigned: `(i, xs[i]) := (1, 9)` reads the new `i`.
+- Each target is an ordinary `Rebind`, so a name is a rebind, a field and an element are
+  a field write, and each destroys the old value and is checked as `x := v` is (a
+  read-only target, a constant, an external variable, a string byte).
+- The right side is taken by the rule of the `let` destructure: a temporary is owned, an
+  owned local is spent whole, and a borrow gives borrowing binders. A rebind from a
+  borrowing binder of an owning type is the consuming use of a borrow (**CE2411**), once
+  for each element, as `a := p.0` would be.
+- An owning swap `(s, t) := (t, s)` moves `t` and `s` into the literal, the binders own
+  the two values, and each rebind moves a binder into a name that was moved out of. A
+  rebind re-initializes the name, so nothing is destroyed and nothing is freed twice.
+- **The type of each place.** A plain `x := 7` types the literal from `x`. The hidden
+  binders have no written type, so the `Let` is marked (`Let.rebinds`), and the typecheck
+  pass stamps each hidden binder with the type of its place (`DestructureTarget.place_type`,
+  `stamp_rebind_places`) before it checks the `Let`. The binder then hands that type to the
+  element of a tuple literal, as a written binder type does, so
+  `(small, big) := (200, 5000000000)` types `200` as a `u8`, and a value of the wrong
+  type is **CE2002** at its place.
+- **The diagnostics name the element, not the hidden binder.** The borrow pass gives each
+  hidden binder a written name, the spelling of its element (`p.0`), so a message reads
+  `cannot consume 'p.0'`.
+- **One place twice** is **CE6109**, judged in the builder on the written places (a
+  name, a field chain, a tuple element, an index that is a literal or a name), with a note
+  at the first one. Two different places of one value are legal: `(p.x, p.y)` and
+  `(i, xs[i])`.
+- A rebind is one source statement and several AST statements, so the statement parser
+  answers a list (`StatementParser.parse_stmts`), which a block and a one-statement
+  `match` arm both splice.
+
 ## 6. Derived contracts
 
 Free under the struct representation, because the derive pass treats a tuple as a struct:
@@ -211,10 +266,11 @@ types are a mixed comparison (**CE2513**), as two structs are.
 | A name or a `_` inside a tuple TYPE; a named element | CE6105 |
 | `t.1e3`, `t.0_1`, `t.01` | CE6106 |
 | A mode on a tuple element: a destructure element (D1) or a tuple type element | CE6107 |
-| A `foreach` destructure, a tuple pattern, a literal in a pattern, a tuple-literal rebind target (temporary) | CE6108 |
+| A tuple pattern, a literal in a pattern (temporary, until phase 3) | CE6108 |
 | `t.N` past the last element | CE2106, with the type rendered as `(i32, string)` |
-| A destructure count that is not the tuple's count | CE2116 |
-| A destructure of a value that is not a tuple | CE2117 |
+| A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | CE2116 |
+| A destructure of a value that is not a tuple (a `let`, a `foreach`, a rebind) | CE2117 |
+| The same place twice in the target of a destructuring rebind | CE6109 |
 | A destructure of an unhandled `Result` | CE2505 |
 | A typed binder whose type is not the element type | CE2002 |
 | A `const` or a `var` of a tuple (ruling 11) | CE0108 |
@@ -251,14 +307,19 @@ Decisions taken for the execution: **D1**, no mode on a destructure element (a l
 can add one); **D2**, the whole grammar lands in phase 1, and the builder refuses the shapes
 of the later phases until their phase.
 
-## 10. Notes for the later phases
+## 10. Notes for phase 3
 
-- Phase 2: a `foreach` destructure desugars in the AST builder to a `let` destructure at
-  the top of the body, as the `??` binder does, so the ownership of each binder follows from
-  the item. Remove the CE6108 refusals of `parse_foreach_destructure` and of the rebind
-  target in `parse_rebind_stmt`, with their fixtures; the count rule of a rebind is CE2116.
-- Phase 3: remove the CE6108 refusals in `ast_builder/statements/matching.py` (a tuple
-  pattern at the top of an arm, and a tuple pattern or a literal inside a pattern item),
-  with their fixtures, and then the code CE6108 itself.
+- Remove the CE6108 refusals in `ast_builder/statements/matching.py` (a tuple pattern at
+  the top of an arm, and a tuple pattern or a literal inside a pattern item), with their
+  fixtures (`tests/tuples/refusals/test_err_tuple_pattern_not_yet.sushi`,
+  `test_err_tuple_literal_pattern_not_yet.sushi`), and then the code CE6108 itself
+  (`internals/errors/syntax.py`, and `not_yet` in `matching.py`).
 - The destructure targets live on `Let.targets`; a reader that collects the locals of a body
-  reads `destructure_binders(stmt.targets)` beside `stmt.name`.
+  reads `destructure_binders(stmt.targets)` beside `stmt.name`. A hidden binder (a
+  destructuring rebind) has no `name_span`, and the scope pass declares it with no span.
+- A one-statement `match` arm can hold a destructuring rebind, so its body `Block` can hold
+  more than one statement (`parse_stmts`). A pass that reads an inline arm must not assume
+  one statement.
+- A `match` pattern binding borrows (ruling 4), and the `foreach` destructure binder takes
+  the class of the item. Keep the two rules apart: a tuple pattern is not a `let`
+  destructure, and it takes the S10b modes.

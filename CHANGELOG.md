@@ -24,9 +24,13 @@ All notable changes to Sushi Lang will be documented in this file.
   crosses a `.slib` of each kind. There is no tuple constant and no tuple `var`, by design.
   A named element is `CE6105`, a bad element index `CE6106`, a mode on an element `CE6107`,
   a destructure count `CE2116` and a destructure of a value that is not a tuple `CE2117`.
-  A `foreach` destructure, a destructuring rebind and a tuple pattern in a `match` parse,
-  and they are `CE6108` until they are supported. `CE2110` covers a tuple type as an
-  extension or perk-implementation target. See `docs/design/tuples.md`.
+  A `foreach` destructures each item (`foreach((k, v) in pairs.iter()):`) by the rule of a
+  `let` destructure. A destructuring rebind (`(a, b) := f()`) assigns each element to a
+  place that `:=` takes (a name, a field, an element); the whole right side is evaluated
+  first, so `(a, b) := (b, a)` is a swap, and an owning swap frees nothing. The same place
+  twice in the target is `CE6109`. A tuple pattern in a `match` parses, and it is `CE6108`
+  until it is supported. `CE2110` covers a tuple type as an extension or
+  perk-implementation target. See `docs/design/tuples.md`.
 
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;

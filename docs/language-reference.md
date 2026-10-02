@@ -319,6 +319,10 @@ x := 30     # OK
 # y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
 
+A tuple rebinds more than one place at once: `(a, b) := (b, a)` evaluates the whole right
+side first and then assigns from left to right, so it is a swap. See
+[Destructuring Rebind](#destructuring-rebind).
+
 A name that is a **view of another value's storage** cannot be rebound. A `match` or
 `foreach` binding is **CE2414**, a `let` bound from a field read, an index or a container
 get-out is **CE2426**, and a `peek` reference is **CE2408** — in each case the store would
@@ -985,6 +989,10 @@ INTO storage, and there is nothing to unwrap there.
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
 by `break` and by `return` as well as at the end of the input.
 
+**A tuple item destructures.** `foreach((k, v) in pairs.iter()):` splits each item into
+its elements by the rule of a `let` destructure, and a binder's ownership follows from the
+item. See [Destructuring in a For-Each Loop](#destructuring-in-a-for-each-loop).
+
 The argument behind all of this -- why the failure rides in the ITEM rather than on the
 loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
 [Iteration (design)](design/iteration.md).
@@ -1448,8 +1456,73 @@ fn main() i32:
   the one rule of [ruling 4](design/borrow-model.md#10e-the-fifth-boundary-a-tuple-destructure-binder): a
   bare binder of a destructure owns, and a bare binding of a `match` pattern borrows.
 
-A destructure in a `foreach` and a destructuring rebind (`(a, b) := (b, a)`) are not
-supported yet (**CE6108**), and neither is a tuple pattern in a `match` arm.
+A tuple pattern in a `match` arm is not supported yet (**CE6108**).
+
+### Destructuring in a For-Each Loop
+
+A `foreach` destructures each item with the same element list:
+
+```sushi
+fn main() i32:
+    let List@((string, i32)) people = List.new()
+    people.push(("arthur", 42))
+    people.push(("ford", 7))
+    foreach((name, age) in people.iter()):
+        println("{name} {age}")
+    foreach((string who, _) in people.iter()):
+        println(who)
+    people.free()
+    return 0
+```
+
+The loop is a `let` destructure of the item at the top of the body, so every rule of
+[Destructuring](#destructuring) applies: the elements, the count (**CE2116**), a tuple item
+(**CE2117**), a typed binder (**CE2002**), and no mode on an element (**CE6107**). A
+binder's ownership follows from the item. The items of `.iter()` are borrowed, so each
+binder borrows its element and consuming one is **CE2411**. A `next()` protocol iterator
+hands out owned items, so each binder owns its element and the body may hand it away. The
+binders of an owned item are destroyed at the end of each iteration, at a `break` and at a
+`return`.
+
+### Destructuring Rebind
+
+A destructuring rebind assigns the elements of a tuple to existing places:
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := (b, a)                    # a swap
+    let Point p = Point(0, 0)
+    let i32[] xs = from([0, 0])
+    (p.x, xs[1]) := (a * 10, b)         # a field and an element
+    println("{a} {b} {p.x} {xs[1]}")    # 2 1 20 1
+    return 0
+```
+
+- The right side is any tuple value: a literal, a call (`(q, r) := divmod(7, 2)`), a
+  local or a parameter. A value that is not a tuple is **CE2117**, an unhandled `Result`
+  is **CE2505**, and a count that is not the tuple's count is **CE2116**.
+- Each target is a place that a plain `:=` takes: a name, a field, an array element, a
+  tuple element (`t.0`) or a unit variable. Each target is a rebind or a field write by
+  the rule of `x := v`, so it destroys the old value and gives its type to a literal
+  element: `(small, big) := (200, 5000000000)` types `200` as the `u8` of `small`. A value
+  of the wrong type is **CE2002**, and a read-only target is the error of a plain `:=`
+  (for example **CE2408** for a `peek` parameter).
+- Nested targets follow the destructure shape: `((a, b), c) := ((1, 2), 3)`.
+- The same place twice in the target, nested targets included, is **CE6109**:
+  `(a, a) := (1, 2)` would replace the first value with the second.
+- **The order** (ruling 13): the whole right side is evaluated first, then each target is
+  assigned from left to right. So `(a, b) := (b, a)` is a swap, and `(i, xs[i]) := (1, 9)`
+  assigns `i` first, so `xs[i]` reads the new `i`.
+- **Ownership.** The right side is taken as a `let` destructure takes it: a temporary is
+  owned, an owned local is spent whole (a later use is **CE2405**), and a borrow cannot
+  give up an owning element (**CE2411**, once for each element). So an owning swap
+  `(s, t) := (t, s)` moves each value to its new name and destroys nothing.
 
 ### Comparison, Hashing and Display
 
