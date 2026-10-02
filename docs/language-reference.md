@@ -1186,6 +1186,23 @@ arr.push(4)
 let i32 last = arr.pop().realise(-1)   # .pop() answers Maybe@(T)
 ```
 
+A dynamic array changes at any index, too. `.insert(i, v)` answers `Result@(~, StdError)`:
+`0 <= i <= len` is `Ok` (`i == len` appends), and any other index is `Err` and changes
+nothing. `.remove(i)` answers `Maybe@(T)` and hands the element's ownership to the caller;
+an index out of range is `Maybe.None()`. Both are the `List@(T)` contract. The element of an
+`insert` is consumed, as a `push` consumes it. On a `T[N]`, `.push()`, `.pop()`, `.insert()`
+and `.remove()` are **CE2023**, because a fixed array cannot change its length.
+
+```sushi
+let i32[] xs = from([1, 3])
+let bool placed = xs.insert(1, 2).is_ok()   # [1, 2, 3]
+let i32 gone = xs.remove(0).realise(-1)     # 1; xs is [2, 3]
+```
+
+The other methods (`first`, `last`, `contains`, `index_of`, `clear`, `truncate`, `fill`,
+`reverse`, `extend`, `extend_range`, `s`, `ss`) and their rules are in
+[Arrays](stdlib/collections/arrays.md).
+
 `new()` is a value, not only a declaration form. It takes its element type from the position
 it stands in, so it spells the empty array anywhere one is expected -- a call argument, an
 enum payload, a rebind, a struct field, and the default of a `.realise()`:

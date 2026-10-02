@@ -153,6 +153,40 @@ model, which [Chapter 12](12-memory-management.md) explores.)
     the elements inside it. This is RAII, and it means no `free()` calls and no leaks in
     ordinary code. You'll see the machinery behind it later in the tutorial.
 
+## Changing the middle
+
+`.push()` and `.pop()` work at the end. Two more methods work at any index:
+
+- `.insert(i, x)` puts `x` at index `i` and moves the elements after it one slot to the
+  right. `0 <= i <= len` is `Ok`, and `i == len` appends. Any other index is `Err`, and
+  the array does not change. Because it can fail, it answers `Result@(~, StdError)`.
+- `.remove(i)` takes the element at index `i` out, moves the rest one slot to the left, and
+  gives the element to you as `Maybe@(T)`. An index out of range is `Maybe.None()`.
+
+A few more methods save you from index arithmetic. `.first()` and `.last()` answer a
+`Maybe@(T)`, so an empty array is not a crash. `.contains(x)` answers a `bool`, and
+`.index_of(x)` answers the index as a `Maybe@(i32)`. `.truncate(n)` keeps the first `n`
+elements, and `.clear()` removes all of them. Both keep the capacity, so you can use the
+buffer again.
+
+```sushi
+--8<-- "docs/tutorial/examples/07-arrays/insert-and-remove.sushi"
+```
+
+Output:
+
+```
+Placed: true, refused: true, crew: 3
+Removed Arthur
+First is Ford; Trillian is at 1; Ford aboard: true
+After truncate: 1
+After clear: 0
+```
+
+A fixed array cannot change its length, so `.insert()`, `.remove()`, `.push()` and
+`.pop()` on a `T[N]` are the error **CE2023**. The full list of array methods is in the
+[Arrays](../stdlib/collections/arrays.md) reference.
+
 ## Repeated values, ranges and slices
 
 You do not have to write every element of a literal. Two short forms fill many slots at
@@ -241,6 +275,9 @@ ragged rows: 3, first row: 1 7
   fixed; its contents are not.
 - `.push()`, `.pop()`, `.iter()`, and `.clone()` are the everyday dynamic-array methods,
   and `foreach(x in arr.iter()):` is how you loop.
+- `.insert(i, x)` and `.remove(i)` change a dynamic array at any index. `.first()`,
+  `.last()`, `.contains()`, `.index_of()`, `.truncate()` and `.clear()` remove most of the
+  index arithmetic.
 - An array element can be an array. The suffixes read from left to right, so `i32[2][3]`
   is 3 rows of `i32[2]`.
 - `[value; count]` and a range fill many slots of a literal. `.extend`, `.extend_range`,
