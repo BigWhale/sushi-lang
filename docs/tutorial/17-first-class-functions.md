@@ -59,9 +59,10 @@ Output:
 ```
 
 `List@(fn(i32) -> i32)` is a list whose element type is a function type. `foreach` hands you each
-stored function in turn, and `step(acc)` calls through it. (Use `List@(fn(...))` rather than a raw
-array for a collection of functions — in `fn() -> T[]` the `[]` belongs to the return type `T[]`,
-so there is no "array of functions" syntax.)
+stored function in turn, and `step(acc)` calls through it. An array of functions puts the
+function type in parentheses: `(fn(i32) -> i32)[]`, or `(fn(i32) -> i32)[3]` for a fixed array.
+Without the parentheses, the `[]` belongs to the return type: `fn(i32) -> i32[]` is a function
+that returns `i32[]`.
 
 ## Functions in a struct
 

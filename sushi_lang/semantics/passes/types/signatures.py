@@ -124,6 +124,7 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     validate_error_channel(self, ret, err_type, err_span)
     self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
     self.variable_types = {}
+    self.refused_bindings = set()
     self.destroyed_arrays = [set()]
 
 

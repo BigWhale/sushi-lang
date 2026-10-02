@@ -1,0 +1,19 @@
+# Parentheses around a function type are legal in every type position (#1128).
+# EXPECT_STDOUT_EXACT: "7\n6\n"
+# EXPECT_STDERR_EMPTY: true
+fn inc(i32 x) i32:
+    return x + 1
+
+fn count(List@(fn(i32) -> i32) fs) i32:
+    return fs.len()
+
+fn pick() (fn(i32) -> i32):
+    return inc
+
+fn main() i32:
+    let List@((fn(i32) -> i32)) fs = List.new()
+    fs.push(inc)
+    let (fn(i32) -> i32) g = pick()
+    println(g(6))
+    println(count(fs) + 5)
+    return 0

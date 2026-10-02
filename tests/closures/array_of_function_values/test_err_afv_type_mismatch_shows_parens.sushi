@@ -1,0 +1,11 @@
+# The two types differ in a message: an array of function values prints in parentheses,
+# and the refused `let` is one error, with no cascade at the later use (#1128).
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign (fn(i32) -> i32)[] to fn(i32) -> i32[]"
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let fn(i32) -> i32[] fs = from([inc])
+    println(fs.len())
+    return 0

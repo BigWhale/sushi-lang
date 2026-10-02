@@ -153,8 +153,22 @@ fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
 ```
 
 `.get(i)` returns `Maybe@(fn(...))`, the same as for every element type. Unwrap it and call it
-in one expression: `ops.get(0)??(v)`, in a function that has a channel. You cannot write an array of function values: the `[]` in
-`fn() -> T[]` binds to the return type `T[]`. Use `List@(fn(...))` for a collection.
+in one expression: `ops.get(0)??(v)`, in a function that has a channel.
+
+An array of function values puts the function type in parentheses. Without them, the `[]` in
+`fn() -> T[]` binds to the return type `T[]`:
+
+```sushi
+fn inc(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([inc])     # a dynamic array of function values
+    fs.push(|i32 x| x * 2)
+    let (fn(i32) -> i32)[2] pair = [inc, inc]   # a fixed array
+    println(fs[1](5) + pair[0](1))
+    return 0
+```
 
 ## Custom error types
 

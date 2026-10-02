@@ -96,6 +96,9 @@ class TypeValidator:
         # template's own unit never imported them and never could (section 6).
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
+        # The `let` names whose initializer was refused; a method call on one is not
+        # refused again (#1128).
+        self.refused_bindings: set[str] = set()
         self.destroyed_arrays: List[set[str]] = []
 
         self.statement_validator = StatementValidator(self)

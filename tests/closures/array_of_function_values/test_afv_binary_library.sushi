@@ -1,0 +1,20 @@
+# A binary library exports an array of function values in a signature; the manifest
+# reads the type back (#1128).
+# BUILD_LIB_BINARY: afv_lib.sushi
+# EXPECT_STDOUT_EXACT: "10\n4\n"
+# EXPECT_STDERR_EMPTY: true
+use <lib/afv_lib>
+
+fn inc(i32 x) i32:
+    return x + 1
+
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([inc, dbl])
+    println(apply_all(fs, 3))
+    let (fn(i32) -> i32)[2] pair = [inc, dbl]
+    let fn(i32) -> i32 f = first_of(pair)
+    println(f(3))
+    return 0
