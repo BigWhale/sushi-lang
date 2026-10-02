@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 #: writes `inferred_return_type` on the DotCall itself, so it is not copied (#769).
 CALLEE_STAMPS = ("resolved_enum_type", "callee_self_mode",
                  "callee_param_modes", "callee_param_names", "callee_param_types",
-                 "callee_method_type_args")
+                 "callee_method_type_args", "callee_variadic_at")
 
 
 class DotCallKind(Enum):

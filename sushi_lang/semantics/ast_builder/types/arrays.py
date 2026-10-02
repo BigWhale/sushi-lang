@@ -75,8 +75,7 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[int, Option
         size_name = size_expr.id
         named = ast_builder.integer_constant(size_expr.id)
         value = named if named is not None else _reject(
-            token, ast_builder,
-            f"no integer constant of this unit is named '{size_expr.id}'")
+            token, ast_builder, _no_size_constant(size_expr.id, ast_builder))
     elif isinstance(size_expr, IntLit):
         value = size_expr.value
     else:
@@ -85,6 +84,18 @@ def _array_size(size_node: Tree, ast_builder: 'ASTBuilder') -> Tuple[int, Option
     if value < 1:
         value = _reject(token, ast_builder, "an array holds at least one element")
     return value, size_name
+
+
+def _no_size_constant(name: str, ast_builder: 'ASTBuilder') -> str:
+    """The reason a name is not a size: no constant of that name, or one of a wrong type."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    from sushi_lang.semantics.type_predicates import is_integer_type
+
+    const_def = ast_builder.unit_constants.get(name)
+    if const_def is not None and const_def.ty is not None and not is_integer_type(const_def.ty):
+        return (f"'{name}' is a {display_type(const_def.ty)} constant, and a size counts "
+                "elements, so it must be an integer constant")
+    return f"no integer constant of this unit is named '{name}'"
 
 
 def _reject(token: Token, ast_builder: 'ASTBuilder', reason: str) -> int:

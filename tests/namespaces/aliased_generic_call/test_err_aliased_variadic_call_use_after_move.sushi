@@ -1,0 +1,11 @@
+# A trailing argument that a `...string` function behind a unit alias collects
+# is moved, as at the flat call (#1125).
+# EXPECT_ERROR_CODE: CE2405
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    println(l.take_all(s, "b"))
+    println(s)
+    return 0

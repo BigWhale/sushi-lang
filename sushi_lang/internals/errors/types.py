@@ -353,7 +353,7 @@ _add(ErrorMessage("CE2092", Severity.ERROR,
 
 _add(ErrorMessage("CE2093", Severity.ERROR,
     "cannot take a function value of '{name}': {reason}",
-    Category.TYPE, "In v1 only plain top-level functions are first-class. Extension/perk methods, FFI externals, and generic functions cannot be referenced as function values."))
+    Category.TYPE, "A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values (#1105)."))
 
 _add(ErrorMessage("CE2094", Severity.ERROR,
     "illegal closure capture: {reason}",
@@ -369,15 +369,15 @@ _add(ErrorMessage("CE2096", Severity.ERROR,
 
 _add(ErrorMessage("CE2099", Severity.ERROR,
     "invalid size '{size}' for a fixed array: {reason}",
-    Category.TYPE, "A fixed array's size is a count of elements, so it must be a positive integer the compiler can read: a literal in any base (256, 0x100, 0b1_0000_0000, 0o400) or the name of an integer constant. One code carries every way it can go wrong, because they share one rule and one fix. The size is read while the unit's AST is built, so the constant must be declared in the SAME unit -- a constant next door is reachable as a value but not as a size (#440). Before this code existed, hex and a name did not parse at all (CE6001, unexpected token) and a zero size left the type unbuilt, which surfaced as CE2007, a missing type annotation on a line that has one (#439)."))
+    Category.TYPE, "A fixed array's size is a count of elements, so it must be a positive integer the compiler can read: a literal in any base (256, 0x100, 0b1_0000_0000, 0o400) or the name of an integer constant. One code carries every way it can go wrong, because they share one rule and one fix. The size is read while the unit's AST is built, so the constant must be declared in the SAME unit -- a constant next door is reachable as a value but not as a size (#440). A constant of this unit that is not an integer (a `f64`, a `bool`) cannot count elements, and the reason names its type (#1107). Before this code existed, hex and a name did not parse at all (CE6001, unexpected token) and a zero size left the type unbuilt, which surfaced as CE2007, a missing type annotation on a line that has one (#439)."))
 
 _add(ErrorMessage("CE2098", Severity.ERROR,
     "{kind} target '{target}' mixes concrete type arguments with type parameters",
     Category.TYPE, "An extension target names either every type parameter -- `extend Box@(T)`, which applies to every instantiation -- or a concrete type for every argument -- `extend Box@(i32)`, which applies to that instantiation alone. A partial form such as `extend Pair@(i32, U)` is partial specialization, and Sushi has none. Rejecting it is what keeps an ordering rule from ever being needed: two fully-concrete targets cannot overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against `Pair@(T, string)` -- equally specific, neither more so -- cannot arise. That ambiguity is where Rust's specialization has stalled for years. Name every parameter, make every argument concrete, or implement a perk on the concrete target. A perk implementation's target reads the same rule and the same code (#860)."))
 
 _add(ErrorMessage("CE2100", Severity.ERROR,
-    "'{method}' needs an element type with equality: '{element}' has none",
-    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and the element type must be one that '==' accepts (CE2514 is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead."))
+    "'{method}' needs an element type with equality: {reason}",
+    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and the element type must be one that '==' accepts (CE2514 is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level (CE2514). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched (#1116)."))
 
 _add(ErrorMessage("CE2101", Severity.ERROR,
     "invalid element '{element}' in an array extension target",

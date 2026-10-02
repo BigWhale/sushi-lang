@@ -1,0 +1,11 @@
+# A binary library of two units. The second unit imports a library and the entry
+# unit does not. A copy of the entry unit's template resolves its body in the entry
+# unit's scope, so the other library's function is not in scope there.
+# BUILD_LIB: ldu_b.sushi
+# BUILD_LIB_BINARY: ldu_pl.sushi
+# EXPECT_ERROR_CODE: CE2008
+use <lib/ldu_pl>
+
+fn main() i32:
+    println("{gen(1)}")
+    return 0

@@ -1,0 +1,12 @@
+# `fn(i32) -> i32[]` is still a function that returns `i32[]` (#1128).
+# EXPECT_STDOUT_EXACT: "4\n3\n"
+# EXPECT_NO_LEAKS: true
+fn upto(i32 n) i32[]:
+    return from([0..n])
+
+fn main() i32:
+    let fn(i32) -> i32[] mk = upto
+    let i32[] xs = mk(4)
+    println(xs.len())
+    println(xs[3])
+    return 0

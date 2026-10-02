@@ -3,7 +3,7 @@
 # (CW1002), a `match` binding `k` shadows it too (CW1002), and the lambda parameter
 # `unused` is never read (CW1001). The reporter also drops an identical repeat inside
 # an instance; a probe with that drop turned off measured one diagnostic per binder.
-# EXPECT_ERROR_CODES_EXACT: CW1001, CW1002
+# EXPECT_ERROR_CODES_EXACT: CW1001, CW1002, CW1002
 # EXPECT_STDERR_CONTAINS: :15:17: warning [CW1002]: declared variable 'k' already exists in an outer scope.
 # EXPECT_STDERR_CONTAINS: :18:13: warning [CW1002]: declared variable 'k' already exists in an outer scope.
 # EXPECT_STDERR_CONTAINS: :20:37: warning [CW1001]: unused variable 'unused'.

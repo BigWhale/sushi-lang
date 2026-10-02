@@ -1,0 +1,13 @@
+# A generic function behind a library alias takes a `nom` argument (#1125).
+# BUILD_LIB: agc_lib.sushi
+# EXPECT_STDOUT_EXACT: "5\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use <lib/agc_lib> as g
+
+fn main() i32:
+    let i32 n = 5
+    println(g.gen(nom n))
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    println(g.gen(nom s))
+    return 0

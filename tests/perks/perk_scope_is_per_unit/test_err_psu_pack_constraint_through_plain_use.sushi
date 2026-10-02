@@ -1,0 +1,11 @@
+# A pack constraint on a perk that is out of scope is the unknown-perk error.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+use "psu_mid"
+
+fn many@(...Ts: Named)(...Ts xs) ~:
+    expand(a in xs):
+        println(a.name())
+
+fn main() i32:
+    return touch()

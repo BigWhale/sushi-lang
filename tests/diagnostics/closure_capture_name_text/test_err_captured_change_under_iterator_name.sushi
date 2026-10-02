@@ -1,0 +1,15 @@
+# A lambda body that changes a captured array while it walks it names the array as it
+# is written, in the error, the note and the help.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: "cannot mutate 'xs' while 'xs.iter()' borrows from it"
+# EXPECT_STDERR_CONTAINS: "the loop walks 'xs.iter()'"
+# EXPECT_STDERR_CONTAINS: "`xs.clone().iter()`"
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let fn() -> i32 h = |~|:
+        foreach(x in xs.iter()):
+            xs.push(x)
+        return 1
+    println(h())
+    return 0

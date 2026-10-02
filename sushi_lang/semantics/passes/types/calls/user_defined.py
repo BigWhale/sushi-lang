@@ -7,7 +7,8 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
 from sushi_lang.semantics.name_ladder import call_constructs_struct
-from ..visibility import (name_is_contested, out_of_scope_help, type_name_is_contested,
+from ..visibility import (name_is_contested, name_was_refused, out_of_scope_help,
+                          type_name_is_contested,
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..arguments import check_arguments
@@ -184,6 +185,8 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         if kept is not None and reject_private_kept_call(
                 validator, function_name, call.callee.loc,
                 library=kept[0], kind=kept[1]):
+            return
+        if name_was_refused(validator, function_name):
             return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)

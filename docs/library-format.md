@@ -343,9 +343,15 @@ is the authority, and the index is a cache of it.
     # consumer loads every library of the graph from these records; a second version of
     # one library is CE3519. Visibility does not follow: a plain `use` gives the
     # consumer no name, and only a `public use` (`reexports`) hands names on.
+    # `units` names the library's own units that write the `use` (#1123). The load and
+    # the version check read the record whole. A copy of a template of the library
+    # resolves its body in the scope of its own unit, and that scope holds only the
+    # records that name the unit. A module that only a unit the library does not own
+    # uses has an empty list. A record with no `units` is read for every unit.
     "dependencies": [
-        {"path": str, "kind": "stdlib"},
-        {"path": str, "kind": "library", "library_name": str, "library_version": str}
+        {"path": str, "kind": "stdlib", "units": [str]},
+        {"path": str, "kind": "library", "library_name": str, "library_version": str,
+         "units": [str]}
     ],
 
     # Written for EVERY kind. A source library ships whole units, so a generic in it is

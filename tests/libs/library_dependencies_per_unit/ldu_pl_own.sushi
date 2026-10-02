@@ -1,0 +1,5 @@
+use "ldu_pl2"
+use <lib/ldu_b>
+
+public fn gen_own@(T)(T x) i32:
+    return b_val()

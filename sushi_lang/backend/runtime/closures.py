@@ -199,8 +199,10 @@ def emit_lambda(codegen: "LLVMCodegen", lam, to_i1: bool) -> ir.Value:
     i32 = codegen.types.i32
     zero = ir.Constant(i32, 0)
     for idx, cap in enumerate(captures):
-        source = _Name(id=cap.name, loc=lam.loc)
-        source.ownership_provenance = getattr(cap, "ownership_provenance", None)
+        source = cap.capture_source
+        if source is None:
+            source = _Name(id=cap.name, loc=lam.loc)
+            source.ownership_provenance = getattr(cap, "ownership_provenance", None)
         value = codegen.expressions.emit_expr(source)
         # The environment takes ownership of the captured value and outlives the scope
         # that built it. That makes this the CAPTURE consuming use, with no decision of

@@ -17,7 +17,7 @@ from .diagnostics import (
     refuses_clone,
 )
 from .reads import (
-    constant_sig, namespaced_storage, read_type, reads_through_owner, root_owner,
+    borrow_owner, constant_sig, namespaced_storage, read_type, reads_through_owner,
     unwrap_try)
 from .state import BorrowState
 from .takes import field_take, spend
@@ -341,7 +341,7 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     dest.is_let_borrow = True
     dest.bound_at_span = stmt.loc
 
-    owner = root_owner(stmt.value)
+    owner = borrow_owner(stmt.value)
     if owner is None:
         return
     owner_state = checker.borrow_state.get(owner)

@@ -609,6 +609,8 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
             return
         if _was_refused(validator, receiver_type, call.method):
             return
+        if isinstance(call.receiver, Name) and call.receiver.id in validator.refused_bindings:
+            return
         er.emit(validator.reporter, er.ERR.CE2008, call.loc,
                 name=f"{display_type(receiver_type)}.{call.method}")
         return

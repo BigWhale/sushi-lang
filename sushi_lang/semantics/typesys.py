@@ -46,6 +46,13 @@ class UnknownType:
     def __str__(self) -> str:
         return self.name
 
+def element_text(element: "Type", render) -> str:
+    """An array element as text. A function element takes parentheses, because
+    `fn(i32) -> i32[]` is a function that returns an array (#1128)."""
+    text = render(element)
+    return f"({text})" if isinstance(element, FunctionType) else text
+
+
 @dataclass(frozen=True)
 class ArrayType:
     base_type: "Type"  # The element type
@@ -54,7 +61,7 @@ class ArrayType:
     size_name: Optional[str] = field(default=None, compare=False)
 
     def __str__(self) -> str:
-        return f"{self.base_type}[{self.size}]"
+        return f"{element_text(self.base_type, str)}[{self.size}]"
 
     def __hash__(self) -> int:
         return hash((self.base_type, self.size))
@@ -67,7 +74,7 @@ class DynamicArrayType:
     base_type: "Type"  # The element type
 
     def __str__(self) -> str:
-        return f"{self.base_type}[]"
+        return f"{element_text(self.base_type, str)}[]"
 
     def __hash__(self) -> int:
         return hash(("dynamic_array", self.base_type))

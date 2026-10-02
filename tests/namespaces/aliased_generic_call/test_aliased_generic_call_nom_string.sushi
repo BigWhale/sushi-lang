@@ -1,0 +1,12 @@
+# A generic function behind a unit alias takes an owning `nom` argument and
+# frees it once (#1125).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let string t = l.gen(nom s)
+    println(t)
+    return 0

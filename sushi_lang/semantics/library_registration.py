@@ -158,6 +158,8 @@ class LibraryRegistration:
                 continue
             perk_table.by_name[perk_name] = perk_def
             perk_table.order.append(perk_name)
+            perk_table.library_units[perk_name] = (
+                f"lib/{lib_name}/{record.get('unit') or lib_name}")
 
     def seed_generic_types(self) -> None:
         """Seed the generic struct and enum TEMPLATES the libraries ship (#728).

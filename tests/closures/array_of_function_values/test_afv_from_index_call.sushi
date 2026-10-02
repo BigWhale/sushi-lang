@@ -1,0 +1,16 @@
+# An array of function values: `from`, an index, a call of an element, `len` (#1128).
+# EXPECT_STDOUT_EXACT: "2\n6\n10\n"
+# EXPECT_STDERR_EMPTY: true
+fn inc(i32 x) i32:
+    return x + 1
+
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([inc, dbl])
+    println(fs.len())
+    println(fs[0](5))
+    let fn(i32) -> i32 g = fs[1]
+    println(g(5))
+    return 0

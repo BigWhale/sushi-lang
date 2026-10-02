@@ -354,8 +354,9 @@ def _note_refused_declared_type(validator: 'TypeValidator', node: Expr) -> None:
     """A refused declared type reaches a constructor, and every constructor in its payload.
 
     The type gives no instance, but it is a declared type, so no constructor it reaches
-    reports CE2112 (#991). The walk follows the payload of a generic enum constructor
-    only: that is where a declared type would go.
+    reports CE2112 (#991), and no static of a generic struct reports CE2060 (#1126). The
+    walk follows the payload of a generic enum constructor only: that is where a
+    declared type would go.
     """
     from sushi_lang.semantics.ast import MemberAccess
 
@@ -364,6 +365,9 @@ def _note_refused_declared_type(validator: 'TypeValidator', node: Expr) -> None:
     elif isinstance(node, (DotCall, MemberAccess)):
         enum_name = _enum_receiver_name(validator, node.receiver)
     else:
+        return
+    if enum_name in validator.generic_struct_table.by_name:
+        _declared_positions(validator).add(id(node))
         return
     if enum_name not in validator.generic_enum_table.by_name:
         return

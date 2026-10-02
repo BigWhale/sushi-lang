@@ -1,0 +1,11 @@
+# A size that names a constant of the wrong type says that the constant exists and
+# that its type is the fault (#1107).
+# EXPECT_ERROR_CODE: CE2099
+# EXPECT_STDERR_CONTAINS: "'N' is a f64 constant"
+
+const f64 N = 3.0
+
+fn main() i32:
+    let i32[N] a = [1, 2, 3]
+    println(a.len())
+    return 0

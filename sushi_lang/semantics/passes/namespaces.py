@@ -118,9 +118,9 @@ def build_compiled_library_namespaces(tables: SymbolTables, *, units: Dict[str, 
     A compiled library has no AST at the consumer, but a copy of one of its templates
     is checked and emitted at the consumer. The names of the copy's body resolve in the
     scope of the library unit that declares the template, never in the scope of the
-    unit that holds the copy (#1120). The manifest records the `use` statements of the
-    library as a whole, so each unit of the library sees the units of its own library
-    and every module and library that the library records in `dependencies`.
+    unit that holds the copy (#1120). Each unit sees the units of its own library and
+    the `dependencies` records that name it in `units` (#1123); a record with no
+    `units` list is read for every unit.
     """
     from sushi_lang.semantics.library_registry import manifest_dependencies
 
@@ -129,21 +129,20 @@ def build_compiled_library_namespaces(tables: SymbolTables, *, units: Dict[str, 
         return found
     for metadata in library_registry.get_all_libraries().values():
         manifest = metadata.raw_manifest or {}
+        prefix = f"lib/{metadata.name}/"
         own = tuple(_binary_library_units(metadata.name, library_registry))
-        uses = []
+        flat: Dict[str, list[Tuple[UseStatement, Provider]]] = {u: [] for u in own}
         for record in manifest_dependencies(manifest):
-            path = record.get("path")
-            if not path:
+            use_stmt = _dependency_use(record)
+            if use_stmt is None:
                 continue
-            if record.get("kind") == "stdlib":
-                uses.append(UseStatement(loc=None, path=path, is_stdlib=True))
-            elif record.get("kind") == "library":
-                uses.append(UseStatement(loc=None, path=path, is_library=True,
-                                         library_name=record.get("library_name") or None))
-        flat = [(use_stmt, _provider_for(use_stmt, tables, units, library_registry))
-                for use_stmt in uses]
+            provider = _provider_for(use_stmt, tables, units, library_registry)
+            writers = record.get("units")
+            for unit_name in own:
+                if writers is None or unit_name[len(prefix):] in writers:
+                    flat[unit_name].append((use_stmt, provider))
         for unit_name in own:
-            scope = _scope_of(unit_name, flat, units, library_registry)
+            scope = _scope_of(unit_name, flat[unit_name], units, library_registry)
             table = NamespaceTable(library=metadata.name)
             # The library's name is the unit of its private types' records.
             table.scope = UnitScope(
@@ -152,6 +151,19 @@ def build_compiled_library_namespaces(tables: SymbolTables, *, units: Dict[str, 
                 modules=scope.modules, generics=scope.generics, everything=False)
             found[unit_name] = table
     return found
+
+
+def _dependency_use(record: dict) -> Optional[UseStatement]:
+    """The `use` statement one manifest `dependencies` record stands for."""
+    path = record.get("path")
+    if not path:
+        return None
+    if record.get("kind") == "stdlib":
+        return UseStatement(loc=None, path=path, is_stdlib=True)
+    if record.get("kind") == "library":
+        return UseStatement(loc=None, path=path, is_library=True,
+                            library_name=record.get("library_name") or None)
+    return None
 
 
 def _library_of(unit: Unit) -> Optional[str]:

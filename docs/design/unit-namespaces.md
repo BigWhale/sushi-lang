@@ -257,7 +257,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | `const` | `my_math.MAX_DEPTH` |
 | `struct` | `let my_math.Vec v = my_math.Vec(1, 2)` |
 | `enum` | `let my_math.Sign s = my_math.Sign.Plus` |
-| `perk` | `fn f@(T: my_math.Loud)(peek T x) ~:` |
+| `perk` | `fn f@(T: my_math.Loud)(peek T x) ~:`, `extend Box with my_math.Loud:` (#1124) |
 
 ### 4.2 What is out, and why
 

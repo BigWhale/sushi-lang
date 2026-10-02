@@ -1,0 +1,10 @@
+# The mode error of a stdlib call behind a module alias names the parameter as
+# the flat call does (#1125).
+# EXPECT_ERROR_CODE: CE2427
+# EXPECT_STDERR_CONTAINS: "declared mode of parameter 'F64'"
+use <math> as m
+
+fn main() i32:
+    let f64 x = 4.0
+    println(m.sqrt(nom x))
+    return 0

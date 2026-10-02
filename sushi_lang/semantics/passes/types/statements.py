@@ -63,9 +63,11 @@ def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
         validator.validate_expression(stmt.value)
         if refused:
             return
-        if not reject_unhandled_result(validator, stmt, resolved_type):
-            reject_incompatible_assignment(validator, stmt.ty, stmt.value,
-                                           stmt.type_span, stmt.value.loc)
+        validator.refused_bindings.discard(stmt.name)
+        if (reject_unhandled_result(validator, stmt, resolved_type)
+                or reject_incompatible_assignment(validator, stmt.ty, stmt.value,
+                                                  stmt.type_span, stmt.value.loc)):
+            validator.refused_bindings.add(stmt.name)
 
 
 def _declares_a_result(stmt: Let, resolved_type) -> bool:

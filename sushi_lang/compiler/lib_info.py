@@ -389,10 +389,15 @@ def _foreign_line(claim: dict, p: Palette) -> str:
 
 
 def _dependency_line(dep: dict, p: Palette) -> str:
-    """A module, or a library with the name and the version that the build found."""
+    """A module, or a library with the name and the version that the build found.
+
+    The units of the library that write the `use` follow (#1123).
+    """
     line = f"  <{dep['path']}>"
     if dep.get('kind') == 'library':
         line += f" ({dep.get('library_name') or '?'} {dep.get('library_version') or '?'})"
+    if dep.get('units'):
+        line += f", used by {', '.join(dep['units'])}"
     return line
 
 

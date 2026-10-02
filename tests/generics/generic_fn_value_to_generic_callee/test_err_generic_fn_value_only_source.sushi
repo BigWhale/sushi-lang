@@ -1,6 +1,7 @@
 # A generic callee whose type arguments come only from a generic function
-# value is not solved: the callee is CE2060 and the value is CE2093 (#1029).
-# EXPECT_ERROR_CODES_EXACT: CE2060, CE2093
+# value is not solved: the value is CE2093, and that is the one diagnostic (#1029,
+# ruled again on #1105).
+# EXPECT_ERROR_CODES_EXACT: CE2093
 fn gen@(T)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32

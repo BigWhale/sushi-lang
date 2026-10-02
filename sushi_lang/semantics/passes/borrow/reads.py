@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
+from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
 
 if TYPE_CHECKING:
@@ -52,6 +53,32 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
     """The named local a read-through-an-owner expression ultimately reads out of."""
     root = walk_place(expr, OWNER_STEPS).name
     return root.id if root is not None else None
+
+
+def captured_key(variable: str) -> str:
+    """The borrow-state name of the captured `variable` in a lifted lambda body."""
+    return f"{ENV_PARAM_NAME}.{variable}"
+
+
+def captured_variable(member: MemberAccess) -> Optional[str]:
+    """`#closure_env.xs` is the captured `xs`: the place a borrow of it stops at."""
+    receiver = member.receiver
+    if isinstance(receiver, Name) and receiver.id == ENV_PARAM_NAME:
+        return captured_key(member.member)
+    return None
+
+
+def borrow_owner(expr: Optional[Expr]) -> Optional[str]:
+    """The name a borrow of `expr` is counted on, and a binding into `expr` freezes.
+
+    It is the root local, except in a lifted lambda body, where each captured variable
+    is a place of its own (#1129): borrows of two captured variables do not conflict.
+    `root_owner` still answers the environment, which owns and frees every capture.
+    """
+    walked = walk_place(expr, OWNER_STEPS, stop=captured_variable)
+    if walked.stop is not None:
+        return walked.stop
+    return walked.name.id if walked.name is not None else None
 
 
 def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:

@@ -1,0 +1,20 @@
+# An owning capture at each level (#1127). The outer lambda moves `s` into its
+# environment. Its body clones the capture, and the inner lambda moves the clone into
+# its own environment. The inner lambda also copies the plain `k` from the outer
+# environment. Each environment frees what it owns.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 16\nMostly Harmless 17\n3\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32 k = 15
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let fn(i32) -> i32 g = |i32 p|:
+        let string t = s.clone()
+        let fn(i32) -> i32 inner = |i32 q|:
+            println("{t} {k + q}")
+            return q
+        return inner(p)
+    let i32 a = g(1)
+    let i32 b = g(2)
+    println(a + b)
+    return 0

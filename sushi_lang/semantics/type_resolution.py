@@ -184,7 +184,8 @@ def parse_type_string(
         BuiltinType, ArrayType, BorrowMode, DynamicArrayType, ReferenceType, UnknownType
     )
 
-    type_str = type_str.strip()
+    from sushi_lang.semantics.generics.type_strings import strip_grouping
+    type_str = strip_grouping(type_str.strip())
 
     if type_str == "~":
         return BuiltinType.BLANK

@@ -69,8 +69,12 @@ def validate_generic_function_call(
 
     type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
+        said = _untyped_argument_faults(validator)
         _walk_unchecked_arguments(validator, call)
-        if not contested:
+        # An argument that has no type of its own (a generic function value, CE2093; a
+        # type-pack name, CE0144) is why nothing was inferred: its diagnostic is the one
+        # fault (#1105, #1109). Any other argument fault stands beside CE2060.
+        if not contested and _untyped_argument_faults(validator) == said:
             er.emit(
                 validator.reporter,
                 er.ERR.CE2060,
@@ -140,6 +144,14 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
         minimum_arity=has_pack, stop_on_arity=True)
 
 
+_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code)
+
+
+def _untyped_argument_faults(validator: 'TypeValidator') -> int:
+    offered = validator.reporter.errors_offered
+    return sum(offered[code] for code in _UNTYPED_ARGUMENT_CODES)
+
+
 def _walk_unchecked_arguments(validator: 'TypeValidator', call: Call) -> None:
     """Walk each argument when no instance is solved, so a fault in one is still said.
 
@@ -190,6 +202,26 @@ def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_fun
     if type_args is None:
         return None
     return substituted_call_result(generic_func, type_args)
+
+
+def reject_unsolved_generic_value(validator: 'TypeValidator', loc, name: str,
+                                  expected_ty) -> None:
+    """CE2093 for a generic function value that no stated function type solves.
+
+    The one text for the bare name and the name behind an alias (#1105).
+    """
+    from sushi_lang.semantics.typesys import FunctionType
+    if isinstance(expected_ty, FunctionType):
+        reason = (f"the function type '{display_type(expected_ty)}' of this position "
+                  "does not solve its type arguments")
+        help_text = (f"state a function type whose parameter types solve each type "
+                     f"parameter of '{name}'")
+    else:
+        reason = "this position states no function type, so its type arguments are unknown"
+        help_text = (f"state the function type at the position, for example "
+                     f"'let fn(i32) -> i32 g = {name}'")
+    er.emit_with(validator.reporter, er.ERR.CE2093, loc, name=name,
+                 reason=reason).help(help_text).emit()
 
 
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,

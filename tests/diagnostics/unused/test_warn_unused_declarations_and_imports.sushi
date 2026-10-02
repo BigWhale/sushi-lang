@@ -4,7 +4,7 @@
 # struct and the enum are never named. `<time>` and the aliased unit bring names the
 # unit never writes.
 # COMPILER_FLAGS: --warn-unused
-# EXPECT_ERROR_CODES_EXACT: CW1004 CW3006
+# EXPECT_ERROR_CODES_EXACT: CW1004, CW1004, CW1004, CW1004, CW1004, CW1004, CW3006, CW3006
 # EXPECT_STDERR_CONTAINS: "private function 'lonely' is never used"
 # EXPECT_STDERR_CONTAINS: "private function 'helper' is never used"
 # EXPECT_STDERR_CONTAINS: "private constant 'UNREAD' is never used"

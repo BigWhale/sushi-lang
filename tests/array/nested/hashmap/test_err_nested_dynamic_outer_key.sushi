@@ -1,6 +1,6 @@
 # a dynamic array of fixed rows is refused as a HashMap key, with the dynamic-array key
 # error, and so is one two levels down: `i32[2][]` and `i32[][3][2]`.
-# EXPECT_ERROR_CODES_EXACT: CE2058
+# EXPECT_ERROR_CODES_EXACT: CE2058, CE2058
 use <collections/hashmap>
 
 fn main() i32:

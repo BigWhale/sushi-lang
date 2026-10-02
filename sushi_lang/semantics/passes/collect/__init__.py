@@ -225,6 +225,7 @@ class CollectorPass:
                  unit_file: Optional[str]) -> 'SymbolTables':
         # One way in for all six: the fields, not a parameter on one collector's method.
         refused = claim_unit_names(self.r, root, unit_file)
+        self.visibility.refused.update((unit_name, name) for name in refused.names)
         for collector in self._collectors:
             collector.current_unit_file = unit_file
             collector.current_unit_name = unit_name

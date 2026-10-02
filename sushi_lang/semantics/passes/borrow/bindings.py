@@ -15,7 +15,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import expr_to_string
-from .reads import names_kept_storage, root_owner
+from .reads import borrow_owner, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState
 
@@ -152,7 +152,7 @@ class BindingScope:
     def freeze_owner(self, state: BorrowState, source: Expr, span: Optional[Span],
                      poke_span: Optional[Span] = None) -> None:
         """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
-        owner = root_owner(source)
+        owner = borrow_owner(source)
         owner_state = self.checker.borrow_state.get(owner) if owner else None
         if owner_state is None:
             return
@@ -190,7 +190,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     check_expr(checker, stmt.value)
     is_poke = stmt.ty.is_poke()
     place = _own_payload_receiver(stmt.value) or stmt.value
-    owner = root_owner(place)
+    owner = borrow_owner(place)
     state = BorrowState(name=stmt.name, var_type=stmt.ty, bound_at_span=stmt.loc,
                         declared_at_span=stmt.loc,
                         declared_branch_depth=checker.branch_depth)
@@ -461,7 +461,7 @@ def reject_a_second_reference(checker: 'BorrowChecker', place: Expr, marker: str
 
     A pattern binding and a `foreach` item both ask this before they bind (#1027).
     """
-    root = root_owner(place)
+    root = borrow_owner(place)
     owner_state = checker.borrow_state.get(root) if root else None
     if owner_state is None:
         return False

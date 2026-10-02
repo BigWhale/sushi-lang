@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import textwrap
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Any
@@ -263,6 +264,9 @@ class Reporter:
         self.collapse_repeats: bool = False
         self.items: List[Diagnostic] = []
         self._identities: set = set()
+        # Every error offered, by code, a dropped repeat included, so "did this walk
+        # report that fault" has one answer in every copy of an instance body.
+        self.errors_offered: Counter[str] = Counter()
 
     def enter_body(self, func) -> None:
         """Tell the reporter whose body a pass is about to read.
@@ -299,6 +303,8 @@ class Reporter:
             d.sub.append(SubDiagnostic("note", self.provenance))
         if d.kind == "warning" and not self._author_compiles():
             return d
+        if d.kind == "error":
+            self.errors_offered[d.code] += 1
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)

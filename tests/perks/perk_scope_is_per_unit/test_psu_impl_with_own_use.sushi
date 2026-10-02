@@ -1,0 +1,16 @@
+# The unit imports the perk itself, so it may implement it.
+# EXPECT_STDOUT_EXACT: "dog\n"
+use "psu_mid"
+use "psu_pk"
+
+struct Dog:
+    i32 x
+
+extend Dog with Named:
+    fn name() string:
+        return "dog"
+
+fn main() i32:
+    let Dog d = Dog(1)
+    println(d.name())
+    return touch()

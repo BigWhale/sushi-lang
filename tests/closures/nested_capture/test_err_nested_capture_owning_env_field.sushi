@@ -1,0 +1,15 @@
+# An owning capture of an owning capture (#1127). The inner lambda reads `s` from the
+# environment of the outer lambda, and a read of a captured field is a borrow. A move of
+# it into the inner environment is the consuming use of a borrow.
+# EXPECT_ERROR_CODE: CE2411
+# EXPECT_ERROR_CODES_EXACT: CE2411
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let fn(i32) -> i32 g = |i32 p|:
+        let fn(i32) -> i32 inner = |i32 q|:
+            println(s)
+            return q
+        return inner(p)
+    println(g(1))
+    return 0

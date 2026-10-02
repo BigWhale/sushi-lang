@@ -1,0 +1,16 @@
+# An array element has no `==` at the top level, so `contains` refuses it. The text
+# says that, and the help names the struct row (#1116).
+# EXPECT_ERROR_CODES_EXACT: CE2100
+# EXPECT_STDERR_CONTAINS: "an array has no '==' at the top level"
+# EXPECT_STDERR_CONTAINS: "struct Row: i32[2] cells"
+
+struct Grid:
+    i32[2] row
+
+fn main() i32:
+    let i32[2][] rows = from([[1, 2], [3, 4]])
+    let Grid a = Grid([1, 2])
+    let Grid b = Grid([1, 2])
+    println(a == b)
+    println(rows.contains([1, 2]))
+    return 0

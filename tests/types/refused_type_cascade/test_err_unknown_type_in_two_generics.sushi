@@ -1,0 +1,8 @@
+# An unknown name two generic levels down is one CE2001, and the empty container static gives no CE2060.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+# EXPECT_STDERR_CONTAINS: unknown type 'Nope'
+
+fn main() i32:
+    let List@(Maybe@(Nope)) x = List.new()
+    println(x.len())
+    return 0

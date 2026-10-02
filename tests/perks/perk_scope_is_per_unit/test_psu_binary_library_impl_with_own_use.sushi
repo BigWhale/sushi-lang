@@ -1,0 +1,16 @@
+# The consumer unit imports the binary library, so it may implement its perk.
+# BUILD_LIB_BINARY: psu_lib.sushi
+# EXPECT_STDOUT_EXACT: "cat\n"
+use <lib/psu_lib>
+
+struct Cat:
+    i32 x
+
+extend Cat with Labeled:
+    fn label() string:
+        return "cat"
+
+fn main() i32:
+    let Cat c = Cat(1)
+    println(c.label())
+    return lib_zero()

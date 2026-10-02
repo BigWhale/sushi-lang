@@ -14,7 +14,7 @@ from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import parameter_escape, write_escape
 from .methods import effect_of
-from .reads import chain_call_boundary, root_owner
+from .reads import borrow_owner, chain_call_boundary
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -132,7 +132,7 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
     if not changes_its_receiver(expr):
         return
     receiver = expr.receiver
-    root = root_owner(receiver)
+    root = borrow_owner(receiver)
     what = f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return

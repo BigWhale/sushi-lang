@@ -2,6 +2,7 @@
 """Enhanced test runner for the Sushi language compiler."""
 
 import atexit
+from collections import Counter
 import io
 import re
 import subprocess
@@ -43,9 +44,9 @@ _NUMERIC = re.compile(r"-?\d+")
 _DIAGNOSTIC_CODE = re.compile(r"\b(?:error|warning) \[(C[EW]\d{4})\]")
 
 
-def diagnostic_codes(stderr: str) -> set:
-    """Every distinct diagnostic code the compiler printed."""
-    return set(_DIAGNOSTIC_CODE.findall(stderr or ""))
+def diagnostic_codes(stderr: str) -> Counter:
+    """Each diagnostic code the compiler printed, with the number of times it printed it."""
+    return Counter(_DIAGNOSTIC_CODE.findall(stderr or ""))
 
 # Why a leak assertion was not evaluated. A skip is never a pass, so the reason has to
 # survive as far as the summary; these constants are what _check_leaks records and what
@@ -678,14 +679,16 @@ class TestRunner:
         return None
 
     def _build_libraries(self, metadata: TestMetadata, workspace: "Workspace") -> Optional[str]:
-        """Build each BUILD_LIB, BUILD_LIB_BINARY, BUILD_LIB_HYBRID and BUILD_LIB_AT library.
+        """Build each library of the BUILD_LIB family.
 
         The answer is the failure, or None. A BUILD_LIB, BUILD_LIB_BINARY or
         BUILD_LIB_HYBRID library goes to the directory the runner puts on SUSHI_LIB_PATH,
-        with `--lib-kind source`, `binary` or `hybrid`; a BUILD_LIB_AT library goes where
+        with `--lib-kind source`, `binary` or `hybrid`; a BUILD_LIB_WARNS library goes
+        there too, as a source library unless its value names the kind; a BUILD_LIB_AT library goes where
         the fixture says, inside the copy, as a source library. A `-> name.slib` form names
         the file in the SUSHI_LIB_PATH directory, and an `@ version` form gives the version.
-        The first three build in
+        A build must exit 0, except a BUILD_LIB_WARNS build: it must exit 1 and print
+        exactly the named set of warning codes (#1122). The first four build in
         the order the fixture writes them, whatever the directive, and every BUILD_LIB_AT
         builds after them. Each build sees the directory on its own SUSHI_LIB_PATH, so a
         library may import one built before it. Each
@@ -697,14 +700,15 @@ class TestRunner:
         workspace.libs.mkdir(parents=True, exist_ok=True)
         directive_of = {"source": "BUILD_LIB", "binary": "BUILD_LIB_BINARY",
                         "hybrid": "BUILD_LIB_HYBRID"}
-        builds = [(directive_of[kind], kind, source, workspace.libs / slib, version)
-                  for kind, source, slib, version in metadata.library_builds]
-        builds += [("BUILD_LIB_AT", "source", source, workspace.root / target, None)
+        builds = [("BUILD_LIB_WARNS" if warns else directive_of[kind], kind, source,
+                   workspace.libs / slib, version, warns)
+                  for kind, source, slib, version, warns in metadata.library_builds]
+        builds += [("BUILD_LIB_AT", "source", source, workspace.root / target, None, None)
                    for source, target in metadata.build_libs_at]
         env = {**os.environ, "NO_COLOR": "1"}
         env["SUSHI_LIB_PATH"] = os.pathsep.join(
             [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
-        for directive, kind, source, target, written in builds:
+        for directive, kind, source, target, written, warns in builds:
             target.parent.mkdir(parents=True, exist_ok=True)
             stated = (workspace.home / "nori.toml").is_file()
             version = ([] if stated and written is None
@@ -714,11 +718,16 @@ class TestRunner:
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
                 cwd=workspace.home, env=env, timeout=60)
-            # Exit 1 is a library built with a warning: a library that extends a type
-            # it does not declare is CW3003, and is still a library.
-            if done.returncode not in (0, 1) or not target.is_file():
+            if done.returncode != (1 if warns else 0) or not target.is_file():
                 return (f"✗ Compilation: {directive} {source} failed with exit "
                         f"{done.returncode}\nSTDERR: {done.stderr.strip()}")
+            if warns:
+                expected, printed = set(warns), set(diagnostic_codes(done.stderr))
+                if printed != expected:
+                    return (f"✗ Compilation: {directive} {source} gave other warnings"
+                            f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
+                            f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
+                            f"\nSTDERR: {done.stderr.strip()}")
         return None
 
     def _binary_path(self, test_file: Path, metadata: TestMetadata) -> Path:
@@ -1012,14 +1021,16 @@ class TestRunner:
                 + f"\nSTDERR: {stderr.strip()}"
             )
         if metadata.expect_error_codes_exact is not None:
-            expected = set(metadata.expect_error_codes_exact)
+            expected = Counter(metadata.expect_error_codes_exact)
             printed = diagnostic_codes(stderr)
             if printed != expected:
+                differ = "".join(
+                    f"\n  {code}: expected {expected[code]}, printed {printed[code]}"
+                    for code in sorted(expected.keys() | printed.keys())
+                    if expected[code] != printed[code])
                 return False, (
-                    "✗ Compilation: the diagnostic codes are not the exact set"
-                    f"\n  missing: {', '.join(sorted(expected - printed)) or '-'}"
-                    f"\n  not expected: {', '.join(sorted(printed - expected)) or '-'}"
-                    f"\nSTDERR: {stderr.strip()}"
+                    "✗ Compilation: the diagnostic codes are not the exact multiset"
+                    f"{differ}\nSTDERR: {stderr.strip()}"
                 )
         return True, "✓ Compilation: diagnostics matched"
 

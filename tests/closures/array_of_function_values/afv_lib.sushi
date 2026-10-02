@@ -1,0 +1,8 @@
+public fn apply_all((fn(i32) -> i32)[] fs, i32 v) i32:
+    let i32 sum = 0
+    foreach(f in fs.iter()):
+        sum := sum + f(v)
+    return sum
+
+public fn first_of((fn(i32) -> i32)[2] fs) fn(i32) -> i32:
+    return fs[0].clone()

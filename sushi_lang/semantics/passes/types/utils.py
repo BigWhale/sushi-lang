@@ -10,7 +10,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType, ForeignPtrType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
-    reject_private_kept, reject_private_type)
+    name_was_refused, reject_private_kept, reject_private_type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Param, Expr
@@ -161,10 +161,12 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
 
         concrete_name = interned_name(type_obj.base_name, type_obj.type_args)
 
-        if concrete_name not in validator.enum_table.by_name and concrete_name not in validator.struct_table.by_name:
-            # Monomorphized type should exist after monomorphization pass
-            # If not, it means this instantiation wasn't collected. `concrete_name`
-            # stays `<>` (it is the table lookup key above); the user sees `@()`.
+        # A refused argument is the one fault: no instance was made from it (#1126).
+        if (concrete_name not in validator.enum_table.by_name
+                and concrete_name not in validator.struct_table.by_name
+                and not names_no_type(validator, type_obj)):
+            # The instantiation was not collected. `concrete_name` stays `<>` (it is
+            # the table lookup key above); the user sees `@()`.
             er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
         return
 
@@ -177,8 +179,9 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             return
         # A binary library's kept type reaches no table at all, so "unknown" was the
         # wrong word for it (#469, the type half).
-        if reject_private_kept(validator, type_obj.name, span,
-                               kinds=_KEPT_TYPE_KINDS):
+        # A name CE1005 refused in this unit is that one fault (#1102).
+        if (reject_private_kept(validator, type_obj.name, span, kinds=_KEPT_TYPE_KINDS)
+                or name_was_refused(validator, type_obj.name)):
             return
         er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
     elif isinstance(type_obj, BuiltinType) and type_obj not in validator.known_types:
@@ -412,8 +415,12 @@ def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
     """Reject any bloom spread `arr...` argument in a context that is never variadic."""
     from sushi_lang.semantics.ast import Spread
     found = False
+    from .arguments import names_a_type_pack
     for arg in args:
-        if isinstance(arg, Spread):
+        if isinstance(arg, Spread) and names_a_type_pack(validator, arg.value):
+            validator.validate_expression(arg)
+            found = True
+        elif isinstance(arg, Spread):
             er.emit(validator.reporter, er.ERR.CE0120, arg.loc,
                     message="bloom argument 'arr...' is only allowed as the last argument "
                             "of a call to a variadic '...T' function")

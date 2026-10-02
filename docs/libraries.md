@@ -136,10 +136,12 @@ too. A binary or hybrid library follows the rule of a source library here.
 A generic template of a library is copied at the consumer, with the type arguments of
 the call. The body of the copy resolves its names in the scope of the library unit that
 declares the template: the library's own declarations, and every library and stdlib
-module that the library uses, plain or public. So a template that calls `b_val()` works
-when the library loads `b` with a plain `use <lib/b>`, and the consumer still cannot
+module that THAT unit uses, plain or public. So a template that calls `b_val()` works
+when its unit loads `b` with a plain `use <lib/b>`, and the consumer still cannot
 call `b_val()` itself. The copy works also when the unit that holds it does not import
-the library.
+the library. A `use` in another unit of the same library does not count: each manifest
+`dependencies` record names the units that write it, so a binary or hybrid library
+gives the same CE2008 as a source library (#1123).
 
 A library is identified by the `library_name` stamped into its `.slib`, not by the path
 that the search finds. One library that several paths reach -- the consumer and a

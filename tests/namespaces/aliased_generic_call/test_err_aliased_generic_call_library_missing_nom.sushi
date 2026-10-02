@@ -1,0 +1,9 @@
+# A generic function behind a library alias checks the `nom` marker (#1125).
+# BUILD_LIB: agc_lib.sushi
+# EXPECT_ERROR_CODE: CE2427
+use <lib/agc_lib> as g
+
+fn main() i32:
+    let i32 n = 5
+    println(g.gen(n))
+    return 0

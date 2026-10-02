@@ -149,6 +149,9 @@ class Param:
     nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
     # A lambda's captures are Params, and the `borrow` pass stamps each one.
     ownership_provenance: Optional["Provenance"] = None
+    # A capture of a name that the enclosing lambda captures is a read off the
+    # environment of that lambda; the `lift` pass sets it (#1127). None reads the name.
+    capture_source: Optional["Expr"] = None
 
 
 @dataclass(slots=True)
@@ -244,6 +247,9 @@ class FuncDef(Node):
     # The `lib/<library>/<unit>` whose scope the names of this body resolve in: a copy
     # of a compiled library's template, which lands in a unit of the consumer (#1120).
     scope_unit: Optional[str] = None
+    # The written type-pack parameters of the template this body is an instance of. The
+    # copy fans each one out, so the name is no local; a use outside `expand` is CE0144.
+    pack_names: Tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -397,6 +403,8 @@ class ExtendWithDef(Node):
     # the mark a walk over that unit reads one written declaration once for each
     # instantiation (#657).
     is_synthesized: bool = False
+    # The alias of `extend Dog with p.Named`, or None for a bare perk name.
+    perk_namespace: Optional[str] = None
 
 @dataclass(slots=True)
 class TypeConstraint:
@@ -790,6 +798,8 @@ class MethodCall(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
+    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
+    callee_variadic_at: Optional[int] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
@@ -826,6 +836,8 @@ class DotCall(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
+    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
+    callee_variadic_at: Optional[int] = None
     # An extern variadic call's promoted argument types (CE5005 checks them).
     variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace

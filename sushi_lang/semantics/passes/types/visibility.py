@@ -23,13 +23,16 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 __all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
-           "reject_out_of_scope_type", "reject_private_call", "reject_private_kept",
+           "reject_out_of_scope_perk", "reject_out_of_scope_type",
+           "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
-           "reject_private_type", "type_is_contested", "type_name_is_contested"]
+           "reject_private_type", "type_is_contested", "type_name_is_contested",
+           "name_was_refused"]
 
 
 # Which kinds one written type name could be. `struct` and `enum` share one namespace,
-# and a perk is here because a constraint is a written name in the same sense.
+# and a perk is here because a perk written in a type position is that same mistake. A
+# perk in a perk position asks `reject_out_of_scope_perk`.
 _TYPE_KINDS = ("struct", "enum", "perk")
 
 
@@ -61,16 +64,49 @@ def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
         _reject_unreachable(validator, name, loc, import_help(home, stdlib=True))
         return True
 
-    table = getattr(validator, "visibility", None)
-    if table is None:
-        return False
-    origins = [origin for kind in _TYPE_KINDS
-               for origin in table.origins(kind, name)
-               if origin.unit_name is not None]
-    if not origins or any(scope.holds_unit(o.unit_name) for o in origins):
+    declarer = _unreachable_declarer(validator, _TYPE_KINDS, name)
+    if declarer is None:
         return False
     _reject_unreachable(validator, name, loc,
-                        import_help(origins[0].unit_name, tables=_unit_tables(validator)))
+                        import_help(declarer, tables=_unit_tables(validator)))
+    return True
+
+
+def _unreachable_declarer(validator: 'TypeValidator', kinds: tuple[str, ...],
+                          name: str) -> Optional[str]:
+    """The unit to import when units declare `name` and none is in this unit's scope.
+
+    None when the name has no record of these kinds, or when one record is reachable.
+    """
+    table = getattr(validator, "visibility", None)
+    if table is None:
+        return None
+    origins = [origin for kind in kinds
+               for origin in table.origins(kind, name)
+               if origin.unit_name is not None]
+    if not origins or any(validator.scope.holds_unit(o.unit_name) for o in origins):
+        return None
+    return origins[0].unit_name
+
+
+def reject_out_of_scope_perk(validator: 'TypeValidator', name: str, loc: Any) -> bool:
+    """CE4003: a perk some unit declares and THIS unit cannot name (#1124).
+
+    One rule for every perk position -- an implementation, a constraint, a pack
+    constraint -- and the scope is the one the other names read. A perk that a compiled
+    library ships has no visibility record, so its `lib/<library>/<unit>` key is asked
+    instead. A predefined perk has neither, and is in every scope.
+    """
+    if getattr(validator, "in_synthesized_body", False) or validator.in_library_unit:
+        return False
+    declarer = _unreachable_declarer(validator, ("perk",), name)
+    if declarer is None:
+        library_unit = validator.perk_table.library_units.get(name)
+        if library_unit is None or validator.scope.holds_unit(library_unit):
+            return False
+        declarer = library_unit
+    er.emit_with(validator.reporter, er.ERR.CE4003, loc, perk=name) \
+        .help(import_help(declarer, tables=_unit_tables(validator))).emit()
     return True
 
 
@@ -133,6 +169,16 @@ def name_is_contested(validator: 'TypeValidator', kind: str, name: str) -> bool:
     if table is None:
         return False
     return table.contested_by(kind, name, validator.current_unit_name)
+
+
+def name_was_refused(validator: 'TypeValidator', name: str) -> bool:
+    """Did the unit being validated declare `name` a second time, under another kind?
+
+    CE1005 (or CE0006) refused that declaration, so a use of the name that finds
+    nothing is the same fault and gives no second diagnostic (#1102).
+    """
+    table = getattr(validator, "visibility", None)
+    return table is not None and table.refused_by(validator.current_unit_name, name)
 
 
 def type_name_is_contested(validator: 'TypeValidator', name: str) -> bool:

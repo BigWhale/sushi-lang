@@ -76,8 +76,16 @@ A function type mirrors the function-declaration return/error syntax:
 - `fn(i32) -> i32 | MathError` — an error channel: a call yields `Result@(i32, MathError)`.
 - `fn() -> ~` — no parameters, blank return.
 
-Collections of functions use the generic form: `List@(fn(i32) -> i32)` (a raw array of function
-pointers is not expressible — the `[]` in `fn() -> T[]` binds to the return type).
+An array of function values puts the function type in parentheses: `(fn(i32) -> i32)[]` is a
+dynamic array and `(fn(i32) -> i32)[3]` is a fixed array. Without parentheses, the `[]` in
+`fn() -> T[]` binds to the return type, so `fn(i32) -> i32[]` is a function that returns `i32[]`.
+Parentheses around a function type are legal in every type position, and they do not change the
+type: `List@((fn(i32) -> i32))` is `List@(fn(i32) -> i32)`. The grammar rule is
+`paren_type: "(" type ")"`, and it is inlined, so the AST builder never sees it. `display_type`
+and `str()` put the parentheses back around a function element of an array, so the two types
+never print alike, and the manifest reader takes them off again (`strip_grouping`). A function
+value is a four-word closure that can own its environment, so an array of function values is an
+array of an owning element: each slot is destroyed with the array.
 
 **Channel-transparent call.** A Sushi `fn` with a channel lowers to `Result@(T, E)(params)`, and
 a bare `fn` lowers to `T(params)`. Calling through a function value therefore yields what a direct
@@ -243,6 +251,15 @@ for the captured variable's provenance and type class, not a closures-specific r
   copy, so *returning* or otherwise consuming it from inside the body needs its own `.clone()` —
   CE2411 otherwise. Reading it without consuming it (e.g. `println(greeting)` inside the body) is
   free.
+- **A nested lambda captures through the lambda around it.** The scope pass records a free name
+  for every lambda it is free in, so when an inner lambda captures a local of the function, the
+  outer lambda captures it too. In the lifted outer body that name is a field of the outer
+  environment, so the inner environment is filled from `#closure_env.<name>` (the `lift` pass
+  sets `Param.capture_source`, and `emit_lambda` reads it). This applies at every depth. The rules
+  above do not change, because the source is a read of a captured field: a plain value is copied
+  into the inner environment, and an owning value is the consuming use of a borrow (CE2411). To
+  move an owning capture one level deeper, clone it in the outer body
+  (`let string t = s.clone()`) and capture the clone (#1127).
 
 ### Environment ownership, escape, and RAII
 

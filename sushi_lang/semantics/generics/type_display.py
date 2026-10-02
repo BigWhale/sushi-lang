@@ -11,6 +11,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
     StructType,
     UnknownType,
+    element_text,
 )
 from sushi_lang.semantics.generics.types import (
     GenericEnumType,
@@ -36,10 +37,10 @@ def display_type(ty) -> str:
         return f"Iterator@({display_type(ty.element_type)})"
 
     if isinstance(ty, ArrayType):
-        return f"{display_type(ty.base_type)}[{ty.size}]"
+        return f"{element_text(ty.base_type, display_type)}[{ty.size}]"
 
     if isinstance(ty, DynamicArrayType):
-        return f"{display_type(ty.base_type)}[]"
+        return f"{element_text(ty.base_type, display_type)}[]"
 
     if isinstance(ty, ReferenceType):
         return f"{ty.mutability} {display_type(ty.referenced_type)}"

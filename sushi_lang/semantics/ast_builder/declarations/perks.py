@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Optional
 from lark import Tree, Token
 from sushi_lang.semantics.ast import PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    expect, first_name, first_tree, ice, is_type_node, read_public)
+    expect, first_name, first_tree, ice, is_type_node, name_tokens, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.signatures import read_signature_types
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
@@ -137,9 +137,12 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
     if not suffix:
         ice(t, "missing extend_with_def suffix")
 
-    perk_name_tok = first_name(suffix.children)
-    if perk_name_tok is None:
-        ice(suffix, "missing perk NAME")
+    perk_node = first_tree(suffix.children, "implemented_perk")
+    if perk_node is None:
+        ice(suffix, "missing implemented_perk")
+    perk_names = name_tokens(perk_node.children)
+    if not perk_names:
+        ice(perk_node, "missing perk NAME")
 
     methods = parse_impl_methods(suffix.children, ast_builder)
 
@@ -151,11 +154,12 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
 
     return ExtendWithDef(
         target_type=target_type,
-        perk_name=str(perk_name_tok),
+        perk_name=str(perk_names[-1]),
         methods=methods,
         loc=span_of(t),
         target_type_span=span_of(target_type_node),
-        perk_name_span=span_of(perk_name_tok),
+        perk_name_span=span_of(perk_node),
+        perk_namespace=str(perk_names[0]) if len(perk_names) > 1 else None,
     )
 
 

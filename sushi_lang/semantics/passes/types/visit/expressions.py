@@ -313,6 +313,9 @@ class ExpressionValidator(RecursiveVisitor):
         tv = self.type_validator
         if node.id in tv.variable_types:
             return
+        from sushi_lang.semantics.passes.types.arguments import reject_type_pack_value
+        if reject_type_pack_value(tv, node):
+            return
         const_sig = tv.const_sig(node.id)
         if const_sig is not None:
             # The one place a bare constant is validated, so the one place the fence
@@ -331,13 +334,14 @@ class ExpressionValidator(RecursiveVisitor):
         if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.
-            from sushi_lang.semantics.passes.types.calls.generics import resolve_generic_fn_reference
-            resolved = resolve_generic_fn_reference(tv, node.id, getattr(node, "expected_type", None))
+            from sushi_lang.semantics.passes.types.calls.generics import (
+                reject_unsolved_generic_value, resolve_generic_fn_reference)
+            expected = getattr(node, "expected_type", None)
+            resolved = resolve_generic_fn_reference(tv, node.id, expected)
             if resolved is not None:
                 node.id = resolved[0]  # mirror the call-site mangled-name rewrite
                 return
-            er.emit(tv.reporter, er.ERR.CE2093, node.loc,
-                    name=node.id, reason="generic function references are deferred (v1)")
+            reject_unsolved_generic_value(tv, node.loc, node.id, expected)
             return
         # A function value of another unit's function obeys the fences its call obeys:
         # CE3005 for a private one, CE3012 for a name two imports bring (#1013).

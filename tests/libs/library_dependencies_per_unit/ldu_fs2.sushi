@@ -1,0 +1,4 @@
+use <io/fs>
+
+public fn fs_two() i32:
+    return 2

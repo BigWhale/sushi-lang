@@ -1,0 +1,9 @@
+# A native `...i32` function behind a unit alias with no trailing argument
+# collects an empty array (#1125).
+# EXPECT_STDOUT_EXACT: "0\n9\n"
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    println(l.coll())
+    println(l.first_or(9))
+    return 0
