@@ -49,12 +49,12 @@ Perks provide a way to:
 A perk defines a set of method signatures that implementing types must provide:
 
 ```sushi
-perk Displayable:
-    fn display() string
+perk Describe:
+    fn describe() string
     fn debug() string
 
-perk Comparable:
-    fn compare(Point other) i32
+perk Ranked:
+    fn rank(Point other) i32
 ```
 
 Five perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`),
@@ -94,8 +94,8 @@ extend Point with Hashable:
         let u64 hy = self.y as u64
         return hx + hy
 
-extend Point with Displayable:
-    fn display() string:
+extend Point with Describe:
+    fn describe() string:
         return "Point({self.x}, {self.y})"
 
     fn debug() string:
@@ -227,10 +227,10 @@ fn main() i32:
 ### Enum Constraints
 
 ```sushi
-perk Displayable:
-    fn display() string
+perk Describe:
+    fn describe() string
 
-enum Tagged@(T: Displayable):
+enum Tagged@(T: Describe):
     One(T)
     Nothing()
 
@@ -238,8 +238,8 @@ enum Status:
     Active(i32)
     Inactive()
 
-extend Status with Displayable:
-    fn display() string:
+extend Status with Describe:
+    fn describe() string:
         match self:
             Status.Active(n) -> return "Active: {n}"
             Status.Inactive() -> return "Inactive"
@@ -247,13 +247,13 @@ extend Status with Displayable:
 fn main() i32:
     let Tagged@(Status) t = Tagged.One(Status.Active(3))
     match t:
-        Tagged.One(s) -> println(s.display())
+        Tagged.One(s) -> println(s.describe())
         Tagged.Nothing() -> println("nothing")
     return 0
 ```
 
 The compiler checks a constraint at each written type. `Tagged@(i32)` is **CE4006**, because
-`i32` does not implement `Displayable`.
+`i32` does not implement `Describe`.
 
 ## Generic Functions with Perks
 
@@ -404,19 +404,19 @@ fn main() i32:
 Types can require multiple perk implementations using the `+` operator:
 
 ```sushi
-perk Displayable:
-    fn display() string
+perk Describe:
+    fn describe() string
 
 # Multiple constraints on struct
-struct Processor@(T: Hashable + Displayable):
+struct Processor@(T: Hashable + Describe):
     T item
 
 # Multiple constraints on function
-fn process@(T: Hashable + Displayable)(T item) ~:
+fn process@(T: Hashable + Describe)(T item) ~:
     let u64 h = item.hash()
-    let string s = item.display()
+    let string s = item.describe()
     println("Hash: {h}")
-    println("Display: {s}")
+    println("Description: {s}")
 
 struct Point:
     i32 x
@@ -426,8 +426,8 @@ extend Point with Hashable:
     fn hash() u64:
         return (self.x as u64) + (self.y as u64)
 
-extend Point with Displayable:
-    fn display() string:
+extend Point with Describe:
+    fn describe() string:
         return "Point({self.x}, {self.y})"
 
 fn main() i32:
@@ -510,11 +510,11 @@ fn main() i32:
 Implementing multiple perks for rich functionality:
 
 ```sushi
-perk Displayable:
-    fn display() string
+perk Describe:
+    fn describe() string
 
-perk Comparable:
-    fn compare(Point other) i32
+perk Ranked:
+    fn rank(Point other) i32
 
 struct Point:
     i32 x
@@ -524,12 +524,12 @@ extend Point with Hashable:
     fn hash() u64:
         return (self.x as u64) + (self.y as u64)
 
-extend Point with Displayable:
-    fn display() string:
+extend Point with Describe:
+    fn describe() string:
         return "({self.x}, {self.y})"
 
-extend Point with Comparable:
-    fn compare(Point other) i32:
+extend Point with Ranked:
+    fn rank(Point other) i32:
         let i32 self_sum = self.x + self.y
         let i32 other_sum = other.x + other.y
         if (self_sum < other_sum):
@@ -542,9 +542,9 @@ fn main() i32:
     let Point p1 = Point(10, 20)
     let Point p2 = Point(15, 10)
 
-    println(p1.display())
+    println(p1.describe())
     let u64 h = p1.hash()
-    let i32 cmp = p1.compare(p2)
+    let i32 cmp = p1.rank(p2)
     println("{h} {cmp}")
 
     return 0
@@ -570,7 +570,7 @@ Perk-related compiler errors:
 
 | Code | Description | Example |
 |------|-------------|---------|
-| CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
+| CE4001 | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
 | CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
 | CE4003 | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
 | CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
@@ -612,7 +612,7 @@ Iteration needs no perk. `foreach` walks any type that has a `next()` method tha
 ### 2. No Perk Inheritance
 
 A perk cannot require another perk. Write both constraints at the use site instead:
-`@(T: Hashable + Displayable)`.
+`@(T: Hashable + Describe)`.
 
 ### 3. No Default Implementations
 
@@ -630,7 +630,7 @@ a perk cannot hold a static method or a constructor (CE4014).
 ## Best Practices
 
 1. **Keep perks focused**: Each perk should represent a single cohesive concept
-2. **Use descriptive names**: `Hashable`, `Displayable`, `Comparable` clearly indicate purpose
+2. **Use descriptive names**: `Hashable`, `Describe`, `Ranked` clearly indicate purpose
 3. **Minimize method count**: Fewer methods = easier to implement
 4. **Document constraints**: Make it clear what perks are required for generic types
 5. **Lean on the predefined perks**: a type the compiler can hash, compare or print needs no implementation of `Hashable`, `Eq`, `Ord` or `Display`
