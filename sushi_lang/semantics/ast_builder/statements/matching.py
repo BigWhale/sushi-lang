@@ -77,8 +77,8 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
                     # them and the grammar stays the only list. A bare expression is
                     # the one alternative that is not a statement.
                     if inline_child.data.endswith("_stmt"):
-                        stmt = ast_builder.stmt_parser.parse_stmt(inline_child)
-                        body = Block(statements=[stmt], loc=span_of(child))
+                        body = Block(statements=ast_builder.stmt_parser.parse_stmts(inline_child),
+                                     loc=span_of(child))
                     elif inline_child.data in EXPR_NODES:
                         body = ast_builder._expr(inline_child)
                     else:

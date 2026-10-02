@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
     """Parse a block by routing every child through the statement dispatcher.
 
-    Doc blocks are peeled first: one reaching `parse_stmt` as a statement class would
+    Doc blocks are peeled first: one reaching `parse_stmts` as a statement class would
     need an arm in every exhaustive statement dispatcher in the compiler.
     """
     t = expect(t, "block")
@@ -24,7 +24,7 @@ def parse_block(t: Tree, ast_builder: 'ASTBuilder') -> Block:
     for child in t.children:
         if isinstance(child, Token) and child.type == "DOC_BLOCK":
             continue
-        statements.append(ast_builder.stmt_parser.parse_stmt(child))
+        statements.extend(ast_builder.stmt_parser.parse_stmts(child))
 
     block = Block(statements=statements, loc=span_of(t), doc=body_doc)
     if body_doc is not None:

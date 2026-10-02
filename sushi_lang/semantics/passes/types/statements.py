@@ -19,6 +19,7 @@ from .compatibility import (validate_assignment_compatibility,
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
 
 
@@ -586,21 +587,70 @@ def validate_let_destructure(validator: 'TypeValidator', stmt: Let) -> None:
         validator.variable_types[stmt.name] = value_type
 
 
+def stamp_rebind_places(validator: 'TypeValidator', statements, index: int) -> None:
+    """`(a, b) := v`: give each hidden binder of the whole the type of its place.
+
+    The AST builder put the rebind of each place right after the whole (`a := #rb0`), in
+    the order of the binders. A binder with the type of its place hands it to the element
+    of a tuple literal, so `(small, big) := (200, 5000000000)` types each literal as
+    `small := 200` does, and a value of the wrong type is CE2002 at its place.
+    """
+    from sushi_lang.semantics.ast import destructure_binders
+
+    whole = statements[index]
+    if not (isinstance(whole, Let) and whole.rebinds):
+        return
+    binders = list(destructure_binders(whole.targets))
+    rebinds = statements[index + 1:index + 1 + len(binders)]
+    if len(rebinds) != len(binders) or not all(
+            isinstance(rebind, Rebind) and isinstance(rebind.value, Name)
+            and rebind.value.id == binder.name
+            for binder, rebind in zip(binders, rebinds, strict=True)):
+        er.raise_internal_error("CE0015", message="a destructuring rebind without the "
+                                                  "rebind of each place after it")
+    for binder, rebind in zip(binders, rebinds, strict=True):
+        binder.place_type = _place_type(validator, rebind.target)
+
+
+def _place_type(validator: 'TypeValidator', place) -> Optional[Type]:
+    """The type a plain `place := v` gives `v`, or None when the place has none."""
+    from sushi_lang.semantics.typesys import ReferenceType
+
+    if isinstance(place, Name):
+        found = validator.variable_types.get(place.id)
+        if found is None:
+            sig = validator.const_sig(place.id)
+            found = sig.const_type if sig is not None and sig.is_var else None
+    elif isinstance(place, (MemberAccess, IndexAccess)):
+        found = validator.infer_expression_type(place)
+    else:
+        found = None
+    return found.referenced_type if isinstance(found, ReferenceType) else found
+
+
+def _declared_binder_type(validator: 'TypeValidator', target) -> Optional[Type]:
+    """A binder's written type, resolved, or the type of the place it rebinds."""
+    from .resolution import resolve_variable_type
+
+    if target.ty is not None:
+        return resolve_variable_type(validator, target.ty, target.type_span)
+    return target.place_type
+
+
 def _propagate_to_targets(validator: 'TypeValidator', value, targets) -> None:
     """Hand each typed binder's type to the element of a tuple literal it binds."""
     from sushi_lang.semantics.ast import TupleLiteral
     from .propagation import propagate_types_to_value
-    from .resolution import resolve_variable_type
 
     if not isinstance(value, TupleLiteral) or len(value.elements) != len(targets):
         return
     for element, target in zip(value.elements, targets, strict=True):
         if target.nested is not None:
             _propagate_to_targets(validator, element, target.nested)
-        elif target.ty is not None:
-            propagate_types_to_value(validator, element,
-                                     resolve_variable_type(validator, target.ty,
-                                                           target.type_span))
+            continue
+        declared = _declared_binder_type(validator, target)
+        if declared is not None:
+            propagate_types_to_value(validator, element, declared)
 
 
 def _bind_targets(validator: 'TypeValidator', targets, value_type, span) -> bool:
@@ -610,7 +660,6 @@ def _bind_targets(validator: 'TypeValidator', targets, value_type, span) -> bool
     later use of a binder is not a second diagnostic of the same fault.
     """
     from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
-    from .resolution import resolve_variable_type
 
     refused = False
     if value_type is None:
@@ -636,7 +685,9 @@ def _bind_targets(validator: 'TypeValidator', targets, value_type, span) -> bool
         bound = element
         if target.ty is not None:
             validate_type_name(validator, target.ty, target.type_span)
-            bound = resolve_variable_type(validator, target.ty, target.type_span)
+        declared = _declared_binder_type(validator, target)
+        if declared is not None:
+            bound = declared
             if element is not None and not types_compatible(validator, element, bound):
                 er.emit_with(validator.reporter, er.ERR.CE2002, target.type_span or target.loc,
                              got=display_type(element), expected=display_type(bound)) \

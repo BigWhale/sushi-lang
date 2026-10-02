@@ -164,10 +164,32 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     )
 
 
-def parse_foreach_destructure(node: Tree, _ast_builder: 'ASTBuilder') -> Foreach:
-    """Parse foreach_destructure: refused until its step gives it a meaning (CE6108)."""
-    from sushi_lang.semantics.ast_builder.statements.matching import not_yet
-    raise not_yet(node, "a `foreach` destructure")
+def parse_foreach_destructure(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
+    """Parse foreach_destructure: FOREACH "(" tuple_list "in" expr ")" ":" block
+
+    The loop binds the item under a hidden name, and the body opens with
+    `let (k, v) = <hidden>`. So a binder owns its element when the item is owned and
+    borrows it when the item is a borrow, by the one rule of a `let` destructure
+    (docs/design/tuples.md).
+    """
+    from sushi_lang.semantics.ast_builder.statements.variables import destructure_let
+
+    _token_at(node, node.children, 0, "FOREACH", "first")
+    tuple_list = node.children[1]
+    if not isinstance(tuple_list, Tree) or tuple_list.data != "tuple_list":
+        ice(node, f"foreach_destructure expects a tuple_list, got {tuple_list}")
+    iterable, body = _loop_tail(node, ast_builder)
+    hidden = hidden_name("fe_item", next(_hidden_ids))
+    header = span_of(tuple_list)
+    body.statements.insert(0, destructure_let(tuple_list, Name(id=hidden, loc=header),
+                                              header, ast_builder))
+    return Foreach(
+        item_name=hidden,
+        item_type=None,
+        iterable=iterable,
+        body=body,
+        loc=span_of(node),
+    )
 
 
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:

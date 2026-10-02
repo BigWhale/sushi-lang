@@ -42,9 +42,9 @@ from .bindings import (
     release_binding_borrow,
     walks_a_temporary,
 )
-from sushi_lang.semantics.generics.monomorphize.unroll import written_let
+from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from .borrows import clear_borrows
-from .diagnostics import emit_change_under_iterator
+from .diagnostics import emit_change_under_iterator, expr_to_string
 from .consume import (
     bind,
     binds_a_bare_literal_string,
@@ -180,10 +180,13 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
     borrowed = whole is not None and whole.is_borrowed_binding
     owner = whole.borrows_from if borrowed and whole is not None else None
     owner_state = checker.borrow_state.get(owner) if owner is not None else None
+    shown = _element_spellings(stmt) if stmt.rebinds else {}
     for binder in destructure_binders(stmt.targets):
         state = BorrowState(name=binder.name, var_type=binder.element_type,
                             declared_at_span=binder.loc,
                             declared_branch_depth=checker.branch_depth)
+        if binder.name in shown:
+            state.written = WrittenLet(shown[binder.name])
         checker.borrow_state[binder.name] = state
         if not borrowed:
             continue
@@ -194,6 +197,29 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
             state.borrows_from = owner
             owner_state.binding_borrows.append((binder.name, stmt.loc))
             checker._scope_binding_borrows[-1].append((owner, binder.name))
+
+
+def _element_spellings(stmt: Let) -> dict[str, str]:
+    """The hidden binders of `(a, b) := v`, each spelled as the element it takes (`v.0`).
+
+    A diagnostic then names `p.0`, which the user can read, and never the hidden binder.
+    The value has a spelling only when it is a place; a temporary needs none, because
+    each binder owns its element.
+    """
+    source = expr_to_string(stmt.value)
+    if "<expression>" in source:
+        return {}
+    shown: dict[str, str] = {}
+
+    def spell(targets, prefix: str) -> None:
+        for index, target in enumerate(targets):
+            if target.nested is not None:
+                spell(target.nested, f"{prefix}.{index}")
+            elif target.name is not None:
+                shown[target.name] = f"{prefix}.{index}"
+
+    spell(stmt.targets or [], source)
+    return shown
 
 
 def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:

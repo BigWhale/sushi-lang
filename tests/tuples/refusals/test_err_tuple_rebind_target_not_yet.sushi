@@ -1,8 +1,0 @@
-# A tuple literal as a rebind target is not supported yet.
-# EXPECT_ERROR_CODES_EXACT: CE6108
-
-fn main() i32:
-    let i32 a = 1
-    let i32 b = 2
-    (a, b) := (b, a)
-    return a

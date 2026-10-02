@@ -532,7 +532,8 @@ class ScopeAnalyzer:
                                written_let(stmt))
         self._check_expression(stmt.value)
         for binder in destructure_binders(stmt.targets):
-            self._declare_variable(binder.name, binder.loc)
+            self._declare_variable(binder.name,
+                                   binder.loc if binder.name_span is not None else None)
 
     def _check_rebind(self, stmt: Rebind) -> None:
         """Check a rebind statement."""

@@ -1,6 +1,6 @@
 """Main statement parser coordinating specialized statement parsers."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from lark import Tree
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
@@ -19,8 +19,11 @@ class StatementParser:
         """Initialize StatementParser with reference to ASTBuilder for recursive parsing."""
         self.ast_builder = ast_builder
 
-    def parse_stmt(self, node: Tree) -> Stmt:
-        """Parse a statement node into a Stmt object."""
+    def parse_stmts(self, node: Tree) -> List[Stmt]:
+        """Parse one statement node into the statements it stands for.
+
+        A destructuring rebind is one source statement and several AST statements.
+        """
         stmt_handlers = {
             "return_stmt": returns.parse_return_stmt,
             "print_stmt": io.parse_print_stmt,
@@ -47,6 +50,7 @@ class StatementParser:
 
         handler = stmt_handlers.get(node.data)
         if handler:
-            return handler(node, self.ast_builder)
+            parsed = handler(node, self.ast_builder)
+            return parsed if isinstance(parsed, list) else [parsed]
 
         unhandled(node)

@@ -254,7 +254,9 @@ class TypeValidator:
 
     def _validate_block(self, block: Block) -> None:
         """Validate statements in a block."""
-        for stmt in block.statements:
+        from .statements import stamp_rebind_places
+        for index, stmt in enumerate(block.statements):
+            stamp_rebind_places(self, block.statements, index)
             self._validate_statement(stmt)
 
     def _validate_statement(self, stmt: Stmt) -> None:

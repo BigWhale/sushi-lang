@@ -354,7 +354,7 @@ def attach_docs(children: Sequence, built: Sequence, ast_builder: 'ASTBuilder',
 def peel_body_docs(children: Sequence, ast_builder: 'ASTBuilder') -> Optional[DocBlock]:
     """Take the doc blocks out of a body, before the statement dispatcher sees one.
 
-    A doc block reaching `parse_stmt` as a statement class would need an arm in every
+    A doc block reaching `parse_stmts` as a statement class would need an arm in every
     exhaustive statement dispatcher in the compiler. The first item is the body's own
     block; anything later documents nothing a body can name, and is a different code.
     """

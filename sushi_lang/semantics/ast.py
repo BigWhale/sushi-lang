@@ -464,7 +464,8 @@ class DestructureTarget:
     """One element of a `let` destructure: a binder, a `_`, or a nested destructure.
 
     A binder has a `name`, and `ty` is its written type or None for a bare binder. A `_`
-    has neither a name nor `nested`. The typecheck pass stamps `element_type`.
+    has neither a name nor `nested`. The typecheck pass stamps `element_type`, and
+    `place_type` on a hidden binder of a destructuring rebind: the type of its place.
     """
     name: Optional[str] = None
     ty: Optional[Type] = None
@@ -473,6 +474,7 @@ class DestructureTarget:
     type_span: Optional[Span] = None
     loc: Optional[Span] = None
     element_type: Optional[Type] = None
+    place_type: Optional[Type] = None
 
 
 def destructure_binders(targets: Optional[List[DestructureTarget]]):
@@ -494,6 +496,9 @@ class Let(Stmt):
     # `let (a, b) = v` (TUPLE.md 4.2): the `Let` binds the whole tuple under a hidden
     # `name`, and the targets split it. None for an ordinary `let`.
     targets: Optional[List[DestructureTarget]] = None
+    # The hidden whole of `(a, b) := v`: its binders are hidden, and the rebinds right
+    # after it (`a := #rb0`, ...) give each binder the type of its place.
+    rebinds: bool = False
 
 @dataclass(slots=True)
 class Rebind(Stmt):
