@@ -1,0 +1,6 @@
+# `assert` is a reserved word, so a variable cannot take it as its name.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+
+fn main() i32:
+    let i32 assert = 1
+    return assert

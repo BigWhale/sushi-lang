@@ -6,6 +6,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **`assert(cond)` and `assert(cond, message)`** stop the program with `RE2026` and exit
+  code 1 when the condition is false. The output names the file, the line and the column
+  of the `assert`, then the message. The message is any `string`, and the program builds
+  it only on failure. An assert is always on, and `assert(false)` does not end the path.
+  `assert` is a reserved word now. A message that is not a `string` is `CE2116`.
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;
   `fn(i32) -> i32[]` is still a function that returns `i32[]`, and a message prints the

@@ -399,6 +399,10 @@ def _stmt_types(stmt) -> Iterator[TypeMention]:
             yield from _expr_types(stmt.expr)
         case a.Return() | a.Print() | a.PrintLn():
             yield from _expr_types(stmt.value)
+        case a.Assert():
+            yield from _expr_types(stmt.cond)
+            if stmt.message is not None:
+                yield from _expr_types(stmt.message)
         case a.If():
             for cond, block in stmt.arms:
                 yield from _expr_types(cond)

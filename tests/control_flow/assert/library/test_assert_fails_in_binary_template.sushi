@@ -1,0 +1,14 @@
+# A false assert in a generic function of a binary library. The consumer builds the
+# instance from the slice of source that the library ships, so the position is the one
+# a compile-time diagnostic in that slice shows: the template label, and the line in
+# the slice (2), not the line in the library's file (4).
+# BUILD_LIB_BINARY: bingen.sushi
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "assertion failed at <template:bingen:bin_same>:2:5: the two values differ\n"
+use <lib/bingen>
+
+fn main() i32:
+    bin_same(1, 1)
+    bin_same(1, 2)
+    return 0

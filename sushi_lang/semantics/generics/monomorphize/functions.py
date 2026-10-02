@@ -497,7 +497,7 @@ class FunctionMonomorphizer:
         var_types: Dict[str, Type],
     ) -> None:
         """The statement walk over a SUBSTITUTED body, shared by functions and extensions."""
-        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block, Lambda
+        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block, Lambda, Assert
 
         for stmt in body.statements:
             if isinstance(stmt, Let) and stmt.value:
@@ -515,6 +515,10 @@ class FunctionMonomorphizer:
                 self._collect_from_expr(stmt.expr, var_types)
             elif isinstance(stmt, Return) and stmt.value:
                 self._collect_from_expr(stmt.value, var_types)
+            elif isinstance(stmt, Assert):
+                self._collect_from_expr(stmt.cond, var_types)
+                if stmt.message is not None:
+                    self._collect_from_expr(stmt.message, var_types)
             elif isinstance(stmt, If):
                 for cond, block in stmt.arms:
                     self._collect_from_expr(cond, var_types)

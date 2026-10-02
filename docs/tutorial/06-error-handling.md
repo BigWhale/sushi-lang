@@ -234,6 +234,31 @@ that `main` calls — that's exactly where its early-return magic belongs.
     `match` or `.realise()`. Errors propagate cleanly through the middle and get handled
     once, at the edge.
 
+## `assert`: for a bug, not for an error
+
+Some failures are not errors at all: they are bugs. `average()` below has no answer for an
+empty array, and a caller that passes one has made a mistake. A channel would make every
+caller handle a case that a correct program never reaches. `assert` states the rule
+instead, and stops the program when it is broken:
+
+```sushi
+--8<-- "docs/tutorial/examples/06-error-handling/assert.sushi"
+```
+
+Output, when you build and run it in `docs/tutorial/examples/06-error-handling/`:
+
+```
+42
+Runtime Error RE2026: assertion failed at ./assert.sushi:2:5: average() needs at least one score
+```
+
+The program exits with code 1. The message is optional (`assert(cond)` alone prints the
+position), and it can be any `string`, an interpolation included. The program builds the
+message only when the condition is false.
+
+Choose with one question: **can the caller do something about it?** If yes, it is an
+error: write the channel and return `Result.Err(...)`. If no, it is a bug: `assert`.
+
 ## What you learned
 
 - A function that can fail writes an error channel, `fn f() T | E:`. The call gives
@@ -249,5 +274,7 @@ that `main` calls — that's exactly where its early-return magic belongs.
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.
 - `main` is bare and returns the exit code. `??` in `main` is **CE0131**; handle errors
   there with `match`, `.realise()`, or `if (result.is_ok()):` instead.
+- `assert(cond, message)` stops the program with **RE2026** when an invariant is false.
+  It is for a bug; the channel is for an error that a caller can handle.
 
 Next we put values in bulk. On to [Arrays](07-arrays.md).

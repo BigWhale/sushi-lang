@@ -304,7 +304,7 @@ class FunctionCollector:
 
     def _collect_from_statement(self, stmt) -> None:
         """Collect generic instantiations from a statement."""
-        from sushi_lang.semantics.ast import Let, Foreach, If, While, Match, Return, ExprStmt, Print, PrintLn, Rebind, Break, Continue, Name
+        from sushi_lang.semantics.ast import Let, Foreach, If, While, Match, Return, ExprStmt, Print, PrintLn, Assert, Rebind, Break, Continue, Name
 
         if isinstance(stmt, Let):
             if stmt.ty is not None:
@@ -368,6 +368,11 @@ class FunctionCollector:
             expr = stmt.expr if hasattr(stmt, 'expr') else stmt.value
             if expr is not None:
                 self.expression_scanner.scan_expression(expr)
+
+        elif isinstance(stmt, Assert):
+            self.expression_scanner.scan_expression(stmt.cond)
+            if stmt.message is not None:
+                self.expression_scanner.scan_expression(stmt.message)
 
         elif isinstance(stmt, Rebind):
             if stmt.value is not None:

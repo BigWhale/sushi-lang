@@ -1,0 +1,7 @@
+# A Maybe in the condition of an assert has its own error, which names `.is_some()`.
+# EXPECT_ERROR_CODES_EXACT: CE2516
+
+fn main() i32:
+    let i32[] xs = from([1])
+    assert(xs.get(0))
+    return 0

@@ -47,7 +47,7 @@ class StatementEmitter:
         self.codegen.utils.ensure_open_block()
 
         from sushi_lang.semantics.ast import (
-            Let, Print, PrintLn, Return, If, While, Foreach, Match,
+            Let, Print, PrintLn, Assert, Return, If, While, Foreach, Match,
             Break, Continue, Rebind, ExprStmt
         )
 
@@ -72,6 +72,9 @@ class StatementEmitter:
             case While():
                 from sushi_lang.backend.statements import control_flow
                 return control_flow.emit_while(self.codegen, stmt)
+            case Assert():
+                from sushi_lang.backend.statements import control_flow
+                return control_flow.emit_assert(self.codegen, stmt)
 
             case Return():
                 from sushi_lang.backend.statements import returns

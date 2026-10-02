@@ -25,6 +25,7 @@ class StatementParser:
             "return_stmt": returns.parse_return_stmt,
             "print_stmt": io.parse_print_stmt,
             "println_stmt": io.parse_println_stmt,
+            "assert_stmt": io.parse_assert_stmt,
             "let_stmt": variables.parse_let_stmt,
             "rebind_stmt": variables.parse_rebind_stmt,
             "call_stmt": calls.parse_call_stmt,

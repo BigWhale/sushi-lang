@@ -1,0 +1,8 @@
+# `assert` is a reserved word, so a function cannot take it as its name.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+
+fn assert(bool c) ~:
+    println(c)
+
+fn main() i32:
+    return 0

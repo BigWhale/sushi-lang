@@ -1,0 +1,12 @@
+# A false assert prints its message after the position. The message is an
+# interpolation, built only on the failing path.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2026: assertion failed at "
+# EXPECT_STDERR_CONTAINS: "test_assert_fails_message.sushi:11:5: the count was 3, not 4\n"
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 want = 4
+    assert(xs.len() == want, "the count was {xs.len()}, not {want}")
+    return 0

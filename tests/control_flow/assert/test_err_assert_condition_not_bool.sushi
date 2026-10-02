@@ -1,0 +1,7 @@
+# The condition of an assert is a bool and nothing else, as in every condition position.
+# EXPECT_ERROR_CODES_EXACT: CE2005
+
+fn main() i32:
+    let i32 n = 3
+    assert(n)
+    return 0

@@ -1,0 +1,9 @@
+# An assert does not end the path, so a value body that ends with `assert(false)`
+# still reaches its end with no return.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn stop() i32:
+    assert(false)
+
+fn main() i32:
+    return stop()

@@ -1,0 +1,8 @@
+# The message of an assert is a string. An interpolation is a string; a bare integer is not.
+# EXPECT_ERROR_CODES_EXACT: CE2116
+# EXPECT_STDERR_CONTAINS: "the message of an assert must be a string, got i32"
+
+fn main() i32:
+    let i32 n = 3
+    assert(n > 0, n)
+    return 0

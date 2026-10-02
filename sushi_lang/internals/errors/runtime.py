@@ -44,6 +44,16 @@ _add(ErrorMessage("RE2023", Severity.ERROR,
 # `string.ss`, which have always clamped. A count of zero was already data rather than an
 # error, so a negative one reaching the same answer needed no rule of its own.
 
+# A false assert
+_add(ErrorMessage("RE2026", Severity.ERROR,
+    "assertion failed at {where}",
+    Category.RUNTIME, "An `assert(cond)` or `assert(cond, message)` found its condition false. "
+    "`{where}` is the file, the line and the column of the `assert`, with the file named as a "
+    "compile-time diagnostic names it; a message, when there is one, follows after `: `. An "
+    "assert states an invariant, so a failure is a defect and not data: the program stops "
+    "with exit code 1, and no error channel catches it. A failure that a caller can handle "
+    "belongs in the channel, `| E` (docs/design/assert.md)."))
+
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,
     "a foreign call returned a null pointer where its declaration says non-null",

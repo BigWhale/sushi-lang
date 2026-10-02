@@ -9,7 +9,7 @@ from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols
 
 from sushi_lang.semantics.ast import Block, DocBlock, Expr, Program
-from sushi_lang.internals.report import Reporter, Span, span_of
+from sushi_lang.internals.report import Reporter, Span, display_filename, span_of
 
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import expect
 
@@ -31,7 +31,8 @@ def _in_source_order(diagnostic: SushiError) -> tuple:
 
 
 class ASTBuilder:
-    def __init__(self, reporter: Optional[Reporter] = None):
+    def __init__(self, reporter: Optional[Reporter] = None,
+                 source_label: Optional[str] = None):
         """Initialize ASTBuilder with lazy-loaded parsers."""
         # Where a recoverable diagnostic goes. With one, a rule that has an honest
         # substitute value reports the fault and keeps building, so one run shows
@@ -39,6 +40,10 @@ class ASTBuilder:
         # own, a library template or a test -- every rule raises, which is what a
         # caller holding no reporter can act on.
         self.reporter = reporter
+        # The file name a diagnostic in this source shows. An `assert` carries it to
+        # run time. A caller with no reporter names the source itself.
+        self.source_label: str = display_filename(
+            source_label or (reporter.filename if reporter else None) or "<input>")
         self.deferred: List[SushiError] = []
         self._type_parser = None
         self._expr_parser = None

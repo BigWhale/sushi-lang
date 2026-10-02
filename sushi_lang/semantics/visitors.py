@@ -6,7 +6,7 @@ from typing import TypeVar, Generic
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import Node, Block
 from sushi_lang.semantics.ast import (
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue,
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Match, Break, Continue,
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread,
@@ -79,6 +79,12 @@ class RecursiveVisitor(NodeVisitor[None]):
     def visit_println(self, node: PrintLn) -> None:
         """Visit a println statement. Default: visit the value expression."""
         self.visit(node.value)
+
+    def visit_assert(self, node: Assert) -> None:
+        """Visit an assert statement. Default: visit the condition and the message."""
+        self.visit(node.cond)
+        if node.message is not None:
+            self.visit(node.message)
 
     def visit_if(self, node: If) -> None:
         """Visit an if statement. Default: visit conditions and blocks."""

@@ -1,0 +1,12 @@
+# A false assert with no message stops the program with RE2026 and its position.
+# The output written before the trap is out, and nothing after it runs.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "before\n"
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2026: assertion failed at "
+# EXPECT_STDERR_CONTAINS: "test_assert_fails_bare.sushi:10:5\n"
+
+fn main() i32:
+    println("before")
+    assert(1 + 1 == 3)
+    println("after")
+    return 0

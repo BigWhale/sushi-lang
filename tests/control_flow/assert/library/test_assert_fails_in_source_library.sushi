@@ -1,0 +1,11 @@
+# A false assert in a source library reports the library's file and the position in it.
+# BUILD_LIB: halflib.sushi
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_STDERR_CONTAINS: "halflib.sushi:2:5: 7 is odd\n"
+use <lib/halflib>
+
+fn main() i32:
+    println(half(8))
+    println(half(7))
+    return 0
