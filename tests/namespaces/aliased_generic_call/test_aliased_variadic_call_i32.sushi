@@ -1,0 +1,9 @@
+# A native `...i32` function behind a unit alias collects its trailing
+# arguments, as the flat call does (#1125).
+# EXPECT_STDOUT_EXACT: "3\n7\n"
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    println(l.coll(1, 2, 3))
+    println(l.first_or(9, 7, 8))
+    return 0

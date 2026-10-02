@@ -14,3 +14,12 @@ public struct Holder:
 
 extend Holder pass@(U)(nom U x) U:
     return x
+
+public fn coll(...i32 xs) i32:
+    return xs.len()
+
+public fn take_all(...string xs) i32:
+    return xs.len()
+
+public fn first_or(i32 d, ...i32 xs) i32:
+    return xs.get(0).realise(d)

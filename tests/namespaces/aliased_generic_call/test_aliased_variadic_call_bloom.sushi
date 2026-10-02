@@ -1,0 +1,10 @@
+# A bloom `arr...` hands the whole array to a native `...i32` function behind a
+# unit alias, as at the flat call (#1125).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let i32[] arr = from([1, 2, 3])
+    println(l.coll(arr...))
+    return 0
