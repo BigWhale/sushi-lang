@@ -1,0 +1,11 @@
+# A hybrid library's public constant is a name only in a unit that imports the
+# library. The entry unit imports it; the second unit does not.
+# BUILD_LIB_HYBRID: lsp_a.sushi
+# EXPECT_ERROR_CODE: CE1001
+# EXPECT_STDERR_CONTAINS: lsp_helper_constant.sushi:
+use <lib/lsp_a>
+use "lsp_helper_constant"
+
+fn main() i32:
+    println("{a_val()} {helper_val()}")
+    return 0

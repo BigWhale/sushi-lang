@@ -1,0 +1,10 @@
+# A second unit that imports the hybrid library itself writes each kind of its
+# public names.
+# BUILD_LIB_HYBRID: lsp_a.sushi
+# EXPECT_STDOUT_EXACT: "8 33\n"
+use <lib/lsp_a>
+use "lsp_helper_own_use"
+
+fn main() i32:
+    println("{a_val()} {helper_val()}")
+    return 0

@@ -1,0 +1,2 @@
+public fn helper_val() i32:
+    return a_id(nom 6)

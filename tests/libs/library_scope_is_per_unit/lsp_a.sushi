@@ -1,0 +1,15 @@
+public fn a_val() i32:
+    return 8
+
+public const i32 A_CONST = 5
+
+public var i32 a_count = 3
+
+public struct ABox:
+    i32 v
+
+public struct AGen@(T):
+    T v
+
+public fn a_id@(T)(nom T x) T:
+    return x

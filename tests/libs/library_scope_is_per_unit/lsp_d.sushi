@@ -1,0 +1,5 @@
+use <lib/lsp_b>
+
+public fn d_wrap@(T)(nom T x) T:
+    println("{b_val()}")
+    return x

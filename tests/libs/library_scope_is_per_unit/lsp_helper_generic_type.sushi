@@ -1,0 +1,3 @@
+public fn helper_val() i32:
+    let AGen@(i32) g = AGen(7)
+    return g.v
