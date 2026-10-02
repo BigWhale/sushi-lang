@@ -1,0 +1,16 @@
+# In a lambda body, a `poke` borrow and a `peek` borrow of ONE captured variable in one
+# call conflict, and the message names the variable as it is written (#1129).
+# EXPECT_ERROR_CODE: CE2407
+# EXPECT_ERROR_CODES_EXACT: CE2407
+# EXPECT_STDERR_CONTAINS: "cannot have peek and poke borrows of 'xs' simultaneously"
+fn both(poke i32[] a, peek i32[] b) i32:
+    a.push(b.len())
+    return a.len()
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let i32[] ys = from([3])
+    let fn(i32) -> i32 f = |i32 k|:
+        return both(poke xs, peek xs) + ys.len() + k
+    println(f(0))
+    return 0
