@@ -124,6 +124,22 @@ def modes_for(params: Optional[Iterable], kind: CalleeKind) -> Tuple[ParamMode, 
     return effective_modes(declared_modes(params), kind)
 
 
+def variadic_index(sig) -> Optional[int]:
+    """Where the trailing arguments of a call to `sig` collect into a `...T` array.
+
+    A declared function marks its last parameter; a registry stdlib function marks
+    the whole signature. None when the callee is not variadic.
+    """
+    if sig is None:
+        return None
+    params = getattr(sig, "params", None) or ()
+    if params and getattr(params[-1], "is_variadic", False):
+        return len(params) - 1
+    if getattr(sig, "is_variadic", False):
+        return max(len(params) - 1, 0)
+    return None
+
+
 class CalleeModes:
     """THE resolver: "what are the modes of the callee named here?"."""
 
@@ -154,15 +170,10 @@ class CalleeModes:
 
     def variadic_from(self, name: str) -> Optional[int]:
         """The index at which trailing arguments collect into a `...T` array, or None."""
-        sig = self._func_sigs.get(name)
-        params = getattr(sig, "params", None) if sig is not None else None
-        if params and getattr(params[-1], "is_variadic", False):
-            return len(params) - 1
-        std = self._stdlib_sigs.get(name)
-        if std is not None and getattr(std, "is_variadic", False):
-            params = getattr(std, "params", None) or ()
-            return max(len(params) - 1, 0)
-        return None
+        found = variadic_index(self._func_sigs.get(name))
+        if found is not None:
+            return found
+        return variadic_index(self._stdlib_sigs.get(name))
 
     def variadic_callee_owns(self, name: str) -> bool:
         """Does the CALLEE free the collected `...T` array, or does the caller keep it?"""

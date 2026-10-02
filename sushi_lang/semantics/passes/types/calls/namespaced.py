@@ -20,7 +20,6 @@ from ..externals import validate_external_call_args
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import DotCall, MemberAccess
     from sushi_lang.semantics.namespaces import Binding
-    from sushi_lang.semantics.param_modes import CalleeKind
     from sushi_lang.semantics.passes.types import TypeValidator
 
 
@@ -56,10 +55,9 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         return
 
     if producer == "stdlib":
-        from sushi_lang.semantics.param_modes import CalleeKind
         from .user_defined import validate_stdlib_function
         _stamp(node, binding)
-        _stamp_param_modes(node, None, CalleeKind.STDLIB)
+        _stamp_stdlib_param_modes(node, binding.record)
         validate_stdlib_function(validator, node, (binding.provider.origin,
                                                    binding.record))
         return
@@ -301,17 +299,30 @@ def _stamp(node, binding: 'Binding', *, name: Optional[str] = None,
     node.namespace_ref = binding.ref(name=name, kind=kind)
 
 
-def _stamp_param_modes(node, func_sig, kind: Optional['CalleeKind'] = None) -> None:
-    """The callee's declared modes, for the borrow pass. A FUNCTION, not a method.
+def _stamp_param_modes(node, func_sig) -> None:
+    """The callee's declared modes and its `...T` slot, for the borrow pass.
 
-    A registry stdlib function declares no mode, so it passes no signature: every
-    argument is a borrow, as at the flat call.
+    A FUNCTION, not a method: the same answers the flat call reads from the resolver.
     """
-    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for, variadic_index
     params = getattr(func_sig, "params", None) or ()
-    node.callee_param_modes = modes_for(params, kind or CalleeKind.FUNCTION)
+    node.callee_param_modes = modes_for(params, CalleeKind.FUNCTION)
     node.callee_param_names = tuple(p.name for p in params)
     node.callee_param_types = tuple(p.ty for p in params)
+    node.callee_variadic_at = variadic_index(func_sig)
+
+
+def _stamp_stdlib_param_modes(node, stdlib_func) -> None:
+    """A registry stdlib function declares no mode: every argument is a borrow.
+
+    Its parameters are types, so the name a diagnostic quotes is the type's, as at
+    the flat call.
+    """
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for, variadic_index
+    params = getattr(stdlib_func, "params", None) or ()
+    node.callee_param_modes = modes_for(None, CalleeKind.STDLIB)
+    node.callee_param_names = tuple(p.name for p in params)
+    node.callee_variadic_at = variadic_index(stdlib_func)
 
 
 def _written(receiver, name: str) -> str:

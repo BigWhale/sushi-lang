@@ -790,6 +790,8 @@ class MethodCall(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
+    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
+    callee_variadic_at: Optional[int] = None
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
@@ -826,6 +828,8 @@ class DotCall(Node):
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
     callee_param_names: Optional[List[str]] = None
     callee_param_types: Optional[Tuple[Type, ...]] = None
+    # Where the trailing arguments collect into a `...T` array, for a call behind a namespace.
+    callee_variadic_at: Optional[int] = None
     # An extern variadic call's promoted argument types (CE5005 checks them).
     variadic_arg_types: Optional[List] = None
     field_names: Optional[List[str]] = None  # named construction through a namespace
