@@ -1,7 +1,7 @@
 # Two binary libraries each declare `extend i32 doubled()`, and a consumer of two
 # units calls the method in both. The duplicate is refused before the link.
-# BUILD_LIB_BINARY: ld_mx_p.sushi
-# BUILD_LIB_BINARY: ld_mx_q.sushi
+# BUILD_LIB_WARNS: ld_mx_p.sushi binary -> CW3003
+# BUILD_LIB_WARNS: ld_mx_q.sushi binary -> CW3003
 # EXPECT_ERROR_CODES_EXACT: CE0101
 use <lib/ld_mx_p>
 use <lib/ld_mx_q>

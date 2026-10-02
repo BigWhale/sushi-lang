@@ -1,7 +1,7 @@
 # Two source libraries each declare `extend i32 doubled()`. One method name on one
 # type from two libraries is a duplicate.
-# BUILD_LIB: ld_ext_p.sushi
-# BUILD_LIB: ld_ext_q.sushi
+# BUILD_LIB_WARNS: ld_ext_p.sushi -> CW3003
+# BUILD_LIB_WARNS: ld_ext_q.sushi -> CW3003
 # EXPECT_ERROR_CODES_EXACT: CE0101
 use <lib/ld_ext_p>
 use <lib/ld_ext_q>
