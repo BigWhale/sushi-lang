@@ -78,6 +78,33 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A library's dependencies load transitively; their names do not.** A library records
+  every `use <lib/...>` it writes, plain or public, with the version it was built
+  against, and the consumer's build loads the whole graph. A plain `use` gives the
+  consumer no name of B; a `public use` re-exports B. A source library's plain `use` no
+  longer needs the consumer to import B as well. One library reached by two paths is one
+  library, and two versions of one library in a build are `CE3519`. A compiled library's
+  stdlib dependencies load with it, so a public struct that holds a `File` no longer
+  stops the consumer with an internal error.
+- **A compiled library's names are per unit.** A binary or hybrid library's functions,
+  constants, `var`s and types reach only the units that import it, as a source
+  library's do. A copy of a library template resolves its body in the scope of the
+  library unit that declares it, so it can call the library's private functions and a
+  plain-use dependency from any consumer unit.
+- **A renamed `.slib` re-exports.** A source library built to a file whose name is not
+  its unit's name gave its importers no `public use` names.
+- **Two compiled libraries that define one extension method are `CE0101`**, as two
+  source libraries are. The build mode chose the body before.
+- **A binary or hybrid library ships its `Drop` implementations.** The consumer calls
+  the library's `drop()` and applies the move rule to the type; a consumer `Drop` on a
+  library type is `CE4012`.
+- **Two compiled libraries link in an incremental build with more than one unit.** The
+  inline runtime functions of a library are `linkonce_odr`, as in a consumer unit.
+- **`CW3002` is given for every library kind**, when a consumer function shadows a public
+  function of a binary or hybrid library.
+- **`CE5013` refuses only the symbol a library unit keeps**, and it sees the symbol of a
+  monomorphized instance.
+
 - **`.free()` on a dynamic array gives back its buffer and allocates nothing.** It left
   an 8-slot buffer (`capacity()` was 8), which leaked on a unit-level `var`. It now
   leaves the empty array, as `new()` does, and a later `push` grows from it.
