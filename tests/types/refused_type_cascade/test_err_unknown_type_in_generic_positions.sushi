@@ -1,0 +1,17 @@
+# An unknown name inside a generic type is one CE2001 in each written position: a parameter, a field, a return and a payload.
+# EXPECT_ERROR_CODES_EXACT: CE2001, CE2001, CE2001, CE2001
+
+fn count(List@(Maybe@(Nope)) xs) i32:
+    return xs.len()
+
+struct Holder:
+    Maybe@(List@(Nope)) held
+
+fn none() Maybe@(Maybe@(Nope)):
+    return Maybe.None
+
+enum Slot:
+    Full(List@(Nope))
+
+fn main() i32:
+    return 0

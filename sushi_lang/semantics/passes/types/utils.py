@@ -161,10 +161,12 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
 
         concrete_name = interned_name(type_obj.base_name, type_obj.type_args)
 
-        if concrete_name not in validator.enum_table.by_name and concrete_name not in validator.struct_table.by_name:
-            # Monomorphized type should exist after monomorphization pass
-            # If not, it means this instantiation wasn't collected. `concrete_name`
-            # stays `<>` (it is the table lookup key above); the user sees `@()`.
+        # A refused argument is the one fault: no instance was made from it (#1126).
+        if (concrete_name not in validator.enum_table.by_name
+                and concrete_name not in validator.struct_table.by_name
+                and not names_no_type(validator, type_obj)):
+            # The instantiation was not collected. `concrete_name` stays `<>` (it is
+            # the table lookup key above); the user sees `@()`.
             er.emit(validator.reporter, er.ERR.CE2001, span, name=display_type(type_obj))
         return
 
