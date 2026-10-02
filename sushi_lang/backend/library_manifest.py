@@ -20,12 +20,14 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 
 
-# The predefined perks whose implementation overrides a derived method. A library
-# ships its implementations of them although it declares none of them.
+# The predefined perks whose implementation overrides a derived method.
 OVERRIDABLE_PREDEFINED_PERKS = frozenset({PerkCollector.HASHABLE_PERK, *CONTRACTS})
 
-# Every perk the compiler predefines. An implementation of one is never an ordinary
-# method of its type, so it never travels as an extension record.
+# Every perk the compiler predefines. A library ships its implementations of them
+# although it declares none of them: an override the consumer's derived methods must
+# read, and a `Drop` that puts the type in the consumer's Drop set (#1118). An
+# implementation of one is never an ordinary method of its type, so it never travels
+# as an extension record.
 PREDEFINED_PERKS = OVERRIDABLE_PREDEFINED_PERKS | {PerkCollector.DROP_PERK}
 
 
@@ -675,10 +677,9 @@ class LibraryManifestGenerator:
         generic_perk_impls, template_keys = self._generic_perk_impl_templates(
             own, referenced_perks)
         perks, shipped_perks = self._shipped_perks(own, referenced_perks)
-        # An implementation of a predefined contract is an override the consumer's
-        # derived methods must read, and the consumer knows the contract already.
+        # The consumer knows every predefined contract already.
         perk_impls = self._concrete_perk_impls(
-            own, shipped_perks | OVERRIDABLE_PREDEFINED_PERKS, template_keys)
+            own, shipped_perks | PREDEFINED_PERKS, template_keys)
 
         templates = {
             "version": TEMPLATES_SCHEMA_VERSION,

@@ -397,9 +397,12 @@ is the authority, and the index is a cache of it.
             {"name": str, "unit": str, "source": str, "methods": [METHOD], "doc": DOC}
         ],
 
-        # Concrete perk IMPLEMENTATIONS of those perks. Bodies live in
+        # Concrete perk IMPLEMENTATIONS of those perks, and of every predefined
+        # perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`). Bodies live in
         # the bitcode (weak linkage); the record carries signatures (source)
-        # and symbol names for declare-and-link at the consumer.
+        # and symbol names for declare-and-link at the consumer. A `Drop` record
+        # puts the type in the consumer's Drop set, so the type moves there and
+        # its scope exit calls the library's compiled drop().
         "perk_impls": [
             {
                 "type": str,           # Concrete target type name

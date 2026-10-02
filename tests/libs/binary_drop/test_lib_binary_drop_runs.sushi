@@ -1,0 +1,11 @@
+# A consumer of a BINARY library calls the compiled drop() of a library type that
+# implements Drop, at scope exit.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_STDOUT_EXACT: "live 7\ndrop 7\n"
+# EXPECT_NO_LEAKS: true
+use <lib/drop_res_lib>
+
+fn main() i32:
+    let Res r = make(7)
+    println("live {r.id}")
+    return 0

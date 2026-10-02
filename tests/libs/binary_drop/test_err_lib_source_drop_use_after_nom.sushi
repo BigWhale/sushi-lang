@@ -1,0 +1,13 @@
+# The source-library control for the use-after-move error on a library Drop type.
+# BUILD_LIB: drop_res_lib.sushi
+# EXPECT_ERROR_CODE: CE2405
+use <lib/drop_res_lib>
+
+fn eat(nom Res r) ~:
+    println("eat {r.id}")
+
+fn main() i32:
+    let Res r = make(7)
+    eat(nom r)
+    println("after {r.id}")
+    return 0

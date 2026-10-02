@@ -661,7 +661,11 @@ Current limitations of the library system:
    impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
    `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
    constraints ship; impls of library-internal perks stay internal as contracts, and
-   their methods ship as ordinary extension methods (below). A generic-target
+   their methods ship as ordinary extension methods (below). An impl of a predefined perk
+   (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) always ships. A shipped `Drop` makes the
+   type own a resource at the consumer: it moves, and scope exit calls the library's
+   compiled `drop()`. A consumer cannot add a `Drop` to a library type (`CE4012`), so the
+   first precedence rule does not apply to `Drop`. A generic-target
    implementation (`extend Box@(T) with Show`) ships as a template in
    `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
 

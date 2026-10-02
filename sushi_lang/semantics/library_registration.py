@@ -113,6 +113,8 @@ class LibraryRegistration:
         # library's code against the consumer's layout, or the consumer's code against
         # the library's.
         self.refused_types: list[str] = []
+        # The generic type templates the libraries ship, by name: the library of each.
+        self.generic_type_owners: dict[str, str] = {}
         # One collector for every re-parsed record, built on first use. A fresh
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
@@ -195,6 +197,7 @@ class LibraryRegistration:
         self._register_private_types(build_units)
         self._register_perk_impls()
         self._register_generic_perk_impls()
+        self._reject_foreign_drops(compilation_order)
         self._register_extensions(build_units)
         self._register_generic_extensions(build_units)
         self._register_generic_functions(build_units)
@@ -640,6 +643,40 @@ class LibraryRegistration:
                 # the user later gets "no such method" on a perk the library implements.
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
 
+    def _reject_foreign_drops(self, compilation_order: list['Unit']) -> None:
+        """CE4012 for a consumer's `Drop` on a type that a binary library declares (#1118).
+
+        The collect pass refuses a foreign `Drop` target from the visibility record, but
+        a public library type has a record with no declaring unit, and the consumer's
+        implementation is collected before the library's arrives. So the rule is read
+        here, where the library's type names and the consumer's implementations meet.
+        """
+        drop = PerkCollector.DROP_PERK
+        files = {u.name: str(u.file_path) for u in compilation_order}
+        owners: dict[str, str] = {}
+        if self.registry is not None:
+            for lib in self.registry.get_all_libraries().values():
+                owners.update(dict.fromkeys([*lib.structs, *lib.enums], lib.name))
+        for name, lib_name in self.generic_type_owners.items():
+            owners.setdefault(name, lib_name)
+
+        perk_impls = self.tables.perk_impls
+        found = [(perk_impls.get(name, drop), perk_impls.owner(name, drop))
+                 for name in sorted(perk_impls.by_perk.get(drop, ()))]
+        table = self.tables.generic_perk_impls
+        found += [(t.impl, t.unit_name) for base in sorted(owners)
+                  for t in table.templates(base) if t.impl.perk_name == drop]
+        for impl, unit_name in found:
+            if impl is None or unit_name not in files:
+                continue
+            target = impl.target_type
+            declared = (getattr(target, "base_name", None)
+                        or getattr(target, "generic_base", None)
+                        or getattr(target, "name", None))
+            if declared in owners:
+                er.emit(self.reporter, er.ERR.CE4012, impl.perk_name_span or impl.loc,
+                        filename=files[unit_name], type=declared, owner=owners[declared])
+
     def _function_collector(self, reporter: Reporter, unit_name: Optional[str],
                             unit_file: Optional[str]):
         """The collect pass's `FunctionCollector`, over this program's own tables."""
@@ -900,6 +937,7 @@ class LibraryRegistration:
 
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
+            self.generic_type_owners[type_name] = lib_name
             declarations = snippet.program.structs if kind == "struct" \
                 else snippet.program.enums
             node = next((d for d in declarations or [] if d.name == type_name), None)
