@@ -1,0 +1,14 @@
+# Only the unit that declares a type may implement Drop for it: a consumer cannot add
+# a Drop to a GENERIC type of a binary library either.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_ERROR_CODE: CE4012
+use <lib/drop_res_lib>
+
+extend Sink@(T) with Drop:
+    fn drop(poke self) ~:
+        println("mine")
+
+fn main() i32:
+    let Sink@(i32) s = Sink(1)
+    println(s.value)
+    return 0

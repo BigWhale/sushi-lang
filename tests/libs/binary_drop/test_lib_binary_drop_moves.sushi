@@ -1,0 +1,15 @@
+# A library type that implements Drop MOVES at the consumer: a `nom` argument hands
+# it to the callee, and drop() runs once, in the callee.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_STDOUT_EXACT: "eat 7\ndrop 7\nback\n"
+# EXPECT_NO_LEAKS: true
+use <lib/drop_res_lib>
+
+fn eat(nom Res r) ~:
+    println("eat {r.id}")
+
+fn main() i32:
+    let Res r = make(7)
+    eat(nom r)
+    println("back")
+    return 0

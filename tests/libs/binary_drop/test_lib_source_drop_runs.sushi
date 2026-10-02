@@ -1,0 +1,13 @@
+# The source-library control: drop() of a library type runs at scope exit, and an
+# owning field of a Drop type in another library struct is dropped with it.
+# BUILD_LIB: drop_res_lib.sushi
+# EXPECT_STDOUT_EXACT: "live 7\nheld 3\ndrop 3\ndrop 7\n"
+# EXPECT_NO_LEAKS: true
+use <lib/drop_res_lib>
+
+fn main() i32:
+    let Res r = make(7)
+    println("live {r.id}")
+    let Holder h = hold(3)
+    println(h.label)
+    return 0

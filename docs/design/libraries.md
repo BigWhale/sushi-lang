@@ -499,8 +499,9 @@ and calls with zero and two arguments.
 
 ### 5.4 Concrete perk implementations
 
-A library's own `extend <ConcreteType> with <Perk>:` block, for a perk one of its
-exported generics constrains on, ships as a `perk_impls` record: `type`, `perk`,
+A library's own `extend <ConcreteType> with <Perk>:` block, for a perk the library
+ships or a predefined perk (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`), ships as a
+`perk_impls` record: `type`, `perk`,
 `source` (the whole `extend` block, for signatures), `methods: [{name, symbol}]`. The
 method symbol name is computed by `impl_method_symbol()` — mirrors
 `backend/functions/helpers.py:get_extension_method_name`'s mangling (`<` → `__`, `>`
@@ -528,6 +529,18 @@ Precedence, all silent (mirrors every other library-registration helper):
    make adding an impl to a library a breaking change for every consumer that happens
    to have a same-named extension method. If the consumer genuinely needs the perk, it
    writes its own `extend`, which raises the normal in-program CE4007 with a real span.
+
+A `Drop` record is what makes a library handle own its resource at the consumer
+(#1118): the registered implementation puts the type in the consumer's Drop set, so
+`owns_resource` answers True (the type moves, and a use after a `nom` is CE2405), and
+scope exit calls the library's compiled `drop()`, linked from the bitcode. A generic
+`extend Sink@(T) with Drop` ships in `generic_perk_impls`, and the consumer cuts its own
+copy, as for any template. The orphan rule holds across the boundary: a consumer `Drop`
+on a type that a binary library declares, concrete or generic, is CE4012. The collect
+pass cannot see that, because a public library type has a visibility record with no
+declaring unit, so `LibraryRegistration._reject_foreign_drops` reads the rule after the
+library's types and implementations are registered. Rule 1 of the precedence list thus
+does not apply to `Drop`.
 
 A perk-impl record that fails to re-parse is not fatal to the consumer's build: it is
 skipped with **CW3506** (a warning, not an error) — "methods it provides will be
@@ -842,7 +855,7 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `sushi_lang/compiler/pipeline.py` | Library resolution and the gates: `_check_library_platform` (binary only), `_check_library_compiler_version`, and the shared source-unit injector that both the bundled source stdlib and source libraries use. Also chooses monolithic vs incremental and drives per-unit caching. |
 | `sushi_lang/semantics/library_registry.py` | `LibraryRegistry` — **binary path only**. Pre-parses a raw manifest dict into typed `FuncSig`/`StructType`/`EnumType` objects once, shared by the semantic analyzer and codegen. |
 | `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl`, `serialize_extension`, `serialize_generic_/deserialize_extension` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
-| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
+| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_reject_foreign_drops`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
 | `sushi_lang/backend/driver.py` | `LLVMDriver.compile_to_bitcode` (producer: sets `weak_odr` on perk impls, promotes export-closure private fns to `external`), `compile_multi_unit` (drives `TwoPhaseLinker` when libraries are present), `compile_library_to_object` (incremental path: one `.o` per library). |
 | `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, `_declare_library_perk_impl_methods`, `library_extensions` (consumer: declares, never defines, library symbols). |
 | `sushi_lang/backend/module_linker.py` | `TwoPhaseLinker` — the monolithic-path in-memory IR merge (reachability + priority-ordered symbol resolution). Not library-specific — the main module and stdlib bitcode go through it too. |

@@ -1,0 +1,29 @@
+use <io/files>
+use <io/fs>
+
+public struct Handle:
+    i32 fd
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        match fd_close(self.fd):
+            Result.Ok(_) -> println("closed")
+            Result.Err(_) -> println("close failed")
+
+public fn open_handle(string path) Handle:
+    match fd_open(path, 0, 420):
+        Result.Ok(fd) -> return Handle(fd)
+        Result.Err(_) -> return Handle(-1)
+
+public struct Log:
+    File file
+    i32 lines
+
+extend Log with Drop:
+    fn drop(poke self) ~:
+        println("log drop {self.lines}")
+
+public fn open_log(string path) Log:
+    match open(path, FileMode.Read()):
+        Result.Ok(nom f) -> return Log(nom f, 3)
+        Result.Err(_) -> return Log(File(fd: -1, owned: false), 0)
