@@ -1,0 +1,16 @@
+# The inner lambda moves the owning local `t` of the outer lambda into its environment,
+# so a later use of `t` in the outer body is a use after a move (#1127). The inner
+# lambda also copies `k` from the outer environment.
+# EXPECT_ERROR_CODE: CE2405
+# EXPECT_ERROR_CODES_EXACT: CE2405
+use <collections/strings>
+
+fn main() i32:
+    let i32 k = 1
+    let fn(i32) -> i32 g = |i32 p|:
+        let string t = "Mostly {p}"
+        let fn(i32) -> i32 inner = |i32 q| t.len() + q + k
+        println(t)
+        return inner(p)
+    println(g(1))
+    return 0

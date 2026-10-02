@@ -1,0 +1,9 @@
+# A lambda that the outer lambda calls at once captures a local of the function (#1127).
+# The outer lambda is called two times, so the inner capture is a copy each time.
+# EXPECT_STDOUT_EXACT: "11\n12\n"
+fn main() i32:
+    let i32 k = 10
+    let fn(i32) -> i32 g = |i32 p| (|i32 q| k + q)(p)
+    println(g(1))
+    println(g(2))
+    return 0

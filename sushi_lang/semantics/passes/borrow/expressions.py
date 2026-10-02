@@ -213,6 +213,11 @@ def _check_lambda(checker: 'BorrowChecker', expr: Lambda) -> None:
     for cap in (expr.captures or []):
         if not isinstance(cap.name, str):
             continue
+        if cap.capture_source is not None:
+            # A field of the enclosing environment: a read through it is a borrow.
+            consume(checker, cap.capture_source)
+            cap.ownership_provenance = cap.capture_source.ownership_provenance
+            continue
         provenance = name_provenance(checker, cap.name)
         cap.ownership_provenance = provenance
         consume_named(checker, cap.name, provenance, expr.loc)
