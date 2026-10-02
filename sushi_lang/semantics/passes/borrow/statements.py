@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import (
+    Assert,
     Block,
     Break,
     Continue,
@@ -98,6 +99,11 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             clear_borrows(checker)
         case Print() | PrintLn():
             check_expr(checker, stmt.value)
+            clear_borrows(checker)
+        case Assert():
+            check_expr(checker, stmt.cond)
+            if stmt.message is not None:
+                check_expr(checker, stmt.message)
             clear_borrows(checker)
         case ExprStmt():
             _check_expr_stmt(checker, stmt)

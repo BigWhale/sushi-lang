@@ -1,0 +1,14 @@
+# A false assert in a one-line match arm reports the position of the arm's assert.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "test_assert_fails_in_match_arm.sushi:13:22: no dot here\n"
+
+enum Shape:
+    Square(i32)
+    Dot
+
+fn main() i32:
+    match Shape.Dot:
+        Shape.Square(n) -> println(n)
+        Shape.Dot -> assert(false, "no dot here")
+    return 0

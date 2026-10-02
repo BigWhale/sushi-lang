@@ -111,3 +111,42 @@ class RuntimeErrors:
         builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr] + list(values))
 
         builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])
+
+    def emit_runtime_error_with_message(
+        self, error_code: str, message: ir.Value, **params
+    ) -> None:
+        """Emit `Runtime Error CODE: <text>: <message>` to stderr and exit the program.
+
+        The registry text is formatted at COMPILE time with `params`, as
+        `emit_runtime_error` formats it. `message` is a Sushi string value
+        (`{i8* data, i32 size, i8 owned}`), which has no NUL terminator, so it prints
+        with `%.*s` from its size and its data.
+        """
+        builder = self.codegen.builder
+
+        text = message_for(error_code, **params).replace("%", "%%")
+        full_format = f"Runtime Error {error_code}: {text}: %.*s\n"
+
+        arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format.encode("utf-8")) + 1)
+        fmt_name = _message_global_name(error_code, full_format, kind="fmt")
+
+        existing = self.codegen.module.globals.get(fmt_name)
+        if existing and isinstance(existing, ir.GlobalVariable):
+            fmt_const = existing
+        else:
+            fmt_const = ir.GlobalVariable(self.codegen.module, arr_ty, name=fmt_name)
+            fmt_const.linkage = 'private'
+            fmt_const.global_constant = True
+            fmt_const.initializer = ir.Constant(
+                arr_ty,
+                bytearray(full_format.encode('utf-8')) + bytearray([0])
+            )
+
+        fmt_ptr = builder.gep(fmt_const, [ZERO_I32, ZERO_I32], name="err_fmt_ptr")
+        data = builder.extract_value(message, 0, name="assert_msg_data")
+        size = builder.extract_value(message, 1, name="assert_msg_size")
+
+        stderr_ptr = builder.load(self.codegen.runtime.libc_stdio.stderr_handle, name="stderr")
+        builder.call(self.codegen.runtime.libc_stdio.fprintf, [stderr_ptr, fmt_ptr, size, data])
+
+        builder.call(self.codegen.runtime.libc_process.exit, [ir.Constant(self.codegen.i32, 1)])

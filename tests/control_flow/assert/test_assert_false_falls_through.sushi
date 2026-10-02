@@ -1,0 +1,11 @@
+# An assert does not end the path: a statement after `assert(false)` is not dead
+# code. Only the trap stops the program at run time.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDERR_CONTAINS: "test_assert_false_falls_through.sushi:7:5\n"
+
+fn stop() i32:
+    assert(false)
+    return 0
+
+fn main() i32:
+    return stop()

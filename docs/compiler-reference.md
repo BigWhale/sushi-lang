@@ -229,6 +229,9 @@ Multi-unit projects (those with `use` statements to other `.sushi` files) automa
   and error channel) and each public constant's **value**, because a dependent bakes all
   of those into its own object. The closure is transitive, so a type reached through a
   `public use` counts, and it includes a source library's injected units
+- It also covers the name of the unit's file as a diagnostic prints it, relative to the
+  working directory of the build, because an `assert` prints that name at run time. The
+  same source built from another directory with one `--cache-dir` is another object
 - Each cached object is content-addressed: its filename is
   `{name}.{global_key}.{fingerprint}.o`, where `global_key` digests the compiler
   version, target triple, opt level, **and** a content digest of the compiler's own

@@ -493,6 +493,15 @@ class PrintLn(Stmt):
     display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
+class Assert(Stmt):
+    """`assert(cond)` / `assert(cond, message)`: a trap when `cond` is false."""
+    cond: "Expr"
+    message: Optional["Expr"] = None
+    # The file name a diagnostic in this unit shows, stamped by the AST builder: the
+    # backend prints it with `loc` when the condition is false.
+    source_label: str = "<input>"
+
+@dataclass(slots=True)
 class If(Stmt):
     arms: List[Tuple["Expr", Block]]     # [(cond, block), ...]
     else_block: Optional[Block]
@@ -972,7 +981,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

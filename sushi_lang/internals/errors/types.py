@@ -28,7 +28,7 @@ _add(ErrorMessage("CE2004", Severity.ERROR,
 
 _add(ErrorMessage("CE2005", Severity.ERROR,
     "condition must be bool",
-    Category.TYPE, "A condition takes a 'bool' and nothing else. Sushi converts no type to a truth value: an integer is not true when it is not zero, and a string is not true when it holds bytes. Write the question instead -- 'n != 0', 's.len() > 0'. This covers every condition position: an if, an elif, a while, and the operands of the logical operators and, or, xor and not. The operators were the hole until #532. They checked no operand at all, so 'not 5' answered 0 with C truthiness while 'if (5)' was refused, and a string, a float, a struct, an enum or an array operand reached the backend and became a CE0017 internal error -- the same shape #449 removed from the comparisons. A Result@(T, E) or a Maybe@(T) in one of these positions is CE2516 instead, which names the predicate that answers for it."))
+    Category.TYPE, "A condition takes a 'bool' and nothing else. Sushi converts no type to a truth value: an integer is not true when it is not zero, and a string is not true when it holds bytes. Write the question instead -- 'n != 0', 's.len() > 0'. This covers every condition position: an if, an elif, a while, an assert, and the operands of the logical operators and, or, xor and not. The operators were the hole until #532. They checked no operand at all, so 'not 5' answered 0 with C truthiness while 'if (5)' was refused, and a string, a float, a struct, an enum or an array operand reached the backend and became a CE0017 internal error -- the same shape #449 removed from the comparisons. A Result@(T, E) or a Maybe@(T) in one of these positions is CE2516 instead, which names the predicate that answers for it."))
 
 _add(ErrorMessage("CE2006", Severity.ERROR,
     "argument type mismatch at position {index}: expected {expected}, got {got}",
@@ -452,3 +452,7 @@ _add(ErrorMessage("CE2112", Severity.ERROR,
 _add(ErrorMessage("CE2115", Severity.ERROR,
     "cannot print a value of type '{type}'",
     Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)` -- and an array has no string form of its own at the top level: print its elements, or hold it in a struct. A type that holds something with no string form has none, and a note names the field. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
+
+_add(ErrorMessage("CE2116", Severity.ERROR,
+    "the message of an assert must be a string, got {got}",
+    Category.TYPE, "`assert(cond, message)` prints its message when the condition is false, so the message is a `string`: a literal, an interpolation, or a call that answers one. An assert does not convert a value to a string for you, as `print` does, because the message is a sentence about the fault and not a value to show. Write the value in an interpolation hole: `assert(n > 0, \"n was {n}\")`. The program builds the message only when the condition is false (docs/design/assert.md)."))

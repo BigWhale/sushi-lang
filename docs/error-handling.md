@@ -916,6 +916,12 @@ can trap exactly as a function with a channel can, and a channel does not catch 
 the checked form when the failure is data: `.get(i)` returns `Maybe@(T)`, and `arr[i]`
 traps.
 
+`assert(cond, message)` is the trap that a program writes itself: RE2026, with the file,
+the line and the column of the `assert`, and the message. Use it for a state that a
+correct program never reaches. When a caller can do something about the failure, it is
+an error and not a defect: give the function a channel and return `Result.Err(...)`.
+See [Assertions](language-reference.md#assertions).
+
 ## Error Codes
 
 Common error codes related to error handling:
@@ -932,12 +938,13 @@ Common error codes related to error handling:
 - **CE2085**: `| E` together with an explicit `Result@(T, E)` return type
 - **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare body: a function, a method or a lambda (no `| E`)
 - **CE2106**: A field read on a `Result` or a `Maybe` (take the value first)
+- **CE2116**: The message of an `assert` is not a `string`
 - **CE2503**: `.realise()` default type mismatch
 - **CE2505**: Assigning a `Result@(T, E)` to a non-Result without handling
 - **CE2507**: Using `??` on a non-Result, non-Maybe type, the call of a bare function included
 - **CE2511**: `??` with an error type that differs from the function's error type
 - **CE2515**: A method chain continues past an unhandled channel
-- **CE2516**: A `Result` or a `Maybe` used as a condition
+- **CE2516**: A `Result` or a `Maybe` used as a condition, an `assert` condition included
 - **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
 - **CW2001**: Unused `Result@(T, E)` value (warning)
 

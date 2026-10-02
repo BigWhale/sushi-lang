@@ -1,0 +1,13 @@
+fn average(i32[] scores) i32:
+    assert(scores.len() > 0, "average() needs at least one score")
+    let i32 total = 0
+    foreach(s in scores.iter()):
+        total := total + s
+    return total / scores.len()
+
+fn main() i32:
+    let i32[] scores = from([42, 40, 44])
+    println(average(scores))
+    let i32[] none = from([])
+    println(average(none))
+    return 0

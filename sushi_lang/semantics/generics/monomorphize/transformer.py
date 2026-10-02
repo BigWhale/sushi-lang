@@ -208,7 +208,7 @@ class TypeSubstitutor:
         """Recursively substitute types in a statement."""
         from sushi_lang.semantics.ast import (
             Let, Rebind, If, While, Foreach, Expand, Return, Match,
-            ExprStmt, Block, Break, Continue, Print, PrintLn
+            ExprStmt, Block, Break, Continue, Print, PrintLn, Assert
         )
 
         if isinstance(stmt, Let):
@@ -267,6 +267,13 @@ class TypeSubstitutor:
         if isinstance(stmt, (Print, PrintLn)):
             result = copy.copy(stmt)
             result.value = self.substitute_expr(stmt.value, substitution)
+            return result
+
+        if isinstance(stmt, Assert):
+            result = copy.copy(stmt)
+            result.cond = self.substitute_expr(stmt.cond, substitution)
+            if stmt.message is not None:
+                result.message = self.substitute_expr(stmt.message, substitution)
             return result
 
         if isinstance(stmt, Return):

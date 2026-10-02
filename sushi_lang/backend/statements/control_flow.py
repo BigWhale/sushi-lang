@@ -9,7 +9,7 @@ from sushi_lang.backend.statements.loops import loop_frame, _emit_block
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import If, While
+    from sushi_lang.semantics.ast import Assert, If, While
 
 
 def _emit_scoped_condition(codegen: 'LLVMCodegen', expr) -> 'ir.Value':
@@ -107,3 +107,38 @@ def emit_while(codegen: 'LLVMCodegen', node: 'While') -> None:
         _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(end_bb)
+
+
+def emit_assert(codegen: 'LLVMCodegen', node: 'Assert') -> None:
+    """Emit an assert: test the condition, and trap with RE2026 when it is false.
+
+    The message is built in the FAIL block alone, so a passing assert does no work for
+    it. Its scope is popped after the trap, when the block is terminated, so no cleanup
+    of a value made there reaches the passing path.
+    """
+    builder, func = require_both_initialized(codegen)
+    codegen.utils.ensure_open_block()
+
+    cond = _emit_scoped_condition(codegen, node.cond)
+    fail_bb = func.append_basic_block(name="assert.fail")
+    ok_bb = func.append_basic_block(name="assert.ok")
+    builder.cbranch(cond, ok_bb, fail_bb)
+
+    builder.position_at_end(fail_bb)
+    loc = node.loc
+    if loc is None:
+        raise_internal_error("CE0015", message="an assert has no source position")
+    where = f"{node.source_label}:{loc.line}:{loc.col}"
+    errors = codegen.runtime.errors
+    if node.message is None:
+        errors.emit_runtime_error("RE2026", where=where)
+    else:
+        codegen.memory.push_scope()
+        message = codegen.expressions.emit_expr(node.message)
+        errors.emit_runtime_error_with_message("RE2026", message, where=where)
+        builder.unreachable()
+        codegen.memory.pop_scope()
+    if not builder.block.is_terminated:
+        builder.unreachable()
+
+    builder.position_at_end(ok_bb)

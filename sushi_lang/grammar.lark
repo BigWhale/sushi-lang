@@ -83,6 +83,7 @@ variadic_param: ELLIPSIS type NAME
           | match_stmt
           | break_stmt
           | continue_stmt
+          | assert_stmt
 
 
 rebind_stmt: postfix ASSIGN_REBIND expr _NEWLINE
@@ -93,6 +94,7 @@ rebind_stmt: postfix ASSIGN_REBIND expr _NEWLINE
 return_stmt: "return" NOM? expr _NEWLINE?
 print_stmt: "print" "(" expr ")" _NEWLINE
 println_stmt: "println" "(" expr ")" _NEWLINE
+assert_stmt: "assert" "(" expr ["," expr] ")" _NEWLINE
 
 let_stmt: "let" [type] NAME "=" NOM? expr _NEWLINE
         | "let" [type] NAME "=" lambda_block       -> let_stmt
@@ -119,7 +121,7 @@ literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
 # A one-statement arm on the arrow. Every alternative here is a STATEMENT the
 # block form already takes, plus a bare expression -- a rebind was the one missing
 # and it is the shape a move out of a temporary wants (#552).
-match_arm_inline: (return_stmt | print_stmt | println_stmt | call_stmt | rebind_stmt | break_stmt | continue_stmt | expr _NEWLINE)
+match_arm_inline: (return_stmt | print_stmt | println_stmt | assert_stmt | call_stmt | rebind_stmt | break_stmt | continue_stmt | expr _NEWLINE)
 pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern

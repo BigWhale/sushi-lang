@@ -65,6 +65,7 @@ def _every_statement() -> dict[type, sushi_ast.Stmt]:
         a.Return: a.Return(None, a.IntLit(None, 0)),
         a.Print: a.Print(None, a.StringLit(None, "s")),
         a.PrintLn: a.PrintLn(None, a.StringLit(None, "s")),
+        a.Assert: a.Assert(None, a.BoolLit(None, True), a.StringLit(None, "s")),
         a.If: a.If(None, [(a.BoolLit(None, True), _block())], _block()),
         a.While: a.While(None, a.BoolLit(None, True), _block()),
         a.Foreach: a.Foreach(None, "i", None, a.Name(None, "xs"), _block()),

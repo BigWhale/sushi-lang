@@ -568,8 +568,8 @@ def reject_non_bool_condition(validator: 'TypeValidator', expr: Expr,
                               expr_type: Optional['Type'] = None) -> bool:
     """Refuse an expression that stands where a condition belongs and is not a bool.
 
-    The ONE seam for every condition position: an `if`, a `while` (#522), and the
-    operands of `and`, `or`, `xor` and `not` (#532). A wrapper is told which predicate
+    The ONE seam for every condition position: an `if`, a `while` (#522), an `assert`,
+    and the operands of `and`, `or`, `xor` and `not` (#532). A wrapper is told which predicate
     answers for it (CE2516); everything else is CE2005, which offers the `== 0` escape
     only to an integer -- a string or a struct has no such spelling. Answers True when
     it reported.

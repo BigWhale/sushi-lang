@@ -7,7 +7,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
-    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, While, Foreach, Expand, Match, MatchArm, Pattern, OwnPattern, Break,
+    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, Assert, While, Foreach, Expand, Match, MatchArm, Pattern, OwnPattern, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
 )
@@ -565,6 +565,12 @@ class ScopeAnalyzer:
         """Check a print statement."""
         self._check_expression(stmt.value)
 
+    def _check_assert(self, stmt: Assert) -> None:
+        """Check an assert statement: the condition, then the message."""
+        self._check_expression(stmt.cond)
+        if stmt.message is not None:
+            self._check_expression(stmt.message)
+
     def _check_exprstmt(self, stmt: ExprStmt) -> None:
         """Check an expression statement."""
         self._check_expression(stmt.expr)
@@ -870,6 +876,7 @@ _STATEMENT_HANDLERS: Dict[type, Callable[[ScopeAnalyzer, Any], None]] = {
     Return: ScopeAnalyzer._check_return,
     Print: ScopeAnalyzer._check_print,
     PrintLn: ScopeAnalyzer._check_println,
+    Assert: ScopeAnalyzer._check_assert,
     If: ScopeAnalyzer._check_if,
     While: ScopeAnalyzer._check_while,
     Foreach: ScopeAnalyzer._check_foreach,

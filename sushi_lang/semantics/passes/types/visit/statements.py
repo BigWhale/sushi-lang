@@ -15,7 +15,7 @@ from sushi_lang.semantics.passes.types.statements import (
     validate_return_statement)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.ast import (
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, If, While, Foreach, Match, Break, Continue
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Match, Break, Continue
 )
 
 
@@ -131,6 +131,24 @@ class StatementValidator(RecursiveVisitor):
         if reason is not None:
             report = report.note(f"no derived Display: {reason}")
         report.emit()
+
+    def visit_assert(self, node: Assert) -> None:
+        """Validate an assert: the condition is a bool (CE2005, CE2516), the message a
+        string (CE2116)."""
+        from sushi_lang.semantics.passes.types.utils import names_no_type
+        from sushi_lang.semantics.typesys import BuiltinType, deref_type
+
+        validate_boolean_condition(self.type_validator, node.cond, "assert")
+        message = node.message
+        if message is None:
+            return
+        self.type_validator.validate_expression(message)
+        message_type = self.type_validator.infer_expression_type(message)
+        if (message_type is None or deref_type(message_type) == BuiltinType.STRING
+                or names_no_type(self.type_validator, message_type)):
+            return
+        er.emit(self.type_validator.reporter, er.ERR.CE2116, message.loc,
+                got=display_type(message_type))
 
     def visit_rebind(self, node: Rebind) -> None:
         """Validate rebind statement."""

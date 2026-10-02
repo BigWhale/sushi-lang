@@ -1,0 +1,46 @@
+# Every assert here holds, so the program runs to its end. An assert stands in a
+# block, a match arm, a lambda body, an extension method and a generic body.
+# The condition of an assert always runs: the pop below takes one element.
+# The message of an assert that holds is never built, so `loud()` never prints.
+# EXPECT_STDOUT_EXACT: "3\nfour\ndone\n"
+# EXPECT_NO_LEAKS
+
+enum Shape:
+    Square(i32)
+    Dot
+
+fn loud() string:
+    println("built")
+    return "never"
+
+fn same@(T)(T x, T y) ~:
+    assert(x == y, "the two values differ")
+
+extend i32 halve() i32:
+    assert(self % 2 == 0, "{self} is odd")
+    return self / 2
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    xs.push(4)
+    assert(xs.pop().is_some())
+    println(xs.len())
+    assert(xs.len() == 3, loud())
+    assert(true, "count {xs.len()}")
+    same(4, 4)
+    same("four", "four")
+    println("four")
+    let i32 h = 8.halve()
+    assert(h == 4)
+    match Shape.Square(2):
+        Shape.Square(n) -> assert(n > 0, "side {n}")
+        Shape.Dot -> assert(false)
+    let fn(i32) -> i32 f = |i32 n|:
+        assert(n >= 0)
+        return n
+    assert(f(3) == 3)
+    println("done")
+    return 0

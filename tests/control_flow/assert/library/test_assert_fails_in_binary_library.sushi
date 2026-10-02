@@ -1,0 +1,11 @@
+# A false assert in a binary library reports the library's file and the position in it.
+# BUILD_LIB_BINARY: binhalf.sushi
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_STDERR_CONTAINS: "binhalf.sushi:2:5: 7 is odd\n"
+use <lib/binhalf>
+
+fn main() i32:
+    println(bin_half(8))
+    println(bin_half(7))
+    return 0

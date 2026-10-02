@@ -181,7 +181,8 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
                 return False
             module_src = src_path.read_text(encoding="utf-8")
             try:
-                module_ast, _ = parse_to_ast(module_src, dump_parse=False)
+                module_ast, _ = parse_to_ast(module_src, dump_parse=False,
+                                             source_label=str(src_path))
             except SushiError as e:
                 e.filename = e.filename or str(src_path)
                 raise
@@ -513,7 +514,8 @@ def _inject_library_source(unit_manager: UnitManager, slib_path: Path, metadata:
             publish_atomically(file_path, text.encode("utf-8"))
 
         try:
-            module_ast, _tree = parse_to_ast(text, dump_parse=False)
+            module_ast, _tree = parse_to_ast(text, dump_parse=False,
+                                             source_label=str(file_path))
         except SushiError as e:
             e.filename = e.filename or str(file_path)
             raise

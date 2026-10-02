@@ -875,9 +875,9 @@ An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` 
 Parentheses required around conditions. A condition is a `bool` and nothing else: a
 `Result@(T, E)` or a `Maybe@(T)` is CE2516 (test one with `.is_ok()` / `.is_some()`),
 and every other type is CE2005 — an integer carries no truth value, so write the
-question (`n != 0`). The same rule covers a `while` condition and both operands of
-`and`, `or` and `xor` and the operand of `not`, so `not 5` is refused exactly as
-`if (5)` is.
+question (`n != 0`). The same rule covers a `while` condition, an `assert` condition,
+both operands of `and`, `or` and `xor`, and the operand of `not`, so `not 5` is refused
+exactly as `if (5)` is.
 
 ```sushi
 if (condition):
@@ -987,6 +987,53 @@ by `break` and by `return` as well as at the end of the input.
 The argument behind all of this -- why the failure rides in the ITEM rather than on the
 loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
 [Iteration (design)](design/iteration.md).
+
+### Assertions
+
+`assert(cond)` and `assert(cond, message)` state an invariant: a state that a correct
+program never reaches. When the condition is `true`, the program continues. When it is
+`false`, the program stops with the runtime error **RE2026** and exit code 1.
+
+```sushi
+fn mean(i32[] xs) i32:
+    assert(xs.len() > 0, "mean() of an empty array")
+    let i32 total = 0
+    foreach(x in xs.iter()):
+        total := total + x
+    return total / xs.len()
+
+fn main() i32:
+    let i32[] xs = from([3, 4, 5])
+    println(mean(xs))
+    return 0
+```
+
+A call of `mean` with an empty array stops the program, and stderr gets the position of
+the `assert` and the message:
+
+```
+Runtime Error RE2026: assertion failed at ./stats.sushi:2:5: mean() of an empty array
+```
+
+- **The condition is a `bool`**, as in every condition position: a `Result` or a `Maybe`
+  is CE2516, and every other type is CE2005.
+- **The message is a `string`** (CE2116): a literal, an interpolation or a call. The
+  program builds it ONLY when the condition is false, so a passing assert costs one test
+  and no allocation.
+- **The position** is the `assert` keyword. The file is named as a compile-time
+  diagnostic names it: relative to the directory of the build, or the base name of a file
+  outside it. A generic function of a binary library is named by its template label,
+  `<template:lib:name>`, with the line in the slice that the library ships.
+- **An assert is always on.** No flag turns it off, and its condition always runs, side
+  effects included.
+- **`assert(false)` does not end the path.** A function that returns a value still needs
+  its `return` (CE0107), and a statement after it is not dead code.
+- **It is a statement**, so it stands wherever a statement does: a block, a one-line
+  `match` arm, a lambda body, a generic body. `assert` is a reserved word.
+- **A failure is a defect, not data.** No error channel catches it. A failure that the
+  caller can handle belongs in the channel `| E`; see
+  [Traps Are Not Errors](error-handling.md#traps-are-not-errors). The design record is
+  [The `assert` statement](design/assert.md).
 
 ## Arrays
 
@@ -2272,7 +2319,7 @@ its name (`CE6001`):
 - Declarations: `fn`, `let`, `const`, `var`, `struct`, `enum`, `perk`, `extend`, `with`,
   `static`, `public`, `use`
 - Control flow: `if`, `elif`, `else`, `while`, `foreach`, `in`, `break`, `continue`,
-  `match`, `return`, `expand`
+  `match`, `return`, `expand`, `assert`
 - Operators and literals: `and`, `or`, `xor`, `not`, `as`, `true`, `false`
 - Parameter and binding modes: `nom`, `peek`, `poke`
 - Foreign functions: `unsafe`, `external`, `because`

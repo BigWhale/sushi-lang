@@ -5,6 +5,7 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.report import display_filename
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.units import Unit, UnitManager
@@ -23,6 +24,12 @@ def compute_unit_fingerprint(unit: Unit, unit_manager: UnitManager | None = None
         raise InternalCompilerError("CE0142", unit=unit.name)
     hasher.update(b"SOURCE:")
     hasher.update(source.encode("utf-8"))
+
+    # The name an `assert` prints for this file is in the object, and it is relative to
+    # the working directory of the build, so the same source built from another
+    # directory is another object.
+    hasher.update(b"LABEL:")
+    hasher.update(display_filename(str(unit.file_path)).encode("utf-8"))
 
     hasher.update(b"OWN_SYMBOLS:")
     for name in sorted(unit.public_symbols.keys()):

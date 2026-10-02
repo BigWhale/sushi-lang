@@ -66,6 +66,7 @@ def _every_statement() -> dict[str, a.Stmt]:
         "Return": a.Return(None, a.IntLit(None, 0)),
         "Print": a.Print(None, a.StringLit(None, "s")),
         "PrintLn": a.PrintLn(None, a.StringLit(None, "s")),
+        "Assert": a.Assert(None, a.BoolLit(None, True), a.StringLit(None, "s")),
         "If": a.If(None, [(a.BoolLit(None, True), _block())], _block()),
         "While": a.While(None, a.BoolLit(None, True), _block()),
         "Foreach": a.Foreach(None, "i", None, a.Name(None, "xs"), _block()),

@@ -40,6 +40,7 @@ def _every_statement() -> dict[str, a.Stmt]:
         "Return": a.Return(None, _carrier()),
         "Print": a.Print(None, _carrier()),
         "PrintLn": a.PrintLn(None, _carrier()),
+        "Assert": a.Assert(None, a.BoolLit(None, True), _carrier()),
         "If": a.If(None, [(a.BoolLit(None, True), block)], None),
         "While": a.While(None, a.BoolLit(None, True), block),
         "Foreach": a.Foreach(None, "p", _marker(), a.Name(None, "xs"), a.Block(None, [])),

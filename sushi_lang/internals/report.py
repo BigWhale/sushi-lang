@@ -186,6 +186,24 @@ def span_of(t: Any) -> Optional[Span]:
     return None
 
 
+def display_filename(filename: str) -> str:
+    """The name a diagnostic prints for `filename`: `./` plus the path relative to the
+    working directory, or the base name of a file outside it.
+
+    An `assert` prints the same name at run time, so the two always agree.
+    """
+    # A name in angle brackets is not a path and has no directory to strip:
+    # `<input>` for a single string, `<template:lib:name>` for a slice a library
+    # shipped. Prefixing `./` onto one made it read as a file next door.
+    if filename.startswith("<") and filename.endswith(">"):
+        return filename
+    try:
+        rel_path = Path(filename).resolve().relative_to(Path.cwd())
+        return f"./{rel_path}"
+    except (ValueError, OSError):
+        return Path(filename).name
+
+
 class DiagnosticBuilder:
     """Builder for attaching sub-diagnostics (notes, help) before emitting.
 
@@ -345,19 +363,6 @@ class Reporter:
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
-    def _resolve_filename(self, filename: str) -> str:
-        """Convert absolute path to relative path with ./ prefix."""
-        # A name in angle brackets is not a path and has no directory to strip:
-        # `<input>` for a single string, `<template:lib:name>` for a slice a library
-        # shipped. Prefixing `./` onto one made it read as a file next door.
-        if filename.startswith("<") and filename.endswith(">"):
-            return filename
-        try:
-            rel_path = Path(filename).resolve().relative_to(Path.cwd())
-            return f"./{rel_path}"
-        except (ValueError, OSError):
-            return Path(filename).name
-
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
         """Get source lines for a file, reading from disk if needed."""
         if filename == self.filename:
@@ -407,7 +412,7 @@ class Reporter:
         name = d.filename or self.filename
         loc = ""
         if name:
-            filename = self._resolve_filename(name)
+            filename = display_filename(name)
             loc = f"{filename}:{d.span.line}:{d.span.col}" if d.span else filename
         message = d.message if d.message.endswith('.') else f"{d.message}."
         kind_style = C.BOLD + (C.RED if d.kind == "error" else C.YELLOW)
@@ -452,7 +457,7 @@ class Reporter:
                           out: List[str]) -> None:
         located = [(s, s.span) for s in d.sub if s.span is not None]
         for i, (sub, sub_span) in enumerate(located):
-            sub_filename = self._resolve_filename(sub.filename or d.filename or self.filename or "")
+            sub_filename = display_filename(sub.filename or d.filename or self.filename or "")
             sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
             sub_lines = (
                 d.source.splitlines() if d.source is not None and sub.filename is None

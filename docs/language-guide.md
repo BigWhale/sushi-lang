@@ -433,6 +433,23 @@ fn main() i32:
     return 0
 ```
 
+### Assertions
+
+`assert(cond)` stops the program with the runtime error RE2026 when `cond` is false. An
+optional second argument is a `string` message, which the program builds only on failure.
+The output names the file, the line and the column of the `assert`:
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    assert(xs.len() == 3, "expected three values, got {xs.len()}")
+    println("Mostly Harmless")
+    return 0
+```
+
+An assert is for a bug, not for an error that a caller can handle: use the error channel
+for that. See [Assertions](language-reference.md#assertions).
+
 ## Error Handling
 
 ### Result@(T, E)
