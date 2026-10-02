@@ -255,6 +255,41 @@ i32 and bool hashed through the predefined Hashable: 6807129317463932018, 1
 (The large number is the FxHash of the integer `42`. The hash is deterministic, so your
 number is the same.)
 
+## `Display`, `Eq` and `Ord` are predefined too
+
+[Chapter 8](08-structs-and-enums.md) showed that every struct and enum prints and compares
+with no code of your own. Three predefined perks give that behaviour. Each has one method:
+
+| Perk | Contract | Read by |
+|------|----------|---------|
+| `Display` | `fn to_str() string` | an interpolation hole, `print`, `println` |
+| `Eq` | `fn eq(Self other) bool` | `==`, `!=`, `contains`, `index_of` |
+| `Ord` | `fn compare(Self other) i32` | `<`, `<=`, `>`, `>=` |
+
+As with `Hashable`, an implementation is an **override** of the derived behaviour:
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/display-override.sushi"
+```
+
+Output:
+
+```
+Ford's towel, 2 knots
+Look: Ford's towel, 2 knots
+Look: 42
+Shelf(top: Ford's towel, 2 knots, count: 1)
+```
+
+The override applies in every position: `println`, a hole, the generic `announce`, and a
+`Towel` that a `Shelf` holds. `Shelf` has no override, so it keeps its derived text and
+uses the `Towel` text for its field. `@(T: Display)` takes `42` too, because every
+primitive has a `Display`.
+
+Where the contract says `Self`, an implementation writes its own type: `fn eq(Towel other)
+bool`. `Self` is legal in these predefined contracts only. A perk that you write cannot use
+it.
+
 ## What perks cannot do
 
 Perks are simple on purpose. Know these limits:
@@ -262,7 +297,7 @@ Perks are simple on purpose. Know these limits:
 - **No type parameters.** `perk Iterator@(Item):` is an error (`CE4010`).
 - **No inheritance.** A perk cannot require another perk (no `perk Ord: Eq`). To ask for
   more than one capability, use `+` at the *use* site:
-  `fn f@(T: Hashable + Displayable)(T x)`.
+  `fn f@(T: Hashable + Describe)(T x)`.
 - **No default implementations.** Each type implements every method of the perk. A perk
   cannot give a fallback body.
 - **No static methods** (`CE4014`). A perk has no `Self` type, so a contract cannot hold a
@@ -292,7 +327,8 @@ With these limits, every perk method call goes to a known function at compile ti
 - `Hashable` is **predefined**, as `Drop`, `Eq`, `Ord` and `Display` are. Every type with a
   derived `hash()` satisfies it, and `extend T with Hashable` replaces the derived hash.
   The compiler also derives `==` and the order operators (`Eq`, `Ord`) and the text of
-  a struct or enum (`Display`); an `extend T with Eq` implementation overrides them.
+  a struct or enum (`Display`); an `extend T with Display` (or `Eq`, `Ord`)
+  implementation overrides them, in every position.
 - Perks have no type parameters, no inheritance, no default methods and no statics.
 
 The next chapter is about how Sushi manages memory without a garbage collector: ownership,

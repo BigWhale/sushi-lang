@@ -1,0 +1,34 @@
+struct Point:
+    i32 x
+    i32 y
+
+struct Hitchhiker:
+    string name
+    i32 towels
+
+enum Shape:
+    Point()
+    Circle(f64)
+    Rectangle(f64, f64)
+
+fn main() i32:
+    # A struct or an enum prints with no code of your own.
+    let Point origin = Point(0, 0)
+    println("{origin}")
+    println("{Shape.Rectangle(3.0, 4.0)}")
+    println("{Shape.Point()}")
+
+    # A string that a struct holds prints in quotes. A string on its own prints bare.
+    let Hitchhiker arthur = Hitchhiker("Arthur", 1)
+    println("{arthur}")
+    println("{arthur.name}")
+
+    # The same values compare with == and <, field by field.
+    println("Same point: {origin == Point(0, 0)}")
+    println("Ordered: {Point(1, 9) < Point(2, 0)}")
+
+    # to_str() gives the same text as a string you can keep.
+    let string text = origin.to_str()
+    println("Saved: {text}")
+
+    return 0

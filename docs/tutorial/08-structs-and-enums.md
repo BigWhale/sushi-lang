@@ -105,6 +105,45 @@ print something; the next chapter is devoted entirely to it.
     `Shape.Circle(2.0)` carries the `f64` value `2.0`, but interpolating it prints `2`, not
     `2.0`. Sushi trims insignificant trailing zeros when formatting floats.
 
+## Printing and comparing your types
+
+A struct or an enum that you declare can be printed and compared at once. You do not write
+any code for it. The compiler derives three contracts for every struct and enum, from the
+fields and the payloads that the type holds:
+
+- **`Display`** gives the text for an interpolation hole, `print` and `println`. The
+  method `.to_str()` gives the same text as a `string`.
+- **`Eq`** gives `==` and `!=`. Two values are equal when all their fields are equal.
+- **`Ord`** gives `<`, `<=`, `>` and `>=`. The fields are compared in declaration order. An
+  enum compares its variant first, in declaration order, and then the payload.
+
+```sushi
+--8<-- "docs/tutorial/examples/08-structs-and-enums/printing.sushi"
+```
+
+Output:
+
+```
+Point(x: 0, y: 0)
+Shape.Rectangle(3, 4)
+Shape.Point
+Hitchhiker(name: "Arthur", towels: 1)
+Arthur
+Same point: true
+Ordered: true
+Saved: Point(x: 0, y: 0)
+```
+
+A struct prints its name and each field as `name: value`. An enum prints
+`Enum.Variant`, and the payload follows in parentheses. A string inside a struct prints in
+quotes, so you can see where it starts and stops. A string on its own prints bare.
+
+`Point(1, 9) < Point(2, 0)` is `true` because `x` is the first field, and `1 < 2` decides
+the answer before `y` is read.
+
+To print a type in a different way, you replace the derived text with your own
+`to_str()`. [Chapter 11](11-perks-and-extensions.md) shows how.
+
 ## A note on generics
 
 Both structs and enums can be **generic** — parameterised by a type. You've already used
@@ -124,6 +163,8 @@ toolbox extends that far.
 - An `enum` is a value that's exactly one of several variants; variants can carry data
   (`Shape.Circle(f64)`), and you construct them as `Shape.Circle(2.0)`.
 - `match` is how you read an enum's data back out.
+- Every struct and enum prints (`println("{p}")`, `p.to_str()`) and compares (`==`, `<`)
+  with no code of your own.
 - Structs and enums can both be generic — more on that in Chapter 10.
 
 Those `match` statements deserve a proper introduction. On to
