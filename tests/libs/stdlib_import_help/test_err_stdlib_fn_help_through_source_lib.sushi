@@ -1,0 +1,13 @@
+# A source library that imports <io/fs> brings that module into the build, but not into
+# this unit. A call of `open` here is CE2008, and the help names the stdlib import with
+# angle brackets, `use <io/fs>`, and not the unit form `use "io/fs"`.
+# BUILD_LIB: fs_user_lib.sushi
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: add `use <io/fs>` above to name it here
+use <lib/fs_user_lib>
+
+fn main() i32:
+    let bool r = open("x.txt", 0).is_ok()
+    println(probe())
+    println(r)
+    return 0

@@ -1,0 +1,4 @@
+use <io/fs>
+
+public fn probe() i32:
+    return 1

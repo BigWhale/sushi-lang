@@ -524,12 +524,16 @@ def import_help(origin: str, *, stdlib: bool = False,
 
     `tables` says whether the unit `origin` belongs to a library. A library's unit is
     named by the import of the library, `use <lib/<library>>`, and never by its unit
-    name.
+    name. A bundled stdlib module is named by its stdlib import, `use <module>`.
     """
     library = getattr(tables.get(origin), "library", None) if tables else None
     if library is not None:
         return (f"library '{library}' declares it; add `use <lib/{library}>` above "
                 f"to name it here")
+    # A bundled Sushi-source module is injected as an ordinary unit, and its unit name
+    # is its module path: it is still imported as a stdlib module.
+    from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
+    stdlib = stdlib or is_source_stdlib_module(origin)
     written = f"<{origin}>" if stdlib else f'"{origin}"'
     return f"'{origin}' declares it; add `use {written}` above to name it here"
 
