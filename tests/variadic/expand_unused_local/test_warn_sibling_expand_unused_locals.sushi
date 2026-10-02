@@ -1,7 +1,7 @@
 # Two `expand` statements, each with an unused `let t`. They are two written
 # declarations, so CW1001 is reported one time for each, with the written name
 # `t` and at its own line (#1019).
-# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_ERROR_CODES_EXACT: CW1001, CW1001
 # EXPECT_STDERR_CONTAINS: :16:9: warning [CW1001]: unused variable 't'.
 # EXPECT_STDERR_CONTAINS: :19:9: warning [CW1001]: unused variable 't'.
 perk Render:

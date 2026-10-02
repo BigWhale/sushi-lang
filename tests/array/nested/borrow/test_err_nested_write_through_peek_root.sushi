@@ -1,6 +1,6 @@
 # a write to an inner element through a `peek` root is a write through the peek, for
 # a dynamic and for a fixed nested array.
-# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_ERROR_CODES_EXACT: CE2408, CE2408
 fn ragged(peek i32[][] a) ~:
     a[0][0] := 1
 

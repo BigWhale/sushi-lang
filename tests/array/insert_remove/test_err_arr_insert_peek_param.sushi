@@ -1,5 +1,5 @@
 # a `peek` parameter is read-only, so `insert` and `remove` on it are refused.
-# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_ERROR_CODES_EXACT: CE2408, CE2408
 fn grow(peek i32[] a) ~:
     a.insert(0, 1)
     a.remove(0)

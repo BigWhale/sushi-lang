@@ -1,5 +1,5 @@
 # a `let peek` reference is read-only, so `insert` and `remove` through it are refused.
-# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_ERROR_CODES_EXACT: CE2408, CE2408
 fn main() i32:
     let i32[][] g = from([from([0])])
     let peek i32[] r = g[0]
