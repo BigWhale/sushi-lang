@@ -411,8 +411,8 @@ fn main() i32:
 Use `+` to require more than one perk:
 
 ```sushi
-perk Displayable:
-    fn display() string
+perk Describe:
+    fn describe() string
 
 struct Tag:
     i32 id
@@ -421,14 +421,14 @@ extend Tag with Hashable:
     fn hash() u64:
         return self.id as u64
 
-extend Tag with Displayable:
-    fn display() string:
+extend Tag with Describe:
+    fn describe() string:
         return "Tag#{self.id}"
 
-fn process@(T: Hashable + Displayable)(T item) ~:
+fn process@(T: Hashable + Describe)(T item) ~:
     let u64 h = item.hash()
-    let string s = item.display()
-    println("Hash: {h}, Display: {s}")
+    let string s = item.describe()
+    println("Hash: {h}, Description: {s}")
 
 fn main() i32:
     let Tag t = Tag(id: 7)

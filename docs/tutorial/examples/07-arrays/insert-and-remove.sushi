@@ -1,0 +1,27 @@
+fn main() i32:
+    let string[] crew = from(["Arthur".clone(), "Trillian".clone()])
+
+    # insert() puts an element at an index and moves the rest one slot to the right.
+    # An index past the end is an Err, and the array does not change.
+    let bool placed = crew.insert(1, "Ford".clone()).is_ok()
+    let bool refused = crew.insert(9, "Marvin".clone()).is_err()
+    println("Placed: {placed}, refused: {refused}, crew: {crew.len()}")
+
+    # remove() takes the element at an index out and gives it to you as Maybe@(T).
+    match crew.remove(0):
+        Maybe.Some(name) -> println("Removed {name}")
+        Maybe.None() -> println("No such index")
+
+    # first(), last(), contains() and index_of() read without an index you must check.
+    let string head = crew.first().realise("nobody".clone())
+    let i32 at = crew.index_of("Trillian").realise(-1)
+    let bool aboard = crew.contains("Ford")
+    println("First is {head}; Trillian is at {at}; Ford aboard: {aboard}")
+
+    # truncate() keeps the first n elements, and clear() removes all of them.
+    crew.truncate(1)
+    println("After truncate: {crew.len()}")
+    crew.clear()
+    println("After clear: {crew.len()}")
+
+    return 0

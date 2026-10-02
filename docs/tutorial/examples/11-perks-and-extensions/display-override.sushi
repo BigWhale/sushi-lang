@@ -1,0 +1,25 @@
+struct Towel:
+    string owner
+    i32 knots
+
+struct Shelf:
+    Towel top
+    i32 count
+
+# The override replaces the derived text: Towel(owner: "Ford", knots: 2).
+extend Towel with Display:
+    fn to_str() string:
+        return "{self.owner}'s towel, {self.knots} knots"
+
+fn announce@(T: Display)(T item) ~:
+    println("Look: {item}")
+
+fn main() i32:
+    let Towel towel = Towel("Ford", 2)
+    println(towel)
+    announce(towel)
+    announce(42)
+
+    # The override also applies when another type holds a Towel.
+    println(Shelf(towel, 1))
+    return 0
