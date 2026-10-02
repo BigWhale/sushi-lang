@@ -1,0 +1,13 @@
+# Two hybrid libraries each declare `extend i32 doubled()`. One method name on one
+# type from two libraries is a duplicate.
+# BUILD_LIB_HYBRID: ld_ext_p.sushi
+# BUILD_LIB_HYBRID: ld_ext_q.sushi
+# EXPECT_ERROR_CODES_EXACT: CE0101
+use <lib/ld_ext_p>
+use <lib/ld_ext_q>
+
+fn main() i32:
+    let i32 n = 5
+    println("{n.doubled()}")
+    println("{p_val() + q_val()}")
+    return 0

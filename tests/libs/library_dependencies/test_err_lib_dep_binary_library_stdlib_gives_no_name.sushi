@@ -1,0 +1,10 @@
+# The binary ld_fs_log uses `<io/fs>`. The build loads the module for the library, and
+# the consumer, which does not import it, cannot write `open`.
+# BUILD_LIB_BINARY: ld_fs_log.sushi
+# EXPECT_ERROR_CODE: CE2008
+use <lib/ld_fs_log>
+
+fn main() i32:
+    match open("x.txt", FileMode.Read()):
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1

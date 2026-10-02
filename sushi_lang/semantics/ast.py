@@ -93,6 +93,11 @@ class UseStatement(Node):
     # takes no `as` (CE3016).
     is_public: bool = False
     public_span: Optional[Span] = None
+    # A `use <lib/...>`: the `library_name` and `library_version` of the `.slib` that the
+    # build found for the path. The driver stamps both before the analysis, because a
+    # library is identified by its stamped name and not by the written path (#1120).
+    library_name: Optional[str] = None
+    library_version: Optional[str] = None
 
 @dataclass(slots=True)
 class Program(Node):

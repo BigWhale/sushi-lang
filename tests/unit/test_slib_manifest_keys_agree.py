@@ -71,6 +71,7 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "reexport": [(MANIFEST, G + "_extract_reexports")],
     "not_exported": [(MANIFEST, G + "_extract_not_exported")],
     "foreign_extension": [(MANIFEST, G + "_extract_foreign_extensions")],
+    "dependency": [(MANIFEST, G + "_extract_dependencies")],
     "closure_summary": [(MANIFEST, G + "_closure_records")],
 }
 
@@ -90,6 +91,8 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "_register_perk_impls"): {"record": "perk_impl", "m": "method"},
     (REGISTRATION, R + "_register_generic_perk_impls"): {"record": "perk_impl"},
     (REGISTRATION, R + "_register_extensions"): {"record": "extension"},
+    (REGISTRATION, R + "_register_functions"): {
+        "manifest": "manifest", "record": "function"},
     (REGISTRATION, R + "_register_generic_extensions"): {
         "record": "extension", "manifest": "manifest"},
     (REGISTRATION, R + "_register_generic_functions"): {
@@ -98,6 +101,9 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
         "record": "generic_type", "manifest": "manifest"},
     (REGISTRY, "manifest_reexports"): {},
     (REGISTRY, "reexported_libraries"): {"record": "reexport"},
+    (REGISTRY, "manifest_dependencies"): {},
+    (REGISTRY, "library_dependencies"): {"record": "dependency"},
+    (REGISTRY, "stdlib_dependencies"): {"record": "dependency"},
     (REGISTRY, Y + "register_library"): {
         "manifest": "manifest", "templates": "templates", "func_info": "function",
         "record": "not_exported"},
@@ -127,6 +133,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (LIB_INFO, "_impl_line"): {"impl": "perk_impl"},
     (LIB_INFO, "_extension_line"): {"ext": "extension"},
     (LIB_INFO, "_foreign_line"): {"claim": "foreign_extension"},
+    (LIB_INFO, "_dependency_line"): {"dep": "dependency"},
     (LIB_INFO, "_own_doc"): {"record": "function"},
     (LIB_INFO, "_unit_doc"): {"metadata": "manifest"},
     (LIB_INFO, "_generic_named"): {"record": "generic_type"},
@@ -163,6 +170,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "example": {"code", "caption"},
     "reexport": {"unit", "path", "kind"},
     "foreign_extension": {"type", "method"},
+    "dependency": {"path", "kind", "library_name", "library_version"},
 }
 
 # A read no writer answers, known and not yet fixed. It may only shrink.

@@ -36,9 +36,9 @@ def own_units(units: list['Unit']) -> list['Unit']:
 
     A `use <collections/iter>` injects the bundled module as an ordinary unit, and a
     `use <lib/other>` over a source library injects its units the same way, so both
-    reach the manifest generator alongside the library's own files. A consumer states
-    each library and each module it uses for itself (`docs/libraries.md`, limitation
-    1), so shipping either one's declarations puts a SECOND definition of every name
+    reach the manifest generator alongside the library's own files. A consumer's build
+    loads each library and each module of the graph on its own account (#1120), so
+    shipping either one's declarations puts a SECOND definition of every name
     into that consumer's build -- CE4001 for a perk, and a duplicate symbol for the
     rest. `Unit.provenance` is the one field that marks such a unit, and it is the
     field `_extract_reexports` reads for the same question about a `public use`, so
@@ -253,7 +253,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.3",
+            "sushi_lib_version": "2.4",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -1049,15 +1049,31 @@ class LibraryManifestGenerator:
                 records.append({"unit": unit.name, "path": path, "kind": kind})
         return records
 
-    def _extract_dependencies(self, units: list['Unit']) -> list[str]:
-        """Extract stdlib dependencies from all units."""
-        deps = set()
+    def _extract_dependencies(self, units: list['Unit']) -> list[dict]:
+        """What a consumer's build must load: one record per module and per library.
+
+        A `stdlib` record is a module that a unit of the build uses. A `library` record
+        is a `use <lib/...>` that one of the library's OWN units writes, plain or public
+        (#1120), with the name and the version of the `.slib` that this build found for
+        the path: the consumer loads the whole graph, and a second version of one
+        library in it is CE3519. An injected source library records its own uses.
+        """
+        modules: set[str] = set()
+        libraries: dict[str, dict] = {}
+        own = {unit.name for unit in own_units(units)}
 
         for unit in units:
             if unit.ast is None:
                 continue
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
-                    deps.add(use_stmt.path)
+                    modules.add(use_stmt.path)
+                elif (use_stmt.is_library and unit.name in own
+                      and use_stmt.path not in libraries):
+                    libraries[use_stmt.path] = {
+                        "path": use_stmt.path, "kind": "library",
+                        "library_name": use_stmt.library_name or "",
+                        "library_version": use_stmt.library_version or ""}
 
-        return sorted(deps)
+        return ([{"path": path, "kind": "stdlib"} for path in sorted(modules)]
+                + [libraries[path] for path in sorted(libraries)])

@@ -72,6 +72,11 @@ class TestMetadata:
     build_libs: Optional[List[str]] = None
     # Binary `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
     build_libs_binary: Optional[List[str]] = None
+    # Hybrid `.slib` files built the same way, on the same SUSHI_LIB_PATH directory.
+    build_libs_hybrid: Optional[List[str]] = None
+    # Every BUILD_LIB, BUILD_LIB_BINARY and BUILD_LIB_HYBRID as (kind, source, `.slib`
+    # file name, version or None), in written order: the order the runner builds them in.
+    library_builds: Optional[List[Tuple[str, str, str, Optional[str]]]] = None
     # Sushi-source stdlib modules the compiler registers from the fixture's copy: name -> path.
     stdlib_modules: Optional[Dict[str, str]] = None
     # Source `.slib` files built at a path inside the copy: (source, target), both relative.
@@ -109,6 +114,10 @@ class TestMetadata:
             self.build_libs = []
         if self.build_libs_binary is None:
             self.build_libs_binary = []
+        if self.build_libs_hybrid is None:
+            self.build_libs_hybrid = []
+        if self.library_builds is None:
+            self.library_builds = []
         if self.stdlib_modules is None:
             self.stdlib_modules = {}
         if self.build_libs_at is None:
@@ -125,7 +134,7 @@ class TestMetadata:
     @property
     def libs_on_the_path(self) -> bool:
         """A library the runner builds into the directory it puts on SUSHI_LIB_PATH."""
-        return bool(self.build_libs or self.build_libs_binary)
+        return bool(self.library_builds)
 
     @property
     def reads_the_copy(self) -> bool:
@@ -294,6 +303,34 @@ def _stdlib_module(metadata: TestMetadata, value: str, test_file: Path) -> None:
         _warn(f"Invalid STDLIB_MODULE value in {test_file}: {value}")
 
 
+def _library_build(field_name: str, kind: str):
+    """A BUILD_LIB-family directive: the kind's own list, and the one ordered list.
+
+    `x.sushi` builds `x.slib` at the runner's version. `x.sushi -> y.slib` builds the
+    same source under another file name, so the library name is not the unit name, and
+    `x.sushi @ 0.2.0` stamps that version. The two forms combine, `->` first.
+    """
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        text, at, version = _unquote(value).partition('@')
+        version = version.strip() if at else None
+        source, sep, target = text.partition('->')
+        source, target = source.strip(), target.strip()
+        if sep or at:
+            if (not source or len(_split(source)) != 1 or (at and not version)
+                    or (sep and (not target.endswith('.slib')
+                                 or len(Path(target).parts) != 1))):
+                metadata.directive_errors.append(
+                    f"a {kind} library build takes `<source>`, `<source> -> <name>.slib` "
+                    f"or either with `@ <version>`, not {value!r}")
+                return
+            pairs = [(source, target or f"{Path(source).stem}.slib")]
+        else:
+            pairs = [(name, f"{Path(name).stem}.slib") for name in _split(source)]
+        getattr(metadata, field_name).extend(name for name, _ in pairs)
+        metadata.library_builds.extend((kind, name, slib, version) for name, slib in pairs)
+    return handle
+
+
 def _build_lib_at(metadata: TestMetadata, value: str, test_file: Path) -> None:
     source, sep, target = _unquote(value).partition('->')
     if sep and source.strip() and target.strip():
@@ -359,8 +396,9 @@ VALUED_DIRECTIVES = {
     'EXPECT_REBUILT': _extend('expect_rebuilt', lambda v: _split(_unquote(v))),
     'EXPECT_CACHED': _extend('expect_cached', lambda v: _split(_unquote(v))),
     'EXPECT_STDOUT_EXACT_BEFORE_REBUILD': _set('expect_stdout_exact_before_rebuild', _text),
-    'BUILD_LIB': _extend('build_libs', lambda v: _split(_unquote(v))),
-    'BUILD_LIB_BINARY': _extend('build_libs_binary', lambda v: _split(_unquote(v))),
+    'BUILD_LIB': _library_build('build_libs', 'source'),
+    'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
+    'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),
     'STDLIB_MODULE': _stdlib_module,
     'BUILD_LIB_AT': _build_lib_at,
     'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),

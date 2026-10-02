@@ -1,0 +1,14 @@
+# Two binary libraries each declare `extend i32 doubled()`, and a consumer of two
+# units calls the method in both. The duplicate is refused before the link.
+# BUILD_LIB_BINARY: ld_mx_p.sushi
+# BUILD_LIB_BINARY: ld_mx_q.sushi
+# EXPECT_ERROR_CODES_EXACT: CE0101
+use <lib/ld_mx_p>
+use <lib/ld_mx_q>
+use "ld_mx_helper"
+
+fn main() i32:
+    let i32 n = 5
+    println("{n.doubled()}")
+    println("{helped(n)}")
+    return 0

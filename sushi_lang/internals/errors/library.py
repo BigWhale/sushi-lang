@@ -130,6 +130,21 @@ _add(ErrorMessage("CE3518", Severity.ERROR,
     "a manifest that the user wrote. A nori.toml that can be read and is not valid is "
     "CE3517 (#1066)."))
 
+_add(ErrorMessage("CE3519", Severity.ERROR,
+    "library '{lib}' is in the build at two versions, {first} and {second}",
+    Category.LIBRARY,
+    "A library records every `use <lib/...>` that its units write, with the version of "
+    "the library that its build found, and the consumer's build loads the whole graph. A "
+    "library is identified by the `library_name` stamped into its `.slib`, so the graph "
+    "holds ONE copy of each library: a body compiled against one version and linked "
+    "against another is a wrong program with no diagnostic. When two paths of the graph "
+    "reach two versions of one library -- a library was built against 0.1.0 and the "
+    "consumer's search finds 0.2.0, or two imports find two files -- the build stops "
+    "here. Each note names a version and the path that reached it: the consumer's "
+    "`use`, or the library that recorded it. The escape is to rebuild the library that "
+    "recorded the old version against the one that the search finds, or to put the "
+    "version that it was built against first on SUSHI_LIB_PATH (#1120)."))
+
 # CE3514 ("a {kind} library cannot carry a `public use`") was RETIRED when #585 landed
 # the manifest record. It refused the statement at build time for as long as a compiled
 # library had nowhere to put it: `public use X` makes X's public names the unit's own,

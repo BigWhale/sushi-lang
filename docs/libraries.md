@@ -109,6 +109,36 @@ the consumer wrote `use <lib/other>`, and `other`'s public names are the consume
 write. If `other` is not on the path, the consumer gets CE3502 with a note that names the
 `public use`.
 
+### Library Dependencies
+
+A library that writes `use <lib/b>` depends on `b`. Two rules apply, the same for every
+kind of library:
+
+1. **Loading is transitive.** The library records each `use <lib/...>` of its own units,
+   plain or public, in the manifest `dependencies`, with the name and the version of the
+   `b` that its build found. The consumer's build loads every library of that graph: a
+   source dependency is compiled with the program, and the bitcode of a compiled one is
+   linked once. So a library body always has what it calls, and the consumer does not
+   write `use <lib/b>` for a library it does not call itself. A stdlib module that a
+   compiled library uses is loaded the same way.
+2. **Visibility is not transitive.** A unit may write the names of what it imports
+   itself, and of what a `public use` hands on. A plain `use <lib/b>` in a library loads
+   `b` and gives the consumer no name of it: a bare `b_val()` at the consumer is CE2008
+   until the consumer writes `use <lib/b>`, or the library writes `public use <lib/b>`.
+
+A library is identified by the `library_name` stamped into its `.slib`, not by the path
+that the search finds. One library that several paths reach -- the consumer and a
+library, or two libraries in a diamond -- is loaded once and gives one candidate for each
+name, so `use <lib/a>` beside `use <lib/b>` is not CE3012. Two versions of one library in
+one graph are CE3519: for example, `a` was built against `b` 0.1.0 and the consumer's
+search finds `b` 0.2.0. The diagnostic names each version and the path that reached it.
+A dependency that the consumer's search cannot find is CE3502, with a note at the `use`
+that needs it, for a plain `use` and for a `public use` alike.
+
+Two libraries that declare one extension method on one type are CE0101 at the consumer,
+with a note for each library, for every kind: a method is found on its receiver's type,
+so no import can choose between the two bodies.
+
 ### Public Declarations
 
 Only declarations marked `public` are accessible from other compilation units. Six kinds
@@ -367,7 +397,9 @@ has no block, so it prints as a bare line and the run of bare lines stays dense.
 a report long, and a reader asking what a library exports usually does not want ten
 screens of it. A `nom` parameter shows its mode, which is the one mode a type cannot
 spell, and it prints either way. `Dependencies` lists every stdlib module the library
-needs, the modules that its imports bring in included: one `use <io/fs>` gives six lines. See
+needs, the modules that its imports bring in included: one `use <io/fs>` gives six lines.
+It also lists each library that the library's own units use, with the name and the
+version that its build found: `<lib/b> (b 0.1.0)`. See
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
 for the few things that do not travel in it.
 
@@ -418,7 +450,7 @@ CE3504: platform mismatch: library compiled for 'linux', current platform is 'da
 The check is skipped entirely for a source library, and `--lib-info` prints no `Platform`
 line for one, because the field means nothing there.
 
-Portable as text is not the same as portable in behaviour. See Limitation #2 below.
+Portable as text is not the same as portable in behaviour. See Limitation #1 below.
 
 ## Versions and Compatibility
 
@@ -614,27 +646,22 @@ fn main() i32:
 
 Current limitations of the library system:
 
-1. **A plain `use` is not transitive**: If library A depends on library B through a plain
-   `use <lib/b>`, you must import both explicitly. A plain `use` in a library exports
-   nothing of the stdlib module or the library it imports, so a consumer states each one
-   for itself. A `public use <lib/b>` in A loads B in the consumer's build and hands B's
-   public names on, for every library kind (see [Library Kinds](#library-kinds)).
-2. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
+1. **Portable as text, not automatically in behaviour**: a source library compiles anywhere,
    but Sushi has no conditional compilation — no `cfg`, no build tags, no per-platform source
    files. A library that binds a platform-specific C function through `unsafe external` still
    only builds where that function exists, and it cannot yet say so.
-3. **A binary library is platform-bound**: `--lib-kind binary` or `hybrid` ships bitcode,
+2. **A binary library is platform-bound**: `--lib-kind binary` or `hybrid` ships bitcode,
    which is bound to the platform that produced it (**CE3504**).
-4. **A public generic cannot reach FFI**: a public generic whose body (transitively)
+3. **A public generic cannot reach FFI**: a public generic whose body (transitively)
    references an `unsafe external` namespace, or a private helper whose signature exposes a
    foreign `ptr`, cannot be exported (**CE5006**; see also **CE5002**). Wrap the foreign
    detail behind a private helper with a C-ABI-free signature. This applies to every kind,
    source included.
-5. **A public native variadic cannot be exported**: a `...T` variadic collects into a runtime
+4. **A public native variadic cannot be exported**: a `...T` variadic collects into a runtime
    `T[]` inside one concrete function, so there is no template to monomorphize and public
    export is **CE0116**. A type pack (`...Ts`) is different: it exports as a template. This
    applies to every kind, source included.
-6. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
+5. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
    cross a `--lib-kind binary` library. A source library needs none of this machinery — its
    generics are ordinary source in ordinary units, so they monomorphize exactly as they would
    in a multi-file program. Regular generic *functions*, *variadic-generic pack* functions

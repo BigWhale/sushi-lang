@@ -1,0 +1,13 @@
+# The source ld_a_plain was built against ld_b 0.1.0, and then ld_b was built
+# again at 0.2.0. The graph holds two versions of one library.
+# BUILD_LIB: ld_b.sushi @ 0.1.0
+# BUILD_LIB: ld_a_plain.sushi
+# BUILD_LIB: ld_b.sushi @ 0.2.0
+# EXPECT_ERROR_CODES_EXACT: CE3519
+# EXPECT_STDERR_CONTAINS: "0.1.0"
+# EXPECT_STDERR_CONTAINS: "0.2.0"
+use <lib/ld_a_plain>
+
+fn main() i32:
+    println("{a_val()}")
+    return 0

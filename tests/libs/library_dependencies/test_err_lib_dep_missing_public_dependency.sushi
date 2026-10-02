@@ -1,0 +1,13 @@
+# ld_far_pub has a public `use` of a library that the consumer cannot find. A library
+# build starts one directory above the copy, so `<lib/fixture/dep/ld_far_b>` finds
+# ld_far_b there; the consumer starts in the copy, where that path does not exist.
+# BUILD_LIB_AT: ld_far_b.sushi -> dep/ld_far_b.slib
+# BUILD_LIB_AT: ld_far_pub.sushi -> ld_far_pub.slib
+# RUN_IN_FIXTURE_DIR
+# EXPECT_ERROR_CODES_EXACT: CE3502
+# EXPECT_STDERR_CONTAINS: "public use <lib/fixture/dep/ld_far_b>"
+use <lib/ld_far_pub>
+
+fn main() i32:
+    println("{a_val()}")
+    return 0

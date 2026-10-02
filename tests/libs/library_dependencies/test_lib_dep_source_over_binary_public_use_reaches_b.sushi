@@ -1,0 +1,11 @@
+# A source library says `public use <lib/ld_b>` over a binary ld_b. The consumer
+# imports A alone, and writes both names: the re-export gives b_val.
+# BUILD_LIB_BINARY: ld_b.sushi
+# BUILD_LIB: ld_a_pub.sushi
+# EXPECT_STDOUT_EXACT: "8\n7\n"
+use <lib/ld_a_pub>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0
