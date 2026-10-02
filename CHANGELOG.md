@@ -11,6 +11,23 @@ All notable changes to Sushi Lang will be documented in this file.
   of the `assert`, then the message. The message is any `string`, and the program builds
   it only on failure. An assert is always on, and `assert(false)` does not end the path.
   `assert` is a reserved word now. A message that is not a `string` is `CE2116`.
+
+- **Tuples.** `(i32, string)` is an anonymous product type, in every type position: a
+  parameter, a return (with a `| E` channel too), a field, a payload, a type argument
+  (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element, a function
+  type and a lambda parameter. `(42, "Arthur")` is the literal, and `t.0`, `t.0.1` read an
+  element; `t.0 := v` writes one and `nom t.0` takes one. A `let` destructures:
+  `let (i32 q, i32 r) = divmod(7, 2)`, `let (q, _) = ...`, `let ((a, b), c) = ...`. Each
+  binder owns its element from an owned value and borrows it from a borrow. A tuple
+  compares element by element (the orders are lexicographic), hashes, prints as
+  `(1, "a")`, clones, is a `HashMap` key, infers through a generic (`swap@(T, U)`) and
+  crosses a `.slib` of each kind. There is no tuple constant and no tuple `var`, by design.
+  A named element is `CE6105`, a bad element index `CE6106`, a mode on an element `CE6107`,
+  a destructure count `CE2116` and a destructure of a value that is not a tuple `CE2117`.
+  A `foreach` destructure, a destructuring rebind and a tuple pattern in a `match` parse,
+  and they are `CE6108` until they are supported. `CE2110` covers a tuple type as an
+  extension or perk-implementation target. See `docs/design/tuples.md`.
+
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;
   `fn(i32) -> i32[]` is still a function that returns `i32[]`, and a message prints the

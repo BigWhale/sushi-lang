@@ -1016,13 +1016,13 @@ let Box@(bool) b3 = Box(value: true)
 | A `T` that only the return type names is not inferred from the `let` annotation; write the type arguments | `CE2060` |
 | A generic static in a position that declares no type | `CE2060` |
 | A generic function value where nothing solves its type (`map(xs, identity)`) | `CE2060`, `CE2093` |
-| No pack forwarding (`g(pack...)`), no pack indexing, no tuples | `CE2060` |
+| No pack forwarding (`g(pack...)`) and no pack indexing; a value pack is not a tuple, so neither `(args...)` nor a tuple bloom exists | `CE2060` |
 | No variadic parameter in a perk method or an extension method | `CE0115` |
 | A native `...T` function cannot be exported through a `.slib` (a pack can) | `CE0116` |
 | A partially concrete target (`extend Pair@(i32, U)`) | `CE2098` |
 | A template and a concrete target for one method name | `CE0101` |
 | A static on an array target | `CE2104` |
-| A function type as an extension or perk-implementation target | `CE2110` |
+| A function type or a tuple type as an extension or perk-implementation target | `CE2110` |
 | A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | `CE2101` |
 | A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
 

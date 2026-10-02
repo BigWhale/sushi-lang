@@ -14,6 +14,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Error Handling](#error-handling)
 - [Collections](#collections)
 - [Structs and Enums](#structs-and-enums)
+- [Tuples](#tuples)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
 - [Units and Imports](#units-and-imports)
@@ -889,6 +890,56 @@ When you pattern match, the compiler generates a switch on the discriminant, the
 - **Error types**: Different error variants with relevant information
 - **Optional complex data**: Use `Maybe@(T)` (which is an enum) for values that might not exist
 - **Algebraic data types**: Build sophisticated recursive data structures
+
+## Tuples
+
+A tuple groups two or more values with no names. It is the shape for a function that
+returns more than one value:
+
+```sushi
+fn min_max(i32[] xs) (i32, i32):
+    let i32 low = xs[0]
+    let i32 high = xs[0]
+    foreach(x in xs.iter()):
+        if (x < low):
+            low := x
+        if (x > high):
+            high := x
+    return (low, high)
+
+fn main() i32:
+    let i32[] values = from([4, 8, 15, 16, 23, 42])
+    let (low, high) = min_max(values)       # a destructure: one name per element
+    println("{low} to {high}")              # 4 to 42
+
+    let (i32, string) answer = (42, "the answer")
+    println(answer.1)                       # an element read: .0, .1, ...
+    answer.0 := 43                          # an element write
+    println("{answer}")                     # (43, "the answer")
+    return 0
+```
+
+**Key features**:
+- **The type and the literal** are both written in parentheses: `(i32, string)` and
+  `(42, "Arthur")`. A tuple type stands wherever a type does: a parameter, a field, a type
+  argument (`List@((string, i32))`), an array element, and a return with a channel
+  (`fn divmod(i32 a, i32 b) (i32, i32) | MathError`)
+- **Element access** is `.0`, `.1`, ... and `.0.1` for a nested tuple. The index is a
+  literal, so `t[i]` is not a tuple access
+- **A destructure** takes a typed binder (`i32 q`), a bare binder (`q`), a `_` that
+  discards, or a nested destructure: `let ((a, b), c) = nested()`
+- **Ownership**: each binder OWNS its element when the value is owned (a temporary, or a
+  local that the destructure spends), and BORROWS it when the value is a borrow (a
+  parameter or a field). So a destructure takes two owned strings out of one value, which
+  two field reads cannot do
+- **Comparison, hashing and printing** come from the elements: `==` compares element by
+  element, `<` is lexicographic, and a tuple of hashable elements is a `HashMap` key
+
+**When to use a struct instead**: a value whose parts have a meaning (a point, a file
+status, a configuration) is a struct, because a struct names its fields. There are no
+named tuple elements, and there is no tuple constant.
+
+A destructure in a `foreach` and a swap with `(a, b) := (b, a)` are not supported yet.
 
 ## Pattern Matching
 

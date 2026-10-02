@@ -14,6 +14,7 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Control Flow](#control-flow)
 - [Arrays](#arrays)
 - [Structs](#structs)
+- [Tuples](#tuples)
 - [Enums](#enums)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
@@ -1362,6 +1363,131 @@ let Rectangle rect = Rectangle(
 
 println(rect.top_left.x)
 ```
+
+## Tuples
+
+A tuple is an anonymous, fixed-size product of two or more values of any types. Its type
+and its literal are both written in parentheses. The design record is
+[docs/design/tuples.md](design/tuples.md).
+
+### Type and Literal
+
+```sushi
+fn divmod(i32 a, i32 b) (i32, i32):
+    return (a / b, a % b)
+
+fn main() i32:
+    let (i32, string) t = (42, "Arthur")
+    let ((i32, i32), bool) nested = ((1, 2), true)
+    let (i32, i32) q = divmod(7, 2)
+    println("{t} {nested} {q.0}")       # (42, "Arthur") ((1, 2), true) 3
+    return 0
+```
+
+- A tuple type has two or more elements. `(T)` is grouping, as `(fn(i32) -> i32)[]` is,
+  and `~` is the unit type, so there is no one-element and no empty tuple.
+- A tuple type stands in every type position: a parameter, a return type (with or without a
+  `| E` channel), a struct field, an enum payload, a type argument
+  (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element
+  (`(i32, i32)[]`, `(i32, i32)[4]`), a function type and a lambda parameter.
+- A tuple type names no binding: `(i32 quot, i32 rem)` is **CE6105**. A record with names
+  is a struct. An element takes no mode either: `(peek i32, i32)` is **CE6107**.
+- A literal is two or more expressions in parentheses. Each element is a consuming
+  position, as an argument of a struct construction is.
+- A statement that has its own parentheses keeps them: `println(1, 2)` is a parse error,
+  and `println((1, 2))` prints a tuple.
+
+### Element Access
+
+An element is read with `.N`, a literal decimal index that starts at 0. `t.0.1` reads an
+element of a nested tuple. The index is a literal because the element type depends on it,
+so `t[i]` is not a tuple access.
+
+```sushi
+fn main() i32:
+    let (i32, (string, i32)) t = (1, ("deep", 2))
+    println(t.1.0)                      # deep
+    t.0 := 5                            # an element write, as a field write
+    println(t.0 + t.1.1)                # 7
+    return 0
+```
+
+The element access follows the struct field rules: a read is a borrow (consuming it is
+**CE2411**), a write consumes its value and destroys the old element, and `nom t.0` is a
+field take that spends all of `t` (see [Ownership Operations](#ownership-operations)). An
+index past the last element is **CE2106**, and a number with an underscore, an exponent or
+a leading zero (`t.0_1`, `t.1e3`, `t.01`) is **CE6106**.
+
+### Destructuring
+
+A `let` destructure splits a tuple into one binder per element:
+
+```sushi
+fn pair() (string, (i32, i32)):
+    return ("towel", (4, 2))
+
+fn main() i32:
+    let (string name, (a, b)) = pair()  # a typed binder, and a nested destructure
+    let (_, n) = (name, a * 10 + b)     # `_` discards an element
+    println(n)                          # 42
+    return 0
+```
+
+- An element is a typed binder (`i32 q`), a bare binder (`q`, which takes the element
+  type), a `_`, or a nested destructure. A typed binder of the wrong type is the type
+  mismatch of a `let` (**CE2002**).
+- The destructure names as many elements as the tuple has (**CE2116**), and only a tuple
+  destructures (**CE2117**). An unhandled `Result` is **CE2505**: take the value with
+  `??`, `.realise(default)` or `match` first.
+- A destructure element takes no mode: `let (peek i32 a, b) = t` is **CE6107**.
+- **Ownership.** Each binder OWNS its element when the value is owned: a temporary, or an
+  owned local, which the destructure spends whole (a later use of it is **CE2405**). Each
+  binder BORROWS its element when the value is a borrow: a parameter, a field, or a
+  binding. Consuming such a binder is **CE2411**, and a change of the owner while it lives
+  is **CE2412**. A `_` element of an owned value is destroyed at the destructure. This is
+  the one rule of [ruling 4](design/borrow-model.md#10e-the-fifth-boundary-a-tuple-destructure-binder): a
+  bare binder of a destructure owns, and a bare binding of a `match` pattern borrows.
+
+A destructure in a `foreach` and a destructuring rebind (`(a, b) := (b, a)`) are not
+supported yet (**CE6108**), and neither is a tuple pattern in a `match` arm.
+
+### Comparison, Hashing and Display
+
+A tuple derives `Eq`, `Ord`, `Display`, `hash()` and `clone()` from its elements, as a
+struct does from its fields:
+
+- `==` and `!=` compare element by element, and `<`, `<=`, `>`, `>=` are LEXICOGRAPHIC:
+  the first element that differs decides. Two tuples of different element types do not
+  compare (**CE2513**).
+- `hash()` reads the elements in order, so a tuple of hashable elements is a `HashMap` key.
+- A tuple prints as `(1, "a")`: the elements in order, a held string quoted.
+- `.clone()` is deep, and it is refused when an element declares a resource.
+
+### Generics
+
+A type parameter infers through a tuple, and a written `(T, U)` substitutes in a template:
+
+```sushi
+fn swap@(T, U)(nom (T, U) p) (U, T):
+    let (a, b) = p
+    return (b, a)
+
+fn main() i32:
+    let (i32, string) t = (42, "answer")
+    let (string, i32) s = swap(nom t)
+    println("{s}")                      # ("answer", 42)
+    return 0
+```
+
+### What a Tuple Is Not
+
+- There is no tuple constant and no tuple unit variable (see [Constants](#constants)).
+- A tuple has no C layout, so it is not a type of an FFI signature (**CE5003**).
+- A tuple type is not an extension target and not a perk-implementation target
+  (**CE2110**). Write a struct and extend it, or a free function that takes the tuple.
+- A tuple does not bloom into a variadic argument list (`f(t...)` is **CE2006**), and
+  `expand` walks a type pack and never a tuple.
+- A cast does not build a tuple (`x as (i32, i32)` is **CE2014**).
 
 ## Enums
 
@@ -2734,6 +2860,12 @@ Constants cannot use:
 - Dynamic arrays
 - A compile-time loop, so a generated table has to be spelled out element by element
 
+There is no tuple constant, by design: a tuple literal is not a constant expression, so
+`const (i32, i32) ORIGIN = (0, 0)` is **CE0108**. A value that a program keeps for its
+whole run and that has parts with a meaning is a struct constant. This is a decision of the
+tuple design ([ruling 11](design/tuples.md#9-rulings)), not a limitation that a later
+change removes.
+
 ```sushi
 # ERROR: Not allowed in constants
 const i32 X = get_value()     # CE0108: function calls forbidden
@@ -2803,6 +2935,10 @@ fn remember(nom string s) ~:
 
 `HashMap.new()` mallocs its buckets and is refused, and so is a `from([1, 2])` with
 elements (**CE0108** either way).
+
+There is no tuple unit variable, by design: its initializer would be a tuple literal, which
+is not a constant expression, so `var (i32, i32) cursor = (0, 0)` is **CE0108**, the rule
+of a [tuple constant](#restrictions).
 
 ### Borrowing, rebinding, and what is refused
 

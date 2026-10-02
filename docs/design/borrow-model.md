@@ -388,6 +388,31 @@ iteration OWNS -- the payload of a fresh `Maybe@(T)` nobody else frees. So the g
 (`eat(nom item)`), and a move of it does not travel the loop's back edge because the next
 iteration holds a new value.
 
+## 10e. The fifth boundary: a tuple destructure binder
+
+A `let` destructure (`let (a, b) = v`) splits a tuple into new names, and each name takes
+its element by the rule of `let x = v` read on the whole value
+([docs/design/tuples.md](tuples.md) section 5):
+
+| `v` is | each binder | who frees the element | `v` afterwards |
+|---|---|---|---|
+| a temporary (`make()`) | OWNS its element | the binder | -- |
+| a local this function OWNS | OWNS its element, and the destructure SPENDS `v` | the binder | CE2405 |
+| a borrow (a parameter, a field, a binding) | BORROWS its element; consuming it is CE2411, and a change of the owner while it lives is CE2412 | `v`'s owner | usable |
+
+A `_` element of an owned value is destroyed at the destructure, as a discarded payload of a
+whole-variant take is. A destructure element takes no mode (CE6107, decision D1 of the tuple
+design): the class of the whole decides.
+
+**Ruling 4 of the tuple design, stated here once.** A bare binder of a `let` destructure
+OWNS its element (when the value is owned), and a bare binding of a `match` pattern BORROWS
+its payload (section 10b). The two rules are different on purpose. A destructure takes the
+whole value apart, so no part is left behind in a half-moved value, and that solves the
+CE2411 problem of reading two owned halves out of one composite. A `match` reads a value
+that its scrutinee keeps, and taking a payload is the marked spelling, `nom`. A tuple
+pattern in a `match` (phase 3 of the tuple design) takes the section 10b modes: bare,
+`poke`, `nom`.
+
 ## 11. Not designed
 
 - **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
