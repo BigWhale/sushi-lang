@@ -14,8 +14,6 @@ class LibraryResolver:
     def __init__(self):
         self.search_paths = self._get_search_paths()
         self.loaded_libraries: dict[str, dict] = {}
-        # The `library_name` each `lib/...` path of the build's graph found (#1120).
-        self.library_names: dict[str, str] = {}
 
     def _get_search_paths(self) -> list[Path]:
         """Get library search paths."""

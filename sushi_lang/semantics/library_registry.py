@@ -11,6 +11,16 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
 
 
+def library_unit(lib_name: str, unit: str | None) -> str:
+    """The unit a compiled library's record is declared in, as `lib/<library>/<unit>`.
+
+    The name a source library's injected unit has, so one unit-keyed table and one
+    scope serve both kinds of library (#1120). `unit` is the record's `unit` key; a
+    record with none is of the library's only unit, which has the library's name.
+    """
+    return f"lib/{lib_name}/{unit or lib_name}"
+
+
 def manifest_reexports(manifest: dict) -> tuple[dict, ...]:
     """One library's `public use` records: `{"unit", "path", "kind"}` each (#585).
 
@@ -189,7 +199,7 @@ class LibraryRegistry:
         metadata.functions = self._parse_functions(manifest.get("public_functions", []),
                                                    lib_path=lib_path)
         metadata.export_units = {
-            func_info["name"]: f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            func_info["name"]: library_unit(lib_name, func_info.get("unit"))
             for func_info in manifest.get("public_functions", []) or []
         }
 
@@ -199,7 +209,7 @@ class LibraryRegistry:
         # consumer unit of the same name cannot collide with it in any per-unit table.
         templates = manifest.get("templates") or {}
         for func_info in templates.get("private_functions", []) or []:
-            unit = f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            unit = library_unit(lib_name, func_info.get("unit"))
             parsed = self._parse_functions([func_info], owner=unit, lib_path=lib_path)
             metadata.private_functions[(unit, func_info["name"])] = parsed[func_info["name"]]
 

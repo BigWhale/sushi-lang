@@ -916,8 +916,31 @@ found, and the consumer's build loads the whole graph (`_resolve_library_imports
 records. VISIBILITY is this section's rule and is not transitive: only a `public use` in
 A, or the consumer's own `use <lib/b>`, gives the consumer B's names. A plain `use
 <lib/b>` loads B for A's body and hands nothing on, so a bare `b_val()` at the consumer is
-CE2008. A compiled library that the build loaded for another library alone files its
-functions under its own units, so they are names only where a scope holds those units.
+CE2008.
+
+**A compiled library is a unit for the scope** (#1120). A source library's declarations
+are filed under its injected units (`lib/<library>/<unit>`), and a compiled library's
+are filed under the same names: each public function in `funcs.by_unit`, each public
+constant and unit variable in `constants.by_unit` (its `ConstSig.unit_name` is the
+library unit), and each public struct, enum and generic type as a visibility record of
+that unit (`library_registration.py`). So a compiled library's name reaches only a unit
+whose scope holds the library unit -- its own `use <lib/a>`, or a `public use` chain --
+and a second unit of the consumer that does not import the library hears CE2008, CE1001
+or CE2001, as for a source library.
+
+A copy of a compiled library's template lands in a unit of the consumer and still
+resolves the names of its body where the template was written. The `namespaces` step
+builds one table for each unit of each compiled library
+(`build_compiled_library_namespaces`): the units of the library, and every module and
+library of its `dependencies` records, plain or public. The manifest records the `use`
+statements of the library as a whole, so each unit of a library sees what any unit of
+it uses. The copy carries that unit as `scope_unit` (`generics/synthesis.py` for a
+function, `_library_scope` in the analyzer for an extension and a perk implementation, a
+lifted lambda from its owner), and a library constant that lands in a host unit carries
+it too. Each reader of a body asks `body_namespaces` and reads that table: the `scope`,
+`typecheck` and `borrow` passes and the backend (`LLVMCodegen.body_scope_unit`). The
+type arguments still come from the consumer, and the identity of an instance is still
+`(unit, name, type args)`.
 
 A library is identified by its stamped `library_name`, and the driver stamps every `use
 <lib/...>` with the name and the version that it found (`UseStatement.library_name`), so

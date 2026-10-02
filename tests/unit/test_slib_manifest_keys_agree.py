@@ -89,7 +89,10 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "_register_one_constant"): {"record": "constant"},
     (REGISTRATION, R + "_register_private_types"): {"record": "private_type"},
     (REGISTRATION, R + "_register_perk_impls"): {"record": "perk_impl", "m": "method"},
-    (REGISTRATION, R + "_register_generic_perk_impls"): {"record": "perk_impl"},
+    (REGISTRATION, R + "_register_generic_perk_impls"): {
+        "record": "perk_impl", "manifest": "manifest"},
+    (REGISTRATION, R + "_record_public_types"): {
+        "manifest": "manifest", "record": ("struct", "enum")},
     (REGISTRATION, R + "_register_extensions"): {"record": "extension"},
     (REGISTRATION, R + "_register_functions"): {
         "manifest": "manifest", "record": "function"},

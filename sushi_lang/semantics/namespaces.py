@@ -25,9 +25,10 @@ set, and both halves of the answer read it: `lookup`/`members` for the dot, and 
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import (AbstractSet, Any, Dict, Iterable, Mapping, Optional, Tuple,
-                    TypeVar)
+from typing import (AbstractSet, Any, Dict, Iterable, Iterator, Mapping, Optional,
+                    Tuple, TypeVar)
 
 from sushi_lang.internals.report import Span
 
@@ -57,8 +58,9 @@ class UnitScope:
     Three memberships, one per producer that can put a name into the flat scope: a
     compilation unit, a registry stdlib module, and the built-in generic an import
     activates. A declaration that belongs to no unit -- a monomorphized instance, a
-    lifted lambda, a binary library's record, every synthesized type -- is in scope
-    everywhere, which is the escape `visibility._permitted` takes for the same reason.
+    lifted lambda, every synthesized type -- is in scope everywhere, which is the
+    escape `visibility._permitted` takes for the same reason. A compiled library's
+    declaration belongs to its `lib/<library>/<unit>`, as a source library's does.
 
     `units` is a TUPLE in `use` order, so which declaration answers is decided the same
     way twice. A name two imports offer is `CE3012` at the use, and the reader that has a
@@ -413,9 +415,13 @@ class NamespaceTable:
     statement contributes to exactly one of them -- `as` is the gate.
     """
 
-    def __init__(self, scope: Optional[UnitScope] = None) -> None:
+    def __init__(self, scope: Optional[UnitScope] = None,
+                 library: Optional[str] = None) -> None:
         self._bound: Dict[str, _Bound] = {}
         self.scope: UnitScope = scope if scope is not None else UnitScope.unrestricted()
+        # The library this unit belongs to, for a unit of a source or a compiled
+        # library: the import that names it is `use <lib/<library>>`.
+        self.library = library
 
     def bind(self, alias: str, provider: Provider, loc: Optional[Span] = None) -> None:
         """Bind a namespace. The caller has already refused a collision (CE3013)."""
@@ -446,6 +452,41 @@ class NamespaceTable:
         return None if bound is None else bound.loc
 
 
+def body_namespaces(node: Any,
+                    tables: Optional[Mapping[str, NamespaceTable]]) -> Optional[NamespaceTable]:
+    """The table that the names of one body resolve in, when it is not its unit's.
+
+    A copy of a compiled library's template, and a constant that a compiled library
+    ships, land in a unit of the consumer and carry `scope_unit`: the library unit whose
+    declarations and imports the body names (#1120). Every other node answers None, and
+    its unit's own table holds.
+    """
+    unit = getattr(node, "scope_unit", None)
+    if unit is None or tables is None:
+        return None
+    return tables.get(unit)
+
+
+@contextmanager
+def in_body_scope(holder: Any, attr: str, node: Any,
+                  tables: Optional[Mapping[str, NamespaceTable]], *,
+                  as_scope: bool = False) -> Iterator[None]:
+    """Read one body in the table `body_namespaces` gives, then restore the holder.
+
+    `attr` is the holder's field: a `NamespaceTable`, or its `UnitScope` (`as_scope`).
+    """
+    table = body_namespaces(node, tables)
+    if table is None:
+        yield
+        return
+    saved = getattr(holder, attr)
+    setattr(holder, attr, table.scope if as_scope else table)
+    try:
+        yield
+    finally:
+        setattr(holder, attr, saved)
+
+
 def suggest_member(members: Iterable[str], written: str) -> Optional[str]:
     """The member a misspelt name most likely meant, or None when none is close.
 
@@ -472,14 +513,23 @@ def homed_enums(module_path: str, enum_table: Any) -> Dict[str, str]:
             if getattr(enum, "home_module", None) == module_path}
 
 
-def import_help(origin: str, *, stdlib: bool = False) -> str:
+def import_help(origin: str, *, stdlib: bool = False,
+                tables: Optional[Mapping[str, NamespaceTable]] = None) -> str:
     """The line that names the import an out-of-scope name needs (section 6.1).
 
     Section 6's refusal is an ordinary "no such name", because that is what it is: the
     name is not in this unit's scope. This line is what turns the refusal into a fix,
     and it is one line for every position, so a call, a type and a bare read all say
     the same thing.
+
+    `tables` says whether the unit `origin` belongs to a library. A library's unit is
+    named by the import of the library, `use <lib/<library>>`, and never by its unit
+    name.
     """
+    library = getattr(tables.get(origin), "library", None) if tables else None
+    if library is not None:
+        return (f"library '{library}' declares it; add `use <lib/{library}>` above "
+                f"to name it here")
     written = f"<{origin}>" if stdlib else f'"{origin}"'
     return f"'{origin}' declares it; add `use {written}` above to name it here"
 

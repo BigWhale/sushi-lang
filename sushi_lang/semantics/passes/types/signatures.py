@@ -18,6 +18,7 @@ from .control_flow import block_always_returns, reject_dead_statements
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.namespaces import in_body_scope
 
 
 # The positions `run()`'s per-declaration loop never reaches. A function, an
@@ -133,6 +134,11 @@ def _leave_body(self) -> None:
     self.in_synthesized_body = False
 
 
+def unit_tables(self):
+    """Every unit's namespace table, for a body that resolves in another unit's (#1120)."""
+    return getattr(getattr(self, "tables", None), "namespaces", None)
+
+
 def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
     """CE0107: a body that answers a value or a Result reaches its end with no `return`.
 
@@ -144,6 +150,11 @@ def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
 
 def validate_function(self, func: FuncDef) -> None:
     """Validate types within a function, or within a lambda the lift pass made one."""
+    with in_body_scope(self, "namespaces", func, unit_tables(self)):
+        _validate_function_body(self, func)
+
+
+def _validate_function_body(self, func: FuncDef) -> None:
     from sushi_lang.semantics.passes.lift import is_lifted_lambda
     self.current_function = func
     self.in_library_body = (self.in_library_unit
@@ -225,6 +236,11 @@ def _validate_method_body(self, target_type, method, synthesized: bool) -> None:
     An extension method and a perk-implementation method differ in one thing only: where
     the target type comes from -- the declaration itself, or the `extend X with P` header.
     """
+    with in_body_scope(self, "namespaces", method, unit_tables(self)):
+        _validate_method_statements(self, target_type, method, synthesized)
+
+
+def _validate_method_statements(self, target_type, method, synthesized: bool) -> None:
     self.current_function = None
     self.in_library_body = (self.in_library_unit
                             or bool(getattr(method, "is_library_template", False)))

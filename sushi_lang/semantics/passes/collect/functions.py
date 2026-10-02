@@ -231,6 +231,8 @@ class GenericFuncDef:
                                                  # by the resolve pass, as on `FuncDef` (#857)
     written_channel: Optional[bool] = None       # On an instance: the template's written
                                                  # channel, as on `FuncDef`
+    scope_unit: Optional[str] = None             # On an instance of a compiled library's
+                                                 # template: the scope it reads, as on `FuncDef`
 
 
 class Redeclaration(Enum):

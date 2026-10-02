@@ -360,7 +360,6 @@ def _resolve_library_imports(unit_manager: UnitManager, reporter: Reporter,
             return None
     print()
 
-    resolver.library_names = dict(names)
     _stamp_library_uses(unit_manager, names, loaded)
     _depend_on_compiled_libraries(unit_manager, compiled_dependencies, source_units,
                                   names)

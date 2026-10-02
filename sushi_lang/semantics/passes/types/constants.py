@@ -6,6 +6,7 @@ from typing import Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
+from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.type_predicates import holds_dynamic_array
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -29,7 +30,13 @@ def assignment_span(const: ConstDef) -> Optional[Span]:
 
 
 def validate_constant(self, const: ConstDef) -> None:
-    """Validate a constant definition."""
+    """Validate a constant definition, in the scope its initializer resolves in."""
+    from .signatures import unit_tables
+    with in_body_scope(self, "namespaces", const, unit_tables(self)):
+        _validate_constant(self, const)
+
+
+def _validate_constant(self, const: ConstDef) -> None:
     validate_type_name(self, const.ty, const.type_span)
 
     # Blank type cannot be used for constants

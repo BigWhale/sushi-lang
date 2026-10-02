@@ -29,15 +29,18 @@ class FunctionDefinitions:
         return llvm_fn
 
     def emit_body(self, llvm_fn: ir.Function, fn: FuncDef) -> None:
-        """Emit the body of `fn` into `llvm_fn`."""
+        """Emit the body of `fn` into `llvm_fn`, in the scope its names resolve in."""
         helpers = self.codegen.functions.helpers
         helpers.begin_function(llvm_fn, fn)
+        saved = self.codegen.body_scope_unit
+        self.codegen.body_scope_unit = getattr(fn, "scope_unit", None)
 
         self.codegen.statements.emit_block(fn.body)
 
         if self.codegen.builder.block.terminator is None:
             helpers.emit_fall_off(fn)
 
+        self.codegen.body_scope_unit = saved
         helpers.end_function()
 
     def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
@@ -84,10 +87,13 @@ class FunctionDefinitions:
                 self.codegen.memory.register_owning_value(
                     "self", ext.target_type, slot)
 
+        saved = self.codegen.body_scope_unit
+        self.codegen.body_scope_unit = getattr(ext, "scope_unit", None)
         self.codegen.statements.emit_block(ext.body)
 
         if self.codegen.builder.block.terminator is None:
             helpers.emit_fall_off(ext)
 
+        self.codegen.body_scope_unit = saved
         helpers.end_function()
         return llvm_fn

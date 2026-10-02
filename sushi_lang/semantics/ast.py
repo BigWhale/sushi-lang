@@ -241,6 +241,9 @@ class FuncDef(Node):
     # may have made a Result (a monomorphized instance, a lifted lambda). None on a
     # written declaration, which `channel.has_channel` reads directly.
     written_channel: Optional[bool] = None
+    # The `lib/<library>/<unit>` whose scope the names of this body resolve in: a copy
+    # of a compiled library's template, which lands in a unit of the consumer (#1120).
+    scope_unit: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -257,6 +260,9 @@ class ConstDef(Node):
     # consumer's copy of the global takes its symbol from this unit, not from the
     # unit that holds the copy; None for a constant this program declares.
     home_unit: Optional[str] = None
+    # The `lib/<library>/<unit>` whose scope the initializer of a compiled library's
+    # constant resolves in, and the unit the constant is a name of (#1120).
+    scope_unit: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -348,6 +354,8 @@ class ExtendDef(Node):
     # see `FuncDef`. A copy keeps both, so its body may call the library's privates.
     is_library_template: bool = False
     library_origin: Optional[Origin] = None
+    # The scope the names of the body resolve in; see `FuncDef`.
+    scope_unit: Optional[str] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:

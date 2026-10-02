@@ -293,7 +293,9 @@ an ordinary unit of a multi-unit program. `register_synthesized_function`
 backend gives it that unit's symbol prefix. A monomorphized extension copy follows the
 same rule (`ufcs-combinators.md`, "The home unit of a copy"). The one exception is a
 BINARY library's template: its units exist only at the producer, so its instance lands
-in the entry unit with no unit identity.
+in the entry unit with no unit identity. The instance keeps the library unit as
+`scope_unit` (#1120): the names of its body resolve in the scope of that unit, never in
+the scope of the entry unit (`docs/design/unit-namespaces.md` section 8.1).
 
 ### 4.7 What the source path does not solve
 
@@ -745,7 +747,9 @@ records carry them, both in `templates`, and every kind writes both.
   `_register_generic_extensions` re-parses the source and files it through the collect
   pass's own `FunctionCollector`. The analyzer cuts each copy, and the copy goes to the
   entry unit, because the template's unit is not a unit of the build (§4.6). The copy
-  carries `is_library_template`, so its body may call the library's privates.
+  carries `is_library_template`, so its body may call the library's privates, and
+  `scope_unit`, so its names resolve in the scope of the library unit (#1120). A
+  generic perk implementation of a library is the same: its methods carry both marks.
 
 One method name on one type from two libraries is CE0101 for every kind, with a note that
 names each library (`_reject_library_extension_clash`). The two bodies are two

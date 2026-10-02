@@ -126,6 +126,21 @@ kind of library:
    `b` and gives the consumer no name of it: a bare `b_val()` at the consumer is CE2008
    until the consumer writes `use <lib/b>`, or the library writes `public use <lib/b>`.
 
+Visibility is also PER UNIT, and it is the same for every kind of library. A library's
+public functions, constants, unit variables and types (concrete and generic) are names
+only in a unit of the consumer that imports the library itself, or that reaches it
+through a `public use` chain. If `main.sushi` writes `use <lib/a>` and `use "helper"`, a
+call of `a_val()` in `helper.sushi` is CE2008 until `helper.sushi` writes `use <lib/a>`
+too. A binary or hybrid library follows the rule of a source library here.
+
+A generic template of a library is copied at the consumer, with the type arguments of
+the call. The body of the copy resolves its names in the scope of the library unit that
+declares the template: the library's own declarations, and every library and stdlib
+module that the library uses, plain or public. So a template that calls `b_val()` works
+when the library loads `b` with a plain `use <lib/b>`, and the consumer still cannot
+call `b_val()` itself. The copy works also when the unit that holds it does not import
+the library.
+
 A library is identified by the `library_name` stamped into its `.slib`, not by the path
 that the search finds. One library that several paths reach -- the consumer and a
 library, or two libraries in a diamond -- is loaded once and gives one candidate for each

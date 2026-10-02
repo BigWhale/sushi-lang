@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import (TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Mapping, Optional,
+                    Set, Tuple)
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -16,6 +17,7 @@ from sushi_lang.semantics.generics.monomorphize.unroll import (
     WrittenLet, written_binder, written_let,
 )
 from sushi_lang.semantics.name_ladder import BareName, classify
+from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 
@@ -53,7 +55,7 @@ class VariableInfo:
 class ScopeAnalyzer:
     """The scope pass: scope and variable usage analysis."""
 
-    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None, function_tables: tuple[Any, ...] = ()) -> None:
+    def __init__(self, reporter: Reporter, constants: Optional[ConstantTable] = None, structs: Optional[StructTable] = None, enums: Optional[EnumTable] = None, generic_enums: Optional[GenericEnumTable] = None, generic_structs: Optional['GenericStructTable'] = None, external_table: Optional['ExternalTable'] = None, kept_constants: Optional[AbstractSet[str]] = None, namespaces: Optional['NamespaceTable'] = None, visibility: Optional['VisibilityTable'] = None, function_tables: tuple[Any, ...] = (), unit_namespaces: Optional[Mapping[str, 'NamespaceTable']] = None) -> None:
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         self.constants = constants or ConstantTable()
@@ -68,6 +70,8 @@ class ScopeAnalyzer:
         from sushi_lang.semantics.namespaces import externals_only
         self.namespaces = (namespaces if namespaces is not None
                            else externals_only(self.external_table))
+        # Every unit's table, for a body that resolves in a compiled library's (#1120).
+        self.unit_namespaces = unit_namespaces
         # A constant a binary library declares and keeps. It resolves to nothing here,
         # and "no such name" is the wrong word for a declaration the library has: the
         # type pass says whose it is (CE3005) once this pass lets the name through.
@@ -330,7 +334,7 @@ class ScopeAnalyzer:
         scope = self.namespaces.scope
         owner = next(iter(scope.declaring_units(name, self.constants.by_unit)), None)
         if owner is not None:
-            return import_help(owner)
+            return import_help(owner, tables=self.unit_namespaces)
         elsewhere = self._namespace_bound_elsewhere(name)
         if elsewhere is None:
             return None
@@ -396,10 +400,15 @@ class ScopeAnalyzer:
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""
-        self._check_expression(const.value)
+        with in_body_scope(self, "namespaces", const, self.unit_namespaces):
+            self._check_expression(const.value)
 
     def _check_function(self, func: FuncDef) -> None:
-        """Check a function definition."""
+        """Check a function definition, in the scope its names resolve in."""
+        with in_body_scope(self, "namespaces", func, self.unit_namespaces):
+            self._check_function_body(func)
+
+    def _check_function_body(self, func: FuncDef) -> None:
         # Whose body this is: the file its spans belong to (#471), and whether it is
         # one of many copies of one source (#648). One seam, set on every entry, so an
         # ordinary body clears what a transplanted or copied one set.
@@ -426,7 +435,11 @@ class ScopeAnalyzer:
         self._pop_scope()
 
     def _check_extension_method(self, ext: ExtendDef) -> None:
-        """Check an extension method definition."""
+        """Check an extension method definition, in the scope its names resolve in."""
+        with in_body_scope(self, "namespaces", ext, self.unit_namespaces):
+            self._check_extension_body(ext)
+
+    def _check_extension_body(self, ext: ExtendDef) -> None:
         self._push_scope()
 
         # Add implicit 'self' parameter first - this is the receiver of the method
@@ -456,7 +469,8 @@ class ScopeAnalyzer:
             for param in method.params:
                 self._declare_variable(param.name, param.name_span)
 
-            self._check_block(method.body)
+            with in_body_scope(self, "namespaces", method, self.unit_namespaces):
+                self._check_block(method.body)
             self._pop_scope()
 
     def _check_block(self, block: Block) -> None:
