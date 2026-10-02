@@ -1,0 +1,17 @@
+# A private type written only in a destructure binder and in a tuple type is used: the
+# dead-code lint reads both positions.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7 8\n"
+
+struct Coin:
+    i32 value
+
+struct Note:
+    i32 value
+
+fn main() i32:
+    let (Coin c, i32 n) = (Coin(7), 1)
+    let (Note, i32) pair = (Note(8), 2)
+    println("{c.value} {pair.0.value}")
+    return n + pair.1 - 3

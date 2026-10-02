@@ -1,0 +1,12 @@
+# A tuple type is not a perk-implementation target.
+# EXPECT_ERROR_CODES_EXACT: CE2110
+
+perk Sized:
+    fn size() i32
+
+extend (i32, i32) with Sized:
+    fn size() i32:
+        return 2
+
+fn main() i32:
+    return 0

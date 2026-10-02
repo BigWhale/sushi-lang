@@ -1,0 +1,6 @@
+# A tuple type names no binding: a `_` element is refused in a type position.
+# EXPECT_ERROR_CODES_EXACT: CE6105
+
+fn main() i32:
+    let (i32, _) t = (1, 2)
+    return t.0

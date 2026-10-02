@@ -1,0 +1,19 @@
+# A HYBRID library takes and returns tuples: a parameter, a return, a nested tuple, a
+# struct field, a channel return and a generic template over a tuple.
+# BUILD_LIB_HYBRID: tuple_hyb_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 arthur\nzaphod 1 2\n3 4 deep\n24 true\n9\n"
+use <lib/tuple_hyb_lib>
+
+fn main() i32:
+    let (i32 n, string s) = swap_pair(("arthur", 7))
+    println("{n} {s}")
+    let Crew c = make_crew(nom "zaphod", 2)
+    println("{c.captain.0} {c.captain.1} {c.size}")
+    let ((a, b), d) = nested()
+    println("{a} {b} {d}")
+    let (i32, bool) k = checked(12).realise((0, false))
+    println("{k.0} {k.1}")
+    println(pick((9, "x")))
+    return 0

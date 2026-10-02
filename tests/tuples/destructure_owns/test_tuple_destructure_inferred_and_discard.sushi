@@ -1,0 +1,16 @@
+# A bare binder takes the element type, and `_` discards an element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 1\n2\nx\n"
+
+fn divmod(i32 a, i32 b) (i32, i32):
+    return (a / b, a % b)
+
+fn main() i32:
+    let (q, r) = divmod(9, 4)
+    println("{q} {r}")
+    let (q2, _) = divmod(9, 4)
+    println(q2)
+    let (_, string s) = (1, "x")
+    println(s)
+    return 0

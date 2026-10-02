@@ -1,0 +1,26 @@
+# A tuple is a return type and a parameter type, in the borrow mode and in the `nom` mode.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 1\n42 Arthur\nMostly Harmless\n"
+
+fn divmod(i32 a, i32 b) (i32, i32):
+    return (a / b, a % b)
+
+fn named() (i32, string):
+    return (42, "Arthur")
+
+fn total((i32, i32) p) i32:
+    return p.0 + p.1
+
+fn greet(nom (string, string) p) string:
+    let (string a, string b) = p
+    return "{a} {b}"
+
+fn main() i32:
+    let (i32, i32) q = divmod(7, 2)
+    println("{q.0} {q.1}")
+    let (i32, string) n = named()
+    println("{n.0} {n.1}")
+    let (string, string) words = ("Mostly", "Harmless")
+    println(greet(nom words))
+    return total(q) - 4

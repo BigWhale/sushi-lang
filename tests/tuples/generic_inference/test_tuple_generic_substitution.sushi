@@ -1,0 +1,23 @@
+# A written `(T, U)` in a generic struct, a generic body and a generic return substitutes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7 seven\n("x", 1)\n3\n"
+
+struct Labelled@(T, U):
+    (T, U) both
+    i32 count
+
+fn pair_of@(T, U)(nom T a, nom U b) (T, U):
+    let (T, U) made = (a, b)
+    return made
+
+fn count_of@(T)(Labelled@(T, string) l) i32:
+    return l.count
+
+fn main() i32:
+    let Labelled@(i32, string) l = Labelled((7, "seven"), 3)
+    println("{l.both.0} {l.both.1}")
+    let (string, i32) p = pair_of(nom "x", nom 1)
+    println("{p}")
+    println(count_of(l))
+    return 0

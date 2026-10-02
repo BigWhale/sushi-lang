@@ -1,0 +1,12 @@
+# A tuple does not bloom into a variadic argument list.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+
+fn sum(...i32 xs) i32:
+    let i32 total = 0
+    foreach(x in xs.iter()):
+        total := total + x
+    return total
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    return sum(t...)

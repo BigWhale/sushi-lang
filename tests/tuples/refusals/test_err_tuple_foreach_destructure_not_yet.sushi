@@ -1,0 +1,8 @@
+# A `foreach` destructure is not supported yet.
+# EXPECT_ERROR_CODES_EXACT: CE6108
+
+fn main() i32:
+    let (i32, i32)[] pairs = from([(1, 2)])
+    foreach((a, b) in pairs.iter()):
+        println(a + b)
+    return 0

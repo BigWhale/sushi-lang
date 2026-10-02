@@ -1,0 +1,14 @@
+# `==` and `!=` compare element by element, and the orders are lexicographic by element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true false\ntrue true false\ntrue true\n"
+
+fn main() i32:
+    let (i32, string) a = (1, "b")
+    let (i32, string) b = (1, "b")
+    let (i32, string) c = (1, "c")
+    println("{a == b} {a != b}")
+    println("{a < c} {(0, 'z') < a} {c <= a}")
+    let ((i32, i32), i32) n = ((1, 2), 3)
+    println("{n > ((1, 1), 9)} {n >= ((1, 2), 3)}")
+    return 0

@@ -1,0 +1,8 @@
+# `expand` walks a type pack, never a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    expand(x in t):
+        println(x)
+    return 0

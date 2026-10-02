@@ -1,0 +1,29 @@
+# A user struct `_Tuple@(A, B)`, and one named `Tuple`, stand beside a real tuple of the same
+# element types. Each type keeps its own symbols: a generic function, the derived contracts
+# and the destructors of the three are not one.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "(1, "a")\n_Tuple(a: 1, b: "a")\nTuple(a: 1, b: "a")\ntrue true\n"
+
+struct _Tuple@(A, B):
+    A a
+    B b
+
+struct Tuple:
+    i32 a
+    string b
+
+fn show@(T)(T x) string:
+    return "{x}"
+
+fn main() i32:
+    let (i32, string) real = (1, "a")
+    let _Tuple@(i32, string) fake = _Tuple(1, "a")
+    let Tuple plain = Tuple(1, "a")
+    println(show(real))
+    println(show(fake))
+    println(show(plain))
+    let (i32, string) real2 = real.clone()
+    let _Tuple@(i32, string) fake2 = fake.clone()
+    println("{real2 == real} {fake2 == fake}")
+    return 0

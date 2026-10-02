@@ -1,0 +1,13 @@
+# A `let` takes a tuple type, a nested tuple type, and a tuple with three elements.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 2\n3 4 trillian\ntrue 2.5 7\n"
+
+fn main() i32:
+    let (i32, i32) p = (1, 2)
+    println("{p.0} {p.1}")
+    let ((i32, i32), string) nested = ((3, 4), "trillian")
+    println("{nested.0.0} {nested.0.1} {nested.1}")
+    let (bool, f64, u8) three = (true, 2.5, 7)
+    println("{three.0} {three.1} {three.2}")
+    return 0

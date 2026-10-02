@@ -1,0 +1,21 @@
+# An owning tuple literal: bound, passed by `nom`, returned, and dropped as a temporary.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab\n2\n1\n"
+
+fn make(string a) (string, string[]):
+    return (a.clone(), from([a.clone(), "x"]))
+
+fn consume(nom (string, string[]) p) i32:
+    return p.1.len()
+
+fn length((string, i32[]) p) i32:
+    return p.1.len()
+
+fn main() i32:
+    let string base = "a"
+    let (string, string) t = ("{base}b", "c")
+    println(t.0)
+    println(consume(nom make(base)))
+    println(length(("temporary", from([7]))))
+    return 0

@@ -1,0 +1,9 @@
+# A tuple pattern in a `match` arm is not supported yet.
+# EXPECT_ERROR_CODES_EXACT: CE6108
+
+fn main() i32:
+    let Maybe@((i32, i32)) m = Maybe.Some((1, 2))
+    match m:
+        Maybe.Some((a, b)) -> println(a + b)
+        Maybe.None -> println(0)
+    return 0

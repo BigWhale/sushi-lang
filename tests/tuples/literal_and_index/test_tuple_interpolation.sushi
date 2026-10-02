@@ -1,0 +1,13 @@
+# A tuple prints by its elements: in a hole, through println, nested, and as a literal.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "(43, "Arthur")\n(43, "Arthur")\n((1, 2), true)\n(7, 8)\n"
+
+fn main() i32:
+    let (i32, string) t = (43, "Arthur")
+    println("{t}")
+    println(t)
+    let ((i32, i32), bool) n = ((1, 2), true)
+    println("{n}")
+    println((7, 8))
+    return 0

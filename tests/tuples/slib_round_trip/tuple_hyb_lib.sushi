@@ -1,0 +1,22 @@
+# A library that takes and returns tuples in each public position.
+
+public struct Crew:
+    (string, i32) captain
+    i32 size
+
+public fn swap_pair((string, i32) p) (i32, string):
+    return (p.1, p.0.clone())
+
+public fn make_crew(nom string name, i32 size) Crew:
+    return Crew((name, 1), size)
+
+public fn nested() ((i32, i32), string):
+    return ((3, 4), "deep")
+
+public fn checked(i32 n) (i32, bool) | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok((n * 2, n > 10))
+
+public fn pick@(T, U)((T, U) p) T:
+    return p.0

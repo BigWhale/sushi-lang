@@ -1,0 +1,10 @@
+# A typed binder takes the element type, or it is the type mismatch of a `let`.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn pair() (i32, i32):
+    return (1, 2)
+
+fn main() i32:
+    let (string a, i32 b) = pair()
+    println(a)
+    return b

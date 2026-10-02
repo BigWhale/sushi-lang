@@ -1,0 +1,39 @@
+# A destructure binder is an ordinary local: a lambda captures it, a lambda body
+# destructures, a field take feeds a destructure, and each unrolled `expand` copy keeps
+# binders of its own.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n3\nheart 4\n1 int\n2 int\n"
+use <collections/strings>
+
+perk Render:
+    fn display() string
+
+extend i32 with Render:
+    fn display() string:
+        return "int"
+
+struct Holder:
+    (string, i32) pair
+    string tag
+
+fn show_all@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        let (n, s) = (a, a.display())
+        println("{n} {s}")
+
+fn main() i32:
+    let string seed = "x"
+    let (string, i32) t = ("{seed}y", 3)
+    let (s, n) = t
+    let fn(i32) -> i32 add = |i32 k| k + n
+    println(add(1))
+    let fn(i32) -> i32 halves = |i32 k|:
+        let (q, r) = (k / 2, k % 2)
+        return q + r
+    println(halves(5))
+    let Holder h = Holder(("heart", 4), "{seed}tag")
+    let (word, count) = nom h.pair
+    println("{word} {count}")
+    show_all(1, 2)
+    return s.len() - 2

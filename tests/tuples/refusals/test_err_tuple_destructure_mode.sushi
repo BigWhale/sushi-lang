@@ -1,0 +1,8 @@
+# A destructure element takes no mode (`peek`, `poke`): a binder is a value or a borrow by
+# the rule of its source.
+# EXPECT_ERROR_CODES_EXACT: CE6107
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    let (peek i32 a, b) = t
+    return b

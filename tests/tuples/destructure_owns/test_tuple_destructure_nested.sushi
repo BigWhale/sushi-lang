@@ -1,0 +1,14 @@
+# A nested destructure: a nested element splits again, with typed and bare binders.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 two 3\n4 6\n"
+
+fn g() ((i32, string), i32):
+    return ((1, "two"), 3)
+
+fn main() i32:
+    let ((a, b), c) = g()
+    println("{a} {b} {c}")
+    let ((i32 x, _), (_, i32 y)) = ((4, "five"), ("six", 6))
+    println("{x} {y}")
+    return 0

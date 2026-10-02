@@ -1,0 +1,11 @@
+# A literal inside an enum payload pattern is part of the tuple-pattern work, and is not
+# supported yet.
+# EXPECT_ERROR_CODES_EXACT: CE6108
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    match m:
+        Maybe.Some(0) -> println(0)
+        Maybe.Some(n) -> println(n)
+        Maybe.None -> println(2)
+    return 0

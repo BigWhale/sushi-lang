@@ -1,0 +1,6 @@
+# An element index is a plain decimal number: `t.1e3` is refused.
+# EXPECT_ERROR_CODES_EXACT: CE6106
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    return t.1e3

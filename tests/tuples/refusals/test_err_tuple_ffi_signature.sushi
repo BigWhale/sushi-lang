@@ -1,0 +1,8 @@
+# A tuple has no C layout, so it is not a type of an FFI signature.
+# EXPECT_ERROR_CODES_EXACT: CE5003, CE5003
+
+unsafe external "C" as libc because "probe":
+    fn labs((i64, i64) n) (i64, i64) = "labs"
+
+fn main() i32:
+    return 0

@@ -1,0 +1,27 @@
+# A tuple is a struct field type and an enum payload type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3 4\n5 6\nnone\nzaphod 2\n"
+
+struct Segment:
+    (i32, i32) start
+    (i32, i32) end
+
+enum Shape:
+    Pt((i32, i32))
+    Label((string, i32))
+    Empty
+
+fn describe(Shape s) ~:
+    match s:
+        Shape.Pt(p) -> println("{p.0} {p.1}")
+        Shape.Label(l) -> println("{l.0} {l.1}")
+        Shape.Empty -> println("none")
+
+fn main() i32:
+    let Segment seg = Segment((3, 4), (5, 6))
+    println("{seg.start.0} {seg.start.1}")
+    describe(Shape.Pt(seg.end))
+    describe(Shape.Empty)
+    describe(Shape.Label(("zaphod", 2)))
+    return 0

@@ -1,0 +1,8 @@
+# A tuple type is not an extension target.
+# EXPECT_ERROR_CODES_EXACT: CE2110
+
+extend (i32, i32) total() i32:
+    return self.0 + self.1
+
+fn main() i32:
+    return 0

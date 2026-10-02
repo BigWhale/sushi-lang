@@ -1,0 +1,13 @@
+# A binder of a destructure of a field borrows the owner, so a change of the owner is refused
+# while the binder lives.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+struct Ship:
+    (string, string) name
+
+fn main() i32:
+    let Ship s = Ship(("heart of", "gold"))
+    let (a, _) = s.name
+    s := Ship(("vogon", "poetry"))
+    println(a)
+    return 0

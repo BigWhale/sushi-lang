@@ -1,0 +1,15 @@
+# `nom t.0` takes one owning element out of a local tuple and spends the tuple.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly\nHarmless\n"
+
+fn keep(nom string s) string:
+    return s
+
+fn main() i32:
+    let (string, string) t = ("Mostly", "Harmless")
+    let string first = nom t.0
+    println(first)
+    let (string, i32) u = ("Harmless", 2)
+    println(keep(nom u.0))
+    return 0

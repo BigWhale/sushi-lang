@@ -1,0 +1,9 @@
+# A destructure of an owned local spends it whole, so a later use of the local is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+fn main() i32:
+    let (string, string) t = ("ford", "prefect")
+    let (a, b) = t
+    println("{a} {b}")
+    println(t.0)
+    return 0
