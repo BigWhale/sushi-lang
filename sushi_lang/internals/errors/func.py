@@ -119,6 +119,10 @@ _add(ErrorMessage("CE0125", Severity.ERROR,
     "internal error: borrow checker has no arm for expression node '{node}'",
     Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
 
+_add(ErrorMessage("CE0143", Severity.ERROR,
+    "internal error: the {kind} call '{name}' behind a namespace has no parameter modes",
+    Category.INTERNAL, "The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. It is fatal ON PURPOSE: the borrow pass skipped such a call with no diagnostic, so a generic call behind an alias lost the CE2427 marker check and the back end then found no ownership decision for a `nom` argument (CE0129, #1125)."))
+
 _add(ErrorMessage("CE0131", Severity.ERROR,
     "'??' operator not allowed in {context}: it returns a bare value and has no error channel",
     Category.FUNC, "A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E) (docs/design/error-channel.md). A BARE function, method or lambda returns the value itself (CE2091), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body (#399). 'main' is bare, so this replaced the CW2511 warning for a ?? in main."))

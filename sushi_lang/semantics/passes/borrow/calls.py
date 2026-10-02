@@ -289,6 +289,11 @@ def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
+# A function behind a dot always carries its modes: the typecheck pass stamps them for
+# each of these kinds. A built-in static behind a dot (`hm.HashMap.new()`) declares none.
+_NAMESPACED_FUNCTION_KINDS = frozenset({"function", "generic function"})
+
+
 def settle_namespaced_args(checker: 'BorrowChecker', expr: DotCall) -> None:
     """A name written through a namespace follows the modes its KIND declares.
 
@@ -305,6 +310,8 @@ def settle_namespaced_args(checker: 'BorrowChecker', expr: DotCall) -> None:
 
     modes = expr.callee_param_modes
     if modes is None:
+        if ref is not None and ref.kind in _NAMESPACED_FUNCTION_KINDS:
+            er.raise_internal_error("CE0143", name=ref.name, kind=ref.kind)
         return
     for i, arg in enumerate(expr.args):
         apply_mode(checker, expr, arg, i, modes, CalleeKind.FUNCTION)
