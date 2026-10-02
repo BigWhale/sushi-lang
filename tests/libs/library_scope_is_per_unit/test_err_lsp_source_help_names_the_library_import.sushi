@@ -1,0 +1,11 @@
+# The help of the refusal names the import that the second unit needs: the
+# source library, as a `use <lib/...>` line.
+# BUILD_LIB: lsp_a.sushi
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: add `use <lib/lsp_a>` above to name it here
+use <lib/lsp_a>
+use "lsp_helper_function"
+
+fn main() i32:
+    println("{a_val()} {helper_val()}")
+    return 0
