@@ -1,0 +1,15 @@
+# Two binary libraries that both measure and compare strings, in a consumer of two
+# units. Each library defines the string runtime functions it uses, and so does each
+# consumer unit; the linker keeps one copy of each.
+# BUILD_LIB_BINARY: duo_text_b.sushi, duo_text_c.sushi
+# EXPECT_STDOUT_EXACT: "6 true\n"
+use <lib/duo_text_b>
+use <lib/duo_text_c>
+use "duo_text_helper"
+
+fn main() i32:
+    let string m = "Mostly"
+    let string s = "harmless"
+    let string t = "harmless"
+    println("{b_len(m)} {same_len(s, t)}")
+    return 0

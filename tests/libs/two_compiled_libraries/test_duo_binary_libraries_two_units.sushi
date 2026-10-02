@@ -1,0 +1,12 @@
+# Two binary libraries that do not depend on each other, in a consumer of two units.
+# The incremental build gives each library its own object to the linker, so a runtime
+# function that both libraries define must not be a strong symbol in either.
+# BUILD_LIB_BINARY: duo_lib_b.sushi, duo_lib_c.sushi
+# EXPECT_STDOUT_EXACT: "7 3\n"
+use <lib/duo_lib_b>
+use <lib/duo_lib_c>
+use "duo_helper"
+
+fn main() i32:
+    println("{b_val()} {h()}")
+    return 0
