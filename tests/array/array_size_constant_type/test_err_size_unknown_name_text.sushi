@@ -1,0 +1,8 @@
+# A name that the unit does not declare keeps its text (#1107).
+# EXPECT_ERROR_CODE: CE2099
+# EXPECT_STDERR_CONTAINS: "no integer constant of this unit is named 'M'"
+
+fn main() i32:
+    let i32[M] a = [1, 2, 3]
+    println(a.len())
+    return 0
