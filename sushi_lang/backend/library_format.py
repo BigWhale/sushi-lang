@@ -311,6 +311,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("dependency", "kind", "str", "yes"),
     ("dependency", "library_name", "str", "no"),
     ("dependency", "library_version", "str", "no"),
+    ("dependency", "units", "strs", "no"),
     ("foreign_extension", "type", "str", "yes"),
     ("foreign_extension", "method", "str", "yes"),
 )

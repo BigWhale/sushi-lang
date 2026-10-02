@@ -24,6 +24,7 @@ PIPELINE = "sushi_lang/compiler/pipeline.py"
 REGISTRATION = "sushi_lang/semantics/library_registration.py"
 REGISTRY = "sushi_lang/semantics/library_registry.py"
 LIB_INFO = "sushi_lang/compiler/lib_info.py"
+NAMESPACES = "sushi_lang/semantics/passes/namespaces.py"
 
 G = "LibraryManifestGenerator."
 R = "LibraryRegistration."
@@ -107,6 +108,8 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRY, "manifest_dependencies"): {},
     (REGISTRY, "library_dependencies"): {"record": "dependency"},
     (REGISTRY, "stdlib_dependencies"): {"record": "dependency"},
+    (NAMESPACES, "build_compiled_library_namespaces"): {"record": "dependency"},
+    (NAMESPACES, "_dependency_use"): {"record": "dependency"},
     (REGISTRY, Y + "register_library"): {
         "manifest": "manifest", "templates": "templates", "func_info": "function",
         "record": "not_exported"},
@@ -173,7 +176,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "example": {"code", "caption"},
     "reexport": {"unit", "path", "kind"},
     "foreign_extension": {"type", "method"},
-    "dependency": {"path", "kind", "library_name", "library_version"},
+    "dependency": {"path", "kind", "library_name", "library_version", "units"},
 }
 
 # A read no writer answers, known and not yet fixed. It may only shrink.

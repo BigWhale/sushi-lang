@@ -135,7 +135,7 @@ authority, and the index is a cache of it.
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
-| `dependencies` | one record per stdlib module the build uses (`kind: "stdlib"`) and per `use <lib/...>` of the library's own units, plain or public (`kind: "library"`, with the `library_name` and the `library_version` that the build found). The consumer's build loads every library of the graph from these records, and `--lib-info` lists them (§5.8, #1120) |
+| `dependencies` | one record per stdlib module the build uses (`kind: "stdlib"`) and per `use <lib/...>` of the library's own units, plain or public (`kind: "library"`, with the `library_name` and the `library_version` that the build found). The consumer's build loads every library of the graph from these records, and `--lib-info` lists them (§5.8, #1120). Each record names in `units` the library's own units that write the `use`: at the consumer, the namespace table of a unit of the library reads only the records that name it, so a template copy sees the imports of its own unit and not the imports of another unit (#1123) |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
 declarations. `_extract_public_functions` and `_extract_public_types` (structs and enums) both
@@ -724,6 +724,10 @@ as the consumer's own units are.
   consumer of A still needs its own `use <lib/b>` to write a name of B. A `public use
   <lib/b>` hands B's names on (§5). Loading is transitive, visibility is not (#1120); see
   `docs/libraries.md`, Library Dependencies.
+- **The imports of one unit, to another unit of the same library** — a copy of a
+  template resolves its body in the scope of the unit that declares the template. That
+  scope holds the `dependencies` records whose `units` name the unit, and no other
+  record, so a binary library has the per-unit scope of a source library (#1123).
 
 ### 5.9 Extension methods
 

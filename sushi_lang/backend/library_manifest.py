@@ -1057,9 +1057,15 @@ class LibraryManifestGenerator:
         (#1120), with the name and the version of the `.slib` that this build found for
         the path: the consumer loads the whole graph, and a second version of one
         library in it is CE3519. An injected source library records its own uses.
+
+        `units` names the library's own units that write the `use` (#1123). The load
+        and the version check read the record whole; the consumer gives each unit of
+        the library only the records that name it. A module that only a unit the
+        library does not own uses has an empty list.
         """
-        modules: set[str] = set()
+        modules: dict[str, set[str]] = {}
         libraries: dict[str, dict] = {}
+        writers: dict[str, set[str]] = {}
         own = {unit.name for unit in own_units(units)}
 
         for unit in units:
@@ -1067,13 +1073,18 @@ class LibraryManifestGenerator:
                 continue
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
-                    modules.add(use_stmt.path)
-                elif (use_stmt.is_library and unit.name in own
-                      and use_stmt.path not in libraries):
-                    libraries[use_stmt.path] = {
-                        "path": use_stmt.path, "kind": "library",
-                        "library_name": use_stmt.library_name or "",
-                        "library_version": use_stmt.library_version or ""}
+                    users = modules.setdefault(use_stmt.path, set())
+                    if unit.name in own:
+                        users.add(unit.name)
+                elif use_stmt.is_library and unit.name in own:
+                    writers.setdefault(use_stmt.path, set()).add(unit.name)
+                    if use_stmt.path not in libraries:
+                        libraries[use_stmt.path] = {
+                            "path": use_stmt.path, "kind": "library",
+                            "library_name": use_stmt.library_name or "",
+                            "library_version": use_stmt.library_version or ""}
 
-        return ([{"path": path, "kind": "stdlib"} for path in sorted(modules)]
-                + [libraries[path] for path in sorted(libraries)])
+        return ([{"path": path, "kind": "stdlib", "units": sorted(modules[path])}
+                 for path in sorted(modules)]
+                + [{**libraries[path], "units": sorted(writers[path])}
+                   for path in sorted(libraries)])
