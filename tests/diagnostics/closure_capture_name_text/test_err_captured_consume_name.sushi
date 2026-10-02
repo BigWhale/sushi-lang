@@ -1,0 +1,16 @@
+# A lambda body that consumes a captured value names the variable as it is written,
+# not the hidden environment of the closure.
+# EXPECT_ERROR_CODE: CE2411
+# EXPECT_STDERR_CONTAINS: "cannot consume 's'"
+# EXPECT_STDERR_CONTAINS: "`s.clone()`"
+# EXPECT_STDERR_CONTAINS: "the closure owns this value"
+
+fn take(nom string s) i32:
+    return 1
+
+fn main() i32:
+    let string s = "Mostly Harmless".clone()
+    let fn() -> i32 f = |~|:
+        return take(nom s)
+    println(f())
+    return 0

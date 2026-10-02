@@ -1,4 +1,5 @@
-"""The borrow pass's diagnostics name the written local of an `expand` copy (#1022).
+"""The borrow pass's diagnostics name the written local of an `expand` copy (#1022),
+and the written name of a variable that a lambda captures.
 
 The unroll gives each top-level `let` of an `expand` copy a hidden name, and every
 copy of one written `let` carries one `WrittenLet` record. The loop variable becomes
@@ -28,15 +29,35 @@ from sushi_lang.semantics.generics.monomorphize.unroll import (
     WrittenLet, written_span, written_variable,
 )
 from sushi_lang.semantics.hidden_names import HIDDEN_MARK
+from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 
 if TYPE_CHECKING:
     from .state import BorrowState
 
 _HIDDEN_NAME = re.compile(re.escape(HIDDEN_MARK) + r"\w+")
+# A lifted lambda reads a captured `s` as `#closure_env.s`; the environment alone is the
+# closure, quoted or not.
+_CAPTURED_FIELD = re.compile(re.escape(ENV_PARAM_NAME) + r"\.(\w+)")
+_CLOSURE_ENV = re.compile("'?" + re.escape(ENV_PARAM_NAME) + r"\b'?")
+
+
+def _env_as_its_capture(kwargs: dict) -> dict:
+    """The environment as an argument names the one captured variable the others name.
+
+    The borrow state of a lifted lambda is the environment whole, so `xs.push(x)` in a
+    walk of `xs.iter()` changes `#closure_env`; the user wrote `xs`.
+    """
+    captured = {name for value in kwargs.values() if isinstance(value, str)
+                for name in _CAPTURED_FIELD.findall(value)}
+    if len(captured) != 1:
+        return kwargs
+    (name,) = captured
+    return {key: name if value == ENV_PARAM_NAME else value for key, value in kwargs.items()}
 
 
 class WrittenNameReporter(PassErrorReporter):
-    """`PassErrorReporter` that prints the written name of each `expand` copy local."""
+    """`PassErrorReporter` that prints the written name of each `expand` copy local and
+    each captured variable."""
 
     def __init__(self, reporter: Reporter,
                  states: Callable[[], Dict[str, 'BorrowState']]) -> None:
@@ -64,11 +85,14 @@ class WrittenNameReporter(PassErrorReporter):
         if self.suppressed or self._told_before(error_msg.code, span, kwargs.values()):
             return _NullDiagnosticBuilder()  # type: ignore[return-value]
         shown = {key: self.shown(value) if isinstance(value, str) else value
-                 for key, value in kwargs.items()}
+                 for key, value in _env_as_its_capture(kwargs).items()}
         return _WrittenNameBuilder(super().emit_with(error_msg, span, **shown), self)
 
     def shown(self, text: str) -> str:
-        """``text`` with each copy local of this body spelled as it is written."""
+        """``text`` with each copy local and each captured variable of this body spelled
+        as it is written."""
+        text = _CAPTURED_FIELD.sub(r"\1", text)
+        text = _CLOSURE_ENV.sub("the closure", text)
         return _HIDDEN_NAME.sub(lambda m: self._written_name(m.group(0)), text)
 
     def _written_name(self, name: str) -> str:
