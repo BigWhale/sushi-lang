@@ -1,0 +1,4 @@
+public use "psu_pk"
+
+public fn touch_pub() i32:
+    return 0

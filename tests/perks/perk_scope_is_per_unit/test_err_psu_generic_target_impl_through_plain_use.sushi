@@ -1,0 +1,17 @@
+# A perk implementation on a generic target, through another unit's plain `use`:
+# the template is refused one time.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+use "psu_mid"
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.name())
+    return touch()

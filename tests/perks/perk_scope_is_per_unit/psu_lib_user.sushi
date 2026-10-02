@@ -1,0 +1,4 @@
+use <lib/psu_lib>
+
+public fn lib_touch() i32:
+    return lib_zero()

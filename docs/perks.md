@@ -572,7 +572,7 @@ Perk-related compiler errors:
 |------|-------------|---------|
 | CE4001 | Duplicate perk definition | Declaring `Displayable` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
 | CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
-| CE4003 | Unknown perk | `extend Point with UnknownPerk:` |
+| CE4003 | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
 | CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
 | CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
 | CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with a type that is not `Hashable`. Reported one time, at the type that names the instantiation, with a note at the constraint |

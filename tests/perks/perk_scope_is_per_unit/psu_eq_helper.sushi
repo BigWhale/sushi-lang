@@ -1,0 +1,13 @@
+public struct Coin:
+    i32 v
+
+extend Coin with Eq:
+    fn eq(Coin other) bool:
+        return self.v == other.v
+
+extend Coin with Display:
+    fn to_str() string:
+        return "coin {self.v}"
+
+public fn same_coin(Coin a, Coin b) bool:
+    return a == b

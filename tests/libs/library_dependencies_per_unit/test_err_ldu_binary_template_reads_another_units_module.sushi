@@ -1,0 +1,10 @@
+# A binary library of two units. The second unit imports a stdlib module and the
+# entry unit does not, so the entry unit's template cannot call what the module
+# declares.
+# BUILD_LIB_BINARY: ldu_fs.sushi
+# EXPECT_ERROR_CODE: CE2008
+use <lib/ldu_fs>
+
+fn main() i32:
+    println("{gen_fs(1)}")
+    return 0

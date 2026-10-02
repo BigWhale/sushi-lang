@@ -1342,12 +1342,15 @@ fn print_dependency_list(MsgValue deps, Opts o) ~:
         MsgValue.Arr(items) ->
             foreach(d in items.iter()):
                 let string path = get_str(d, "path")
+                let string line = "  <{path}>"
                 if (get_str(d, "kind") == "library"):
                     let string name = or_unknown(nom get_str(d, "library_name"))
                     let string version = or_unknown(nom get_str(d, "library_version"))
-                    println("  <{path}> ({name} {version})")
-                else:
-                    println("  <{path}>")
+                    line := "{line} ({name} {version})"
+                let string users = join_at(d, "units", ", ")
+                if (users.len() > 0):
+                    line := "{line}, used by {users}"
+                println(line)
         _ ->
             return ~
     println("")

@@ -1,7 +1,7 @@
 # The perk is declared by a unit of this program and this unit did not import it,
-# so the bare name is not writable here. The per-unit scope rule answers, with its
-# own code, and the existence check never runs (#505).
-# EXPECT_ERROR_CODE: CE2001
+# so the bare name is not writable here. The per-unit scope rule answers with the
+# unknown-perk code and the import in the help (#505, #1124).
+# EXPECT_ERROR_CODE: CE4003
 use "helpers/user"
 
 fn shout@(T: Loud)(T x) i32:

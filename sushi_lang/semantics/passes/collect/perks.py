@@ -28,6 +28,9 @@ class PerkTable:
     # The unit each perk was defined in. A PerkDef is an AST node and carries no file,
     # and a duplicate is reported while ANOTHER unit is being collected (#473).
     files: Dict[str, Optional[str]] = field(default_factory=dict)
+    # The `lib/<library>/<unit>` key of each perk a compiled library ships. Such a perk
+    # has no visibility record, and the scope of a unit is asked for this key (#1124).
+    library_units: Dict[str, str] = field(default_factory=dict)
 
     def register(self, perk: PerkDef) -> bool:
         """Register a perk. Returns False if duplicate."""
@@ -627,7 +630,12 @@ class PerkCollector:
             return False
 
         if not self.perks.get(perk_name):
+            # The one diagnostic of the fault. Its calls stay silent.
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
+            from sushi_lang.semantics.generics.types import GenericTypeRef
+            self._refuse_methods(target_type.base_name
+                                 if isinstance(target_type, GenericTypeRef)
+                                 else type_name, impl)
             return False
 
         if perk_name == self.DROP_PERK and self._reject_bad_drop_target(

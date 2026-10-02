@@ -1,0 +1,4 @@
+use <lib/ldu_b>
+
+public fn two() i32:
+    return b_val()
