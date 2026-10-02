@@ -2,7 +2,10 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree
-from sushi_lang.semantics.ast import Let, Rebind
+from itertools import count
+
+from sushi_lang.semantics.ast import Let, Rebind, TupleLiteral
+from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_token, first_tree, ice, is_type_node, mark_nom)
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES, statement_expr
@@ -49,6 +52,36 @@ def parse_let_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Let:
     )
 
 
+# One counter for the process: each destructure binds the whole tuple under a name the
+# grammar refuses, so it collides with nothing a user writes.
+_destructure_ids = count()
+
+
+def parse_let_destructure(node: Tree, ast_builder: 'ASTBuilder') -> Let:
+    """Parse let_destructure: LET tuple_list "=" NOM? expr (docs/design/tuples.md).
+
+    The `Let` binds the whole value under a hidden name with no span, so it is never
+    CW1001, and its targets split it.
+    """
+    from sushi_lang.semantics.ast_builder.types.tuples import parse_destructure_targets
+
+    tuple_list = first_tree(node.children, "tuple_list")
+    expr_node = statement_expr(node)
+    if tuple_list is None or expr_node is None:
+        ice(node, "let_destructure expects a tuple_list and an expression")
+    value = ast_builder._expr(expr_node)
+    nom = first_token(node.children, "NOM")
+    if nom is not None:
+        mark_nom(value, nom)
+    return Let(
+        name=hidden_name("tuple", next(_destructure_ids)),
+        ty=None,
+        value=value,
+        targets=parse_destructure_targets(tuple_list, ast_builder),
+        loc=span_of(node),
+    )
+
+
 def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
     """Parse rebind_stmt: postfix ":=" expr"""
     target_node = first_tree(node.children, "maybe_call")
@@ -66,4 +99,8 @@ def parse_rebind_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Rebind:
     if expr_node is None:
         ice(node, "value expression missing")
 
-    return Rebind(target=ast_builder._expr(target_node), value=ast_builder._expr(expr_node), loc=span_of(node))
+    target = ast_builder._expr(target_node)
+    if isinstance(target, TupleLiteral):
+        from sushi_lang.semantics.ast_builder.statements.matching import not_yet
+        raise not_yet(target_node, "a destructuring rebind")
+    return Rebind(target=target, value=ast_builder._expr(expr_node), loc=span_of(node))

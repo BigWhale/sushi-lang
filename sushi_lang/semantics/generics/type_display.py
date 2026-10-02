@@ -1,6 +1,8 @@
 """Human-facing type rendering: the `@(...)` display form."""
 from __future__ import annotations
 
+import re
+
 from sushi_lang.semantics.typesys import (
     ArrayType,
     DynamicArrayType,
@@ -23,6 +25,11 @@ from sushi_lang.semantics.generics.types import (
 
 def display_type(ty) -> str:
     """Render a type in the canonical `@(...)` surface form for diagnostics."""
+    from sushi_lang.semantics.generics.tuples import (
+        display_tuple, is_tuple_type, tuple_elements)
+    if is_tuple_type(ty) and not isinstance(ty, ReferenceType):
+        return display_tuple(display_type(element) for element in tuple_elements(ty))
+
     if isinstance(ty, (StructType, EnumType)):
         if ty.generic_base is not None and ty.generic_args is not None:
             args = ", ".join(display_type(a) for a in ty.generic_args)
@@ -74,6 +81,9 @@ def display_type(ty) -> str:
 
 def display_type_name(name: str) -> str:
     """Best-effort `@(...)` for a bare identity name lacking structured metadata."""
+    from sushi_lang.semantics.generics.tuples import TUPLE_BASE
+    if TUPLE_BASE in name:
+        return _display_tuples_in_name(name)
     if "<" not in name:
         return name
     if "->" in name:
@@ -81,3 +91,21 @@ def display_type_name(name: str) -> str:
     if name.count("<") != name.count(">"):
         return name
     return name.replace("<", "@(").replace(">", ")")
+
+
+
+_INNERMOST_TUPLE = re.compile(r"\$Tuple<([^<>]*)>")
+
+
+def _display_tuples_in_name(name: str) -> str:
+    """A bare identity name that spells a tuple: `$Tuple<i32, string>` reads `(i32, string)`.
+
+    The innermost tuple is rewritten first, so a tuple nested in a tuple, in a generic
+    argument or in a function type reads as written.
+    """
+    while True:
+        rewritten = _INNERMOST_TUPLE.sub(r"(\1)", name)
+        if rewritten == name:
+            break
+        name = rewritten
+    return display_type_name(name)

@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 
 def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
     """Validate let statement type annotations."""
+    if stmt.targets is not None:
+        validate_let_destructure(validator, stmt)
+        return
     # Check if type annotation is missing (CE2007)
     if stmt.ty is None:
         er.emit(validator.reporter, er.ERR.CE2007, stmt.name_span, name=stmt.name)
@@ -558,3 +561,91 @@ def _foreach_iterable_is_addressable(iterable) -> bool:
     if isinstance(iterable, (MethodCall, DotCall)):
         return iterable.method in ("iter", "keys", "values")
     return False
+
+
+def validate_let_destructure(validator: 'TypeValidator', stmt: Let) -> None:
+    """`let (a, b) = v`: the value is a tuple, and each binder takes its element.
+
+    The hidden `Let` takes the value's type, so every later pass reads an ordinary typed
+    `let` of the whole tuple. A typed binder hands its type to a tuple literal first, so
+    `let (u8 a, i32 b) = (7, 1)` types the literal 7 as a u8.
+    """
+    from sushi_lang.semantics.generics.results import is_result_enum
+    from sushi_lang.semantics.typesys import deref_type
+
+    _propagate_to_targets(validator, stmt.value, stmt.targets or [])
+    validator.validate_expression(stmt.value)
+    value_type = deref_type(validator.infer_expression_type(stmt.value))
+    if value_type is not None and is_result_enum(value_type):
+        er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
+        value_type = None
+    if not _bind_targets(validator, stmt.targets or [], value_type, stmt.value.loc):
+        value_type = None
+    stmt.ty = value_type
+    if value_type is not None:
+        validator.variable_types[stmt.name] = value_type
+
+
+def _propagate_to_targets(validator: 'TypeValidator', value, targets) -> None:
+    """Hand each typed binder's type to the element of a tuple literal it binds."""
+    from sushi_lang.semantics.ast import TupleLiteral
+    from .propagation import propagate_types_to_value
+    from .resolution import resolve_variable_type
+
+    if not isinstance(value, TupleLiteral) or len(value.elements) != len(targets):
+        return
+    for element, target in zip(value.elements, targets, strict=True):
+        if target.nested is not None:
+            _propagate_to_targets(validator, element, target.nested)
+        elif target.ty is not None:
+            propagate_types_to_value(validator, element,
+                                     resolve_variable_type(validator, target.ty,
+                                                           target.type_span))
+
+
+def _bind_targets(validator: 'TypeValidator', targets, value_type, span) -> bool:
+    """Give each binder its element type. False when a diagnostic refused the split.
+
+    A refused split still declares every binder, with its written type or none, so a
+    later use of a binder is not a second diagnostic of the same fault.
+    """
+    from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+    from .resolution import resolve_variable_type
+
+    refused = False
+    if value_type is None:
+        refused = True
+    elif not is_tuple_type(value_type):
+        er.emit(validator.reporter, er.ERR.CE2117, span, type=display_type(value_type))
+        refused = True
+    elif len(tuple_elements(value_type)) != len(targets):
+        er.emit(validator.reporter, er.ERR.CE2116, span,
+                count=len(targets), type=display_type(value_type),
+                arity=len(tuple_elements(value_type)))
+        refused = True
+
+    elements = tuple_elements(value_type) if not refused else (None,) * len(targets)
+    for target, element in zip(targets, elements, strict=True):
+        if target.nested is not None:
+            if not _bind_targets(validator, target.nested, element, target.loc):
+                refused = True
+            continue
+        if target.name is None:
+            target.element_type = element
+            continue
+        bound = element
+        if target.ty is not None:
+            validate_type_name(validator, target.ty, target.type_span)
+            bound = resolve_variable_type(validator, target.ty, target.type_span)
+            if element is not None and not types_compatible(validator, element, bound):
+                er.emit_with(validator.reporter, er.ERR.CE2002, target.type_span or target.loc,
+                             got=display_type(element), expected=display_type(bound)) \
+                    .emit()
+                validator.refused_bindings.add(target.name)
+                refused = True
+        target.element_type = bound
+        if bound is None:
+            validator.refused_bindings.add(target.name)
+        else:
+            validator.variable_types[target.name] = bound
+    return not refused

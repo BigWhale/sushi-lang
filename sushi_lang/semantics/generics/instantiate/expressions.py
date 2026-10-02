@@ -66,7 +66,7 @@ class ExpressionScanner:
             EnumConstructor, CastExpr, InterpolatedString, DotCall, TryExpr,
             IntLit, FloatLit, StringLit, BoolLit, Name, Borrow,
             RangeExpr, Spread, MemberAccess, MethodCall, DynamicArrayFrom,
-            DynamicArrayNew, BlankLit, Lambda, Block,
+            DynamicArrayNew, BlankLit, Lambda, Block, TupleLiteral,
         )
 
         if isinstance(expr, Call):
@@ -143,6 +143,10 @@ class ExpressionScanner:
 
         elif isinstance(expr, DynamicArrayFrom):
             self.scan_expression(expr.elements)
+
+        elif isinstance(expr, TupleLiteral):
+            for item in expr.elements:
+                self.scan_expression(item)
 
         elif isinstance(expr, Lambda):
             # Lambda bodies are still present at the instantiate pass (lambda-lifting is the lift pass), so a

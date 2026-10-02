@@ -21,7 +21,7 @@ from sushi_lang.semantics.ast import (
     BlankLit, Borrow, Call, DotCall, DynamicArrayFrom, DynamicArrayNew, EnumConstructor,
     Expr, IntLit, FloatLit, BoolLit, StringLit, ArrayLiteral, BinaryOp, UnaryOp, Name,
     CastExpr, IndexAccess, InterpolatedString, Lambda, MemberAccess, MethodCall, RangeExpr,
-    Spread, TryExpr
+    Spread, TryExpr, TupleLiteral
 )
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
@@ -68,10 +68,11 @@ _ORDERINGS = ("<", "<=", ">", ">=")
 # backstop in `evaluate`; naming them here is what lets the gate tell a decision from a
 # fall-through. A `MethodCall` and an `EnumConstructor` never arrive from the parser in
 # an initializer (both are spelled as a `DotCall` there) and a `Spread` is an argument,
-# but the union holds them, so the table says what they would be.
+# but the union holds them, so the table says what they would be. A `TupleLiteral` is no
+# constant by design: there is no tuple `const` and no tuple `var` (docs/design/tuples.md).
 NOT_CONSTANT: frozenset[type] = frozenset({
     MethodCall, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, Borrow, TryExpr,
-    RangeExpr, Spread, Lambda, BlankLit,
+    RangeExpr, Spread, Lambda, BlankLit, TupleLiteral,
 })
 
 

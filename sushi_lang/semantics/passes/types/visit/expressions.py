@@ -24,7 +24,7 @@ from sushi_lang.semantics.passes.types.utils import reject_named_args
 from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Lambda,
-    MemberAccess
+    MemberAccess, TupleLiteral
 )
 from sushi_lang.semantics.passes.types.visit.helpers import (
     infer_lambda_type, validate_fn_field_call_args)
@@ -249,6 +249,13 @@ class ExpressionValidator(RecursiveVisitor):
     def visit_arrayliteral(self, node: ArrayLiteral) -> None:
         """Validate array literal, then make sure it is stamped (#889)."""
         validate_array_literal(self.type_validator, node)
+        if node.resolved_type is None:
+            self.type_validator.infer_expression_type(node)
+
+    def visit_tupleliteral(self, node: TupleLiteral) -> None:
+        """Validate every element, then make sure the literal is stamped."""
+        for element in node.elements:
+            self.visit(element)
         if node.resolved_type is None:
             self.type_validator.infer_expression_type(node)
 

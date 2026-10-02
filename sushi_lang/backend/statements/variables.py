@@ -2,7 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sushi_lang.backend.destructors import destroy_old_value, resolve_named_type
-from sushi_lang.backend.ownership import ConsumingUse, bind, consume
+from sushi_lang.backend.ownership import (
+    ConsumingUse, bind, consume, relinquish, relinquish_temp)
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -76,6 +77,62 @@ def emit_let(codegen: 'LLVMCodegen', stmt: 'Let') -> None:
 
         if owns:
             codegen.memory.register_owning_value(stmt.name, semantic_type, slot)
+
+        if stmt.targets is not None:
+            _emit_destructure(codegen, stmt.targets, slot, semantic_type, owns)
+            if owns:
+                relinquish_temp(codegen, stmt.name)
+
+
+def _emit_destructure(codegen: 'LLVMCodegen', targets, whole_ptr: 'ir.Value',
+                      whole_type: 'Type', owns: bool) -> None:
+    """Split a tuple held at `whole_ptr` into its binders (docs/design/tuples.md).
+
+    `owns` is the hidden whole's answer from `bind()`. An owned whole hands each element to
+    its binder, which owns it from here, and destroys each `_` element now; the whole is
+    then given up, so nothing is freed twice. A borrowed whole gives each binder a view
+    that frees nothing.
+    """
+    from sushi_lang.backend import gep_utils
+    from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
+    from sushi_lang.backend.utils.validation import require_builder
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.semantics.typesys import DynamicArrayType, StructType
+
+    builder = require_builder(codegen)
+    resolved = resolve_named_type(codegen, whole_type)
+    if not isinstance(resolved, StructType):
+        raise InternalCompilerError("CE0015", message="a destructure of a value that is "
+                                                      "not a tuple reached the backend")
+    for index, target in enumerate(targets):
+        element_type = resolved.fields[index][1]
+        field_ptr = gep_utils.gep_struct_field(codegen, whole_ptr, index,
+                                               name=f"tuple_elem{index}")
+        if target.nested is not None:
+            _emit_destructure(codegen, target.nested, field_ptr, element_type, owns)
+            continue
+        if target.name is None:
+            if owns and needs_cleanup(codegen, element_type):
+                emit_value_destructor(codegen, field_ptr, element_type)
+            continue
+        bound_type = resolve_named_type(codegen, target.element_type or element_type)
+        value = builder.load(field_ptr, name=target.name)
+        if isinstance(bound_type, DynamicArrayType):
+            arrays = codegen.dynamic_arrays
+            if arrays is None:
+                raise InternalCompilerError("CE0014")
+            alloca = arrays.declare_dynamic_array(target.name, bound_type)
+            codegen.memory.track_local(target.name, alloca, bound_type)
+            builder.store(value, alloca)
+            if not owns:
+                relinquish(codegen, target.name)
+            continue
+        ll_type = codegen.types.ll_type(bound_type)
+        slot = codegen.memory.create_local_nostore(target.name, ll_type, bound_type,
+                                                   register_cleanup=False)
+        builder.store(codegen.utils.cast_for_param(value, ll_type), slot)
+        if owns:
+            codegen.memory.register_owning_value(target.name, bound_type, slot)
 
 
 def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:

@@ -8,6 +8,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     BlankLit, BoolLit, DynamicArrayNew, FloatLit, IntLit, Name, StringLit
 )
+from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, StructType, UnknownType,
@@ -111,6 +112,10 @@ class TypeSubstitutor:
                 new_arg = self.substitute_type(arg, substitution)
                 new_type_args.append(new_arg)
 
+            if ty.base_name == TUPLE_BASE:
+                return intern_tuple(self.monomorphizer.struct_table,
+                                    self.monomorphizer.enum_table, new_type_args)
+
             cache_key = (ty.base_name, tuple(new_type_args))
             if cache_key in self.monomorphizer.cache:
                 return self.monomorphizer.cache[cache_key]
@@ -212,12 +217,14 @@ class TypeSubstitutor:
         )
 
         if isinstance(stmt, Let):
-            result = copy.copy(stmt)
+            let_copy = copy.copy(stmt)
             if stmt.ty:
-                result.ty = self.substitute_type(stmt.ty, substitution)
+                let_copy.ty = self.substitute_type(stmt.ty, substitution)
             if stmt.value:
-                result.value = self.substitute_expr(stmt.value, substitution)
-            return result
+                let_copy.value = self.substitute_expr(stmt.value, substitution)
+            if stmt.targets is not None:
+                let_copy.targets = self._substitute_targets(stmt.targets, substitution)
+            return let_copy
 
         if isinstance(stmt, Rebind):
             result = copy.copy(stmt)
@@ -309,6 +316,17 @@ class TypeSubstitutor:
         # every type parameter its annotations name.
         er.raise_internal_error("CE0135", kind="statement", node=type(stmt).__name__)
 
+    def _substitute_targets(self, targets, substitution: Dict[str, "Type | TypePack"]):
+        """A destructure's targets: each written binder type names the type parameter."""
+        result = []
+        for target in targets:
+            copied = copy.copy(target)
+            copied.ty = self._substitute_optional_type(target.ty, substitution)
+            if target.nested is not None:
+                copied.nested = self._substitute_targets(target.nested, substitution)
+            result.append(copied)
+        return result
+
     def _substitute_optional_type(
         self, ty: 'Type | None', substitution: Dict[str, "Type | TypePack"]
     ) -> 'Type | None':
@@ -351,7 +369,7 @@ class TypeSubstitutor:
         from sushi_lang.semantics.ast import (
             ArrayLiteral, BinaryOp, Borrow, Call, CastExpr, DotCall, DynamicArrayFrom,
             EnumConstructor, IndexAccess, InterpolatedString, Lambda, MemberAccess,
-            MethodCall, RangeExpr, Spread, TryExpr, UnaryOp,
+            MethodCall, RangeExpr, Spread, TryExpr, TupleLiteral, UnaryOp,
         )
 
         match expr:
@@ -436,6 +454,11 @@ class TypeSubstitutor:
                 return result
             case Lambda():
                 return self._substitute_lambda(expr, substitution)
+            case TupleLiteral():
+                tuple_copy = copy.copy(expr)
+                tuple_copy.elements = [self.substitute_expr(e, substitution)
+                                       for e in expr.elements]
+                return tuple_copy
             case _ if isinstance(expr, INERT_EXPRS):
                 return copy.copy(expr)
             case _:

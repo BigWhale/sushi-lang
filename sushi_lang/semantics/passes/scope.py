@@ -9,7 +9,8 @@ from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
     Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, Assert, While, Foreach, Expand, Match, MatchArm, Pattern, OwnPattern, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
-    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param
+    DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param,
+    TupleLiteral, destructure_binders,
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
@@ -530,6 +531,8 @@ class ScopeAnalyzer:
         self._declare_variable(stmt.name, stmt.loc if stmt.name_span is not None else None,
                                written_let(stmt))
         self._check_expression(stmt.value)
+        for binder in destructure_binders(stmt.targets):
+            self._declare_variable(binder.name, binder.loc)
 
     def _check_rebind(self, stmt: Rebind) -> None:
         """Check a rebind statement."""
@@ -738,6 +741,10 @@ class ScopeAnalyzer:
             if element.count is not None:
                 self._check_expression(element.count)
 
+    def _check_tuple_literal(self, expr: TupleLiteral) -> None:
+        for element in expr.elements:
+            self._check_expression(element)
+
     def _check_index_access(self, expr: IndexAccess) -> None:
         self._check_expression(expr.array)
         self._check_expression(expr.index)
@@ -915,5 +922,6 @@ _EXPRESSION_HANDLERS: Dict[type, Callable[[ScopeAnalyzer, Any], None]] = {
     RangeExpr: ScopeAnalyzer._check_range,
     Spread: ScopeAnalyzer._check_spread,
     Lambda: ScopeAnalyzer._check_lambda,
+    TupleLiteral: ScopeAnalyzer._check_tuple_literal,
     **{kind: ScopeAnalyzer._check_leaf_expression for kind in _LEAF_EXPRS},
 }

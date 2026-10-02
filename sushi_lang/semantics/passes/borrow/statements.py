@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import (
     Assert,
+    destructure_binders,
     Block,
     Break,
     Continue,
@@ -161,7 +162,38 @@ def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
     # A `let` BINDS; it does not take ownership (#242). It inherits the source's
     # provenance, so a read through a live owner makes it a BORROW.
     bind(checker, stmt)
+    if stmt.targets is not None:
+        _split_destructure(checker, stmt)
     clear_borrows(checker)
+
+
+def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
+    """`let (a, b) = v`: each binder is what the hidden whole is (ruling 4 of tuples).
+
+    The hidden `Let` took the value by the rule of `let x = v`: it owns a temporary and an
+    owned local (which it spends), and it borrows a parameter, a field or a binding. Each
+    binder then OWNS its element when the whole is owned, and BORROWS it from the whole's
+    owner when the whole is a borrow, so a change of that owner is refused while a binder
+    lives.
+    """
+    whole = checker.borrow_state.get(stmt.name)
+    borrowed = whole is not None and whole.is_borrowed_binding
+    owner = whole.borrows_from if borrowed and whole is not None else None
+    owner_state = checker.borrow_state.get(owner) if owner is not None else None
+    for binder in destructure_binders(stmt.targets):
+        state = BorrowState(name=binder.name, var_type=binder.element_type,
+                            declared_at_span=binder.loc,
+                            declared_branch_depth=checker.branch_depth)
+        checker.borrow_state[binder.name] = state
+        if not borrowed:
+            continue
+        state.is_borrowed_binding = True
+        state.is_let_borrow = True
+        state.bound_at_span = stmt.loc
+        if owner is not None and owner_state is not None:
+            state.borrows_from = owner
+            owner_state.binding_borrows.append((binder.name, stmt.loc))
+            checker._scope_binding_borrows[-1].append((owner, binder.name))
 
 
 def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:

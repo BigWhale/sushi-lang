@@ -397,6 +397,7 @@ TYPE_NODE_NAMES = {
     "array_t", "dynamic_array_t", "reference_t",
     "generic_type_t",  # Generic type instantiation (e.g., Result<i32>)
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
+    "tuple_t",         # Tuple type (e.g., (i32, string))
     "name_t", "qualified_name_t", "qualified_generic_type_t",
 }
 

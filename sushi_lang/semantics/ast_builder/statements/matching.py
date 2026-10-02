@@ -7,7 +7,7 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
-from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+from sushi_lang.internals.diagnostics import SushiError, SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
@@ -50,6 +50,9 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     literal_tree = (first_tree(t.children, "literal_pattern")
                     or first_tree(t.children, "neg_literal_pattern"))
     wildcard_tree = first_tree(t.children, "wildcard_pattern")
+    tuple_tree = first_tree(t.children, "tuple_pattern")
+    if tuple_tree is not None:
+        raise not_yet(tuple_tree, "a tuple pattern")
 
     if pattern_tree is not None:
         pattern = parse_pattern(pattern_tree, ast_builder)
@@ -88,6 +91,12 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
         ice(t, "missing body")
 
     return MatchArm(pattern=pattern, body=body, loc=span_of(t))
+
+
+def not_yet(node: Tree, construct: str) -> SushiError:
+    """CE6108: a shape of the tuple grammar that a later step gives its meaning."""
+    return SyntaxDiagnostic("CE6108", span=span_of(node), construct=construct) \
+        .help("destructure with a `let` instead, as in `let (a, b) = value`")
 
 
 def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
@@ -134,6 +143,13 @@ def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder') -> Union[str, Patt
     inner_own = first_tree(node.children, "own_pattern_call")
     if inner_own is not None:
         return parse_own_pattern(inner_own, ast_builder)
+
+    for shape, construct in (("tuple_pattern", "a tuple pattern"),
+                             ("literal_pattern", "a literal inside a pattern"),
+                             ("neg_literal_pattern", "a literal inside a pattern")):
+        found = first_tree(node.children, shape)
+        if found is not None:
+            raise not_yet(found, construct)
 
     token = next((c for c in node.children if isinstance(c, Token)), None)
     if token is None or token.type != "NAME":

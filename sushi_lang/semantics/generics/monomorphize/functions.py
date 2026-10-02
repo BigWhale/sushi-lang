@@ -56,7 +56,8 @@ def let_annotations(block) -> Iterator[Type]:
     seam does the same for an extension copy (#555). A `foreach` item's declared type
     is a local's annotation too.
     """
-    from sushi_lang.semantics.ast import Block, Let, If, While, Foreach, Match, Lambda
+    from sushi_lang.semantics.ast import (
+        Block, Let, If, While, Foreach, Match, Lambda, destructure_binders)
 
     if not isinstance(block, Block):
         return
@@ -64,6 +65,9 @@ def let_annotations(block) -> Iterator[Type]:
         if isinstance(stmt, Let):
             if stmt.ty is not None:
                 yield stmt.ty
+            for binder in destructure_binders(stmt.targets):
+                if binder.ty is not None:
+                    yield binder.ty
             if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
                 yield from let_annotations(stmt.value.body)
         elif isinstance(stmt, If):
@@ -511,6 +515,8 @@ class FunctionMonomorphizer:
                 # the annotation is the local's type as it stands.
                 if stmt.ty is not None:
                     var_types[stmt.name] = stmt.ty
+                if stmt.targets is not None:
+                    self._bind_destructure(stmt, var_types)
             elif isinstance(stmt, ExprStmt):
                 self._collect_from_expr(stmt.expr, var_types)
             elif isinstance(stmt, Return) and stmt.value:
@@ -540,6 +546,25 @@ class FunctionMonomorphizer:
                     if isinstance(arm.body, Block):
                         self._collect_block_instantiations(arm.body, var_types)
 
+    def _bind_destructure(self, stmt, var_types: Dict[str, Type]) -> None:
+        """Each binder of a destructure is a local for the calls after it (#555's rule)."""
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+
+        inferrer = self._get_arg_inferrer(var_types)
+        value_type = inferrer.infer_expression_type(stmt.value) if inferrer else None
+
+        def bind(targets, whole) -> None:
+            elements: tuple = tuple_elements(whole) if is_tuple_type(whole) else ()
+            if len(elements) != len(targets):
+                elements = (None,) * len(targets)
+            for target, element in zip(targets, elements, strict=True):
+                if target.nested is not None:
+                    bind(target.nested, element)
+                elif target.name is not None and (target.ty or element) is not None:
+                    var_types[target.name] = target.ty or element
+
+        bind(stmt.targets, value_type)
+
     def _collect_from_expr(self, expr, var_types: Dict[str, Type]) -> None:
         """Recursively scan expression for generic function calls."""
         from sushi_lang.semantics.ast import (
@@ -547,7 +572,7 @@ class FunctionMonomorphizer:
             IndexAccess, ArrayLiteral, EnumConstructor, CastExpr,
             InterpolatedString, Borrow, RangeExpr, Spread, MemberAccess,
             MethodCall, DynamicArrayFrom, DynamicArrayNew, BlankLit, Lambda,
-            IntLit, FloatLit, StringLit, BoolLit, Block,
+            IntLit, FloatLit, StringLit, BoolLit, Block, TupleLiteral,
         )
 
         if isinstance(expr, Call):
@@ -575,9 +600,7 @@ class FunctionMonomorphizer:
         elif isinstance(expr, BinaryOp):
             self._collect_from_expr(expr.left, var_types)
             self._collect_from_expr(expr.right, var_types)
-        elif isinstance(expr, UnaryOp):
-            self._collect_from_expr(expr.expr, var_types)
-        elif isinstance(expr, TryExpr):
+        elif isinstance(expr, (UnaryOp, TryExpr, CastExpr, Borrow)):
             self._collect_from_expr(expr.expr, var_types)
         elif isinstance(expr, DotCall):
             self._collect_from_expr(expr.receiver, var_types)
@@ -594,14 +617,10 @@ class FunctionMonomorphizer:
         elif isinstance(expr, EnumConstructor):
             for arg in expr.args:
                 self._collect_from_expr(arg, var_types)
-        elif isinstance(expr, CastExpr):
-            self._collect_from_expr(expr.expr, var_types)
         elif isinstance(expr, InterpolatedString):
             for part in expr.parts:
                 if not isinstance(part, str):
                     self._collect_from_expr(part, var_types)
-        elif isinstance(expr, Borrow):
-            self._collect_from_expr(expr.expr, var_types)
         elif isinstance(expr, RangeExpr):
             self._collect_from_expr(expr.start, var_types)
             self._collect_from_expr(expr.end, var_types)
@@ -615,6 +634,9 @@ class FunctionMonomorphizer:
                 self._collect_from_expr(arg, var_types)
         elif isinstance(expr, DynamicArrayFrom):
             self._collect_from_expr(expr.elements, var_types)
+        elif isinstance(expr, TupleLiteral):
+            for item in expr.elements:
+                self._collect_from_expr(item, var_types)
         elif isinstance(expr, Lambda):
             # An expression-body lambda scans directly. A block-body lambda (a `let` RHS) is
             # walked in _collect_nested_instantiations, which has the generic_func needed to

@@ -31,6 +31,7 @@ from sushi_lang.backend.runtime import string_builder as sb
 from sushi_lang.backend.types.contracts import contract_override
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.contracts import DISPLAY
+from sushi_lang.semantics.generics.tuples import is_tuple_type
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, StructType, Type)
@@ -164,10 +165,12 @@ def _emit_fmt_body(codegen: 'LLVMCodegen', value: ir.Value, ty: Type,
                       builder.load(get_list_len_ptr(builder, slot), name="list_len"),
                       buffer)
     elif isinstance(ty, StructType):
-        sb.emit_push_text(codegen, buffer, f"{_display_name(ty)}(")
+        # A tuple prints its elements alone: `(1, "a")`, the spelling of its literal.
+        tuple_form = is_tuple_type(ty)
+        sb.emit_push_text(codegen, buffer, "(" if tuple_form else f"{_display_name(ty)}(")
         for index, (name, field_type) in enumerate(ty.fields):
             prefix = ", " if index else ""
-            sb.emit_push_text(codegen, buffer, f"{prefix}{name}: ")
+            sb.emit_push_text(codegen, buffer, prefix if tuple_form else f"{prefix}{name}: ")
             emit_value_fmt(codegen, builder.extract_value(value, index), field_type, buffer)
         sb.emit_push_text(codegen, buffer, ")")
     elif isinstance(ty, DynamicArrayType):

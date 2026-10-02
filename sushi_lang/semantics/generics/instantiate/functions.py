@@ -86,6 +86,27 @@ class FunctionCollector:
             inferred = self.expression_scanner.generic_call_type(scrutinee)
         return inferred
 
+    def _bind_destructure(self, targets, value_type) -> None:
+        """A destructure's binders are locals: a written type is collected, and each
+        binder takes its written type or the element type of the value."""
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+
+        elements: tuple = (tuple_elements(value_type) if is_tuple_type(value_type)
+                           else (None,) * len(targets))
+        if len(elements) != len(targets):
+            elements = (None,) * len(targets)
+        for target, element in zip(targets, elements, strict=True):
+            if target.nested is not None:
+                self._bind_destructure(target.nested, element)
+                continue
+            if target.ty is not None:
+                self._collect_from_type(target.ty, target.type_span)
+            if target.name is None:
+                continue
+            bound = self._resolve_local_type(target.ty) if target.ty is not None else element
+            if bound is not None:
+                self.variable_types[target.name] = bound
+
     def _variant_payload_types(self, scrutinee_type, variant_name):
         """The payload types of one variant, or () when they cannot be read here.
 
@@ -319,6 +340,8 @@ class FunctionCollector:
                 self.expression_scanner.scan_expression(stmt.value)
                 if stmt.ty is not None:
                     self._scan_fn_value(stmt.value, stmt.ty)
+            if stmt.targets is not None:
+                self._bind_destructure(stmt.targets, self._infer_scrutinee_type(stmt.value))
 
         elif isinstance(stmt, Foreach):
             if stmt.item_type is not None:

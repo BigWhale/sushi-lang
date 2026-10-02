@@ -164,6 +164,12 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     )
 
 
+def parse_foreach_destructure(node: Tree, _ast_builder: 'ASTBuilder') -> Foreach:
+    """Parse foreach_destructure: refused until its step gives it a meaning (CE6108)."""
+    from sushi_lang.semantics.ast_builder.statements.matching import not_yet
+    raise not_yet(node, "a `foreach` destructure")
+
+
 def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
     """Parse foreach_ref: FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block"""
     children = node.children

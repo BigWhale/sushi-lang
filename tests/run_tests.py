@@ -921,6 +921,15 @@ public fn half(i32 n) i32 | StdError:
     if (n % 2 == 1):
         return Result.Err(StdError.Error)
     return Result.Ok(n / 2)
+
+##:
+Splits a number in two halves.
+
+- Parameter n: The number.
+- Returns: The halves, as a tuple with a nested tuple.
+:##
+public fn split(i32 n) ((i32, i32), string):
+    return ((n / 2, n - n / 2), "split")
 """
 
 _REPORT_CONSUMER = """\
@@ -938,12 +947,14 @@ fn main() i32:
     return 0
 """
 
-# Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966).
+# Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966);
+# the last one is a tuple, which neither half may print in its interned `$Tuple<...>` form.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
     "  fn paint(i32 n) Colour",
     "  fn half(i32 n) i32 | StdError",
+    "  fn split(i32 n) ((i32, i32), string)",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
 REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\n"

@@ -7,6 +7,8 @@ from sushi_lang.internals.report import in_source_order
 from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType, UnknownType
 from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
 from sushi_lang.semantics.generics.interned import interned_name
+from sushi_lang.semantics.generics.tuples import (
+    TUPLE_BASE, holds_written_tuple, intern_tuple, intern_tuples_in)
 from sushi_lang.semantics.type_predicates import is_abstract_type
 from sushi_lang.semantics.type_resolution import TypeResolver
 
@@ -137,6 +139,10 @@ class TypeMonomorphizer:
 
         for base_name, type_args in types_in_site_order(
                 instantiations, self.monomorphizer.sites):
+            if base_name == TUPLE_BASE:
+                tuple_type = self.intern_tuple(type_args)
+                concrete_structs[tuple_type.name] = tuple_type
+                continue
             if base_name not in generic_structs:
                 continue
 
@@ -207,6 +213,17 @@ class TypeMonomorphizer:
         object.__setattr__(concrete, "fields", tuple(concrete_fields))
 
         return concrete
+
+    def intern_tuple(self, elements: Tuple[Type, ...]) -> StructType:
+        """A tuple goes to its interner and never through `monomorphize_struct`.
+
+        A tuple has no declaration and a variable arity, so the arity refusal would read
+        every tuple as a wrong count. Each element is substituted first, which builds a
+        generic instance an element names (`(Box@(i32), i32)`).
+        """
+        mono = self.monomorphizer
+        built = tuple(mono.substitutor.substitute_type(t, {}) for t in elements)
+        return intern_tuple(mono.struct_table, mono.enum_table, built)
 
     def _tables(self) -> Tuple[dict, dict]:
         """The struct and enum tables as dicts; empty on a unit-test path with no tables."""
@@ -351,6 +368,9 @@ class TypeMonomorphizer:
         catch. One resolution at the entry keeps one identity per name.
         """
         structs, enums = self._tables()
+        mono = self.monomorphizer
+        type_args = tuple(intern_tuples_in(arg, mono.struct_table, mono.enum_table)
+                          if holds_written_tuple(arg) else arg for arg in type_args)
         return TypeResolver(structs, enums).resolve_type_args(type_args)
 
     @staticmethod

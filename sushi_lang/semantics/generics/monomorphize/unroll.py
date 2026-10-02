@@ -8,6 +8,7 @@ from typing import Dict, Iterator, List, Optional, Tuple, cast
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Lambda, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
+    destructure_binders,
 )
 from sushi_lang.semantics.hidden_names import expand_copy_local_name
 from sushi_lang.internals.report import Span
@@ -260,16 +261,19 @@ def _rename_copy_locals(statements: List[Stmt], copy_number: int) -> List[Stmt]:
     """Alpha-rename top-level ``let`` locals in one unrolled copy to fresh names."""
     for idx, stmt in enumerate(statements):
         if isinstance(stmt, Let):
-            old = stmt.name
-            new = expand_copy_local_name(old, copy_number)
-            stmt.name = new
-            # Rewrite references in the statements that follow (the local's
-            # scope is from its declaration to the end of the block), honoring
-            # any later re-`let` of the same name as a fresh binding.
-            tail = _rename_block_statements(
-                statements[idx + 1:], old, new, _seen=set()
-            )
-            statements[idx + 1:] = tail
+            renames = [(stmt, stmt.name)]
+            # A destructure's binders are locals of the copy too (docs/design/tuples.md).
+            renames.extend((binder, binder.name) for binder in destructure_binders(stmt.targets))
+            for holder, old in renames:
+                new = expand_copy_local_name(old, copy_number)
+                holder.name = new
+                # Rewrite references in the statements that follow (the local's
+                # scope is from its declaration to the end of the block), honoring
+                # any later re-`let` of the same name as a fresh binding.
+                tail = _rename_block_statements(
+                    statements[idx + 1:], old, new, _seen=set()
+                )
+                statements[idx + 1:] = tail
     return statements
 
 
@@ -404,7 +408,8 @@ def _rename_block_statements(statements, var: str, new_name: str, _seen,
         if shadowed:
             out.append(stmt)
             continue
-        if isinstance(stmt, Let) and stmt.name == var:
+        if isinstance(stmt, Let) and (stmt.name == var or any(
+                binder.name == var for binder in destructure_binders(stmt.targets))):
             if stmt.value is not None:
                 stmt.value = _rename_value(stmt.value, var, new_name, _seen, written)
             out.append(stmt)

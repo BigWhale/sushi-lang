@@ -19,7 +19,7 @@ from sushi_lang.semantics.type_predicates import (
 from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, DynamicArrayNew, DynamicArrayFrom, CastExpr, EnumConstructor, TryExpr, RangeExpr, Borrow, Spread, Lambda,
-    BlankLit, MemberAccess
+    BlankLit, MemberAccess, TupleLiteral
 )
 from sushi_lang.semantics.passes.types.visit.helpers import (
     function_value_type_of, infer_lambda_type)
@@ -143,6 +143,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if node.resolved_type is None and isinstance(inferred, ArrayType):
             node.resolved_type = inferred
         return inferred
+
+    def visit_tupleliteral(self, node: TupleLiteral) -> Optional[Type]:
+        """A tuple literal is the tuple of its element types, interned and stamped."""
+        if node.resolved_type is not None:
+            return node.resolved_type
+        from sushi_lang.semantics.generics.tuples import intern_tuple
+        from sushi_lang.semantics.typesys import deref_type
+        tv = self.type_validator
+        elements: list = []
+        for element in node.elements:
+            element_type = deref_type(tv.infer_expression_type(element))
+            if element_type is None:
+                return None
+            elements.append(element_type)
+        node.resolved_type = intern_tuple(tv.struct_table, tv.enum_table, elements)
+        return node.resolved_type
 
     def visit_indexaccess(self, node: IndexAccess) -> Optional[Type]:
         """Infer index access type."""

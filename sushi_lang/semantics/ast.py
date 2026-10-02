@@ -460,12 +460,40 @@ class Block(Node):
 
 
 @dataclass(slots=True)
+class DestructureTarget:
+    """One element of a `let` destructure: a binder, a `_`, or a nested destructure.
+
+    A binder has a `name`, and `ty` is its written type or None for a bare binder. A `_`
+    has neither a name nor `nested`. The typecheck pass stamps `element_type`.
+    """
+    name: Optional[str] = None
+    ty: Optional[Type] = None
+    nested: Optional[List["DestructureTarget"]] = None
+    name_span: Optional[Span] = None
+    type_span: Optional[Span] = None
+    loc: Optional[Span] = None
+    element_type: Optional[Type] = None
+
+
+def destructure_binders(targets: Optional[List[DestructureTarget]]):
+    """Every binder of a destructure, nested ones included, in source order."""
+    for target in targets or ():
+        if target.nested is not None:
+            yield from destructure_binders(target.nested)
+        elif target.name is not None:
+            yield target
+
+
+@dataclass(slots=True)
 class Let(Stmt):
     name: str
     ty: Optional[Type]
     value: "Expr"
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
+    # `let (a, b) = v` (TUPLE.md 4.2): the `Let` binds the whole tuple under a hidden
+    # `name`, and the targets split it. None for an ordinary `let`.
+    targets: Optional[List[DestructureTarget]] = None
 
 @dataclass(slots=True)
 class Rebind(Stmt):
@@ -723,6 +751,13 @@ class BinaryOp(Node):
     operand_type: Optional["Type"] = None
 
 @dataclass(slots=True)
+class TupleLiteral(Node):
+    """A tuple literal: two or more expressions in parentheses, `(1, "a")`."""
+    elements: List["Expr"]
+    # The interned tuple type, stamped by the typecheck pass; the backend reads it.
+    resolved_type: Optional["Type"] = None
+
+@dataclass(slots=True)
 class Spread(Node):
     """A bloomed call argument: `arr...` fans an existing array's elements into a variadic `...T`
     slot. Only valid as the sole, last trailing argument of a call to a variadic function; the
@@ -937,7 +972,7 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The three call shapes; each carries the whole set of callee stamps.
 CallLike = Union[Call, MethodCall, DotCall]
 # The two call shapes with a receiver and a method name.
@@ -982,7 +1017,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
-    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]

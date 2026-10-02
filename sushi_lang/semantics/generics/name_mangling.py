@@ -79,14 +79,26 @@ def sanitize_extension_receiver(receiver_display: str) -> str:
     """
     if receiver_display.endswith("[]"):
         return "arr__" + sanitize_extension_receiver(receiver_display[:-2])
-    return receiver_display.replace("<", "__").replace(">", "").replace(", ", "_")
+    return (_unit_free(receiver_display)
+            .replace("<", "__").replace(">", "").replace(", ", "_"))
+
+
+def _unit_free(type_str: str) -> str:
+    """A type string with no `$` in it, so no part of a symbol reads as a unit prefix.
+
+    The one `$` a type string holds starts a tuple's base name, `$Tuple`. It becomes a
+    digit, and no written type name starts with a digit, so the sanitized tuple
+    collides with no user type: a `struct _Tuple@(A, B)` keeps `_Tuple`
+    (docs/design/tuples.md).
+    """
+    return type_str.replace("$", "0")
 
 
 def _join_sanitized(type_args: Tuple['Type', ...]) -> str:
     """Sanitize each type arg's string form and join with single underscores."""
     arg_strs = []
     for arg in type_args:
-        type_str = str(arg)
+        type_str = _unit_free(str(arg))
 
         sanitized = (type_str
                      .replace('<', '_')

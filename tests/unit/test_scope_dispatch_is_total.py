@@ -110,6 +110,7 @@ def _every_expression() -> dict[type, sushi_ast.Expr]:
         a.RangeExpr: a.RangeExpr(None, a.Name(None, "lo"), a.Name(None, "hi"), False),
         a.Spread: a.Spread(None, a.Name(None, "xs")),
         a.Lambda: a.Lambda(None, [a.Param("p", None)], a.Name(None, "p")),
+        a.TupleLiteral: a.TupleLiteral(None, [a.Name(None, "x"), a.IntLit(None, 1)]),
     }
 
 
