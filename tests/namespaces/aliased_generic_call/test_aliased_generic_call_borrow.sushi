@@ -1,0 +1,12 @@
+# A generic function behind a unit alias that borrows leaves the argument with
+# the caller (#1125).
+# EXPECT_STDOUT_EXACT: "15 Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let i32 k = l.look(s)
+    println("{k} {s}")
+    return 0

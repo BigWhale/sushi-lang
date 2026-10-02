@@ -110,8 +110,10 @@ def _borrowed_method_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Ex
     """A method-shaped call's arguments that land on a parameter that does not consume."""
     modes = expr.callee_param_modes
     if modes is not None:
+        variadic_at = expr.callee_variadic_at
         return [arg for i, arg in enumerate(expr.args)
-                if not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
+                if (variadic_at is None or i < variadic_at)
+                and not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
     if (called_on(expr, *CONTAINER_INSERT_METHODS) is not None
             and checker.types.is_container(read_type(checker, expr.receiver))):
         return []
@@ -245,11 +247,18 @@ def consume_call_args(checker: 'BorrowChecker', expr: Call) -> None:
     collected_owner_is_callee = (
         isinstance(expr.callee, Name)
         and checker.callee_modes.variadic_callee_owns(expr.callee.id))
-    for i, arg in enumerate(expr.args):
+    _settle_args(checker, expr, kind, modes, variadic_at, collected_owner_is_callee)
+
+
+def _settle_args(checker: 'BorrowChecker', call: CallLike, kind: CalleeKind,
+                 modes: Sequence[ParamMode], variadic_at: Optional[int],
+                 collected_owner_is_callee: bool) -> None:
+    """Each declared argument by its mode; each trailing one into the `...T` slot."""
+    for i, arg in enumerate(call.args):
         if variadic_at is not None and i >= variadic_at:
             _consume_collected(checker, arg, collected_owner_is_callee)
         else:
-            apply_mode(checker, expr, arg, i, modes, kind)
+            apply_mode(checker, call, arg, i, modes, kind)
 
 
 def _consume_collected(checker: 'BorrowChecker', arg: Expr,
@@ -289,6 +298,11 @@ def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
+# A function behind a dot always carries its modes: the typecheck pass stamps them for
+# each of these kinds. A built-in static behind a dot (`hm.HashMap.new()`) declares none.
+_NAMESPACED_FUNCTION_KINDS = frozenset({"function", "generic function"})
+
+
 def settle_namespaced_args(checker: 'BorrowChecker', expr: DotCall) -> None:
     """A name written through a namespace follows the modes its KIND declares.
 
@@ -305,9 +319,13 @@ def settle_namespaced_args(checker: 'BorrowChecker', expr: DotCall) -> None:
 
     modes = expr.callee_param_modes
     if modes is None:
+        if ref is not None and ref.kind in _NAMESPACED_FUNCTION_KINDS:
+            er.raise_internal_error("CE0143", name=ref.name, kind=ref.kind)
         return
-    for i, arg in enumerate(expr.args):
-        apply_mode(checker, expr, arg, i, modes, CalleeKind.FUNCTION)
+    # A stdlib callee leaves the collected array with the caller, as at the flat call.
+    collected_owner_is_callee = ref is None or ref.producer != "stdlib"
+    _settle_args(checker, expr, CalleeKind.FUNCTION, modes, expr.callee_variadic_at,
+                 collected_owner_is_callee)
 
 
 def consume_indirect_args(checker: 'BorrowChecker', expr: DotCall) -> None:
