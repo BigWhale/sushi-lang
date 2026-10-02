@@ -6,14 +6,14 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import declared_modes
 from sushi_lang.semantics.typesys import UnknownType
-from sushi_lang.semantics.ast import Call, Spread
+from sushi_lang.semantics.ast import Call
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.explicit_type_args import (
     resolve_explicit_type_args,
     check_explicit_type_arg_arity,
 )
 from ..visibility import name_is_contested, reject_private_call
-from ..arguments import check_arguments, names_a_type_pack, reject_misplaced_spread
+from ..arguments import check_arguments, reject_misplaced_spread
 from .user_defined import validate_call_arguments
 
 if TYPE_CHECKING:
@@ -69,8 +69,12 @@ def validate_generic_function_call(
 
     type_args = _named_or_inferred_type_args(validator, call, generic_func)
     if type_args is None:
+        said = _untyped_argument_faults(validator)
         _walk_unchecked_arguments(validator, call)
-        if not contested and not _forwards_a_type_pack(validator, call):
+        # An argument that has no type of its own (a generic function value, CE2093; a
+        # type-pack name, CE0144) is why nothing was inferred: its diagnostic is the one
+        # fault (#1105, #1109). Any other argument fault stands beside CE2060.
+        if not contested and _untyped_argument_faults(validator) == said:
             er.emit(
                 validator.reporter,
                 er.ERR.CE2060,
@@ -140,10 +144,12 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
         minimum_arity=has_pack, stop_on_arity=True)
 
 
-def _forwards_a_type_pack(validator: 'TypeValidator', call: Call) -> bool:
-    """Is an argument a type-pack name? Its CE0144 is the one fault of the call (#1109)."""
-    return any(names_a_type_pack(validator, arg.value if isinstance(arg, Spread) else arg)
-               for arg in call.args)
+_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code)
+
+
+def _untyped_argument_faults(validator: 'TypeValidator') -> int:
+    offered = validator.reporter.errors_offered
+    return sum(offered[code] for code in _UNTYPED_ARGUMENT_CODES)
 
 
 def _walk_unchecked_arguments(validator: 'TypeValidator', call: Call) -> None:
