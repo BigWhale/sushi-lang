@@ -143,7 +143,7 @@ is the authority, and the index is a cache of it.
 
 ```python
 {
-    "sushi_lib_version": "2.3",        # Protocol version
+    "sushi_lib_version": "2.4",        # Protocol version
     "library_name": str,               # Library identifier, from the output filename
     "library_version": str,            # The library's own version, "major.minor.patch"
     "kind": str,                       # "source" / "binary" / "hybrid", matching KIND
@@ -152,11 +152,10 @@ is the authority, and the index is a cache of it.
                                        #   below reads the same filter: a
                                        #   bundled stdlib module and an imported
                                        #   source library both arrive as ordinary
-                                       #   compilation units, and a consumer states
-                                       #   each module and each library it uses for
-                                       #   itself. `dependencies` is the exception --
-                                       #   it says what the consumer's build must be
-                                       #   able to provide, not what this library
+                                       #   compilation units, and each declares
+                                       #   on its own account. `dependencies` is the
+                                       #   exception -- it says what the consumer's
+                                       #   build must load, not what this library
                                        #   declares.
     "requires_compiler": str,          # Compiler constraint, e.g. "~0.11" ("" if unknown)
     "compiled_at": str,                # ISO 8601 timestamp
@@ -308,11 +307,13 @@ is the authority, and the index is a cache of it.
     #   "stdlib"  -- a stdlib module. `path` is the import path, `io/fs`. The
     #                consumer's build compiles the module and links its bitcode on
     #                the strength of this record alone, because no unit wrote the
-    #                import (`_reexported_stdlib_modules`)
+    #                import (`_compiled_stdlib_modules`)
     #   "library" -- another library. `path` is the written `lib/...` path. The
-    #                consumer's build finds that library on `SUSHI_LIB_PATH` as if a
-    #                unit of its own wrote the import, and links it; a library that is
-    #                not on the path is CE3502 with a note that names this library
+    #                record gives the consumer the library's public NAMES. The
+    #                `dependencies` record of the same `use` is what LOADS it (#1120),
+    #                and a library built before that key reads this record for both;
+    #                a library that is not on the path is CE3502 with a note that
+    #                names this library
     #
     # The whole key is absent when no unit says `public use`, so an ordinary library
     # grows by nothing. An absent key means no re-export.
@@ -336,7 +337,16 @@ is the authority, and the index is a cache of it.
         {"type": str, "method": str, "unit": str}
     ],
 
-    "dependencies": [str],             # Stdlib/library dependencies
+    # What a consumer's build must load (#1120): one record per stdlib module that the
+    # build uses, and one per `use <lib/...>` of the library's OWN units, plain or
+    # public, with the name and the version of the `.slib` that the build found. The
+    # consumer loads every library of the graph from these records; a second version of
+    # one library is CE3519. Visibility does not follow: a plain `use` gives the
+    # consumer no name, and only a `public use` (`reexports`) hands names on.
+    "dependencies": [
+        {"path": str, "kind": "stdlib"},
+        {"path": str, "kind": "library", "library_name": str, "library_version": str}
+    ],
 
     # Written for EVERY kind. A source library ships whole units, so a generic in it is
     # already there as ordinary source -- but the index must answer without a parser, and
@@ -607,7 +617,7 @@ Kind: source
 Compiler: 0.13.0
 Requires compiler: ~0.13
 Compiled: 2026-09-28T19:18:00+00:00
-Protocol: 2.3
+Protocol: 2.4
 
 Units (1):
   mylib

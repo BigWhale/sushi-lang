@@ -34,9 +34,9 @@ def own_units(units: list['Unit']) -> list['Unit']:
 
     A `use <collections/iter>` injects the bundled module as an ordinary unit, and a
     `use <lib/other>` over a source library injects its units the same way, so both
-    reach the manifest generator alongside the library's own files. A consumer states
-    each library and each module it uses for itself (`docs/libraries.md`, limitation
-    1), so shipping either one's declarations puts a SECOND definition of every name
+    reach the manifest generator alongside the library's own files. A consumer's build
+    loads each library and each module of the graph on its own account (#1120), so
+    shipping either one's declarations puts a SECOND definition of every name
     into that consumer's build -- CE4001 for a perk, and a duplicate symbol for the
     rest. `Unit.provenance` is the one field that marks such a unit, and it is the
     field `_extract_reexports` reads for the same question about a `public use`, so

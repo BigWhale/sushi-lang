@@ -905,14 +905,27 @@ stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
 `IoError` from a read. The fixtures under `tests/namespaces/reexport/` hold rule 3.
 
 **A library re-exports a library** (#1106). `public use <lib/b>` in a library A is the
-same rule as `public use <io/error>` in `<io/contracts>`. The consumer's build finds B on
-`SUSHI_LIB_PATH` as if the consumer wrote `use <lib/b>`: a source A by its re-parsed
-statement, a compiled A by its `kind: "library"` record (`_resolve_library_imports`,
-`compiler/pipeline.py`, follows both; the monolithic link reads the record through
-`reexported_libraries`). Only a `public use` loads B; a plain `use <lib/b>` in A stays
-local. A B that the consumer also imports for itself is one candidate, because the
-candidates count by declaring unit. A B that is not on the path is CE3502 at the
-consumer, with a note that names A's `public use`.
+same rule as `public use <io/error>` in `<io/contracts>`: B's public names become A's own,
+so a consumer of A writes them.
+
+**Loading is not visibility** (#1120). The two questions have two rules. LOADING is
+transitive: A records every `use <lib/...>` of its own units, plain or public, in the
+manifest `dependencies` with the name and the version of the `.slib` that its build
+found, and the consumer's build loads the whole graph (`_resolve_library_imports`,
+`compiler/pipeline.py`): a source A by its re-parsed statements, a compiled A by its
+records. VISIBILITY is this section's rule and is not transitive: only a `public use` in
+A, or the consumer's own `use <lib/b>`, gives the consumer B's names. A plain `use
+<lib/b>` loads B for A's body and hands nothing on, so a bare `b_val()` at the consumer is
+CE2008. A compiled library that the build loaded for another library alone files its
+functions under its own units, so they are names only where a scope holds those units.
+
+A library is identified by its stamped `library_name`, and the driver stamps every `use
+<lib/...>` with the name and the version that it found (`UseStatement.library_name`), so
+the provider of section 3.1 picks the library by name: a `.slib` built under another name
+than its unit's re-exports exactly as the others do. One library that two paths reach is
+loaded once and is one candidate. Two versions of one library in the graph are CE3519. A
+dependency that is not on the path is CE3502 at the consumer, with a note at the `use`
+that needs it.
 
 **What this does not decide.** Whether a `public use` may re-export a single name
 (`public use "geometry".Vec`). It is open until asked for.

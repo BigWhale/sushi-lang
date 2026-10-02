@@ -135,7 +135,7 @@ authority, and the index is a cache of it.
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
 | `not_exported` | what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
-| `dependencies` | the libraries this library imports. `--lib-info` lists them; no consumer resolves them, so a consumer states every library it needs with its own `use` (§5.8) |
+| `dependencies` | one record per stdlib module the build uses (`kind: "stdlib"`) and per `use <lib/...>` of the library's own units, plain or public (`kind: "library"`, with the `library_name` and the `library_version` that the build found). The consumer's build loads every library of the graph from these records, and `--lib-info` lists them (§5.8, #1120) |
 
 `structs` / `enums` / `public_functions` carry **only concrete, non-generic**
 declarations. `_extract_public_functions` and `_extract_public_types` (structs and enums) both
@@ -361,7 +361,7 @@ answers "which unit does this import name": a façade unit whose every public na
 re-exported declares nothing of its own, so no `public_functions` record can name it. And
 a re-exported STDLIB module has to reach the consumer's build at all -- a source
 library's `use <io/fs>` does that by being text in the build, and a compiled one has only
-the record, so `_reexported_stdlib_modules` reads it and both the source-module injection
+the record, so `_compiled_stdlib_modules` reads it and both the source-module injection
 and the bitcode link line take it. A re-exported LIBRARY follows the same rule (#1106):
 `_resolve_library_imports` loads it as if the consumer wrote the import -- from a source
 library's re-parsed statement and from a compiled library's `kind: "library"` record --
@@ -704,10 +704,11 @@ as the consumer's own units are.
   TEMPLATES instead (`_generic_perk_impl_templates`), and the
   consumer instantiates them like any other template.
 - **v1 native `...T` variadics** as public functions — CE0116, §5.1.
-- **A plain `use` of another library** — if library A's source does a plain
-  `use <lib/b>`, a consumer of A still needs its own `use <lib/b>` statement. A
-  `public use <lib/b>` loads B for the consumer (§5). See `docs/libraries.md`,
-  Limitation 1.
+- **The NAMES of a plain `use` of another library** — if library A's source does a plain
+  `use <lib/b>`, the consumer's build loads B (A's `dependencies` record says so), and a
+  consumer of A still needs its own `use <lib/b>` to write a name of B. A `public use
+  <lib/b>` hands B's names on (§5). Loading is transitive, visibility is not (#1120); see
+  `docs/libraries.md`, Library Dependencies.
 
 ### 5.9 Extension methods
 
@@ -732,6 +733,11 @@ records carry them, both in `templates`, and every kind writes both.
   pass's own `FunctionCollector`. The analyzer cuts each copy, and the copy goes to the
   entry unit, because the template's unit is not a unit of the build (§4.6). The copy
   carries `is_library_template`, so its body may call the library's privates.
+
+One method name on one type from two libraries is CE0101 for every kind, with a note that
+names each library (`_reject_library_extension_clash`). The two bodies are two
+definitions of one symbol, and before #1120 the second record was skipped with no
+diagnostic, so which body ran depended on the build mode.
 
 The methods of an implementation of a perk that does NOT ship (a private perk that no
 export names) travel as `extensions` records. The perk hides its contract, and its
