@@ -1,0 +1,12 @@
+# A hybrid library uses a source ld_b (public `use`), and the consumer
+# imports both: one ld_b, so one b_val.
+# BUILD_LIB: ld_b.sushi
+# BUILD_LIB_HYBRID: ld_a_pub.sushi
+# EXPECT_STDOUT_EXACT: "8\n7\n"
+use <lib/ld_a_pub>
+use <lib/ld_b>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0

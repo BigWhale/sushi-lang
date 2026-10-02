@@ -1,0 +1,4 @@
+use <lib/ld_b_mid>
+
+public fn at_val() i32:
+    return bm_val() + 1

@@ -1,0 +1,5 @@
+use <lib/ld_mu_a>
+use <lib/ld_mu_c>
+
+public fn sum_ac() i32:
+    return a_val() + c_val()

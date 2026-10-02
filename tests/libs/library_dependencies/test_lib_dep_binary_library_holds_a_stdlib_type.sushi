@@ -1,0 +1,15 @@
+# A binary library's public struct holds a `File`, because the library writes
+# `use <io/fs>`. The consumer writes only `use <lib/ld_fs_log>`: the build loads the
+# module for the type, and gives the consumer no name of it.
+# BUILD_LIB_BINARY: ld_fs_log.sushi
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n1\n"
+use <lib/ld_fs_log>
+
+fn main() i32:
+    match console_log():
+        Result.Ok(nom log) ->
+            match log_line(poke log, "Mostly Harmless"):
+                Result.Ok(_) -> println("{lines_of(log)}")
+                Result.Err(_) -> return 1
+        Result.Err(_) -> return 1
+    return 0

@@ -1,0 +1,2 @@
+public fn d_val() i32:
+    return 5

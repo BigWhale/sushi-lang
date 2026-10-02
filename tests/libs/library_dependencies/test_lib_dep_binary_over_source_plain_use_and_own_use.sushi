@@ -1,0 +1,12 @@
+# A binary library uses a source ld_b (plain `use`), and the consumer
+# imports both: one ld_b, so one b_val.
+# BUILD_LIB: ld_b.sushi
+# BUILD_LIB_BINARY: ld_a_plain.sushi
+# EXPECT_STDOUT_EXACT: "8\n7\n"
+use <lib/ld_a_plain>
+use <lib/ld_b>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0
