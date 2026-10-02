@@ -6,6 +6,12 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
+  fixed one. Parentheses around a function type are legal in every type position;
+  `fn(i32) -> i32[]` is still a function that returns `i32[]`, and a message prints the
+  parentheses.
+- **`extend T with ns.Perk`** names a perk behind an alias in an implementation.
+
 - **A nullable C pointer is a `Maybe` at the FFI boundary.** `Maybe@(string)` and
   `Maybe@(ptr)` in an extern parameter or return mean "may be NULL": a NULL return answers
   `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A plain `string` or `ptr`
@@ -78,6 +84,31 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A call behind a unit alias has its parameter modes.** A generic, a stdlib function
+  and a native variadic called as `l.gen(nom n)`, `m.sqrt(x)` or `v.coll(1, 2, 3)` were
+  an internal error (CE0129) or skipped the mode check. A call with no mode stamp is now
+  an internal error (CE0143), never a silent skip.
+- **A lambda inside a lambda captures a local of the function**, at any depth. It was an
+  internal error. Moving an owning capture out of the outer environment is CE2411, as
+  any field read of the environment is.
+- **Borrows of two different captured variables in a lambda do not conflict.** A borrow
+  of a captured variable is a borrow of that variable, and a message names it as
+  written, not as `#closure_env.s`.
+- **A perk is in scope only where the unit imports it**, as every other name is. An
+  out-of-scope perk is `CE4003` in an implementation, a constraint and a pack constraint,
+  once, with the import in the help.
+- **Each unit of a compiled library sees only its own imports.** A `dependencies` record
+  names the units that write the `use`.
+- **One fault, one diagnostic.** An unknown type inside a generic type is one `CE2001`; a
+  use of a name that `CE1005` refused gives nothing more; a consume of a captured
+  variable is `CE2411` alone; a generic function value that solves no callee is `CE2093`
+  alone; a type-pack name used as a value is the new `CE0144`, which names `expand`.
+- **Clearer messages.** `CE2093` says why a generic function value is refused and what
+  to state; `CE2099` names the type of a size constant that is not an integer; `CE2100`
+  says that an array has no top-level `==` and names the struct-row escape; the `CE6001`
+  help follows the context (`while`, `elif`, a type parameter on a perk method); an import
+  help writes a stdlib module as `use <io/fs>`.
+
 - **A library's dependencies load transitively; their names do not.** A library records
   every `use <lib/...>` it writes, plain or public, with the version it was built
   against, and the consumer's build loads the whole graph. A plain `use` gives the
@@ -140,6 +171,10 @@ All notable changes to Sushi Lang will be documented in this file.
   form. A `HashMap@(i32[2][2], V)` key was `CE2055`.
 
 ### Changed
+
+- **`EXPECT_ERROR_CODES_EXACT` counts each code**, so a fixture can assert that a fault
+  is reported once. A library build directive accepts exit 0 only; a library that builds
+  with a warning is `BUILD_LIB_WARNS: x.sushi [kind] -> CW3003`.
 
 - **A peer address is an `IpAddr`.** `TcpStream.peer_ip()` answers `IpAddr | NetError`,
   and `Datagram.peer()` reads the sender as an `IpAddr`. `<net/tcp>` and `<net/udp>`
