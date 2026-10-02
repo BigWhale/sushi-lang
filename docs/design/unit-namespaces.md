@@ -905,14 +905,50 @@ stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
 `IoError` from a read. The fixtures under `tests/namespaces/reexport/` hold rule 3.
 
 **A library re-exports a library** (#1106). `public use <lib/b>` in a library A is the
-same rule as `public use <io/error>` in `<io/contracts>`. The consumer's build finds B on
-`SUSHI_LIB_PATH` as if the consumer wrote `use <lib/b>`: a source A by its re-parsed
-statement, a compiled A by its `kind: "library"` record (`_resolve_library_imports`,
-`compiler/pipeline.py`, follows both; the monolithic link reads the record through
-`reexported_libraries`). Only a `public use` loads B; a plain `use <lib/b>` in A stays
-local. A B that the consumer also imports for itself is one candidate, because the
-candidates count by declaring unit. A B that is not on the path is CE3502 at the
-consumer, with a note that names A's `public use`.
+same rule as `public use <io/error>` in `<io/contracts>`: B's public names become A's own,
+so a consumer of A writes them.
+
+**Loading is not visibility** (#1120). The two questions have two rules. LOADING is
+transitive: A records every `use <lib/...>` of its own units, plain or public, in the
+manifest `dependencies` with the name and the version of the `.slib` that its build
+found, and the consumer's build loads the whole graph (`_resolve_library_imports`,
+`compiler/pipeline.py`): a source A by its re-parsed statements, a compiled A by its
+records. VISIBILITY is this section's rule and is not transitive: only a `public use` in
+A, or the consumer's own `use <lib/b>`, gives the consumer B's names. A plain `use
+<lib/b>` loads B for A's body and hands nothing on, so a bare `b_val()` at the consumer is
+CE2008.
+
+**A compiled library is a unit for the scope** (#1120). A source library's declarations
+are filed under its injected units (`lib/<library>/<unit>`), and a compiled library's
+are filed under the same names: each public function in `funcs.by_unit`, each public
+constant and unit variable in `constants.by_unit` (its `ConstSig.unit_name` is the
+library unit), and each public struct, enum and generic type as a visibility record of
+that unit (`library_registration.py`). So a compiled library's name reaches only a unit
+whose scope holds the library unit -- its own `use <lib/a>`, or a `public use` chain --
+and a second unit of the consumer that does not import the library hears CE2008, CE1001
+or CE2001, as for a source library.
+
+A copy of a compiled library's template lands in a unit of the consumer and still
+resolves the names of its body where the template was written. The `namespaces` step
+builds one table for each unit of each compiled library
+(`build_compiled_library_namespaces`): the units of the library, and every module and
+library of its `dependencies` records, plain or public. The manifest records the `use`
+statements of the library as a whole, so each unit of a library sees what any unit of
+it uses. The copy carries that unit as `scope_unit` (`generics/synthesis.py` for a
+function, `_library_scope` in the analyzer for an extension and a perk implementation, a
+lifted lambda from its owner), and a library constant that lands in a host unit carries
+it too. Each reader of a body asks `body_namespaces` and reads that table: the `scope`,
+`typecheck` and `borrow` passes and the backend (`LLVMCodegen.body_scope_unit`). The
+type arguments still come from the consumer, and the identity of an instance is still
+`(unit, name, type args)`.
+
+A library is identified by its stamped `library_name`, and the driver stamps every `use
+<lib/...>` with the name and the version that it found (`UseStatement.library_name`), so
+the provider of section 3.1 picks the library by name: a `.slib` built under another name
+than its unit's re-exports exactly as the others do. One library that two paths reach is
+loaded once and is one candidate. Two versions of one library in the graph are CE3519. A
+dependency that is not on the path is CE3502 at the consumer, with a note at the `use`
+that needs it.
 
 **What this does not decide.** Whether a `public use` may re-export a single name
 (`public use "geometry".Vec`). It is open until asked for.

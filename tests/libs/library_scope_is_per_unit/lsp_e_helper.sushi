@@ -1,0 +1,5 @@
+use <lib/lsp_e>
+
+public fn helper_val() i32:
+    let EBox@(i32) b = e_make(nom 1)
+    return b.total() + b.show()

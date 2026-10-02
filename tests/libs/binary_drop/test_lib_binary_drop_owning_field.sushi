@@ -1,0 +1,16 @@
+# A library struct with an owning field of a library Drop type: the consumer drops the
+# field, and a consumer struct that holds the library type drops it too.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_STDOUT_EXACT: "held 3\nwrap 5\ndrop 5\ndrop 3\n"
+# EXPECT_NO_LEAKS: true
+use <lib/drop_res_lib>
+
+struct Wrap:
+    Res inner
+
+fn main() i32:
+    let Holder h = hold(3)
+    println(h.label)
+    let Wrap w = Wrap(make(5))
+    println("wrap {w.inner.id}")
+    return 0

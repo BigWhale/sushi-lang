@@ -1,0 +1,5 @@
+use <lib/ld_mx_p>
+use <lib/ld_mx_q>
+
+public fn helped(i32 n) i32:
+    return n.doubled()

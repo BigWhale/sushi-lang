@@ -11,6 +11,16 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
 
 
+def library_unit(lib_name: str, unit: str | None) -> str:
+    """The unit a compiled library's record is declared in, as `lib/<library>/<unit>`.
+
+    The name a source library's injected unit has, so one unit-keyed table and one
+    scope serve both kinds of library (#1120). `unit` is the record's `unit` key; a
+    record with none is of the library's only unit, which has the library's name.
+    """
+    return f"lib/{lib_name}/{unit or lib_name}"
+
+
 def manifest_reexports(manifest: dict) -> tuple[dict, ...]:
     """One library's `public use` records: `{"unit", "path", "kind"}` each (#585).
 
@@ -32,6 +42,28 @@ def reexported_libraries(manifest: dict) -> tuple[str, ...]:
     """
     return tuple(record["path"] for record in manifest_reexports(manifest)
                  if record.get("kind") == "library" and record.get("path"))
+
+
+def manifest_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """One library's `dependencies` records: `{"path", "kind", ...}` each (#1120).
+
+    The ONE reader of the key. A `stdlib` record is a `use <module>` of the library's
+    own units; a `library` record is a `use <lib/...>`, plain or public, with the
+    `library_name` and the `library_version` that the library's build found.
+    """
+    return tuple((manifest or {}).get("dependencies") or ())
+
+
+def library_dependencies(manifest: dict) -> tuple[dict, ...]:
+    """The `library` records of `dependencies`: what the consumer's build must load."""
+    return tuple(record for record in manifest_dependencies(manifest)
+                 if record.get("kind") == "library" and record.get("path"))
+
+
+def stdlib_dependencies(manifest: dict) -> tuple[str, ...]:
+    """The stdlib module paths of `dependencies`."""
+    return tuple(record["path"] for record in manifest_dependencies(manifest)
+                 if record.get("kind") == "stdlib" and record.get("path"))
 
 
 def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
@@ -95,6 +127,9 @@ class LibraryMetadata:
     path: Path
     platform: str
     functions: dict[str, 'FuncSig'] = field(default_factory=dict)
+    # The unit that exports each public function, as `lib/<library>/<unit>`: the name
+    # a source library's injected unit has. CW3002 names it (#1103).
+    export_units: dict[str, str] = field(default_factory=dict)
     # Export-closure private helpers (C4b/C5): signature-only records whose
     # definitions link from the library bitcode. Kept separate from
     # `functions` because the consumer applies clash (CE5007), not
@@ -107,9 +142,14 @@ class LibraryMetadata:
     # enum and a constant. A type is the one the type funnel asks about, because a kept
     # type reaches no table and "unknown type" was the wrong word for it.
     not_exported: dict[str, str] = field(default_factory=dict)
+    # The same records as (unit, name, kind), one for each unit that keeps the name
+    # (#1112). CE5013 reads the unit to know which symbol the bitcode defines. The unit
+    # is None for a record of a library that was built before the record had one.
+    kept: tuple[tuple[str | None, str, str], ...] = ()
     structs: dict[str, StructType] = field(default_factory=dict)
     enums: dict[str, EnumType] = field(default_factory=dict)
-    dependencies: list[str] = field(default_factory=list)
+    # The `dependencies` records (#1120): every module and library the units use.
+    dependencies: tuple[dict, ...] = ()
     # What each of the library's units re-exports (#585): the target of every
     # `public use`, keyed by the unit that wrote it. A compiled library ships no text
     # for the `namespaces` pass to read the statement from.
@@ -145,7 +185,7 @@ class LibraryRegistry:
             name=lib_name,
             path=lib_path,
             platform=manifest.get("platform", "unknown"),
-            dependencies=manifest.get("dependencies", []),
+            dependencies=manifest_dependencies(manifest),
             reexports=manifest_reexports(manifest),
             raw_manifest=manifest,
         )
@@ -158,6 +198,10 @@ class LibraryRegistry:
 
         metadata.functions = self._parse_functions(manifest.get("public_functions", []),
                                                    lib_path=lib_path)
+        metadata.export_units = {
+            func_info["name"]: library_unit(lib_name, func_info.get("unit"))
+            for func_info in manifest.get("public_functions", []) or []
+        }
 
         # Keyed (unit, name): two of the library's own units may each ship a
         # private `helper`, and each record names its unit (#494). The key wears the
@@ -165,14 +209,17 @@ class LibraryRegistry:
         # consumer unit of the same name cannot collide with it in any per-unit table.
         templates = manifest.get("templates") or {}
         for func_info in templates.get("private_functions", []) or []:
-            unit = f"lib/{lib_name}/{func_info.get('unit') or lib_name}"
+            unit = library_unit(lib_name, func_info.get("unit"))
             parsed = self._parse_functions([func_info], owner=unit, lib_path=lib_path)
             metadata.private_functions[(unit, func_info["name"])] = parsed[func_info["name"]]
 
+        kept_records = manifest.get("not_exported", []) or []
         metadata.not_exported = {
-            record["name"]: record.get("kind", "function")
-            for record in manifest.get("not_exported", []) or []
+            record["name"]: record.get("kind", "function") for record in kept_records
         }
+        metadata.kept = tuple(
+            (record.get("unit"), record["name"], record.get("kind", "function"))
+            for record in kept_records)
 
         self._libraries[lib_name] = metadata
         return metadata

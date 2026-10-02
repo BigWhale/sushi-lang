@@ -1,0 +1,10 @@
+# A copy of a binary library's template calls a private and a public function of
+# its library, and names its constant and its type. The entry unit does not
+# import the library; the second unit does.
+# BUILD_LIB_BINARY: lsp_t.sushi
+# EXPECT_STDOUT_EXACT: "42\n1\n"
+use "lsp_t_helper"
+
+fn main() i32:
+    println("{helper_val()}")
+    return 0

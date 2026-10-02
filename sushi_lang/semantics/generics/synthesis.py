@@ -24,7 +24,7 @@ def register_synthesized_function(
     prefix. Two units' instances of one mangled base name are then two symbols, and
     each unit's call binds to its own. A `home_unit` that names no unit in the build
     -- a binary library's template, whose units exist only at the producer -- lands in
-    the entry unit with no unit identity, exactly as before.
+    the entry unit with no unit identity, and keeps the library unit as `scope_unit`.
 
     A lifted lambda passes no `home_unit`: its name already carries the per-unit
     lifter's counter (#402), and it keeps its bare symbol.
@@ -33,6 +33,11 @@ def register_synthesized_function(
 
     if home_unit is not None and units:
         if not any(u.name == home_unit and u.ast for u in units):
+            # The names of the body still resolve where the template was written: a
+            # copy of a compiled library's template reads the scope of the library
+            # unit that declares it, never the scope of the unit it lands in (#1120).
+            if from_library_template:
+                funcdef.scope_unit = home_unit
             home_unit = None
 
     name = funcdef.name

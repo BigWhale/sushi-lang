@@ -19,7 +19,7 @@ import sushi_lang.internals.errors as er
 from sushi_lang.internals.diagnostics import SushiError
 from sushi_lang.internals.report import Origin, Reporter
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.semantics.library_registry import LibraryRegistry
+from sushi_lang.semantics.library_registry import LibraryRegistry, library_unit
 from sushi_lang.semantics.library_templates import (
     TemplateSourceError, apply_template_bindings, deserialize_perk_impl,
     parse_one_declaration)
@@ -27,7 +27,8 @@ from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type, display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
-from sushi_lang.semantics.visibility import TYPE_KINDS, DeclOrigin, reject_library_clash
+from sushi_lang.semantics.visibility import (
+    TYPE_KINDS, DeclOrigin, reject_library_clash, warn_shadowed_export)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, Program
@@ -54,6 +55,16 @@ _PRIVATE_TYPE_TABLES = (
     ("generic_structs", "struct", False),
     ("generic_enums", "enum", False),
 )
+
+
+def _template_origin(lib_name: str, version: Optional[str], label: str,
+                     source: str) -> Origin:
+    """Whose code a library template is, and the text its spans index into."""
+    return Origin(
+        filename=label, source=source,
+        provenance=(f"'{lib_name}' {version or 'unknown'} "
+                    f"ships this template; it is monomorphized here because of "
+                    f"`use <lib/{lib_name}>`"))
 
 
 class _Snippet:
@@ -113,6 +124,8 @@ class LibraryRegistration:
         # library's code against the consumer's layout, or the consumer's code against
         # the library's.
         self.refused_types: list[str] = []
+        # The generic type templates the libraries ship, by name: the library of each.
+        self.generic_type_owners: dict[str, str] = {}
         # One collector for every re-parsed record, built on first use. A fresh
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
@@ -183,21 +196,24 @@ class LibraryRegistration:
         if self.registry is None and self.linker is None:
             return
         build_units = {u.name for u in compilation_order}
+        # A unit with a provenance arrived from a source library or the stdlib.
+        consumer_units = {u.name for u in compilation_order if u.provenance is None}
         self._register_types("structs", "struct", LibraryRegistry.get_all_structs,
                              build_units)
         self._register_types("enums", "enum", LibraryRegistry.get_all_enums,
                              build_units)
         self._refile_consumer_extensions(compilation_order)
-        self._register_functions()
+        self._register_functions(consumer_units)
         self._register_private_functions(build_units)
         self._register_not_exported()
         self._register_constants(compilation_order)
         self._register_private_types(build_units)
         self._register_perk_impls()
         self._register_generic_perk_impls()
+        self._reject_foreign_drops(compilation_order)
         self._register_extensions(build_units)
         self._register_generic_extensions(build_units)
-        self._register_generic_functions(build_units)
+        self._register_generic_functions(build_units, consumer_units)
 
     def signatures(self) -> Iterator['FuncSig']:
         """Every signature a loaded library's manifest declares: the public API, and
@@ -315,6 +331,28 @@ class LibraryRegistration:
             if name not in table.by_name:
                 table.by_name[name] = ty
                 table.order.append(name)
+        self._record_public_types(key, kind)
+
+    def _record_public_types(self, key: str, kind: str) -> None:
+        """File each public type a library exports under the unit that declares it.
+
+        A source library's type has the record of its unit, and a compiled library's
+        type has one of the same shape, so it is a name only in a unit whose scope holds
+        that unit (#1120). A name a consumer declaration took is refused above and gets
+        no record here.
+        """
+        if self.registry is None:
+            return
+        for library in self.registry.get_all_libraries().values():
+            manifest = library.raw_manifest or {}
+            for record in manifest.get(key, []) or []:
+                name = record.get("name")
+                if not name or name in self.refused_types:
+                    continue
+                self.tables.visibility.record(DeclOrigin(
+                    kind=kind, name=name,
+                    unit_name=library_unit(library.name, record.get("unit")),
+                    filename=manifest.get("library_path")))
 
     def _reject_type_clash(self, kind: str, name: str,
                            build_units: set[str]) -> bool:
@@ -370,20 +408,53 @@ class LibraryRegistration:
                 owner = lib.name
         return owner
 
-    def _register_functions(self) -> None:
+    def _register_functions(self, consumer_units: set[str]) -> None:
         """Register the libraries' public functions into the function table.
 
         The registry's `_parse_functions` is the ONE reader of a manifest signature. A
         second builder lived here and read `return_type` alone, so a binary library's
-        `| E` was typed StdError at every consumer (#541).
+        `| E` was typed StdError at every consumer (#541). A consumer function of the
+        same name keeps the name, and CW3002 says so, as for a source library (#1103).
+
+        Each function is also filed under the `lib/<library>/<unit>` that declares it,
+        as a source library's is, so it is a name only in a unit whose scope holds that
+        unit: its own `use <lib/...>`, or a `public use` chain (#1120). A copy of the
+        library's template reads the scope of the library unit, so it calls them too.
         """
         if self.registry is None:
             return
         funcs = self.tables.funcs
         for func_name, func_sig in self.registry.get_all_functions().items():
-            if func_name not in funcs.by_name:
+            existing = funcs.by_name.get(func_name)
+            if existing is None:
                 funcs.by_name[func_name] = func_sig
                 funcs.order.append(func_name)
+            elif existing.unit_name in consumer_units:
+                self._warn_shadowed_export(existing, self._export_unit(func_name))
+        for library in self.registry.get_all_libraries().values():
+            manifest = library.raw_manifest or {}
+            for record in manifest.get("public_functions", []) or []:
+                sig = library.functions.get(record["name"])
+                if sig is None:
+                    continue
+                funcs.by_unit.setdefault(library_unit(library.name, record.get("unit")),
+                                         {})[record["name"]] = sig
+
+    def _export_unit(self, func_name: str) -> str:
+        """The unit that exports a public function, as `lib/<library>/<unit>`.
+
+        The LAST library that exports the name, as `get_all_functions` merges them.
+        """
+        owner = func_name
+        if self.registry is not None:
+            for lib in self.registry.get_all_libraries().values():
+                owner = lib.export_units.get(func_name, owner)
+        return owner
+
+    def _warn_shadowed_export(self, existing, owner: str) -> None:
+        """CW3002 at the consumer declaration that shadows a library export."""
+        warn_shadowed_export(self.reporter, existing.name, existing.name_span,
+                             existing.filename, owner=owner)
 
     def _register_private_functions(self, build_units: set[str]) -> None:
         """Register the export-closure private helpers (C4b/C5).
@@ -462,8 +533,13 @@ class LibraryRegistration:
             # type are still printed by `--lib-info`; only the value is out of reach.
             return
 
+        unit = library_unit(lib_name, record.get("unit"))
         existing = constants.by_name.get(const_name)
         if existing is not None:
+            if existing.unit_name == unit:
+                # The same declaration under a second arm: a public constant that a
+                # template body names ships in the closure too.
+                return
             if published:
                 er.emit_with(self.reporter, er.ERR.CE0105,
                              getattr(existing, "name_span", None),
@@ -477,20 +553,24 @@ class LibraryRegistration:
                         lib=lib_name, name=const_name)
             return
 
+        # Collected under the library unit that declares it, as a source library's
+        # constant is: it is a name only where the scope holds that unit (#1120).
         snippet = self._collect_snippet(
-            source, f"<const:{lib_name}:{const_name}>", lib_name, lib_name,
+            source, f"<const:{lib_name}:{const_name}>", unit, lib_name,
             f"constant '{const_name}'")
         sig = snippet.declared("constants", const_name)
         const_defs = snippet.program.constants or []
         if sig is None or len(const_defs) != 1:
             return
 
-        constants.by_name[const_name] = sig
-        constants.order.append(const_name)
+        constants.declare(const_name, sig)
         decl = const_defs[0]
         if record.get("link_symbol") and hasattr(decl, "link_symbol"):
             decl.link_symbol = record["link_symbol"]
         decl.home_unit = record.get("unit") or lib_name
+        # The copy lands in a unit of the consumer, and its initializer still reads
+        # the library unit's scope.
+        decl.scope_unit = unit
         host_unit.ast.constants.append(decl)
 
     def _register_private_types(self, build_units: set[str]) -> None:
@@ -608,7 +688,7 @@ class LibraryRegistration:
             generic_structs=self.tables.generic_structs,
             generic_enums=self.tables.generic_enums, perks=perks)
 
-        for lib_name, _manifest, record in self._template_records("generic_perk_impls"):
+        for lib_name, manifest, record in self._template_records("generic_perk_impls"):
             base = record.get("type")
             perk_name = record.get("perk")
             source = record.get("source")
@@ -626,12 +706,20 @@ class LibraryRegistration:
             except TemplateSourceError:
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
                 continue
+            # The methods are the library's code, as an extension template's are: a
+            # copy may call the library's privates, and a diagnostic names the library.
+            origin = _template_origin(lib_name, manifest.get("library_version"), label,
+                                      source)
+            for impl in [*program.perk_impls, *(program.generic_perk_impls or [])]:
+                for method in impl.methods:
+                    method.is_library_template = True
+                    method.library_origin = origin
 
             collector = PerkCollector(
                 Reporter(source=source, filename=label),
                 perks=perks, perk_impls=perk_impls,
                 is_declared_type=is_declared_type, generic_perk_impls=table)
-            collector.current_unit_name = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+            collector.current_unit_name = library_unit(lib_name, record.get("unit"))
             collector.current_unit_file = label
             before = len(table.templates(base))
             collector.collect_implementations(program)
@@ -639,6 +727,40 @@ class LibraryRegistration:
                 # The snippet parsed and the collector still filed nothing: say so, or
                 # the user later gets "no such method" on a perk the library implements.
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
+
+    def _reject_foreign_drops(self, compilation_order: list['Unit']) -> None:
+        """CE4012 for a consumer's `Drop` on a type that a binary library declares (#1118).
+
+        The collect pass refuses a foreign `Drop` target from the visibility record, but
+        a public library type has a record with no declaring unit, and the consumer's
+        implementation is collected before the library's arrives. So the rule is read
+        here, where the library's type names and the consumer's implementations meet.
+        """
+        drop = PerkCollector.DROP_PERK
+        files = {u.name: str(u.file_path) for u in compilation_order}
+        owners: dict[str, str] = {}
+        if self.registry is not None:
+            for lib in self.registry.get_all_libraries().values():
+                owners.update(dict.fromkeys([*lib.structs, *lib.enums], lib.name))
+        for name, lib_name in self.generic_type_owners.items():
+            owners.setdefault(name, lib_name)
+
+        perk_impls = self.tables.perk_impls
+        found = [(perk_impls.get(name, drop), perk_impls.owner(name, drop))
+                 for name in sorted(perk_impls.by_perk.get(drop, ()))]
+        table = self.tables.generic_perk_impls
+        found += [(t.impl, t.unit_name) for base in sorted(owners)
+                  for t in table.templates(base) if t.impl.perk_name == drop]
+        for impl, unit_name in found:
+            if impl is None or unit_name not in files:
+                continue
+            target = impl.target_type
+            declared = (getattr(target, "base_name", None)
+                        or getattr(target, "generic_base", None)
+                        or getattr(target, "name", None))
+            if declared in owners:
+                er.emit(self.reporter, er.ERR.CE4012, impl.perk_name_span or impl.loc,
+                        filename=files[unit_name], type=declared, owner=owners[declared])
 
     def _function_collector(self, reporter: Reporter, unit_name: Optional[str],
                             unit_file: Optional[str]):
@@ -716,9 +838,12 @@ class LibraryRegistration:
                 if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
                                                  existing.filename, sig.name, target)
+                else:
+                    self._reject_library_extension_clash(
+                        existing.unit_name or "?", lib_name, lib_file, sig.name, target)
                 continue
 
-            unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+            unit = library_unit(lib_name, record.get("unit"))
             self_mode = record.get("self_mode")
             is_static = bool(record.get("static", False))
             extensions.add_method(ExtensionMethod(
@@ -759,28 +884,34 @@ class LibraryRegistration:
                 if bindings:
                     apply_template_bindings(ext.body, bindings)
                 ext.is_library_template = True
-                ext.library_origin = Origin(
-                    filename=label, source=source,
-                    provenance=(f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
-                                f"ships this template; it is monomorphized here because "
-                                f"of `use <lib/{lib_name}>`"))
+                ext.library_origin = _template_origin(
+                    lib_name, manifest.get("library_version"), label, source)
 
             reporter = Reporter(source=source, filename=label)
             collector = self._function_collector(
-                reporter, f"lib/{lib_name}/{record.get('unit') or lib_name}", label)
+                reporter, library_unit(lib_name, record.get("unit")), label)
             collector.collect_extensions(program)
             if any(d.code == "CE0101" for d in reporter.items):
                 self._reject_template_clash(lib_name, record["name"], build_units)
 
     def _reject_template_clash(self, lib_name: str, method: str,
                                build_units: set[str]) -> None:
-        """CE0101 at the consumer's template that a library template of one name meets."""
+        """CE0101 at the template, of the consumer or of another library, that a library
+        template of one name meets."""
+        other = None
         for declarations in self.tables.generic_extensions.by_type.values():
             for (name, _key), existing in declarations.items():
-                if name == method and existing.unit_name in build_units:
+                if name != method:
+                    continue
+                if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
                                                  existing.filename, method, None)
                     return
+                if not (existing.unit_name or "").startswith(f"lib/{lib_name}/"):
+                    other = existing.unit_name
+        if other is not None:
+            self._reject_library_extension_clash(
+                other, lib_name, self._library_file(lib_name), method, None)
 
     def _reject_extension_clash(self, lib_name: str, span, filename, method: str,
                                 target) -> None:
@@ -797,24 +928,47 @@ class LibraryRegistration:
                   "between the two; rename one of them") \
             .emit()
 
-    def _register_generic_functions(self, build_units: set[str]) -> None:
+    def _reject_library_extension_clash(self, first_unit: str, lib_name: str,
+                                        lib_file: str, method: str, target) -> None:
+        """CE0101: two compiled libraries declare one extension method on one type.
+
+        The bodies are two definitions of one symbol, and which one the link keeps
+        depends on the build mode, so the second record is refused and not skipped
+        (#1120). Neither declaration has a file the consumer can see, so a note names
+        each library in prose.
+        """
+        parts = first_unit.split("/")
+        first = parts[1] if len(parts) > 2 and parts[0] == "lib" else first_unit
+        name = (f"extension method '{method}' for '{display_type(target)}'"
+                if target is not None else f"extension method '{method}'")
+        er.emit_with(self.reporter, er.ERR.CE0101, None, lib_file, name=name) \
+            .note(f"library '{first}' declares it") \
+            .note(f"library '{lib_name}' declares it too") \
+            .help("a method is found on the receiver's type, so no import can choose "
+                  "between the two; rename one of them") \
+            .emit()
+
+    def _register_generic_functions(self, build_units: set[str],
+                                    consumer_units: set[str]) -> None:
         """Register the generic function templates the libraries ship."""
         generic_funcs = self.tables.generic_funcs
         for lib_name, manifest, record in self._template_records("generic_functions"):
             func_name = record["name"]
-            template_unit = f"lib/{lib_name}/{record.get('unit') or lib_name}"
+            template_unit = library_unit(lib_name, record.get("unit"))
             existing = generic_funcs.by_name.get(func_name)
-            # A CONSUMER's declaration wins silently, but an export-closure PRIVATE
-            # template must keep its name: shadowing it would change what the
-            # library's other bodies call (CE5007). A declaration from ANOTHER library
-            # unit is neither: the two coexist, each under its unit (#494/#495), so the
-            # walk falls through to registration.
+            # A CONSUMER's declaration wins, and CW3002 says so (#1103), but an
+            # export-closure PRIVATE template must keep its name: shadowing it would
+            # change what the library's other bodies call (CE5007). A declaration from
+            # ANOTHER library unit is neither: the two coexist, each under its unit
+            # (#494/#495), so the walk falls through to registration.
             if existing is not None and \
                     getattr(existing, "unit_name", None) in build_units:
                 if record.get("private"):
                     er.emit(self.reporter, er.ERR.CE5007,
                             getattr(existing, "name_span", None),
                             lib=lib_name, name=func_name)
+                elif existing.unit_name in consumer_units:
+                    self._warn_shadowed_export(existing, template_unit)
                 continue
             if generic_funcs.by_unit.get(template_unit, {}).get(func_name):
                 continue
@@ -845,14 +999,8 @@ class LibraryRegistration:
             # a library's mistake against the consumer's file (#471). The filename
             # shape is the throwaway reporter's, so one convention names a template
             # everywhere.
-            gfd.library_origin = Origin(
-                filename=label,
-                source=source,
-                provenance=(
-                    f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
-                    f"ships this template; it is monomorphized here because of "
-                    f"`use <lib/{lib_name}>`"),
-            )
+            gfd.library_origin = _template_origin(
+                lib_name, manifest.get("library_version"), label, source)
 
             # The snippet already carries these, but the record is the source of truth.
             rec_tps = record.get("type_params") or []
@@ -871,9 +1019,9 @@ class LibraryRegistration:
         `key` names both the manifest list and the table: `generic_structs` or
         `generic_enums`.
 
-        A PUBLIC template gets a visibility record with no declaring unit, as the
-        registry's other public types have: a binary library is no unit of the build,
-        and the consumer's scope admits a name no unit declared. The seed runs before
+        A PUBLIC template gets a visibility record under the `lib/<library>/<unit>` that
+        declares it, as the registry's other public types have, so the consumer's scope
+        admits the name only where it holds that unit (#1120). The seed runs before
         the collect loop, so a consumer that then declares the same name is filed as
         the LOSER, and a rule that reads the winner's shape asks `name_is_contested`
         before it speaks to it (#738). A PRIVATE template is recorded under its
@@ -900,13 +1048,16 @@ class LibraryRegistration:
 
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
+            self.generic_type_owners[type_name] = lib_name
             declarations = snippet.program.structs if kind == "struct" \
                 else snippet.program.enums
             node = next((d for d in declarations or [] if d.name == type_name), None)
             shipped_in = manifest.get("library_path")
             if getattr(node, "is_public", False):
                 self.tables.visibility.record(DeclOrigin(
-                    kind=kind, name=type_name, filename=shipped_in))
+                    kind=kind, name=type_name,
+                    unit_name=library_unit(lib_name, record.get("unit")),
+                    filename=shipped_in))
             else:
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=type_name, unit_name=lib_name, filename=shipped_in,

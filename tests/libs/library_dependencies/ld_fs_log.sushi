@@ -1,0 +1,17 @@
+use <io/fs>
+
+public struct Log:
+    File out
+    i32 lines
+
+public fn console_log() Log | IoError:
+    let File twin = stdout.share()??
+    return Result.Ok(Log(twin, 0))
+
+public fn log_line(poke Log log, string text) ~ | IoError:
+    log.out.write("{text}\n")??
+    log.lines := log.lines + 1
+    return Result.Ok(~)
+
+public fn lines_of(Log log) i32:
+    return log.lines

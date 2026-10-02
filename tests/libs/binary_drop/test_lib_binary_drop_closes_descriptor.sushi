@@ -1,0 +1,15 @@
+# A library handle that owns a descriptor closes it in its compiled drop(), at the
+# consumer's scope exit, and a library struct that wraps a File runs its drop() before
+# the File field closes.
+# BUILD_LIB_BINARY: drop_fd_lib.sushi
+# EXPECT_STDOUT_EXACT: "open\nlog drop 3\nclosed\n"
+# EXPECT_NO_OPEN_FDS: true
+use <io/fs>
+use <lib/drop_fd_lib>
+
+fn main() i32:
+    let Handle h = open_handle("/dev/null")
+    let Log l = open_log("/dev/null")
+    if (h.fd >= 0 and l.lines == 3):
+        println("open")
+    return 0

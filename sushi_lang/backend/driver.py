@@ -138,23 +138,21 @@ class LLVMDriver:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        library_paths = set()
         stdlib_units = set()
 
         for unit in units:
             if unit.ast is not None:
                 for use_stmt in unit.ast.uses:
-                    if use_stmt.is_library:
-                        library_paths.add(use_stmt.path)
-                    elif use_stmt.is_stdlib:
+                    if use_stmt.is_stdlib:
                         stdlib_units.add(use_stmt.path)
 
+        # Every COMPILED library of the graph, once, by its stamped name (#1120): the
+        # pipeline loaded each one, the consumer's own imports, the dependencies and
+        # the re-exports alike, so this is the one list of bitcode to link.
         library_linker = cg.library_linker
-        if library_linker is not None:
-            from sushi_lang.semantics.library_registry import reexported_libraries
-            for manifest in list(library_linker.loaded_libraries.values()):
-                library_paths.update(reexported_libraries(manifest))
-        if library_linker is not None and library_paths:
+        libraries = (dict(library_linker.loaded_libraries)
+                     if library_linker is not None else {})
+        if libraries:
             from sushi_lang.backend.module_linker import TwoPhaseLinker
 
             target_triple = llmod.triple if hasattr(llmod, 'triple') else ""
@@ -166,18 +164,15 @@ class LLVMDriver:
 
             from sushi_lang.backend.library_format import LibraryFormat
             from sushi_lang.backend.library_errors import LibraryError
-            for lib_path in library_paths:
+            for lib_name, loaded in sorted(libraries.items()):
                 try:
-                    slib_path = library_linker.resolve_library(lib_path)
-                    metadata, bitcode = LibraryFormat.read(slib_path)
-                    library_linker.loaded_libraries[metadata["library_name"]] = metadata
-
+                    _metadata, bitcode = LibraryFormat.read(Path(loaded["library_path"]))
                     lib_mod = llvm.parse_bitcode(bitcode)
-                    two_phase.add_library_module(lib_mod, metadata["library_name"])
+                    two_phase.add_library_module(lib_mod, lib_name)
                 except LibraryError:
                     raise
                 except Exception as e:
-                    raise LibraryError("CE3507", lib=lib_path, reason=str(e)) from e
+                    raise LibraryError("CE3507", lib=lib_name, reason=str(e)) from e
 
             for stdlib_path in stdlib_units:
                 bc_paths = cg.stdlib._resolve_stdlib_unit(stdlib_path)
@@ -222,6 +217,11 @@ class LLVMDriver:
         weak_units = frozenset(u.name for u in units if u.provenance is not None)
 
         mod_ir: ir.Module = cg.build_module_multi_unit(units, weak_units=weak_units)
+
+        # The incremental consumer links this library's object beside other objects
+        # that define the same inline runtime functions (#1117).
+        from sushi_lang.backend.codegen_llvm import _set_linkonce_odr_on_inline_runtime
+        _set_linkonce_odr_on_inline_runtime(mod_ir)
 
         # A perk impl may ship through the manifest and be overridden locally. weak_odr,
         # not linkonce_odr: it must survive optimization while unreferenced in the library,

@@ -1,0 +1,4 @@
+use <lib/ld_d>
+
+public fn bm_val() i32:
+    return d_val() + 1

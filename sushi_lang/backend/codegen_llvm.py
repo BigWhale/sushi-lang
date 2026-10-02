@@ -58,6 +58,8 @@ def _perk_method_to_extend_def(perk_impl, method) -> ExtendDef:
         err_type=getattr(method, "err_type", None),
         err_span=getattr(method, "err_span", None),
         written_channel=getattr(method, "written_channel", None),
+        # And the scope its names resolve in (#1120).
+        scope_unit=getattr(method, "scope_unit", None),
     )
 
 
@@ -84,6 +86,9 @@ class LLVMCodegen:
         # A named callee is resolved through it, so a library's own body reads the
         # library's signature where a consumer shadows the name (#487).
         self.emitting_unit: Optional[str] = None
+        # The library unit whose scope the body being emitted resolves in, while it is a
+        # copy of a compiled library's template (#1120). None for every other body.
+        self.body_scope_unit: Optional[str] = None
         # What each unit may write, bare and behind a dot, handed over by the semantic
         # analyser. The back end resolves a bare callee through the SAME ladder the
         # typecheck pass walked, or two units declaring one name would bind the call to
@@ -206,8 +211,12 @@ class LLVMCodegen:
 
     @property
     def scope(self):
-        """The scope of the unit being emitted, or an unrestricted one outside a unit."""
-        return self.scope_of(self.emitting_unit)
+        """The scope of the body being emitted, or an unrestricted one outside a unit.
+
+        A body's scope is its unit's, except for a copy of a compiled library's
+        template, which resolves in the library unit's (`body_scope_unit`, #1120).
+        """
+        return self.scope_of(self.body_scope_unit or self.emitting_unit)
 
     # Centralized memory management function declarations.
     # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
@@ -621,6 +630,10 @@ class LLVMCodegen:
         """
         if const.ty is None:
             return  # Skip constants with no type (should be caught in semantic analysis)
+
+        # A compiled library's constant is a name of the library unit, and its
+        # initializer reads that unit's scope (#1120).
+        unit_name = const.scope_unit or unit_name
 
         if isinstance(const, VarDef):
             self._emit_unit_variable(const, unit_name, defining)

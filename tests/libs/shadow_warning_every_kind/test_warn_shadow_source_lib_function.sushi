@@ -1,0 +1,14 @@
+# CW3002 for every library kind (#1103): the program declares `helper`, which a
+# source library exports. The same program as the binary fixture, and the same
+# warning.
+# BUILD_LIB: shadow_kind_lib.sushi
+# EXPECT_ERROR_CODE: CW3002
+# EXPECT_STDERR_CONTAINS: 'helper' shadows the function 'lib/shadow_kind_lib/shadow_kind_lib' exports
+use <lib/shadow_kind_lib>
+
+fn helper() i32:
+    return 42
+
+fn main() i32:
+    println("{helper()} {area(Point(2, 3))}")
+    return 0

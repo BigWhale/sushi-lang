@@ -1,12 +1,14 @@
 """The borrow pass. The pass object holds the state; siblings hold the rules."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, FrozenSet, List, Optional, Set
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set
 
 from sushi_lang.semantics.ast import Block, ExtendDef, FuncDef, Param, Program
 from sushi_lang.semantics.typesys import (
     BuiltinType, DynamicArrayType, ReferenceType, Type,
 )
+from sushi_lang.semantics.namespaces import body_namespaces
 from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
 from sushi_lang.internals.report import Reporter, Span
 
@@ -122,22 +124,40 @@ class BorrowChecker:
             for method in perk_impl.methods:
                 # Whether this body is one of many copies of one source (#800).
                 self.reporter.enter_body(method)
-                self._check_callable(method.params, method.body, fn_name=method.name,
-                                     self_type=perk_impl.target_type,
-                                     self_span=perk_impl.target_type_span,
-                                     self_mode=getattr(method, "self_mode", None))
+                with self._body_scope(method):
+                    self._check_callable(method.params, method.body, fn_name=method.name,
+                                         self_type=perk_impl.target_type,
+                                         self_span=perk_impl.target_type_span,
+                                         self_mode=getattr(method, "self_mode", None))
         self.reporter.leave_body()
+
+    @contextmanager
+    def _body_scope(self, node) -> Iterator[None]:
+        """Check one body in the scope its names resolve in (`body_namespaces`, #1120)."""
+        table = body_namespaces(node, getattr(self.tables, "namespaces", None))
+        if table is None:
+            yield
+            return
+        saved = (self.scope, self.callee_modes)
+        self.scope = table.scope
+        self.callee_modes = _build_callee_modes(self.tables, self.unit_name, table.scope)
+        try:
+            yield
+        finally:
+            self.scope, self.callee_modes = saved
 
     def _check_function(self, func: FuncDef) -> None:
         """Check borrow safety for a single plain function."""
-        self._check_callable(func.params, func.body, fn_name=func.name)
+        with self._body_scope(func):
+            self._check_callable(func.params, func.body, fn_name=func.name)
 
     def _check_extension(self, ext: ExtendDef) -> None:
         """Check borrow safety for an extension method."""
-        self._check_callable(ext.params, ext.body, fn_name=ext.name,
-                             self_type=ext.target_type,
-                             self_span=ext.target_type_span,
-                             self_mode=getattr(ext, "self_mode", None))
+        with self._body_scope(ext):
+            self._check_callable(ext.params, ext.body, fn_name=ext.name,
+                                 self_type=ext.target_type,
+                                 self_span=ext.target_type_span,
+                                 self_mode=getattr(ext, "self_mode", None))
 
     def _check_callable(self, params: List[Param], body: Block, *,
                         fn_name: Optional[str] = None,

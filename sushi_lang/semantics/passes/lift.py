@@ -47,6 +47,9 @@ class LambdaLifter:
         # every copy carrying the template's spans, so the copies answer one report
         # (#648).
         self._owner_instance_of = None
+        # And which scope its names resolve in: a copy of a compiled library's
+        # template resolves in the library unit's (#1120), and so does its lambda.
+        self._owner_scope_unit: Optional[str] = None
 
     def run(self) -> None:
         for fn in list(self.program.functions):
@@ -55,6 +58,7 @@ class LambdaLifter:
             self._owner_is_library = bool(getattr(fn, "is_library_template", False))
             self._owner_origin = getattr(fn, "library_origin", None)
             self._owner_instance_of = getattr(fn, "instance_of", None)
+            self._owner_scope_unit = getattr(fn, "scope_unit", None)
             self._walk(fn.body)
         self._owner_is_library = False
         self._owner_origin = None
@@ -65,12 +69,15 @@ class LambdaLifter:
         # fn templates -- their instantiation copies carry the lambdas and are
         # lifted into the copy's home unit in _check_monomorphized_extensions.
         for ext in list(self.program.extensions):
+            self._owner_scope_unit = getattr(ext, "scope_unit", None)
             self._walk(ext.body)
         for impl in list(self.program.perk_impls):
             for method in impl.methods:
+                self._owner_scope_unit = getattr(method, "scope_unit", None)
                 self._walk(method.body)
+        self._owner_scope_unit = None
 
-    def lift_body(self, body) -> List[FuncDef]:
+    def lift_body(self, body, scope_unit: Optional[str] = None) -> List[FuncDef]:
         """Lift one body and answer the FuncDefs this call produced (#399).
 
         The per-instantiation extension copies live in no unit AST, so the
@@ -81,7 +88,9 @@ class LambdaLifter:
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
+        self._owner_scope_unit = scope_unit
         self._walk(body)
+        self._owner_scope_unit = None
         return self._lifted[before:]
 
     def _walk(self, node) -> None:
@@ -160,6 +169,7 @@ class LambdaLifter:
             raise_internal_error("CE0137", name=lifted.name)
         self._lifted.append(lifted)
         lifted.instance_of = self._owner_instance_of
+        lifted.scope_unit = self._owner_scope_unit
 
     def _annotate_then_walk(self, lifted: FuncDef) -> None:
         """Type the lifted body, THEN look in it for the next lambda.

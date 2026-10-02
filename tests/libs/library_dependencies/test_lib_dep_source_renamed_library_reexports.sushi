@@ -1,0 +1,11 @@
+# The unit ld_a_pub is built as the source library ld_renamed. The import names
+# the library, and the `public use` of its one unit still re-exports ld_b.
+# BUILD_LIB: ld_b.sushi
+# BUILD_LIB: ld_a_pub.sushi -> ld_renamed.slib
+# EXPECT_STDOUT_EXACT: "8\n7\n"
+use <lib/ld_renamed>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{b_val()}")
+    return 0

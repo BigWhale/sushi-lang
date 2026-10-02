@@ -1,0 +1,9 @@
+# A hybrid library's template calls a function of lsp_b, which the library loads
+# with a plain `use <lib/lsp_b>`. The consumer imports only the library.
+# BUILD_LIB_HYBRID: lsp_b.sushi, lsp_d.sushi
+# EXPECT_STDOUT_EXACT: "7\n3\n"
+use <lib/lsp_d>
+
+fn main() i32:
+    println("{d_wrap(nom 3)}")
+    return 0

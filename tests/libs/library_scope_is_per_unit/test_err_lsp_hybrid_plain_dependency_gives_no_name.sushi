@@ -1,0 +1,10 @@
+# A hybrid library loads lsp_b with a plain `use <lib/lsp_b>`. The consumer
+# imports only the library, so it cannot call b_val().
+# BUILD_LIB_HYBRID: lsp_b.sushi, lsp_d.sushi
+# EXPECT_ERROR_CODE: CE2008
+# EXPECT_STDERR_CONTAINS: 'b_val'
+use <lib/lsp_d>
+
+fn main() i32:
+    println("{d_wrap(nom 3)} {b_val()}")
+    return 0

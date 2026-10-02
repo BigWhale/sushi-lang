@@ -1,0 +1,5 @@
+extend i32 doubled() i32:
+    return self * 2
+
+public fn p_val() i32:
+    return 1

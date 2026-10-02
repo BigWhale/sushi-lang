@@ -1,0 +1,4 @@
+use <lib/lsp_t>
+
+public fn helper_val() i32:
+    return t_wrap(nom 1)

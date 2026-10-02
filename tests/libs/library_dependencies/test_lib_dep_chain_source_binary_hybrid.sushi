@@ -1,0 +1,11 @@
+# A chain: ld_a_top (hybrid) uses ld_b_mid (binary), and ld_b_mid uses ld_d (source).
+# The consumer imports ld_a_top alone, and the build loads the whole chain.
+# BUILD_LIB: ld_d.sushi
+# BUILD_LIB_BINARY: ld_b_mid.sushi
+# BUILD_LIB_HYBRID: ld_a_top.sushi
+# EXPECT_STDOUT_EXACT: "7\n"
+use <lib/ld_a_top>
+
+fn main() i32:
+    println("{at_val()}")
+    return 0

@@ -20,12 +20,14 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
 
 
-# The predefined perks whose implementation overrides a derived method. A library
-# ships its implementations of them although it declares none of them.
+# The predefined perks whose implementation overrides a derived method.
 OVERRIDABLE_PREDEFINED_PERKS = frozenset({PerkCollector.HASHABLE_PERK, *CONTRACTS})
 
-# Every perk the compiler predefines. An implementation of one is never an ordinary
-# method of its type, so it never travels as an extension record.
+# Every perk the compiler predefines. A library ships its implementations of them
+# although it declares none of them: an override the consumer's derived methods must
+# read, and a `Drop` that puts the type in the consumer's Drop set (#1118). An
+# implementation of one is never an ordinary method of its type, so it never travels
+# as an extension record.
 PREDEFINED_PERKS = OVERRIDABLE_PREDEFINED_PERKS | {PerkCollector.DROP_PERK}
 
 
@@ -34,9 +36,9 @@ def own_units(units: list['Unit']) -> list['Unit']:
 
     A `use <collections/iter>` injects the bundled module as an ordinary unit, and a
     `use <lib/other>` over a source library injects its units the same way, so both
-    reach the manifest generator alongside the library's own files. A consumer states
-    each library and each module it uses for itself (`docs/libraries.md`, limitation
-    1), so shipping either one's declarations puts a SECOND definition of every name
+    reach the manifest generator alongside the library's own files. A consumer's build
+    loads each library and each module of the graph on its own account (#1120), so
+    shipping either one's declarations puts a SECOND definition of every name
     into that consumer's build -- CE4001 for a perk, and a duplicate symbol for the
     rest. `Unit.provenance` is the one field that marks such a unit, and it is the
     field `_extract_reexports` reads for the same question about a `public use`, so
@@ -251,7 +253,7 @@ class LibraryManifestGenerator:
         )
 
         manifest = {
-            "sushi_lib_version": "2.3",
+            "sushi_lib_version": "2.4",
             "library_name": library_name,
             "library_version": library_version,
             "kind": kind,
@@ -352,7 +354,7 @@ class LibraryManifestGenerator:
         return public_funcs
 
     def _extract_not_exported(self, units: list['Unit'], templates: dict) -> list[dict]:
-        """Name what the library declares and keeps -- a name, and its kind (#469).
+        """Name what the library declares and keeps -- a name, its kind and its unit (#469).
 
         The export closure ships the privates a public generic's body needs, and those
         carry a signature the consumer registers. A private no template names ships
@@ -361,6 +363,9 @@ class LibraryManifestGenerator:
         instead, so no signature, body or source travels here.
 
         Each private is named in exactly ONE place: the closure, or this list.
+
+        A record is keyed by (unit, name), because two units may each keep a `helper`
+        (#1112). The unit tells CE5013 which symbol the bitcode defines.
         """
         summary = templates.get("closure_summary") or {}
         shipped = (set(summary.get("private_functions", []))
@@ -368,7 +373,7 @@ class LibraryManifestGenerator:
                    | set(summary.get("private_types", []))
                    | set(summary.get("constants", [])))
 
-        kept: dict[str, str] = {}
+        kept: dict[tuple[str, str], str] = {}
         for unit in own_units(units):
             if unit.ast is None:
                 continue
@@ -379,7 +384,7 @@ class LibraryManifestGenerator:
                 # now, and neither is a name a consumer can write.
                 if getattr(func, "is_synthesized", False):
                     continue
-                kept[func.name] = (
+                kept[(unit.name, func.name)] = (
                     "generic_function" if func.type_params else "function"
                 )
             # A type and a constant are kept the same way, and for the same reason: the
@@ -388,15 +393,17 @@ class LibraryManifestGenerator:
             # this library does make.
             for struct_def in unit.ast.structs:
                 if not struct_def.is_public and struct_def.name not in shipped:
-                    kept[struct_def.name] = "struct"
+                    kept[(unit.name, struct_def.name)] = "struct"
             for enum_def in unit.ast.enums:
                 if not enum_def.is_public and enum_def.name not in shipped:
-                    kept[enum_def.name] = "enum"
+                    kept[(unit.name, enum_def.name)] = "enum"
             for const in unit.ast.constants:
                 if not const.is_public and const.name not in shipped:
-                    kept[const.name] = "variable" if isinstance(const, VarDef) else "constant"
+                    kept[(unit.name, const.name)] = (
+                        "variable" if isinstance(const, VarDef) else "constant")
 
-        return [{"name": name, "kind": kept[name]} for name in sorted(kept)]
+        return [{"name": name, "kind": kept[(unit, name)], "unit": unit}
+                for unit, name in sorted(kept, key=lambda key: (key[1], key[0]))]
 
     def _extract_foreign_extensions(self, units: list['Unit']) -> list[dict]:
         """The foreign types this library claims methods on, in declaration order."""
@@ -675,10 +682,9 @@ class LibraryManifestGenerator:
         generic_perk_impls, template_keys = self._generic_perk_impl_templates(
             own, referenced_perks)
         perks, shipped_perks = self._shipped_perks(own, referenced_perks)
-        # An implementation of a predefined contract is an override the consumer's
-        # derived methods must read, and the consumer knows the contract already.
+        # The consumer knows every predefined contract already.
         perk_impls = self._concrete_perk_impls(
-            own, shipped_perks | OVERRIDABLE_PREDEFINED_PERKS, template_keys)
+            own, shipped_perks | PREDEFINED_PERKS, template_keys)
 
         templates = {
             "version": TEMPLATES_SCHEMA_VERSION,
@@ -1043,15 +1049,31 @@ class LibraryManifestGenerator:
                 records.append({"unit": unit.name, "path": path, "kind": kind})
         return records
 
-    def _extract_dependencies(self, units: list['Unit']) -> list[str]:
-        """Extract stdlib dependencies from all units."""
-        deps = set()
+    def _extract_dependencies(self, units: list['Unit']) -> list[dict]:
+        """What a consumer's build must load: one record per module and per library.
+
+        A `stdlib` record is a module that a unit of the build uses. A `library` record
+        is a `use <lib/...>` that one of the library's OWN units writes, plain or public
+        (#1120), with the name and the version of the `.slib` that this build found for
+        the path: the consumer loads the whole graph, and a second version of one
+        library in it is CE3519. An injected source library records its own uses.
+        """
+        modules: set[str] = set()
+        libraries: dict[str, dict] = {}
+        own = {unit.name for unit in own_units(units)}
 
         for unit in units:
             if unit.ast is None:
                 continue
             for use_stmt in unit.ast.uses:
                 if use_stmt.is_stdlib:
-                    deps.add(use_stmt.path)
+                    modules.add(use_stmt.path)
+                elif (use_stmt.is_library and unit.name in own
+                      and use_stmt.path not in libraries):
+                    libraries[use_stmt.path] = {
+                        "path": use_stmt.path, "kind": "library",
+                        "library_name": use_stmt.library_name or "",
+                        "library_version": use_stmt.library_version or ""}
 
-        return sorted(deps)
+        return ([{"path": path, "kind": "stdlib"} for path in sorted(modules)]
+                + [libraries[path] for path in sorted(libraries)])

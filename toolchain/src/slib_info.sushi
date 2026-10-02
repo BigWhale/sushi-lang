@@ -1304,6 +1304,17 @@ fn print_reexport_list(MsgValue records, Opts o) ~:
     println("")
 
 ##:
+The text, or `?` when the text is empty.
+
+- Parameter text: The text.
+- Returns: The text, or `?`.
+:##
+fn or_unknown(nom string text) string:
+    if (text.len() == 0):
+        return "?"
+    return text
+
+##:
 Prints the section of dependencies.
 
 - Parameter meta: The metadata map.
@@ -1321,7 +1332,7 @@ fn print_dependencies(MsgValue meta, Opts o) ~:
 ##:
 Prints each dependency.
 
-- Parameter deps: The array of dependency names.
+- Parameter deps: The array of dependency records.
 - Parameter o: The options of the run.
 :##
 fn print_dependency_list(MsgValue deps, Opts o) ~:
@@ -1330,8 +1341,13 @@ fn print_dependency_list(MsgValue deps, Opts o) ~:
     match deps:
         MsgValue.Arr(items) ->
             foreach(d in items.iter()):
-                let string s = str(d)
-                println("  <{s}>")
+                let string path = get_str(d, "path")
+                if (get_str(d, "kind") == "library"):
+                    let string name = or_unknown(nom get_str(d, "library_name"))
+                    let string version = or_unknown(nom get_str(d, "library_version"))
+                    println("  <{path}> ({name} {version})")
+                else:
+                    println("  <{path}>")
         _ ->
             return ~
     println("")

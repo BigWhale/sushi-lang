@@ -1,0 +1,6 @@
+use <lib/lsp_a>
+
+public fn helper_val() i32:
+    let ABox b = ABox(4)
+    let AGen@(i32) g = AGen(7)
+    return a_val() + A_CONST + a_count + b.v + g.v + a_id(nom 6)

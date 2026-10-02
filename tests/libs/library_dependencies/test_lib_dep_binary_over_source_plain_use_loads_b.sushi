@@ -1,0 +1,10 @@
+# A binary library says a plain `use <lib/ld_b>` over a source ld_b. The consumer
+# imports A alone: the build loads ld_b for the body of A.
+# BUILD_LIB: ld_b.sushi
+# BUILD_LIB_BINARY: ld_a_plain.sushi
+# EXPECT_STDOUT_EXACT: "8\n"
+use <lib/ld_a_plain>
+
+fn main() i32:
+    println("{a_val()}")
+    return 0

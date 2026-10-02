@@ -1,0 +1,2 @@
+public fn helper_val() i32:
+    return A_CONST

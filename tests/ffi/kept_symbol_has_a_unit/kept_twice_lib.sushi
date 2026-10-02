@@ -1,0 +1,7 @@
+# A library of three units (#1112). Two units each keep a private `helper`, so the
+# library bitcode defines `kept_twice_a$helper` and `kept_twice_b$helper`.
+use "kept_twice_a"
+use "kept_twice_b"
+
+public fn twins(i32 n) i32:
+    return from_twin_a(n) + from_twin_b(n)

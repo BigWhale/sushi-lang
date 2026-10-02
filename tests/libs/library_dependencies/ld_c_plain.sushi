@@ -1,0 +1,4 @@
+use <lib/ld_b>
+
+public fn c_val() i32:
+    return b_val() + 2

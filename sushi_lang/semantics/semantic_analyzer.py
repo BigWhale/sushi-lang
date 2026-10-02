@@ -154,6 +154,10 @@ class SemanticAnalyzer:
         into the extension table. It is the `monomorphize` stage's tail and both ends of
         its placement -- after `derive`, before `shadowing` -- are load-bearing.
 
+        `ffi-clash` has a second half with no row of its own: `_check_instance_clash`
+        runs CE5013 over the monomorphized function instances, directly after
+        `monomorphize`, because no instance exists before it (#1113).
+
         `semantics/const_eval.py` is NOT a pass. THREE callers reach it as a helper: the
         AST BUILDER, which reads a fixed array's size while the unit is parsed (Known
         Limitation 12) and keeps a constant table of its own for it; the `typecheck`
@@ -207,6 +211,7 @@ class SemanticAnalyzer:
         instantiations = self._collect_instantiations(compilation_order, libraries)
         monomorphizer, concrete_extension_defs = self._monomorphize(
             compilation_order, instantiations)
+        self._check_instance_clash(compilation_order)
 
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
         # as CE2095 does below. CE4006 stands at the type that named the refused
@@ -352,7 +357,9 @@ class SemanticAnalyzer:
         # After `libraries`, because a BINARY library's declarations exist only once that
         # step has read the manifest, and before `ffi-clash`, which is the first step that
         # asks whether a name is already taken (`unit-namespaces.md` section 3.2).
-        from sushi_lang.semantics.passes.namespaces import build_namespaces
+        from sushi_lang.semantics.passes.namespaces import (
+            build_compiled_library_namespaces, build_namespaces,
+        )
         for unit in compilation_order:
             if unit.ast is None:
                 continue
@@ -361,6 +368,12 @@ class SemanticAnalyzer:
                 unit_reporter, unit, self.tables, units=all_units,
                 library_registry=self.library_registry)
             self._merge_unit(unit_reporter)
+        # A compiled library's units have no AST here, and a copy of one of their
+        # templates still resolves its names in their scope (#1120).
+        for unit_name, table in build_compiled_library_namespaces(
+                self.tables, units=all_units,
+                library_registry=self.library_registry).items():
+            self.tables.namespaces.setdefault(unit_name, table)
 
     def _check_ffi_clash(self, compilation_order: list[Unit]) -> None:
         """ffi-clash: fold the link-name constants (#1089), then an extern naming a symbol
@@ -394,6 +407,24 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             reject_disagreeing_link_names(unit_reporter, unit.ast, self.tables.externals,
                                           link_names)
+            self._merge_unit(unit_reporter)
+
+    def _check_instance_clash(self, compilation_order: list[Unit]) -> None:
+        """ffi-clash, the instance half: an extern naming a monomorphized instance (CE5013).
+
+        It runs after `monomorphize`, because no instance exists before it (#1113).
+        """
+        from sushi_lang.semantics.passes.types.externals import (
+            monomorphized_instances, reject_external_naming_an_instance,
+        )
+        instances = monomorphized_instances(compilation_order, self.tables.funcs)
+        if not instances:
+            return
+        for unit in compilation_order:
+            if unit.ast is None or not getattr(unit.ast, "externals", None):
+                continue
+            unit_reporter = self._unit_reporter(unit)
+            reject_external_naming_an_instance(unit_reporter, unit.ast, instances)
             self._merge_unit(unit_reporter)
 
     def _collect_instantiations(self, compilation_order: list[Unit],
@@ -717,7 +748,8 @@ class SemanticAnalyzer:
                               kept_constants=libraries.kept_constant_names(),
                               namespaces=namespaces,
                               visibility=self.tables.visibility,
-                              function_tables=(self.tables.funcs, self.tables.generic_funcs))
+                              function_tables=(self.tables.funcs, self.tables.generic_funcs),
+                              unit_namespaces=self.tables.namespaces)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
@@ -761,10 +793,22 @@ class SemanticAnalyzer:
                      if u.ast is not None and u.name == unit_name), None)
         return home or self._entry_unit(compilation_order)
 
+    def _library_scope(self, unit_name: Optional[str], home: Optional[Unit]) -> Optional[str]:
+        """The compiled library unit a copy's names resolve in, or None (#1120).
+
+        A copy of a compiled library's template goes home to a unit of the consumer,
+        because the template's unit is not a unit of this build. Its body still means
+        what it meant in the library, so it reads the scope of the declaring unit.
+        """
+        if unit_name is None or (home is not None and home.name == unit_name):
+            return None
+        return unit_name if unit_name in self.tables.namespaces else None
+
     def _adopt_extension_copy(self, extend_def: ExtendDef,
                               compilation_order: list[Unit]) -> None:
         """Give an extension copy its home unit and queue it for the check and codegen."""
         home = self._home_unit(extend_def.home_unit, compilation_order)
+        extend_def.scope_unit = self._library_scope(extend_def.home_unit, home)
         extend_def.home_unit = home.name if home is not None else None
         self.monomorphized_extensions.append(extend_def)
 
@@ -892,6 +936,9 @@ class SemanticAnalyzer:
                                             unit_name=template.unit_name):
                 continue
             home = self._home_unit(template.unit_name, compilation_order)
+            scope_unit = self._library_scope(template.unit_name, home)
+            for method in impl.methods:
+                method.scope_unit = scope_unit
             if home is not None:
                 home.ast.perk_impls.append(impl)
             for method in impl.methods:
@@ -1084,7 +1131,8 @@ class SemanticAnalyzer:
             for extend_def in copies:
                 passes.scope._check_extension_method(extend_def)
                 passes.typecheck._validate_extension_method(extend_def)
-                lifted = passes.lifter.lift_body(extend_def.body)
+                lifted = passes.lifter.lift_body(extend_def.body,
+                                                 scope_unit=extend_def.scope_unit)
                 passes.borrow._check_extension(extend_def)
                 for fn in lifted:
                     passes.borrow._check_function(fn)

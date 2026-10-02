@@ -1,0 +1,23 @@
+fn e_private() i32:
+    return 30
+
+public fn e_public() i32:
+    return 10
+
+public const i32 E_BASE = 2
+
+public struct EBox@(T):
+    T v
+
+public perk EShow:
+    fn show() i32
+
+extend EBox@(T) total() i32:
+    return e_private() + e_public() + E_BASE
+
+extend EBox@(T) with EShow:
+    fn show() i32:
+        return e_private() + e_public() + 100
+
+public fn e_make@(T)(nom T x) EBox@(T):
+    return EBox(x)

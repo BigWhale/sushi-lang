@@ -388,8 +388,12 @@ def _foreign_line(claim: dict, p: Palette) -> str:
     return f"  extend {_surface(claim['type'])} {claim['method']}"
 
 
-def _dependency_line(dep: str, p: Palette) -> str:
-    return f"  <{dep}>"
+def _dependency_line(dep: dict, p: Palette) -> str:
+    """A module, or a library with the name and the version that the build found."""
+    line = f"  <{dep['path']}>"
+    if dep.get('kind') == 'library':
+        line += f" ({dep.get('library_name') or '?'} {dep.get('library_version') or '?'})"
+    return line
 
 
 def _own_doc(record: dict, metadata: dict) -> tuple[Optional[dict], Optional[dict]]:

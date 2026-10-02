@@ -1,0 +1,15 @@
+# A library with a public struct, two public functions and a public generic.
+# The fixtures of this directory build it as a source and as a binary library.
+
+public struct Point:
+    i32 x
+    i32 y
+
+public fn area(Point p) i32:
+    return p.x * p.y
+
+public fn helper() i32:
+    return 1
+
+public fn pick@(T)(nom T x) T:
+    return x

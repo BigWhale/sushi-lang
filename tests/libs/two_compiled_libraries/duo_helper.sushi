@@ -1,0 +1,4 @@
+use <lib/duo_lib_c>
+
+public fn h() i32:
+    return c_val()

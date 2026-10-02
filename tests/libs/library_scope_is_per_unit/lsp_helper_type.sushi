@@ -1,0 +1,3 @@
+public fn helper_val() i32:
+    let ABox b = ABox(4)
+    return b.v

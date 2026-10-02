@@ -93,6 +93,11 @@ class UseStatement(Node):
     # takes no `as` (CE3016).
     is_public: bool = False
     public_span: Optional[Span] = None
+    # A `use <lib/...>`: the `library_name` and `library_version` of the `.slib` that the
+    # build found for the path. The driver stamps both before the analysis, because a
+    # library is identified by its stamped name and not by the written path (#1120).
+    library_name: Optional[str] = None
+    library_version: Optional[str] = None
 
 @dataclass(slots=True)
 class Program(Node):
@@ -236,6 +241,9 @@ class FuncDef(Node):
     # may have made a Result (a monomorphized instance, a lifted lambda). None on a
     # written declaration, which `channel.has_channel` reads directly.
     written_channel: Optional[bool] = None
+    # The `lib/<library>/<unit>` whose scope the names of this body resolve in: a copy
+    # of a compiled library's template, which lands in a unit of the consumer (#1120).
+    scope_unit: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -252,6 +260,9 @@ class ConstDef(Node):
     # consumer's copy of the global takes its symbol from this unit, not from the
     # unit that holds the copy; None for a constant this program declares.
     home_unit: Optional[str] = None
+    # The `lib/<library>/<unit>` whose scope the initializer of a compiled library's
+    # constant resolves in, and the unit the constant is a name of (#1120).
+    scope_unit: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -343,6 +354,8 @@ class ExtendDef(Node):
     # see `FuncDef`. A copy keeps both, so its body may call the library's privates.
     is_library_template: bool = False
     library_origin: Optional[Origin] = None
+    # The scope the names of the body resolve in; see `FuncDef`.
+    scope_unit: Optional[str] = None
 
 @dataclass(slots=True)
 class PerkMethodSignature:

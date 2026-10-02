@@ -71,7 +71,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
 
     _reject_use_below_declaration(reporter, unit, program)
 
-    table = NamespaceTable()
+    table = NamespaceTable(library=_library_of(unit))
 
     # The FFI namespaces THIS unit declares. An `unsafe external` block is declared in
     # one unit (section 3), so the namespace it binds is that unit's, exactly as a `use`
@@ -106,8 +106,60 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
 
-    table.scope = _scope_of(unit, flat, units, library_registry, aliased)
+    table.scope = _scope_of(unit.name, flat, units, library_registry, aliased)
     return table
+
+
+def build_compiled_library_namespaces(tables: SymbolTables, *, units: Dict[str, Unit],
+                                      library_registry: Optional[LibraryRegistry]
+                                      ) -> Dict[str, NamespaceTable]:
+    """The table of each unit of each compiled library, keyed `lib/<library>/<unit>`.
+
+    A compiled library has no AST at the consumer, but a copy of one of its templates
+    is checked and emitted at the consumer. The names of the copy's body resolve in the
+    scope of the library unit that declares the template, never in the scope of the
+    unit that holds the copy (#1120). The manifest records the `use` statements of the
+    library as a whole, so each unit of the library sees the units of its own library
+    and every module and library that the library records in `dependencies`.
+    """
+    from sushi_lang.semantics.library_registry import manifest_dependencies
+
+    found: Dict[str, NamespaceTable] = {}
+    if library_registry is None:
+        return found
+    for metadata in library_registry.get_all_libraries().values():
+        manifest = metadata.raw_manifest or {}
+        own = tuple(_binary_library_units(metadata.name, library_registry))
+        uses = []
+        for record in manifest_dependencies(manifest):
+            path = record.get("path")
+            if not path:
+                continue
+            if record.get("kind") == "stdlib":
+                uses.append(UseStatement(loc=None, path=path, is_stdlib=True))
+            elif record.get("kind") == "library":
+                uses.append(UseStatement(loc=None, path=path, is_library=True,
+                                         library_name=record.get("library_name") or None))
+        flat = [(use_stmt, _provider_for(use_stmt, tables, units, library_registry))
+                for use_stmt in uses]
+        for unit_name in own:
+            scope = _scope_of(unit_name, flat, units, library_registry)
+            table = NamespaceTable(library=metadata.name)
+            # The library's name is the unit of its private types' records.
+            table.scope = UnitScope(
+                unit=unit_name,
+                units=tuple(dict.fromkeys((*own, metadata.name, *scope.units))),
+                modules=scope.modules, generics=scope.generics, everything=False)
+            found[unit_name] = table
+    return found
+
+
+def _library_of(unit: Unit) -> Optional[str]:
+    """The source library a unit was injected from, or None for any other unit."""
+    parts = unit.name.split("/")
+    if getattr(unit, "from_library", False) and parts[0] == "lib" and len(parts) > 2:
+        return parts[1]
+    return None
 
 
 class MethodInterfaceNamespace(UnitNamespace):
@@ -122,7 +174,7 @@ class MethodInterfaceNamespace(UnitNamespace):
         super().__init__(module_path, functions={}, constants={}, others=homed)
 
 
-def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
+def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
               units: Dict[str, Unit],
               library_registry: Optional[LibraryRegistry] = None,
               aliased: Iterable[Provider] = ()) -> UnitScope:
@@ -151,6 +203,11 @@ def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
                 generics.extend(reached.members())
             elif reached.namespace_kind == "unit":
                 scoped_units.append(reached.origin)
+                if reached.origin not in units:
+                    # A compiled library's unit, reached through a re-export: its
+                    # declarations are filed under `lib/<library>/<unit>`.
+                    scoped_units.extend(
+                        _binary_library_units(reached.origin, library_registry))
         if use_stmt.is_library and provider.namespace_kind == "unit":
             scoped_units.extend(_library_units(provider.origin, units))
             scoped_units.extend(
@@ -158,7 +215,7 @@ def _scope_of(unit: Unit, flat: Iterable[Tuple[UseStatement, Provider]],
     for provider in aliased:
         scoped_units.extend(reached.origin for reached in provider.reaches()
                             if isinstance(reached, MethodInterfaceNamespace))
-    return UnitScope(unit=unit.name, units=tuple(dict.fromkeys(scoped_units)),
+    return UnitScope(unit=unit_name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False)
 
@@ -288,7 +345,7 @@ def _provider_for(use_stmt: UseStatement, tables: SymbolTables, units: Dict[str,
     """
     if use_stmt.is_library:
         return _library_provider(use_stmt.path, tables, units, library_registry,
-                                 visited)
+                                 visited, library_name=use_stmt.library_name)
     if use_stmt.is_stdlib:
         return _stdlib_provider(use_stmt.path, tables, units, library_registry, visited)
     return _unit_provider(_imported_unit(use_stmt.path, host, units), tables,
@@ -403,18 +460,33 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
 
 def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
                       library_registry: Optional[LibraryRegistry],
-                      visited: AbstractSet[str] = frozenset()) -> Provider:
-    """One unit of a library. The namespace is the unit, never the library (section 8)."""
+                      visited: AbstractSet[str] = frozenset(),
+                      library_name: Optional[str] = None) -> Provider:
+    """One unit of a library. The namespace is the unit, never the library (section 8).
+
+    `library_name` is the name stamped into the `.slib` the path found (#1120). It
+    picks the library, and the library's unit is the one the path's last segment
+    names, or its only unit: a `.slib` built under another name than its unit's is the
+    same library. Without the stamp, the unit is matched on the last segment alone.
+    """
     wanted = path.rsplit("/", 1)[-1]
 
     source_units = [name for name, unit in units.items()
                     if getattr(unit, "from_library", False)]
-    matched = _one_of(source_units, lambda name: name.rsplit("/", 1)[-1] == wanted)
+    if library_name is not None:
+        own = [name for name in source_units
+               if name.startswith(f"lib/{library_name}/")]
+        matched = _one_of(own, lambda name: name.rsplit("/", 1)[-1] == wanted)
+        if matched is None and len(own) == 1:
+            matched = own[0]
+    else:
+        matched = _one_of(source_units, lambda name: name.rsplit("/", 1)[-1] == wanted)
     if matched is not None:
         return _unit_provider(matched, tables, units=units,
                               library_registry=library_registry, visited=visited)
 
-    provider = _binary_library_provider(path, tables, units, library_registry, visited)
+    provider = _binary_library_provider(path, tables, units, library_registry, visited,
+                                        library_name)
     if provider is not None:
         return provider
 
@@ -423,7 +495,8 @@ def _library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
 
 def _binary_library_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
                              library_registry: Optional[LibraryRegistry],
-                             visited: AbstractSet[str] = frozenset()
+                             visited: AbstractSet[str] = frozenset(),
+                             library_name: Optional[str] = None
                              ) -> Optional[UnitNamespace]:
     """A binary library has no AST: its records name their unit in the manifest.
 
@@ -434,7 +507,8 @@ def _binary_library_provider(path: str, tables: SymbolTables, units: Dict[str, U
     if library_registry is None:
         return None
     wanted = path.rsplit("/", 1)[-1]
-    named = _named_library(path, library_registry)
+    named = (library_registry.get_library(library_name) if library_name is not None
+             else None) or _named_library(path, library_registry)
     candidates = ([named] if named is not None
                   else list(library_registry.get_all_libraries().values()))
     for metadata in candidates:

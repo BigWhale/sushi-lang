@@ -1,0 +1,15 @@
+fn t_private() i32:
+    return 30
+
+public fn t_public() i32:
+    return 10
+
+public const i32 T_BASE = 2
+
+public struct TBox:
+    i32 v
+
+public fn t_wrap@(T)(nom T x) T:
+    let TBox b = TBox(t_private() + t_public() + T_BASE)
+    println("{b.v}")
+    return x

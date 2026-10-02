@@ -69,8 +69,14 @@ def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
                if origin.unit_name is not None]
     if not origins or any(scope.holds_unit(o.unit_name) for o in origins):
         return False
-    _reject_unreachable(validator, name, loc, import_help(origins[0].unit_name))
+    _reject_unreachable(validator, name, loc,
+                        import_help(origins[0].unit_name, tables=_unit_tables(validator)))
     return True
+
+
+def _unit_tables(validator: 'TypeValidator') -> Any:
+    """Every unit's namespace table, which says whether a unit is a library's."""
+    return getattr(getattr(validator, "tables", None), "namespaces", None)
 
 
 def _reject_unreachable(validator: 'TypeValidator', name: str, loc: Any,
@@ -96,9 +102,19 @@ def out_of_scope_help(validator: 'TypeValidator', kind: str,
         for origin in table.candidates(kind, name, validator.current_unit_name):
             if (origin.unit_name is not None
                     and not validator.scope.holds_unit(origin.unit_name)):
-                return import_help(origin.unit_name)
+                return import_help(origin.unit_name, tables=_unit_tables(validator))
     if kind != "function":
         return None
+    # A compiled library's function has no visibility record: its unit-keyed entry
+    # says which library unit declares it (#1120).
+    tables = _unit_tables(validator) or {}
+    for by_unit in (validator.func_table.by_unit, validator.generic_func_table.by_unit):
+        for unit_name, declared in by_unit.items():
+            sig = declared.get(name)
+            if (sig is not None and getattr(sig, "is_public", False)
+                    and getattr(tables.get(unit_name), "library", None) is not None
+                    and not validator.scope.holds_unit(unit_name)):
+                return import_help(unit_name, tables=tables)
     found = validator.func_table.lookup_stdlib_by_name(name)
     if found is not None and not validator.scope.holds_module(found[0]):
         return import_help(found[0], stdlib=True)

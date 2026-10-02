@@ -1,0 +1,4 @@
+public use <lib/fixture/dep/ld_far_b>
+
+public fn a_val() i32:
+    return far_val() + 1

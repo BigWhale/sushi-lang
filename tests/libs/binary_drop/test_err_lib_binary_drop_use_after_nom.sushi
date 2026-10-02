@@ -1,0 +1,14 @@
+# A library type that implements Drop owns a resource at the consumer, so a use after
+# a `nom` is the use-after-move error, as for a source library.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_ERROR_CODE: CE2405
+use <lib/drop_res_lib>
+
+fn eat(nom Res r) ~:
+    println("eat {r.id}")
+
+fn main() i32:
+    let Res r = make(7)
+    eat(nom r)
+    println("after {r.id}")
+    return 0

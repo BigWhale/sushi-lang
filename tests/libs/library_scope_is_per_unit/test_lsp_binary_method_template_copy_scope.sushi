@@ -1,0 +1,10 @@
+# A copy of a binary library's extension template and of its perk implementation
+# template calls a private and a public function of its library. The entry unit
+# does not import the library; the second unit does.
+# BUILD_LIB_BINARY: lsp_e.sushi
+# EXPECT_STDOUT_EXACT: "182\n"
+use "lsp_e_helper"
+
+fn main() i32:
+    println("{helper_val()}")
+    return 0

@@ -192,11 +192,15 @@ class UnitManager:
             for use_stmt in unit.ast.uses:
                 if not (use_stmt.is_stdlib or use_stmt.is_library):
                     continue
-                prefix = use_stmt.path + "/"
+                # A library is its stamped name, whatever path found it (#1120).
+                path = (f"lib/{use_stmt.library_name}"
+                        if use_stmt.is_library and use_stmt.library_name
+                        else use_stmt.path)
+                prefix = path + "/"
                 for name in self.units:
                     if name == unit.name or name in graph[unit.name]:
                         continue
-                    if name == use_stmt.path or name.startswith(prefix):
+                    if name == path or name.startswith(prefix):
                         graph[unit.name].append(name)
         return graph
 

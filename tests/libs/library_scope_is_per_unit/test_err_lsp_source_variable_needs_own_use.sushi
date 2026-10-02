@@ -1,0 +1,11 @@
+# A source library's public variable is a name only in a unit that imports the
+# library. The entry unit imports it; the second unit does not.
+# BUILD_LIB: lsp_a.sushi
+# EXPECT_ERROR_CODE: CE1001
+# EXPECT_STDERR_CONTAINS: lsp_helper_variable.sushi:
+use <lib/lsp_a>
+use "lsp_helper_variable"
+
+fn main() i32:
+    println("{a_val()} {helper_val()}")
+    return 0

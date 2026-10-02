@@ -1,0 +1,13 @@
+# CW3002 for every library kind (#1103): the program declares the generic
+# `pick`, which a BINARY library exports as a template.
+# BUILD_LIB_BINARY: shadow_kind_lib.sushi
+# EXPECT_ERROR_CODE: CW3002
+# EXPECT_STDERR_CONTAINS: 'pick' shadows the function 'lib/shadow_kind_lib/shadow_kind_lib' exports
+use <lib/shadow_kind_lib>
+
+fn pick@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    println("{pick(nom 7)} {area(Point(2, 3))}")
+    return 0

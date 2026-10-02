@@ -1,0 +1,15 @@
+# A generic-target Drop implementation of a binary library (`extend Sink@(T) with
+# Drop`) is cut for an instantiation at the consumer, and the type moves there.
+# BUILD_LIB_BINARY: drop_res_lib.sushi
+# EXPECT_STDOUT_EXACT: "live 5\ntake 9\nsink drop\nsink drop\n"
+# EXPECT_NO_LEAKS: true
+use <lib/drop_res_lib>
+
+fn take(nom Sink@(i32) s) ~:
+    println("take {s.value}")
+
+fn main() i32:
+    let Sink@(i32) s = Sink(5)
+    println("live {s.value}")
+    take(nom Sink(9))
+    return 0

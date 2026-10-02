@@ -1,0 +1,13 @@
+# A diamond: ld_a_plain (binary) and ld_c_plain (binary) each use ld_b (binary).
+# The consumer imports the two, and the build loads ld_b once.
+# BUILD_LIB_BINARY: ld_b.sushi
+# BUILD_LIB_BINARY: ld_a_plain.sushi
+# BUILD_LIB_BINARY: ld_c_plain.sushi
+# EXPECT_STDOUT_EXACT: "8\n9\n"
+use <lib/ld_a_plain>
+use <lib/ld_c_plain>
+
+fn main() i32:
+    println("{a_val()}")
+    println("{c_val()}")
+    return 0
