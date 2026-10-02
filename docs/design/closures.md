@@ -243,6 +243,15 @@ for the captured variable's provenance and type class, not a closures-specific r
   copy, so *returning* or otherwise consuming it from inside the body needs its own `.clone()` —
   CE2411 otherwise. Reading it without consuming it (e.g. `println(greeting)` inside the body) is
   free.
+- **A nested lambda captures through the lambda around it.** The scope pass records a free name
+  for every lambda it is free in, so when an inner lambda captures a local of the function, the
+  outer lambda captures it too. In the lifted outer body that name is a field of the outer
+  environment, so the inner environment is filled from `#closure_env.<name>` (the `lift` pass
+  sets `Param.capture_source`, and `emit_lambda` reads it). This applies at every depth. The rules
+  above do not change, because the source is a read of a captured field: a plain value is copied
+  into the inner environment, and an owning value is the consuming use of a borrow (CE2411). To
+  move an owning capture one level deeper, clone it in the outer body
+  (`let string t = s.clone()`) and capture the clone (#1127).
 
 ### Environment ownership, escape, and RAII
 

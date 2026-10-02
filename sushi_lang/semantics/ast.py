@@ -149,6 +149,9 @@ class Param:
     nom_span: Optional[Span] = None   # the `nom` marker itself, for diagnostics
     # A lambda's captures are Params, and the `borrow` pass stamps each one.
     ownership_provenance: Optional["Provenance"] = None
+    # A capture of a name that the enclosing lambda captures is a read off the
+    # environment of that lambda; the `lift` pass sets it (#1127). None reads the name.
+    capture_source: Optional["Expr"] = None
 
 
 @dataclass(slots=True)

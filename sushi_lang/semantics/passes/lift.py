@@ -115,7 +115,7 @@ class LambdaLifter:
         env_struct = self._synthesize_env_struct(f"__closure_env_{index}", lam)
 
         body = _normalized_body(lam)
-        _rewrite_captures(body, {c.name for c in (lam.captures or [])})
+        _rewrite_captures(body, {c.name: c for c in (lam.captures or [])})
 
         lifted = _build_lifted_function(lam, f"__lambda_{index}", env_struct, body)
         self._register(lifted)
@@ -236,14 +236,19 @@ def is_lifted_lambda(func: FuncDef) -> bool:
     return bool(func.params) and func.params[0].name == ENV_PARAM_NAME
 
 
-def _rewrite_captures(node, cap_names: set) -> None:
+def _rewrite_captures(node, captures: dict) -> None:
     """Replace `Name(cap)` reads with `MemberAccess(Name(env), cap)` in-place.
 
-    A nested lambda is left alone: its own captures are rewritten against its own
-    environment when it is lifted.
+    The body of a nested lambda is left alone: its reads are rewritten against its own
+    environment when it is lifted. Its capture LIST is not: a name it shares with this
+    lambda is no local of the lifted function, so the nested environment is filled from
+    this one (#1127).
     """
+    cap_names = set(captures)
+
     def rewrite_the_slots_of(owner: Node) -> bool:
         if isinstance(owner, Lambda):
+            _source_from_env(owner, captures)
             return False
         for name, value in node_fields(owner):
             rebuilt = _rewrite_slot(value, cap_names)
@@ -252,6 +257,17 @@ def _rewrite_captures(node, cap_names: set) -> None:
         return True
 
     walk_nodes(node, rewrite_the_slots_of)
+
+
+def _source_from_env(nested: Lambda, captures: dict) -> None:
+    """Point each capture `nested` shares with the enclosing lambda at its env field."""
+    for cap in (nested.captures or []):
+        outer = captures.get(cap.name)
+        if outer is None or cap.capture_source is not None:
+            continue
+        cap.capture_source = _env_access(Name(id=cap.name, loc=cap.loc or nested.loc))
+        if cap.ty is None:
+            cap.ty = outer.ty
 
 
 def _rewrite_slot(value, cap_names: set):

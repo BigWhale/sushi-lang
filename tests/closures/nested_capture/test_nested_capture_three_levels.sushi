@@ -1,0 +1,12 @@
+# Three levels of lambdas: the innermost one captures a local of the function, and a
+# parameter of each lambda around it (#1127).
+# EXPECT_STDOUT_EXACT: "1111\n"
+fn main() i32:
+    let i32 k = 1000
+    let fn(i32) -> i32 g = |i32 a|:
+        let fn(i32) -> i32 mid = |i32 b|:
+            let fn(i32) -> i32 inner = |i32 c| k + a + b + c
+            return inner(1)
+        return mid(10)
+    println(g(100))
+    return 0
