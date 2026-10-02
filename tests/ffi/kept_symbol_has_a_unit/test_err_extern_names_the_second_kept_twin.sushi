@@ -1,0 +1,12 @@
+# Two units of the binary library each keep a `helper` (#1112), and each one has
+# its own record. The link name is the symbol of the second one.
+# BUILD_LIB_BINARY: kept_twice_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/kept_twice_lib>
+
+unsafe external "C" as raw because "a name the library defines":
+    fn h(i32 n) i32 = "kept_twice_b$helper"
+
+fn main() i32:
+    println(twins(1))
+    return 0

@@ -40,15 +40,15 @@ _KEPT_KINDS_WITH_A_SYMBOL = frozenset({"function", "constant", "variable"})
 def _kept_symbols(lib) -> set[str]:
     """The symbols that a library's kept declarations emit.
 
-    A kept record carries a name and a kind, and no unit. The manifest lists the
-    library's units, so each unit's symbol of the name is a candidate. For a library
-    with one unit, that is the exact symbol.
+    A kept record names the unit that keeps it (#1112), so the symbol is exact. A
+    record of a library built before the record had a unit falls back to each unit
+    that the manifest lists.
     """
-    units = lib.raw_manifest.get("units") or [lib.name]
+    every_unit = lib.raw_manifest.get("units") or [lib.name]
     return {emitted_symbol(name, unit)
-            for name, kind in lib.not_exported.items()
+            for record_unit, name, kind in lib.kept
             if kind in _KEPT_KINDS_WITH_A_SYMBOL
-            for unit in units}
+            for unit in ([record_unit] if record_unit is not None else every_unit)}
 
 
 def _declaration_emitting(symbol: str, table):

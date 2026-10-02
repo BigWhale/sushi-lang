@@ -1,0 +1,12 @@
+# The link name `kept_unit_a$helper` is the symbol of the private `helper` that
+# the unit `kept_unit_a` of the binary library keeps (#1112).
+# BUILD_LIB_BINARY: kept_unit_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/kept_unit_lib>
+
+unsafe external "C" as raw because "a name the library defines":
+    fn h(i32 n) i32 = "kept_unit_a$helper"
+
+fn main() i32:
+    println(both(1))
+    return 0

@@ -1,0 +1,2 @@
+public fn from_b(i32 n) i32:
+    return n + 2

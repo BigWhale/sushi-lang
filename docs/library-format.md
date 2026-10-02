@@ -515,11 +515,17 @@ is the authority, and the index is a cache of it.
     # two places, and the closure carries a private constant and a private type as
     # SOURCE (`templates.constants`, `templates.private_types`), because a monomorphized
     # template body names them and the consumer has to register them.
+    #
+    # One record for each (unit, name): two units may each keep a `helper` (#1112).
+    # `unit` is the producer's unit that keeps the declaration, so CE5013 refuses the
+    # one symbol `<unit>$<name>` that the bitcode defines. A record with no `unit` (a
+    # library built before the field) matches that name in each unit of `units`.
     "not_exported": [
         {
             "name": str,
-            "kind": str                # "function" / "generic_function" / "struct"
+            "kind": str,               # "function" / "generic_function" / "struct"
                                        #   / "enum" / "constant" / "variable"
+            "unit": str                # optional
         }
     ]
 }

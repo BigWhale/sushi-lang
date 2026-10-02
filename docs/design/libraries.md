@@ -133,7 +133,7 @@ authority, and the index is a cache of it.
 | `compiled_at` | ISO-8601 UTC |
 | `public_functions`, `public_constants`, `structs`, `enums` | the index |
 | `templates` | written for EVERY kind. It is redundant on the source path -- the generics are in the source section as well -- but it is what lets `--lib-info` list a source library's generic functions without parsing anything (§5) |
-| `not_exported` | what the library declares and keeps: a name and its kind, and nothing else. The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
+| `not_exported` | what the library declares and keeps: a name, its kind and the unit that keeps it, one record for each (unit, name), and nothing else (#1112). The complement of `templates.closure_summary`, and absent when a library keeps nothing (§5.5) |
 | `reexports` | one record per `public use`: the target, the unit that wrote it, and which producer the target is. Absent when no unit re-exports |
 | `dependencies` | the libraries this library imports. `--lib-info` lists them; no consumer resolves them, so a consumer states every library it needs with its own `use` (§5.8) |
 
