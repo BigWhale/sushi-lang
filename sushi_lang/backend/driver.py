@@ -223,6 +223,11 @@ class LLVMDriver:
 
         mod_ir: ir.Module = cg.build_module_multi_unit(units, weak_units=weak_units)
 
+        # The incremental consumer links this library's object beside other objects
+        # that define the same inline runtime functions (#1117).
+        from sushi_lang.backend.codegen_llvm import _set_linkonce_odr_on_inline_runtime
+        _set_linkonce_odr_on_inline_runtime(mod_ir)
+
         # A perk impl may ship through the manifest and be overridden locally. weak_odr,
         # not linkonce_odr: it must survive optimization while unreferenced in the library,
         # and it lets the consumer's strong definition win at link time.

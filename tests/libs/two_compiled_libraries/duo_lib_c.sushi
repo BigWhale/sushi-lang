@@ -1,0 +1,2 @@
+public fn c_val() i32:
+    return 3

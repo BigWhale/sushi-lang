@@ -1,0 +1,5 @@
+use <collections/strings>
+use <lib/duo_text_c>
+
+public fn same_len(string a, string b) bool:
+    return c_same(a, b) and c_len(a) == a.len()
