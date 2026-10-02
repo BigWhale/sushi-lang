@@ -1,0 +1,16 @@
+# In a lambda body, two `let poke` bindings of ONE captured variable conflict (#1129).
+# EXPECT_ERROR_CODE: CE2403
+# EXPECT_ERROR_CODES_EXACT: CE2403
+# EXPECT_STDERR_CONTAINS: "'xs' already has an active poke borrow"
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let i32[] ys = from([3])
+    let fn(i32) -> i32 f = |i32 k|:
+        let poke i32[] y = ys
+        let poke i32[] a = xs
+        let poke i32[] b = xs
+        a.push(k)
+        b.push(y.len())
+        return a.len()
+    println(f(0))
+    return 0

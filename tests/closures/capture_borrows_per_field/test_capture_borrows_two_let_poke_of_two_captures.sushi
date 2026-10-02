@@ -1,0 +1,15 @@
+# In a lambda body, a `let poke` of one captured variable and a `let poke` of a
+# different captured variable can live at the same time (#1129).
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let i32[] ys = from([3])
+    let fn(i32) -> i32 f = |i32 k|:
+        let poke i32[] x = xs
+        let poke i32[] y = ys
+        x.push(y.len())
+        y.push(k)
+        return x.len() + y.len()
+    println(f(0))
+    return 0
