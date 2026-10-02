@@ -1,0 +1,5 @@
+# A library with one public generic (#1113). A consumer's instance of a SOURCE
+# library's generic takes the library unit's prefix.
+
+public fn src_gen@(T)(nom T x) T:
+    return x

@@ -1,0 +1,14 @@
+# The link name is the symbol of an instance of a binary library's template
+# (#1113). The template's home names no unit of this build, so the instance
+# takes the bare symbol `inst_gen__i32`.
+# BUILD_LIB_BINARY: inst_bin_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/inst_bin_lib>
+
+unsafe external "C" as raw because "naming an instance":
+    fn g(i32 x) i32 = "inst_gen__i32"
+
+fn main() i32:
+    println(inst_gen(nom 3))
+    println(raw.g(4))
+    return 0

@@ -51,15 +51,22 @@ def _kept_symbols(lib) -> set[str]:
             for unit in ([record_unit] if record_unit is not None else every_unit)}
 
 
-def _declaration_emitting(symbol: str, table):
+def _table_entries(table) -> list:
+    """Every signature of a two-view table: the flat view, then each unit's own view.
+
+    Two units may each declare a `helper`, and the flat view holds one of them.
+    """
+    return [*table.by_name.values(),
+            *(sig for own in table.by_unit.values() for sig in own.values())]
+
+
+def _declaration_emitting(symbol: str, candidates):
     """The collected function or constant whose emitted symbol is `symbol`, or None.
 
-    Two units may each declare a `helper`, and the flat view holds one of them, so
-    the walk also reads each unit's own view. A binary library's function carries its
-    `link_symbol`, and a library's unit variable carries it on its declaration.
+    A binary library's function carries its `link_symbol`, and a library's unit
+    variable carries it on its declaration. A monomorphized instance carries its home
+    unit, which is the unit that the back end names its symbol with (#1113).
     """
-    candidates = [*table.by_name.values(),
-                  *(sig for own in table.by_unit.values() for sig in own.values())]
     for sig in candidates:
         link_symbol = (getattr(sig, "link_symbol", None)
                        or getattr(getattr(sig, "decl", None), "link_symbol", None))
@@ -93,15 +100,13 @@ def _defining_site(symbol: str, tables, registry, generated=frozenset()) -> Opti
                    for sig in lib.functions.values()):
                 return (f"library '{lib.name}' exports it", None, None)
 
-    sig = _declaration_emitting(symbol, tables.funcs)
+    sig = _declaration_emitting(symbol, _table_entries(tables.funcs))
     if sig is not None:
         if sig.name_span is not None:
             return ("defined here", sig.name_span, sig.filename)
-        # A monomorphized instance carries no span of its own: it is a body the
-        # compiler synthesized, not one the user wrote.
         return ("this program defines it", None, None)
 
-    const = _declaration_emitting(symbol, tables.constants)
+    const = _declaration_emitting(symbol, _table_entries(tables.constants))
     if const is not None:
         if const.name_span is not None:
             return ("the constant is defined here", const.name_span, const.filename)
@@ -179,17 +184,70 @@ def reject_external_naming_a_defined_symbol(
     for block in externals:
         for decl in [*block.decls, *block.variables]:
             found = _defining_site(decl.link_name, tables, registry, generated_symbols)
-            if found is None:
+            if found is not None:
+                _emit_defined_symbol(reporter, decl, *found)
+
+
+def _emit_defined_symbol(reporter: Reporter, decl, note: str, span, filename) -> None:
+    """CE5013 at the extern, with a note at the definition when it has a span."""
+    diagnostic = er.emit_with(reporter, er.ERR.CE5013, decl.name_span or decl.loc,
+                              symbol=decl.link_name)
+    if span is None:
+        diagnostic.note(note)
+    else:
+        diagnostic.note_at(note, span, filename)
+    diagnostic.emit()
+
+
+def monomorphized_instances(compilation_order, funcs) -> list[tuple]:
+    """Each monomorphized function instance of the build, as (signature, body).
+
+    The body is a copy of its generic, so it carries the template's span and file.
+    Its signature carries the home unit (`generics/synthesis.py`), which is the unit
+    that the back end names the symbol with: the unit that declared the generic, or no
+    unit for a binary library's template.
+    """
+    instances = []
+    for unit in compilation_order:
+        if unit.ast is None:
+            continue
+        for fn in unit.ast.functions:
+            if not getattr(fn, "is_synthesized", False):
                 continue
-            note, span, filename = found
-            diagnostic = er.emit_with(reporter, er.ERR.CE5013,
-                                      decl.name_span or decl.loc,
-                                      symbol=decl.link_name)
-            if span is None:
-                diagnostic.note(note)
+            sig = funcs.declared(fn.name, getattr(fn, "home_unit", None))
+            if sig is not None:
+                instances.append((sig, fn))
+    return instances
+
+
+def reject_external_naming_an_instance(reporter: Reporter, program: 'Program',
+                                       instances: list[tuple]) -> None:
+    """CE5013, the instance half: an extern that names a monomorphized instance (#1113).
+
+    An instance exists only after the `monomorphize` pass, and the first half runs
+    before it, so this half reads the instances that the pass made. A library's
+    template comes from a manifest slice that the consumer does not have, so its note
+    is a plain fact.
+    """
+    externals = getattr(program, "externals", None)
+    if not externals or not instances:
+        return
+    bodies = {id(sig): fn for sig, fn in instances}
+    for block in externals:
+        for decl in [*block.decls, *block.variables]:
+            sig = _declaration_emitting(decl.link_name, [sig for sig, _ in instances])
+            if sig is None:
+                continue
+            fn = bodies[id(sig)]
+            generic = getattr(fn, "instance_of", None) or fn.name
+            if getattr(fn, "is_library_template", False) or fn.name_span is None:
+                _emit_defined_symbol(
+                    reporter, decl,
+                    f"an instance of the library generic '{generic}' defines it",
+                    None, None)
             else:
-                diagnostic.note_at(note, span, filename)
-            diagnostic.emit()
+                _emit_defined_symbol(reporter, decl, "the instance of this generic",
+                                     fn.name_span, getattr(fn, "filename", None))
 
 
 def validate_ptr_unit_gate(reporter: Reporter, program: 'Program') -> None:

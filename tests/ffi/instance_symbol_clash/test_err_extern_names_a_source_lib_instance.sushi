@@ -1,0 +1,13 @@
+# The link name is the symbol of an instance of a source library's generic
+# (#1113). The instance goes home to the library unit and takes its prefix.
+# BUILD_LIB: inst_src_lib.sushi
+# EXPECT_ERROR_CODE: CE5013
+use <lib/inst_src_lib>
+
+unsafe external "C" as raw because "naming an instance":
+    fn g(i32 x) i32 = "lib$inst_src_lib$inst_src_lib$src_gen__i32"
+
+fn main() i32:
+    println(src_gen(nom 3))
+    println(raw.g(4))
+    return 0

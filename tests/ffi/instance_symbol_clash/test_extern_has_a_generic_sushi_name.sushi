@@ -1,0 +1,13 @@
+# The link name is the SUSHI name of a generic, and no instance emits that symbol
+# (#1113). The extern is never called, so the program links.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+unsafe external "C" as raw because "a foreign name":
+    fn g(i32 x) i32 = "ident"
+
+fn ident@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    println(ident(nom 3))
+    return 0
