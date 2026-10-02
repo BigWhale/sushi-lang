@@ -60,7 +60,7 @@ from .flow import (
     snapshot_flow,
     terminates,
 )
-from .reads import root_owner
+from .reads import borrow_owner
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -161,7 +161,7 @@ def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
 def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     """`x := v` or `obj.field := v`: the target takes ownership of a new value."""
     target = stmt.target
-    owner = root_owner(target)
+    owner = borrow_owner(target)
 
     # No "rebind while borrowed" check here, deliberately: this runs BEFORE the value
     # walk, and moving it after would reject `x := f(peek x)`. CE2401 lives at the
@@ -189,7 +189,7 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
                               receiver=target.receiver)
         check_expr(checker, target)
     elif isinstance(target, IndexAccess):
-        # An element rebind mutates in place too, and `root_owner` already walks an
+        # An element rebind mutates in place too, and `borrow_owner` already walks an
         # index, so the same gate answers for all five read-only receiver kinds.
         reject_readonly_write(checker, owner, stmt.loc, "assign to an array element",
                               receiver=target.array)

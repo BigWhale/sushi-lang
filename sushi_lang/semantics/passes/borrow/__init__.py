@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set
 
 from sushi_lang.semantics.ast import Block, ExtendDef, FuncDef, Param, Program
 from sushi_lang.semantics.typesys import (
-    BuiltinType, DynamicArrayType, ReferenceType, Type,
+    BorrowMode, BuiltinType, DynamicArrayType, ReferenceType, StructType, Type,
 )
+from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 from sushi_lang.semantics.namespaces import body_namespaces
 from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
 from sushi_lang.internals.report import Reporter, Span
@@ -16,7 +17,7 @@ from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .expressions import INERT_EXPRS, check_expr
 from .flow import FlowFacts, LoopFrame
-from .reads import unit_variables
+from .reads import captured_key, unit_variables
 from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
@@ -212,6 +213,9 @@ class BorrowChecker:
             # parameters did not transfer (docs/design/borrow-model.md S1).
             self._declare(state, is_borrow=not param_mode(param).consumes)
 
+        if params and params[0].name == ENV_PARAM_NAME:
+            self._declare_captures(params[0])
+
         check_block(self, body)
         body.conditional_move_names = frozenset(self.conditional_moves)
 
@@ -220,6 +224,21 @@ class BorrowChecker:
         # A borrow parameter does not own its value -- `string` included (#338).
         state.is_borrow_param = is_borrow
         self.borrow_state[state.name] = state
+
+    def _declare_captures(self, env: Param) -> None:
+        """Give each captured variable of a lifted lambda the state of a `poke` borrow.
+
+        The environment is a `poke` parameter, and a borrow of one captured field is
+        counted on that field alone (`borrow_owner`, #1129).
+        """
+        env_type = env.ty.referenced_type if isinstance(env.ty, ReferenceType) else None
+        if not isinstance(env_type, StructType):
+            return
+        for field_name, field_type in env_type.fields:
+            self._declare(BorrowState(name=captured_key(field_name),
+                                      var_type=ReferenceType(field_type, BorrowMode.POKE),
+                                      declared_at_span=getattr(env, "loc", None)),
+                          is_borrow=True)
 
     @staticmethod
     def _is_argv_view_param(ty: Optional[Type]) -> bool:

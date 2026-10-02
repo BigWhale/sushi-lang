@@ -12,6 +12,7 @@ from sushi_lang.semantics.param_modes import borrow_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
+from .reads import captured_variable
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -24,15 +25,18 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
     # A field borrow is tracked against the BASE variable: this pass tracks whole
     # variables, not sub-places, so the two spellings differ in exactly one thing --
-    # where the name comes from.
-    target = walk_place(borrow.expr, Step.MEMBER).node
+    # where the name comes from. A captured variable is a whole variable (#1129).
+    walked = walk_place(borrow.expr, Step.MEMBER, stop=captured_variable)
 
-    if not isinstance(target, Name):
+    if walked.stop is not None:
+        name = walked.stop
+    elif isinstance(walked.node, Name):
+        name = walked.node.id
+    else:
         # A call result, a literal, a member chain off one -- nothing with an address.
         checker.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_to_string(borrow.expr))
         return
 
-    name = target.id
     # An unfindable name was ALREADY reported by the scope pass, which owns names
     # (CE1001 or CE2400). Asking again here gave one token two diagnostics, and the wrong
     # one, because `borrow_state` cannot tell the two cases apart.
