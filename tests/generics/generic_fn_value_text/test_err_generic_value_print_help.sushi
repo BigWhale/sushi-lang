@@ -1,0 +1,11 @@
+# A generic function in a print argument has no stated function type. The help names
+# the position that states one (#1105).
+# EXPECT_ERROR_CODES_EXACT: CE2093
+# EXPECT_STDERR_CONTAINS: "let fn(i32) -> i32 g = identity"
+
+fn identity@(T)(T x) T:
+    return x
+
+fn main() i32:
+    println(identity)
+    return 0

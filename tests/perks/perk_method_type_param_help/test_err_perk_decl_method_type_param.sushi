@@ -1,0 +1,10 @@
+# A perk declaration method declares no type parameters. The parse error helps with
+# that fault, not with an `if` condition (#1104).
+# EXPECT_ERROR_CODE: CE6001
+# EXPECT_STDERR_CONTAINS: "a perk method declares no type parameters"
+
+perk Describe:
+    fn describe@(U)() string
+
+fn main() i32:
+    return 0

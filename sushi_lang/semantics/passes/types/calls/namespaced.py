@@ -228,11 +228,11 @@ def _infer_namespaced_generic_value(validator: 'TypeValidator', node: 'MemberAcc
 
 def _reject_generic_function_value(validator: 'TypeValidator', node: 'MemberAccess') -> None:
     """CE2093: no expected fn type solves the generic behind the alias (#1013, #1017)."""
+    from .generics import reject_unsolved_generic_value
     loc = getattr(node, "loc", None)
     if _first_report(validator, loc):
-        er.emit(validator.reporter, er.ERR.CE2093, loc,
-                name=_written(node.receiver, node.member),
-                reason="generic function references are deferred (v1)")
+        reject_unsolved_generic_value(validator, loc, _written(node.receiver, node.member),
+                                      getattr(node, "expected_type", None))
 
 
 def fold_namespaced_enum(validator: 'TypeValidator', node) -> bool:

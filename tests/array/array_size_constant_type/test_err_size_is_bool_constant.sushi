@@ -1,0 +1,10 @@
+# A bool constant cannot count elements either (#1107).
+# EXPECT_ERROR_CODE: CE2099
+# EXPECT_STDERR_CONTAINS: "'N' is a bool constant"
+
+const bool N = true
+
+fn main() i32:
+    let i32[N] a = [1, 2, 3]
+    println(a.len())
+    return 0

@@ -259,16 +259,49 @@ def _string_opens_a_hole_before(line_text: str, col: int) -> bool:
     return False
 
 
+_CONDITION_HINTS = {
+    "IF": "use 'if (condition):' instead of 'if condition:'",
+    "ELIF": "use 'elif (condition):' instead of 'elif condition:'",
+    "WHILE": "use 'while (condition):' instead of 'while condition:'",
+}
+
+_PERK_METHOD_HINT = ("a perk method declares no type parameters; a generic method is a "
+                     "plain extension method ('extend T name@(U)(...)')")
+
+
+def _sole_lpar_hint(e: UnexpectedInput) -> Optional[str]:
+    """The help for a position where `(` is the one expected token, read from the
+    tokens before the failure. None when the position has no help."""
+    parser = getattr(e, "interactive_parser", None)
+    stack = getattr(getattr(parser, "parser_state", None), "value_stack", None)
+    if not stack:
+        return None
+    kinds = [getattr(value, "type", None) for value in stack[-2:]]
+    if kinds[-1] in _CONDITION_HINTS:
+        return _CONDITION_HINTS[kinds[-1]]
+    # A function definition takes `@(` after its name; a perk method takes only `(`.
+    token = getattr(getattr(e, "token", None), "type", None)
+    if kinds == ["FN", "NAME"] and token == "AT" and _inside_a_perk(stack):
+        return _PERK_METHOD_HINT
+    return None
+
+
+def _inside_a_perk(stack: list) -> bool:
+    """Whether the nearest open block keyword on the parser stack is `perk`."""
+    for value in reversed(stack):
+        kind = getattr(value, "type", None)
+        if kind in ("PERK", "EXTERNAL"):
+            return kind == "PERK"
+    return False
+
+
 def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     """Advice for a parse failure the grammar cannot phrase itself. None if none applies."""
-    # The if/elif grammar (`IF "(" expr ")" ...`) is the only place that fails
-    # with LPAR as the SOLE expected token: after the keyword the parser demands
-    # `(`. Gate the parentheses hint on that, so an unrelated error that merely
-    # lists LPAR among several alternatives no longer gets a misleading
-    # "missing parentheses around if" message.
     expected = getattr(e, "expected", None)
     if expected is not None and set(expected) == {"LPAR"}:
-        return "use 'if (condition):' instead of 'if condition:'"
+        hint = _sole_lpar_hint(e)
+        if hint is not None:
+            return hint
 
     line = getattr(e, "line", None)
     col = getattr(e, "column", None)

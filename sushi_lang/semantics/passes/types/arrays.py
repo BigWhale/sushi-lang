@@ -181,10 +181,24 @@ def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter:
     comparable = (has_equality(validator, array_type.base_type) if validator is not None
                   else operand_contract(array_type.base_type, EQ)[0])
     if not comparable:
-        er.emit(reporter, er.ERR.CE2100, call.loc, method=call.method,
-                element=display_type(array_type.base_type))
+        _reject_uncomparable_element(call, array_type.base_type, reporter)
         return
     _validate_element_argument(call, array_type.base_type, reporter, validator)
+
+
+def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) -> None:
+    """CE2100. An array element has its own reason and escape: an array has no top-level
+    `==` (CE2514), and a struct that holds the row takes a derived `Eq` (#1116)."""
+    shown = display_type(element)
+    if not isinstance(element, (ArrayType, DynamicArrayType)):
+        er.emit(reporter, er.ERR.CE2100, call.loc, method=call.method,
+                reason=f"'{shown}' has none")
+        return
+    er.emit_with(reporter, er.ERR.CE2100, call.loc, method=call.method,
+                 reason=f"'{shown}' is an array, and an array has no '==' at the top "
+                        "level").help(
+        f"put the row in a struct ('struct Row: {shown} cells'), which takes a derived "
+        f"'Eq', and search a 'Row[]'").emit()
 
 
 def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,

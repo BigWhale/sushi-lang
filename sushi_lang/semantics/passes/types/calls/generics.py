@@ -192,6 +192,26 @@ def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_fun
     return substituted_call_result(generic_func, type_args)
 
 
+def reject_unsolved_generic_value(validator: 'TypeValidator', loc, name: str,
+                                  expected_ty) -> None:
+    """CE2093 for a generic function value that no stated function type solves.
+
+    The one text for the bare name and the name behind an alias (#1105).
+    """
+    from sushi_lang.semantics.typesys import FunctionType
+    if isinstance(expected_ty, FunctionType):
+        reason = (f"the function type '{display_type(expected_ty)}' of this position "
+                  "does not solve its type arguments")
+        help_text = (f"state a function type whose parameter types solve each type "
+                     f"parameter of '{name}'")
+    else:
+        reason = "this position states no function type, so its type arguments are unknown"
+        help_text = (f"state the function type at the position, for example "
+                     f"'let fn(i32) -> i32 g = {name}'")
+    er.emit_with(validator.reporter, er.ERR.CE2093, loc, name=name,
+                 reason=reason).help(help_text).emit()
+
+
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,
                                  generic_func=None):
     """Resolve a generic-fn reference against an expected FunctionType (T2.3).
