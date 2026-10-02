@@ -1,0 +1,9 @@
+# An `if` condition without parentheses keeps its own help (#1104).
+# EXPECT_ERROR_CODE: CE6001
+# EXPECT_STDERR_CONTAINS: "use 'if (condition):' instead of 'if condition:'"
+
+fn main() i32:
+    let i32 n = 1
+    if n == 1:
+        return 0
+    return 0
