@@ -1,0 +1,9 @@
+# A generic function behind a unit alias that borrows refuses a `nom` marker
+# (#1125).
+# EXPECT_ERROR_CODE: CE2427
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let i32 n = 5
+    println(l.look(nom n))
+    return 0

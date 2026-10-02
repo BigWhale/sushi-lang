@@ -1,0 +1,9 @@
+# A generic function behind a unit alias checks the `nom` marker, as the flat
+# call does (#1125).
+# EXPECT_ERROR_CODE: CE2427
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let i32 n = 5
+    println(l.gen(n))
+    return 0

@@ -1,0 +1,9 @@
+# A stdlib function behind a module alias borrows its argument and refuses a
+# `nom` marker, as the flat call does (#1125).
+# EXPECT_ERROR_CODE: CE2427
+use <math> as m
+
+fn main() i32:
+    let f64 x = 4.0
+    println(m.sqrt(nom x))
+    return 0

@@ -1,0 +1,2 @@
+public fn gen@(T)(nom T x) T:
+    return x

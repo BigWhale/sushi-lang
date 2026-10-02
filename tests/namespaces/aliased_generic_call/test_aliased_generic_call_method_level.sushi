@@ -1,0 +1,13 @@
+# A method-level generic on a type behind a unit alias takes a `nom` argument
+# (#1125).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let l.Holder h = l.Holder(1)
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let string t = h.pass(nom s)
+    println(t)
+    return 0

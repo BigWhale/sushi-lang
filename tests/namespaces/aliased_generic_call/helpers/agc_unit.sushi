@@ -1,0 +1,16 @@
+use <collections/strings>
+
+public fn gen@(T)(nom T x) T:
+    return x
+
+public fn look@(T: Display)(T x) i32:
+    return "{x}".len()
+
+public fn count_all@(...Ts)(...Ts xs) i32:
+    return 3
+
+public struct Holder:
+    i32 n
+
+extend Holder pass@(U)(nom U x) U:
+    return x

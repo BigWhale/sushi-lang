@@ -1,0 +1,9 @@
+# A generic function behind a unit alias takes a `nom` argument, as the flat
+# call does (#1125).
+# EXPECT_STDOUT_EXACT: "5\n"
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let i32 n = 5
+    println(l.gen(nom n))
+    return 0

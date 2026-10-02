@@ -1,0 +1,11 @@
+# A pack generic behind a unit alias (#1125).
+# EXPECT_STDOUT_EXACT: "3 Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_unit" as l
+
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let i32 k = l.count_all(1, s, 2.0)
+    println("{k} {s}")
+    return 0
