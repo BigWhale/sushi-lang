@@ -70,6 +70,10 @@ class MoveTracker:
         with self.codegen.builder.if_then(live):
             emit()
 
+    def owns_unconditionally(self, slot: 'ir.Instruction') -> bool:
+        """True if the binding owns its value on every path: never moved, and no drop flag."""
+        return slot not in self._moved and slot not in self._flags
+
     def unmark(self, slot: 'ir.Instruction') -> None:
         """Clear a binding's moved flag: a rebind RE-INITIALIZES it (F5, 2026-08-14)."""
         flag = self._flags.get(slot)

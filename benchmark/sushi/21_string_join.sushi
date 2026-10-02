@@ -1,0 +1,9 @@
+use <collections/strings>
+
+fn main() i32:
+    let string[] parts = from([])
+    foreach(i in 0..50000):
+        parts.push("{i},")
+    let string s = "".join(parts)
+    println(s.size())
+    return 0

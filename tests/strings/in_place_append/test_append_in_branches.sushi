@@ -1,0 +1,19 @@
+# An append in a branch, after a conditional rebind to a literal, and in a loop that ends
+# with a `break`: every path frees the string once.
+# EXPECT_STDOUT_EXACT: "reset:2:3:4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn main() i32:
+    let string s = "seed"
+    foreach(i in 0..10):
+        if (i == 1):
+            s := "reset"
+        else:
+            if (i > 1):
+                s := s.concat(":{i}")
+        if (i == 4):
+            break
+    println(s)
+    return 0

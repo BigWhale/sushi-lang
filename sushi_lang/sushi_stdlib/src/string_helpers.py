@@ -40,7 +40,16 @@ def emit_checked_malloc(builder: ir.IRBuilder, malloc_fn: ir.Function, size: ir.
     The builder continues at the end of a new block, so a phi after this call must name
     `builder.block` as its predecessor, not the block the call started in.
     """
-    raw = builder.call(malloc_fn, [size], name=name)
+    return _null_checked(builder, builder.call(malloc_fn, [size], name=name))
+
+
+def emit_checked_realloc(builder: ir.IRBuilder, realloc_fn: ir.Function, ptr: ir.Value,
+                         size: ir.Value, name: str = "") -> ir.Value:
+    """Call realloc(ptr, size), checked as `emit_checked_malloc` is. `size` must not be 0."""
+    return _null_checked(builder, builder.call(realloc_fn, [ptr, size], name=name))
+
+
+def _null_checked(builder: ir.IRBuilder, raw: ir.Value) -> ir.Value:
     func = builder.function
     fail = alloc_fail_block(func)
     ok = func.append_basic_block(name="alloc_ok")

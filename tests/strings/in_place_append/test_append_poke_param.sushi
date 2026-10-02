@@ -1,0 +1,21 @@
+# A rebind through a `poke` parameter grows the caller's string in place, and the caller
+# frees it at its own scope exit.
+# EXPECT_STDOUT_EXACT: "a,b,c,d,\n8\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn add(poke string out, string piece) ~:
+    out := out.concat(piece)
+    out := out.concat(",")
+
+fn main() i32:
+    let string s = ""
+    add(poke s, "a")
+    add(poke s, "b")
+    let string[] rest = from(["c", "d"])
+    foreach(p in rest.iter()):
+        add(poke s, p)
+    println(s)
+    println(s.size())
+    return 0

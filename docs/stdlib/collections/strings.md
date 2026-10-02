@@ -280,6 +280,42 @@ let string greeting = "Hello".concat(" World")
 println(greeting)  # "Hello World"
 ```
 
+`concat` makes a new string and does not change the receiver. When you rebind a string
+to its own concatenation, `s := s.concat(x)`, the compiler appends to the buffer of `s`
+in place, so a loop of appends takes linear time:
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string csv = ""
+    foreach(i in 0..5):
+        csv := csv.concat("{i},")
+    println(csv)  # "0,1,2,3,4,"
+    return 0
+```
+
+Only this exact form appends in place. In each of these forms, every step copies the
+whole string, so a loop of them takes quadratic time:
+
+- `s := s.concat(a).concat(b)` (the second `concat` copies the first result)
+- `s := "{s}{x}"`
+- `t := s.concat(x)` (a different target)
+
+To build a string from many pieces in those forms, push the pieces to a `string[]` and
+join them one time:
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string[] parts = from([])
+    foreach(i in 0..5):
+        parts.push("{i}")
+    println(",".join(parts))  # "0,1,2,3,4"
+    return 0
+```
+
 ## Whitespace Trimming
 
 ### `.trim() -> string`

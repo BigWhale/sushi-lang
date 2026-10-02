@@ -1,0 +1,15 @@
+# A string bound from a literal owns no heap: the first append copies it, and every later
+# append grows the copy. The literal itself does not change.
+# EXPECT_STDOUT_EXACT: "start-0-1-2\nstart\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn main() i32:
+    let string s = "start"
+    foreach(i in 0..3):
+        s := s.concat("-{i}")
+    println(s)
+    let string t = "start"
+    println(t)
+    return 0

@@ -109,6 +109,9 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
     else:
         raise_internal_error("CE0022", type=f"Unsupported rebind target: {type(stmt.target)}")
 
+    if _emit_string_append_rebind(codegen, stmt, slot, var_name, semantic_type):
+        return
+
     # The descriptor BY VALUE, from every producer (docs/design/array-representation.md):
     # the load-if-pointer branch that stood here was reached by nothing once the two
     # producers that answered an address were fixed (cf12c73f), measured again for #553.
@@ -154,6 +157,48 @@ def emit_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind') -> None:
         _emit_owned_value_rebind(codegen, stmt, slot, val, var_name, semantic_type)
     else:
         raise_internal_error("CE0022", type=str(dst))
+
+
+def _emit_string_append_rebind(codegen: 'LLVMCodegen', stmt: 'Rebind', slot: 'ir.Value',
+                               var_name: str, semantic_type: 'Type | None') -> bool:
+    """`s := s.concat(x)`: grow the buffer in place, or answer False for the general path.
+
+    The general path frees the old value right after the copy, so `string_append` hands
+    the old buffer to `realloc` under the same rule: only when the `owned` bit is set.
+    """
+    from sushi_lang.backend.expressions.calls.stdlib.signatures import as_param_value
+    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+    from sushi_lang.backend.functions import declare_stdlib_function
+    from sushi_lang.semantics.ast import DotCall, MethodCall, Name
+    from sushi_lang.semantics.typesys import BuiltinType, ReferenceType
+    from sushi_lang.sushi_stdlib.src.signatures import Param
+
+    value = stmt.value
+    if not (isinstance(value, (DotCall, MethodCall)) and value.method == "concat"
+            and isinstance(value.receiver, Name) and value.receiver.id == var_name
+            and len(value.args) == 1):
+        return False
+
+    through_reference = isinstance(semantic_type, ReferenceType)
+    referent = semantic_type.referenced_type if through_reference else semantic_type
+    if referent != BuiltinType.STRING:
+        return False
+    if through_reference:
+        address = codegen.builder.load(slot, name=f"{var_name}_ref_ptr")
+    else:
+        da = getattr(codegen, "dynamic_arrays", None)
+        if not codegen.moves.owns_unconditionally(slot) or (
+                da is not None and da.is_destroyed(var_name)):
+            return False
+        address = slot
+
+    old = codegen.builder.load(address, name=f"{var_name}_old")
+    piece = as_param_value(codegen, Param(BuiltinType.STRING),
+                           emit_borrowed_arg(codegen, value.args[0]))
+    append = declare_stdlib_function(codegen.module, "string_append", old.type,
+                                     [old.type, old.type])
+    codegen.builder.store(codegen.builder.call(append, [old, piece], name="appended"), address)
+    return True
 
 
 def _emit_dynamic_array_rebind(
