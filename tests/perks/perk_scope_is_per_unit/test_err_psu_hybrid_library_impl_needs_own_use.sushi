@@ -1,0 +1,19 @@
+# A hybrid library's perk, at a consumer unit that does not import the library:
+# another unit imports it. The implementation is refused.
+# BUILD_LIB_HYBRID: psu_lib.sushi
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+# EXPECT_STDERR_CONTAINS: add `use <lib/psu_lib>` above to name it here
+use "psu_lib_user"
+
+struct Cat:
+    i32 x
+
+extend Cat with Labeled:
+    fn label() string:
+        return "cat"
+
+fn main() i32:
+    let Cat c = Cat(1)
+    println(c.label())
+    return lib_touch()

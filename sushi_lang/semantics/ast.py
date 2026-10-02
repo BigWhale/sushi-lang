@@ -397,6 +397,8 @@ class ExtendWithDef(Node):
     # the mark a walk over that unit reads one written declaration once for each
     # instantiation (#657).
     is_synthesized: bool = False
+    # The alias of `extend Dog with p.Named`, or None for a bare perk name.
+    perk_namespace: Optional[str] = None
 
 @dataclass(slots=True)
 class TypeConstraint:

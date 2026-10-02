@@ -1,0 +1,19 @@
+# The unit reaches the perk only through another unit's plain `use`, which
+# re-exports nothing. The implementation is refused one time, with the import in the
+# help, and the method call gives no second diagnostic.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+# EXPECT_STDERR_CONTAINS: add `use "psu_pk"` above to name it here
+use "psu_mid"
+
+struct Dog:
+    i32 x
+
+extend Dog with Named:
+    fn name() string:
+        return "dog"
+
+fn main() i32:
+    let Dog d = Dog(1)
+    println(d.name())
+    return touch()

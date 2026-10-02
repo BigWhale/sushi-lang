@@ -1,0 +1,15 @@
+# The perk is behind an alias, and the implementation names it through the alias.
+# EXPECT_STDOUT_EXACT: "dog\n"
+use "psu_pk" as p
+
+struct Dog:
+    i32 x
+
+extend Dog with p.Named:
+    fn name() string:
+        return "dog"
+
+fn main() i32:
+    let Dog d = Dog(1)
+    println(d.name())
+    return 0

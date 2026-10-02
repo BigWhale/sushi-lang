@@ -1,0 +1,14 @@
+# The alias holds the name, and the name is a function and not a perk.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+use "psu_mid" as m
+
+struct Dog:
+    i32 x
+
+extend Dog with m.touch:
+    fn name() string:
+        return "dog"
+
+fn main() i32:
+    return 0

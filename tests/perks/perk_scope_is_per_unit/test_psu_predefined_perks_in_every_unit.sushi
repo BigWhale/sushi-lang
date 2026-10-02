@@ -1,0 +1,10 @@
+# A predefined perk is in the scope of every unit: a unit with no import implements
+# `Eq` and `Display`.
+# EXPECT_STDOUT_EXACT: "true\ncoin 3\n"
+use "psu_eq_helper"
+
+fn main() i32:
+    let Coin a = Coin(3)
+    println(same_coin(a, Coin(3)))
+    println(a)
+    return 0

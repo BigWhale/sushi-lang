@@ -23,7 +23,7 @@ def check_constraint_perks(validator, program) -> None:
     does not hold the name -- so a site it refused is silent here.
     """
     from sushi_lang.semantics.ast_walk import signature_constraints
-    from .visibility import reject_out_of_scope_type
+    from .visibility import reject_out_of_scope_perk
 
     # Not a LIBRARY unit, for `check_public_signatures`' reason: its declarations were
     # checked when the library was built.
@@ -32,18 +32,38 @@ def check_constraint_perks(validator, program) -> None:
 
     for site in signature_constraints(program):
         if site.namespace is not None:
-            _reject_qualified_non_perk(validator, site)
+            _reject_qualified_non_perk(validator, site.namespace, site.perk_name,
+                                       site.span)
             continue
-        # A perk some unit declares and this one did not import is out of scope, not
-        # missing, and CE2001 is the code that says so -- `_TYPE_KINDS` already reads
-        # the perk kind. A name NO unit declares falls through to CE4003.
-        if reject_out_of_scope_type(validator, site.perk_name, site.span):
+        # A perk some unit declares and this one cannot name is CE4003 with the import
+        # in the help, as at an implementation (#1124). A name NO unit declares is
+        # CE4003 with no help.
+        if reject_out_of_scope_perk(validator, site.perk_name, site.span):
             continue
         if validator.perk_table.get(site.perk_name) is None:
             er.emit(validator.reporter, er.ERR.CE4003, site.span, perk=site.perk_name)
 
 
-def _reject_qualified_non_perk(validator, site) -> None:
+def reject_unnamable_implemented_perk(validator, impl: ExtendWithDef) -> bool:
+    """The perk of a WRITTEN implementation is in this unit's scope (#1124).
+
+    The rule of a constraint, at the other perk position: a bare name must be in the
+    unit's own scope, and a qualified one must be a perk behind a bound alias. A perk
+    that no unit declares is the collect pass's CE4003, so it is not asked here.
+    """
+    from .qualified import reject_qualified_name
+    from .visibility import reject_out_of_scope_perk
+
+    if impl.perk_namespace is None:
+        return reject_out_of_scope_perk(validator, impl.perk_name, impl.perk_name_span)
+    if reject_qualified_name(validator, impl.perk_namespace, impl.perk_name,
+                             impl.perk_name_span, kind="perk"):
+        return True
+    return _reject_qualified_non_perk(validator, impl.perk_namespace, impl.perk_name,
+                                      impl.perk_name_span)
+
+
+def _reject_qualified_non_perk(validator, namespace: str, name: str, span) -> bool:
     """CE4003 for `@(T: h.Vec)`: the alias holds the name, and it is not a perk (#733).
 
     The qualified path asked only whether the namespace holds a MEMBER of that name, so
@@ -55,11 +75,11 @@ def _reject_qualified_non_perk(validator, site) -> None:
     """
     from .qualified import written_name
 
-    binding = validator.namespaces.lookup(site.namespace, site.perk_name)
+    binding = validator.namespaces.lookup(namespace, name)
     if binding is None or binding.kind == "perk":
-        return
-    er.emit(validator.reporter, er.ERR.CE4003, site.span,
-            perk=written_name(site.namespace, site.perk_name))
+        return False
+    er.emit(validator.reporter, er.ERR.CE4003, span, perk=written_name(namespace, name))
+    return True
 
 
 def validate_perk_implementation(
@@ -125,7 +145,7 @@ def validate_template_header(validator, impl: ExtendWithDef) -> None:
     judged here.
     """
     perk_def = validator.perk_table.by_name.get(impl.perk_name)
-    if perk_def is not None:
+    if perk_def is not None and not reject_unnamable_implemented_perk(validator, impl):
         validate_perk_implementation(impl, perk_def, validator.reporter)
         _reject_template_name_conflicts(validator, impl)
 

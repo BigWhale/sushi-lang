@@ -20,7 +20,7 @@ _add(ErrorMessage("CE4002", Severity.ERROR,
 
 _add(ErrorMessage("CE4003", Severity.ERROR,
     "unknown perk: {perk}",
-    Category.PERK, "The perk being implemented has not been defined. Define the perk with 'perk {perk}:' before implementing it."))
+    Category.PERK, "The perk is not in the scope of this unit, in an implementation, a constraint or a pack constraint. When no unit declares the perk, define it with 'perk {perk}:'. When another unit or a library declares it, the help names the import that brings it: scope is per unit and not transitive, so a plain `use` in another unit does not bring it here (#1124). The predefined perks are in every scope."))
 
 _add(ErrorMessage("CE4004", Severity.ERROR,
     "method {method} signature does not match perk {perk} requirement",

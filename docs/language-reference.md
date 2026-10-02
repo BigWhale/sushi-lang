@@ -1700,6 +1700,11 @@ error channel. The rules of the contract:
 - A name has one home on a type: a perk method beside an extension method of the same name
   is `CE4007`.
 - A type argument that does not implement a constraint is `CE4006`.
+- The perk must be in the scope of the unit, in an implementation, a constraint and a pack
+  constraint alike: declared there, brought by the unit's own `use`, or re-exported by a
+  `public use` chain. An aliased import gives `extend Dog with p.Named` and
+  `@(T: p.Named)`. A perk out of scope is `CE4003`, with the import in the help; a plain
+  `use` in another unit does not bring it. The predefined perks are in every scope.
 - A perk has no type parameters, no inheritance, no default implementations and no `Self`
   type. A perk that declares `@(...)`, and an implementation method that declares its own
   type parameters, are both `CE4010`. A `static` in a perk implementation is `CE4014`: with

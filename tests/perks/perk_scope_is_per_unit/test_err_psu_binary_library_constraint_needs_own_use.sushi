@@ -1,0 +1,12 @@
+# A constraint on a binary library's perk, at a consumer unit that does not import
+# the library.
+# BUILD_LIB_BINARY: psu_lib.sushi
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+use "psu_lib_user"
+
+fn show@(T: Labeled)(T v) string:
+    return v.label()
+
+fn main() i32:
+    return lib_touch()

@@ -1,0 +1,12 @@
+# A constraint on a perk that is out of scope is the unknown-perk error, as an
+# implementation is, with the import in the help.
+# EXPECT_ERROR_CODE: CE4003
+# EXPECT_ERROR_CODES_EXACT: CE4003
+# EXPECT_STDERR_CONTAINS: add `use "psu_pk"` above to name it here
+use "psu_mid"
+
+fn show@(T: Named)(T v) string:
+    return v.name()
+
+fn main() i32:
+    return touch()

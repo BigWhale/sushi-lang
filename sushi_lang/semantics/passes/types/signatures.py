@@ -16,7 +16,10 @@ from sushi_lang.semantics.generics.extension_targets import (
 
 from .control_flow import block_always_returns, reject_dead_statements
 from .utils import validate_type_name, validate_and_register_parameters
-from .perks import validate_perk_implementation, check_no_conflicts_with_regular_methods
+from .perks import (
+    check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
+    validate_perk_implementation,
+)
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.namespaces import in_body_scope
 
@@ -273,9 +276,13 @@ def validate_extension_method(self, ext: ExtendDef) -> None:
 
 def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     """Validate a perk implementation: the contract, the header, then each method."""
+    # A perk that no unit declares is the collect pass's one CE4003 (#1124).
     perk_def = self.perk_table.by_name.get(impl.perk_name)
     if not perk_def:
-        self.err.emit(er.ERR.CE4003, impl.perk_name_span, perk=impl.perk_name)
+        return
+
+    from sushi_lang.semantics.ast_walk import is_written
+    if is_written(impl) and reject_unnamable_implemented_perk(self, impl):
         return
 
     validate_perk_implementation(impl, perk_def, self.reporter)
@@ -287,7 +294,6 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     # `self.field` in the body silently failed to resolve -- and a `??` beside one then
     # reached codegen unannotated, as a CE0124.
     from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.ast_walk import is_written
     resolved_type = impl.target_type
     if isinstance(impl.target_type, (UnknownType, GenericTypeRef)):
         resolved_type = resolve_unknown_type(

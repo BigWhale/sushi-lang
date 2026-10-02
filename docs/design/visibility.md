@@ -300,6 +300,17 @@ may implement it, and who may demand it in a constraint. It never governs a meth
 that is already public. That is the whole content of Ruling 3, and the table is the shortest
 way to say it.
 
+**The perk must also be in the unit's own scope** (#1124). Visibility decides who MAY name a
+perk; scope decides where the name is written. An implementation (`extend T with P`), a
+constraint (`@(T: P)`) and a pack constraint (`@(...Ts: P)`) are legal only when `P` is
+declared in the unit, or its own `use` brings it, or a `public use` chain re-exports it. A
+flat import gives the bare name; an aliased import gives `p.P` (`extend Dog with p.Named`).
+A perk that a compiled library ships follows the same rule at the consumer. A perk out of
+scope is CE4003 in every position, one time, with the import in the help: a plain `use` in
+another unit does not bring it, because scope is not transitive. The predefined perks
+(`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) are in every scope. The check reads the scope
+that every other name reads (`reject_out_of_scope_perk`, `passes/types/visibility.py`).
+
 The practical reading: keep a perk private while it is an implementation detail you may still
 want to change, because nothing outside can then depend on it. Publish it when you want other
 units to implement it, and accept that its method set is API from that point on.
