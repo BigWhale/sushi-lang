@@ -35,7 +35,7 @@ String operations, concatenation, and basic manipulation.
 String interpolation with variables and expressions.
 
 ### 06-arrays.sushi
-Fixed and dynamic arrays, array operations, and iteration.
+Fixed and dynamic arrays, array operations (`insert` and `remove` included), and iteration.
 
 ## Error Handling
 

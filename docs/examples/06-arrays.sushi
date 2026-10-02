@@ -4,6 +4,8 @@
 # - Fixed-size arrays (T[N]) - stack-allocated, immutable length
 # - Dynamic arrays (T[]) - heap-allocated, growable
 # - Array methods: len(), get(), capacity(), push(), pop()
+# - Changing the middle: insert(), remove()
+# - Reading without an index: first(), last(), contains(), index_of()
 # - Writing one element: arr[i] := value
 # - Array iteration with foreach
 # - Array manipulation: fill(), reverse(), clone()
@@ -60,6 +62,23 @@ fn main() i32:
 
     foreach(member in crew.iter()):
         println("  - {member}")
+
+    # insert() moves the elements from the index on one slot to the right.
+    # It answers Result@(~, StdError): an index past len() is an Err.
+    let bool placed = crew.insert(2, "Eddie").is_ok()
+    let bool refused = crew.insert(99, "Slartibartfast").is_err()
+    println("Inserted Eddie: {placed}, index 99 refused: {refused}")
+
+    # remove() takes the element out and answers Maybe@(T).
+    let string left = crew.remove(0).realise("nobody")
+    println("Left the ship: {left}, crew members: {crew.len()}")
+
+    # first(), last() and index_of() answer a Maybe, so an empty array is no crash.
+    let string captain = crew.first().realise("nobody")
+    let string android = crew.last().realise("nobody")
+    let i32 eddie_at = crew.index_of("Eddie").realise(-1)
+    let bool has_marvin = crew.contains("Marvin")
+    println("First: {captain}, last: {android}, Eddie at {eddie_at}, Marvin aboard: {has_marvin}")
 
     # Fill array with a value
     let i32[] answers = from([1, 2, 3, 4, 5])
