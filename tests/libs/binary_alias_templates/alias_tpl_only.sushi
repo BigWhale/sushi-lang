@@ -1,0 +1,2 @@
+public fn only_id@(T)(nom T x) T:
+    return x
