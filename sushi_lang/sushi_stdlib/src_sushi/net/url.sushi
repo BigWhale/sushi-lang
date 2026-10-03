@@ -100,10 +100,8 @@ public fn parse_url(string text) Url | UrlError:
 
     # The fragment and then the query come off the tail, in that order: a `#`
     # ends the query, and a `?` inside a fragment is part of the fragment.
-    let string fragment = after_first(rest, "#")
-    let string without_fragment = before_first(rest, "#")
-    let string query = after_first(without_fragment, "?")
-    let string body = before_first(without_fragment, "?")
+    let (string without_fragment, string fragment) = rest.split_once("#").realise((rest.clone(), ""))
+    let (string body, string query) = without_fragment.split_once("?").realise((without_fragment.clone(), ""))
 
     if (not body.starts_with("//")):
         # No authority: an opaque or rooted path, kept exactly as written.
@@ -119,8 +117,7 @@ public fn parse_url(string text) Url | UrlError:
         authority := authority_and_path.s(0, slash)
         path := authority_and_path.s(slash, authority_and_path.len())
 
-    let string userinfo = before_last(authority, "@")
-    let string hostport = after_last(authority, "@")
+    let (string userinfo, string hostport) = authority.rsplit_once("@").realise(("", authority.clone()))
 
     let string host = ""
     let i32 port = 0
@@ -257,59 +254,3 @@ fn read_port(string text) i32 | UrlError:
     if (value < 1 or value > 65535):
         return Result.Err(UrlError.BadPort)
     return Result.Ok(value)
-
-##:
-The text before the first `mark`, or the whole text when there is none.
-
-- Parameter text: The text to cut.
-- Parameter mark: The delimiter to cut at.
-- Returns: The part before the delimiter.
-:##
-fn before_first(string text, string mark) string:
-    let i32 at = text.find(mark).realise(-1)
-    if (at < 0):
-        # The parameter is a borrow, so handing it back is CE2411: the caller
-        # keeps it. A copy is what the caller is being given.
-        return text.clone()
-    return text.s(0, at)
-
-##:
-The text after the first `mark`, or empty when there is none.
-
-- Parameter text: The text to cut.
-- Parameter mark: The delimiter to cut at.
-- Returns: The part after the delimiter.
-:##
-fn after_first(string text, string mark) string:
-    let i32 at = text.find(mark).realise(-1)
-    if (at < 0):
-        return ""
-    return text.s(at + mark.len(), text.len())
-
-##:
-The text before the last `mark`, or empty when there is none.
-
-The LAST one, because a userinfo may itself hold an `@`.
-
-- Parameter text: The text to cut.
-- Parameter mark: The delimiter to cut at.
-- Returns: The part before the last delimiter.
-:##
-fn before_last(string text, string mark) string:
-    let i32 at = text.find_last(mark).realise(-1)
-    if (at < 0):
-        return ""
-    return text.s(0, at)
-
-##:
-The text after the last `mark`, or the whole text when there is none.
-
-- Parameter text: The text to cut.
-- Parameter mark: The delimiter to cut at.
-- Returns: The part after the last delimiter.
-:##
-fn after_last(string text, string mark) string:
-    let i32 at = text.find_last(mark).realise(-1)
-    if (at < 0):
-        return text.clone()
-    return text.s(at + mark.len(), text.len())
