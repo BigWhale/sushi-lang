@@ -656,7 +656,7 @@ class FunctionMonomorphizer:
         if tables is None:
             return None
         from sushi_lang.semantics.passes.types import ReadOnlyInferrer
-        inferrer = ReadOnlyInferrer(tables)
+        inferrer = ReadOnlyInferrer(tables, tables.namespaces.get(self._asking_unit))
         inferrer.variable_types = var_types
         return inferrer
 
