@@ -438,9 +438,10 @@ def emit_receiver_as_pointer(codegen: 'LLVMCodegen', receiver: Expr,
     # A captured collection read as `#closure_env.<name>` (any struct-field List/Own).
     # try_get_struct_alloca recurses through the env reference param and GEPs to the
     # field, yielding a pointer to the List/Own so mutating methods work in the body.
+    # A temporary at the root of the chain is parked and owned once (#1148).
     if isinstance(receiver, MemberAccess):
         from sushi_lang.backend.expressions.structs import try_get_struct_alloca
-        return try_get_struct_alloca(codegen, receiver)
+        return try_get_struct_alloca(codegen, receiver, park_temporary=True)
 
     # An element has storage: a write through `self` must reach it and not a copy (#776).
     if isinstance(receiver, IndexAccess):

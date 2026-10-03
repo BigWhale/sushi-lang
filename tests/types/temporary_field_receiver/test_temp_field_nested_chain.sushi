@@ -1,0 +1,30 @@
+# A built-in method at the end of a field chain off a temporary (#1148): a struct field of
+# a struct field, and a tuple element of a tuple element.
+# EXPECT_STDOUT_EXACT: "2\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Inner:
+    List@(i32) l
+
+struct Outer:
+    i32 tag
+    Inner inner
+
+fn outer() Outer:
+    let List@(i32) l = List.new()
+    l.push(1)
+    l.push(2)
+    return Outer(7, Inner(l))
+
+fn t() (i32, (string, List@(i32))):
+    let List@(i32) l = List.new()
+    l.push(1)
+    l.push(2)
+    l.push(3)
+    return (1, ("x", l))
+
+fn main() i32:
+    println(outer().inner.l.len())
+    println(t().1.1.len())
+    return 0

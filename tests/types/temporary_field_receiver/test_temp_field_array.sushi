@@ -1,0 +1,15 @@
+# A built-in method on a dynamic-array field of a temporary struct (#1148).
+# EXPECT_STDOUT_EXACT: "3\n10\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct A:
+    i32[] a
+
+fn arr() A:
+    return A(from([10, 20, 30]))
+
+fn main() i32:
+    println(arr().a.len())
+    println(arr().a.get(0).realise(0))
+    return 0

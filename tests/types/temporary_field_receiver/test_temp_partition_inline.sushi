@@ -1,0 +1,18 @@
+# A built-in method on a tuple element that `partition` answers, with no binding (#1148).
+# EXPECT_STDOUT_EXACT: "2\n4\n3\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+use <collections/iter>
+
+fn main() i32:
+    let List@(i32) nums = List.new()
+    nums.push(1)
+    nums.push(2)
+    nums.push(3)
+    nums.push(4)
+    nums.push(5)
+    foreach(n in nums.partition(|i32 n| n % 2 == 0).0.iter()):
+        println(n)
+    println(nums.partition(|i32 n| n % 2 == 0).1.len())
+    return 0

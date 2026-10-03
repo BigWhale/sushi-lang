@@ -1,0 +1,21 @@
+# A built-in method on a HashMap field of a temporary struct (#1148).
+# EXPECT_STDOUT_EXACT: "1\ntrue\nONE\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+use <collections/hashmap>
+use <collections/strings>
+
+struct Book:
+    HashMap@(i32, string) names
+
+fn book() Book:
+    let HashMap@(i32, string) names = HashMap.new()
+    names.insert(1, "one".upper())
+    return Book(names)
+
+fn main() i32:
+    println(book().names.len())
+    println(book().names.contains_key(1))
+    println(book().names.get(1).realise("none"))
+    return 0

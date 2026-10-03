@@ -1,0 +1,22 @@
+# A built-in method on a List field of a temporary struct (#1148). The field read is a
+# borrow, so the method reads the field in place; the temporary is freed once.
+# EXPECT_STDOUT_EXACT: "1\n4\n6\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct W:
+    List@(i32) l
+
+fn w() W:
+    let List@(i32) l = List.new()
+    l.push(4)
+    return W(l)
+
+fn main() i32:
+    println(w().l.len())
+    println(w().l.get(0).realise(0))
+    let i32 total = 0
+    foreach(i in 0..3):
+        total := total + w().l.len() + i
+    println(total)
+    return 0
