@@ -200,6 +200,41 @@ extend BufReader@(R) into_inner(nom self) R:
     return nom self.inner
 
 ##:
+Hands the handle back with the bytes that the reader holds and did not read, and ends
+the reader.
+
+The bytes are the rest of the window, in order. They come before what the handle still
+reads, so no byte of the input is lost. The reader is spent: a later mention of it is
+refused while compiling.
+
+- Returns: The handle, now the caller's, and the bytes that were not read.
+- Example:
+  ```sushi no_run
+  use <io/fs>
+
+  fn first_line(string path) string | IoError:
+      let File f = open(path, FileMode.Read())??
+      let BufReader@(File) r = BufReader.new(nom f, 8192)
+      let string line = r.read_line()??.realise("")
+      let (File back, u8[] unread) = r.into_parts()
+      println("{unread.len()} bytes held")
+      back.close()??
+      return Result.Ok(line)
+
+  fn main() i32:
+      match first_line("data.txt"):
+          Result.Ok(line) ->
+              println(line)
+              return 0
+          Result.Err(_) -> return 1
+  ```
+:##
+extend BufReader@(R) into_parts(nom self) (R, u8[]):
+    let u8[] unread = self.window.ss(self.pos, self.window.len() - self.pos)
+    let R handle = nom self.inner
+    return (handle, unread)
+
+##:
 A line iterator over a buffered reader, which it OWNS.
 
 next() answers Maybe@(Result@(string, IoError)): the outer Maybe says whether the input

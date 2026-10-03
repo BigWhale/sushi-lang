@@ -778,8 +778,46 @@ The function reads stored, fixed and dynamic blocks, up to the final block.
 - Errors: A `ZError` that names the fault.
 :##
 public fn inflate_raw(u8[] src) u8[] | ZError:
-    let u8[] out = from([])
     let ZBits s = ZBits(0, 0, 0)
+    return Result.Ok(inflate_blocks(peek src, poke s)??)
+
+##:
+Decompresses the raw DEFLATE stream at the start of a buffer, and tells how many input
+bytes the stream took.
+
+The count goes up to the end of the final block, rounded up to a byte. Bytes after it
+are not read, so a caller can find what follows the stream.
+
+- Parameter src: The bytes that start with a DEFLATE stream.
+- Returns: The decompressed bytes and the count of input bytes that the stream took.
+- Errors: The errors of `inflate_raw`.
+- Example:
+  ```sushi
+  use <collections/strings>
+
+  let u8[] packed = deflate_raw("Mostly Harmless".to_bytes(), 6).realise(from([]))
+  packed.push(0xff)
+  match inflate_raw_prefix(packed):
+      Result.Ok((out, used)) -> println("{out.len()} bytes out of {used} input bytes")
+      Result.Err(e) -> println(e.text())
+  ```
+:##
+public fn inflate_raw_prefix(u8[] src) (u8[], i32) | ZError:
+    let ZBits s = ZBits(0, 0, 0)
+    let u8[] out = inflate_blocks(peek src, poke s)??
+    return Result.Ok((out, s.pos))
+
+##:
+Decodes the blocks of a raw DEFLATE stream, up to the final block.
+
+- Parameter src: The compressed input.
+- Parameter s: The bit cursor. After the final block, `s.pos` is the count of input
+  bytes that the stream took: the cursor holds less than one byte of bits.
+- Returns: The decompressed bytes.
+- Errors: A `ZError` that names the fault.
+:##
+fn inflate_blocks(peek u8[] src, poke ZBits s) u8[] | ZError:
+    let u8[] out = from([])
     while (true):
         let i32 last = bits_get(peek src, poke s, 1)?? as i32
         let i32 btype = bits_get(peek src, poke s, 2)?? as i32
