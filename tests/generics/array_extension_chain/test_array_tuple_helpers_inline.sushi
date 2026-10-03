@@ -1,0 +1,20 @@
+# The T[] forms of enumerate, zip and partition, with no written type that names
+# their answer (#1143).
+# EXPECT_STDOUT_EXACT: "0: Arthur\n1: Ford\n2\nArthur is 42\nFord is 200\neven 2\neven 4\n1 odd\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["Arthur", "Ford"])
+    foreach((i, name) in names.enumerate().iter()):
+        println("{i}: {name}")
+    println(names.enumerate().len())
+    let i32[] ages = from([42, 200])
+    foreach((name, age) in names.zip(ages).iter()):
+        println("{name} is {age}")
+    let i32[] nums = from([2, 3, 4])
+    let (even, odd) = nums.partition(|i32 n| n % 2 == 0)
+    foreach(n in even.iter()):
+        println("even {n}")
+    println("{odd.len()} odd")
+    return 0

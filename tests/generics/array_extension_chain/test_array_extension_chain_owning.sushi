@@ -1,0 +1,14 @@
+# The same chain over an owning element type (#1143).
+# EXPECT_STDOUT_EXACT: "Arthur\nFord\n"
+# EXPECT_NO_LEAKS
+extend T[] copied() List@(T):
+    let List@(T) out = List.new()
+    foreach(x in self.iter()):
+        out.push(x.clone())
+    return out
+
+fn main() i32:
+    let string[] names = from(["Arthur", "Ford"])
+    foreach(name in names.copied().iter()):
+        println(name)
+    return 0

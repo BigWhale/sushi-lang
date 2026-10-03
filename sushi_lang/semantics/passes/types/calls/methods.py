@@ -69,9 +69,30 @@ def instantiate_array_extension(validator: 'TypeValidator',
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)))
+    _intern_signature(validator, ret, err, *(p.ty for p in params))
     validator.extension_table.add_method(concrete)
     _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
     return concrete
+
+
+def _intern_signature(validator: 'TypeValidator', *types) -> None:
+    """Intern every instantiation a call-site substituted signature names (risk 1).
+
+    The call site is the first place that names the element type of a `T[]` template
+    and the method type arguments of a method-generic one, so a `List@(T)` in the
+    signature can name an instance nothing else in the program names. It is interned
+    NOW, so the call's answer is a concrete type and not a `GenericTypeRef` (#1143).
+
+    The reader of what a call yields asks again: a `T[]` signature enters the extension
+    table at its first call, and that call can be an inference of the `instantiate`
+    pass, which runs before the interner exists.
+    """
+    interner = getattr(validator.tables, "intern_generic_ref", None)
+    if interner is None:
+        return
+    for ty in types:
+        if ty is not None:
+            interner(ty)
 
 
 def _queue_extension_instantiation(validator: 'TypeValidator', template, target_type,
@@ -277,13 +298,7 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         is_nom=getattr(p, "is_nom", False),
     ) for p in template.params]
 
-    # A solved argument can name an instantiation nothing else in the program names
-    # (risk 1): intern it NOW, so this very unit's bodies resolve against it.
-    interner = getattr(validator.tables, "intern_generic_ref", None)
-    if interner is not None:
-        for ty in (ret, err, *(p.ty for p in params)):
-            if ty is not None:
-                interner(ty)
+    _intern_signature(validator, ret, err, *(p.ty for p in params))
 
     concrete = ExtensionMethod(
         target_type=receiver_type, name=call.method, params=params, ret_type=ret,
@@ -359,7 +374,9 @@ def extension_call_result_type(validator: 'TypeValidator', method):
     declared = getattr(method, "ret_type", None)
     if declared is None:
         declared = getattr(method, "ret", None)
-    return call_yield(validator, declared, getattr(method, "err_type", None))
+    err_type = getattr(method, "err_type", None)
+    _intern_signature(validator, declared, err_type)
+    return call_yield(validator, declared, err_type)
 
 
 def _unhandled_channel_payload(receiver_type):
