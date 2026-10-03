@@ -155,6 +155,10 @@ _add(ErrorMessage("CE0144", Severity.ERROR,
     "'{name}' is a type pack, not a value",
     Category.FUNC, "A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was CE1001, which called a written parameter undeclared, and a call around it added CE2060 and CE0120. Walk the pack with `expand(a in args):`."))
 
+_add(ErrorMessage("CE0147", Severity.ERROR,
+    "'{name}' is a type pack: it names a type only in its `...{name}` parameter",
+    Category.FUNC, "A type pack `...Ts` stands for any number of types, so its name is a type in ONE position: the trailing parameter `...Ts args`, which takes one argument per element. Everywhere else the name would have to be ONE type, and it is not: a parameter written `Ts x` with no `...`, a return type, an error type, a `let` type, an array element (`Ts[]`), a type argument (`List@(Ts)`), a cast and a lambda parameter are all refused at the declaration. Walk the values with `expand(a in args):`, or declare an ordinary type parameter `T` for a single value. Until #1167 a parameter `Ts x` was silently read as a second pack, so the call counted its arguments wrong, and a `let Ts y` in the body was the internal error CE0000 at the first call."))
+
 _add(ErrorMessage("CE0134", Severity.ERROR,
     "static method '{name}' has no receiver",
     Category.FUNC, "A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so nothing was called ON: there is no receiver to declare a mode for and none to read in the body. ONE code for TWO positions, because it is one fault -- a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of `self` in the body -- and the caret sits on whichever one was written. Drop the `static` marker to get an instance method, whose `self` is implicit, or take the value as an ordinary parameter."))

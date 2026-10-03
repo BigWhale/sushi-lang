@@ -216,6 +216,11 @@ class CollectorPass:
                 *self.enum_collector.refused_library_types]
 
     @property
+    def refused_pack_templates(self) -> list[str]:
+        """The generic functions that name their type pack as one type (CE0147)."""
+        return list(self.function_collector.refused_pack_templates)
+
+    @property
     def _collectors(self) -> tuple:
         """All six, in collection order. One list, so no binding reaches five of them."""
         return (self.constant_collector, self.struct_collector, self.enum_collector,

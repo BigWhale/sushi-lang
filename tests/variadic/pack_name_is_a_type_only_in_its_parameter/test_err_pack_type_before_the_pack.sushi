@@ -1,0 +1,10 @@
+# A pack name as the type of a parameter before the pack parameter (#1167).
+# EXPECT_ERROR_CODES_EXACT: CE0147
+fn f@(...Ts: Display)(Ts x, ...Ts rest) i32:
+    println(x)
+    expand(r in rest):
+        println(r)
+    return 1
+
+fn main() i32:
+    return f(1, 2)

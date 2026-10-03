@@ -1,0 +1,9 @@
+# A type pack names a type only in its own `...Ts name` parameter. A parameter written
+# `Ts x`, with no `...`, is refused at the declaration (#1167).
+# EXPECT_ERROR_CODES_EXACT: CE0147
+fn f@(...Ts: Display)(Ts x) i32:
+    println(x)
+    return 1
+
+fn main() i32:
+    return f(1)
