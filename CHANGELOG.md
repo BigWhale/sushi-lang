@@ -6,6 +6,15 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **A perk on every array: `extend T[] with P:`.** One implementation covers every dynamic
+  array, and `T` is the element type (an `i32[][]` receiver has `T = i32[]`). The compiler
+  makes the copy for an array type when the program uses that type with the perk, and it
+  checks the body for each element type. The predefined perks are legal: `Display` gives
+  `println(xs)` its string form, and `Eq`, `Ord` and `Hashable` are read by a direct call
+  and by an array that a struct holds. A library of each kind ships an array template, and
+  `--lib-info` prints it as `extend T[] with P`. `extend T[][] with P` is `CE2101`, as for
+  an extension (#699).
+
 - **`assert(cond)` and `assert(cond, message)`** stop the program with `RE2026` and exit
   code 1 when the condition is false. The output names the file, the line and the column
   of the `assert`, then the message. The message is any `string`, and the program builds
@@ -150,6 +159,19 @@ All notable changes to Sushi Lang will be documented in this file.
   a return type, a `let` type, `Ts[]` and `List@(Ts)` are `CE0147` where the function is
   written. A parameter `Ts x` was read as a second pack, so the function took the wrong
   count of arguments. A `let Ts y` was the internal error `CE0000` at the first call.
+- **A template and a concrete target that cover one type are an error.**
+  `extend Box@(T) with P` beside `extend Box@(i32) with P` compiled, and the concrete
+  implementation won; it is `CE4002` now. `extend T[] f()` beside `extend i32[] f()`
+  compiled the same way; it is `CE0101` now, as for `extend Box@(T) f()` beside
+  `extend Box@(i32) f()`. Each is refused in either order, with a note at the first
+  declaration. Two templates of two perks that give one method name are `CE4015`; one such
+  pair stopped the build with an internal error.
+- **`Drop` on a type that no unit declares is `CE4016`.** `extend i32[] with Drop:` and
+  `extend i32 with Drop:` compiled, and `drop()` never ran. A primitive, a `string`, an
+  array, an array template, `List`, `HashMap`, `Own`, `Maybe`, `Result` and a predefined
+  error enum are refused.
+- **A direct `xs.hash()` on an array reads a `Hashable` implementation.** A struct field and
+  a `HashMap` probe read it, and the direct call answered the built-in hash.
 - **A generic call that the early passes missed no longer fails with CE2061.** The
   `typecheck` pass requests a missing function instance late, and the instance goes through
   every pass that an early one goes through. The early walks also bind a `foreach` binder

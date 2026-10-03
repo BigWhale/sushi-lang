@@ -2123,6 +2123,11 @@ error channel. The rules of the contract:
 - A name has one home on a type: a perk method beside an extension method of the same name
   is `CE4007`.
 - A type argument that does not implement a constraint is `CE4006`.
+- A target may be a template: `extend Box@(T) with P` covers every `Box@(...)`, and
+  `extend T[] with P` covers every dynamic array (`T` is the element type, and an `i32[][]`
+  receiver has `T = i32[]`). There is no specialization: a template and a concrete target
+  of the same perk on one base are `CE4002`, in either order. `extend T[][] with P` is
+  `CE2101`.
 - The perk must be in the scope of the unit, in an implementation, a constraint and a pack
   constraint alike: declared there, brought by the unit's own `use`, or re-exported by a
   `public use` chain. An aliased import gives `extend Dog with p.Named` and
@@ -2166,13 +2171,16 @@ help prints the contract with the target filled in.
 for example a file descriptor. A type that implements it MOVES like a `string`. When the
 value goes out of scope, `drop()` runs first, and then the owning fields are destroyed.
 At the end of a scope, the values are destroyed in the reverse order of their declaration.
-Only the unit that declares the type may implement `Drop` for it (`CE4012`), and a channel
-on `drop()` is `CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
+Only the unit that declares the type may implement `Drop` for it (`CE4012`). No unit
+declares a primitive, a `string`, an array, `List`, `HashMap`, `Own`, `Maybe`, `Result` or
+a predefined error enum, so `Drop` on one of them is `CE4016`. A channel on `drop()` is
+`CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
 
 **`Hashable`** is the constraint for a type that has a hash. Every type
 with a derived hash implements it with no declaration. `extend T with Hashable` replaces
 the derived hash of `T`, and the replacement applies everywhere the value is hashed: as a
-field, as a payload, as a container element and as a map key.
+field, as a payload, as a container element, as a map key and in a direct `.hash()` call
+(an array's built-in `hash` included).
 
 **`Eq`, `Ord` and `Display`** are derived for every struct and enum from what the type
 holds. The compiler does not register them in a table: it answers each call from the type.
