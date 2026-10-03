@@ -131,6 +131,12 @@ path are the ones `??` already has in every other position — there is no secon
 step. The one thing the parser cannot know is that `let`'s type, and the `foreach` validator
 fills it in from the item type.
 
+The `let` is ONE object in two places: the first statement of the body, and the loop's
+`item_try_let`, which is how the validator reaches it. A pass that copies the loop keeps
+the two as one object. The copy of a generic template takes `item_try_let` from the copied
+body, so a `??` binder in a generic function, a generic extension, a lambda inside one and
+an `expand` body works as it does in a plain body (#1140).
+
 A declared type on a `??` binder names what the USER binds, which is the unwrapped value,
 so `foreach(string line?? in r.lines())` puts `string` on the `let`.
 

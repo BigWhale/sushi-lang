@@ -1,0 +1,49 @@
+# The item type of the walk names the type parameter: `Feed@(T)` answers
+# `Maybe@(Result@(T, Bad))`, so the type of the `??` binder is substituted per instance
+# (#1140). The `string` instance owns its items. A feed with a fault in it leaves the
+# function at the Err.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "got 4\ngot 5\nok 2\ngot a\ngot b\nok 2\ngot a\nerr\n"
+# EXPECT_NO_LEAKS
+
+enum Bad:
+    Broken()
+
+struct Feed@(T):
+    T[] items
+    i32 at
+    i32 fail_at
+
+extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+    if (self.at == self.fail_at):
+        self.at := self.at + 1
+        return Maybe.Some(Result.Err(Bad.Broken))
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
+        Maybe.None -> return Maybe.None
+
+extend Feed@(T) fresh() Feed@(T):
+    return Feed(self.items.clone(), 0, self.fail_at)
+
+fn count@(T)(Feed@(T) feed) i32 | Bad:
+    let i32 seen = 0
+    foreach(x?? in feed.fresh()):
+        println("got {x}")
+        seen := seen + 1
+    return Result.Ok(seen)
+
+fn report(Result@(i32, Bad) r) ~:
+    match r:
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(_) -> println("err")
+
+fn main() i32:
+    let Feed@(i32) nums = Feed(from([4, 5]), 0, -1)
+    report(count(nums))
+    let Feed@(string) words = Feed(from(["a", "b"]), 0, -1)
+    report(count(words))
+    let Feed@(string) broken = Feed(from(["a", "b"]), 0, 1)
+    report(count(broken))
+    return 0
