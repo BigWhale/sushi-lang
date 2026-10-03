@@ -494,7 +494,7 @@ def _answers_array(receiver_type, method_name, derived_methods):
 ARRAY_HASH = "hash"
 
 
-def _answers_array_hash(receiver_type, method_name, derived_methods):
+def _answers_array_hash(receiver_type, method_name, _derived_methods):
     return (isinstance(receiver_type, (ArrayType, DynamicArrayType))
             and method_name == ARRAY_HASH)
 
