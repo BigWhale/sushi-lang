@@ -1,0 +1,13 @@
+# A declared P[] local and a P argument bind one type parameter (#1134).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n"
+struct P:
+    i32 x
+
+fn cnt@(T)(T[] xs, T d) i32:
+    return xs.len() + ((d.hash() * 0) as i32)
+
+fn main() i32:
+    let P[] ps = from([P(1), P(2)])
+    println(cnt(ps, P(0)))
+    return 0

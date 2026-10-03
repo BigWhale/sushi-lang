@@ -1,0 +1,20 @@
+# An annotated lambda whose parameter is an enum (#1135).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+use <collections/iter>
+
+enum E:
+    A
+    B
+
+fn code(E e) i32:
+    match e:
+        E.A -> return 1
+        E.B -> return 2
+
+fn main() i32:
+    let E[] es = from([E.A(), E.B()])
+    let List@(i32) r = es.map(|E e| code(e))
+    foreach(v in r.iter()):
+        println(v)
+    return 0

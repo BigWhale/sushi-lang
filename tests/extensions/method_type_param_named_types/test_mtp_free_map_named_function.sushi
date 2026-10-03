@@ -1,0 +1,20 @@
+# The free function map with a declared List@(P) local and a named function that
+# takes a P: the leading solver binds T from both arguments (#1134, #1135).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10\n20\n"
+use <collections/iter>
+
+struct P:
+    i32 x
+
+fn tenx(P p) i32:
+    return p.x * 10
+
+fn main() i32:
+    let List@(P) lp = List.new()
+    lp.push(P(1))
+    lp.push(P(2))
+    let List@(i32) r = map(lp, tenx)
+    foreach(v in r.iter()):
+        println(v)
+    return 0

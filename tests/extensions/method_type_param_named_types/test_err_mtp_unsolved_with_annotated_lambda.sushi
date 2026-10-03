@@ -1,0 +1,19 @@
+# The method-level type parameter U is in no parameter type, so no argument solves
+# it. The lambda is annotated, so the help names the missing argument and does not
+# blame a bare-param lambda (#1135).
+# EXPECT_ERROR_CODES_EXACT: CE2063
+# EXPECT_STDERR_CONTAINS: "no argument of this call has a type that holds it"
+struct P:
+    i32 x
+
+extend List@(T) pick@(U)(fn(T) -> i32 f) List@(U):
+    foreach(x in self.iter()):
+        println(f(x))
+    return List.new()
+
+fn main() i32:
+    let List@(P) ps = List.new()
+    ps.push(P(1))
+    let List@(i32) r = ps.pick(|P p| p.x)
+    println(r.len())
+    return 0

@@ -1,0 +1,24 @@
+# A user extension with a method-level type parameter, and an annotated lambda that
+# takes a struct and answers a struct (#1135).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\n6\n"
+struct P:
+    i32 x
+
+struct Q:
+    i32 y
+
+extend List@(T) mapv@(U)(fn(T) -> U f) List@(U):
+    let List@(U) out = List.new()
+    foreach(x in self.iter()):
+        out.push(f(x))
+    return out
+
+fn main() i32:
+    let List@(P) ps = List.new()
+    ps.push(P(2))
+    ps.push(P(3))
+    let List@(Q) qs = ps.mapv(|P p| Q(p.x * 2))
+    foreach(q in qs.iter()):
+        println(q.y)
+    return 0

@@ -1,0 +1,18 @@
+# A struct nested in a generic argument of the lambda parameter type, a Box@(P)
+# (#1135).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "8\n"
+use <collections/iter>
+
+struct P:
+    i32 x
+
+struct Box@(T):
+    T v
+
+fn main() i32:
+    let Box@(P)[] bs = from([Box(P(8))])
+    let List@(i32) r = bs.map(|Box@(P) b| b.v.x)
+    foreach(v in r.iter()):
+        println(v)
+    return 0

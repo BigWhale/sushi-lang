@@ -1,0 +1,6 @@
+public struct Pt:
+    i32 x
+
+public enum Mark:
+    On
+    Off
