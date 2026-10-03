@@ -15,6 +15,7 @@ test_stdlib_signature_tables.py` is the gate.
 """
 from typing import Dict, List
 
+from sushi_lang.semantics.generics.tuples import tuple_ref
 from sushi_lang.semantics.typesys import (
     BuiltinType,
     DynamicArrayType,
@@ -28,6 +29,7 @@ from sushi_lang.sushi_stdlib.src.signatures import (
 )
 
 I32 = BuiltinType.I32
+U64 = BuiltinType.U64
 BYTES = DynamicArrayType(BuiltinType.U8)
 STRINGS = DynamicArrayType(BuiltinType.STRING)
 NET = "NetError"
@@ -39,8 +41,11 @@ SOCKET_SIGNATURES: Dict[str, Signature] = {
     "sock_tcp_listen":       Signature(params_of(cstr(), I32, I32), ok=I32, error=NET),
     "sock_udp_bind":         Signature(params_of(cstr(), I32), ok=I32, error=NET),
     "sock_dns_resolve":      Signature(params_of(cstr()), ok=STRINGS, error=NET),
+    # The accepted descriptor and its peer: (descriptor, version 4 or 6, high, low).
+    # A .bc module cannot name IpAddr, so <net/tcp> builds it from the three numbers.
+    "sock_tcp_accept":       Signature(params_of(I32),
+                                       ok=tuple_ref((I32, I32, U64, U64)), error=NET),
     # One descriptor in, a descriptor or a number out.
-    "sock_tcp_accept":       Signature(params_of(I32), ok=I32, error=NET),
     "sock_close":            Signature(params_of(I32), ok=I32, error=NET),
     "sock_dup":              Signature(params_of(I32), ok=I32, error=NET),
     "sock_local_port":       Signature(params_of(I32), ok=I32, error=NET),

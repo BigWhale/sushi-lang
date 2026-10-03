@@ -84,7 +84,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/visibility.py", "FOLLOWS_TARGET_TYPE", "tests/unit/test_visibility_seam_is_total.py"),
     ("sushi_lang/semantics/visibility.py", "NO_VISIBILITY", "tests/unit/test_visibility_seam_is_total.py"),
     ("sushi_lang/semantics/visitors.py", "WALKED_IN_PARENT", "tests/unit/test_visitor_dispatch_is_total.py"),
-    ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "AF_INET6", "tests/unit/test_net_platform_constants.py"),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "AI_CANONNAME_OFFSET",
      "tests/unit/test_net_platform_constants.py"),
     ("sushi_lang/sushi_stdlib/src/collections/strings/__init__.py", "arg_count",
@@ -99,8 +98,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "tests/unit/test_stdlib_signature_tables.py"),
     # -- kept by a maintainer ruling, one entry each (no pattern) --------------------
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SO_ERROR", _PLATFORM_ABI),
-    ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_OFFSET", _PLATFORM_ABI),
-    ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_FAMILY_BITS", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_HAS_LEN", _PLATFORM_ABI),
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a reserved bit of the .slib header format; the library design defines it and "

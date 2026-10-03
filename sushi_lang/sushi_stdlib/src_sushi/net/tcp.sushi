@@ -198,17 +198,44 @@ public fn listen(string host, i32 port, i32 backlog) TcpListener | NetError:
     return Result.Ok(TcpListener(fd))
 
 ##:
-Takes the next connection waiting on a listener.
+Takes the next connection waiting on a listener, and the address of its peer.
 
 The call blocks until one arrives, unless set_timeout() has given the
-listener a bound, in which case it answers TimedOut.
+listener a bound, in which case it answers TimedOut. The address is the one
+that accept(2) gives, so it costs no second system call. A dual-stack listener
+gives an IPv4 peer as a V4-mapped V6 address.
 
-- Returns: The accepted stream.
-- Errors: NetError, when no connection could be taken.
+- Returns: The accepted stream and the address of its peer.
+- Errors: NetError, when no connection could be taken, or
+  NetError.InvalidAddress when the peer is not an IPv4 or an IPv6 address.
+- Example:
+```sushi
+use <collections/strings>
+
+fn greet() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    let TcpStream client = connect("127.0.0.1", listener.local_port()??)??
+    let (TcpStream served, IpAddr peer) = listener.accept()??
+    println("connection from {peer.text()}")
+    served.send_all("Mostly Harmless".to_bytes())??
+    let u8[] heard = client.recv_exact(15)??
+    println(heard.to_string())
+    return Result.Ok(~)
+
+fn main() i32:
+    match greet():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
+```
 :##
-extend TcpListener accept() TcpStream | NetError:
-    let i32 fd = sock_tcp_accept(self.fd)??
-    return Result.Ok(TcpStream(fd))
+extend TcpListener accept() (TcpStream, IpAddr) | NetError:
+    let (i32 fd, i32 version, u64 high, u64 low) = sock_tcp_accept(self.fd)??
+    let TcpStream stream = TcpStream(fd)
+    if (version == 4):
+        return Result.Ok((stream, IpAddr.V4(low as u32)))
+    if (version == 6):
+        return Result.Ok((stream, IpAddr.V6(high, low)))
+    return Result.Err(NetError.InvalidAddress)
 
 ##:
 Opens a second handle over the same listening socket.

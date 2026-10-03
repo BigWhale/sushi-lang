@@ -1,14 +1,15 @@
 """The sockaddr and addrinfo vocabulary shared by the <net/socket> generators.
 
-Nothing here ever reads an address family. The only field any generator
-touches is the port, and sin_port and sin6_port both sit at
-SOCKADDR_PORT_OFFSET, so a v4 and a v6 address are handled by one code path.
-That is also why the port is patched into whatever getaddrinfo returned rather
-than passed to it as a service string.
+sin_port and sin6_port both sit at SOCKADDR_PORT_OFFSET, so the port is read and
+patched by one code path for a v4 and a v6 address. That is also why the port is
+patched into whatever getaddrinfo returned rather than passed to it as a service
+string. The one reader of the family is emit_read_address, which accept uses to
+answer the peer without a second system call.
 """
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_extern
 from sushi_lang.sushi_stdlib.src.type_definitions import get_basic_types
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -94,6 +95,64 @@ def emit_read_port(builder: ir.IRBuilder, sockaddr: ir.Value) -> ir.Value:
     slot = _at(builder, sockaddr, platform_net.SOCKADDR_PORT_OFFSET, i16, "sin_port")
     net_order = builder.load(slot, name="port_net")
     return builder.zext(_bswap16(builder, net_order, "port_host"), i32, name="port")
+
+
+def _bswap(builder: ir.IRBuilder, value: ir.Value, name: str) -> ir.Value:
+    """Swap the byte order of an i32 or an i64, through the llvm.bswap intrinsic."""
+    width = value.type.width
+    swap_fn = declare_extern(builder.module, f"llvm.bswap.i{width}", value.type, [value.type])
+    return builder.call(swap_fn, [value], name=name)
+
+
+def _load_be_u64(builder: ir.IRBuilder, sockaddr: ir.Value, offset: int,
+                 name: str) -> ir.Value:
+    """Read eight address bytes in network order as one host-order i64."""
+    i64 = ir.IntType(64)
+    raw = builder.load(_at(builder, sockaddr, offset, i64, f"{name}_ptr"), name=f"{name}_net")
+    return _bswap(builder, raw, name)
+
+
+def emit_read_address(builder: ir.IRBuilder,
+                      sockaddr: ir.Value) -> tuple[ir.Value, ir.Value, ir.Value]:
+    """Read the address of a sockaddr as (version, high, low), in host order.
+
+    The version is 4 for AF_INET, 6 for AF_INET6, and 0 for any other family. A v4
+    address is the low 32 bits of `low` and `high` is 0, which is the IpAddr.V4 payload
+    once it is cast to u32; a v6 address is the IpAddr.V6 payload as it is. The
+    sockaddr is a SOCKADDR_STORAGE_SIZE buffer, so the v6 reads are in bounds for any
+    family, and a select picks the answer.
+    """
+    platform_net = get_platform_module('net')
+    _i8, _i8_ptr, i32, i64 = get_basic_types()
+    family_ty = ir.IntType(platform_net.SOCKADDR_FAMILY_BITS)
+    family = builder.zext(
+        builder.load(_at(builder, sockaddr, platform_net.SOCKADDR_FAMILY_OFFSET,
+                         family_ty, "sa_family_ptr"), name="sa_family_raw"),
+        i32, name="sa_family")
+    is_v4 = builder.icmp_signed("==", family, ir.Constant(i32, platform_net.AF_INET),
+                                name="is_v4")
+    is_v6 = builder.icmp_signed("==", family, ir.Constant(i32, platform_net.AF_INET6),
+                                name="is_v6")
+
+    v4_net = builder.load(_at(builder, sockaddr, platform_net.SOCKADDR_IN_ADDR_OFFSET, i32,
+                              "sin_addr_ptr"), name="sin_addr_net")
+    v4_low = builder.zext(_bswap(builder, v4_net, "sin_addr"), i64, name="v4_low")
+    v6_high = _load_be_u64(builder, sockaddr, platform_net.SOCKADDR_IN6_ADDR_OFFSET,
+                           "sin6_high")
+    v6_low = _load_be_u64(builder, sockaddr, platform_net.SOCKADDR_IN6_ADDR_OFFSET + 8,
+                          "sin6_low")
+
+    zero32 = ir.Constant(i32, 0)
+    zero64 = ir.Constant(i64, 0)
+    version = builder.select(
+        is_v4, ir.Constant(i32, 4),
+        builder.select(is_v6, ir.Constant(i32, 6), zero32, name="v6_or_none"),
+        name="ip_version")
+    high = builder.select(is_v6, v6_high, zero64, name="ip_high")
+    low = builder.select(is_v4, v4_low,
+                         builder.select(is_v6, v6_low, zero64, name="v6_low_or_none"),
+                         name="ip_low")
+    return version, high, low
 
 
 def emit_hints(builder: ir.IRBuilder, socktype: int, passive: bool) -> ir.Value:

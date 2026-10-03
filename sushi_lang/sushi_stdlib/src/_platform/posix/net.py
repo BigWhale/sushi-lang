@@ -1,9 +1,9 @@
 """POSIX socket declarations, and the constants both platforms agree on.
 
 The declarations are the BSD socket API as libc exports it. A sockaddr is an
-opaque i8* here: no generator in <net/socket> ever reads its family, because
-the only field any of them touches is the port, and sin_port and sin6_port are
-both at SOCKADDR_PORT_OFFSET.
+opaque i8* here. sin_port and sin6_port are both at SOCKADDR_PORT_OFFSET, and
+the address bytes are at SOCKADDR_IN_ADDR_OFFSET and SOCKADDR_IN6_ADDR_OFFSET on
+both platforms; only the family field differs (see the platform files).
 
 Every constant below was read from an offsetof probe on both platforms
 (2026-08-30) and is asserted in tests/unit/test_net_platform_constants.py. The
@@ -34,6 +34,10 @@ SOCKADDR_IN_SIZE = 16
 SOCKADDR_IN6_SIZE = 28
 SOCKADDR_STORAGE_SIZE = 128
 SOCKADDR_PORT_OFFSET = 2
+# sin_addr (4 bytes) and sin6_addr (16 bytes), in network order. sin6_flowinfo
+# is the 4 bytes between the port and sin6_addr.
+SOCKADDR_IN_ADDR_OFFSET = 4
+SOCKADDR_IN6_ADDR_OFFSET = 8
 
 # struct addrinfo. ai_addr and ai_canonname are NOT here: they trade places
 # between the platforms, so they live in the per-platform files.
@@ -140,7 +144,8 @@ __all__ = [
     "AF_UNSPEC", "AF_INET", "SOCK_STREAM", "SOCK_DGRAM", "IPPROTO_TCP",
     "IPPROTO_UDP", "SHUT_RDWR", "AI_PASSIVE", "AI_NUMERICHOST", "NI_MAXHOST",
     "INET6_ADDRSTRLEN", "SOCKADDR_IN_SIZE", "SOCKADDR_IN6_SIZE",
-    "SOCKADDR_STORAGE_SIZE", "SOCKADDR_PORT_OFFSET", "ADDRINFO_SIZE",
+    "SOCKADDR_STORAGE_SIZE", "SOCKADDR_PORT_OFFSET", "SOCKADDR_IN_ADDR_OFFSET",
+    "SOCKADDR_IN6_ADDR_OFFSET", "ADDRINFO_SIZE",
     "AI_FLAGS_OFFSET", "AI_FAMILY_OFFSET", "AI_SOCKTYPE_OFFSET",
     "AI_PROTOCOL_OFFSET", "AI_ADDRLEN_OFFSET", "AI_NEXT_OFFSET",
     "TIMEVAL_SIZE", "TIMEVAL_USEC_OFFSET",

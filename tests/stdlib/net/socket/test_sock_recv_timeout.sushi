@@ -13,7 +13,7 @@ fn main() i32:
     let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
     let i32 port = sock_local_port(lfd).realise(-1)
     let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
-    let i32 afd = sock_tcp_accept(lfd).realise(-1)
+    let (i32 afd, _, _, _) = sock_tcp_accept(lfd).realise((-1, 0, 0, 0))
 
     sock_set_recv_timeout(afd, 200).realise(-1)
     match sock_recv(afd, 64):

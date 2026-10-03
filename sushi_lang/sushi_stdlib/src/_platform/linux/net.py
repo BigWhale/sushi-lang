@@ -7,7 +7,7 @@ from sushi_lang.sushi_stdlib.src._platform.posix.net import (  # noqa: F401
     AF_UNSPEC, AF_INET, SOCK_STREAM, SOCK_DGRAM, IPPROTO_TCP, IPPROTO_UDP,
     SHUT_RDWR, AI_PASSIVE, AI_NUMERICHOST, NI_MAXHOST, INET6_ADDRSTRLEN,
     SOCKADDR_IN_SIZE, SOCKADDR_IN6_SIZE, SOCKADDR_STORAGE_SIZE,
-    SOCKADDR_PORT_OFFSET, ADDRINFO_SIZE, AI_FLAGS_OFFSET, AI_FAMILY_OFFSET,
+    SOCKADDR_PORT_OFFSET, SOCKADDR_IN_ADDR_OFFSET, SOCKADDR_IN6_ADDR_OFFSET, ADDRINFO_SIZE, AI_FLAGS_OFFSET, AI_FAMILY_OFFSET,
     AI_SOCKTYPE_OFFSET, AI_PROTOCOL_OFFSET, AI_ADDRLEN_OFFSET, AI_NEXT_OFFSET,
     TIMEVAL_SIZE, TIMEVAL_USEC_OFFSET,
     declare_socket, declare_connect, declare_bind, declare_listen,
@@ -46,8 +46,8 @@ TIMEVAL_USEC_BITS = 64
 EAI_SYSTEM = -11
 
 # The sockaddr family field, for the next person: linux has a u16 family at
-# offset 0, where darwin has a u8 sin_len then a u8 family. Nothing in
-# <net/socket> reads it -- the port is the only field any generator touches.
+# offset 0, where darwin has a u8 sin_len then a u8 family. accept reads it
+# (addr.emit_read_address) to answer the peer.
 SOCKADDR_FAMILY_OFFSET = 0
 SOCKADDR_FAMILY_BITS = 16
 SOCKADDR_HAS_LEN = False

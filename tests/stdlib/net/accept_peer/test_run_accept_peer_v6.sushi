@@ -1,0 +1,36 @@
+# accept() over the IPv6 loopback answers a V6 peer, the high 64 bits and then the low
+# 64 bits, the same address that peer_ip() reads from the stream.
+# EXPECT_STDOUT_EXACT: "peer ::1\nv6 true\nhigh 0 low 1\nsame as peer_ip true\nloopback true\nserver got Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+use <collections/strings>
+
+fn exchange() ~ | NetError:
+    let TcpListener listener = listen("::1", 0, 8)??
+    listener.set_timeout(5000)??
+    let i32 port = listener.local_port()??
+    let TcpStream client = connect("::1", port)??
+    let (TcpStream served, IpAddr peer) = listener.accept()??
+    println("peer {peer.text()}")
+    println("v6 {peer.is_v6()}")
+    match peer:
+        IpAddr.V4(_) -> println("not a V6 address")
+        IpAddr.V6(high, low) -> println("high {high} low {low}")
+    let IpAddr again = served.peer_ip()??
+    println("same as peer_ip {peer == again}")
+    println("loopback {peer == V6_LOOPBACK}")
+    client.set_timeouts(5000, 5000)??
+    served.set_timeouts(5000, 5000)??
+    client.send_all("Mostly Harmless".to_bytes())??
+    let u8[] heard = served.recv_exact(15)??
+    println("server got {heard.to_string()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match exchange():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> println("failed")
+    return 1

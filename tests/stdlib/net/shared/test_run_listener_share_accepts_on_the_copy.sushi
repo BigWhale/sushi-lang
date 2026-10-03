@@ -20,7 +20,7 @@ fn main() i32:
                 Result.Ok(nom client) ->
                     client.write("Mostly Harmless")
                     match twin.accept():
-                        Result.Ok(nom session) ->
+                        Result.Ok((nom session, _)) ->
                             let string got = session.read(64).realise("")
                             println("accepted on the copy: {got}")
                         Result.Err(_) -> println("accept failed")

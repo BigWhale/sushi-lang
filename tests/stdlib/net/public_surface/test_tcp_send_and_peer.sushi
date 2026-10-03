@@ -27,7 +27,7 @@ fn main() i32:
         println("client set_timeouts failed")
         return 1
 
-    let TcpStream served = listener.accept().realise(TcpStream(-1))
+    let (TcpStream served, _) = listener.accept().realise((TcpStream(-1), IpAddr.V4(0)))
     if (served.fd < 0):
         println("accept failed")
         return 1
