@@ -21,7 +21,7 @@ HASHMAP_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "new": 0, "insert": 2, "get": 1, "contains_key": 1, "remove": 1,
     "len": 0, "is_empty": 0, "tombstone_count": 0, "rehash": 0,
     "free": 0, "destroy": 0, "debug": 0,
-    "keys": 0, "values": 0, "entries": 0, "clone": 0,
+    "keys": 0, "values": 0, "entries": 0, "pairs": 0, "clone": 0,
 })
 
 

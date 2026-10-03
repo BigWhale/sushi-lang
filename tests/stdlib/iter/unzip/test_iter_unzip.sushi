@@ -1,0 +1,32 @@
+# unzip splits a list of pairs into two lists, in order. It is the inverse of
+# zip over lists of the same length. The input stays usable, and each string in
+# the answer is a copy.
+# EXPECT_STDOUT_EXACT: "names Arthur Ford\nages 42 200\nback Arthur 42\nback Ford 200\nkept 2\nempty 0 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/iter>
+use <collections/strings>
+
+fn main() i32:
+    let List@((string, i32)) pairs = List.new()
+    pairs.push(("Arthur", 42))
+    pairs.push(("Ford", 200))
+
+    let (List@(string) names, List@(i32) ages) = unzip(pairs)
+    let string line = "names"
+    foreach(n in names.iter()):
+        line := line.concat(" {n}")
+    println(line)
+    line := "ages"
+    foreach(a in ages.iter()):
+        line := line.concat(" {a}")
+    println(line)
+
+    foreach((n, a) in zip(names, ages).iter()):
+        println("back {n} {a}")
+    println("kept {pairs.len()}")
+
+    let List@((string, i32)) none = List.new()
+    let (List@(string), List@(i32)) halves = unzip(none)
+    println("empty {halves.0.len()} {halves.1.len()}")
+    return 0

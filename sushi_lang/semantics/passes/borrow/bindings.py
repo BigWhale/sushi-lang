@@ -23,7 +23,7 @@ from .state import BorrowState
 if TYPE_CHECKING:
     from . import BorrowChecker
 
-CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries"})
+CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
 
 
 def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> None:

@@ -370,6 +370,12 @@ class HashMapMethodInferrer:
                         key_type, value_type
                     )
                     return IteratorType(element_type=entry_type)
+                elif self.method_name == "pairs":
+                    from sushi_lang.semantics.typesys import IteratorType
+                    from sushi_lang.semantics.generics.tuples import intern_tuple
+                    pair_type = intern_tuple(self.validator.struct_table,
+                                             self.validator.enum_table, (key_type, value_type))
+                    return IteratorType(element_type=pair_type)
         return None
 
 

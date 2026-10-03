@@ -317,6 +317,29 @@ public fn decode(u8[] buf) MsgValue | MpError:
     return Result.Ok(v)
 
 ##:
+Decodes the first value of a buffer, and tells how many bytes it read.
+
+Bytes after the value are not an error, so a caller can read a stream of values: the
+next value starts at the count.
+
+- Parameter buf: The MessagePack bytes.
+- Returns: The value tree and the count of bytes that it took.
+- Errors: The `MpError` variants of `decode`, except `MpError.Trailing`. An empty buffer
+  is `MpError.Truncated`.
+- Example:
+```sushi
+let u8[] buf = from([0x01, 0xa2, 0x68, 0x69])
+match decode_prefix(buf):
+    Result.Ok((v, used)) -> println("{show(v)} took {used} bytes")
+    Result.Err(_) -> println("decode error")
+```
+:##
+public fn decode_prefix(u8[] buf) (MsgValue, i32) | MpError:
+    let MpCursor cur = MpCursor(0)
+    let MsgValue v = decode_value(peek buf, poke cur)??
+    return Result.Ok((v, cur.pos))
+
+##:
 Tells if a map key is the string `key`. A key of a different kind does not match.
 
 - Parameter k: The map key.

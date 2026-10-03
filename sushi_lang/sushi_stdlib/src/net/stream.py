@@ -1,4 +1,6 @@
 """Operations on a socket descriptor, whatever transport made it."""
+from typing import Callable
+
 from llvmlite import ir
 
 from sushi_lang.sushi_stdlib.src._platform import get_platform_module
@@ -23,6 +25,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_byte_array_type,
     get_result_type,
     get_string_type,
+    get_tuple_type,
     get_unit_enum_type,
 )
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -37,6 +40,7 @@ def generate_ir(module: ir.Module) -> None:
     generate_recv(module)
     generate_peer_ip(module)
     generate_peer_port(module)
+    generate_peer(module)
 
 
 def generate_close(module: ir.Module) -> None:
@@ -282,23 +286,48 @@ def generate_peer_port(module: ir.Module) -> None:
 
 
 def generate_peer_ip(module: ir.Module) -> None:
-    """Emit `Result<{i8*,i32,i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`.
+    """Emit `Result<{i8*,i32,i8}, NetError> sushi_net_sock_peer_ip(i32 fd)`."""
+    _emit_peer(module, "sushi_net_sock_peer_ip", get_string_type(),
+               lambda _builder, text, _storage: text)
+
+
+def generate_peer(module: ir.Module) -> None:
+    """Emit `Result<{string, i32}, NetError> sushi_net_sock_peer(i32 fd)`.
+
+    The address text and the port come from ONE getpeername call.
+    """
+    _i8, _i8_ptr, i32, _i64 = get_basic_types()
+    pair = get_tuple_type([get_string_type(), i32])
+
+    def make_pair(builder: ir.IRBuilder, text: ir.Value, storage: ir.Value) -> ir.Value:
+        value = builder.insert_value(ir.Constant(pair, ir.Undefined), text, 0)
+        return builder.insert_value(value, addr.emit_read_port(builder, storage), 1,
+                                    name="peer_pair")
+
+    _emit_peer(module, "sushi_net_sock_peer", pair, make_pair)
+
+
+def _emit_peer(module: ir.Module, symbol: str, ok_type: ir.Type,
+               make_ok: Callable[[ir.IRBuilder, ir.Value, ir.Value], ir.Value]) -> None:
+    """Emit `Result<ok_type, NetError> symbol(i32 fd)` over one getpeername call.
 
     getnameinfo with NI_NUMERICHOST renders the address and never asks a
     resolver, so this makes no network request and works for either family.
+    `make_ok` builds the Ok value from the rendered text and the sockaddr.
 
     The text is copied into a fresh owned buffer rather than handed out from
     the stack one: owned=1 puts it under Sushi RAII, which is what frees it.
     """
+    from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
+
     _i8, i8_ptr, i32, i64 = get_basic_types()
     platform_net = get_platform_module('net')
     getnameinfo_fn = platform_net.declare_getnameinfo(module)
     malloc_fn = declare_malloc(module)
     strlen_fn = declare_strlen(module)
 
-    result_type = get_result_type(get_string_type(), get_unit_enum_type())
-    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
-                       name="sushi_net_sock_peer_ip")
+    result_type = get_result_type(ok_type, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]), name=symbol)
     func.args[0].name = "fd"
     builder = ir.IRBuilder(func.append_basic_block(name="entry"))
 
@@ -340,4 +369,5 @@ def generate_peer_ip(module: ir.Module) -> None:
     memcpy_fn = declare_memcpy(builder.module)
     builder.call(memcpy_fn, [owned, host_buf, length64, ir.Constant(ir.IntType(1), 0)])
     text = cstr_to_fat_pointer_with_len(builder, owned, length, owned=1)
-    builder.ret(emit_ok_result(builder, result_type, text, 16))
+    builder.ret(emit_ok_result(builder, result_type, make_ok(builder, text, storage),
+                               calculate_llvm_type_size(ok_type)))

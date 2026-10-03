@@ -1,0 +1,26 @@
+# split answers (dirname, basename) for every path, in one call.
+# EXPECT_STDOUT_EXACT: "[/a|b.txt]\n[a|]\n[|file]\n[/|]\n[|]\n[//|x]\n[a/b|c]\ndir /usr/lib name libc.so\nsame true\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <io/path>
+
+fn show(string p) string:
+    let (d, b) = split(p)
+    return "[{d}|{b}]"
+
+fn main() i32:
+    println(show("/a/b.txt"))
+    println(show("a/"))
+    println(show("file"))
+    println(show("/"))
+    println(show(""))
+    println(show("//x"))
+    println(show("a/b//c"))
+
+    let (string dir, string name) = split("/usr/lib/libc.so")
+    println("dir {dir} name {name}")
+
+    let string p = "x/y/z"
+    let (string, string) parts = split(p)
+    println("same {parts.0 == dirname(p) and parts.1 == basename(p)}")
+    return 0

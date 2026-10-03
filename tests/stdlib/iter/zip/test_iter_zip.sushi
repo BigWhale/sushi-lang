@@ -1,0 +1,37 @@
+# zip pairs the elements of two inputs in order, and stops at the end of the
+# shorter one. The free function and the List method take two lists, and the
+# array method takes two arrays. Both inputs stay usable.
+# EXPECT_STDOUT_EXACT: "Arthur 42\nFord 200\nArthur 42\nFord 200\nx 1\ny 2\nlast ("Ford", 200)\nkept 3 2\nempty 0 0 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/iter>
+
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    names.push("Zaphod")
+    let List@(i32) ages = List.new()
+    ages.push(42)
+    ages.push(200)
+
+    foreach((name, age) in zip(names, ages).iter()):
+        println("{name} {age}")
+    foreach((string name, i32 age) in names.zip(ages).iter()):
+        println("{name} {age}")
+
+    let string[] letters = from(["x", "y"])
+    let i32[] digits = from([1, 2, 3])
+    foreach((l, d) in letters.zip(digits).iter()):
+        println("{l} {d}")
+
+    let List@((string, i32)) pairs = zip(names, ages)
+    let (string, i32) last = pairs.pop().realise(("", 0))
+    println("last {last}")
+    println("kept {names.len()} {ages.len()}")
+
+    let List@(string) none = List.new()
+    let List@(i32) no_ages = List.new()
+    let i32[] nothing = from([])
+    println("empty {zip(none, ages).len()} {names.zip(no_ages).len()} {nothing.zip(digits).len()}")
+    return 0

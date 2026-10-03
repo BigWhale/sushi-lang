@@ -93,7 +93,7 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     hashmap_method = None
 
     if isinstance(node.iterable, DotCall):
-        if node.iterable.method in ("keys", "values", "entries"):
+        if node.iterable.method in ("keys", "values", "entries", "pairs"):
             # The SAME helper the HashMap emitters use, so this loop and
             # `try_emit_hashmap_method` cannot disagree about what a HashMap receiver is.
             # Asking by variable NAME made `get_map()??.keys()` fall through to the array
@@ -265,22 +265,25 @@ def _emit_hashmap_foreach(
     hashmap_type: 'StructType',
     method: str
 ) -> None:
-    """Emit foreach for HashMap.keys(), HashMap.values(), and HashMap.entries() iterators."""
+    """Emit foreach for HashMap.keys(), .values(), .entries() and .pairs() iterators."""
     from llvmlite import ir
     from sushi_lang.backend import gep_utils
-    from sushi_lang.backend.generics.hashmap.types import (
-        get_entry_type, get_user_entry_type, ENTRY_OCCUPIED,
-    )
+    from sushi_lang.backend.generics.hashmap.types import get_entry_type, ENTRY_OCCUPIED
     from sushi_lang.semantics.generics.hashmap import (
         parse_hashmap_types, ensure_entry_type_in_struct_table,
     )
+    from sushi_lang.semantics.generics.tuples import intern_tuple
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
 
-    is_entries = (method == "entries")
-    if is_entries:
+    # `entries()` and `pairs()` both give the key and the value as one `{K, V}` element.
+    is_entries = method in ("entries", "pairs")
+    if method == "entries":
         element_type = ensure_entry_type_in_struct_table(
             codegen.struct_table, codegen.derived_methods, key_type, value_type)
+    elif method == "pairs":
+        element_type = intern_tuple(codegen.struct_table, codegen.enum_table,
+                                    (key_type, value_type))
     else:
         element_type = key_type if method == "keys" else value_type
     entry_field_index = 0 if method == "keys" else 1  # 0=key, 1=value in Entry<K,V>
@@ -334,7 +337,7 @@ def _emit_hashmap_foreach(
         # owner. Registering the binding as a second owner double-freed every owning
         # key/value type.
         if is_entries:
-            user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
+            user_entry_llvm = codegen.types.ll_type(element_type)
 
             key_ptr = gep_utils.gep_struct_field(codegen, current_entry_ptr, 0, "entry_key_ptr")
             key_val = codegen.builder.load(key_ptr, name="entry_key")

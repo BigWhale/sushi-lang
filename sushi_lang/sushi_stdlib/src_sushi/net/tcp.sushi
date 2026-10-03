@@ -337,6 +337,26 @@ extend TcpStream peer_port() i32 | NetError:
     return Result.Ok(sock_peer_port(self.fd)??)
 
 ##:
+The address and the port of the peer at the other end, from one system call.
+
+No resolver is asked, so this makes no network request.
+
+- Returns: The peer's address and port.
+- Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
+  when the kernel gave an address that <net/ip> cannot read.
+- Example:
+  ```sushi no_run
+  let TcpStream s = connect("127.0.0.1", 8080).realise(TcpStream(-1))
+  match s.peer():
+      Result.Ok((ip, port)) -> println("{ip.text()}:{port}")
+      Result.Err(_) -> println("no peer")
+  ```
+:##
+extend TcpStream peer() (IpAddr, i32) | NetError:
+    let (string text, i32 port) = sock_peer(self.fd)??
+    return Result.Ok((parse_ip(text)??, port))
+
+##:
 The port a listener actually bound.
 
 This is the only way to learn the port after binding port 0.

@@ -51,6 +51,8 @@ SOCKET_SIGNATURES: Dict[str, Signature] = {
     "sock_local_port":       Signature(params_of(I32), ok=I32, error=NET),
     "sock_peer_port":        Signature(params_of(I32), ok=I32, error=NET),
     "sock_peer_ip":          Signature(params_of(I32), ok=BuiltinType.STRING, error=NET),
+    "sock_peer":             Signature(params_of(I32),
+                                       ok=tuple_ref((BuiltinType.STRING, I32)), error=NET),
     # A descriptor and a count, or a descriptor and bytes.
     "sock_recv":             Signature(params_of(I32, I32), ok=BYTES, error=NET),
     "sock_send":             Signature(params_of(I32, BYTES), ok=I32, error=NET),

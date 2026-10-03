@@ -61,9 +61,3 @@ def emit_key_hash_i32(codegen: Any, key_type: Type, key_value: ir.Value) -> ir.V
     hash_value = emit_value_hash(codegen, key_value, key_type)
     return codegen.builder.trunc(hash_value, codegen.types.i32, name="hash_i32")
 
-
-def get_user_entry_type(codegen: Any, key_type: Type, value_type: Type) -> 'ir.Type':
-    """Get LLVM struct type for the user-facing Entry<K, V> (key + value only)."""
-    key_llvm = codegen.types.ll_type(key_type)
-    value_llvm = codegen.types.ll_type(value_type)
-    return ir.LiteralStructType([key_llvm, value_llvm])

@@ -1,0 +1,56 @@
+# pairs() walks a map as (key, value) tuples. A foreach destructures each pair,
+# an item can be read whole, and an empty map gives no pair. The elements are
+# borrows of the map's entries, as the key and the value of entries() are, so
+# the map keeps them and nothing is freed twice.
+# EXPECT_STDOUT_EXACT: "total 242 letters 10\nFord 200\npair ("Ford", 200)\ncopied 2\nlists 3\nempty true\nstill 2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/hashmap>
+use <collections/strings>
+
+fn main() i32:
+    let HashMap@(string, i32) ages = HashMap.new()
+    ages.insert("Arthur", 42)
+    ages.insert("Ford", 200)
+
+    let i32 total = 0
+    let i32 letters = 0
+    foreach((name, age) in ages.pairs()):
+        total := total + age
+        letters := letters + name.len()
+    println("total {total} letters {letters}")
+
+    foreach((string name, i32 age) in ages.pairs()):
+        if (name == "Ford"):
+            println("{name} {age}")
+
+    foreach(p in ages.pairs()):
+        if (p.0 == "Ford"):
+            println("pair {p}")
+
+    let List@(string) copied = List.new()
+    foreach((name, _) in ages.pairs()):
+        copied.push(name.clone())
+    println("copied {copied.len()}")
+
+    let HashMap@(i32, List@(string)) groups = HashMap.new()
+    let List@(string) crew = List.new()
+    crew.push("Arthur")
+    crew.push("Ford")
+    groups.insert(1, crew)
+    let List@(string) solo = List.new()
+    solo.push("Marvin")
+    groups.insert(2, solo)
+    let i32 count = 0
+    foreach((_, members) in groups.pairs()):
+        count := count + members.len()
+    println("lists {count}")
+
+    let HashMap@(string, string) none = HashMap.new()
+    let bool empty = true
+    foreach((k, v) in none.pairs()):
+        empty := false
+        println("{k} {v}")
+    println("empty {empty}")
+    println("still {ages.len()}")
+    return 0

@@ -128,3 +128,224 @@ extend T[] fold@(U)(U init, fn(U, T) -> U f) U:
     foreach(x in self.iter()):
         acc := f(acc, x)
     return acc
+
+##:
+Gives each element of the list with its index, in a new list.
+
+- Parameter xs: The list to read.
+- Returns: A new list of `(index, element)` pairs, in order. The index starts at 0, and
+  each element is a clone.
+- Example:
+  ```sushi
+  let List@(string) names = List.new()
+  names.push("Arthur")
+  names.push("Ford")
+  foreach((i, name) in enumerate(names).iter()):
+      println("{i}: {name}")
+  ```
+:##
+public fn enumerate@(T)(List@(T) xs) List@((i32, T)):
+    return xs.enumerate()
+
+##:
+Pairs the elements of two lists in order, and stops at the end of the shorter list.
+
+- Parameter xs: The list that gives the first element of each pair.
+- Parameter ys: The list that gives the second element of each pair.
+- Returns: A new list of `(x, y)` pairs, as long as the shorter list. Each element is a
+  clone.
+- Example:
+  ```sushi
+  let List@(string) names = List.new()
+  names.push("Arthur")
+  names.push("Ford")
+  let List@(i32) ages = List.new()
+  ages.push(42)
+  ages.push(200)
+  foreach((name, age) in zip(names, ages).iter()):
+      println("{name} is {age}")
+  ```
+:##
+public fn zip@(T, U)(List@(T) xs, List@(U) ys) List@((T, U)):
+    return xs.zip(ys)
+
+##:
+Divides the list in two: the elements for which `pred` answers true, then the others.
+
+- Parameter xs: The list to read.
+- Parameter pred: The predicate.
+- Returns: Two new lists of clones, `(kept, rest)`, each in order.
+- Example:
+  ```sushi
+  let List@(i32) nums = List.new()
+  foreach(n in 1..=6):
+      nums.push(n)
+  let (even, odd) = partition(nums, |i32 n| n % 2 == 0)
+  println("{even.len()} even, {odd.len()} odd")
+  ```
+:##
+public fn partition@(T)(List@(T) xs, fn(T) -> bool pred) (List@(T), List@(T)):
+    return xs.partition(pred)
+
+##:
+Divides a list of pairs into two lists: the first elements, then the second elements.
+
+It is the inverse of `zip` over two lists of the same length. It is a free function
+only, because a list of pairs is not a target that an extension method can name.
+
+- Parameter xs: The list of pairs to read.
+- Returns: Two new lists of clones, each in the order of `xs`.
+- Example:
+  ```sushi
+  let List@((string, i32)) pairs = List.new()
+  pairs.push(("Arthur", 42))
+  pairs.push(("Ford", 200))
+  let (names, ages) = unzip(pairs)
+  println("{names.len()} names, {ages.len()} ages")
+  ```
+:##
+public fn unzip@(T, U)(List@((T, U)) xs) (List@(T), List@(U)):
+    let List@(T) firsts = List.new()
+    let List@(U) seconds = List.new()
+    foreach((a, b) in xs.iter()):
+        firsts.push(a.clone())
+        seconds.push(b.clone())
+    return (firsts, seconds)
+
+##:
+Gives each element of the list with its index, in a new list.
+
+- Returns: A new list of `(index, element)` pairs, in order. The index starts at 0, and
+  each element is a clone.
+- Example:
+  ```sushi
+  let List@(string) names = List.new()
+  names.push("Arthur")
+  foreach((i, name) in names.enumerate().iter()):
+      println("{i}: {name}")
+  ```
+:##
+extend List@(T) enumerate() List@((i32, T)):
+    let List@((i32, T)) out = List.new()
+    let i32 i = 0
+    foreach(x in self.iter()):
+        out.push((i, x.clone()))
+        i := i + 1
+    return out
+
+##:
+Pairs the elements of this list with the elements of `other`, in order, and stops at the
+end of the shorter list.
+
+- Parameter other: The list that gives the second element of each pair.
+- Returns: A new list of pairs, as long as the shorter list. Each element is a clone.
+- Example:
+  ```sushi
+  let List@(string) names = List.new()
+  names.push("Arthur")
+  let List@(i32) ages = List.new()
+  ages.push(42)
+  foreach((name, age) in names.zip(ages).iter()):
+      println("{name} is {age}")
+  ```
+:##
+extend List@(T) zip@(U)(List@(U) other) List@((T, U)):
+    let List@((T, U)) out = List.new()
+    let i32 n = self.len()
+    if (other.len() < n):
+        n := other.len()
+    foreach(i in 0..n):
+        match (self.get(i), other.get(i)):
+            (Maybe.Some(a), Maybe.Some(b)) -> out.push((a.clone(), b.clone()))
+            _ -> ~
+    return out
+
+##:
+Divides the list in two: the elements for which `pred` answers true, then the others.
+
+- Parameter pred: The predicate.
+- Returns: Two new lists of clones, `(kept, rest)`, each in order.
+- Example:
+  ```sushi
+  let List@(i32) nums = List.new()
+  nums.push(1)
+  nums.push(2)
+  let (even, odd) = nums.partition(|i32 n| n % 2 == 0)
+  println("{even.len()} even, {odd.len()} odd")
+  ```
+:##
+extend List@(T) partition(fn(T) -> bool pred) (List@(T), List@(T)):
+    let List@(T) kept = List.new()
+    let List@(T) rest = List.new()
+    foreach(x in self.iter()):
+        if (pred(x)):
+            kept.push(x.clone())
+        else:
+            rest.push(x.clone())
+    return (kept, rest)
+
+##:
+Gives each element of the array with its index, in a new list.
+
+- Returns: A new list of `(index, element)` pairs, in order. The index starts at 0, and
+  each element is a clone.
+- Example:
+  ```sushi
+  let string[] names = from(["Arthur", "Ford"])
+  let List@((i32, string)) numbered = names.enumerate()
+  foreach((i, name) in numbered.iter()):
+      println("{i}: {name}")
+  ```
+:##
+extend T[] enumerate() List@((i32, T)):
+    let List@((i32, T)) out = List.new()
+    let i32 i = 0
+    foreach(x in self.iter()):
+        out.push((i, x.clone()))
+        i := i + 1
+    return out
+
+##:
+Pairs the elements of this array with the elements of `other`, in order, and stops at
+the end of the shorter array.
+
+- Parameter other: The array that gives the second element of each pair.
+- Returns: A new list of pairs, as long as the shorter array. Each element is a clone.
+- Example:
+  ```sushi
+  let string[] names = from(["Arthur", "Ford"])
+  let i32[] ages = from([42, 200])
+  foreach((name, age) in names.zip(ages).iter()):
+      println("{name} is {age}")
+  ```
+:##
+extend T[] zip@(U)(U[] other) List@((T, U)):
+    let List@((T, U)) out = List.new()
+    let i32 n = self.len()
+    if (other.len() < n):
+        n := other.len()
+    foreach(i in 0..n):
+        out.push((self[i].clone(), other[i].clone()))
+    return out
+
+##:
+Divides the array in two: the elements for which `pred` answers true, then the others.
+
+- Parameter pred: The predicate.
+- Returns: Two new lists of clones, `(kept, rest)`, each in order.
+- Example:
+  ```sushi
+  let i32[] nums = from([1, 2, 3, 4])
+  let (even, odd) = nums.partition(|i32 n| n % 2 == 0)
+  println("{even.len()} even, {odd.len()} odd")
+  ```
+:##
+extend T[] partition(fn(T) -> bool pred) (List@(T), List@(T)):
+    let List@(T) kept = List.new()
+    let List@(T) rest = List.new()
+    foreach(x in self.iter()):
+        if (pred(x)):
+            kept.push(x.clone())
+        else:
+            rest.push(x.clone())
+    return (kept, rest)
