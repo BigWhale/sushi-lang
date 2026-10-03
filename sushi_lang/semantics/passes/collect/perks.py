@@ -221,6 +221,24 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     return str(ty)
 
 
+def _is_built_in(ty: Optional[Type]) -> bool:
+    """A type no unit declares: a primitive, an array, a built-in generic, a predefined enum."""
+    from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.predefined_types import PREDEFINED_ENUMS
+    from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, UnknownType
+    if isinstance(ty, (BuiltinType, ArrayType, DynamicArrayType)):
+        return True
+    if isinstance(ty, GenericTypeRef):
+        name = ty.base_name
+    elif isinstance(ty, (UnknownType, StructType, EnumType)):
+        name = ty.name
+    else:
+        return False
+    return (name in CONTAINER_BASES or name in ("Maybe", "Result")
+            or any(enum.name == name for enum in PREDEFINED_ENUMS))
+
+
 @dataclass(frozen=True)
 class _Written:
     """One implementation as written: the node, its file and its unit."""
@@ -790,6 +808,14 @@ class PerkCollector:
                                  if isinstance(target_type, GenericTypeRef)
                                  else type_name, impl)
             return False
+
+        if perk_name == self.DROP_PERK and _is_built_in(target_type):
+            # Refused whole: it leaves `perk_impls`, so no later pass reads its target.
+            from sushi_lang.semantics.generics.type_display import display_type
+            er.emit(self.r, ERR.CE4016, impl.target_type_span or perk_name_span,
+                    type=display_type(target_type))
+            self._refuse_methods(type_name, impl)
+            return True
 
         if perk_name == self.DROP_PERK and self._reject_bad_drop_target(
                 impl, target_type, type_name, perk_name_span):
