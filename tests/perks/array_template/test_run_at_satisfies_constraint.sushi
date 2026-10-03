@@ -1,0 +1,22 @@
+# An array template satisfies the perk CONTRACT, so a function that asks for the perk
+# takes an array of each element type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "named 1\nnamed 2\n"
+
+perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "named {self.len()}"
+
+fn show@(N: Named)(N thing) string:
+    return thing.name()
+
+fn main() i32:
+    let i32[] xs = from([42])
+    let string[] names = from(["arthur", "ford"])
+    println(show(xs))
+    println(show(names))
+    return 0

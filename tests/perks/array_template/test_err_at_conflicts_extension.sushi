@@ -1,0 +1,16 @@
+# A name has one home: a perk method and an extension method of one name on the array
+# template are refused, with no call needed.
+# EXPECT_ERROR_CODE: CE4007
+
+perk Named:
+    fn name() string
+
+extend T[] name() string:
+    return "ext"
+
+extend T[] with Named:
+    fn name() string:
+        return "perk"
+
+fn main() i32:
+    return 0

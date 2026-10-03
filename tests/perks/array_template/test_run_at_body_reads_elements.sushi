@@ -1,0 +1,24 @@
+# The body of an array template names the element type `T`: an index reads a `T`, and a
+# local of type `T` holds it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 from 7\n3 from arthur\nempty\n"
+
+perk Summary:
+    fn summary() string
+
+extend T[] with Summary:
+    fn summary() string:
+        if (self.len() == 0):
+            return "empty"
+        let T head = self[0]
+        return "{self.len()} from {head}"
+
+fn main() i32:
+    let i32[] xs = from([7, 8])
+    let string[] names = from(["arthur", "ford", "trillian"])
+    let f64[] none = from([])
+    println(xs.summary())
+    println(names.summary())
+    println(none.summary())
+    return 0

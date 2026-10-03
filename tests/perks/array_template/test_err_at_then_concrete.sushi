@@ -1,0 +1,19 @@
+# Sushi has no specialization: a template that covers `i32[]` and a concrete `i32[]`
+# implementation of the same perk are two implementations, and the second is refused.
+# EXPECT_ERROR_CODES_EXACT: CE4002
+
+perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "arr"
+
+extend i32[] with Named:
+    fn name() string:
+        return "ints"
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.name())
+    return 0

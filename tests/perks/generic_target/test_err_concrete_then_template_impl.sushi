@@ -1,0 +1,21 @@
+# The overlap rule does not read the declaration order: a concrete `Box@(i32)`
+# implementation followed by the template of the same perk is refused too.
+# EXPECT_ERROR_CODES_EXACT: CE4002
+
+perk Named:
+    fn name() string
+
+struct Box@(T):
+    T v
+
+extend Box@(i32) with Named:
+    fn name() string:
+        return "intbox"
+
+extend Box@(T) with Named:
+    fn name() string:
+        return "box"
+
+fn main() i32:
+    println(Box(1).name())
+    return 0

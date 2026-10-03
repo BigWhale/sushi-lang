@@ -1,0 +1,15 @@
+# The header of an array template is judged once, where it is written: `T` is not
+# `i32`, even if every call uses `i32[]`.
+# EXPECT_ERROR_CODE: CE4004
+
+perk Takes:
+    fn take(i32 x) i32
+
+extend T[] with Takes:
+    fn take(T x) i32:
+        return 1
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.take(2))
+    return 0

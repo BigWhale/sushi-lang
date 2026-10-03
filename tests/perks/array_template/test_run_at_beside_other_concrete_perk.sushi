@@ -1,0 +1,24 @@
+# A template and a concrete target overlap only for ONE perk. A different perk on a
+# concrete array is a different implementation and coexists with the template.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "arr\nints 2\n"
+
+perk Named:
+    fn name() string
+
+perk Counted:
+    fn count() i32
+
+extend T[] with Named:
+    fn name() string:
+        return "arr"
+
+extend i32[] with Counted:
+    fn count() i32:
+        return self.len()
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    println(xs.name())
+    println("ints {xs.count()}")
+    return 0

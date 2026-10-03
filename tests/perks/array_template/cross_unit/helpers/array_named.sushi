@@ -1,0 +1,11 @@
+const string PREFIX = "array_named"
+
+public perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "{PREFIX} {self.len()}"
+
+public fn describe@(N: Named)(N thing) string:
+    return thing.name()

@@ -1,0 +1,10 @@
+# `Drop` declares a resource, and only the unit that declares a type may say what
+# releasing it means. No unit declares a built-in type, so `Drop` on `i32` is refused.
+# EXPECT_ERROR_CODES_EXACT: CE4016
+
+extend i32 with Drop:
+    fn drop(poke self) ~:
+        println("released")
+
+fn main() i32:
+    return 0

@@ -1,0 +1,13 @@
+# A nested array is not a perk target: `extend T[]` binds `T = i32[]` and covers an
+# `i32[][]` receiver, so a second spelling of the same target is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2101
+
+perk Named:
+    fn name() string
+
+extend T[][] with Named:
+    fn name() string:
+        return "grid"
+
+fn main() i32:
+    return 0
