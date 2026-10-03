@@ -344,7 +344,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """What a call to this callee yields, before the stamp is parked on the node."""
         from sushi_lang.semantics.typesys import FunctionType
         from sushi_lang.semantics.passes.types.calls.user_defined import (
-            struct_takes_the_call)
+            generic_struct_takes_the_call, struct_takes_the_call)
         # Call-through any expression yielding a function value (`env.f(x)`,
         # `obj.handler()`, `arr[0]()`). Yields what a direct call yields.
         if not isinstance(node.callee, Name):
@@ -361,6 +361,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
 
         if struct_takes_the_call(self.type_validator, function_name):
             return self.type_validator.struct_table.by_name[function_name]
+
+        # A generic struct constructor no declared type stamped: the instance its
+        # arguments solve, the answer the validating half reaches (#1150).
+        if generic_struct_takes_the_call(self.type_validator, function_name):
+            from sushi_lang.semantics.passes.types.calls.structs import (
+                untyped_struct_instance)
+            return untyped_struct_instance(self.type_validator, function_name,
+                                           node.args, node.field_names)
 
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library

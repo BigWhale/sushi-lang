@@ -59,8 +59,16 @@ class ExpressionScanner:
             type_inferrer.enum_table or {}
         )
 
-    def scan_expression(self, expr) -> None:
-        """Recursively collect generic instantiations from expressions."""
+    def scan_expression(self, expr, stated: bool = True) -> None:
+        """Recursively collect generic instantiations from expressions.
+
+        `stated` says whether the position of `expr` states a type: a typed `let`, a
+        `return`, an argument of a concrete callee. A generic constructor in a position
+        that states none is solved from its arguments, and the instance it builds is
+        collected here (#1150, #1152), so it gets its extension copies like any other.
+        A stated position gives the constructor its own type, so it is not solved: a
+        literal argument would solve another instance than the one the position states.
+        """
         from sushi_lang.semantics.ast import (
             Call, BinaryOp, UnaryOp, IndexAccess, ArrayLiteral,
             EnumConstructor, CastExpr, InterpolatedString, DotCall, TryExpr,
@@ -71,8 +79,8 @@ class ExpressionScanner:
 
         if isinstance(expr, Call):
             self._scan_call(expr)
-            for arg in expr.args:
-                self.scan_expression(arg)
+            self._scan_arguments(expr, stated, constructs=self._names_generic_struct(expr),
+                                 solves=self._calls_generic(expr))
             self.scan_fn_value_arguments(expr, self._call_param_types)
 
         elif isinstance(expr, DotCall):
@@ -81,72 +89,73 @@ class ExpressionScanner:
             # We treat it as a potential method call for generic return types
             if not self._scan_namespaced_call(expr):
                 self._scan_dot_call(expr)
-                self.scan_expression(expr.receiver)
-            for arg in expr.args:
-                self.scan_expression(arg)
+                self.scan_expression(expr.receiver, False)
+            self._scan_arguments(expr, stated, constructs=self._dot_constructs_generic(expr),
+                                 solves=self._dot_calls_generic(expr))
             self._scan_static_call(expr)
             self.scan_fn_value_arguments(expr, self._dot_call_param_types)
 
         elif isinstance(expr, BinaryOp):
-            self.scan_expression(expr.left)
-            self.scan_expression(expr.right)
+            self.scan_expression(expr.left, False)
+            self.scan_expression(expr.right, False)
 
         elif isinstance(expr, UnaryOp):
-            self.scan_expression(expr.expr)
+            self.scan_expression(expr.expr, False)
 
         elif isinstance(expr, IndexAccess):
-            self.scan_expression(expr.array)
+            self.scan_expression(expr.array, False)
             self.scan_expression(expr.index)
 
         elif isinstance(expr, ArrayLiteral):
             for element in expr.elements:
-                self.scan_expression(element.value)
+                self.scan_expression(element.value, stated)
                 if element.count is not None:
                     self.scan_expression(element.count)
 
         elif isinstance(expr, EnumConstructor):
-            for arg in expr.args:
-                self.scan_expression(arg)
+            self._scan_arguments(expr, stated,
+                                 constructs=expr.enum_name in (self.generic_enums or {}),
+                                 solves=False)
             self.scan_fn_value_arguments(
                 expr, lambda node: self._payload_types(node.enum_name, node.variant_name))
 
         elif isinstance(expr, CastExpr):
-            self.scan_expression(expr.expr)
+            self.scan_expression(expr.expr, False)
 
         elif isinstance(expr, InterpolatedString):
             for part in expr.parts:
                 if not isinstance(part, str):  # Skip string literals
-                    self.scan_expression(part)
+                    self.scan_expression(part, False)
 
         elif isinstance(expr, TryExpr):
-            self.scan_expression(expr.expr)
+            self.scan_expression(expr.expr, False)
 
         elif isinstance(expr, Borrow):
-            self.scan_expression(expr.expr)
+            self.scan_expression(expr.expr, stated)
 
         elif isinstance(expr, RangeExpr):
             self.scan_expression(expr.start)
             self.scan_expression(expr.end)
 
         elif isinstance(expr, Spread):
-            self.scan_expression(expr.value)
+            self.scan_expression(expr.value, stated)
 
         elif isinstance(expr, MemberAccess):
-            self.scan_expression(expr.receiver)
+            self.scan_expression(expr.receiver, False)
 
         elif isinstance(expr, MethodCall):
-            self.scan_expression(expr.receiver)
+            self.scan_expression(expr.receiver, False)
             for arg in expr.args:
                 self.scan_expression(arg)
             self._scan_static_call(expr)
             self.scan_fn_value_arguments(expr, self._method_param_types)
 
         elif isinstance(expr, DynamicArrayFrom):
-            self.scan_expression(expr.elements)
+            self.scan_expression(expr.elements, stated)
 
         elif isinstance(expr, TupleLiteral):
             for item in expr.elements:
-                self.scan_expression(item)
+                self.scan_expression(item, stated)
 
         elif isinstance(expr, Lambda):
             # Lambda bodies are still present at the instantiate pass (lambda-lifting is the lift pass), so a
@@ -158,11 +167,80 @@ class ExpressionScanner:
                 if self.scan_block is not None:
                     self.scan_block(expr.body, expr.ret)
             else:
-                self.scan_expression(expr.body)
+                self.scan_expression(expr.body, False)
 
         elif isinstance(expr, (IntLit, FloatLit, StringLit, BoolLit, Name,
                                BlankLit, DynamicArrayNew)):
             pass
+
+    def _scan_arguments(self, expr, stated: bool, *, constructs: bool, solves: bool) -> None:
+        """Scan the arguments of a call or a constructor, each in the position it fills.
+
+        A generic constructor in a position that states no type is collected here. Its
+        arguments are in the position the constructor is in: a declared type reaches
+        them through it. The arguments of a generic call solve it and state nothing,
+        and those of a concrete callee state its parameter types.
+        """
+        if constructs and not stated:
+            self._collect_constructed(expr)
+        args_stated = stated if constructs else not solves
+        for arg in expr.args:
+            self.scan_expression(arg, args_stated)
+
+    def _collect_constructed(self, expr) -> None:
+        """Collect the instance a generic constructor builds from its arguments alone.
+
+        The shared inferrer answers it, so the instance collected here is the one the
+        typecheck pass solves (#1150, #1152). An unsolvable constructor answers None,
+        and the typecheck pass reports it.
+        """
+        constructed = self._infer_arg_type(expr)
+        if constructed is not None:
+            self.collect_type(constructed)
+
+    def _generic_struct_names(self):
+        validator = self.type_validator
+        return validator.generic_struct_table.by_name if validator is not None else {}
+
+    def _names_generic_struct(self, call) -> bool:
+        """`Box(args)` constructs an instance of the generic struct `Box` in this unit."""
+        from sushi_lang.semantics.ast import Name
+        callee = call.callee
+        if not isinstance(callee, Name) or callee.id in self.type_inferrer.variable_types:
+            return False
+        return (callee.id in self._generic_struct_names()
+                and callee.id not in (self.generic_funcs or {})
+                and not self._declares_concrete(callee.id))
+
+    def _calls_generic(self, call) -> bool:
+        """`f(args)` calls a generic function: its arguments solve it, and state nothing."""
+        from sushi_lang.semantics.ast import Name
+        callee = call.callee
+        return (isinstance(callee, Name)
+                and callee.id not in self.type_inferrer.variable_types
+                and callee.id in (self.generic_funcs or {})
+                and not self._declares_concrete(callee.id))
+
+    def _dot_constructs_generic(self, call) -> bool:
+        """`X.Y(args)` builds an instance of a generic type: `sh.Box(1)`, `Slot.Full(5)`,
+        `sh.Slot.Full(5)`."""
+        from sushi_lang.semantics.ast import MemberAccess, Name
+        receiver = call.receiver
+        if isinstance(receiver, MemberAccess):
+            binding = self._namespaced_binding(receiver.receiver, receiver.member)
+            return (binding is not None and binding.kind == "enum"
+                    and binding.name in (self.generic_enums or {}))
+        if not isinstance(receiver, Name) or receiver.id in self.type_inferrer.variable_types:
+            return False
+        binding = self._namespaced_binding(receiver, call.method)
+        if binding is not None:
+            return binding.kind == "struct" and binding.name in self._generic_struct_names()
+        return receiver.id in (self.generic_enums or {})
+
+    def _dot_calls_generic(self, call) -> bool:
+        """`alias.f(args)` calls a generic function behind an alias."""
+        binding = self._namespaced_binding(call.receiver, call.method)
+        return binding is not None and binding.kind == "generic function"
 
     def _scan_dot_call(self, call) -> None:
         """Detect built-in method calls (via DotCall) with generic return types."""

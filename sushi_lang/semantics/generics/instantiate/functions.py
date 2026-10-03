@@ -345,7 +345,8 @@ class FunctionCollector:
                 if stmt.name is not None:
                     self.variable_types[stmt.name] = self._resolve_local_type(stmt.ty)
             if stmt.value is not None:
-                self.expression_scanner.scan_expression(stmt.value)
+                # A destructure states no type for its value.
+                self.expression_scanner.scan_expression(stmt.value, stmt.ty is not None)
                 if stmt.ty is not None:
                     self._scan_fn_value(stmt.value, stmt.ty)
             if stmt.targets is not None:
@@ -355,24 +356,24 @@ class FunctionCollector:
             if stmt.item_type is not None:
                 self._collect_from_type(stmt.item_type, getattr(stmt, "item_type_span", None))
             if stmt.iterable is not None:
-                self.expression_scanner.scan_expression(stmt.iterable)
+                self.expression_scanner.scan_expression(stmt.iterable, False)
             self._collect_from_block(stmt.body)
 
         elif isinstance(stmt, If):
             for cond, block in stmt.arms:
-                self.expression_scanner.scan_expression(cond)
+                self.expression_scanner.scan_expression(cond, False)
                 self._collect_from_block(block)
             if stmt.else_block is not None:
                 self._collect_from_block(stmt.else_block)
 
         elif isinstance(stmt, While):
             if stmt.cond is not None:
-                self.expression_scanner.scan_expression(stmt.cond)
+                self.expression_scanner.scan_expression(stmt.cond, False)
             self._collect_from_block(stmt.body)
 
         elif isinstance(stmt, Match):
             if stmt.scrutinee is not None:
-                self.expression_scanner.scan_expression(stmt.scrutinee)
+                self.expression_scanner.scan_expression(stmt.scrutinee, False)
             # A pattern binding is a LOCAL, and a generic called with one needs its type
             # exactly as a `let` local's is needed. `resolved_scrutinee_type` is stamped by
             # the typecheck pass, which runs after this one, so the scrutinee is typed here
@@ -387,7 +388,7 @@ class FunctionCollector:
                     # An arm body that is an EXPRESSION introduces no type ANNOTATION, which
                     # is why it used to be skipped -- but it may still CALL a generic, and
                     # the call is what needs collecting (#539).
-                    self.expression_scanner.scan_expression(arm.body)
+                    self.expression_scanner.scan_expression(arm.body, False)
                 self._unbind(bound)
 
         elif isinstance(stmt, Return):
@@ -398,10 +399,10 @@ class FunctionCollector:
         elif isinstance(stmt, (ExprStmt, Print, PrintLn)):
             expr = stmt.expr if hasattr(stmt, 'expr') else stmt.value
             if expr is not None:
-                self.expression_scanner.scan_expression(expr)
+                self.expression_scanner.scan_expression(expr, False)
 
         elif isinstance(stmt, Assert):
-            self.expression_scanner.scan_expression(stmt.cond)
+            self.expression_scanner.scan_expression(stmt.cond, False)
             if stmt.message is not None:
                 self.expression_scanner.scan_expression(stmt.message)
 

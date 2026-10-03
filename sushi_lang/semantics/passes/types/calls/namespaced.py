@@ -84,30 +84,49 @@ def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
     """
     from sushi_lang.semantics.ast import Call, Name
     from sushi_lang.semantics.passes.types.visibility import reject_private_type
-    from .structs import validate_struct_constructor
+    from .structs import validate_generic_struct_constructor, validate_struct_constructor
 
     if reject_private_type(validator, binding.name, node.loc):
         return
 
-    stand_in = Call(callee=Name(id=binding.name, loc=node.loc), args=node.args,
+    # A GENERIC struct is built as the flat form builds it (#1151): the instance the
+    # declared type stamped, or else the one the arguments solve (#1150).
+    stamped = getattr(node, "resolved_struct_type", None)
+    generic = binding.name in validator.generic_struct_table.by_name
+    name = stamped.name if generic and stamped is not None else binding.name
+    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
                     field_names=node.field_names, loc=node.loc)
-    validate_struct_constructor(validator, stand_in)
+    if generic and stamped is None:
+        constructed = validate_generic_struct_constructor(
+            validator, stand_in, _written(node.receiver, node.method))
+    else:
+        validate_struct_constructor(validator, stand_in)
+        constructed = validator.struct_table.by_name.get(name)
     # A named construction is put in declaration order on the stand-in, as the bare
     # form is on its own node. The node is what every later reader emits from, so
     # the order comes back with it, and the names are spent.
     node.args = stand_in.args
     node.field_names = stand_in.field_names
-    node.resolved_struct_type = _constructed_struct(validator, binding)
-    _stamp(node, binding)
+    node.resolved_struct_type = constructed
+    _stamp(node, binding, name=constructed.name if constructed is not None else None)
 
 
-def _constructed_struct(validator: 'TypeValidator', binding: 'Binding') -> Optional[Type]:
+def _constructed_struct(validator: 'TypeValidator', node: 'DotCall',
+                        binding: 'Binding') -> Optional[Type]:
     """The struct a constructor behind a dot builds: the one its name declares (Ruling 6).
 
     Both halves read it, so `sh.Pt(0)` has the type `Pt(0)` has under a flat import in
     every pass that infers it, the passes before the typecheck pass included (#1147).
+    A generic struct answers the instance the declared type stamped, or else the one
+    its arguments solve (#1150, #1151).
     """
-    return validator.struct_table.by_name.get(binding.name)
+    if binding.name not in validator.generic_struct_table.by_name:
+        return validator.struct_table.by_name.get(binding.name)
+    stamped = getattr(node, "resolved_struct_type", None)
+    if stamped is not None:
+        return stamped
+    from .structs import untyped_struct_instance
+    return untyped_struct_instance(validator, binding.name, node.args, node.field_names)
 
 
 def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
@@ -150,7 +169,7 @@ def infer_namespaced_call(validator: 'TypeValidator',
     if binding.kind == "generic function":
         return _infer_generic_call(validator, node)
     if binding.kind == "struct":
-        constructed = _constructed_struct(validator, binding)
+        constructed = _constructed_struct(validator, node, binding)
         node.inferred_return_type = constructed
         return constructed
     if binding.kind != "function":

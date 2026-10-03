@@ -267,6 +267,21 @@ def _static_receiver_type_name(validator: 'TypeValidator', node: Expr) -> Option
 def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
                                    struct_type: StructType) -> None:
     """Propagate generic struct type (Own, Box, Pair, user-defined) to constructor."""
+    from sushi_lang.semantics.type_predicates import is_instance_of
+
+    if isinstance(node, DotCall) and isinstance(struct_type, StructType):
+        # `sh.Box(1)`: a constructor behind an alias takes the declared type as the
+        # flat `Box(1)` does (#1151). The dot works in every written-name position.
+        binding = validator.resolve_namespaced(node.receiver, node.method)
+        if binding is not None and binding.kind == "struct":
+            if binding.name in validator.generic_struct_table.by_name:
+                if is_instance_of(struct_type, binding.name):
+                    node.resolved_struct_type = struct_type
+                    _propagate_to_struct_args(validator, node, struct_type)
+            elif binding.name == struct_type.name:
+                _propagate_to_struct_args(validator, node, struct_type)
+            return
+
     if isinstance(node, DotCall):
         struct_name = _static_receiver_type_name(validator, node)
 
@@ -293,6 +308,10 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             return
 
         if struct_name in validator.generic_struct_table.by_name:
+            # A declared type that is no instance of this generic gives it nothing: the
+            # arguments solve it (#1150), and the position reports the mismatch.
+            if not is_instance_of(struct_type, struct_name):
+                return
             # Update the Call node's callee id to use the concrete type name
             # This allows validate_struct_constructor to find the right struct
             # e.g., Box -> Box<i32>
