@@ -1,7 +1,8 @@
 """One type-unification engine, shared by the instantiate and typecheck passes."""
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from dataclasses import replace
+from typing import Dict, List, Optional, cast
 
 from sushi_lang.semantics.typesys import (
     Type,
@@ -15,6 +16,26 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.type_walk import map_named_types
+
+
+def as_type_argument(ty: Type) -> Type:
+    """`ty` as a type argument: every function type in it with no `captures` (#1154).
+
+    A type argument is a TYPE. `captures` is a fact about one lambda VALUE, and the early
+    passes read it before the `scope` pass fills it, so a capturing lambda reads as
+    `captures=()`, which `owns_resource` answers as a plain value. `FunctionType` equality
+    ignores `captures`, so the inferred and the written spelling name one instance, and
+    the first spelling decided whether the instance owned its closure parameter.
+    """
+    return cast(Type, map_named_types(ty, _without_captures))
+
+
+def _without_captures(ty: Type) -> Type:
+    """A function type with no `captures`; every other type unchanged."""
+    if isinstance(ty, FunctionType) and ty.captures is not None:
+        return replace(ty, captures=None)
+    return ty
 
 
 def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type],
@@ -33,18 +54,12 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
                      if isinstance(arg_type, ReferenceType) else arg_type)
         return unify_types(param_type.referenced_type, inner_arg, type_param_map, why)
 
-    if isinstance(param_type, TypeParameter):
-        param_name = param_type.name
+    if isinstance(param_type, (TypeParameter, UnknownType)):
+        param_name = (param_type.name if isinstance(param_type, TypeParameter)
+                      else str(param_type))
         if param_name in type_param_map:
             return type_param_map[param_name] == arg_type
-        type_param_map[param_name] = arg_type
-        return True
-
-    if isinstance(param_type, UnknownType):
-        param_name = str(param_type)
-        if param_name in type_param_map:
-            return type_param_map[param_name] == arg_type
-        type_param_map[param_name] = arg_type
+        type_param_map[param_name] = as_type_argument(arg_type)
         return True
 
     if param_type == arg_type:

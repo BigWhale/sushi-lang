@@ -1,0 +1,14 @@
+# A capturing lambda given `nom` to a generic pass-through. The solved type argument
+# is a function type, and the instance returns its parameter: the return moves the
+# closure to the caller, and only the caller frees its environment.
+# EXPECT_STDOUT_EXACT: "8\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn kb@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32 a = 5
+    let fn(i32) -> i32 r = kb(nom |i32 x| x + a)
+    println(r(3))
+    return 0
