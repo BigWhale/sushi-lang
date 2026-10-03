@@ -1,0 +1,13 @@
+# An array of capturing lambdas given `nom` to a generic pass-through. The type
+# argument holds the function type one level down, in the element.
+# EXPECT_STDOUT_EXACT: "8\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn kb@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32 a = 5
+    let (fn(i32) -> i32)[] r = kb(nom from([|i32 x| x + a]))
+    println(r[0](3))
+    return 0

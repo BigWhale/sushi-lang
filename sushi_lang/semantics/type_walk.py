@@ -261,10 +261,15 @@ def map_named_types(
     for slot in slots:
         held = getattr(mapped, slot)
         if isinstance(held, tuple):
-            new_held: object = tuple(map_named_types(item, resolve) for item in held)
+            new_items = tuple(map_named_types(item, resolve) for item in held)
+            moved = any(new is not old for new, old in zip(new_items, held, strict=True))
+            new_held: object = new_items
         else:
             new_held = map_named_types(held, resolve)
-        if new_held != held:
+            moved = new_held is not held
+        # IDENTITY, not equality: equality ignores a fn type's `captures` and a fixed
+        # array's `size_name`, so a change to one of them one level down was lost (#1154).
+        if moved:
             changed[slot] = new_held
 
     if not changed:

@@ -127,7 +127,8 @@ def infer_flat_type_args(
                                       why=why)
     if leading is None:
         return None
-    return leading + tuple(arg_types[pack_idx:])
+    from sushi_lang.semantics.generics.unify import as_type_argument
+    return leading + tuple(as_type_argument(t) for t in arg_types[pack_idx:])
 
 
 def infer_call_arg_type(validator, arg_expr) -> "Type | None":
