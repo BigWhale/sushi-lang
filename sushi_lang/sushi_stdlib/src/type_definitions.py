@@ -1,7 +1,7 @@
 """Type Definitions"""
 
 import llvmlite.ir as ir
-from typing import Tuple
+from typing import Iterable, Tuple
 
 
 def get_basic_types() -> Tuple[ir.IntType, ir.PointerType, ir.IntType, ir.IntType]:
@@ -162,3 +162,14 @@ def get_timespec_type() -> ir.LiteralStructType:
     """Get the POSIX timespec struct type."""
     i64 = ir.IntType(64)
     return ir.LiteralStructType([i64, i64])
+
+
+def get_tuple_type(element_types: Iterable[ir.Type]) -> ir.LiteralStructType:
+    """The VALUE type of a tuple whose elements have these LLVM types, in order.
+
+    The backend gives a tuple the identified struct `%"$Tuple<...>"` with this body, so
+    the two have one size and one field order. A generator and a call site both build a
+    tuple type here, and a tuple crosses inside a `Result` or a `Maybe` payload, sized by
+    `calculate_llvm_type_size` like any other payload.
+    """
+    return ir.LiteralStructType(list(element_types))

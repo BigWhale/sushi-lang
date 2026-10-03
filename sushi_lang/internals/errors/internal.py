@@ -285,6 +285,19 @@ _add(ErrorMessage("CE0077", Severity.ERROR,
     "unknown stdlib string method: {method}",
     Category.INTERNAL, "Standard library string method not implemented."))
 
+_add(ErrorMessage("CE0145", Severity.ERROR,
+    "a stdlib row names the type '{type}', which has no LLVM value type",
+    Category.INTERNAL,
+    "A registry row (`Signature`) and a string method row (`MethodSpec`) give their "
+    "parameters and their answer in Sushi types, and `llvm_value_type` "
+    "(backend/expressions/calls/stdlib/signatures.py) turns each into the LLVM type it "
+    "crosses as. This row names a type that function cannot map, so the call site cannot "
+    "declare the generated function. The method or the function is KNOWN: the fault is "
+    "the type in its row. Before this code, a string method row said CE0077 (unknown "
+    "method) and a registry row said CE0024 (unknown method), which named the wrong "
+    "fault. Add the type to `llvm_value_type`, built through the helper in "
+    "sushi_stdlib/src/type_definitions.py that the generator also uses."))
+
 _add(ErrorMessage("CE0078", Severity.ERROR,
     "to_str() expects 0 arguments, got {got}",
     Category.INTERNAL, "String conversion method called with incorrect arguments."))
