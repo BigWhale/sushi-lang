@@ -1,0 +1,18 @@
+# A `let T` in the body of a generic static, then a generic call (#1158).
+# EXPECT_STDOUT_EXACT: "7\n3\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(T) static of(T v) Box@(T):
+    let T y = v
+    let i32 n = k(y)
+    println(n)
+    return Box(y)
+
+fn main() i32:
+    let Box@(i32) b = Box.of(3)
+    println(b.v)
+    return 0
