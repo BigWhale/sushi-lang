@@ -623,6 +623,8 @@ fn render_param_list(MsgValue ps, nom string out) string:
                 let string mode = ""
                 if (declared == "nom"):
                     mode := "nom "
+                if (get_bool(p, "is_pack")):
+                    mode := "{mode}..."
                 parts.push("{mode}{t} {pn}")
             return ", ".join(parts)
         _ ->
@@ -713,7 +715,7 @@ fn render_type_params(MsgValue gf) string:
             return ""
 
 ##:
-Writes a `type_params` array as `@(...)`, with the constraints.
+Writes a `type_params` array as `@(...)`, with the constraints and the `...` of a pack.
 
 - Parameter tps: The `type_params` array.
 - Returns: The text, or `""` for an empty array.
@@ -726,6 +728,8 @@ fn render_type_param_list(MsgValue tps) string:
             let string[] parts = from([])
             foreach(tp in items.iter()):
                 let string tname = get_str(tp, "name")
+                if (get_bool(tp, "is_pack")):
+                    tname := "...{tname}"
                 let string cs = join_at(tp, "constraints", " + ")
                 let string one = ""
                 if (cs == ""):
