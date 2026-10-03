@@ -1,0 +1,8 @@
+# A bare binding of a tuple pattern is a read-only view.
+# EXPECT_ERROR_CODES_EXACT: CE2414
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    match t:
+        (a, _) -> a := 3
+    return 0

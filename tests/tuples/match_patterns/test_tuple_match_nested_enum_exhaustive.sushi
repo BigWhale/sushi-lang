@@ -1,0 +1,29 @@
+# A nested match that covers every value compiles and runs: one checker reads every match.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 2 0\n0 11 20 21\n"
+
+enum Color:
+    Red
+    Green
+
+fn name(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(Color.Red) -> return 1
+        Maybe.Some(Color.Green) -> return 2
+        Maybe.None -> return 0
+
+fn pair((Maybe@(Color), Color) p) i32:
+    match p:
+        (Maybe.None, _) -> return 0
+        (Maybe.Some(Color.Red), Color.Red) -> return 11
+        (Maybe.Some(_), Color.Green) -> return 20
+        (Maybe.Some(Color.Green), Color.Red) -> return 21
+
+fn main() i32:
+    println("{name(Maybe.Some(Color.Red))} {name(Maybe.Some(Color.Green))} {name(Maybe.None)}")
+    let i32 a = pair((Maybe.None, Color.Red))
+    let i32 b = pair((Maybe.Some(Color.Red), Color.Red))
+    let i32 c = pair((Maybe.Some(Color.Red), Color.Green))
+    let i32 d = pair((Maybe.Some(Color.Green), Color.Red))
+    println("{a} {b} {c} {d}")
+    return 0

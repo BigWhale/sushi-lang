@@ -1,0 +1,28 @@
+# A `return`, a `break` and a `continue` out of an arm destroy the scrutinee the match
+# owns.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5\nskip 1\nstop 2\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn first(i32 n) i32:
+    match make("r", n):
+        (_, 5) -> return 5
+        (_, _) -> return 0
+
+fn main() i32:
+    println(first(5))
+    foreach(i in 1..4):
+        match make("l", i):
+            (_, 1) ->
+                println("skip 1")
+                continue
+            (_, n) ->
+                println("stop {n}")
+                break
+    return 0

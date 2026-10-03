@@ -1,0 +1,10 @@
+# A literal inside a tuple pattern takes the element type, with the fit rule of a
+# literal arm.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+
+fn main() i32:
+    let (u8, i32) t = (1 as u8, 2)
+    match t:
+        (300, n) -> println(n)
+        (_, _) -> println(1)
+    return 0

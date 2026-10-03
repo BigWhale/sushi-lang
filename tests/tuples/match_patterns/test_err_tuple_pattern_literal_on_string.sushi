@@ -1,0 +1,10 @@
+# An integer literal pattern needs an integer value: a string element takes only a
+# binding or `_`.
+# EXPECT_ERROR_CODES_EXACT: CE2119
+
+fn main() i32:
+    let (string, i32) t = ("a", 2)
+    match t:
+        (0, n) -> println(n)
+        (_, _) -> println(1)
+    return 0

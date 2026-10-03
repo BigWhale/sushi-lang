@@ -1,0 +1,29 @@
+# A tuple scrutinee takes a tuple pattern with enum, literal, binding and `_` elements.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "red one\nred 7\ngreen 3\nother 0\nnamed 9\ntemp 5\n"
+
+enum Color:
+    Red
+    Green
+
+fn describe((Color, i32) p) ~:
+    match p:
+        (Color.Red, 1) -> println("red one")
+        (Color.Red, n) -> println("red {n}")
+        (Color.Green, 3) -> println("green 3")
+        (_, n) -> println("other {n}")
+
+fn make() (i32, string):
+    return (5, "five")
+
+fn main() i32:
+    describe((Color.Red, 1))
+    describe((Color.Red, 7))
+    describe((Color.Green, 3))
+    describe((Color.Green, 0))
+    let (i32, i32) t = (4, 5)
+    match t:
+        (a, b) -> println("named {a + b}")
+    match make():
+        (x, _) -> println("temp {x}")
+    return 0

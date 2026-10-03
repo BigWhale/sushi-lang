@@ -1,0 +1,32 @@
+# A tuple pattern in an enum payload takes the owning elements with `nom`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate p1\nate p2\nnothing\nkept p1 p2\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn find(bool hit) Maybe@((string, string)):
+    let string base = "p"
+    if (hit):
+        return Maybe.Some(("{base}1", "{base}2"))
+    return Maybe.None
+
+fn main() i32:
+    match find(true):
+        Maybe.Some((nom a, nom b)) ->
+            eat(nom a)
+            eat(nom b)
+        Maybe.None -> println("nothing")
+    match find(false):
+        Maybe.Some((nom a, nom b)) ->
+            eat(nom a)
+            eat(nom b)
+        Maybe.None -> println("nothing")
+    match find(true):
+        Maybe.Some((a, b)) -> println("kept {a} {b}")
+        Maybe.None -> println("nothing")
+    return 0

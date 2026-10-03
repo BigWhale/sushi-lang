@@ -1,0 +1,10 @@
+# An integer literal inside an enum payload needs an integer payload.
+# EXPECT_ERROR_CODES_EXACT: CE2119
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some("a")
+    match m:
+        Maybe.Some(0) -> println(0)
+        Maybe.Some(_) -> println(1)
+        Maybe.None -> println(2)
+    return 0

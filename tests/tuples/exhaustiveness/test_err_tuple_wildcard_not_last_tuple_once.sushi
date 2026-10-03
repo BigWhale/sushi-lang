@@ -1,0 +1,10 @@
+# The `_` rule holds in a tuple match too, with one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2041
+
+fn f((i32, i32) p) i32:
+    match p:
+        _ -> return 0
+        (0, 0) -> return 1
+
+fn main() i32:
+    return f((0, 0))

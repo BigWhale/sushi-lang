@@ -1,0 +1,15 @@
+# An integer element has no end of values, so it needs a `_` or a binding.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: (_, _)
+
+enum Color:
+    Red
+    Green
+
+fn f((i32, Color) p) i32:
+    match p:
+        (0, _) -> return 0
+        (1, Color.Red) -> return 1
+
+fn main() i32:
+    return f((0, Color.Red))

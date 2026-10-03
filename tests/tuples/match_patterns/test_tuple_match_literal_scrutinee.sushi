@@ -1,0 +1,38 @@
+# A tuple literal scrutinee is matched in place (ruling 3): no tuple is built, each element
+# is read once and from left to right, the elements stay usable, and `poke` writes through.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "both arthur dent\narthur dent\nin order 2\nred zero\narthur? dent\n"
+
+enum Color:
+    Red
+    Green
+
+var i32 counter = 0
+
+fn tick() i32:
+    counter := counter + 1
+    return counter
+
+fn main() i32:
+    let string base = "arth"
+    let string a = "{base}ur"
+    let string b = "{base}ur"
+    b := "dent"
+    match (a, b):
+        (x, y) -> println("both {x} {y}")
+    println("{a} {b}")
+    match (tick(), tick()):
+        (1, 2) -> println("in order {counter}")
+        (_, _) -> println("out of order")
+    let i32 n = 0
+    let Color k = Color.Red
+    match (k, n):
+        (Color.Red, 0) -> println("red zero")
+        (Color.Red, _) -> println("red")
+        (Color.Green, _) -> println("green")
+    match (a, n):
+        (poke x, 0) -> x := "{x}?"
+        (_, _) -> println("no")
+    println("{a} {b}")
+    return 0

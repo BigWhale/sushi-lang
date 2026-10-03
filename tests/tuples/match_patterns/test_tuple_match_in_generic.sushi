@@ -1,0 +1,20 @@
+# A tuple pattern in a generic body is checked and emitted for each instance.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "zero 7\nzero x\nother 3\n2\n"
+
+fn pick@(T: Display)((T, i32) p) ~:
+    match p:
+        (x, 0) -> println("zero {x}")
+        (_, n) -> println("other {n}")
+
+fn count_zero@(T)((T, i32) p) i32:
+    match p:
+        (_, 0) -> return 1
+        (_, _) -> return 0
+
+fn main() i32:
+    pick((7, 0))
+    pick(("x", 0))
+    pick((true, 3))
+    println(count_zero((1, 0)) + count_zero(("a", 0)) + count_zero((2, 5)))
+    return 0

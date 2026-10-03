@@ -1,0 +1,15 @@
+# A plain enum match keeps listing the missing variant names.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: missing variants: Blue, Green
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn f(Color c) i32:
+    match c:
+        Color.Red -> return 0
+
+fn main() i32:
+    return f(Color.Red)

@@ -1,0 +1,14 @@
+# A `_` arm that is not last is CE2041, and the arms after it get no second error.
+# EXPECT_ERROR_CODES_EXACT: CE2041
+
+enum Color:
+    Red
+    Green
+
+fn f(Color c) i32:
+    match c:
+        _ -> return 0
+        Color.Red -> return 1
+
+fn main() i32:
+    return f(Color.Red)

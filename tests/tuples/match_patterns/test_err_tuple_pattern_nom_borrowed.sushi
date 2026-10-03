@@ -1,0 +1,9 @@
+# A `nom` binding needs a scrutinee that the match owns.
+# EXPECT_ERROR_CODES_EXACT: CE2432
+
+fn main() i32:
+    let string base = "a"
+    let (string, i32) t = ("{base}b", 2)
+    match t:
+        (nom s, _) -> println(s)
+    return 0

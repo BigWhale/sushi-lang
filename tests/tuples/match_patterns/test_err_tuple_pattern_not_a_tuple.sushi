@@ -1,0 +1,16 @@
+# A tuple pattern needs a tuple value, at the top of an arm and nested in a payload.
+# EXPECT_ERROR_CODES_EXACT: CE2117, CE2117
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let Color c = Color.Red
+    match c:
+        (_, _) -> println(0)
+    let Maybe@(i32) m = Maybe.Some(1)
+    match m:
+        Maybe.Some((_, _)) -> println(1)
+        Maybe.None -> println(0)
+    return 0

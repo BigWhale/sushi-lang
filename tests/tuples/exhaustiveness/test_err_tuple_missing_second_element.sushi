@@ -1,0 +1,16 @@
+# The missing pattern names the column that is not covered.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: (_, Color.Blue)
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn f((i32, Color) p) i32:
+    match p:
+        (_, Color.Red) -> return 0
+        (_, Color.Green) -> return 1
+
+fn main() i32:
+    return f((0, Color.Red))

@@ -1,0 +1,11 @@
+# An element of a tuple literal scrutinee follows the rules of a named scrutinee: a
+# local is borrowed unless the match says `nom`.
+# EXPECT_ERROR_CODES_EXACT: CE2432
+
+fn main() i32:
+    let string base = "a"
+    let string a = "{base}b"
+    let i32 n = 1
+    match (a, n):
+        (nom s, _) -> println(s)
+    return 0

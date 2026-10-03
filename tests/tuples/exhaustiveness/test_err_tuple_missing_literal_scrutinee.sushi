@@ -1,0 +1,14 @@
+# A tuple literal scrutinee is checked as a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: (Color.Green, _)
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let Color c = Color.Red
+    let i32 n = 1
+    match (c, n):
+        (Color.Red, _) -> println(n)
+    return 0
