@@ -657,8 +657,8 @@ is an `i32`; a typed value of another integer type is `CE2121` (`CE2006` as a me
 for example to `.get()`), and the fix is `as i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
-index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and a
-literal index is rejected at compile time: `CE2012` past the end of a fixed array, `CE2056`
+index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and an
+index the compiler can read -- a literal or a named constant -- is rejected at compile time: `CE2012` past the end of a fixed array, `CE2056`
 if it is negative):
 
 ```sushi

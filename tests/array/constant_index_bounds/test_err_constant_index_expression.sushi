@@ -1,0 +1,8 @@
+# A constant expression in an index is read at compile time too (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2012
+const i32 K = 2
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    println(a[K + 1])
+    return 0

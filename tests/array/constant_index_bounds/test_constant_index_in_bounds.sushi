@@ -1,0 +1,9 @@
+# A named-constant index inside the bounds compiles and reads its element (#1137).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: 3\n
+const i32 K = 2
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    println(a[K])
+    return 0

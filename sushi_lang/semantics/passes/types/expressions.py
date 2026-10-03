@@ -84,7 +84,7 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
                 type=display_type(array_type))
 
     if isinstance(array_type, ArrayType):
-        validate_constant_array_index(expr.index, array_type.size, validator.reporter)
+        validate_constant_array_index(validator, expr.index, array_type.size)
 
 
 def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:

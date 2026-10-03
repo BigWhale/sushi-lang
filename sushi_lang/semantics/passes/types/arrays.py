@@ -144,8 +144,8 @@ def _an_index_the_size_holds(call: MethodCall, array_type: ArrayReceiver,
                              validator: Optional['TypeValidator']) -> None:
     """`get(i)`: an integer, and on a FIXED array one the declared size can hold."""
     _an_index(call, array_type, reporter, validator)
-    if isinstance(array_type, ArrayType):
-        validate_constant_array_index(call.args[0], array_type.size, reporter)
+    if validator is not None and isinstance(array_type, ArrayType):
+        validate_constant_array_index(validator, call.args[0], array_type.size)
 
 
 def _an_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,

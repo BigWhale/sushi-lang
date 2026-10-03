@@ -57,7 +57,7 @@ _add(ErrorMessage("CE2011", Severity.ERROR,
 
 _add(ErrorMessage("CE2012", Severity.ERROR,
     "array index {index} is out of bounds for array of size {size}",
-    Category.TYPE, "Array access with compile-time constant index exceeds array bounds."))
+    Category.TYPE, "An index the compiler can read is past the end of a fixed array, in `a[i]`, in `a[i] := v` and in `a.get(i)`. The index is read through the constant evaluator: a literal, a named constant (`a[K]`) and an expression of them (`a[K + 1]`). A local of the same name as a constant shadows it, and an index that names a local is not read. A named constant was not read until #1137, so `a[K]` compiled and trapped at run time (RE2020). A negative index is CE2056."))
 
 _add(ErrorMessage("CE2013", Severity.ERROR,
     "array element type mismatch: expected {expected}, got {got}",
@@ -241,7 +241,7 @@ _add(ErrorMessage("CE2058", Severity.ERROR,
 # Array indexing errors (CE2056-CE2057)
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
-    Category.TYPE, "Array indices must be non-negative. Negative indices are not supported."))
+    Category.TYPE, "Array indices must be non-negative. Negative indices are not supported. The index is read as CE2012 reads it: a literal (`a[-1]`), a named constant and an expression of them."))
 
 _add(ErrorMessage("CE2057", Severity.ERROR,
     "array index {index} out of bounds for array of size {size}",

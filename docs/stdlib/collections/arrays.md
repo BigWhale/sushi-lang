@@ -181,7 +181,8 @@ scores[i] := 99            # the index may be any i32 expression
 ```
 
 The index is bounds-checked exactly like a read: an index past the end aborts with
-**RE2020** at run time, and a literal index is rejected at compile time -- **CE2012** past
+**RE2020** at run time, and an index the compiler can read (a literal, a named constant, or
+an expression of them) is rejected at compile time -- **CE2012** past
 the end of a fixed array, **CE2056** if it is negative.
 
 If the element type owns heap -- a `string`, a struct with a dynamic-array field -- the
