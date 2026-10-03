@@ -236,6 +236,6 @@ class InstantiationCollector:
             return None
         from sushi_lang.semantics.passes.types import ReadOnlyInferrer
 
-        validator = ReadOnlyInferrer(self.tables)
+        validator = ReadOnlyInferrer(self.tables, self.namespaces)
         validator.variable_types = self.variable_types
         return validator

@@ -1,0 +1,14 @@
+# An owning struct constructor behind a unit alias solves a generic call that
+# takes it, and it is freed once (#1147).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/acs_shapes" as sh
+
+fn keep@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let string w = "Harmless"
+    let sh.Tag t = keep(nom sh.Tag("Mostly {w}"))
+    println(t.name)
+    return 0

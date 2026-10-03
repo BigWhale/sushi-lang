@@ -492,6 +492,16 @@ not exist yet, so it answers nothing for one here. A `match` over a generic call
 types its arm bindings from that substituted signature, and a generic called with such a
 binding is collected like any other.
 
+### The inferrer reads the unit's scope
+
+This pass and the `monomorphize` pass type the arguments of a generic call with
+`ReadOnlyInferrer`. Each inferrer gets the namespace table of the unit that holds the call,
+the same table the typecheck pass gives that unit. For a monomorphized copy, that unit is
+the home unit of the template. Thus `sh.Pt(0)` and `sh.Mark.Off()` behind `use "shapes" as
+sh` have the type that `Pt(0)` and `Mark.Off()` have under a flat import, and the argument
+solves the type parameter in every pass (#1147). An inferrer with no unit (a copy of an
+extension or of a perk implementation) reads only the FFI namespaces.
+
 ### Where a type names an instantiation
 
 A type names an instantiation in every position that HOLDS a type, and the reader of those

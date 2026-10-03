@@ -97,8 +97,17 @@ def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
     # the order comes back with it, and the names are spent.
     node.args = stand_in.args
     node.field_names = stand_in.field_names
-    node.resolved_struct_type = validator.struct_table.by_name.get(binding.name)
+    node.resolved_struct_type = _constructed_struct(validator, binding)
     _stamp(node, binding)
+
+
+def _constructed_struct(validator: 'TypeValidator', binding: 'Binding') -> Optional[Type]:
+    """The struct a constructor behind a dot builds: the one its name declares (Ruling 6).
+
+    Both halves read it, so `sh.Pt(0)` has the type `Pt(0)` has under a flat import in
+    every pass that infers it, the passes before the typecheck pass included (#1147).
+    """
+    return validator.struct_table.by_name.get(binding.name)
 
 
 def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
@@ -140,6 +149,10 @@ def infer_namespaced_call(validator: 'TypeValidator',
         return binding.record.ret_type
     if binding.kind == "generic function":
         return _infer_generic_call(validator, node)
+    if binding.kind == "struct":
+        constructed = _constructed_struct(validator, binding)
+        node.inferred_return_type = constructed
+        return constructed
     if binding.kind != "function":
         return None
     if producer == "stdlib":
