@@ -1,0 +1,26 @@
+# A struct constructor behind a unit alias solves the type parameter of a
+# generic call, as the flat form does (#1147).
+# EXPECT_STDOUT_EXACT: "1\n1\ntrue\n"
+use "helpers/acs_shapes" as sh
+
+fn one@(T)(T d) i32:
+    if (d == d):
+        return 1
+    return 0
+
+fn cnt@(T)(T[] xs, T d) i32:
+    let i32 n = 0
+    foreach(x in xs.iter()):
+        if (x == d):
+            n := n + 1
+    return n
+
+fn same@(T)(T a, T b) bool:
+    return a == b
+
+fn main() i32:
+    println(one(sh.Pt(0)))
+    let sh.Pt[] ps = from([sh.Pt(1), sh.Pt(2)])
+    println(cnt(ps, sh.Pt(2)))
+    println(same(sh.Pt(5), sh.Pt(5)))
+    return 0
