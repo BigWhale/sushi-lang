@@ -136,9 +136,33 @@ class PerkImplementationTable:
         """The unit that declared this implementation, if a unit declared it."""
         return self.units.get((type_name, perk_name))
 
+    # Cuts the copy of an array template (`extend T[] with P`) for one array type, on
+    # a miss (#699): an array has no instantiation set to cut it from ahead of time.
+    # It takes the array type and the perk OR the method name that was asked, and cuts
+    # only a template that gives it. The analyzer installs it for the length of the
+    # analysis; with none, a miss is a miss. True when a copy was registered.
+    on_array_miss: Optional[Callable[..., bool]] = field(
+        default=None, repr=False, compare=False)
+
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
         return (type_name, perk_name) in self.implementations
+
+    def implements_type(self, ty: 'Type', perk_name: str) -> bool:
+        """Does this TYPE implement the perk? An array template's copy is cut on a miss."""
+        type_name = _get_type_name(ty)
+        if type_name is None:
+            return False
+        if self.implements(type_name, perk_name):
+            return True
+        return (self._cut_on_miss(ty, perk=perk_name)
+                and self.implements(type_name, perk_name))
+
+    def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
+                     method: Optional[str] = None) -> bool:
+        from sushi_lang.semantics.typesys import DynamicArrayType
+        return (self.on_array_miss is not None and isinstance(ty, DynamicArrayType)
+                and self.on_array_miss(ty, perk=perk, method=method))
 
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
         """Get a specific perk implementation."""
@@ -149,15 +173,18 @@ class PerkImplementationTable:
         type_name = _get_type_name(target_type)
         if type_name is None:
             return None
+        found = self._method(type_name, method_name)
+        if found is None and self._cut_on_miss(target_type, method=method_name):
+            found = self._method(type_name, method_name)
+        return found
 
-        perks = self.by_type.get(type_name, set())
-        for perk_name in perks:
+    def _method(self, type_name: str, method_name: str) -> Optional['FuncDef']:
+        for perk_name in self.by_type.get(type_name, set()):
             impl = self.implementations.get((type_name, perk_name))
             if impl:
                 for method in impl.methods:
                     if method.name == method_name:
                         return method
-
         return None
 
 
@@ -587,7 +614,6 @@ class PerkCollector:
         from sushi_lang.semantics.generics.extension_targets import (
             classify_extension_target, reject_mixed_target, reject_unwritable_target)
         from sushi_lang.semantics.generics.types import GenericTypeRef
-        from sushi_lang.semantics.passes.collect.functions import deep_type_params
 
         if not isinstance(target_type, GenericTypeRef):
             return False
@@ -602,21 +628,54 @@ class PerkCollector:
         if self._reject_overlap(impl, target_type, target_type.base_name, template=True):
             return True
 
+        self._add_template(impl, target_type.base_name, shape.param_names)
+        return True
+
+    def _register_array_template(self, impl: ExtendWithDef,
+                                 target_type: Optional[Type]) -> bool:
+        """Register an `extend T[] with P` implementation as a template. True when it is one.
+
+        The element position reads as an array extension's does: a bare undeclared name
+        is the type parameter, a declared or built-in name is ONE array type and
+        registers as it stands, and anything else is CE2101. True also when the target
+        was refused.
+        """
+        from sushi_lang.semantics.generics.extension_targets import (
+            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
+        from sushi_lang.semantics.typesys import DynamicArrayType
+
+        if not isinstance(target_type, DynamicArrayType):
+            return False
+        element = target_type.base_type
+        shape = classify_array_extension_target(element, self.is_declared_type)
+        if reject_array_target(self.r, shape, element,
+                               impl.target_type_span or impl.perk_name_span):
+            return True
+        if not shape.param_names:
+            return False
+        if self._reject_overlap(impl, target_type, ARRAY_BASE_KEY, template=True):
+            return True
+        self._add_template(impl, ARRAY_BASE_KEY, shape.param_names)
+        return True
+
+    def _add_template(self, impl: ExtendWithDef, base_type_name: str,
+                      type_params: Tuple[str, ...]) -> None:
+        """File a template, its method signatures written in `TypeParameter`s."""
+        from sushi_lang.semantics.passes.collect.functions import deep_type_params
+
         for method in impl.methods or []:
-            method.ret = deep_type_params(method.ret, shape.param_names)
-            method.err_type = deep_type_params(
-                method.err_type, shape.param_names)
+            method.ret = deep_type_params(method.ret, type_params)
+            method.err_type = deep_type_params(method.err_type, type_params)
             for param in method.params:
-                param.ty = deep_type_params(param.ty, shape.param_names)
+                param.ty = deep_type_params(param.ty, type_params)
 
         self.generic_perk_impls.add(GenericPerkImpl(
-            base_type_name=target_type.base_name,
-            type_params=shape.param_names,
+            base_type_name=base_type_name,
+            type_params=type_params,
             impl=impl,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
         ))
-        return True
 
     def _reject_overlap(self, impl: ExtendWithDef, target_type: Optional[Type],
                         base: str, *, template: bool) -> bool:
@@ -719,7 +778,8 @@ class PerkCollector:
                 filename=self.current_unit_file):
             return False
 
-        if self._register_generic_template(impl, target_type):
+        if (self._register_generic_template(impl, target_type)
+                or self._register_array_template(impl, target_type)):
             return True
 
         base = _covering_base(target_type)

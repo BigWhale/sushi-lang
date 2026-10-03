@@ -279,6 +279,24 @@ def classify_array_extension_target(
     return None
 
 
+def reject_array_target(reporter, shape: Optional[ExtensionTarget], element: Type,
+                        span) -> bool:
+    """CE2101 for an array target whose element is neither a bare name nor a plain type.
+
+    The extension collector and the perk collector both ask here, so one header reads
+    one way.
+    """
+    if shape is not None:
+        return False
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.generics.type_display import display_type
+    er.emit_with(reporter, er.ERR.CE2101, span, element=display_type(element)) \
+        .help("write a bare type-parameter name ('extend T[]') or a plain "
+              "declared type ('extend i32[]'); 'extend T[]' also applies to a "
+              "nested array, with T the inner array type").emit()
+    return True
+
+
 def target_shape_of(ext) -> Optional[ExtensionTarget]:
     """The shape the collect pass stamped on a declaration, if it stamped one."""
     return getattr(ext, "target_shape", None)

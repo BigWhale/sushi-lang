@@ -726,6 +726,7 @@ def _reject_missing_method_module(validator: 'TypeValidator', call: MethodCall,
 
 
 @METHOD_TYPE_REGISTRY.validator("array")
+@METHOD_TYPE_REGISTRY.validator("array_hash")
 def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
     from sushi_lang.semantics.passes.types.arrays import validate_builtin_array_method

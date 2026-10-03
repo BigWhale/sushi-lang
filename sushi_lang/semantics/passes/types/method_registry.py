@@ -485,7 +485,18 @@ def _named(receiver_type: 'Type', kind: type, base: str) -> bool:
 def _answers_array(receiver_type, method_name, derived_methods):
     from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method
     return (isinstance(receiver_type, (ArrayType, DynamicArrayType))
+            and method_name != ARRAY_HASH
             and is_builtin_array_method(method_name))
+
+
+# An array's `hash` is the one array method a perk overrides: a `Hashable`
+# implementation wins in every position, a direct call included (#699).
+ARRAY_HASH = "hash"
+
+
+def _answers_array_hash(receiver_type, method_name, derived_methods):
+    return (isinstance(receiver_type, (ArrayType, DynamicArrayType))
+            and method_name == ARRAY_HASH)
 
 
 def _answers_string(receiver_type, method_name, derived_methods):
@@ -611,6 +622,9 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
     arity=FOREIGN_PTR_METHOD_ARITY,
     infer=lambda rt, name, v: ForeignPtrMethodInferrer(name, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="array_hash", beats_perk=False, answers=_answers_array_hash,
+    infer=lambda rt, name, v: ArrayMethodInferrer(rt, name, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_hash", beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
     infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))

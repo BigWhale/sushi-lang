@@ -1035,17 +1035,13 @@ class FunctionCollector:
         is fully handled here -- filed as a template, or refused.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            ARRAY_BASE_KEY, classify_array_extension_target)
+            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
 
         element = target_type.base_type
         shape = classify_array_extension_target(element, self.is_declared_type)
         h.ext.target_shape = shape
-        if shape is None:
-            er.emit_with(self.r, ERR.CE2101, h.target_type_span or h.name_span,
-                         element=display_type(element)) \
-                .help("write a bare type-parameter name ('extend T[]') or a plain "
-                      "declared type ('extend i32[]'); 'extend T[]' also applies to a "
-                      "nested array, with T the inner array type").emit()
+        if reject_array_target(self.r, shape, element,
+                               h.target_type_span or h.name_span):
             return None
 
         if not shape.param_names:
