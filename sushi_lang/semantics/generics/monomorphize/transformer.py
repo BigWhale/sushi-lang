@@ -39,6 +39,22 @@ def substituted_param(param, ty: "Type | None") -> 'Param':
     return Param(**kept)
 
 
+def _copied_try_let(source, copy_):
+    """The `??` binder's `let` of a copied `Foreach`: the statement its copied body holds.
+
+    The `let` is ONE object in two places, the body and `item_try_let` (#1140). The
+    typecheck pass stamps it through `item_try_let` and checks it in the body, so a
+    separate copy of it takes a stamp that no checked statement sees.
+    """
+    if source.item_try_let is None:
+        return None
+    for index, stmt in enumerate(source.body.statements):
+        if stmt is source.item_try_let:
+            return copy_.body.statements[index]
+    return er.raise_internal_error(
+        "CE0000", detail="a foreach ?? binder whose let is not in the loop body")
+
+
 class TypeSubstitutor:
     """Handles type parameter substitution in types and AST nodes."""
 
@@ -253,11 +269,9 @@ class TypeSubstitutor:
             result.iterable = self.substitute_expr(stmt.iterable, substitution)
             result.body = self.substitute_body(stmt.body, substitution)
             # The item ANNOTATION is source-written and names the type parameter as any
-            # other annotation does (#602). The `??` binder's hidden `let` is stamped
-            # from it by the typecheck pass, so each instantiation needs its own copy.
+            # other annotation does (#602).
             result.item_type = self._substitute_optional_type(stmt.item_type, substitution)
-            if stmt.item_try_let is not None:
-                result.item_try_let = self.substitute_statement(stmt.item_try_let, substitution)
+            result.item_try_let = _copied_try_let(stmt, result)
             return result
 
         # Expand statement (compile-time pack expansion). Type-substitute the
