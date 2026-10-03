@@ -1,0 +1,13 @@
+# The element argument comes before the declared P[] local (#1134).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n"
+struct P:
+    i32 x
+
+fn cnt@(T)(T d, T[] xs) i32:
+    return xs.len() + ((d.hash() * 0) as i32)
+
+fn main() i32:
+    let P[] ps = from([P(1), P(2), P(3)])
+    println(cnt(P(0), ps))
+    return 0

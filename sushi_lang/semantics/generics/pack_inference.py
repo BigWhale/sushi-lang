@@ -48,10 +48,23 @@ def solve_leading_type_args(
     callee types (#1029): the first pass leaves it out, and the other arguments must
     solve every type parameter. The caller then solves the value against the substituted
     parameter type, as against any declared position.
+
+    Each argument type and `ret_type` is resolved RECURSIVELY against the tables before
+    it is unified. A written name stays an `UnknownType` inside an array, a generic
+    argument or a function parameter, and type identity is nominal: `UnknownType("P")`
+    and `StructType P` are one type, and a unification that sees both answers a false
+    miss (#1134, #1135).
     """
     from sushi_lang.semantics.generics.unify import unify_types
-    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.type_resolution import (
+        resolve_type_recursively, resolve_unknown_type)
     from sushi_lang.semantics.typesys import FunctionType
+
+    tables = (structs or {}, enums or {})
+    arg_types = [resolve_type_recursively(t, *tables) if t is not None else None
+                 for t in arg_types]
+    if ret_type is not None:
+        ret_type = resolve_type_recursively(ret_type, *tables)
 
     if param_types is None:
         param_types = [p.ty for p in generic_func.params

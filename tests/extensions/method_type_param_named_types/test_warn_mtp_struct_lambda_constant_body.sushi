@@ -1,0 +1,13 @@
+# The body of the lambda does not read its struct parameter, and the method-level type
+# parameter is still solved: the one diagnostic is the unused-parameter warning (#1135).
+# EXPECT_ERROR_CODES_EXACT: CW1001
+use <collections/iter>
+
+struct P:
+    i32 x
+
+fn main() i32:
+    let P[] ps = from([P(1), P(2)])
+    let List@(i32) r = ps.map(|P p| 10)
+    println(r.len())
+    return 0

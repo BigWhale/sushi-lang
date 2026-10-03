@@ -1,0 +1,18 @@
+# The same call inside the body of a generic function, which the monomorphize pass
+# solves (#1134).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "7\n2\n"
+struct P:
+    i32 x
+
+fn cnt@(T)(T[] xs, T d) i32:
+    return xs.len() + ((d.hash() * 0) as i32)
+
+fn outer@(U)(U u) i32:
+    println(u)
+    let P[] ps = from([P(1), P(2)])
+    return cnt(ps, P(0))
+
+fn main() i32:
+    println(outer(7))
+    return 0

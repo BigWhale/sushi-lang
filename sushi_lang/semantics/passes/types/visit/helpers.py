@@ -38,8 +38,15 @@ def function_type_of_sig(sig) -> Optional[Type]:
 
 
 def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
-    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal."""
+    """Compute (and, by default, cache on the node) the FunctionType of a lambda literal.
+
+    A written parameter type is resolved before the body is read and before the type is
+    built: `|P p|` binds `p` to the struct, so `p.x` has a type, and a solver that
+    unifies the answer against `fn(T) -> U` never sees `UnknownType("P")` beside the
+    struct (#1135).
+    """
     from sushi_lang.semantics.param_modes import declared_modes
+    from sushi_lang.semantics.passes.types.utils import resolve_declared_type
     from sushi_lang.semantics.typesys import FunctionType
     expected = getattr(lam, "expected_type", None)
     cached = getattr(lam, "resolved_type", None)
@@ -55,6 +62,8 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
             pty = expected.param_types[idx]
             if stamp:
                 p.ty = pty  # persist the inferred type for the lift pass / backend
+        else:
+            pty = resolve_declared_type(type_validator, pty)
         param_types.append(pty)
         if pty is not None:
             type_validator.variable_types[p.name] = pty

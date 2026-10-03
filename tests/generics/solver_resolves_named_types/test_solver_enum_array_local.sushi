@@ -1,0 +1,14 @@
+# A declared E[] local of an enum and an E argument bind one type parameter (#1134).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n"
+enum E:
+    A
+    B
+
+fn cnt@(T)(T[] xs, T d) i32:
+    return xs.len() + ((d.hash() * 0) as i32)
+
+fn main() i32:
+    let E[] es = from([E.A(), E.B()])
+    println(cnt(es, E.B()))
+    return 0

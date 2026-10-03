@@ -389,7 +389,7 @@ _add(ErrorMessage("CE2097", Severity.ERROR,
 
 _add(ErrorMessage("CE2063", Severity.ERROR,
     "cannot infer method type parameter{plural} {names} for '{method}' from this call",
-    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. The one shape that cannot be solved is the bare-param lambda (Known Limitation 7): `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`. The escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function."))
+    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. Two shapes cannot be solved, and the help names the one that applies. The bare-param lambda: `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`; the escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function. And a type parameter that no parameter type holds: no argument can solve it, so the help says to write it in a parameter type. A written parameter type is resolved before the solve, so `|P p|` over a struct or an enum `P` solves as `|i32 x|` does (#1135); the help blamed the lambda for that case before."))
 
 _add(ErrorMessage("CE2064", Severity.ERROR,
     "method type parameter '{name}' shadows a type parameter of the extension target",
