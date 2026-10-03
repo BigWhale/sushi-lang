@@ -1,0 +1,19 @@
+# Two instances of the generic body, so two copies of the static: each copy is made one
+# time (#1153).
+# EXPECT_STDOUT_EXACT: "5\ntrue\n"
+struct Box@(T):
+    T v
+
+fn unbox@(T)(nom Box@(T) b) T:
+    return b.v
+
+extend Box@(T) static of(T v) Box@(T):
+    return Box(v)
+
+fn o@(T)(T x) T:
+    return unbox(nom Box.of(x))
+
+fn main() i32:
+    println(o(5))
+    println(o(true))
+    return 0

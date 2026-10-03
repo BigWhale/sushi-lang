@@ -1,0 +1,19 @@
+# The same argument in the body of an extension on a generic target, which is copied per
+# instance like a generic function (#1153).
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(T) static of(T v) Box@(T):
+    return Box(v)
+
+extend Box@(T) wrap() i32:
+    return k(Box.of(self.v))
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.wrap())
+    return 0
