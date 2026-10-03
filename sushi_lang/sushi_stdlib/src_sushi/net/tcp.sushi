@@ -231,10 +231,22 @@ fn main() i32:
 extend TcpListener accept() (TcpStream, IpAddr) | NetError:
     let (i32 fd, i32 version, u64 high, u64 low) = sock_tcp_accept(self.fd)??
     let TcpStream stream = TcpStream(fd)
+    return Result.Ok((stream, peer_address(version, high, low)??))
+
+##:
+The IpAddr of a peer, from the address bits that accept(2) or getpeername(2) wrote.
+
+- Parameter version: 4, 6, or 0 for an address family that is not IP.
+- Parameter high: The high 64 bits of a V6 address; 0 for V4.
+- Parameter low: The low 64 bits of a V6 address, or the V4 address.
+- Returns: The address.
+- Errors: NetError.InvalidAddress when the version is not 4 or 6.
+:##
+fn peer_address(i32 version, u64 high, u64 low) IpAddr | NetError:
     if (version == 4):
-        return Result.Ok((stream, IpAddr.V4(low as u32)))
+        return Result.Ok(IpAddr.V4(low as u32))
     if (version == 6):
-        return Result.Ok((stream, IpAddr.V6(high, low)))
+        return Result.Ok(IpAddr.V6(high, low))
     return Result.Err(NetError.InvalidAddress)
 
 ##:
@@ -316,16 +328,16 @@ extend TcpStream recv_exact(i32 count) u8[] | NetError:
 ##:
 The address of the peer at the other end.
 
-No resolver is asked, so this makes no network request. Call .text() on the
-answer for the canonical text.
+It reads the address bits that getpeername(2) wrote, as peer() does, and asks
+no resolver. Call .text() on the answer for the canonical text.
 
 - Returns: The peer's address.
 - Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
-  when the kernel gave an address that <net/ip> cannot read.
+  when the peer is not an IPv4 or an IPv6 address.
 :##
 extend TcpStream peer_ip() IpAddr | NetError:
-    let string text = sock_peer_ip(self.fd)??
-    return Result.Ok(parse_ip(text)??)
+    let (IpAddr ip, _) = self.peer()??
+    return Result.Ok(ip)
 
 ##:
 The port of the peer at the other end.
@@ -343,7 +355,7 @@ No resolver is asked, so this makes no network request.
 
 - Returns: The peer's address and port.
 - Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
-  when the kernel gave an address that <net/ip> cannot read.
+  when the peer is not an IPv4 or an IPv6 address.
 - Example:
   ```sushi no_run
   let TcpStream s = connect("127.0.0.1", 8080).realise(TcpStream(-1))
@@ -353,8 +365,8 @@ No resolver is asked, so this makes no network request.
   ```
 :##
 extend TcpStream peer() (IpAddr, i32) | NetError:
-    let (string text, i32 port) = sock_peer(self.fd)??
-    return Result.Ok((parse_ip(text)??, port))
+    let (i32 version, u64 high, u64 low, i32 port) = sock_peer(self.fd)??
+    return Result.Ok((peer_address(version, high, low)??, port))
 
 ##:
 The port a listener actually bound.

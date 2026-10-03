@@ -97,9 +97,9 @@ A **second descriptor over the same open socket**: `dup(2)`. It is the socket tw
 
 Who is at the other end. The address is rendered numerically and asks no resolver, so neither call makes a network request. They are separate so that a test can assert the address — which is fixed — without asserting an ephemeral port. This layer answers the address as text; `TcpStream.peer_ip()` in `<net/tcp>` reads it into an `IpAddr`, because every address that leaves the net modules is one.
 
-### `sock_peer(i32 fd) (string, i32) | NetError`
+### `sock_peer(i32 fd) (i32, u64, u64, i32) | NetError`
 
-The address text and the port of the other end, from one `getpeername(2)` call. The address is rendered numerically, as `sock_peer_ip` renders it. `TcpStream.peer()` in `<net/tcp>` reads the text into an `IpAddr`.
+The other end, from one `getpeername(2)` call, as `(version, high, low, port)`. The address is in the shape that `sock_tcp_accept` gives: the IP version (`4`, `6`, or `0` for another address family) and the address bits. `TcpStream.peer()` and `TcpStream.peer_ip()` in `<net/tcp>` build the `IpAddr` from these bits in the same way that `TcpListener.accept()` does.
 
 ### `sock_set_recv_timeout(i32 fd, i32 ms)` and `sock_set_send_timeout(i32 fd, i32 ms)`
 
