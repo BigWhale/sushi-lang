@@ -1166,8 +1166,9 @@ arr.destroy()
 println(arr.len())         # CE2406: use of destroyed variable 'arr'
 ```
 
-The second fragment also gives CE2024 ("use of destroyed dynamic array") from the
-`typecheck` pass, at the same position. Thus one fault gives two diagnostics today.
+CE2406 is the one diagnostic for a use after a destroy. The `borrow` pass reads the flow,
+and it covers a value of every type. (The `typecheck` pass gave CE2024 for an array at the
+same position until #1137; that code is retired.)
 
 5. **A `let` reading through an owner BORROWS, and consuming or invalidating that borrow is an
    error (CE2411, CE2412)**

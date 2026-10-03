@@ -587,23 +587,23 @@ fn main() i32:
 
 **Fix:** Declare with `let` first (`let i32 count = 0`) before rebinding with `:=`.
 
-#### CE2024: Use of Destroyed Dynamic Array
+#### CE2406: Use of Destroyed Variable
 
-<!-- docs-sweep: error CE2024 -->
+<!-- docs-sweep: error CE2406 -->
 ```sushi
 fn main() i32:
     let i32[] arr = from([1, 2, 3])
     arr.destroy()
 
-    # ERROR CE2024: use of destroyed dynamic array 'arr'
     # ERROR CE2406: use of destroyed variable 'arr'
     println(arr.len())
 
     return 0
 ```
 
-The one use gives two diagnostics: CE2024 from the array rule and CE2406 from the borrow
-checker.
+The `borrow` pass reports the use. It reads the flow of the function, and it covers a
+value of every type. The use gives one diagnostic. (CE2024, the old array-only code, is
+retired.)
 
 **Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead. After
 `.free()` the array is empty (its length is 0) and you can use it again.
@@ -788,7 +788,7 @@ library it lives in was not linked.
 fn get_value() i32:
     return 42
 
-# ERROR CE0108: expression is not a compile-time constant
+# ERROR CE0108: a function call is not a compile-time constant
 const i32 X = get_value()
 ```
 

@@ -1,0 +1,9 @@
+# A named-constant index on a fixed array is read at compile time, as a literal index
+# is: `a[K]` with K = 7 on an `i32[3]` is CE2012, not a run-time trap (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2012
+const i32 K = 7
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    println(a[K])
+    return 0

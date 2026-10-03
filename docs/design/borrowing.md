@@ -174,7 +174,7 @@ indexed assignment, which routes through the same gate:
 | `match` / `foreach` value binding | CE2414 | bind it `poke` to write through, or `nom` to take it; otherwise `.clone()`, mutate, store back (`.share()` for a resource) |
 | `peek` reference | CE2408 | declare the parameter `poke` |
 | method receiver | CE2421 | `poke self` |
-| by-value method parameter | CE2422 | declare the parameter `poke T` |
+| by-value parameter (function or method) | CE2422 | declare the parameter `poke T` |
 | `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
 | unbound chained borrow (`o.get().items`) | CE2429 | `.clone()`, mutate, rebuild the owner (`o := Own.alloc(h)`); or a nested `Own(poke ...)` binding where the `Own` sits in an enum |
 

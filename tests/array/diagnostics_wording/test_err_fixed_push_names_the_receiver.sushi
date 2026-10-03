@@ -1,0 +1,8 @@
+# A fixed array has no `push`. The fault is the receiver, and CE2023 says so: it does
+# not call the receiver an argument (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: receiver mismatch for 'push': expected dynamic array, got i32[3]
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    a.push(4)
+    return 0

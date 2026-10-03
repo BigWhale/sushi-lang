@@ -67,7 +67,8 @@ def validate_generic_function_call(
             validator, call, generic_func, written):
         return
 
-    type_args = _named_or_inferred_type_args(validator, call, generic_func)
+    why: list[str] = []
+    type_args = _named_or_inferred_type_args(validator, call, generic_func, why)
     if type_args is None:
         said = _untyped_argument_faults(validator)
         _walk_unchecked_arguments(validator, call)
@@ -80,7 +81,7 @@ def validate_generic_function_call(
                 er.ERR.CE2060,
                 call.callee.loc,
                 name=written,
-                reason="could not infer type arguments from call site"
+                reason=why[0] if why else "could not infer type arguments from call site"
             )
         return
 
@@ -176,13 +177,16 @@ def call_type_args(validator: 'TypeValidator', call: Call, generic_func) -> Opti
     return _named_or_inferred_type_args(validator, call, generic_func)
 
 
-def _named_or_inferred_type_args(validator: 'TypeValidator', call: Call,
-                                 generic_func) -> Optional[tuple]:
-    """The explicit type arguments resolved, or the inferred ones. The arity is checked."""
+def _named_or_inferred_type_args(validator: 'TypeValidator', call: Call, generic_func,
+                                 why: Optional[list[str]] = None) -> Optional[tuple]:
+    """The explicit type arguments resolved, or the inferred ones. The arity is checked.
+
+    `why` collects the reason an inference failed, for CE2060.
+    """
     if call.type_args:
         return resolve_explicit_type_args(
             call.type_args, validator.struct_table.by_name, validator.enum_table.by_name)
-    return _infer_type_args_from_call_site(validator, call, generic_func)
+    return _infer_type_args_from_call_site(validator, call, generic_func, why)
 
 
 def generic_call_result_type(validator: 'TypeValidator', call: Call, generic_func):
@@ -267,7 +271,8 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
 def _infer_type_args_from_call_site(
     validator: 'TypeValidator',
     call: Call,
-    generic_func
+    generic_func,
+    why: Optional[list[str]] = None,
 ) -> Optional[tuple]:
     """Infer type arguments from call site arguments.
 
@@ -290,7 +295,7 @@ def _infer_type_args_from_call_site(
             return None
         arg_types.append(resolve_unknown_type(arg_type, structs, enums))
 
-    return infer_flat_type_args(generic_func, arg_types, structs, enums)
+    return infer_flat_type_args(generic_func, arg_types, structs, enums, why)
 
 
 def names_generic_fn_value(validator: 'TypeValidator', expr) -> bool:

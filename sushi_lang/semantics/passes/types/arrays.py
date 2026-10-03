@@ -87,22 +87,29 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: R
 # ------------------------------------------------------------------ an i32 position
 
 
+# The positions that are not a method argument, as CE2121 names them.
+ARRAY_INDEX = "an array index"
+STRING_INDEX = "a string index"
+REPEAT_COUNT = "a repeat count"
+RANGE_BOUND = "a range bound"
+
+
 def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], *,
-                   argument: Optional[int] = None) -> bool:
+                   position: Optional[str] = None, argument: Optional[int] = None) -> bool:
     """The one rule for an index, a count and a range bound: the value is an i32 (#870).
 
     `got` is the type the caller's walk of `expr` answered. A bare literal is already an
     i32, because that is its default when no position gives it a type. Any other type is
     refused, and there is no implicit widening: the backend used to zero-extend a narrow
     value, so `-1 as i8` counted 255. A method argument reads CE2006 at its `argument`
-    position; every other position reads CE2002, as `arr[i]` did first. Answers whether
-    the value was refused.
+    position; every other position reads CE2121, which names the `position` the caller
+    gives. Answers whether the value was refused.
     """
     if got is None or got == BuiltinType.I32:
         return False
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2002, expr.loc,
-                              got=display_type(got), expected=display_type(BuiltinType.I32))
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, expr.loc,
+                              position=position, got=display_type(got))
     else:
         report = er.emit_with(validator.reporter, er.ERR.CE2006, expr.loc, index=argument,
                               expected=display_type(BuiltinType.I32), got=display_type(got))
@@ -137,8 +144,8 @@ def _an_index_the_size_holds(call: MethodCall, array_type: ArrayReceiver,
                              validator: Optional['TypeValidator']) -> None:
     """`get(i)`: an integer, and on a FIXED array one the declared size can hold."""
     _an_index(call, array_type, reporter, validator)
-    if isinstance(array_type, ArrayType):
-        validate_constant_array_index(call.args[0], array_type.size, reporter)
+    if validator is not None and isinstance(array_type, ArrayType):
+        validate_constant_array_index(validator, call.args[0], array_type.size)
 
 
 def _an_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -221,11 +228,11 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
         return False
     source_type = deref_type(source_type)
     if not isinstance(source_type, (ArrayType, DynamicArrayType)):
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
                 expected="an array", got=display_type(source_type))
         return True
     if source_type.base_type != array_type.base_type:
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
                 expected=display_type(array_type), got=display_type(source_type))
         return True
     return False
@@ -484,7 +491,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayReceiver,
         return
 
     if not _receiver_is_accepted(spec.receiver, array_type):
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="receiver", method=call.method,
                 expected=spec.receiver.value, got=display_type(array_type))
         return
 

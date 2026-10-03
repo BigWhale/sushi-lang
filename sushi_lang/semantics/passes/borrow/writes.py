@@ -76,10 +76,10 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
                                and not state.is_method_receiver
                                and not isinstance(state.var_type, ReferenceType)),
         note_span=lambda state: state.declared_at_span,
-        note="'{name}' is declared here, as a by-value parameter of a method",
-        help="the write ({what}) would land on the method's private copy of the "
-             "argument; declare the parameter `poke` if the method must write through "
-             "it{copy}",
+        note="'{name}' is declared here, as a by-value parameter of a {callable}",
+        help="the write ({what}) would land on the {callable}'s private copy of the "
+             "argument; declare the parameter `poke` if the {callable} must write "
+             "through it{copy}",
     ),
     ReadOnlyReceiver(
         # `and not is_let_borrow`: a match binding is a private deep copy, so the write
@@ -177,11 +177,12 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
             continue
         if rebind and not kind.refuses_a_rebind:
             return False
-        diag = checker.err.emit_with(kind.code, span, name=name)
+        callable_kind = "method" if state.is_method_param else "function"
+        diag = checker.err.emit_with(kind.code, span, name=name, callable=callable_kind)
         note_span = kind.note_span(state)
         if note_span is not None:
-            diag.note_at(kind.note.format(name=name), note_span)
-        diag.help(kind.help.format(name=name, what=what,
+            diag.note_at(kind.note.format(name=name, callable=callable_kind), note_span)
+        diag.help(kind.help.format(name=name, what=what, callable=callable_kind,
                                    escape=write_escape(checker, name, state.var_type),
                                    copy=parameter_escape(checker, name, state.var_type)))
         diag.emit()

@@ -1,7 +1,7 @@
 """The typecheck pass: type validation and inference."""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, List, Optional, Set, TYPE_CHECKING
+from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -99,7 +99,6 @@ class TypeValidator:
         # The `let` names whose initializer was refused; a method call on one is not
         # refused again (#1128).
         self.refused_bindings: set[str] = set()
-        self.destroyed_arrays: List[set[str]] = []
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)

@@ -1,7 +1,7 @@
 """Type-argument inference for a generic call: the one solver, shared by every pass."""
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
@@ -26,6 +26,7 @@ def solve_leading_type_args(
     partial: bool = False,
     param_types: "Sequence[Type | None] | None" = None,
     type_param_names: Optional[Sequence[str]] = None,
+    why: Optional[List[str]] = None,
 ) -> Any:
     """The leading (non-pack) type arguments that `arg_types` bind. None when unsolved.
 
@@ -42,7 +43,7 @@ def solve_leading_type_args(
     answer is `(solved, unsolved)`: the map as unified, not resolved, and the names it
     does not hold, in declaration order. `param_types` replaces the declared parameter
     types when the caller substituted them first, and `type_param_names` the names read
-    off the map.
+    off the map. `why` collects the reason for a unify miss (see `unify_types`).
 
     A None argument type in a FUNCTION-typed parameter is a generic function value the
     callee types (#1029): the first pass leaves it out, and the other arguments must
@@ -84,7 +85,7 @@ def solve_leading_type_args(
                 unify_types(param_ty, arg_type, type_param_map)
         elif arg_type is None and isinstance(param_ty, FunctionType):
             continue
-        elif param_ty is None or not unify_types(param_ty, arg_type, type_param_map):
+        elif param_ty is None or not unify_types(param_ty, arg_type, type_param_map, why):
             return None
     if ret_type is not None and generic_func.ret is not None:
         if not unify_types(generic_func.ret, ret_type, type_param_map) and not partial:
@@ -107,6 +108,7 @@ def infer_flat_type_args(
     arg_types: Sequence["Type"],
     structs: Any,
     enums: Any,
+    why: Optional[List[str]] = None,
 ) -> Optional[Tuple["Type", ...]]:
     """The flat tuple of type arguments for a generic call: the leading ones, then the pack.
 
@@ -118,10 +120,11 @@ def infer_flat_type_args(
     pack_idx = _pack_value_param_index(generic_func)
     arg_types = list(arg_types)
     if pack_idx is None:
-        return solve_leading_type_args(generic_func, arg_types, structs, enums)
+        return solve_leading_type_args(generic_func, arg_types, structs, enums, why=why)
     if len(arg_types) < pack_idx or any(t is None for t in arg_types[pack_idx:]):
         return None
-    leading = solve_leading_type_args(generic_func, arg_types[:pack_idx], structs, enums)
+    leading = solve_leading_type_args(generic_func, arg_types[:pack_idx], structs, enums,
+                                      why=why)
     if leading is None:
         return None
     return leading + tuple(arg_types[pack_idx:])

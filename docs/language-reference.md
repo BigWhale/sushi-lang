@@ -1051,8 +1051,8 @@ See [Standard Library](standard-library.md) for complete array API.
 **An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
 range bound, and the index or count argument of a built-in method: `get`, `insert` and
 `remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
-`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
-method argument), and it needs `as i32`: nothing widens, and a float is refused.
+`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2121`, which names the position (`an array
+index is i32, got i64`; `CE2006` as a method argument), and it needs `as i32`: nothing widens, and a float is refused.
 
 ### Fixed Arrays
 
@@ -1288,8 +1288,8 @@ let i32[] names = from([1, 2])
 names[1] := 99
 ```
 
-The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for a literal
-index past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
+The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for an index the
+compiler can read -- a literal, a named constant, or an expression of them -- past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
 first. The assignment takes ownership of the value, so an owned source is moved (later use
 is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
 
