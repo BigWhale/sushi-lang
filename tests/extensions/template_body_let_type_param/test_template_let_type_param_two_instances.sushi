@@ -1,0 +1,18 @@
+# Two instances of the template: each copy records its own `k` instance (#1158).
+# EXPECT_STDOUT_EXACT: "1\ntrue\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(nom T x) T:
+    return x
+
+extend Box@(T) o() T:
+    let T y = self.v
+    return k(nom y)
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(bool) b = Box(true)
+    println(a.o())
+    println(b.o())
+    return 0

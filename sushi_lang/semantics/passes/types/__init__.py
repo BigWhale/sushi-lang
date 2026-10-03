@@ -33,6 +33,10 @@ from .signatures import (
 class TypeValidator:
     """The typecheck pass: type validation and inference."""
 
+    # The typecheck pass enters a late extension copy: its signature in the extension
+    # table and its body in the copy queue. An inference before it does not (#1153).
+    queues_late_copies = True
+
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
@@ -284,7 +288,13 @@ class ReadOnlyInferrer(TypeValidator):
     `namespaces` is the table of the unit that holds the expression, as the typecheck
     pass gives it: `sh.Pt(0)` names what `Pt(0)` names under a flat import only when
     the inferrer knows the alias (#1147). Without it the inferrer has no unit.
+
+    It queues no late copy of a generic static either: the copy of an instance the
+    monomorphize pass reaches is cut by that pass, and a second copy from the queue
+    was a duplicate symbol (#1153). The typecheck pass queues what is still missing.
     """
+
+    queues_late_copies = False
 
     def __init__(self, tables: 'SymbolTables',
                  namespaces: Optional['NamespaceTable'] = None) -> None:

@@ -1,0 +1,19 @@
+# A generic static as the argument of a generic call, inside a generic body. The early
+# inference of the argument queued a second copy of `Box.of`, and the backend declared
+# `Box__i32_of` two times: CE0000 on a correct program (#1153).
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(T) static of(T v) Box@(T):
+    return Box(v)
+
+fn o@(T)(T x) i32:
+    return k(Box.of(x))
+
+fn main() i32:
+    println(o(5))
+    return 0

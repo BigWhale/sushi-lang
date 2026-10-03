@@ -221,11 +221,10 @@ class InstantiationCollector:
                             function_collector._collect_from_type(
                                 substitute_type_params(declared, substitution))
 
-                    # The BODY's own annotations are collected as written. For a concrete
-                    # target they already are concrete; for a template they still name the
-                    # type parameter, and `_collect_from_type` drops what it cannot resolve.
-                    function_collector._reset_scope()
-                    function_collector._collect_from_block(ext.body)
+                    # A template BODY is not walked, as a generic function's is not: in it
+                    # a `let T y` binds the unbound `T`, and `k(y)` recorded the instance
+                    # `k<T>`, a false CE2001 at `k` (#1158). Each copy is walked once it is
+                    # cut (`collect_from_extension_body`).
 
             if len(self.instantiations) == before:
                 return
