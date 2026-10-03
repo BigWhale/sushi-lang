@@ -132,6 +132,11 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A built-in method on a field of a temporary works.** `w().l.len()`,
+  `two().0.iter()` and `nums.partition(f).0.iter()` were the internal error CE0000. The
+  compiler now keeps the temporary in a slot that it owns, gives the address of the field
+  to the method, and frees the temporary one time. A mutating method on such a field
+  (`w().l.push(1)`) is still `CE2429`.
 - **A `foreach` over a named `next()` iterable moves it.** A `foreach` over a local or a
   `nom` parameter whose type has `next()` and owns a resource freed the value two times:
   the loop and the scope exit both destroyed it. Now the loop takes the value, and a
