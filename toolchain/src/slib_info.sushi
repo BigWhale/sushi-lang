@@ -1096,13 +1096,19 @@ fn print_perk_list(MsgValue perks, Opts o) ~:
             return ~
     println("")
 
+##: The base name a manifest gives an array template (`extend T[] with P`). :##
+const string ARRAY_BASE_KEY = "$array"
+
 ##:
-Writes the target of an implementation record, for example `Box@(T)`.
+Writes the target of an implementation record, for example `Box@(T)` or `T[]`.
 
 - Parameter r: The implementation record.
 - Returns: The target.
 :##
 fn render_impl_target(MsgValue r) string:
+    if (get_str(r, "type") == ARRAY_BASE_KEY):
+        let string element = join_at(r, "type_args", ", ")
+        return "{element}[]"
     let string target = to_surface(get_str(r, "type"))
     if (len_at(r, "type_args") == 0):
         return target

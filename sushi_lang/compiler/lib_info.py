@@ -310,13 +310,17 @@ class _Records:
 
 
 def _render_impl_target(impl: dict) -> str:
-    """An implementation's target: `Gadget`, or `Box@(T)` for a generic-target template.
+    """An implementation's target: `Gadget`, `Box@(T)` for a generic-target template,
+    or `T[]` for an array template.
 
     A template record carries the target's BASE name and its parameters as written,
     so the header is rebuilt here rather than parsed out of the source slice.
     """
-    target = _surface(impl['type'])
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     type_args = impl.get('type_args') or []
+    if impl['type'] == ARRAY_BASE_KEY:
+        return f"{type_args[0]}[]"
+    target = _surface(impl['type'])
     return f"{target}@({', '.join(type_args)})" if type_args else target
 
 

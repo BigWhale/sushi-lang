@@ -247,7 +247,7 @@ class _Written:
     unit_name: Optional[str]
 
 
-def _covering_base(ty: Optional[Type]) -> Optional[str]:
+def covering_base(ty: Optional[Type]) -> Optional[str]:
     """The base a template of this target covers: a generic name, or every array."""
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     from sushi_lang.semantics.generics.types import GenericTypeRef
@@ -833,7 +833,7 @@ class PerkCollector:
                 or self._register_array_template(impl, target_type)):
             return True
 
-        base = _covering_base(target_type)
+        base = covering_base(target_type)
         if base is not None and (
                 self._reject_overlap(impl, target_type, base, template=False)
                 or self._reject_second_home_on_base(impl, base, template=False)):
