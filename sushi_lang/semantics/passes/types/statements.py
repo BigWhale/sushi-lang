@@ -668,7 +668,7 @@ def _bind_targets(validator: 'TypeValidator', targets, value_type, span) -> bool
         er.emit(validator.reporter, er.ERR.CE2117, span, type=display_type(value_type))
         refused = True
     elif len(tuple_elements(value_type)) != len(targets):
-        er.emit(validator.reporter, er.ERR.CE2116, span,
+        er.emit(validator.reporter, er.ERR.CE2120, span,
                 count=len(targets), type=display_type(value_type),
                 arity=len(tuple_elements(value_type)))
         refused = True

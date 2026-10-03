@@ -374,13 +374,13 @@ def _check_literal(validator: 'TypeValidator', pattern: LiteralPattern,
 
 def _check_tuple_pattern(validator: 'TypeValidator', pattern: TuplePattern, ty: Type,
                          note: _Note) -> Optional[Pat]:
-    """A tuple pattern: a tuple value, one item for each element (CE2117, CE2116)."""
+    """A tuple pattern: a tuple value, one item for each element (CE2117, CE2120)."""
     if not is_tuple_type(ty):
         er.emit(validator.reporter, er.ERR.CE2117, pattern.loc, type=display_type(ty))
         return None
     elements = tuple_elements(ty)
     if len(pattern.elements) != len(elements):
-        er.emit(validator.reporter, er.ERR.CE2116, pattern.loc,
+        er.emit(validator.reporter, er.ERR.CE2120, pattern.loc,
                 count=len(pattern.elements), type=display_type(ty), arity=len(elements))
         return None
     spelling = display_type(ty)

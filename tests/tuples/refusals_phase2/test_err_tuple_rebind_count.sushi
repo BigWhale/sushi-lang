@@ -1,5 +1,5 @@
 # A destructuring rebind names as many targets as the tuple has elements.
-# EXPECT_ERROR_CODES_EXACT: CE2116
+# EXPECT_ERROR_CODES_EXACT: CE2120
 
 fn main() i32:
     let i32 a = 1

@@ -1444,7 +1444,7 @@ fn main() i32:
 - An element is a typed binder (`i32 q`), a bare binder (`q`, which takes the element
   type), a `_`, or a nested destructure. A typed binder of the wrong type is the type
   mismatch of a `let` (**CE2002**).
-- The destructure names as many elements as the tuple has (**CE2116**), and only a tuple
+- The destructure names as many elements as the tuple has (**CE2120**), and only a tuple
   destructures (**CE2117**). An unhandled `Result` is **CE2505**: take the value with
   `??`, `.realise(default)` or `match` first.
 - A destructure element takes no mode: `let (peek i32 a, b) = t` is **CE6107**.
@@ -1476,7 +1476,7 @@ fn main() i32:
 ```
 
 The loop is a `let` destructure of the item at the top of the body, so every rule of
-[Destructuring](#destructuring) applies: the elements, the count (**CE2116**), a tuple item
+[Destructuring](#destructuring) applies: the elements, the count (**CE2120**), a tuple item
 (**CE2117**), a typed binder (**CE2002**), and no mode on an element (**CE6107**). A
 binder's ownership follows from the item. The items of `.iter()` are borrowed, so each
 binder borrows its element and consuming one is **CE2411**. A `next()` protocol iterator
@@ -1506,7 +1506,7 @@ fn main() i32:
 
 - The right side is any tuple value: a literal, a call (`(q, r) := divmod(7, 2)`), a
   local or a parameter. A value that is not a tuple is **CE2117**, an unhandled `Result`
-  is **CE2505**, and a count that is not the tuple's count is **CE2116**.
+  is **CE2505**, and a count that is not the tuple's count is **CE2120**.
 - Each target is a place that a plain `:=` takes: a name, a field, an array element, a
   tuple element (`t.0`) or a unit variable. Each target is a rebind or a field write by
   the rule of `x := v`, so it destroys the old value and gives its type to a literal
@@ -1834,7 +1834,7 @@ fn main() i32:
     return 0
 ```
 
-- A tuple pattern names as many items as the tuple has elements (**CE2116**), and only a
+- A tuple pattern names as many items as the tuple has elements (**CE2120**), and only a
   tuple takes a tuple pattern (**CE2117**). An enum pattern arm and a literal arm do not
   fit a tuple scrutinee (**CE2076**).
 - A bare binding BORROWS its element, as a payload binding does (ruling 4 of the tuple

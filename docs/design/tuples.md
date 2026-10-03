@@ -340,13 +340,13 @@ types are a mixed comparison (**CE2513**), as two structs are.
 | A name or a `_` inside a tuple TYPE; a named element | CE6105 |
 | `t.1e3`, `t.0_1`, `t.01` | CE6106 |
 | A mode on a tuple element: a destructure element (D1) or a tuple type element | CE6107 |
-| A tuple pattern names a count that is not the tuple's count | CE2116 |
+| A tuple pattern names a count that is not the tuple's count | CE2120 |
 | A tuple pattern over a value that is not a tuple | CE2117 |
 | An integer literal pattern over a value that is not an integer | CE2119 |
 | A match that does not cover a value | CE2040 (CE2074 for an integer scrutinee) |
 | A match arm that the arms above it cover | CE2118 |
 | `t.N` past the last element | CE2106, with the type rendered as `(i32, string)` |
-| A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | CE2116 |
+| A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | CE2120 |
 | A destructure of a value that is not a tuple (a `let`, a `foreach`, a rebind) | CE2117 |
 | The same place twice in the target of a destructuring rebind | CE6109 |
 | A destructure of an unhandled `Result` | CE2505 |

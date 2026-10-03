@@ -23,7 +23,7 @@ All notable changes to Sushi Lang will be documented in this file.
   `(1, "a")`, clones, is a `HashMap` key, infers through a generic (`swap@(T, U)`) and
   crosses a `.slib` of each kind. There is no tuple constant and no tuple `var`, by design.
   A named element is `CE6105`, a bad element index `CE6106`, a mode on an element `CE6107`,
-  a destructure count `CE2116` and a destructure of a value that is not a tuple `CE2117`.
+  a destructure count `CE2120` and a destructure of a value that is not a tuple `CE2117`.
   A `foreach` destructures each item (`foreach((k, v) in pairs.iter()):`) by the rule of a
   `let` destructure. A destructuring rebind (`(a, b) := f()`) assigns each element to a
   place that `:=` takes (a name, a field, an element); the whole right side is evaluated
