@@ -16,7 +16,9 @@ from .mutations import (
     emit_hashmap_destroy
 )
 from .debug import emit_hashmap_debug
-from .iterators import emit_hashmap_keys, emit_hashmap_values, emit_hashmap_entries
+from .iterators import (
+    emit_hashmap_keys, emit_hashmap_values, emit_hashmap_entries, emit_hashmap_pairs,
+)
 
 __all__ = [
     'emit_hashmap_new',
@@ -34,4 +36,5 @@ __all__ = [
     'emit_hashmap_keys',
     'emit_hashmap_values',
     'emit_hashmap_entries',
+    'emit_hashmap_pairs',
 ]
