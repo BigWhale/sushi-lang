@@ -1,0 +1,8 @@
+# A range given to a generic pass-through behind a unit alias (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+use "range_alias_sid" as u
+
+fn main() i32:
+    foreach(i in u.sid(nom 0..3)):
+        println(i)
+    return 0

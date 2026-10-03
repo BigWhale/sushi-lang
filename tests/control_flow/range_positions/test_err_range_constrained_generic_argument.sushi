@@ -1,0 +1,10 @@
+# A range given to a generic function whose type parameter has a constraint. The range is
+# the fault, not the constraint, so the one diagnostic is the range's (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn k@(T: Display)(T x) i32:
+    println(x)
+    return 7
+
+fn main() i32:
+    println(k(0..3))
+    return 0

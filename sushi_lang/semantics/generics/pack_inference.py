@@ -143,10 +143,12 @@ def infer_call_arg_type(validator, arg_expr) -> "Type | None":
     monomorphize): a lambda is typed from its written parameters and never stamped, and
     `.clone()` answers its receiver's type when the receiver is still a generic
     reference -- `.clone()` returns its receiver's type by definition, and the interned
-    instance does not exist until the monomorphize pass (F8).
+    instance does not exist until the monomorphize pass (F8). An argument that holds a
+    range in a value position answers nothing: the range is the fault (CE2122).
     """
     from sushi_lang.semantics.ast import Lambda
-    if validator is None:
+    from sushi_lang.semantics.ranges import holds_a_range_value
+    if validator is None or holds_a_range_value(arg_expr):
         return None
     if isinstance(arg_expr, Lambda):
         from sushi_lang.semantics.passes.types.visitor import infer_lambda_type

@@ -442,6 +442,11 @@ def _body_of(body) -> Iterator[TypeMention]:
         yield from _expr_types(body)
 
 
+def types_in_body(body) -> Iterator[TypeMention]:
+    """Every type ONE body names, as (type, span): the per-declaration `body_types()`."""
+    yield from _body_of(body)
+
+
 def body_types(program: 'Program') -> Iterator[TypeMention]:
     """Every type one unit's BODIES name, as (type, span). Never a signature.
 

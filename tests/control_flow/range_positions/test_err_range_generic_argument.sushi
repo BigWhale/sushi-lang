@@ -1,0 +1,10 @@
+# A range given as a value to a generic function. A range is walked by `foreach` or
+# spelled into an array, and nothing else (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn k@(T)(nom T x) i32:
+    let T[] kept = from([x])
+    return kept.len()
+
+fn main() i32:
+    println(k(nom 0..3))
+    return 0

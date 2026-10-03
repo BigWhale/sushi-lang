@@ -73,8 +73,8 @@ def validate_generic_function_call(
         said = _untyped_argument_faults(validator)
         _walk_unchecked_arguments(validator, call)
         # An argument that has no type of its own (a generic function value, CE2093; a
-        # type-pack name, CE0144) is why nothing was inferred: its diagnostic is the one
-        # fault (#1105, #1109). Any other argument fault stands beside CE2060.
+        # type-pack name, CE0144; a range, CE2122) is why nothing was inferred: its
+        # diagnostic is the one fault (#1105, #1109, #1165). Any other argument fault stands beside CE2060.
         if not contested and _untyped_argument_faults(validator) == said:
             er.emit(
                 validator.reporter,
@@ -171,7 +171,7 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
         minimum_arity=has_pack, stop_on_arity=True)
 
 
-_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code)
+_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code, er.ERR.CE2122.code)
 
 
 def _untyped_argument_faults(validator: 'TypeValidator') -> int:
@@ -303,9 +303,11 @@ def _infer_type_args_from_call_site(
     """Infer type arguments from call site arguments.
 
     A generic function value is not typed here: the callee types it, once the other
-    arguments solve the callee (#1029).
+    arguments solve the callee (#1029). An argument that holds a range solves nothing:
+    the range is the fault (CE2122), and the walk of the unchecked arguments says so.
     """
     from sushi_lang.semantics.generics.pack_inference import infer_flat_type_args
+    from sushi_lang.semantics.ranges import holds_a_range_value
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     structs = validator.struct_table.by_name
@@ -316,6 +318,8 @@ def _infer_type_args_from_call_site(
         if names_generic_fn_value(validator, arg_expr):
             arg_types.append(None)
             continue
+        if holds_a_range_value(arg_expr):
+            return None
         arg_type = validator.infer_expression_type(arg_expr)
         if arg_type is None or isinstance(arg_type, UnknownType):
             return None

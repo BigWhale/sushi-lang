@@ -1,0 +1,29 @@
+# The hybrid twin: a hybrid library's templates behind a unit alias (#1163).
+# BUILD_LIB_HYBRID: alias_tpl_lib.sushi -> alias_tpl_hyb.slib
+# EXPECT_STDOUT_EXACT: "2\n6\n6\n7\n5\n3\n4\n"
+# EXPECT_STDERR_EMPTY: true
+use <lib/alias_tpl_hyb> as b
+
+struct Tag:
+    i32 v
+
+extend Tag with b.Named:
+    fn named() i32:
+        return self.v
+
+fn k@(T: Display)(T x) i32:
+    println(x)
+    return 7
+
+fn main() i32:
+    println(b.plain(1))
+    println(b.lsid(nom 6))
+    println(k(b.lsid(nom 6)))
+    let b.Box@(i32) bx = b.Box(5)
+    println(bx.peekv())
+    let b.Opt@(i32) o = b.Opt.Has(3)
+    match o:
+        b.Opt.Has(x) -> println(x)
+        b.Opt.Empty -> println("none")
+    println(Tag(4).named())
+    return 0

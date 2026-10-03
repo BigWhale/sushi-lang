@@ -1,0 +1,18 @@
+public fn plain(i32 x) i32:
+    return x + 1
+
+public fn lsid@(T)(nom T x) T:
+    return x
+
+public struct Box@(T):
+    T v
+
+public enum Opt@(T):
+    Has(T)
+    Empty
+
+extend Box@(T) peekv() T:
+    return self.v
+
+public perk Named:
+    fn named() i32

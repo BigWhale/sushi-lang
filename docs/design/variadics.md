@@ -193,6 +193,9 @@ fn main() i32:
 - **CE0118** — cannot mix a type-pack `...Ts` with a native homogeneous `...T` in the same function.
 - **CE0119** — malformed `expand` statement (wrong syntax, iterator variable, or target).
 - **CE2090** — a pack element type at the call site does not satisfy the pack's perk constraint.
+- **CE0147** — the pack name is a type only in its own `...Ts args` parameter. A parameter
+  `Ts x`, a return type, a `let` type, `Ts[]` and `List@(Ts)` are refused where the
+  template is written, and the analysis stops before the generic passes.
 
 ### Type-pack limitations
 
