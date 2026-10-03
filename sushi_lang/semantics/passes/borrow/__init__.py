@@ -202,7 +202,8 @@ class BorrowChecker:
 
         for param in params:
             state = BorrowState(name=param.name, var_type=param.ty,
-                                declared_at_span=getattr(param, "loc", None))
+                                declared_at_span=getattr(param, "loc", None),
+                                is_method_param=self_type is not None)
             # main's `string[] args` is a borrowed view of process argv (the runtime owns
             # and frees it). Stamp it so a by-value move is a hard error (CE2410), not a
             # silent move that makes the callee free argv (N2).

@@ -48,6 +48,7 @@ class BorrowState:
     is_let_borrow: bool = False
     is_borrow_param: bool = False
     is_method_receiver: bool = False
+    is_method_param: bool = False       # CE2422 names the callable: a method or a function
     owns_no_heap: bool = False
     bound_at_span: Optional[Span] = None      # where the binding was introduced
     declared_at_span: Optional[Span] = None   # where the variable was introduced

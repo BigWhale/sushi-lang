@@ -167,6 +167,27 @@ elements hash alike, at each level, so `[[1, 2], [3, 4]]` as an `i32[2][2]` and 
 **Limitation:** The element type must have a hash. An array whose element has no hash
 (today, `ptr[]`) is CE0052.
 
+### Printing
+
+An array goes into an interpolation hole and into `print` / `println` when its element has
+a string form. It prints its elements in brackets, in the form a struct that holds it
+prints: a string element in quotes, a nested array in its own brackets, and `[]` when it
+is empty. A `u8[]` prints as numbers; `.to_string()` gives the text.
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32[2][2] grid = [[1, 2], [3, 4]]
+    println("{xs}")                     # [1, 2, 3]
+    println(grid)                       # [[1, 2], [3, 4]]
+    println(from(["a, b", "c"]))        # ["a, b", "c"]
+    return 0
+```
+
+An element with no string form, such as a function value, is CE2035 in a hole and CE2115
+in `println`, and a note names the element type. An array prints, but it does not compare
+at the top level: `==` and `<` on two arrays are still CE2514.
+
 ### `arr[index] := value`
 
 Write one element, in place. Not a method -- it is the assignment form of `arr[index]`,
@@ -181,7 +202,8 @@ scores[i] := 99            # the index may be any i32 expression
 ```
 
 The index is bounds-checked exactly like a read: an index past the end aborts with
-**RE2020** at run time, and a literal index is rejected at compile time -- **CE2012** past
+**RE2020** at run time, and an index the compiler can read (a literal, a named constant, or
+an expression of them) is rejected at compile time -- **CE2012** past
 the end of a fixed array, **CE2056** if it is negative.
 
 If the element type owns heap -- a `string`, a struct with a dynamic-array field -- the
@@ -485,7 +507,7 @@ Free memory and invalidate (unusable).
 
 ```sushi
 arr.destroy()
-# arr.len()  # ERROR CE2024 (use of destroyed dynamic array) and CE2406
+# arr.len()  # ERROR CE2406 (use of destroyed variable)
 ```
 
 ## Byte Array Only (u8[])

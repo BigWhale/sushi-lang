@@ -23,6 +23,7 @@ visibility marker -- it is as visible as the type it extends. write() copies the
 to_bytes() and once into the buffer.
 :##
 
+use <collections/strings>
 public use <io/contracts>
 
 ##:

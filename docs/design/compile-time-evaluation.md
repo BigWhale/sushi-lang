@@ -17,10 +17,11 @@ Read `docs/language-reference.md` for the constant rules that hold.
 `semantics/const_eval.py` is an expression walker. `evaluate` decides every `Expr` kind
 through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binary and a
 unary operator, an array literal, a name, a cast, an index, an interpolated string, a
-struct construction, a member access and a dot call each have a handler, and the ten
+struct construction, a member access and a dot call each have a handler, and the eleven
 kinds named in `NOT_CONSTANT` -- a method call, an enum constructor, `new()`, `from()`, a
-borrow, a `??`, a range, a spread, a lambda and a blank -- answer CE0108 through the one
-backstop.
+borrow, a `??`, a range, a spread, a lambda, a blank and a tuple -- answer CE0108 through
+the one backstop. The table gives each kind the phrase that CE0108 prints, as the source
+writes the expression ("a `from(...)` call is not a compile-time constant").
 `tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
 union, so a kind added to the language cannot fall through in silence.
 

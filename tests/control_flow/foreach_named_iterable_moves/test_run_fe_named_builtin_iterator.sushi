@@ -1,0 +1,22 @@
+# A foreach over `.iter()` of a named array or List walks a cursor over a buffer the
+# container keeps: the container is not moved, a second loop walks it again, and it is
+# freed one time at the scope exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n1\n2\na\nb\na\nb\n2 2\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(x in xs.iter()):
+        println(x)
+    foreach(x in xs.iter()):
+        println(x)
+    let List@(string) words = List.new()
+    words.push("a".clone())
+    words.push("b".clone())
+    foreach(w in words.iter()):
+        println(w)
+    foreach(w in words.iter()):
+        println(w)
+    println("{xs.len()} {words.len()}")
+    return 0

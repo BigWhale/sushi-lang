@@ -1,0 +1,13 @@
+# A write through a by-value parameter of a free function is CE2422. The message, the
+# note and the help say "function", because `f` is not a method (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2422
+# EXPECT_STDERR_CONTAINS: a by-value function parameter is a read-only borrow
+# EXPECT_STDERR_CONTAINS: as a by-value parameter of a function
+# EXPECT_STDERR_CONTAINS: would land on the function's private copy of the argument; declare the parameter `poke` if the function must write through it
+fn f(i32[] a) ~:
+    a.push(1)
+
+fn main() i32:
+    let i32[] a = from([1])
+    f(a)
+    return 0

@@ -131,6 +131,8 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     from sushi_lang.backend.constants.error_codes import MAYBE_SOME_TAG
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    from sushi_lang.backend import ownership
+    from sushi_lang.semantics.typesys import ReferenceType
 
     iter_name = node.protocol_iter_name
     if iter_name is None:
@@ -139,6 +141,13 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = infer_expr_semantic_type(codegen, node.iterable)
+    if isinstance(iterator_type, ReferenceType):
+        # A `peek`/`poke` parameter reads as its value; the slot holds a copy of it.
+        iterator_type = iterator_type.referenced_type
+    # The slot is the loop's hidden `let`, and it takes the iterable: a named local is
+    # marked moved, so its own scope exit does not destroy it again (#1145).
+    iterator_value = ownership.consume(codegen, node.iterable, iterator_value,
+                                       iterator_type, ownership.ConsumingUse.LET)
 
     cond_bb = codegen.func.append_basic_block(name="foreach.next_cond")
     body_bb = codegen.func.append_basic_block(name="foreach.next_body")

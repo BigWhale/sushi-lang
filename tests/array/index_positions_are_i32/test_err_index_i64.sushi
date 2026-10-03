@@ -1,0 +1,10 @@
+# An array index is an i32 position (#870). The diagnostic names the position and does
+# not say "assign", because nothing is assigned (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2121
+# EXPECT_STDERR_CONTAINS: an array index is i32, got i64
+# EXPECT_STDERR_CONTAINS: convert it with 'as i32'
+fn main() i32:
+    let i32[] a = from([1])
+    let i64 i = 0
+    println(a[i])
+    return 0

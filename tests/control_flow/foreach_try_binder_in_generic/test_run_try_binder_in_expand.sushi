@@ -1,0 +1,41 @@
+# A `??` binder on a `foreach` in the body of an `expand` compiles (#1140): each unrolled
+# copy of the body holds its own loop, and the binder of each copy takes its own type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "int 6\ntext 6\nok\n"
+
+enum Bad:
+    Broken()
+
+perk Tag:
+    fn tag() string
+
+extend i32 with Tag:
+    fn tag() string:
+        return "int"
+
+extend string with Tag:
+    fn tag() string:
+        return "text"
+
+struct Steps:
+    i32 n
+
+extend Steps next(poke self) Maybe@(Result@(i32, Bad)):
+    if (self.n >= 3):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
+
+fn sum_each@(...Ts: Tag)(...Ts args) ~ | Bad:
+    expand(a in args):
+        let i32 sum = 0
+        foreach(x?? in Steps(0)):
+            sum := sum + x
+        println("{a.tag()} {sum}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match sum_each(42, "hi"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    return 0

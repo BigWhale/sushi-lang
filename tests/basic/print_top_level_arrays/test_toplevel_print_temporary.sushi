@@ -1,0 +1,24 @@
+# An array that is a temporary -- a call result -- prints, and it is freed after it is
+# written, in a hole and in `println`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "got ["a", "b"]\n["a", "b"]\nlist [1]\n[1]\n[[1, 2]]\n"
+# EXPECT_NO_LEAKS: true
+
+fn words() string[]:
+    return from(["a".clone(), "b".clone()])
+
+fn ones() List@(i32):
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    return xs
+
+fn nested() i32[][]:
+    return from([from([1, 2])])
+
+fn main() i32:
+    println("got {words()}")
+    println(words())
+    println("list {ones()}")
+    println(ones())
+    println(nested())
+    return 0

@@ -54,7 +54,7 @@ meaning here.
 ```python
 class ConsumingUse(Enum):
     CALL_ARG          # f(x), including struct/enum constructor calls and indirect calls
-    LET               # let T x = <source>
+    LET               # let T x = <source>, and the hidden slot of a `next()` foreach
     REBIND            # x := <source>
     FIELD_ASSIGN      # obj.field := <source>
     STRUCT_FIELD      # S(field: <source>)
@@ -560,7 +560,7 @@ CE2411 names. `peek self` and `peek self.field` work. A PLAIN parameter — an i
 primitives — is never affected in either direction: it copies, and (BORROWED, PLAIN) adopts.
 
 **Four read-only receivers, one gate.** A `match`/`foreach` binding (CE2414), a `peek`
-reference (CE2408), the method receiver (CE2421) and a by-value method parameter (CE2422)
+reference (CE2408), the method receiver (CE2421) and a by-value parameter (CE2422)
 are the same rule with four rationales: a write through any of them cannot reach the value
 it appears to write. The checker holds them as a TABLE of kinds behind one dispatcher
 (`reject_readonly_write`, `passes/borrow/writes.py`), called from the four write sites, so a

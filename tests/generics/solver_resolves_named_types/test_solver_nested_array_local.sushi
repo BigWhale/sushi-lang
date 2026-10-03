@@ -1,0 +1,14 @@
+# A name two levels down in a declared P[][] local binds the same type parameter as a
+# P argument (#1134).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n"
+struct P:
+    i32 x
+
+fn cnt@(T)(T[][] xss, T d) i32:
+    return xss.len() + ((d.hash() * 0) as i32)
+
+fn main() i32:
+    let P[][] pss = from([from([P(1)]), from([P(2), P(3)])])
+    println(cnt(pss, P(0)))
+    return 0

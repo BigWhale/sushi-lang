@@ -143,8 +143,15 @@ def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool =
     return field_value
 
 
-def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Optional[ir.Value]:
-    """Try to get the alloca instruction or pointer for a struct variable."""
+def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr,
+                          park_temporary: bool = False) -> Optional[ir.Value]:
+    """Try to get the alloca instruction or pointer for a struct variable.
+
+    With `park_temporary`, a base that names no storage (a call, a tuple literal) is
+    parked in a slot and owned through `park_value`, so a method on its field reads the
+    field in place (#1148). A write cannot reach that slot: the borrow pass refuses it
+    with CE2429.
+    """
     if isinstance(receiver_expr, Name):
         # A local's slot, or the global backing a constant or a unit variable.
         from sushi_lang.backend.expressions.names import resolve_name_slot
@@ -162,7 +169,7 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         storage = namespaced_storage(codegen, receiver_expr)
         if storage is not None:
             return storage[1]  # `geo.pair.a := v` writes into the variable's storage
-        base_alloca = try_get_struct_alloca(codegen, receiver_expr.receiver)
+        base_alloca = try_get_struct_alloca(codegen, receiver_expr.receiver, park_temporary)
         if base_alloca is None:
             return None
 
@@ -185,6 +192,13 @@ def try_get_struct_alloca(codegen: 'LLVMCodegen', receiver_expr: Expr) -> Option
         # `.len()`/`.push()` dispatch on the field's pointer, so a copy makes them fail.
         from sushi_lang.backend.types.arrays.indexing import emit_element_pointer
         return emit_element_pointer(codegen, receiver_expr)
+    elif park_temporary:
+        from sushi_lang.backend.expressions.memory import park_value
+        struct_type = infer_struct_type(codegen, receiver_expr)
+        value = codegen.expressions.emit_expr(receiver_expr)
+        if value is None:
+            return None
+        return park_value(codegen, receiver_expr, value, struct_type)
     else:
         return None
 

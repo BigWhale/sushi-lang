@@ -168,10 +168,14 @@ have run — so the analyzer installs a late interner on the tables: the new typ
 monomorphized, resolved and derived at resolution time, and again for the copies'
 bodies in the drain.
 
-Inference is call-site-only: there is no `@(...)` slot on a method call. The one
-shape that cannot be solved is the bare-param lambda (`|x| ...` has no type of its
-own), and CE2063 names the escape: annotate the parameter, or pass a named function. A
-method-level name that repeats a receiver-target parameter is CE2064.
+Inference is call-site-only: there is no `@(...)` slot on a method call. Two shapes
+cannot be solved, and the help of CE2063 names the one that applies. The bare-param
+lambda (`|x| ...` has no type of its own): annotate the parameter, or pass a named
+function. A method-level parameter that no parameter type holds: no argument can solve
+it. Each argument type is resolved recursively before the solve, so an annotated
+`|P p|`, a `|P[2] a|` or a named `fn tenx(P p) i32` over a struct or an enum `P` solves
+as `|i32 x|` does (#1135). A method-level name that repeats a receiver-target parameter
+is CE2064.
 
 ## Program-wide extension visibility (the stated asymmetry)
 

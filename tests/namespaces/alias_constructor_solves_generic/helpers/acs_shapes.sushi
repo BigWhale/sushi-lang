@@ -1,0 +1,13 @@
+public struct Pt:
+    i32 x
+
+public struct Tag:
+    string name
+
+public enum Mark:
+    On
+    Off
+
+public enum Shape:
+    Circle(i32)
+    Square(i32)

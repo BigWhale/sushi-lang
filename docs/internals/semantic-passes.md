@@ -492,6 +492,16 @@ not exist yet, so it answers nothing for one here. A `match` over a generic call
 types its arm bindings from that substituted signature, and a generic called with such a
 binding is collected like any other.
 
+### The inferrer reads the unit's scope
+
+This pass and the `monomorphize` pass type the arguments of a generic call with
+`ReadOnlyInferrer`. Each inferrer gets the namespace table of the unit that holds the call,
+the same table the typecheck pass gives that unit. For a monomorphized copy, that unit is
+the home unit of the template. Thus `sh.Pt(0)` and `sh.Mark.Off()` behind `use "shapes" as
+sh` have the type that `Pt(0)` and `Mark.Off()` have under a flat import, and the argument
+solves the type parameter in every pass (#1147). An inferrer with no unit (a copy of an
+extension or of a perk implementation) reads only the FFI namespaces.
+
 ### Where a type names an instantiation
 
 A type names an instantiation in every position that HOLDS a type, and the reader of those
@@ -556,6 +566,15 @@ passes, so publishing there is the worklist, and the analyzer reads the reached
 instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
+
+A late instance gets its generic-target extension copies in
+`_cut_templates_for_late_instantiations`, a fixpoint after the function round. The
+instantiate pass collects the signature of an EARLY instance's copy, but it ended before
+a late instance existed. So each round sends the types that its new copies name -- the
+return, the channel, the parameters and the `let` annotations -- through
+`collect_type_instantiations` and monomorphizes them, before `resolve` and `derive`. A
+method that no call names still has a signature of known types, and an instance found
+this way gets its own copies in the next round (#1146).
 
 ### One source, one report
 
@@ -1166,8 +1185,9 @@ arr.destroy()
 println(arr.len())         # CE2406: use of destroyed variable 'arr'
 ```
 
-The second fragment also gives CE2024 ("use of destroyed dynamic array") from the
-`typecheck` pass, at the same position. Thus one fault gives two diagnostics today.
+CE2406 is the one diagnostic for a use after a destroy. The `borrow` pass reads the flow,
+and it covers a value of every type. (The `typecheck` pass gave CE2024 for an array at the
+same position until #1137; that code is retired.)
 
 5. **A `let` reading through an owner BORROWS, and consuming or invalidating that borrow is an
    error (CE2411, CE2412)**

@@ -63,7 +63,7 @@ of values is a **range**. Ranges come in two flavours:
 
 If `start` is greater than `end`, the range counts **down** automatically. The two bounds
 of a range are `i32` values. A bound of a different type, such as a `u8` variable, is an
-error (`CE2002`); convert it with `as i32`. You can also
+error (`CE2121`); convert it with `as i32`. You can also
 `foreach` over an array by calling `.iter()` on it:
 
 ```sushi

@@ -1,0 +1,9 @@
+# CE0108 names the expression as the source writes it, never a compiler class name
+# (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE0108
+# EXPECT_STDERR_CONTAINS: a `from(...)` call is not a compile-time constant
+var i32[] v = from([1, 2])
+
+fn main() i32:
+    println(v.len())
+    return 0

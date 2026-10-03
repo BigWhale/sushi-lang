@@ -1,0 +1,53 @@
+# The reached instance holds an owning payload: `Feed@(Crew)`, where `Crew` owns a
+# string, and only the generic body of `names@(T)` reaches it. A method that no call
+# names answers `Maybe@(Result@(List@(T), Bad))`, so the reached instance names a
+# `List@(Crew)` that nothing else names (#1146).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Arthur\nFord\n2\n"
+
+enum Bad:
+    Oops
+
+perk Named:
+    fn label() string
+
+struct Crew:
+    string name
+
+extend Crew with Named:
+    fn label() string:
+        return self.name.clone()
+
+struct Feed@(T):
+    T[] items
+    i32 at
+
+extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
+        Maybe.None -> return Maybe.None
+
+extend Feed@(T) copied() Maybe@(Result@(List@(T), Bad)):
+    let List@(T) out = List.new()
+    foreach(v in self.items.iter()):
+        out.push(v.clone())
+    return Maybe.Some(Result.Ok(out))
+
+fn feed_of@(T)(nom T[] items) Feed@(T):
+    return Feed(items, 0)
+
+fn names@(T: Named)(nom T[] crew) i32:
+    let i32 n = 0
+    foreach(r in feed_of(nom crew)):
+        match r:
+            Result.Ok(c) -> println(c.label())
+            Result.Err(_) -> println("bad")
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(names(nom from([Crew("Arthur"), Crew("Ford")])))
+    return 0

@@ -98,8 +98,9 @@ class StatementValidator(RecursiveVisitor):
 
         An unhandled `Result@(T, E)` has no printable form, so it is CE2037 in either.
         Any other value prints by the rule an interpolation hole reads: a primitive, or a
-        struct or an enum through `Display`. Everything else is CE2115, and a type that
-        holds something with no string form says which field it is.
+        struct, an enum, an array, a `List@(T)` or an `Own@(T)` through `Display`.
+        Everything else is CE2115, and a type that holds something with no string form
+        says which field or element it is.
         """
         from sushi_lang.semantics.generics.contracts import DISPLAY
         from sushi_lang.semantics.passes.types.expressions import top_level_contract

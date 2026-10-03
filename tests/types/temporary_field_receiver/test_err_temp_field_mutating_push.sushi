@@ -1,0 +1,18 @@
+# A mutating built-in method on a field of a temporary (#1148). The read-only methods on
+# such a field compile; a write is refused by the chained-borrow rule, because the
+# statement discards the temporary and the write is dead. One push, one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2429
+
+use <collections/strings>
+
+struct W:
+    List@(string) l
+
+fn w() W:
+    let List@(string) l = List.new()
+    l.push("a".upper())
+    return W(l)
+
+fn main() i32:
+    w().l.push("b".upper())
+    return 0

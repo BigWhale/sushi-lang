@@ -1,0 +1,14 @@
+# A struct nested in the lambda parameter type, a fixed P[2] (#1135).
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n7\n"
+use <collections/iter>
+
+struct P:
+    i32 x
+
+fn main() i32:
+    let P[2][] pss = from([[P(1), P(2)], [P(3), P(4)]])
+    let List@(i32) r = pss.map(|P[2] a| a[0].x + a[1].x)
+    foreach(v in r.iter()):
+        println(v)
+    return 0

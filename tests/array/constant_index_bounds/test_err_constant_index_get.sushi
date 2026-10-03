@@ -1,0 +1,9 @@
+# `get(K)` on a fixed array reads a named-constant index at compile time, as `get(7)`
+# does (#1137).
+# EXPECT_ERROR_CODES_EXACT: CE2012
+const i32 K = 5
+
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    println(a.get(K).realise(0))
+    return 0

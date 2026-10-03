@@ -26,7 +26,9 @@ An **iterator** is `{i32 index, i32 length, T* data}` — a cursor over contiguo
 `.iter()` answers one on an array or a `List@(T)`, `.keys()` / `.values()` / `.entries()`
 answer one on a `HashMap`, and a range is one. It has no `next` to call: the loop reads the
 length and indexes. `Iterator@(T)` is deliberately not a nameable type (**CE2001**), so an
-iterator only ever appears as the iterable of the loop that consumes it.
+iterator only ever appears as the iterable of the loop that consumes it. It has no method
+either: `a.iter().len()`, `(0..3).len()` and `a.iter().next()` are each **CE2008** at the
+call.
 
 A **protocol iterator** is any type carrying a nullary `next()` that answers `Maybe@(T)`.
 The loop calls it until it answers `None`. There is no type to implement and no perk to
@@ -131,6 +133,12 @@ path are the ones `??` already has in every other position — there is no secon
 step. The one thing the parser cannot know is that `let`'s type, and the `foreach` validator
 fills it in from the item type.
 
+The `let` is ONE object in two places: the first statement of the body, and the loop's
+`item_try_let`, which is how the validator reaches it. A pass that copies the loop keeps
+the two as one object. The copy of a generic template takes `item_try_let` from the copied
+body, so a `??` binder in a generic function, a generic extension, a lambda inside one and
+an `expand` body works as it does in a plain body (#1140).
+
 A declared type on a `??` binder names what the USER binds, which is the unwrapped value,
 so `foreach(string line?? in r.lines())` puts `string` on the `let`.
 
@@ -176,6 +184,19 @@ end block, registered through `register_owning_value` — the complete registry 
 `create_local`'s default, which does not know a dynamic array, a `List@(T)` or an `Own@(T)`.
 Every exit path destroys it: the end of the input, a `break`, a `return` from the
 body, and the propagation path a `??` binder takes.
+
+The move into that local is a consuming position, the same as `let T x = it`: it goes
+through the ownership seam (`consume`), and the borrow pass consumes the iterable the same
+way. So the loop destroys the iterator and nothing else does (#1145):
+
+- a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
+  later mention of it is **CE2405**;
+- a borrow that owns a resource (a parameter, a `peek` or `poke` parameter, a field read)
+  is **CE2411**, because another owner still frees it; `.clone()` gives the loop a value
+  of its own;
+- a value that owns nothing is copied, and the loop walks the copy, so the source does
+  not change;
+- a temporary (`foreach(line?? in r.lines())`) has no owner, and the loop adopts it.
 
 The item of a protocol iterator is registered as an owner too: it is the payload of a
 fresh `Maybe@(T)` nobody else frees, so the iteration owns it, the body may hand it away,

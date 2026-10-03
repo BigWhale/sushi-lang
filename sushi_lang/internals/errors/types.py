@@ -40,7 +40,7 @@ _add(ErrorMessage("CE2007", Severity.ERROR,
 
 _add(ErrorMessage("CE2008", Severity.ERROR,
     "undefined function '{name}'",
-    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469)."))
+    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. Until #1136 a call on an iterator was not checked, and the backend stopped with an internal error and no location."))
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
     "wrong number of arguments: '{name}' expects {expected}, got {got}",
@@ -57,7 +57,7 @@ _add(ErrorMessage("CE2011", Severity.ERROR,
 
 _add(ErrorMessage("CE2012", Severity.ERROR,
     "array index {index} is out of bounds for array of size {size}",
-    Category.TYPE, "Array access with compile-time constant index exceeds array bounds."))
+    Category.TYPE, "An index the compiler can read is past the end of a fixed array, in `a[i]`, in `a[i] := v` and in `a.get(i)`. The index is read through the constant evaluator: a literal, a named constant (`a[K]`) and an expression of them (`a[K + 1]`). A local of the same name as a constant shadows it, and an index that names a local is not read. A named constant was not read until #1137, so `a[K]` compiled and trapped at run time (RE2020). A negative index is CE2056."))
 
 _add(ErrorMessage("CE2013", Severity.ERROR,
     "array element type mismatch: expected {expected}, got {got}",
@@ -93,7 +93,7 @@ _add(ErrorMessage("CE2017", Severity.ERROR,
 
 _add(ErrorMessage("CE2019", Severity.ERROR,
     "invalid range in an array literal: {reason}",
-    Category.TYPE, "A range element fills the slots it spans: '0..5' is five elements and '0..=5' is six, and the direction follows `foreach`, so '5..0' descends. One code carries every way a range cannot fill slots, the way CE2017 carries every bad repeat count, because they share one rule and one fix. Two ways: a bound the compiler cannot read in a position that needs a readable LENGTH -- a fixed array, whose length is part of its type, and a constant, whose evaluator needs the values -- and a readable range that yields nothing, because Sushi has no zero-length array and '3..3' spells nothing. The escape for the first is `from()`, which carries its length in the descriptor and accepts any i32 expression as a bound. A range yields i32 (CE2002 for anything else), and it cannot carry a repeat count (CE2020)."))
+    Category.TYPE, "A range element fills the slots it spans: '0..5' is five elements and '0..=5' is six, and the direction follows `foreach`, so '5..0' descends. One code carries every way a range cannot fill slots, the way CE2017 carries every bad repeat count, because they share one rule and one fix. Two ways: a bound the compiler cannot read in a position that needs a readable LENGTH -- a fixed array, whose length is part of its type, and a constant, whose evaluator needs the values -- and a readable range that yields nothing, because Sushi has no zero-length array and '3..3' spells nothing. The escape for the first is `from()`, which carries its length in the descriptor and accepts any i32 expression as a bound. A range yields i32 (CE2121 for a bound of any other type), and it cannot carry a repeat count (CE2020)."))
 
 _add(ErrorMessage("CE2020", Severity.ERROR,
     "a range element cannot carry a repeat count",
@@ -102,12 +102,13 @@ _add(ErrorMessage("CE2020", Severity.ERROR,
 # Dynamic array-specific errors (compile-time only)
 
 _add(ErrorMessage("CE2023", Severity.ERROR,
-    "dynamic array method argument mismatch for '{method}': expected {expected}, got {got}",
-    Category.TYPE, "Dynamic array method called with incorrect argument types."))
+    "dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}",
+    Category.TYPE, "A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type. The text said \"argument\" for both until #1137, so a fixed-array receiver read as a wrong argument."))
 
-_add(ErrorMessage("CE2024", Severity.ERROR,
-    "use of destroyed dynamic array '{name}'",
-    Category.TYPE, "Attempted to use a dynamic array after it was explicitly destroyed."))
+# CE2024 ("use of destroyed dynamic array '{name}'") was RETIRED by #1137. It came from
+# the typecheck pass, which kept a scope stack of destroyed names and read no flow, and
+# every use it reported was reported again by CE2406 from the borrow pass, which reads the
+# flow and covers every type. One fault is one code: a use after `.destroy()` is CE2406.
 
 _add(ErrorMessage("CE2026", Severity.ERROR,
     "unterminated interpolation in string literal",
@@ -149,7 +150,7 @@ _add(ErrorMessage("CE2034", Severity.ERROR,
 
 _add(ErrorMessage("CE2035", Severity.ERROR,
     "cannot interpolate expression of type '{type}' into string",
-    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field. A `Maybe`, a `Result` and a bare array are not printed: handle the missing value or the error first, or print the elements."))
+    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. Before #1132 a top-level array, `List@(T)` and `Own@(T)` were refused here too, although a type that held one printed it."))
 
 _add(ErrorMessage("CE2036", Severity.ERROR,
     "Ok() requires a value. For blank return type use Ok(~)",
@@ -240,7 +241,7 @@ _add(ErrorMessage("CE2058", Severity.ERROR,
 # Array indexing errors (CE2056-CE2057)
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
-    Category.TYPE, "Array indices must be non-negative. Negative indices are not supported."))
+    Category.TYPE, "Array indices must be non-negative. Negative indices are not supported. The index is read as CE2012 reads it: a literal (`a[-1]`), a named constant and an expression of them."))
 
 _add(ErrorMessage("CE2057", Severity.ERROR,
     "array index {index} out of bounds for array of size {size}",
@@ -256,7 +257,10 @@ _add(ErrorMessage("CE2060", Severity.ERROR,
     "two steps, as one resolution (#573): from the arguments, for every target type "
     "parameter a parameter names, then from the declared type at the binding site for "
     "the rest. A parameter neither step reaches is this error, and the text names both "
-    "sources and the parameter. History: from #542 to #573 a static read the stamp "
+    "sources and the parameter. When the unifier knows why an argument does not fit, "
+    "the reason names it: a fixed-size parameter takes an array of that size alone, so "
+    "`T[3]` against an `i32[4]` says 'the parameter is 'T[3]', the argument is "
+    "'i32[4]'' (#1137). History: from #542 to #573 a static read the stamp "
     "alone, which left a `| E` static unwritable -- a Result-valued call is never "
     "stamped."))
 
@@ -389,7 +393,7 @@ _add(ErrorMessage("CE2097", Severity.ERROR,
 
 _add(ErrorMessage("CE2063", Severity.ERROR,
     "cannot infer method type parameter{plural} {names} for '{method}' from this call",
-    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. The one shape that cannot be solved is the bare-param lambda (Known Limitation 7): `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`. The escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function."))
+    Category.TYPE, "A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. Two shapes cannot be solved, and the help names the one that applies. The bare-param lambda: `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`; the escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function. And a type parameter that no parameter type holds: no argument can solve it, so the help says to write it in a parameter type. A written parameter type is resolved before the solve, so `|P p|` over a struct or an enum `P` solves as `|i32 x|` does (#1135); the help blamed the lambda for that case before."))
 
 _add(ErrorMessage("CE2064", Severity.ERROR,
     "method type parameter '{name}' shadows a type parameter of the extension target",
@@ -451,7 +455,7 @@ _add(ErrorMessage("CE2112", Severity.ERROR,
 
 _add(ErrorMessage("CE2115", Severity.ERROR,
     "cannot print a value of type '{type}'",
-    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)` -- and an array has no string form of its own at the top level: print its elements, or hold it in a struct. A type that holds something with no string form has none, and a note names the field. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
+    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
 
 _add(ErrorMessage("CE2116", Severity.ERROR,
     "the message of an assert must be a string, got {got}",
@@ -472,3 +476,7 @@ _add(ErrorMessage("CE2119", Severity.ERROR,
 _add(ErrorMessage("CE2120", Severity.ERROR,
     "the destructure names {count} elements, but '{type}' has {arity}",
     Category.TYPE, "A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. Added with tuples (docs/design/tuples.md)."))
+
+_add(ErrorMessage("CE2121", Severity.ERROR,
+    "{position} is i32, got {got}",
+    Category.TYPE, "An index, a count and a range bound are i32 positions (#870): an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it: the backend used to zero-extend a narrow value, so `-1 as i8` counted 255, and an i64 bound of 4294967297 was cut to 1. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is CE2006, which names the argument; an assignment of the wrong type is CE2002. Until #1137 this fault was CE2002, whose text said 'cannot assign'."))

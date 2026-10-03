@@ -1,0 +1,33 @@
+# A foreach that moves a named local on one path only: the scope exit destroys the local
+# on the other path, and only there.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n5\nwalked\nkept\n"
+# EXPECT_NO_LEAKS
+
+enum Bad:
+    Oops
+
+struct Feed:
+    i32[] items
+    i32 at
+
+extend Feed next(poke self) Maybe@(Result@(i32, Bad)):
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v))
+        Maybe.None -> return Maybe.None
+
+fn maybe_walk(bool walk) ~:
+    let Feed f = Feed(from([4, 5]), 0)
+    if (walk):
+        foreach(r in f):
+            println(r.realise(0))
+        println("walked")
+    else:
+        println("kept")
+
+fn main() i32:
+    maybe_walk(true)
+    maybe_walk(false)
+    return 0

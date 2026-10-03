@@ -219,6 +219,10 @@ copy yet is cut afterwards, to a fixpoint, so `Box@(string)` has its `show()` wh
 program spelled it or a substitution produced it. The constraint check reads the templates
 beside the registered copies: a template applies to every instantiation of its base name by
 construction, so `@(S: Show)` holds for a late `Box@(string)` before its copy is cut.
+The late copy's signature and `let` annotations are collected by the instantiate pass's
+own walk in the same round, as the pass collects them for an early copy: the
+`Maybe@(Result@(string, Bad))` that a late `Feed@(string)` names in its `next()` is an
+instance too, and the next round cuts its own copies (#1146).
 
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations

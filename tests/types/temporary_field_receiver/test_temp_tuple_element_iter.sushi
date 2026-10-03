@@ -1,0 +1,17 @@
+# A built-in method on a tuple element of a temporary (#1148): the element is iterated in
+# place, and the tuple is freed once.
+# EXPECT_STDOUT_EXACT: "5\n6\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn two() (List@(i32), string):
+    let List@(i32) l = List.new()
+    l.push(5)
+    l.push(6)
+    return (l, "tail")
+
+fn main() i32:
+    foreach(n in two().0.iter()):
+        println(n)
+    println(two().0.len())
+    return 0

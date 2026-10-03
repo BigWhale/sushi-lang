@@ -132,6 +132,53 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A generic instance that only a generic body reaches gets all its methods.** When
+  only a generic function instance named a generic type instance (the return type
+  `Feed@(T)` of `feed_of@(T)`, called from `count@(T)` with `T = string`), an extension
+  method of that instance was `CE2001` (unknown type) on its signature and `CE2112` in its
+  body. The `Result`, `Maybe` and `List` types in such a signature are now interned as for
+  an instance that `main` writes, also for a method that no call names.
+- **A constructor behind a unit alias solves a generic call.** `one(sh.Pt(0))` was
+  `CE2060` and `cnt(ms, sh.Mark.Off())` was `CE2061`, while the flat form `one(Pt(0))`
+  compiled. A struct constructor and an enum variant behind an alias now have, in every
+  pass, the type that the flat form has.
+- **A built-in method on a field of a temporary works.** `w().l.len()`,
+  `two().0.iter()` and `nums.partition(f).0.iter()` were the internal error CE0000. The
+  compiler now keeps the temporary in a slot that it owns, gives the address of the field
+  to the method, and frees the temporary one time. A mutating method on such a field
+  (`w().l.push(1)`) is still `CE2429`.
+- **A `foreach` over a named `next()` iterable moves it.** A `foreach` over a local or a
+  `nom` parameter whose type has `next()` and owns a resource freed the value two times:
+  the loop and the scope exit both destroyed it. Now the loop takes the value, and a
+  mention of the local after the loop is `CE2405`. A borrowed iterable that owns a
+  resource (a parameter, a `peek` or `poke` parameter, a field) is `CE2411`; walk a
+  `.clone()` of it. A `peek` or `poke` parameter as the iterable is no longer the internal
+  error CE0017; when its type owns nothing, the loop walks a copy.
+- **The source of a bulk array copy is checked.** A `??` in the source of `extend` or
+  `extend_range` (`two.extend(give()??)`) was the internal error CE0124 on a correct
+  program, and an error inside the source (an undefined function) was the internal error
+  CE0000 and not its own code.
+- **A generic `T[]` extension answers a concrete type at the call.** A `foreach` over
+  `arr.f().iter()`, with `f` a generic `extend T[] f() List@(T)`, was the internal error
+  CE0015, and so was a destructure of a tuple that such a method answers. The `T[]` forms
+  of `enumerate`, `zip` and `partition` in `<collections/iter>` now work inline. When the
+  `typecheck` pass finds no type for a `foreach` iterable and no error was reported, it
+  now reports the internal error CE0146 at the iterable, never a silent skip.
+- **A method call on an iterator is checked.** An `Iterator@(T)` and a range have no
+  methods. `a.iter().len()`, `(0..3).len()` and `a.iter().next()` were internal errors
+  (CE0042, CE0000) with no location. Each is now `CE2008` at the call, with a help that
+  names `foreach`.
+- **A generic call solves its type parameters from a written struct or enum type at any
+  depth.** A declared `P[]`, `P[][]` or `List@(P)` local and a second argument now bind one
+  type parameter (`cnt(ps, P(0))`); before, the call was `CE2061`. A method-level type
+  parameter (`xs.map(f)`) is now solved when `f` is an annotated lambda or a named
+  function that takes a struct or an enum, also inside an array or a generic argument
+  (`|P p|`, `|P[2] a|`, `|Box@(P) b|`); before, the call was `CE2063`. The help of
+  `CE2063` names the lambda annotation only when a lambda has a parameter with no type.
+- **A `??` binder on a `foreach` compiles in a generic body** (`foreach(x?? in it)`), in a
+  generic function, an extension on a generic target, a lambda in a generic body and an
+  `expand` body. Before, it was `CE2007`: the copy of the template split the binder's
+  `let` from the statement in the copied body.
 - **A call behind a unit alias has its parameter modes.** A generic, a stdlib function
   and a native variadic called as `l.gen(nom n)`, `m.sqrt(x)` or `v.coll(1, 2, 3)` were
   an internal error (CE0129) or skipped the mode check. A call with no mode stamp is now
@@ -220,6 +267,26 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A top-level array prints.** A `T[]`, a `T[N]` and a `List@(T)` go into an
+  interpolation hole and into `print` / `println`, in the form that a struct which holds
+  them prints: `[1, 2, 3]`, `[]` when empty, a string element in quotes (`["a, b", "c"]`),
+  a nested array as `[[1], [2, 3]]`. A top-level `Own@(T)` prints its payload. A `u8[]`
+  prints as numbers; `.to_string()` gives the text. An element with no string form is
+  still `CE2035` in a hole and `CE2115` in `println`, and the note names the element type.
+  A `HashMap` is still refused, because its iteration order is not specified, and a note
+  now gives this reason. `==`, `<`, `.to_str()` and a `Display` constraint on a top-level
+  array do not change.
+- **Seven array diagnostics are correct.** `CE2023` says "receiver" when the receiver is
+  at fault (`push` on a fixed array). `CE2422` says "function" for a parameter of a free
+  function. `CE0108` names the expression as the source writes it ("a `from(...)` call is
+  not a compile-time constant"). A use after `destroy()` is one error, `CE2406`; `CE2024`
+  is retired. `CE2060` names a wrong fixed array size ("the parameter is 'T[3]', the
+  argument is 'i32[4]'"). A value of the wrong type in an index, a repeat count or a range
+  bound is the new error `CE2121`, which names the position ("an array index is i32, got
+  i64"); before, it was `CE2002`, "cannot assign". A method argument stays `CE2006`. A
+  named-constant index on a fixed array (`a[K]`, `a.get(K)`) is checked at compile time as
+  a literal index is: `CE2012` past the end, `CE2056` when negative. Before, it compiled
+  and stopped with `RE2020` at run time.
 - **Breaking: `TcpListener.accept()` answers `(TcpStream, IpAddr) | NetError`.** The
   address of the peer comes from the `accept(2)` call itself, so no second call is
   necessary. Write `let (TcpStream s, _) = l.accept()??` where the address is not needed.

@@ -987,7 +987,10 @@ A `??` binder over an item that is not a `Result` has nothing to unwrap and is
 INTO storage, and there is nothing to unwrap there.
 
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
-by `break` and by `return` as well as at the end of the input.
+by `break` and by `return` as well as at the end of the input. A protocol iterator held in a
+local is MOVED into the loop: a later mention of the local is **CE2405**, and a borrowed one
+that owns a resource (a parameter, a field) is **CE2411** -- walk a `.clone()` of it. A
+protocol iterator that owns nothing is copied, and the loop walks the copy.
 
 **A tuple item destructures.** `foreach((k, v) in pairs.iter()):` splits each item into
 its elements by the rule of a `let` destructure, and a binder's ownership follows from the
@@ -1051,8 +1054,8 @@ See [Standard Library](standard-library.md) for complete array API.
 **An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
 range bound, and the index or count argument of a built-in method: `get`, `insert` and
 `remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
-`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2002` (`CE2006` as a
-method argument), and it needs `as i32`: nothing widens, and a float is refused.
+`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2121`, which names the position (`an array
+index is i32, got i64`; `CE2006` as a method argument), and it needs `as i32`: nothing widens, and a float is refused.
 
 ### Fixed Arrays
 
@@ -1288,8 +1291,8 @@ let i32[] names = from([1, 2])
 names[1] := 99
 ```
 
-The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for a literal
-index past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
+The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for an index the
+compiler can read -- a literal, a named constant, or an expression of them -- past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
 first. The assignment takes ownership of the value, so an owned source is moved (later use
 is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
 
@@ -2723,7 +2726,8 @@ println("Next: {x + 1}")
 println("Squared: {x * x}")
 ```
 
-**Supported types:** the integers, the floats, `bool`, `string`, and every struct and enum.
+**Supported types:** the integers, the floats, `bool`, `string`, every struct and enum, and
+an array, a `List@(T)` or an `Own@(T)` whose element has a string form.
 A `bool` prints as `true` or `false`. A struct or an enum prints through the predefined
 perk `Display` (see [Predefined Perks](#predefined-perks-drop-hashable-eq-ord-and-display)).
 The compiler derives the text from what the type holds, and `extend T with Display` with
@@ -2751,6 +2755,9 @@ fn main() i32:
     println("{u}")                      # User(name: "Arthur Dent", age: 42)
     println("{u.name}")                 # Arthur Dent
     println(Point(0, 0))
+    let i32[] xs = from([1, 2, 3])
+    println("{xs}")                     # [1, 2, 3]
+    println(from(["a, b", "c"]))        # ["a, b", "c"]
     return 0
 ```
 
@@ -2764,17 +2771,25 @@ fn main() i32:
 - A string that a type holds prints in quotes, and its bytes are written as they are, with
   no escaping. A string in a hole of its own prints bare.
 - An array and a `List@(T)` print as `[1, 2, 3]` and `["a", "b"]`. An empty one prints `[]`.
+  The form is the same at the top level and when a type holds the array. A nested array
+  prints `[[1], [2, 3]]`, and a `u8[]` prints as numbers (`[72, 105]`); `.to_string()`
+  gives the text.
 - An `Own@(T)` prints its payload. A float prints as `%g`, as a float hole does. A `bool`
   prints `true` or `false`, and `~` prints `~`.
 
 **What is refused:**
 
-- A type that holds a function value, a `ptr` or a `HashMap@(K, V)` has no string form. A
-  hole is `CE2035`, and `print` and `println` are `CE2115`. A note names the field.
+- A type that holds a function value, a `ptr` or a `HashMap@(K, V)` has no string form, and
+  neither has an array of one. A hole is `CE2035`, and `print` and `println` are `CE2115`.
+  A note names the field or the element.
+- A `HashMap@(K, V)` itself is refused: its iteration order is not specified, so its
+  printed form could change from one run to the next.
 - A top-level `Result` stays `CE2037` in `print` and `println`, and is `CE2035` in a hole.
-- A top-level `Maybe` and a top-level array are `CE2115` in `print` and `println`, and
-  `CE2035` in a hole. Handle the value first (`match`, `.realise(default)`, `??`), or print
-  the elements. A type that HOLDS a `Maybe`, a `Result` or an array prints them.
+- A top-level `Maybe` is `CE2115` in `print` and `println`, and `CE2035` in a hole. Handle
+  the value first (`match`, `.realise(default)`, `??`). A type that HOLDS a `Maybe` or a
+  `Result` prints them.
+- Only the printed positions take a top-level array: `==`, `<`, `.to_str()` and a
+  `Display` constraint on one are still refused.
 
 ### String Arguments in Interpolation
 
