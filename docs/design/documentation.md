@@ -854,7 +854,7 @@ known keys:
   function's existing `params` array costs no new helper. The reason is the ORDER and only
   the order: whatever order a map happened to have would not be the signature's.
 
-  A `Map` can be walked. `len` is `Arr`-only, but `MsgValue.Map(MsgValue[], MsgValue[])`
+  A `Map` can be walked. `len` is `Arr`-only, but `MsgValue.Map((MsgValue, MsgValue)[])`
   destructures in a `match`, and `map_get` in the stdlib does exactly that. The tool reads
   `unit_docs` by key the same way.
 - **A multi-line `body` needs a line splitter**, and its indent has to match Python's byte

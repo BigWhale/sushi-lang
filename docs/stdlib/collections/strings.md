@@ -409,6 +409,28 @@ let string[] parts = "a,b,c".split(',')
 A `string[]` cannot go into an interpolation hole (CE2035). Join it first:
 `println("Parts: {','.join(parts)}")`.
 
+### `.split_once(string sep) -> Maybe@((string, string))`
+
+### `.rsplit_once(string sep) -> Maybe@((string, string))`
+
+Split at the FIRST (`split_once`) or the LAST (`rsplit_once`) occurrence of `sep`, into the
+part before it and the part after it. The separator is in neither part, and both parts are
+new owned strings. No occurrence gives `Maybe.None`. An empty separator matches at the
+start for `split_once`, `Some(("", s))`, and at the end for `rsplit_once`, `Some((s, ""))`.
+The search is by bytes, so a multi-byte UTF-8 separator works.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let (key, value) = "name=Arthur=Dent".split_once("=").realise(("", ""))
+    println("{key} {value}")                             # name Arthur=Dent
+    match "a/b/c".rsplit_once("/"):
+        Maybe.Some((dir, file)) -> println("{dir} {file}")   # a/b c
+        Maybe.None -> println("no separator")
+    return 0
+```
+
 ### `.join(string[] parts) -> string`
 
 Join array with separator.

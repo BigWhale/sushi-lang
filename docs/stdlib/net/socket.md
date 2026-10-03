@@ -69,9 +69,9 @@ fn main() i32:
 
 Connect to a host and port. The host may be a name or a numeric address; a name is resolved and every answer is tried in turn. There is **no connect timeout** — that needs a non-blocking socket and `select` — so an address that answers nothing waits for the kernel to give up.
 
-### `sock_tcp_accept(i32 fd) i32 | NetError`
+### `sock_tcp_accept(i32 fd) (i32, i32, u64, u64) | NetError`
 
-Take the next connection waiting on a listener. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
+Take the next connection waiting on a listener, and the peer address that `accept(2)` wrote. The tuple is `(fd, version, high, low)`: the new descriptor, the IP version (`4`, `6`, or `0` for another address family), and the address bits. An IPv4 address is the low 32 bits of `low`; an IPv6 address is `high` then `low`, as `IpAddr.V6` holds it. `TcpListener.accept()` builds the `IpAddr` from these. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
 
 ### `sock_send(i32 fd, u8[] data) i32 | NetError`
 

@@ -45,7 +45,7 @@ public enum MsgValue:
     Str(string)
     Bin(u8[])
     Arr(MsgValue[])
-    Map(MsgValue[], MsgValue[])    # parallel keys/values, wire order kept
+    Map((MsgValue, MsgValue)[])    # (key, value) pairs, wire order kept
 
 public enum MpError:
     Truncated(i32)      # offset of the read that could not complete
@@ -57,8 +57,23 @@ public enum MpError:
 `e.text()` gives one stable line for an `MpError`, with no payload, so a caller can
 compare it.
 
-A map is two parallel arrays, not a hash table: MessagePack keys are not limited to
-strings, and the wire order stays visible and deterministic.
+A map is one array of `(key, value)` pairs, not a hash table: MessagePack keys are not
+limited to strings, and the wire order stays visible and deterministic. A `foreach`
+destructures each pair:
+
+```sushi
+use <encoding/msgpack>
+
+fn main() i32:
+    let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x02])
+    match decode(buf):
+        Result.Ok(MsgValue.Map(pairs)) ->
+            foreach((k, v) in pairs.iter()):
+                println("{show(k)} -> {show(v)}")    # "a" -> 1, then "b" -> 2
+        Result.Ok(_) -> println("not a map")
+        Result.Err(_) -> println("decode error")
+    return 0
+```
 
 ## Functions
 
@@ -115,17 +130,18 @@ fn main() i32:
 
 The position of a string key in a `Map`, in wire order; the first key that matches wins.
 A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the
-position to borrow the value in place, inside a `MsgValue.Map(keys, vals)` arm.
+position to borrow the value in place, inside a `MsgValue.Map(pairs)` arm: `pairs[i].1`
+is the value.
 
 ```sushi
 use <encoding/msgpack>
 
 fn count_items(MsgValue m, string key) i32 | StdError:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
                 Maybe.Some(i) ->
-                    match vals[i]:
+                    match pairs[i].1:
                         MsgValue.Arr(items) -> return Result.Ok(items.len())
                         _ -> return Result.Ok(0)
                 Maybe.None() -> return Result.Ok(0)
