@@ -311,9 +311,9 @@ class ExpressionValidator(RecursiveVisitor):
         validate_try_expression(self.type_validator, node)
 
     def visit_rangeexpr(self, node: RangeExpr) -> None:
-        """Validate range expression."""
-        from sushi_lang.semantics.passes.types.expressions import validate_range_expression
-        validate_range_expression(self.type_validator, node)
+        """A range reached through the dispatch is in neither of its two positions."""
+        from sushi_lang.semantics.passes.types.expressions import refuse_range_value
+        refuse_range_value(self.type_validator, node)
 
     def visit_name(self, node: Name) -> None:
         """Name expressions are terminal."""

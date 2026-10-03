@@ -1,0 +1,10 @@
+# A range handed through a generic pass-through to a `foreach`: the range is the
+# argument, not the iterable (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn sid@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    foreach(i in sid(nom 0..3)):
+        println(i)
+    return 0

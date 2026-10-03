@@ -1,0 +1,5 @@
+# A range as the operand of an operator (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn main() i32:
+    let i32 x = (0..3) + 1
+    return x

@@ -1,0 +1,14 @@
+# A range given to a generic struct constructor, as a field of a declared instance and as
+# an argument of a generic function (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122, CE2122
+struct Holder@(T):
+    T it
+
+fn count@(T)(nom Holder@(T) h) i32:
+    let Holder@(T)[] kept = from([h])
+    return kept.len()
+
+fn main() i32:
+    let Holder@(i32) typed = Holder(0..3)
+    println(count(nom Holder(0..3)))
+    return typed.it

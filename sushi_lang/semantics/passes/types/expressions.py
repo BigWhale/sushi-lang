@@ -28,7 +28,10 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
         return
 
     for element in expr.elements:
-        validator.validate_expression(element.value)
+        if isinstance(element.value, RangeExpr):
+            validate_range_expression(validator, element.value)
+        else:
+            validator.validate_expression(element.value)
         if element.count is not None:
             reject_non_i32(validator, element.count,
                            validator.validate_expression(element.count),
@@ -116,6 +119,20 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     if not is_valid_cast(source_type, target_type):
         er.emit(validator.reporter, er.ERR.CE2014, expr.loc,
                source=display_type(source_type), target=display_type(target_type))
+
+
+def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
+    """CE2122: a range in a position that is not a `foreach` iterable or an array element.
+
+    The two legal positions validate their range with `validate_range_expression`
+    directly, so a range that reaches the general dispatch is in any other position
+    (#1165). The bounds are still checked.
+    """
+    er.emit_with(validator.reporter, er.ERR.CE2122, expr.loc) \
+        .help("walk it with `foreach`, or spell it into an array: `from([a..b])`") \
+        .emit()
+    validator.refused_ranges.add(id(expr))
+    validate_range_expression(validator, expr)
 
 
 def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
