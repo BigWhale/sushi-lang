@@ -144,6 +144,12 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
 )
 
 
+def predefined_variant_tag(enum_name: str, variant: str) -> int:
+    """The runtime tag of a variant of a predefined enum: its index in ABI order."""
+    predefined = next(enum for enum in PREDEFINED_ENUMS if enum.name == enum_name)
+    return predefined.variants.index(variant)
+
+
 def predefined_enums() -> tuple[EnumType, ...]:
     """The nine synthesized enums, each stamped with its home module."""
     return tuple(

@@ -14,9 +14,6 @@ from ..visibility import (name_is_contested, name_was_refused, out_of_scope_help
 from ..arguments import check_arguments
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value, type_literal_from_sibling
-from sushi_lang.semantics.type_predicates import (
-    BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES, BUILTIN_NUMERIC_TYPES,
-    BUILTIN_UNSIGNED_INTEGER_TYPES)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -313,12 +310,7 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
     args = call.args if hasattr(call, 'args') else []
 
     if stdlib_func.params is None:
-        if function_name in ("min", "max") and len(args) == 2:
-            type_literal_from_sibling(validator, args[0], args[1],
-                                      validator.infer_expression_type)
-        for arg in args:
-            validator.validate_expression(arg)
-        _validate_polymorphic_math(validator, call, function_name)
+        _validate_math_family(validator, call, function_name)
         return
 
     expected_params = stdlib_func.params
@@ -344,40 +336,33 @@ def validate_stdlib_function(validator: 'TypeValidator', call: Call, module_and_
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
-def _validate_polymorphic_math(validator: 'TypeValidator', call: Call, function_name: str) -> None:
-    """Validate polymorphic math functions (abs, min, max)."""
+def _validate_math_family(validator: 'TypeValidator', call: Call, function_name: str) -> None:
+    """A `<math>` family call (`abs`, `min`, `max`, `divmod`), measured against its table.
+
+    The count comes first. Then each argument must have a type of the family, and the two
+    arguments of a two-argument family must have one type.
+    """
+    from sushi_lang.sushi_stdlib.src.math import FAMILY_TYPE_NAMES, MATH_FAMILIES
+
     args = call.args if hasattr(call, 'args') else []
     _name, callee_loc = written_callee(call)
+    arity, family_types = MATH_FAMILIES[function_name]
 
-    # `abs` is the one caller that reads a SIGNED set, and `type_predicates` holds no
-    # such name today, so this one stays local.
-    SIGNED_INTS = BUILTIN_INTEGER_TYPES - BUILTIN_UNSIGNED_INTEGER_TYPES
-    FLOATS = BUILTIN_FLOAT_TYPES
-    NUMERIC = BUILTIN_NUMERIC_TYPES
+    if arity == 2 and len(args) == 2:
+        type_literal_from_sibling(validator, args[0], args[1],
+                                  validator.infer_expression_type)
+    for arg in args:
+        validator.validate_expression(arg)
 
-    if function_name == "abs":
-        if len(args) != 1:
-            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
-                   name="abs", expected=1, got=len(args))
-            return
-        arg_type = validator.infer_expression_type(args[0])
-        if arg_type is not None and arg_type not in (SIGNED_INTS | FLOATS):
-            er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
-                   index=1, expected="signed integer or float", got=display_type(arg_type))
-
-    elif function_name in ("min", "max"):
-        if len(args) != 2:
-            er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
-                   name=function_name, expected=2, got=len(args))
-            return
-        type_a = validator.infer_expression_type(args[0])
-        type_b = validator.infer_expression_type(args[1])
-        if type_a is not None and type_a not in NUMERIC:
-            er.emit(validator.reporter, er.ERR.CE2006, args[0].loc,
-                   index=1, expected="numeric type", got=display_type(type_a))
-        if type_b is not None and type_b not in NUMERIC:
-            er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
-                   index=2, expected="numeric type", got=display_type(type_b))
-        if type_a is not None and type_b is not None and type_a != type_b:
-            er.emit(validator.reporter, er.ERR.CE2006, args[1].loc,
-                   index=2, expected=display_type(type_a), got=display_type(type_b))
+    if len(args) != arity:
+        er.emit(validator.reporter, er.ERR.CE2009, callee_loc,
+               name=function_name, expected=arity, got=len(args))
+        return
+    arg_types = [validator.infer_expression_type(arg) for arg in args]
+    for index, (arg, arg_type) in enumerate(zip(args, arg_types, strict=True), start=1):
+        if arg_type is not None and arg_type not in family_types:
+            er.emit(validator.reporter, er.ERR.CE2006, arg.loc, index=index,
+                   expected=FAMILY_TYPE_NAMES[function_name], got=display_type(arg_type))
+    if arity == 2 and None not in arg_types and arg_types[0] != arg_types[1]:
+        er.emit(validator.reporter, er.ERR.CE2006, args[1].loc, index=2,
+               expected=display_type(arg_types[0]), got=display_type(arg_types[1]))

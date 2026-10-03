@@ -1,0 +1,59 @@
+# A zero divisor is `MathError.DivisionByZero` for every width, and the signed
+# `MIN / -1` is `MathError.Overflow`: the quotient does not fit the type.
+# EXPECT_STDOUT_EXACT: "i32 zero\nu8 zero\nu64 zero\ni8 overflow\ni16 overflow\ni32 overflow\ni64 overflow\ni8 127 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn name(MathError e) string:
+    match e:
+        MathError.DivisionByZero -> return "zero"
+        MathError.Overflow -> return "overflow"
+        MathError.Underflow -> return "underflow"
+        MathError.InvalidInput -> return "input"
+
+fn main() i32:
+    let i32 a = 7
+    let i32 zero = 0
+    match divmod(a, zero):
+        Result.Ok(_) -> println("i32 ok")
+        Result.Err(e) -> println("i32 {name(e)}")
+
+    let u8 b = 7
+    let u8 zero8 = 0
+    match divmod(b, zero8):
+        Result.Ok(_) -> println("u8 ok")
+        Result.Err(e) -> println("u8 {name(e)}")
+
+    let u64 c = 18000000000000000000
+    match divmod(c, 0):
+        Result.Ok(_) -> println("u64 ok")
+        Result.Err(e) -> println("u64 {name(e)}")
+
+    let i8 min8 = -128
+    let i8 neg8 = -1
+    match divmod(min8, neg8):
+        Result.Ok(_) -> println("i8 ok")
+        Result.Err(e) -> println("i8 {name(e)}")
+
+    let i16 min16 = -32768
+    let i16 neg16 = -1
+    match divmod(min16, neg16):
+        Result.Ok(_) -> println("i16 ok")
+        Result.Err(e) -> println("i16 {name(e)}")
+
+    let i32 min32 = -2147483648
+    match divmod(min32, -1):
+        Result.Ok(_) -> println("i32 ok")
+        Result.Err(e) -> println("i32 {name(e)}")
+
+    let i64 min64 = -9223372036854775808
+    let i64 neg64 = -1
+    match divmod(min64, neg64):
+        Result.Ok(_) -> println("i64 ok")
+        Result.Err(e) -> println("i64 {name(e)}")
+
+    let i8 near = -127
+    match divmod(near, neg8):
+        Result.Ok((q, r)) -> println("i8 {q} {r}")
+        Result.Err(e) -> println("i8 {name(e)}")
+    return 0

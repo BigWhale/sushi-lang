@@ -1,6 +1,6 @@
 """Call emission for the <math> module functions, each from its row (#827).
 
-`abs`, `min` and `max` are a family with one row per argument type. The row is picked
+`abs`, `min`, `max` and `divmod` are families, one row per argument type. The row is picked
 from the SEMANTIC type of the first argument, because an LLVM integer carries no sign:
 `min` over two u8 must call `sushi_min_u8`, never the signed `sushi_min_i8` (#817).
 """

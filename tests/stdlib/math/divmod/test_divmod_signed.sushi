@@ -1,0 +1,37 @@
+# `divmod` on every signed width answers `(a / b, a % b)`, exactly as the two
+# operators do: the quotient goes toward zero and the remainder takes the sign of `a`.
+# EXPECT_STDOUT_EXACT: "i8 -3 -1\ni8 -3 1\ni16 -142 6\ni32 -14 -2\ni64 1285714285714285714 2\ni32 3 1\nsame true\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+
+fn main() i32:
+    let i8 a8 = -7
+    let i8 b8 = 2
+    let (i8 q8, i8 r8) = divmod(a8, b8).realise((0, 0))
+    println("i8 {q8} {r8}")
+    let i8 c8 = 7
+    let i8 d8 = -2
+    let (q8n, r8n) = divmod(c8, d8).realise((0, 0))
+    println("i8 {q8n} {r8n}")
+
+    let i16 a16 = 1000
+    let i16 b16 = -7
+    let (i16 q16, i16 r16) = divmod(a16, b16).realise((0, 0))
+    println("i16 {q16} {r16}")
+
+    let i32 a32 = -100
+    let i32 b32 = 7
+    let (i32 q32, i32 r32) = divmod(a32, b32).realise((0, 0))
+    println("i32 {q32} {r32}")
+
+    let i64 a64 = 9000000000000000000
+    let i64 b64 = 7
+    let (i64 q64, i64 r64) = divmod(a64, b64).realise((0, 0))
+    println("i64 {q64} {r64}")
+
+    let (q, r) = divmod(7, 2).realise((0, 0))
+    println("i32 {q} {r}")
+
+    let (sq, sr) = divmod(a32, b32).realise((0, 0))
+    println("same {sq == a32 / b32 and sr == a32 % b32}")
+    return 0

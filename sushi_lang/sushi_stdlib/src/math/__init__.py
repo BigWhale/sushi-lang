@@ -1,12 +1,13 @@
 """Math module for Sushi standard library."""
 from __future__ import annotations
 import typing
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 from llvmlite import ir
 
+from sushi_lang.semantics.generics.tuples import tuple_ref
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.sushi_stdlib.src.signatures import Signature, params_of
+from sushi_lang.sushi_stdlib.src.signatures import Signature, SushiType, params_of
 
 if typing.TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
@@ -24,16 +25,31 @@ MATH_SIGNATURES: Dict[str, Signature] = {
     **{name: Signature(params_of(F64, F64), bare=F64) for name in _BINARY},
 }
 
-_SIGNED = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64)
-_UNSIGNED = (BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
+SIGNED = (BuiltinType.I8, BuiltinType.I16, BuiltinType.I32, BuiltinType.I64)
+UNSIGNED = (BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
 _FLOATS = (BuiltinType.F32, BuiltinType.F64)
 
-# `abs`, `min` and `max` are a FAMILY: one row per argument type, every parameter and
-# the answer of that one type, and the generated function is `sushi_<name>_<type>`.
+# `abs`, `min`, `max` and `divmod` are a FAMILY: one row per argument type, every
+# parameter of that one type, and the generated function is `sushi_<name>_<type>`.
 MATH_FAMILIES: Dict[str, Tuple[int, Tuple[BuiltinType, ...]]] = {
-    'abs': (1, _SIGNED + _FLOATS),
-    'min': (2, _SIGNED + _UNSIGNED + _FLOATS),
-    'max': (2, _SIGNED + _UNSIGNED + _FLOATS),
+    'abs': (1, SIGNED + _FLOATS),
+    'min': (2, SIGNED + UNSIGNED + _FLOATS),
+    'max': (2, SIGNED + UNSIGNED + _FLOATS),
+    'divmod': (2, SIGNED + UNSIGNED),
+}
+
+# What a refusal calls the argument types of each family.
+FAMILY_TYPE_NAMES: Dict[str, str] = {
+    'abs': "signed integer or float",
+    'min': "numeric type",
+    'max': "numeric type",
+    'divmod': "integer type",
+}
+
+# A family member answers its argument type, except a family named here: it answers
+# `Result@(ok, MathError)`, with `ok` made from the argument type.
+_FAMILY_OK: Dict[str, Callable[[BuiltinType], SushiType]] = {
+    'divmod': lambda ty: tuple_ref((ty, ty)),
 }
 
 
@@ -43,7 +59,11 @@ def family_row(name: str, ty) -> Optional[Signature]:
     if family is None or ty not in family[1]:
         return None
     arity, _types = family
-    return Signature(params_of(*([ty] * arity)), bare=ty)
+    params = params_of(*([ty] * arity))
+    ok = _FAMILY_OK.get(name)
+    if ok is None:
+        return Signature(params, bare=ty)
+    return Signature(params, ok=ok(ty), error="MathError")
 
 
 def is_builtin_math_function(name: str) -> bool:
@@ -95,6 +115,7 @@ def generate_module_ir() -> ir.Module:
 
     operations.generate_abs_functions(module)
     operations.generate_min_max_functions(module)
+    operations.generate_divmod_functions(module)
     operations.generate_sqrt(module)
     operations.generate_pow(module)
     operations.generate_floor(module)
