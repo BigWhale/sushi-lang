@@ -146,8 +146,10 @@ class SemanticAnalyzer:
             borrow        borrow checking                        _check_units                      passes/borrow/
 
         The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
-        those four for each instantiation of a generic-target extension, and
-        `_check_array_extensions` drives that to a fixpoint.
+        those four for each instantiation of a generic-target extension,
+        `_check_late_functions` repeats them for each function instance cut after the
+        loop started (a late request of the typecheck pass, #1155), and
+        `_check_array_extensions` drives both to a fixpoint.
 
         One call in `_check_multi_file` carries no row, because it is not a pass:
         `_register_monomorphized_extensions` merges the generic-target extension copies
