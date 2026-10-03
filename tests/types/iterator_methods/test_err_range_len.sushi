@@ -1,5 +1,6 @@
-# A range is an Iterator@(i32) and has no methods: `len` is CE2008 at the call (#1136).
-# EXPECT_ERROR_CODES_EXACT: CE2008
+# A range is not a value, so it is no method receiver either: `(0..3).len()` is CE2122 at
+# the range (#1136, #1165). An iterator VALUE with no such method is still CE2008.
+# EXPECT_ERROR_CODES_EXACT: CE2122
 fn main() i32:
     println((0..3).len())
     return 0
