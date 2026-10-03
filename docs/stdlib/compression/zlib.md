@@ -3,7 +3,8 @@
 [← Back to Standard Library](../../standard-library.md)
 
 DEFLATE and the zlib container, written in Sushi: `zlib_compress`,
-`zlib_uncompress`, `deflate_raw`, `inflate_raw`, `adler32`, and `ZError.text()`.
+`zlib_uncompress`, `deflate_raw`, `inflate_raw`, `inflate_raw_prefix`, `adler32`, and
+`ZError.text()`.
 Data this module writes is readable by any zlib, and data any zlib writes is
 readable here.
 
@@ -26,7 +27,7 @@ It implements two formats:
 
 | Format | Entry points | Framing |
 |---|---|---|
-| RFC 1951, raw DEFLATE | `deflate_raw`, `inflate_raw` | none |
+| RFC 1951, raw DEFLATE | `deflate_raw`, `inflate_raw`, `inflate_raw_prefix` | none |
 | RFC 1950, zlib | `zlib_compress`, `zlib_uncompress` | two-byte header, Adler-32 trailer |
 
 **The decoder is complete.** It reads all three block types — stored, fixed Huffman and
@@ -131,6 +132,26 @@ fn run() i32 | ZError:
 fn main() i32:
     return run().realise(1)
 # 3 bytes: abc
+```
+
+### `inflate_raw_prefix(u8[] src) -> (u8[], i32) | ZError`
+
+Decompress the raw DEFLATE stream at the start of `src`, and answer the output with the
+count of input bytes the stream used: up to the end of its final block, rounded up to a
+byte. Bytes after the stream are not read, so a caller can find where the next field of a
+container starts.
+
+```sushi
+use <compression/zlib>
+use <collections/strings>
+
+fn main() i32:
+    let u8[] packed = deflate_raw("Mostly Harmless".to_bytes(), 6).realise(from([]))
+    packed.push(0xff)
+    match inflate_raw_prefix(packed):
+        Result.Ok((out, used)) -> println("{out.len()} bytes out of {used} input bytes")
+        Result.Err(e) -> println(e.text())
+    return 0
 ```
 
 ### `adler32(u8[] data) -> u32`

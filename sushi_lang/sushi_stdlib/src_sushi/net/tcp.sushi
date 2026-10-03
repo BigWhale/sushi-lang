@@ -198,17 +198,56 @@ public fn listen(string host, i32 port, i32 backlog) TcpListener | NetError:
     return Result.Ok(TcpListener(fd))
 
 ##:
-Takes the next connection waiting on a listener.
+Takes the next connection waiting on a listener, and the address of its peer.
 
 The call blocks until one arrives, unless set_timeout() has given the
-listener a bound, in which case it answers TimedOut.
+listener a bound, in which case it answers TimedOut. The address is the one
+that accept(2) gives, so it costs no second system call. A dual-stack listener
+gives an IPv4 peer as a V4-mapped V6 address.
 
-- Returns: The accepted stream.
-- Errors: NetError, when no connection could be taken.
+- Returns: The accepted stream and the address of its peer.
+- Errors: NetError, when no connection could be taken, or
+  NetError.InvalidAddress when the peer is not an IPv4 or an IPv6 address.
+- Example:
+```sushi
+use <collections/strings>
+
+fn greet() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    let TcpStream client = connect("127.0.0.1", listener.local_port()??)??
+    let (TcpStream served, IpAddr peer) = listener.accept()??
+    println("connection from {peer.text()}")
+    served.send_all("Mostly Harmless".to_bytes())??
+    let u8[] heard = client.recv_exact(15)??
+    println(heard.to_string())
+    return Result.Ok(~)
+
+fn main() i32:
+    match greet():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
+```
 :##
-extend TcpListener accept() TcpStream | NetError:
-    let i32 fd = sock_tcp_accept(self.fd)??
-    return Result.Ok(TcpStream(fd))
+extend TcpListener accept() (TcpStream, IpAddr) | NetError:
+    let (i32 fd, i32 version, u64 high, u64 low) = sock_tcp_accept(self.fd)??
+    let TcpStream stream = TcpStream(fd)
+    return Result.Ok((stream, peer_address(version, high, low)??))
+
+##:
+The IpAddr of a peer, from the address bits that accept(2) or getpeername(2) wrote.
+
+- Parameter version: 4, 6, or 0 for an address family that is not IP.
+- Parameter high: The high 64 bits of a V6 address; 0 for V4.
+- Parameter low: The low 64 bits of a V6 address, or the V4 address.
+- Returns: The address.
+- Errors: NetError.InvalidAddress when the version is not 4 or 6.
+:##
+fn peer_address(i32 version, u64 high, u64 low) IpAddr | NetError:
+    if (version == 4):
+        return Result.Ok(IpAddr.V4(low as u32))
+    if (version == 6):
+        return Result.Ok(IpAddr.V6(high, low))
+    return Result.Err(NetError.InvalidAddress)
 
 ##:
 Opens a second handle over the same listening socket.
@@ -289,16 +328,16 @@ extend TcpStream recv_exact(i32 count) u8[] | NetError:
 ##:
 The address of the peer at the other end.
 
-No resolver is asked, so this makes no network request. Call .text() on the
-answer for the canonical text.
+It reads the address bits that getpeername(2) wrote, as peer() does, and asks
+no resolver. Call .text() on the answer for the canonical text.
 
 - Returns: The peer's address.
 - Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
-  when the kernel gave an address that <net/ip> cannot read.
+  when the peer is not an IPv4 or an IPv6 address.
 :##
 extend TcpStream peer_ip() IpAddr | NetError:
-    let string text = sock_peer_ip(self.fd)??
-    return Result.Ok(parse_ip(text)??)
+    let (IpAddr ip, _) = self.peer()??
+    return Result.Ok(ip)
 
 ##:
 The port of the peer at the other end.
@@ -308,6 +347,26 @@ The port of the peer at the other end.
 :##
 extend TcpStream peer_port() i32 | NetError:
     return Result.Ok(sock_peer_port(self.fd)??)
+
+##:
+The address and the port of the peer at the other end, from one system call.
+
+No resolver is asked, so this makes no network request.
+
+- Returns: The peer's address and port.
+- Errors: NetError, when the stream has no peer, or NetError.InvalidAddress
+  when the peer is not an IPv4 or an IPv6 address.
+- Example:
+  ```sushi no_run
+  let TcpStream s = connect("127.0.0.1", 8080).realise(TcpStream(-1))
+  match s.peer():
+      Result.Ok((ip, port)) -> println("{ip.text()}:{port}")
+      Result.Err(_) -> println("no peer")
+  ```
+:##
+extend TcpStream peer() (IpAddr, i32) | NetError:
+    let (i32 version, u64 high, u64 low, i32 port) = sock_peer(self.fd)??
+    return Result.Ok((peer_address(version, high, low)??, port))
 
 ##:
 The port a listener actually bound.

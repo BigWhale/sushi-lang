@@ -251,21 +251,22 @@ length. The source length is compared with what is left of the file, and the bit
 length is not.
 
 - Parameter f: The file, after the metadata blob.
-- Parameter left: The number of bytes that are left in the file. The read takes the
-  two length fields and the source section off it.
-- Returns: The two lengths.
+- Parameter left: The number of bytes that are left in the file.
+- Returns: The two lengths, and the number of bytes that are left after the two length
+  fields and the source section.
 - Errors: `SlibError.Truncated` or `SlibError.Io`.
 :##
-fn read_sections(poke File f, poke u64 left) SlibSizes | SlibError:
-    let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Source())??
-    left := left - LENGTH_FIELD_SIZE
+fn read_sections(poke File f, u64 left) (SlibSizes, u64) | SlibError:
+    let u64 rest = left
+    let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, rest, SlibSection.Source())??
+    rest := rest - LENGTH_FIELD_SIZE
     let u64 slen = le_uint(peek src_field, 0, 8)
-    skip_part(poke f, slen, left, SlibSection.Source())??
-    left := left - slen
-    let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, left, SlibSection.Bitcode())??
-    left := left - LENGTH_FIELD_SIZE
+    skip_part(poke f, slen, rest, SlibSection.Source())??
+    rest := rest - slen
+    let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, rest, SlibSection.Bitcode())??
+    rest := rest - LENGTH_FIELD_SIZE
     let u64 bclen = le_uint(peek bc_field, 0, 8)
-    return Result.Ok(SlibSizes(slen, bclen))
+    return Result.Ok((SlibSizes(slen, bclen), rest))
 
 ##:
 Reads and decodes the metadata map of a `.slib` file.
@@ -296,8 +297,8 @@ public fn sizes(string path) SlibSizes | SlibError:
     let u64 mlen = read_header(poke f, total)??
     let u64 left = total - HEADER_SIZE
     skip_part(poke f, mlen, left, SlibSection.Metadata())??
-    left := left - mlen
-    return Result.Ok(read_sections(poke f, poke left)??)
+    let (SlibSizes both, _) = read_sections(poke f, left - mlen)??
+    return Result.Ok(both)
 
 ##:
 Reads the length of the bitcode section alone.
@@ -484,7 +485,7 @@ fn value_kind(MsgValue v) string:
     match v:
         MsgValue.Str(_) -> return "str"
         MsgValue.Bool(_) -> return "bool"
-        MsgValue.Map(_, _) -> return "map"
+        MsgValue.Map(_) -> return "map"
         MsgValue.Arr(_) -> return "list"
         MsgValue.Nil() -> return "nil"
         _ -> return "other"
@@ -522,8 +523,8 @@ fn record_fault(MsgValue rec, string kind, string where) Maybe@(string):
             match map_index(rec, row.key):
                 Maybe.Some(at) ->
                     match rec:
-                        MsgValue.Map(_, vals) ->
-                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)
+                        MsgValue.Map(pairs) ->
+                            let Maybe@(string) fault = value_fault(pairs[at].1, row.spec, name)
                             if (fault.is_some()):
                                 return fault
                         _ ->
@@ -586,11 +587,11 @@ fn value_fault(MsgValue v, string spec, string name) Maybe@(string):
         return record_fault(v, spec.s(1, spec.len()), name)
     let string value_spec = "@{spec.s(2, spec.len())}"
     match v:
-        MsgValue.Map(keys, vals) ->
-            foreach(i in 0..keys.len()):
-                match keys[i]:
+        MsgValue.Map(pairs) ->
+            foreach((key, value) in pairs.iter()):
+                match key:
                     MsgValue.Str(k) ->
-                        let Maybe@(string) fault = value_fault(vals[i], value_spec, "{name}.{k}")
+                        let Maybe@(string) fault = value_fault(value, value_spec, "{name}.{k}")
                         if (fault.is_some()):
                             return fault
                     _ ->
@@ -635,9 +636,8 @@ public fn read_library(string path) SlibLibrary | SlibError:
     let u64 mlen = read_header(poke f, total)??
     let u64 left = total - HEADER_SIZE
     let MsgValue meta = read_blob(poke f, mlen, left)??
-    left := left - mlen
-    let SlibSizes both = read_sections(poke f, poke left)??
-    if (both.bitcode > left):
-        return Result.Err(SlibError.Truncated(SlibSection.Bitcode(), both.bitcode, left))
+    let (SlibSizes both, u64 rest) = read_sections(poke f, left - mlen)??
+    if (both.bitcode > rest):
+        return Result.Err(SlibError.Truncated(SlibSection.Bitcode(), both.bitcode, rest))
     check_manifest(meta)??
     return Result.Ok(SlibLibrary(meta, both))

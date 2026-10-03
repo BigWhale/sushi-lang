@@ -113,7 +113,7 @@ let HashMap@(string, i32) copy = ages.clone()
 
 ## Iteration
 
-A `HashMap` can be iterated three ways. Each returns an iterator suitable for a `foreach`
+A `HashMap` can be iterated four ways. Each returns an iterator suitable for a `foreach`
 loop. Iteration order is unspecified.
 
 ### `.keys() -> Iterator@(K)`
@@ -143,8 +143,26 @@ foreach(entry in ages.entries()):
     println("{entry.key} is {entry.value}")
 ```
 
+### `.pairs() -> Iterator@((K, V))`
+
+Iterate over key-value pairs as tuples, so a `foreach` destructures each one. The key and
+the value have the same ownership as `.key` and `.value` of `.entries()`; the two
+iterators differ only in the shape of the item.
+
+```sushi
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32) ages = HashMap.new()
+    ages.insert("Arthur", 42)
+    ages.insert("Ford", 200)
+    foreach((name, age) in ages.pairs()):
+        println("{name} is {age}")
+    return 0
+```
+
 !!! note
-    `.keys()`, `.values()`, and `.entries()` accept any receiver whose type resolves,
+    `.keys()`, `.values()`, `.entries()` and `.pairs()` accept any receiver whose type resolves,
     including a fallible getter: `foreach(k in get_map()??.keys())` works, and the map
     it produces is freed at scope exit.
 

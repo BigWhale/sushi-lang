@@ -1,0 +1,47 @@
+# decode_prefix decodes the FIRST value of a buffer and answers it with the
+# count of bytes it read. Bytes after the value are not an error, so a loop
+# reads a stream of values. An empty or a truncated buffer fails as decode
+# fails.
+# EXPECT_STDOUT_EXACT: "1 used 1\n"hi" used 3\n[1,2] used 3\nnil used 1\ndone 8\nwhole 3 of 5\nempty truncated input\nempty decode truncated input\nshort truncated input\nshort decode truncated input\nbad unsupported tag\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <encoding/msgpack>
+
+fn walk(u8[] stream) i32 | MpError:
+    let i32 at = 0
+    while (at < stream.len()):
+        let (MsgValue v, i32 used) = decode_prefix(stream.s(at, stream.len()))??
+        println("{show(v)} used {used}")
+        at := at + used
+    return Result.Ok(at)
+
+fn fault(Result@((MsgValue, i32), MpError) r) string:
+    match r:
+        Result.Ok(_) -> return "decoded"
+        Result.Err(e) -> return e.text()
+
+fn main() i32:
+    let u8[] stream = from([0x01, 0xa2, 0x68, 0x69, 0x92, 0x01, 0x02, 0xc0])
+    match walk(stream):
+        Result.Ok(n) -> println("done {n}")
+        Result.Err(e) -> println("walk failed {e.text()}")
+
+    let u8[] padded = from([0xa2, 0x6f, 0x6b, 0xff, 0xff])
+    let (MsgValue, i32) first = decode_prefix(padded).realise((MsgValue.Nil(), -1))
+    println("whole {first.1} of {padded.len()}")
+
+    let u8[] empty = from([])
+    println("empty {fault(decode_prefix(empty))}")
+    match decode(empty):
+        Result.Ok(_) -> println("empty decoded")
+        Result.Err(e) -> println("empty decode {e.text()}")
+
+    let u8[] short = from([0xa5, 0x68])
+    println("short {fault(decode_prefix(short))}")
+    match decode(short):
+        Result.Ok(_) -> println("short decoded")
+        Result.Err(e) -> println("short decode {e.text()}")
+
+    let u8[] bad = from([0xc1, 0x00])
+    println("bad {fault(decode_prefix(bad))}")
+    return 0

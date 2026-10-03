@@ -1,6 +1,6 @@
 """Shared utilities for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, AbstractSet, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Callable, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.interned import interned_name
@@ -338,7 +338,9 @@ def intern_declared_wrapper(validator: 'TypeValidator',
     may name an entry nobody has built yet, because nothing instantiates a `Result@(T, E)`
     until a declaration asks for it, so it goes through the seam that alone may build one
     -- a structural build poisons the table (CE0126). Both seams resolve their own
-    payloads recursively, so nothing is resolved before the call.
+    payloads recursively. A tuple in a payload is the exception: it has no declaration,
+    and a stdlib row can name one that no written type has built, so it is interned here
+    first, or the wrapper holds it unresolved and stays out of the table.
 
     None means "not a written wrapper". That is what lets a caller fall through to the
     lookup instead of reading the answer to tell a miss from a hit (#755). A tuple goes to
@@ -351,26 +353,31 @@ def intern_declared_wrapper(validator: 'TypeValidator',
     if not isinstance(ty, GenericTypeRef):
         return None
 
-    from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
+    from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple, is_tuple_type
     from sushi_lang.semantics.type_walk import map_named_types
 
     def written(held: Type) -> Type:
         interned = intern_declared_wrapper(validator, held)
         return interned if interned is not None else held
 
-    if ty.base_name == TUPLE_BASE:
-        elements: List[Type] = []
-        for arg in ty.type_args:
-            mapped = map_named_types(arg, written)
-            elements.append(arg if mapped is None else mapped)
-        return intern_tuple(validator.struct_table, validator.enum_table, elements)
+    def held_tuple(held: Type) -> Type:
+        return written(held) if is_tuple_type(held) else held
 
+    def mapped_args(resolve: Callable[[Type], Type]) -> List[Type]:
+        mapped = [map_named_types(arg, resolve) for arg in ty.type_args]
+        return [arg if new is None else new for arg, new in zip(ty.type_args, mapped, strict=True)]
+
+    if ty.base_name == TUPLE_BASE:
+        return intern_tuple(validator.struct_table, validator.enum_table,
+                            mapped_args(written))
+
+    payloads = mapped_args(held_tuple)
     structs = validator.struct_table.by_name
-    if ty.base_name == "Result" and len(ty.type_args) == 2:
-        return ensure_result_type_in_table(validator.enum_table, ty.type_args[0],
-                                           ty.type_args[1], struct_table=structs)
-    if ty.base_name == "Maybe" and len(ty.type_args) == 1:
-        return ensure_maybe_type_in_table(validator.enum_table, ty.type_args[0],
+    if ty.base_name == "Result" and len(payloads) == 2:
+        return ensure_result_type_in_table(validator.enum_table, payloads[0],
+                                           payloads[1], struct_table=structs)
+    if ty.base_name == "Maybe" and len(payloads) == 1:
+        return ensure_maybe_type_in_table(validator.enum_table, payloads[0],
                                           struct_table=structs)
     return None
 

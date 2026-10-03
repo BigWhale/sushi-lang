@@ -1552,6 +1552,45 @@ fn main() i32:
     return 0
 ```
 
+### Tuples in the Standard Library
+
+A stdlib function with two results answers a tuple:
+
+| Module | Function | Answer |
+|---|---|---|
+| `<math>` | `divmod(T a, T b)` | `(T, T) \| MathError` |
+| `<collections/strings>` | `s.split_once(sep)`, `s.rsplit_once(sep)` | `Maybe@((string, string))` |
+| `<collections/iter>` | `enumerate`, `zip`, `partition`, `unzip` | a `List` of tuples, or a tuple of `List`s |
+| `<collections/hashmap>` | `m.pairs()` | `Iterator@((K, V))` |
+| `<io/path>` | `split(p)`, `split_extension(p)` | `(string, string)` |
+| `<io/buf>` | `r.into_parts()` | `(R, u8[])` |
+| `<net/tcp>` | `l.accept()`, `s.peer()` | `(TcpStream, IpAddr) \| NetError`, `(IpAddr, i32) \| NetError` |
+| `<encoding/msgpack>` | `decode_prefix(buf)` | `(MsgValue, i32) \| MpError` |
+| `<compression/zlib>` | `inflate_raw_prefix(src)` | `(u8[], i32) \| ZError` |
+
+A `MsgValue.Map` holds its entries as `(MsgValue, MsgValue)[]`. The answer goes into a
+destructure, a `match` with a tuple pattern, or a `foreach`:
+
+```sushi
+use <math>
+use <collections/strings>
+use <collections/hashmap>
+
+fn main() i32:
+    match divmod(7, 2):
+        Result.Ok((q, 1)) -> println("odd, half is {q}")
+        Result.Ok((q, _)) -> println("even, half is {q}")
+        Result.Err(_) -> println("no answer")
+    match "a/b/c".rsplit_once("/"):
+        Maybe.Some((dir, file)) -> println("{dir} {file}")    # a/b c
+        Maybe.None -> println("no separator")
+    let HashMap@(string, i32) ages = HashMap.new()
+    ages.insert("Arthur", 42)
+    foreach((name, age) in ages.pairs()):
+        println("{name} is {age}")
+    return 0
+```
+
 ### What a Tuple Is Not
 
 - There is no tuple constant and no tuple unit variable (see [Constants](#constants)).

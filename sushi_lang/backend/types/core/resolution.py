@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from sushi_lang.semantics.generics.interned import interned_name
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import (
     UnknownType,
@@ -59,7 +60,7 @@ def require_generic_instance(
     if concrete_name in struct_table:
         return struct_table[concrete_name]
 
-    raise_internal_error("CE0045", type=concrete_name)
+    raise_internal_error("CE0045", type=display_type(semantic_type))
 
 
 # calculate_max_variant_size was RETIRED with the aligned enum payload layout (#300

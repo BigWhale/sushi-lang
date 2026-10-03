@@ -1,0 +1,36 @@
+# enumerate gives each element with its index, from 0, in a new list. The free
+# function, the List method and the array method give the same pairs. The input
+# is a borrow: it stays usable, and each string in the answer is a copy.
+# EXPECT_STDOUT_EXACT: "0 Arthur\n1 Ford\n2 Zaphod\n0 Arthur\n1 Ford\n2 Zaphod\n0 10\n1 20\nlast 2 Zaphod\nfirst (0, "Arthur")\nstill 3\nempty 0 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/iter>
+
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    names.push("Zaphod")
+
+    foreach((i, name) in enumerate(names).iter()):
+        println("{i} {name}")
+    foreach((i32 i, string name) in names.enumerate().iter()):
+        println("{i} {name}")
+
+    let i32[] scores = from([10, 20])
+    let List@((i32, i32)) indexed = scores.enumerate()
+    foreach((i, v) in indexed.iter()):
+        println("{i} {v}")
+
+    let List@((i32, string)) numbered = enumerate(names)
+    let (i32 at, string last) = numbered.pop().realise((-1, ""))
+    println("last {at} {last}")
+    match numbered.get(0):
+        Maybe.Some(first) -> println("first {first}")
+        Maybe.None -> println("none")
+    println("still {names.len()}")
+
+    let List@(string) none = List.new()
+    let i32[] nothing = from([])
+    println("empty {enumerate(none).len()} {nothing.enumerate().len()}")
+    return 0

@@ -1,0 +1,39 @@
+# `split_once` splits at the FIRST occurrence and `rsplit_once` at the LAST; the
+# separator is in neither part. No occurrence is `Maybe.None`. An empty separator
+# matches at the start for `split_once` and at the end for `rsplit_once`.
+# EXPECT_STDOUT_EXACT: "[a|b=c]\n[a=b|c]\nnone\nnone\n[|abc]\n[abc|]\n[|abc]\n[abc|]\n[|abc]\n[abc|]\n[|]\n[|]\nnone\nnone\n[|]\n[|]\nnone\n[k|v]\n[k|v]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show(Maybe@((string, string)) m) string:
+    match m:
+        Maybe.Some((a, b)) -> return "[{a}|{b}]"
+        Maybe.None -> return "none"
+
+fn main() i32:
+    println(show("a=b=c".split_once("=")))
+    println(show("a=b=c".rsplit_once("=")))
+    println(show("abc".split_once("=")))
+    println(show("abc".rsplit_once("=")))
+
+    println(show("=abc".split_once("=")))
+    println(show("abc=".split_once("=")))
+    println(show("=abc".rsplit_once("=")))
+    println(show("abc=".rsplit_once("=")))
+
+    println(show("abc".split_once("")))
+    println(show("abc".rsplit_once("")))
+    println(show("".split_once("")))
+    println(show("".rsplit_once("")))
+    println(show("".split_once("x")))
+    println(show("ab".rsplit_once("abc")))
+
+    println(show("==".split_once("==")))
+    println(show("==".rsplit_once("==")))
+    println(show("a=".split_once("==")))
+
+    let string line = "k::v".clone()
+    println(show(line.split_once("::")))
+    println(show(line.rsplit_once("::")))
+    return 0

@@ -19,7 +19,7 @@ use <io/path>
 ## Functions
 
 Every function in this module is **bare**: it has no error channel, and a call gives the
-`string` itself. Do not write `??` or `.realise(...)` on a call. A `??` on it is CE2507, and
+`string` (or, for `split` and `split_extension`, the pair of strings) itself. Do not write `??` or `.realise(...)` on a call. A `??` on it is CE2507, and
 a `.realise(...)` on it is CE2008.
 
 A bare function is the exception in Sushi. These functions are bare because each one is
@@ -77,6 +77,37 @@ use <io/path>
 fn main() i32:
     println(extension("archive.tar.gz"))  # gz
     println(extension(".bashrc"))         # (empty)
+    return 0
+```
+
+### `split(string path) (string, string)`
+
+The directory and the last component, in one call: `split(p)` is `(dirname(p), basename(p))`
+for every `p`.
+
+```sushi
+use <io/path>
+
+fn main() i32:
+    let (dir, name) = split("/usr/lib/libc.so")
+    println("{dir} {name}")    # /usr/lib libc.so
+    return 0
+```
+
+### `split_extension(string path) (string, string)`
+
+The path without its extension, and the extension: `(stem, extension(p))`. The extension
+has no dot, as `extension()` answers it, and `stem` is `p` without `"." + extension`. A
+path with no extension gives `(p, "")`; a hidden file such as `.bashrc` has none.
+
+```sushi
+use <io/path>
+
+fn main() i32:
+    let (stem, ext) = split_extension("notes/towel.txt")
+    println("{stem} {ext}")    # notes/towel txt
+    let (s, e) = split_extension("archive.tar.gz")
+    println("{s} {e}")         # archive.tar gz
     return 0
 ```
 

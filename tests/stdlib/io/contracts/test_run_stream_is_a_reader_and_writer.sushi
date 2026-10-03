@@ -27,7 +27,7 @@ fn main() i32:
                 Result.Ok(_) -> println("sent through the contract")
                 Result.Err(_) -> println("send failed")
             match server.accept():
-                Result.Ok(nom session) ->
+                Result.Ok((nom session, _)) ->
                     let string got = first_text(poke session).realise("")
                     println("server read: {got}")
                 Result.Err(_) -> println("accept failed")

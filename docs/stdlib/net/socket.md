@@ -69,9 +69,9 @@ fn main() i32:
 
 Connect to a host and port. The host may be a name or a numeric address; a name is resolved and every answer is tried in turn. There is **no connect timeout** — that needs a non-blocking socket and `select` — so an address that answers nothing waits for the kernel to give up.
 
-### `sock_tcp_accept(i32 fd) i32 | NetError`
+### `sock_tcp_accept(i32 fd) (i32, i32, u64, u64) | NetError`
 
-Take the next connection waiting on a listener. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
+Take the next connection waiting on a listener, and the peer address that `accept(2)` wrote. The tuple is `(fd, version, high, low)`: the new descriptor, the IP version (`4`, `6`, or `0` for another address family), and the address bits. An IPv4 address is the low 32 bits of `low`; an IPv6 address is `high` then `low`, as `IpAddr.V6` holds it. `TcpListener.accept()` builds the `IpAddr` from these. Give the listener a timeout first and this answers `TimedOut` instead of waiting forever.
 
 ### `sock_send(i32 fd, u8[] data) i32 | NetError`
 
@@ -96,6 +96,10 @@ A **second descriptor over the same open socket**: `dup(2)`. It is the socket tw
 ### `sock_peer_ip(i32 fd) string | NetError` and `sock_peer_port(i32 fd) i32 | NetError`
 
 Who is at the other end. The address is rendered numerically and asks no resolver, so neither call makes a network request. They are separate so that a test can assert the address — which is fixed — without asserting an ephemeral port. This layer answers the address as text; `TcpStream.peer_ip()` in `<net/tcp>` reads it into an `IpAddr`, because every address that leaves the net modules is one.
+
+### `sock_peer(i32 fd) (i32, u64, u64, i32) | NetError`
+
+The other end, from one `getpeername(2)` call, as `(version, high, low, port)`. The address is in the shape that `sock_tcp_accept` gives: the IP version (`4`, `6`, or `0` for another address family) and the address bits. `TcpStream.peer()` and `TcpStream.peer_ip()` in `<net/tcp>` build the `IpAddr` from these bits in the same way that `TcpListener.accept()` does.
 
 ### `sock_set_recv_timeout(i32 fd, i32 ms)` and `sock_set_send_timeout(i32 fd, i32 ms)`
 

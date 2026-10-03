@@ -1,0 +1,45 @@
+# into_parts() ends the reader and hands back the handle AND the bytes that were
+# read into the window and not consumed, in order. Nothing is lost: the rest of
+# the input is the unread bytes, then what the handle still reads. Before any
+# read the bytes are empty and the handle reads everything.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+# EXPECT_NO_OPEN_FDS
+# EXPECT_STDOUT_EXACT: "line [Mostly]\nunread [Harmless\nand more]\nhandle []\nfresh unread 0\nfresh handle [Mostly\nHarmless\nand more]\nsmall line [Mostly]\nsmall unread [Harm]\nsmall handle [less\nand more]\nok\n"
+use <io/fs>
+use <io/buf>
+
+fn run(string path) ~ | IoError:
+    let File wf = open(path, FileMode.Write())??
+    wf.write("Mostly\nHarmless\nand more")??
+    wf.close()??
+
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)
+    let string line = r.read_line()??.realise("")
+    println("line [{line}]")
+    let (File back, u8[] unread) = r.into_parts()
+    println("unread [{unread.to_string()}]")
+    println("handle [{back.read_all()??}]")
+
+    let File g = open(path, FileMode.Read())??
+    let BufReader@(File) fresh = BufReader.new(nom g, 8192)
+    let (File, u8[]) parts = fresh.into_parts()
+    println("fresh unread {parts.1.len()}")
+    let (File h, _) = parts
+    println("fresh handle [{h.read_all()??}]")
+
+    let File s = open(path, FileMode.Read())??
+    let BufReader@(File) small = BufReader.new(nom s, 11)
+    let string first = small.read_line()??.realise("")
+    println("small line [{first}]")
+    let (File rest, u8[] bytes) = small.into_parts()
+    println("small unread [{bytes.to_string()}]")
+    println("small handle [{rest.read_all()??}]")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run("/tmp/sushi_buf_into_parts.txt"):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("failed")
+    return 0

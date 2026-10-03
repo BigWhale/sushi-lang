@@ -3,7 +3,8 @@
 [← Back to Standard Library](../../standard-library.md)
 
 Higher-order combinators over `List@(T)` and `T[]`: `map`, `filter`, `fold` — as
-methods and as free functions — and `compose`.
+methods and as free functions — `compose`, and the tuple combinators `enumerate`, `zip`,
+`partition` and `unzip`.
 
 ## Import
 
@@ -165,6 +166,48 @@ fn dbl(i32 x) i32:
 fn main() i32:
     let fn(i32) -> i32 incthendouble = compose(nom inc, nom dbl)
     println(incthendouble(10))    # dbl(inc(10)) = 22
+    return 0
+```
+
+## Tuple combinators
+
+Four combinators answer [tuples](../../language-reference.md#tuples). They follow `map`
+and `filter`: each one is a free function and a bare method on `List@(T)` and on `T[]`,
+except `unzip`, which is a free function only (an extension on a tuple type is refused). Each
+one answers a new `List`, reads its receiver as a borrow, and copies each element as
+`filter` does, so an owning element type works. A `List` is not an iterator itself: walk
+the answer with `.iter()`, and destructure the item in the `foreach`.
+
+| Free function | Answer |
+|---|---|
+| `enumerate@(T)(List@(T) xs)` | `List@((i32, T))`: each element with its index, from 0 |
+| `zip@(T, U)(List@(T) xs, List@(U) ys)` | `List@((T, U))`: the elements side by side; it stops at the shorter list |
+| `partition@(T)(List@(T) xs, fn(T) -> bool pred)` | `(List@(T), List@(T))`: the elements that `pred` keeps, then the others, each in order |
+| `unzip@(T, U)(List@((T, U)) xs)` | `(List@(T), List@(U))`: the first elements, then the second elements |
+
+The methods are `xs.enumerate()`, `xs.zip(ys)` and `xs.partition(pred)`; on a `T[]`
+receiver, `zip` takes a `U[]`.
+
+```sushi
+use <collections/iter>
+
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    let List@(i32) ages = List.new()
+    ages.push(42)
+    ages.push(200)
+    ages.push(7)
+
+    foreach((i, name) in enumerate(names).iter()):
+        println("{i}: {name}")              # 0: Arthur, then 1: Ford
+    foreach((name, age) in names.zip(ages).iter()):
+        println("{name} is {age}")          # two lines: 7 has no partner
+    let (even, odd) = ages.partition(|i32 n| n % 2 == 0)
+    println("{even.len()} even, {odd.len()} odd")    # 2 even, 1 odd
+    let (back, _) = unzip(zip(names, ages))
+    println(back.len())                     # 2
     return 0
 ```
 

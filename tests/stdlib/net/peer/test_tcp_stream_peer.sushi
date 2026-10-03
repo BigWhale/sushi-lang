@@ -1,0 +1,30 @@
+# peer() answers the address and the port of the other end in one call. The
+# client's peer is the listener, so the port is the one the listener bound, and
+# the answer agrees with peer_ip() and peer_port(). Loopback only.
+# EXPECT_STDOUT_EXACT: "peer 127.0.0.1\nport is the listener's true\nsame as peer_ip true\nsame as peer_port true\nv4 true\n"
+# EXPECT_NO_LEAKS
+# EXPECT_NO_OPEN_FDS
+# TIMEOUT_SECONDS: 20
+use <net/tcp>
+
+fn run() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    let i32 port = listener.local_port()??
+    let TcpStream client = connect("127.0.0.1", port)??
+
+    let (IpAddr ip, i32 at) = client.peer()??
+    println("peer {ip.text()}")
+    println("port is the listener's {at == port}")
+    println("same as peer_ip {ip == client.peer_ip()??}")
+    println("same as peer_port {at == client.peer_port()??}")
+
+    let (IpAddr, i32) both = client.peer()??
+    println("v4 {both.0.is_v4()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return 0
+        Result.Err(_) ->
+            println("failed")
+            return 1

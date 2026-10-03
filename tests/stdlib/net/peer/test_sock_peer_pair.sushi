@@ -1,0 +1,27 @@
+# sock_peer is the one primitive under TcpStream.peer(): one getpeername call
+# answers the address bits and the port, in the shape sock_tcp_accept gives
+# them: (version, high, low, port). A descriptor with no peer is an error.
+# EXPECT_STDOUT_EXACT: "version 4\nhigh 0\nloopback true\nport true\nno peer true\n"
+# EXPECT_NO_LEAKS
+# EXPECT_NO_OPEN_FDS
+# TIMEOUT_SECONDS: 20
+use <net/socket>
+
+fn main() i32:
+    let i32 lfd = sock_tcp_listen("127.0.0.1", 0, 8).realise(-1)
+    let i32 port = sock_local_port(lfd).realise(-1)
+    let i32 cfd = sock_tcp_connect("127.0.0.1", port).realise(-1)
+
+    match sock_peer(cfd):
+        Result.Ok((version, high, low, p)) ->
+            println("version {version}")
+            println("high {high}")
+            println("loopback {low == 2130706433}")
+            println("port {p == port}")
+        Result.Err(_) -> println("peer failed")
+
+    println("no peer {sock_peer(lfd).is_err()}")
+
+    sock_close(cfd).realise(-1)
+    sock_close(lfd).realise(-1)
+    return 0

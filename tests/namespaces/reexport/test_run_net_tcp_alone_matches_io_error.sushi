@@ -21,7 +21,7 @@ fn main() i32:
     match connect("127.0.0.1", port):
         Result.Ok(nom client) ->
             match server.accept():
-                Result.Ok(nom session) ->
+                Result.Ok((nom session, _)) ->
                     client.close()
                     match drain(poke session):
                         Result.Ok(got) ->

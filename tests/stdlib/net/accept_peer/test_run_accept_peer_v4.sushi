@@ -1,0 +1,37 @@
+# accept() answers the accepted stream and the address of the peer as one tuple. The
+# address comes from the accept call itself, so it is the address that peer_ip() reads
+# from the stream later. The V4 payload is in host order, most significant octet first.
+# EXPECT_STDOUT_EXACT: "peer 127.0.0.1\nv4 true\nbits 2130706433\nsame as peer_ip true\nloopback true\nserver got Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# TIMEOUT_SECONDS: 20
+
+use <net/tcp>
+use <collections/strings>
+
+fn exchange() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    listener.set_timeout(5000)??
+    let i32 port = listener.local_port()??
+    let TcpStream client = connect("127.0.0.1", port)??
+    let (TcpStream served, IpAddr peer) = listener.accept()??
+    println("peer {peer.text()}")
+    println("v4 {peer.is_v4()}")
+    match peer:
+        IpAddr.V4(bits) -> println("bits {bits}")
+        IpAddr.V6(_, _) -> println("not a V4 address")
+    let IpAddr again = served.peer_ip()??
+    println("same as peer_ip {peer == again}")
+    println("loopback {peer == V4_LOOPBACK}")
+    client.set_timeouts(5000, 5000)??
+    served.set_timeouts(5000, 5000)??
+    client.send_all("Mostly Harmless".to_bytes())??
+    let u8[] heard = served.recv_exact(15)??
+    println("server got {heard.to_string()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match exchange():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> println("failed")
+    return 1

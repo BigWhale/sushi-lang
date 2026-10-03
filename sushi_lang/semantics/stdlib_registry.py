@@ -137,7 +137,7 @@ def _get_param_specs():
 def signature_tables() -> Dict[str, Dict[str, "Signature"]]:
     """Every registry module's ONE signature table, keyed by its `use` path (#798).
 
-    The math FAMILIES (`abs`, `min`, `max`) have one row per argument type and are not
+    The math FAMILIES (`abs`, `min`, `max`, `divmod`) have one row per argument type and are not
     here: `math.family_row` builds the row for the type a call reaches.
     """
     from sushi_lang.sushi_stdlib.src.io.files_funcs import FILES_SIGNATURES
@@ -163,7 +163,7 @@ def family_tables() -> Dict[str, Dict[Callable, Tuple[str, ...]]]:
     """Every registry module's FAMILIES: a resolver over argument types, and its names.
 
     A family has one row per argument type, so it has no one entry in its module's
-    signature table. Only `<math>` has families today (`abs`, `min`, `max`).
+    signature table. Only `<math>` has families today (`abs`, `min`, `max`, `divmod`).
     """
     from sushi_lang.sushi_stdlib.src.math import (
         MATH_FAMILIES,

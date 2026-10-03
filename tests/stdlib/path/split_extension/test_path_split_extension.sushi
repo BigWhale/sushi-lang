@@ -1,0 +1,27 @@
+# split_extension answers (stem, extension). The extension is the one that
+# extension() answers, with no dot. The stem is the path without the dot and the
+# extension, or the whole path when there is no extension.
+# EXPECT_STDOUT_EXACT: "[a/b|txt]\n[archive.tar|gz]\n[.bashrc|]\n[no_ext|]\n[dir.d/plain|]\n[file.|]\n[|]\n[a/.hidden|txt]\n[...|]\n[/x/y.é|ü]\nstem notes ext md\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <io/path>
+
+fn show(string p) string:
+    let (stem, ext) = split_extension(p)
+    return "[{stem}|{ext}]"
+
+fn main() i32:
+    println(show("a/b.txt"))
+    println(show("archive.tar.gz"))
+    println(show(".bashrc"))
+    println(show("no_ext"))
+    println(show("dir.d/plain"))
+    println(show("file."))
+    println(show(""))
+    println(show("a/.hidden.txt"))
+    println(show("..."))
+    println(show("/x/y.é.ü"))
+
+    let (string stem, string ext) = split_extension("notes.md")
+    println("stem {stem} ext {ext}")
+    return 0

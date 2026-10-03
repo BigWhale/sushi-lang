@@ -238,17 +238,13 @@ class StringMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, get_builtin_string_method_return_type
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        from sushi_lang.semantics.generics.types import GenericTypeRef
+        from sushi_lang.semantics.passes.types.utils import intern_declared_wrapper
         if is_builtin_string_method(self.method_name):
             ret = get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
             # The family table answers a Maybe as a SPELLING (it has no enum table);
             # interning it is this layer's job.
-            if isinstance(ret, GenericTypeRef) and ret.base_name == "Maybe":
-                return ensure_maybe_type_in_table(
-                    self.validator.enum_table, ret.type_args[0],
-                    struct_table=self.validator.struct_table.by_name)
-            return ret
+            interned = intern_declared_wrapper(self.validator, ret)
+            return interned if interned is not None else ret
         return None
 
 
@@ -374,6 +370,12 @@ class HashMapMethodInferrer:
                         key_type, value_type
                     )
                     return IteratorType(element_type=entry_type)
+                elif self.method_name == "pairs":
+                    from sushi_lang.semantics.typesys import IteratorType
+                    from sushi_lang.semantics.generics.tuples import intern_tuple
+                    pair_type = intern_tuple(self.validator.struct_table,
+                                             self.validator.enum_table, (key_type, value_type))
+                    return IteratorType(element_type=pair_type)
         return None
 
 

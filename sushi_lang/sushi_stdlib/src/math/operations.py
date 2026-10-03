@@ -168,6 +168,71 @@ def generate_min_max_functions(module: ir.Module) -> None:
         builder.ret(result)
 
 
+def generate_divmod_functions(module: ir.Module) -> None:
+    """Generate `sushi_divmod_<T>(T a, T b) -> Result<(T, T), MathError>` for every integer T."""
+    from sushi_lang.sushi_stdlib.src.math import MATH_FAMILIES, UNSIGNED
+
+    _arity, types = MATH_FAMILIES['divmod']
+    for ty in types:
+        _generate_divmod(module, ty, signed=ty not in UNSIGNED)
+
+
+def _generate_divmod(module: ir.Module, ty, signed: bool) -> None:
+    """`(a / b, a % b)` as the operators give it; a zero `b` and the signed `MIN / -1` fail."""
+    from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
+    from sushi_lang.semantics.integer_width import integer_bit_width
+    from sushi_lang.semantics.predefined_types import predefined_variant_tag
+    from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
+    from sushi_lang.sushi_stdlib.src.type_definitions import (
+        get_result_type, get_tuple_type, get_unit_enum_type,
+    )
+
+    width = integer_bit_width(ty)
+    if width is None:
+        raise ValueError(f"divmod is for the integer types, not {ty}")
+    int_type = ir.IntType(width)
+    pair = get_tuple_type([int_type, int_type])
+    result_type = get_result_type(pair, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [int_type, int_type]),
+                       name=f"sushi_divmod_{ty}")
+    a, b = func.args
+    a.name = "a"
+    b.name = "b"
+
+    def fail(block: ir.Block, variant: str) -> None:
+        builder = ir.IRBuilder(block)
+        tag = ir.Constant(ir.IntType(32), predefined_variant_tag("MathError", variant))
+        builder.ret(emit_err_result(builder, result_type, tag))
+
+    entry = func.append_basic_block("entry")
+    by_zero = func.append_basic_block("division_by_zero")
+    divide = func.append_basic_block("divide")
+    builder = ir.IRBuilder(entry)
+    is_zero = builder.icmp_unsigned("==", b, ir.Constant(int_type, 0), name="is_zero")
+    if signed:
+        overflow_check = func.append_basic_block("overflow_check")
+        overflow = func.append_basic_block("overflow")
+        builder.cbranch(is_zero, by_zero, overflow_check)
+        builder.position_at_end(overflow_check)
+        is_min = builder.icmp_signed("==", a, ir.Constant(int_type, -(1 << (width - 1))),
+                                     name="is_min")
+        is_minus_one = builder.icmp_signed("==", b, ir.Constant(int_type, -1),
+                                           name="is_minus_one")
+        builder.cbranch(builder.and_(is_min, is_minus_one, name="overflows"),
+                        overflow, divide)
+        fail(overflow, "Overflow")
+    else:
+        builder.cbranch(is_zero, by_zero, divide)
+    fail(by_zero, "DivisionByZero")
+
+    builder = ir.IRBuilder(divide)
+    quotient = (builder.sdiv if signed else builder.udiv)(a, b, name="quotient")
+    remainder = (builder.srem if signed else builder.urem)(a, b, name="remainder")
+    value = builder.insert_value(ir.Constant(pair, ir.Undefined), quotient, 0)
+    value = builder.insert_value(value, remainder, 1, name="pair")
+    builder.ret(emit_ok_result(builder, result_type, value, calculate_llvm_type_size(pair)))
+
+
 def generate_sqrt(module: ir.Module) -> None:
     """Generate sushi_sqrt(f64 x) -> f64 via the llvm.sqrt.f64 intrinsic."""
     _forward_f64(module, "llvm.sqrt.f64", "sushi_sqrt", ('x',))

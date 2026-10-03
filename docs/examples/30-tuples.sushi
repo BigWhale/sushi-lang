@@ -1,0 +1,79 @@
+# Example 30: Tuples
+#
+# The crew of the Heart of Gold files a few log lines. A tuple carries two
+# values where a function has two results, so this program takes each log line
+# apart without a struct.
+#
+# Key concepts covered:
+# - A tuple type `(A, B)`, a tuple literal, and `t.0` / `t.1`
+# - A destructure: `let (a, b) = ...`, with `_` for a part you do not need
+# - A tuple pattern in a `match`, with a literal element
+# - Stdlib functions that answer a tuple: `divmod`, `split_once`,
+#   `enumerate`, `zip` and `HashMap.pairs()`
+
+use <math>
+use <collections/strings>
+use <collections/iter>
+use <collections/hashmap>
+
+# A function with two results answers a tuple.
+fn min_max(i32[] xs) (i32, i32):
+    let i32 lo = xs[0]
+    let i32 hi = xs[0]
+    foreach(x in xs.iter()):
+        lo := min(lo, x)
+        hi := max(hi, x)
+    return (lo, hi)
+
+# A tuple pattern matches the parts. An integer literal is legal in a pattern.
+fn describe((string, i32) entry) string:
+    match entry:
+        (_, 42) -> return "the answer"
+        (name, 1) -> return "one {name}"
+        (name, n) -> return "{name} x{n}"
+
+fn main() i32:
+    # divmod answers (quotient, remainder) in a Result.
+    let (i32 hours, i32 minutes) = divmod(135, 60).realise((0, 0))
+    println("flight time: {hours}h {minutes}m")
+
+    # split_once answers a Maybe of the two parts.
+    let string[] lines = from(["crew=Arthur", "crew=Ford", "item=towel", "noise"])
+    let HashMap@(string, i32) counts = HashMap.new()
+    foreach(line in lines.iter()):
+        match line.split_once("="):
+            Maybe.Some((kind, _)) ->
+                let i32 seen = counts.get(kind).realise(0)
+                counts.insert(kind.clone(), seen + 1)    # the binder borrows
+            Maybe.None -> println("skipped: {line}")
+
+    # pairs() gives each entry as a (key, value) tuple.
+    let i32 total = 0
+    foreach((_, n) in counts.pairs()):
+        total := total + n
+    let i32 crew = counts.get("crew").realise(0)
+    println("{total} entries, crew: {crew}")
+
+    # enumerate and zip build a List of tuples.
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    names.push("Zaphod")
+    let List@(i32) heads = List.new()
+    heads.push(1)
+    heads.push(1)
+    heads.push(2)
+    foreach((i, name) in enumerate(names).iter()):
+        println("{i}: {name}")
+    foreach((name, n) in zip(names, heads).iter()):
+        println("{name} has {n} head(s)")
+
+    # A tuple is a value: read a part with .0 and .1.
+    let i32[] depths = from([3, 42, 7])
+    let (i32, i32) range = min_max(depths)
+    println("depth {range.0}..{range.1}")
+
+    println(describe(("towel", 1)))
+    println(describe(("mice", 42)))
+    println(describe(("tea", 2)))
+    return 0

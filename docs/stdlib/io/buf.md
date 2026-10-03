@@ -103,7 +103,37 @@ Hands the handle back and ends the reader. A later mention of the reader is refu
 compiling.
 
 Whatever was buffered and not read is DISCARDED, so the handle comes back positioned where
-the last refill left the kernel and not where the cursor was.
+the last refill left the kernel and not where the cursor was. To keep those bytes, use
+`into_parts()`.
+
+### `into_parts() (R, u8[])`
+
+Hands the handle back WITH the bytes that were read into the window and not consumed, in
+order, and ends the reader. A later mention of the reader is refused while compiling. The
+bytes come first and the handle continues after them, so a caller that reads the bytes and
+then the handle sees the stream in order. Use it to hand a stream over to a different
+reader after a header, for example.
+
+```sushi
+use <io/fs>
+use <io/buf>
+
+fn first_line(string path) string | IoError:
+    let File f = open(path, FileMode.Read())??
+    let BufReader@(File) r = BufReader.new(nom f, 8192)
+    let string line = r.read_line()??.realise("")
+    let (File back, u8[] unread) = r.into_parts()
+    println("{unread.len()} bytes held")
+    back.close()??
+    return Result.Ok(line)
+
+fn main() i32:
+    match first_line("data.txt"):
+        Result.Ok(line) ->
+            println(line)
+            return 0
+        Result.Err(_) -> return 1
+```
 
 ### `lines() Lines@(R)`
 

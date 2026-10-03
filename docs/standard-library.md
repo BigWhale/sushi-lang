@@ -15,7 +15,7 @@ Complete reference for Sushi's standard library modules and types.
 - [HashMap@(K, V)](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
 - [Strings](stdlib/collections/strings.md) - String manipulation methods
-- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, and `compose`
+- [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, `compose`, and the tuple combinators `enumerate`/`zip`/`partition`/`unzip`
 
 ### Encoding and Compression
 - [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
@@ -25,7 +25,7 @@ Complete reference for Sushi's standard library modules and types.
 ### I/O Operations
 - [Console I/O](stdlib/io/console.md) - println, print, stdin/stdout/stderr
 - [File I/O](stdlib/io/files.md) - File operations with error handling
-- [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, normalize)
+- [Path algebra](stdlib/io/path.md) - Lexical path manipulation (join, basename, dirname, extension, split, split_extension, normalize)
 - [File-system ops](stdlib/io/fs.md) - stat, recursive walk, mkdir_all, remove_all
 - [I/O contracts](stdlib/io/contracts.md) - `Reader`, `Writer`, `Seek`: what a handle can do
 - [I/O errors](stdlib/io/error.md) - `IoError` and `FileError`, the error vocabulary of the io modules
@@ -43,7 +43,7 @@ Complete reference for Sushi's standard library modules and types.
 - [URLs](stdlib/net/url.md) - lexical URL splitting
 
 ### System Modules
-- [Math](stdlib/math.md) - Mathematical operations (abs, min, max, sqrt, pow, trig)
+- [Math](stdlib/math.md) - Mathematical operations (abs, min, max, divmod, sqrt, pow, trig)
 - [Random](stdlib/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
 - [Time](stdlib/time.md) - Sleep functions, the wall clock and the monotonic clock
 - [Environment](stdlib/env.md) - Environment variables and system information
@@ -57,7 +57,7 @@ Complete reference for Sushi's standard library modules and types.
 ```sushi
 use <collections/strings>  # String methods
 use <collections/hashmap>  # HashMap@(K, V)
-use <collections/iter>     # Higher-order combinators (map/filter/fold/compose)
+use <collections/iter>     # Higher-order combinators (map/filter/fold/compose/enumerate/zip)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/msgpack>     # MessagePack decoder
 use <io/buf>               # BufReader, BufWriter: buffered over any handle
@@ -154,6 +154,8 @@ let string clean = text.trim().lower()  # "hello world"
 let string[] parts = "a,b,c".split(',')
 let string joined = ','.join(parts)  # "a,b,c"
 
+let (key, value) = "port=8080".split_once("=").realise(("", ""))  # "port", "8080"
+
 let string path = "/home/user/file.txt"
 let string filename = path.strip_prefix("/home/user/")  # "file.txt"
 ```
@@ -220,7 +222,7 @@ fn greet() ~ | IoError:
 - Construction: `HashMap.new()`
 - Operations: `insert()`, `get()`, `remove()`, `contains_key()`
 - Size: `len()`, `is_empty()`, `tombstone_count()`, `rehash()`
-- Iteration: `keys()`, `values()`, `entries()`
+- Iteration: `keys()`, `values()`, `entries()`, `pairs()` (each item a `(K, V)` tuple)
 - Automatic resizing at 0.75 load factor
 - Copy and inspection: `clone()`, `debug()`
 - Memory: `free()`, `destroy()`
@@ -242,7 +244,7 @@ fn greet() ~ | IoError:
 
 **Strings** - methods from `use <collections/strings>`:
 - Inspection, slicing, transformation, padding, stripping
-- Splitting/joining, case conversion, parsing
+- Splitting/joining (`split_once`, `rsplit_once` answer a `Maybe` of a pair), case conversion, parsing
 - UTF-8 aware where needed
 - Each unit that calls a string method must import the module itself (CE3015).
   `is_empty()` and `clone()` need no import
@@ -254,6 +256,8 @@ fn greet() ~ | IoError:
   element that it keeps
 - Free functions over `List@(T)`: `map(xs, f)`, `filter(xs, pred)`, `fold(xs, init, f)`,
   and `compose(nom g, nom f)`
+- Tuple combinators: `enumerate`, `zip`, `partition` (free functions and methods) and
+  `unzip` (a free function); each answers a `List` of tuples or a tuple of `List`s
 - Written in Sushi (a source stdlib module, no bitcode)
 - Pass a lambda with typed parameters (`|i32 x| ...`) or a function reference
 
@@ -261,7 +265,8 @@ fn greet() ~ | IoError:
 
 **zlib** - DEFLATE and the RFC 1950 container, written in Sushi (no C library, no FFI):
 - `zlib_compress(src, level)`, `zlib_uncompress(src)` - the container, with an Adler-32 trailer
-- `deflate_raw(src, level)`, `inflate_raw(src)` - a bare RFC 1951 stream
+- `deflate_raw(src, level)`, `inflate_raw(src)` - a bare RFC 1951 stream;
+  `inflate_raw_prefix(src)` also answers the count of input bytes the stream used
 - `adler32(data)`, `e.text()` on a `ZError` - the checksum, and one stable line per error
 - The decoder reads stored, fixed and dynamic blocks; the encoder emits stored and fixed
   only, so its ratio is short of a full encoder's
@@ -290,12 +295,14 @@ fn greet() ~ | IoError:
 - `BufReader.new(nom src, cap)` / `BufWriter.new(nom dst, cap)` - one system call per WINDOW
 - `r.lines()` answers a `Lines@(R)`, which `foreach` walks:
   `foreach(line?? in r.lines())`
+- `r.into_parts()` answers the handle and the buffered bytes that were not read
 
 ### Math (`use <math>`)
 
 All functions use a single polymorphic name (no type-suffixed variants):
 - Absolute value / min / max: `abs()`, `min()`, `max()` (return the argument's type; a
   literal argument of `min`/`max` takes the type of the other argument)
+- Integer division: `divmod(a, b)` answers `(a / b, a % b) | MathError`
 - Floating-point (f64): `sqrt()`, `pow()`, `floor()`, `ceil()`, `round()`, `trunc()`
 - Trigonometry: `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()`, `atan2()`
 - Hyperbolic: `sinh()`, `cosh()`, `tanh()`
@@ -334,13 +341,15 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 ### Encoding (`use <encoding/msgpack>`)
 
 - `decode(u8[] buf)` - Decode MessagePack bytes into a `MsgValue` tree
+- `decode_prefix(u8[] buf)` - Decode one value from the start, and answer the count of bytes it used
+- A `MsgValue.Map` holds `(key, value)` pairs
 - `map_get()`, `map_index()`, `map_get_str()`, `map_get_bool()` - Read a map entry
 - `show()` - Render a `MsgValue` as text
 
 ### I/O paths and contracts
 
 - `<io/path>` - Lexical path functions: `join`, `basename`, `dirname`, `extension`,
-  `normalize`. See [Path algebra](stdlib/io/path.md)
+  `split`, `split_extension`, `normalize`. See [Path algebra](stdlib/io/path.md)
 - `<io/contracts>` - The perks `Reader`, `Writer` and `Seek`. See
   [I/O contracts](stdlib/io/contracts.md)
 
@@ -352,7 +361,8 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
   `NetError` comes with each of them. `<net/tcp>` and `<net/udp>` also re-export
   `<net/handle>` (`close_socket`) and `<net/ip>` (`IpAddr`)
 - Every address that leaves the net modules is an `IpAddr`: `resolve()`,
-  `TcpStream.peer_ip()` and `Datagram.peer()`
+  `TcpListener.accept()` (with the stream), `TcpStream.peer()`, `TcpStream.peer_ip()` and
+  `Datagram.peer()`
 - See the pages in the [Networking](#networking) list above
 
 ### Process (`use <sys/process>`)

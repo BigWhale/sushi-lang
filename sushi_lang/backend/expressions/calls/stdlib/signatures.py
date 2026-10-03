@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Optional
 from llvmlite import ir
 
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, UnknownType
 from sushi_lang.sushi_stdlib.src.signatures import Param, Signature
@@ -44,7 +46,7 @@ def llvm_value_type(ty) -> Optional[ir.Type]:
     """The LLVM type a Sushi type crosses as, BY VALUE, or None if it cannot."""
     from sushi_lang.sushi_stdlib.src.type_definitions import (
         get_byte_array_type, get_datagram_type, get_dynamic_array_type,
-        get_maybe_type, get_string_type,
+        get_maybe_type, get_string_type, get_tuple_type,
     )
 
     scalar = _SCALARS.get(ty)
@@ -60,6 +62,9 @@ def llvm_value_type(ty) -> Optional[ir.Type]:
     if isinstance(ty, GenericTypeRef) and ty.base_name == "Maybe" and len(ty.type_args) == 1:
         inner = llvm_value_type(ty.type_args[0])
         return None if inner is None else get_maybe_type(inner)
+    if is_tuple_type(ty):
+        elements = [llvm_value_type(element) for element in tuple_elements(ty)]
+        return None if any(e is None for e in elements) else get_tuple_type(elements)
     if isinstance(ty, UnknownType) and ty.name == "Datagram":
         # The one named struct a registry primitive answers. Sized from the same
         # helper the generator used, so the Result layout matches byte for byte.
@@ -91,13 +96,14 @@ def llvm_return_type(sig: Signature) -> ir.Type:
     if sig.ok is None and sig.bare == BuiltinType.BLANK:
         return ir.VoidType()
     if sig.ok is None or sig.bare_ok is not None:
-        bare = llvm_value_type(sig.ok if sig.bare_ok is not None else sig.bare)
+        answered = sig.ok if sig.bare_ok is not None else sig.bare
+        bare = llvm_value_type(answered)
         if bare is None:
-            raise_internal_error("CE0024", type="stdlib signature", method=str(sig.bare))
+            raise_internal_error("CE0145", type=display_type(answered))
         return bare
     ok = llvm_ok_type(sig.ok)
     if ok is None:
-        raise_internal_error("CE0024", type="stdlib signature", method=str(sig.ok))
+        raise_internal_error("CE0145", type=display_type(sig.ok))
     # Every registry error enum is a UNIT enum, so the Err arm's size is the same for
     # all of them and the payload word count comes out of the Ok type alone.
     return get_result_type(ok, get_unit_enum_type())
@@ -106,8 +112,9 @@ def llvm_return_type(sig: Signature) -> ir.Type:
 def llvm_function_type(sig: Signature) -> ir.FunctionType:
     """The LLVM type of the generated function a row describes."""
     params = [llvm_param_type(param) for param in sig.params]
-    if any(param is None for param in params):
-        raise_internal_error("CE0024", type="stdlib signature", method=str(sig.params))
+    for param, llvm_type in zip(sig.params, params, strict=True):
+        if llvm_type is None:
+            raise_internal_error("CE0145", type=display_type(param.ty))
     return ir.FunctionType(llvm_return_type(sig), params)
 
 

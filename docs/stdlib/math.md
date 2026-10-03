@@ -20,6 +20,7 @@ referred to by a single, **polymorphic** name — there are no type-suffixed var
 `abs_i32` or `sqrt_f64`. Two families exist:
 
 - `abs`, `min`, and `max` accept any matching numeric type and return that same type.
+  `divmod` accepts any integer type and returns a pair of that type.
 - All other functions (`sqrt`, `pow`, the trigonometric, hyperbolic, logarithmic, and
   exponential functions, and `hypot`) operate on `f64` and return `f64`.
 
@@ -62,6 +63,37 @@ fn main() i32:
   other argument, so `max(b, 1)` with `b: u32` compares two `u32` values. A literal that
   does not fit that type is CE2073.
 - `max(T a, T b) -> T` — larger of two values. Same typing rules as `min`.
+
+## Integer Division: divmod
+
+### `divmod(T a, T b) -> (T, T) | MathError`
+
+The quotient and the remainder in one call: `(a / b, a % b)`, exactly as the two operators
+give them, so the quotient truncates toward zero and the remainder has the sign of `a`. `T`
+is any **integer** type (`i8` to `i64`, `u8` to `u64`); a float is CE2006. The typing rules
+of `min` apply: two typed arguments have one type, and a literal takes the type of the other
+argument.
+
+`divmod` has an error channel, where the `/` and `%` operators have none:
+
+- `b == 0` is `Err(MathError.DivisionByZero)`.
+- A signed `MIN / -1` (for example `divmod(-128 as i8, -1 as i8)`) is
+  `Err(MathError.Overflow)`, because the quotient does not fit `T`.
+
+```sushi
+use <math>
+
+fn main() i32:
+    let (i32 q, i32 r) = divmod(17, 5).realise((0, 0))
+    println("{q} {r}")                                   # 3 2
+    let (i32 nq, i32 nr) = divmod(-17, 5).realise((0, 0))
+    println("{nq} {nr}")                                 # -3 -2
+    match divmod(7, 0):
+        Result.Ok((a, b)) -> println("{a} {b}")
+        Result.Err(MathError.DivisionByZero) -> println("division by zero")
+        Result.Err(_) -> println("other")
+    return 0
+```
 
 ## Floating-Point Functions
 

@@ -5,8 +5,8 @@ import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
 from sushi_lang.backend import gep_utils
-from ..types import get_user_entry_type
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types, ensure_entry_type_in_struct_table
+from sushi_lang.semantics.generics.tuples import intern_tuple
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -108,13 +108,37 @@ def emit_hashmap_entries(
     hashmap_type: StructType
 ) -> ir.Value:
     """Emit HashMap<K, V>.entries() -> Iterator<Entry<K, V>>"""
-    if len(call.args) != 0:
-        raise_internal_error("CE0023", method="entries", expected=0, got=len(call.args))
-
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
-
     entry_struct_type = ensure_entry_type_in_struct_table(
         codegen.struct_table, codegen.derived_methods, key_type, value_type)
+    return _emit_key_value_iterator(codegen, call, hashmap_value, entry_struct_type)
+
+
+def emit_hashmap_pairs(
+    codegen: Any,
+    call: MethodCall,
+    hashmap_value: ir.Value,
+    hashmap_type: StructType
+) -> ir.Value:
+    """Emit HashMap<K, V>.pairs() -> Iterator<(K, V)>"""
+    key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
+    pair_type = intern_tuple(codegen.struct_table, codegen.enum_table, (key_type, value_type))
+    return _emit_key_value_iterator(codegen, call, hashmap_value, pair_type)
+
+
+def _emit_key_value_iterator(
+    codegen: Any,
+    call: MethodCall,
+    hashmap_value: ir.Value,
+    element_type: StructType
+) -> ir.Value:
+    """The iterator over the buckets that `entries()` and `pairs()` share.
+
+    The element is `{K, V}` in both: an `Entry<K, V>` or the tuple `(K, V)`. The foreach
+    reads the buckets and builds the element (`_emit_hashmap_foreach`).
+    """
+    if len(call.args) != 0:
+        raise_internal_error("CE0023", method=call.method, expected=0, got=len(call.args))
 
     buckets_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 0, "buckets_ptr")
     capacity_ptr = gep_utils.gep_struct_field(codegen, hashmap_value, 2, "capacity_ptr")
@@ -125,7 +149,7 @@ def emit_hashmap_entries(
 
     from sushi_lang.semantics.typesys import IteratorType
 
-    iterator_type = IteratorType(element_type=entry_struct_type)
+    iterator_type = IteratorType(element_type=element_type)
     iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
 
     iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="hashmap_entries_iterator")
@@ -139,9 +163,9 @@ def emit_hashmap_entries(
     codegen.builder.store(marked_capacity, capacity_ptr_out)
 
     buckets_ptr_out = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "buckets_ptr_out")
-    user_entry_llvm = get_user_entry_type(codegen, key_type, value_type)
+    element_llvm = codegen.types.ll_type(element_type)
     buckets_as_entries = codegen.builder.bitcast(
-        buckets_data, ir.PointerType(user_entry_llvm), name="buckets_as_entries"
+        buckets_data, ir.PointerType(element_llvm), name="buckets_as_entries"
     )
     codegen.builder.store(buckets_as_entries, buckets_ptr_out)
 

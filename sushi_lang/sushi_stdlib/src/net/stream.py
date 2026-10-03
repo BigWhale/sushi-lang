@@ -23,6 +23,7 @@ from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_byte_array_type,
     get_result_type,
     get_string_type,
+    get_tuple_type,
     get_unit_enum_type,
 )
 from sushi_lang.backend.memory.allocas import entry_alloca
@@ -37,6 +38,7 @@ def generate_ir(module: ir.Module) -> None:
     generate_recv(module)
     generate_peer_ip(module)
     generate_peer_port(module)
+    generate_peer(module)
 
 
 def generate_close(module: ir.Module) -> None:
@@ -279,6 +281,41 @@ def generate_peer_port(module: ir.Module) -> None:
     builder.position_at_end(success_bb)
     builder.ret(emit_ok_result(builder, result_type,
                                addr.emit_read_port(builder, storage), 4))
+
+
+def generate_peer(module: ir.Module) -> None:
+    """Emit `Result<{i32, i64, i64, i32}, NetError> sushi_net_sock_peer(i32 fd)`.
+
+    The Ok payload is the tuple (version, high, low, port) from ONE getpeername call.
+    The address is the (version, high, low) of sock_tcp_accept, read by the same
+    emit_read_address, so <net/tcp> builds every peer IpAddr in one way.
+    """
+    from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
+
+    _i8, _i8_ptr, i32, i64 = get_basic_types()
+    peer = get_tuple_type([i32, i64, i64, i32])
+    result_type = get_result_type(peer, get_unit_enum_type())
+    func = ir.Function(module, ir.FunctionType(result_type, [i32]),
+                       name="sushi_net_sock_peer")
+    func.args[0].name = "fd"
+    builder = ir.IRBuilder(func.append_basic_block(name="entry"))
+
+    ok, storage, _len_slot = _emit_getpeername(builder, module, func, func.args[0])
+    success_bb = func.append_basic_block(name="success")
+    failure_bb = func.append_basic_block(name="failure")
+    builder.cbranch(ok, success_bb, failure_bb)
+
+    builder.position_at_end(failure_bb)
+    builder.ret(emit_errno_err_result(builder, module, result_type))
+
+    builder.position_at_end(success_bb)
+    version, high, low = addr.emit_read_address(builder, storage)
+    port = addr.emit_read_port(builder, storage)
+    value = ir.Constant(peer, ir.Undefined)
+    for index, part in enumerate((version, high, low, port)):
+        value = builder.insert_value(value, part, index, name=f"peer_{index}")
+    builder.ret(emit_ok_result(builder, result_type, value,
+                               calculate_llvm_type_size(peer)))
 
 
 def generate_peer_ip(module: ir.Module) -> None:

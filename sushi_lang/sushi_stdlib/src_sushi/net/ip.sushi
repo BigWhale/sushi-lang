@@ -281,9 +281,7 @@ fn parse_v6_groups(string text) u16[] | NetError:
             return Result.Err(NetError.InvalidAddress)
         return Result.Ok(whole)
 
-    let i32 cut = text.find("::").realise(-1)
-    let string head = text.s(0, cut)
-    let string tail = text.s(cut + 2, text.len())
+    let (string head, string tail) = text.split_once("::").realise(("", ""))
     if (tail.contains("::")):
         return Result.Err(NetError.InvalidAddress)
 

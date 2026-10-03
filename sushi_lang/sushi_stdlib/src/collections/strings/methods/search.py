@@ -4,8 +4,12 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import llvmlite.ir as ir
+from ..common import allocate_substring
 from ..intrinsics import declare_utf8_count_intrinsic
-from sushi_lang.sushi_stdlib.src.type_definitions import get_string_types, get_maybe_type
+from sushi_lang.sushi_stdlib.src.type_definitions import (
+    get_maybe_type, get_string_types, get_tuple_type,
+)
+from sushi_lang.sushi_stdlib.src.libc_declarations import declare_malloc, declare_memcpy
 from sushi_lang.sushi_stdlib.src.results import emit_none, emit_some
 
 
@@ -377,3 +381,48 @@ def _ret_carried(builder: ir.IRBuilder, carried: Optional[ir.Value]) -> None:
     if carried is None:
         raise ValueError("string_count carries a count")
     builder.ret(carried)
+
+
+def _emit_string_split_at(module: ir.Module, func_name: str, reverse: bool) -> ir.Function:
+    """Emit a search that answers the two owned parts around its match as `Maybe@((string, string))`.
+
+    The separator is in neither part. An empty separator matches at the start of the
+    scan: at byte 0 forward, and at the end of the string in `reverse`.
+    """
+    func = _defined(module, func_name)
+    if func is not None:
+        return func
+    _i8, _i8_ptr, i32, i64, string_type = get_string_types()
+    pair_type = get_tuple_type([string_type, string_type])
+    maybe_type = get_maybe_type(pair_type)
+    malloc = declare_malloc(module)
+    memcpy = declare_memcpy(module)
+
+    def on_found(builder: ir.IRBuilder, scan: _Scan, found_pos: Callable[[], ir.Value]) -> None:
+        at = found_pos()
+        after = builder.add(at, scan.needle_size, name="after")
+        head = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+                                  ir.Constant(i32, 0), at, i32, i64)
+        tail = allocate_substring(builder, malloc, memcpy, string_type, scan.str_data,
+                                  after, builder.sub(scan.str_size, after, name="tail_size"),
+                                  i32, i64)
+        pair = builder.insert_value(ir.Constant(pair_type, ir.Undefined), head, 0)
+        pair = builder.insert_value(pair, tail, 1, name="parts")
+        _ret_maybe_some(builder, maybe_type, pair)
+
+    return _emit_search(
+        module, func_name, maybe_type,
+        on_found=on_found,
+        on_exhausted=lambda builder, _carried: _ret_maybe_none(builder, maybe_type),
+        reverse=reverse,
+    )
+
+
+def emit_string_split_once(module: ir.Module) -> ir.Function:
+    """Emit `Maybe<(string, string)> string_split_once(string str, string needle)`."""
+    return _emit_string_split_at(module, "string_split_once", reverse=False)
+
+
+def emit_string_rsplit_once(module: ir.Module) -> ir.Function:
+    """Emit `Maybe<(string, string)> string_rsplit_once(string str, string needle)`."""
+    return _emit_string_split_at(module, "string_rsplit_once", reverse=True)

@@ -1,0 +1,33 @@
+# `divmod` answers `(T, T) | MathError`: `??` passes the error on, a `match`
+# takes the tuple apart in the pattern, a hole prints the tuple, and the call
+# works behind an alias.
+# EXPECT_STDOUT_EXACT: "hole (4, 2)\nsum 6\nfailed zero\nmatch 3 1\nalias (-2, -1)\nwhole (5, 0)\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <math>
+use <math> as m
+
+fn quotient_plus_remainder(i32 a, i32 b) i32 | MathError:
+    println("hole {divmod(a, b)??}")
+    let (q, r) = divmod(a, b)??
+    return Result.Ok(q + r)
+
+fn main() i32:
+    match quotient_plus_remainder(18, 4):
+        Result.Ok(sum) -> println("sum {sum}")
+        Result.Err(_) -> println("sum failed")
+    match quotient_plus_remainder(1, 0):
+        Result.Ok(sum) -> println("sum {sum}")
+        Result.Err(MathError.DivisionByZero) -> println("failed zero")
+        Result.Err(_) -> println("failed other")
+
+    match divmod(7, 2):
+        Result.Ok((q, r)) -> println("match {q} {r}")
+        Result.Err(_) -> println("match failed")
+
+    let i32 neg = -5
+    let (i32, i32) t = m.divmod(neg, 2).realise((0, 0))
+    println("alias {t}")
+
+    let (i32, i32) whole = divmod(10, 2).realise((0, 0))
+    println("whole ({whole.0}, {whole.1})")
+    return 0

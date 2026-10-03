@@ -1,0 +1,49 @@
+# partition gives two new lists: the elements for which the predicate answers
+# true, then the others, each in order. The free function, the List method and
+# the array method agree, and the input stays usable.
+# EXPECT_STDOUT_EXACT: "even 2 4 6\nodd 1 3 5\nlong Arthur Zaphod\nshort Ford\nbig 1 small 2\nkept 6 3\nempty 0 0 0 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/iter>
+use <collections/strings>
+
+fn join(List@(i32) xs) string:
+    let string out = ""
+    foreach(x in xs.iter()):
+        out := out.concat(" {x}")
+    return out
+
+fn is_long(string s) bool:
+    return s.len() > 4
+
+fn main() i32:
+    let List@(i32) nums = List.new()
+    foreach(n in 1..=6):
+        nums.push(n)
+    let (List@(i32) even, List@(i32) odd) = partition(nums, |i32 x| x % 2 == 0)
+    println("even{join(even)}")
+    println("odd{join(odd)}")
+
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    names.push("Zaphod")
+    let (long, short) = names.partition(is_long)
+    let string line = "long"
+    foreach(n in long.iter()):
+        line := line.concat(" {n}")
+    println(line)
+    foreach(n in short.iter()):
+        println("short {n}")
+
+    let i32[] sizes = from([100, 3, 7])
+    let (List@(i32), List@(i32)) split = sizes.partition(|i32 x| x > 50)
+    println("big {split.0.len()} small {split.1.len()}")
+    println("kept {nums.len()} {names.len()}")
+
+    let List@(i32) none = List.new()
+    let i32[] nothing = from([])
+    let (a, b) = partition(none, |i32 x| x > 0)
+    let (c, d) = nothing.partition(|i32 x| x > 0)
+    println("empty {a.len()} {b.len()} {c.len()} {d.len()}")
+    return 0

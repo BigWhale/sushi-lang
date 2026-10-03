@@ -82,6 +82,42 @@ public fn extension(string path) string:
         Maybe.None() -> return ""
 
 ##:
+Splits a path into its directory part and its last component.
+
+The answer is `(dirname(path), basename(path))` for every path.
+
+- Parameter path: The path to split.
+- Returns: The directory part and the last component.
+- Example:
+  ```sushi
+  let (dir, name) = split("/usr/lib/libc.so")
+  println("{dir} {name}")
+  ```
+:##
+public fn split(string path) (string, string):
+    return (dirname(path), basename(path))
+
+##:
+Splits a path into its stem and its extension.
+
+The extension is the one that `extension()` answers, without the dot. The stem is the
+path without the dot and the extension, or the whole path when it has no extension.
+
+- Parameter path: The path to split.
+- Returns: The stem and the extension.
+- Example:
+  ```sushi
+  let (stem, ext) = split_extension("notes/towel.txt")
+  println("{stem} {ext}")
+  ```
+:##
+public fn split_extension(string path) (string, string):
+    let string ext = extension(path)
+    if (ext.is_empty()):
+        return (path.clone(), ext)
+    return (path.s(0, path.len() - ext.len() - 1), ext)
+
+##:
 Normalizes a path lexically.
 
 Doubled separators collapse, `.` components vanish, and a `..` component

@@ -2,8 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A MessagePack decoder, written in Sushi: `decode`, the map readers (`map_index`,
-`map_get`, `map_get_str`, `map_get_bool`), and `show`. Decode-only — there is no encoder.
+A MessagePack decoder, written in Sushi: `decode`, `decode_prefix`, the map readers
+(`map_index`, `map_get`, `map_get_str`, `map_get_bool`), and `show`. Decode-only — there is no encoder.
 
 ## Import
 
@@ -45,7 +45,7 @@ public enum MsgValue:
     Str(string)
     Bin(u8[])
     Arr(MsgValue[])
-    Map(MsgValue[], MsgValue[])    # parallel keys/values, wire order kept
+    Map((MsgValue, MsgValue)[])    # (key, value) pairs, wire order kept
 
 public enum MpError:
     Truncated(i32)      # offset of the read that could not complete
@@ -57,8 +57,23 @@ public enum MpError:
 `e.text()` gives one stable line for an `MpError`, with no payload, so a caller can
 compare it.
 
-A map is two parallel arrays, not a hash table: MessagePack keys are not limited to
-strings, and the wire order stays visible and deterministic.
+A map is one array of `(key, value)` pairs, not a hash table: MessagePack keys are not
+limited to strings, and the wire order stays visible and deterministic. A `foreach`
+destructures each pair:
+
+```sushi
+use <encoding/msgpack>
+
+fn main() i32:
+    let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x02])
+    match decode(buf):
+        Result.Ok(MsgValue.Map(pairs)) ->
+            foreach((k, v) in pairs.iter()):
+                println("{show(k)} -> {show(v)}")    # "a" -> 1, then "b" -> 2
+        Result.Ok(_) -> println("not a map")
+        Result.Err(_) -> println("decode error")
+    return 0
+```
 
 ## Functions
 
@@ -80,6 +95,23 @@ fn show_or_err(u8[] buf) string | StdError:
 fn main() i32:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     println(show_or_err(buf).realise("error"))    # {"a":1,"b":[2]}
+    return 0
+```
+
+### `decode_prefix(u8[] buf) -> (MsgValue, i32) | MpError`
+
+Decode ONE value from the start of the buffer, and answer it with the count of bytes it
+used. Bytes after the value are not an error, so a caller can read several values from one
+buffer, one after the other. An empty or a truncated buffer fails as `decode` fails.
+
+```sushi
+use <encoding/msgpack>
+
+fn main() i32:
+    let u8[] buf = from([0x01, 0xa2, 0x68, 0x69])
+    match decode_prefix(buf):
+        Result.Ok((v, used)) -> println("{show(v)} took {used} bytes")    # 1 took 1 bytes
+        Result.Err(_) -> println("decode error")
     return 0
 ```
 
@@ -115,17 +147,18 @@ fn main() i32:
 
 The position of a string key in a `Map`, in wire order; the first key that matches wins.
 A missing key, or a non-map argument, gives `Maybe.None`. Nothing is copied: use the
-position to borrow the value in place, inside a `MsgValue.Map(keys, vals)` arm.
+position to borrow the value in place, inside a `MsgValue.Map(pairs)` arm: `pairs[i].1`
+is the value.
 
 ```sushi
 use <encoding/msgpack>
 
 fn count_items(MsgValue m, string key) i32 | StdError:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
                 Maybe.Some(i) ->
-                    match vals[i]:
+                    match pairs[i].1:
                         MsgValue.Arr(items) -> return Result.Ok(items.len())
                         _ -> return Result.Ok(0)
                 Maybe.None() -> return Result.Ok(0)
@@ -214,7 +247,8 @@ fn main() i32:
 
 ## Limitations
 
-- Decode-only. No encoder, no streaming entry point.
+- Decode-only. No encoder. `decode_prefix` reads one value from the start of a buffer; there
+  is no entry point that reads from a handle.
 - `ext`, `fixext`, and timestamp tags give `MpError.Unsupported` with the tag byte.
 - `show` does not escape string contents.
 - The decoder targets buffers below 2 GiB. A length prefix is checked against what is

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.backend.expressions.calls.stdlib.signatures import as_param_value, llvm_value_type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS, MethodSpec
@@ -21,9 +22,11 @@ if TYPE_CHECKING:
 
 def string_method_function_type(spec: MethodSpec) -> ir.FunctionType:
     """The LLVM type of the generated `string_<name>`: the receiver, then the arguments."""
-    types = [llvm_value_type(ty) for ty in (spec.returns, BuiltinType.STRING, *spec.arg_types)]
-    if any(ty is None for ty in types):
-        raise_internal_error("CE0077", method=spec.name)
+    sushi_types = (spec.returns, BuiltinType.STRING, *spec.arg_types)
+    types = [llvm_value_type(ty) for ty in sushi_types]
+    for sushi_type, llvm_type in zip(sushi_types, types, strict=True):
+        if llvm_type is None:
+            raise_internal_error("CE0145", type=display_type(sushi_type))
     return_type, *param_types = types
     return ir.FunctionType(return_type, param_types)
 

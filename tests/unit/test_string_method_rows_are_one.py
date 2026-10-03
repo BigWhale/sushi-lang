@@ -28,7 +28,7 @@ NAMES = sorted(METHOD_SPECS)
 
 def test_the_rows_are_measured():
     """The control: the table holds the names the old ladder spelled."""
-    assert len(METHOD_SPECS) == 33
+    assert len(METHOD_SPECS) == 35
     for name in ("len", "join", "pad_left", "find_last", "to_f64", "split"):
         assert name in METHOD_SPECS
 

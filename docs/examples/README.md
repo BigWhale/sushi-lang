@@ -68,6 +68,10 @@ Generic `HashMap@(K, V)` - hash tables with key-value pairs.
 ### 25-named-parameters.sushi
 Named parameter syntax for struct construction - order-independent, prevents boolean traps.
 
+### 30-tuples.sushi
+Tuples - a function with two results, a destructure, a tuple pattern, and the stdlib
+functions that answer a tuple (`divmod`, `split_once`, `enumerate`, `zip`, `pairs()`).
+
 ## Advanced Features
 
 ### 13-references.sushi

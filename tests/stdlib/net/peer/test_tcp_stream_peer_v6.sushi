@@ -1,0 +1,24 @@
+# peer() reads an IPv6 peer too: the client's peer is the listener on the IPv6
+# loopback, so the address is ::1 and the port is the one the listener bound.
+# EXPECT_STDOUT_EXACT: "peer ::1\nv6 true\nport is the listener's true\n"
+# EXPECT_NO_LEAKS
+# EXPECT_NO_OPEN_FDS
+# TIMEOUT_SECONDS: 20
+use <net/tcp>
+
+fn run() ~ | NetError:
+    let TcpListener listener = listen("::1", 0, 8)??
+    let i32 port = listener.local_port()??
+    let TcpStream client = connect("::1", port)??
+    let (IpAddr ip, i32 at) = client.peer()??
+    println("peer {ip.text()}")
+    println("v6 {ip.is_v6()}")
+    println("port is the listener's {at == port}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return 0
+        Result.Err(_) ->
+            println("failed")
+            return 1

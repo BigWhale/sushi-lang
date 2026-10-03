@@ -21,6 +21,7 @@ from sushi_lang.sushi_stdlib.src.results import emit_err_result, emit_ok_result
 from sushi_lang.sushi_stdlib.src.type_definitions import (
     get_basic_types,
     get_result_type,
+    get_tuple_type,
     get_unit_enum_type,
 )
 from sushi_lang.backend.runtime.constants import ERRNO_DEFAULT_NET_ERROR
@@ -236,21 +237,25 @@ def generate_connect(module: ir.Module) -> None:
 
 
 def generate_accept(module: ir.Module) -> None:
-    """Emit `Result<i32, NetError> sushi_net_sock_tcp_accept(i32 fd)`.
+    """Emit `Result<{i32, i32, i64, i64}, NetError> sushi_net_sock_tcp_accept(i32 fd)`.
 
-    The peer is not returned: Sushi has no tuples, and sock_peer_ip works on
-    the accepted descriptor afterwards. The accepted descriptor does NOT
-    inherit SO_NOSIGPIPE, so it is set here too.
+    The Ok payload is the tuple (descriptor, version, high, low). accept(2) already
+    wrote the peer's address into the storage, so the peer costs no second system
+    call; emit_read_address reads it, and <net/tcp> builds the IpAddr. The accepted
+    descriptor does NOT inherit SO_NOSIGPIPE, so it is set here too.
 
     A listening socket carrying SO_RCVTIMEO makes accept() answer EAGAIN when
     it expires, which the table maps to TimedOut. That is what gives a test a
     bound rather than a hang.
     """
-    _i8, i8_ptr, i32, _i64 = get_basic_types()
+    from sushi_lang.backend.expressions.memory import calculate_llvm_type_size
+
+    _i8, _i8_ptr, i32, i64 = get_basic_types()
     platform_net = get_platform_module('net')
     accept_fn = platform_net.declare_accept(module)
 
-    result_type = get_result_type(i32, get_unit_enum_type())
+    accepted = get_tuple_type([i32, i32, i64, i64])
+    result_type = get_result_type(accepted, get_unit_enum_type())
     func = ir.Function(module, ir.FunctionType(result_type, [i32]),
                        name="sushi_net_sock_tcp_accept")
     func.args[0].name = "fd"
@@ -273,4 +278,9 @@ def generate_accept(module: ir.Module) -> None:
 
     builder.position_at_end(success_bb)
     addr.emit_nosigpipe(builder, module, fd, one_slot)
-    builder.ret(emit_ok_result(builder, result_type, fd, 4))
+    version, high, low = addr.emit_read_address(builder, storage)
+    value = ir.Constant(accepted, ir.Undefined)
+    for index, part in enumerate((fd, version, high, low)):
+        value = builder.insert_value(value, part, index, name=f"accepted_{index}")
+    builder.ret(emit_ok_result(builder, result_type, value,
+                               calculate_llvm_type_size(accepted)))

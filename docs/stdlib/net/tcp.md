@@ -61,9 +61,29 @@ Connect to a host and port. There is no connect timeout — an unreachable addre
 
 ## Methods
 
-### `l.accept() TcpStream | NetError`
+### `l.accept() (TcpStream, IpAddr) | NetError`
 
-Take the next connection. With `l.set_timeout(ms)` set, this answers `TimedOut` rather than waiting.
+Take the next connection, and the address of the peer that made it. The address is the one `accept(2)` already wrote, so it costs no second system call. An IPv4 peer is `IpAddr.V4`, an IPv6 peer is `IpAddr.V6`; on a dual-stack `"::"` listener an IPv4 client is the V4-mapped `IpAddr.V6`. With `l.set_timeout(ms)` set, this answers `TimedOut` rather than waiting.
+
+Destructure the pair, and write `_` for the half you do not need. A stream behind `_` is dropped at once, and its descriptor closes:
+
+```sushi
+use <net/tcp>
+
+fn serve_one() ~ | NetError:
+    let TcpListener listener = listen("127.0.0.1", 0, 8)??
+    let TcpStream client = connect("127.0.0.1", listener.local_port()??)??
+    let (TcpStream served, IpAddr peer) = listener.accept()??
+    println("connection from {peer.text()}")    # connection from 127.0.0.1
+    served.close()??
+    client.close()??
+    return Result.Ok(~)
+
+fn main() i32:
+    match serve_one():
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> return 1
+```
 
 ### `l.share() TcpListener | IoError`
 
@@ -100,7 +120,7 @@ fn exchange() ~ | NetError:
 
     let i32 port = listener.local_port()??
     let TcpStream client = connect("127.0.0.1", port)??
-    let TcpStream served = listener.accept()??
+    let (TcpStream served, _) = listener.accept()??
     client.set_timeouts(5000, 5000)??
     served.set_timeouts(5000, 5000)??
 
@@ -134,6 +154,21 @@ Bound how long a call may wait. **Set these before anything blocks.** Without th
 ### `s.peer_ip() IpAddr | NetError`, `s.peer_port()`, `s.local_port()`, `l.local_port()`
 
 Who is at each end. All four carry the `| NetError` channel. Every address that leaves the net modules is an [`IpAddr`](ip.md), so `peer_ip()` answers one and `.text()` gives its canonical text. No resolver is asked. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
+
+### `s.peer() (IpAddr, i32) | NetError`
+
+The address and the port of the other end, from ONE `getpeername(2)` call. Use it when you need both: two calls of `peer_ip()` and `peer_port()` ask the kernel twice.
+
+```sushi
+use <net/tcp>
+
+fn main() i32:
+    let TcpStream s = connect("127.0.0.1", 8080).realise(TcpStream(-1))
+    match s.peer():
+        Result.Ok((ip, port)) -> println("{ip.text()}:{port}")
+        Result.Err(_) -> println("no peer")
+    return 0
+```
 
 ### `s.is_open() bool` and `l.is_open() bool`
 

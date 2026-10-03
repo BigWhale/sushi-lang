@@ -1,0 +1,62 @@
+# inflate_raw_prefix decompresses the DEFLATE stream at the start of a buffer
+# and answers the output with the count of input bytes up to the end of the
+# final block. Bytes after the stream are not read, so two streams back to back
+# come apart. An empty or a truncated stream fails as inflate_raw fails.
+# EXPECT_STDOUT_EXACT: "fixed [Mostly Harmless] used all true\nstored [Mostly Harmless] used all true\nsecond [Don't Panic] at end true\nempty truncated input\nempty raw truncated input\nshort truncated input\nshort raw truncated input\nnothing 0 used all true\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <compression/zlib>
+use <collections/strings>
+
+fn fault(Result@((u8[], i32), ZError) r) string:
+    match r:
+        Result.Ok(_) -> return "inflated"
+        Result.Err(e) -> return e.text()
+
+fn run() ~ | ZError:
+    let u8[] text = "Mostly Harmless".to_bytes()
+    let u8[] fixed = deflate_raw(text, 6)??
+    let u8[] stored = deflate_raw(text, 0)??
+
+    let u8[] padded = fixed.clone()
+    padded.push(0xff)
+    padded.push(0x00)
+    let (u8[] out, i32 used) = inflate_raw_prefix(padded)??
+    println("fixed [{out.to_string()}] used all {used == fixed.len()}")
+
+    let u8[] padded_stored = stored.clone()
+    padded_stored.push(0x07)
+    let (u8[], i32) got = inflate_raw_prefix(padded_stored)??
+    println("stored [{got.0.to_string()}] used all {got.1 == stored.len()}")
+
+    let u8[] two = fixed.clone()
+    let u8[] panic = deflate_raw("Don't Panic".to_bytes(), 6)??
+    two.extend(panic)
+    let (_, i32 first) = inflate_raw_prefix(two)??
+    let (u8[] second, i32 rest) = inflate_raw_prefix(two.s(first, two.len()))??
+    println("second [{second.to_string()}] at end {first + rest == two.len()}")
+
+    let u8[] empty = from([])
+    println("empty {fault(inflate_raw_prefix(empty))}")
+    match inflate_raw(empty):
+        Result.Ok(_) -> println("empty raw inflated")
+        Result.Err(e) -> println("empty raw {e.text()}")
+
+    let u8[] short = fixed.s(0, fixed.len() - 2)
+    println("short {fault(inflate_raw_prefix(short))}")
+    match inflate_raw(short):
+        Result.Ok(_) -> println("short raw inflated")
+        Result.Err(e) -> println("short raw {e.text()}")
+
+    let u8[] blank = from([])
+    let u8[] nothing = deflate_raw(blank, 6)??
+    let (u8[] none, i32 n) = inflate_raw_prefix(nothing)??
+    println("nothing {none.len()} used all {n == nothing.len()}")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run():
+        Result.Ok(_) -> return 0
+        Result.Err(e) ->
+            println("failed {e.text()}")
+            return 1

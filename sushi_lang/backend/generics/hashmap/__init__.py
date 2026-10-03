@@ -27,6 +27,7 @@ from .methods import (
     emit_hashmap_keys,
     emit_hashmap_values,
     emit_hashmap_entries,
+    emit_hashmap_pairs,
 )
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ HASHMAP_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "keys": ContainerMethod(emit_hashmap_keys),
     "values": ContainerMethod(emit_hashmap_values),
     "entries": ContainerMethod(emit_hashmap_entries),
+    "pairs": ContainerMethod(emit_hashmap_pairs),
     "clone": ContainerMethod(_emit_hashmap_clone),
 })
 
@@ -96,4 +98,5 @@ __all__ = [
     'emit_hashmap_keys',
     'emit_hashmap_values',
     'emit_hashmap_entries',
+    'emit_hashmap_pairs',
 ]

@@ -13,7 +13,7 @@ fn exchange() ~ | NetError:
     listener.set_timeout(5000)??
     let i32 port = listener.local_port()??
     let TcpStream client = connect("127.0.0.1", port)??
-    let TcpStream served = listener.accept()??
+    let (TcpStream served, _) = listener.accept()??
     client.set_timeouts(5000, 5000)??
     served.set_timeouts(5000, 5000)??
     client.send_all("Mostly Harmless".to_bytes())??
