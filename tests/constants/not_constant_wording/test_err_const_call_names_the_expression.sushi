@@ -1,0 +1,12 @@
+# CE0108 names the expression as the source writes it, never a compiler class name
+# (#1137). A function call in a constant is a call.
+# EXPECT_ERROR_CODES_EXACT: CE0108
+# EXPECT_STDERR_CONTAINS: a function call is not a compile-time constant
+fn pick() i32:
+    return 4
+
+const i32 X = pick()
+
+fn main() i32:
+    println(X)
+    return 0

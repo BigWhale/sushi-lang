@@ -788,7 +788,7 @@ library it lives in was not linked.
 fn get_value() i32:
     return 42
 
-# ERROR CE0108: expression is not a compile-time constant
+# ERROR CE0108: a function call is not a compile-time constant
 const i32 X = get_value()
 ```
 

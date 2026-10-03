@@ -70,10 +70,20 @@ _ORDERINGS = ("<", "<=", ">", ">=")
 # an initializer (both are spelled as a `DotCall` there) and a `Spread` is an argument,
 # but the union holds them, so the table says what they would be. A `TupleLiteral` is no
 # constant by design: there is no tuple `const` and no tuple `var` (docs/design/tuples.md).
-NOT_CONSTANT: frozenset[type] = frozenset({
-    MethodCall, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, Borrow, TryExpr,
-    RangeExpr, Spread, Lambda, BlankLit, TupleLiteral,
-})
+# The value is the phrase CE0108 prints, as the source writes the expression (#1137).
+NOT_CONSTANT: Mapping[type, str] = {
+    MethodCall: "a method call",
+    EnumConstructor: "an enum variant construction",
+    DynamicArrayNew: "a `new()` call",
+    DynamicArrayFrom: "a `from(...)` call",
+    Borrow: "a borrow",
+    TryExpr: "a `??` expression",
+    RangeExpr: "a range",
+    Spread: "a bloom argument",
+    Lambda: "a lambda",
+    BlankLit: "the blank value `~`",
+    TupleLiteral: "a tuple",
+}
 
 
 @dataclass
@@ -256,7 +266,8 @@ class ConstantEvaluator:
         span = expr.loc or span
         handler = self.HANDLERS.get(type(expr))
         if handler is None:
-            er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+            er.emit(self.reporter, er.ERR.CE0108, span,
+                    what=NOT_CONSTANT.get(type(expr), "this expression"))
             return None
         return handler(self, expr, expected_type, span)
 
@@ -296,7 +307,7 @@ class ConstantEvaluator:
             stand_in = Call(callee=Name(id=ref.name, loc=expr.loc), args=expr.args,
                             field_names=expr.field_names, loc=expr.loc)
             return self._evaluate_struct_construction(stand_in, expected_type, span)
-        er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+        er.emit(self.reporter, er.ERR.CE0108, span, what="a function call")
         return None
 
     def _qualified(self, node: Union[DotCall, MemberAccess]) -> Optional[NamespaceRef]:
@@ -369,7 +380,9 @@ class ConstantEvaluator:
         arguments = None if struct_type is None else self._arguments_in_field_order(
             expr, struct_type.fields)
         if arguments is None:
-            er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+            what = ("a function call" if struct_type is None
+                    else "a struct construction whose arguments do not fit its fields")
+            er.emit(self.reporter, er.ERR.CE0108, span, what=what)
             return None
 
         field_values: List[ConstantValue] = []
@@ -400,7 +413,8 @@ class ConstantEvaluator:
         enum_type = self._named_type(expr.receiver, expected_type, self.enum_table,
                                      EnumType)
         if enum_type is None:
-            er.emit(self.reporter, er.ERR.CE0108, span, expr_type=type(expr).__name__)
+            what = "a method call" if isinstance(expr, DotCall) else "a field read"
+            er.emit(self.reporter, er.ERR.CE0108, span, what=what)
             return None
 
         if isinstance(expr, DotCall):
@@ -503,7 +517,7 @@ class ConstantEvaluator:
             if is_integer_type(t):
                 return str(value.value)
         er.emit(self.reporter, er.ERR.CE0108, span,
-                expr_type=f"interpolation of {display_type(value.semantic_type)}")
+                what=f"an interpolated '{display_type(value.semantic_type)}' value")
         return None
 
     def _evaluate_interpolation(self, expr: InterpolatedString, expected_type: Type,
@@ -640,7 +654,7 @@ class ConstantEvaluator:
             element_values.extend([run_val] * run.count)
 
         if not element_values:
-            er.emit(self.reporter, er.ERR.CE0108, span, expr_type='empty array')
+            er.emit(self.reporter, er.ERR.CE0108, span, what="an empty array")
             return None
 
         return AggregateConstant(element_values, expected_type)
@@ -679,7 +693,7 @@ class ConstantEvaluator:
             # Storage has a run-time value, so neither a constant nor another variable
             # can fold it in -- and no initialization order exists to say otherwise.
             er.emit(self.reporter, er.ERR.CE0108, span,
-                    expr_type=f"unit variable '{sig.name}'")
+                    what=f"the unit variable '{sig.name}'")
             return None
 
         key = (sig.unit_name, sig.name)
