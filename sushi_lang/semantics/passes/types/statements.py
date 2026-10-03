@@ -377,7 +377,11 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
     if iterable_type is None:
-        return  # Error already emitted during expression validation
+        # With an error on record the build stops before the backend; with none, a
+        # missing type here is a gap in the compiler, and it is told at the iterable.
+        if not validator.reporter.has_errors:
+            er.emit(validator.reporter, er.ERR.CE0146, stmt.iterable.loc)
+        return
 
     if isinstance(iterable_type, IteratorType):
         element_type = iterable_type.element_type

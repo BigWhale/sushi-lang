@@ -1,0 +1,6 @@
+# An error inside the source of `extend` reports its own code (#1144).
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn main() i32:
+    let u8[] two = from([0])
+    two.extend(nope())
+    return 0

@@ -1,0 +1,7 @@
+# An Iterator@(T) from a List@(T) has no methods: `len` is CE2008 at the call (#1136).
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    println(l.iter().len())
+    return 0

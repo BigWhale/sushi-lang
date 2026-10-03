@@ -1,0 +1,6 @@
+# An unknown method on an Iterator@(T) is CE2008 at the call (#1136).
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn main() i32:
+    let i32[] a = from([1, 2])
+    a.iter().bogus()
+    return 0

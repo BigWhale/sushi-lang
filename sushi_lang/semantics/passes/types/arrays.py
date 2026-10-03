@@ -211,10 +211,12 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
     Compared unstamped, the literal defaulted to `i32[]` and a correct call was CE2023
     (#576).
     """
-    if validator is not None:
-        from .propagation import propagate_types_to_value
-        propagate_types_to_value(validator, call.args[0], array_type)
-    source_type = validator.infer_expression_type(call.args[0]) if validator else None
+    if validator is None:
+        return False
+    from .propagation import propagate_types_to_value
+    propagate_types_to_value(validator, call.args[0], array_type)
+    validator.validate_expression(call.args[0])
+    source_type = validator.infer_expression_type(call.args[0])
     if source_type is None:
         return False
     source_type = deref_type(source_type)

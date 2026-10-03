@@ -1,0 +1,17 @@
+# A `??` in the source of `extend` is validated like any argument (#1144).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+enum E:
+    Bad
+
+fn give() u8[] | E:
+    return Result.Ok(from([1, 2]))
+
+fn grow() i32 | E:
+    let u8[] two = from([0])
+    two.extend(give()??)
+    return Result.Ok(two.len())
+
+fn main() i32:
+    println(grow().realise(0))
+    return 0

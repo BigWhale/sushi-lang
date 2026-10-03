@@ -474,3 +474,14 @@ _add(ErrorMessage("CE0142", Severity.ERROR,
     "the key read the file again, so a file that changed after the parse stored the old "
     "object under the key of the new text, and a file that was gone left the source out "
     "of the key with no diagnostic (#1062)."))
+
+_add(ErrorMessage("CE0146", Severity.ERROR,
+    "internal error: the typecheck pass found no type for this foreach iterable",
+    Category.INTERNAL,
+    "The typecheck pass gives the iterable of every foreach its type, and the loop reads "
+    "its item type from it. When inference answers nothing and no other error was "
+    "reported for the iterable, the fault is in the compiler, not in the program. The "
+    "pass reports it here, at the iterable, so the backend never reads a loop with no "
+    "item type. Before #1143 the pass returned with no diagnostic, and the backend "
+    "stopped with CE0015 and no location. Bind the iterable to a 'let' with a written "
+    "type first, and please report the program."))

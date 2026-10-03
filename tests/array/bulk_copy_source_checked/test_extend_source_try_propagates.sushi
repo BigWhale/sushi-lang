@@ -1,0 +1,17 @@
+# The Err of a `??` in the source of `extend` leaves the function (#1144).
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS
+enum E:
+    Bad
+
+fn give() string[] | E:
+    return Result.Err(E.Bad)
+
+fn grow() i32 | E:
+    let string[] two = from(["a"])
+    two.extend(give()??)
+    return Result.Ok(two.len())
+
+fn main() i32:
+    println(grow().realise(7))
+    return 0

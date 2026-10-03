@@ -32,7 +32,8 @@ import pytest
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 from sushi_lang.semantics.typesys import (
     ForeignPtrType,
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, StructType,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, IteratorType,
+    StructType,
 )
 
 TYPES_PASS = (Path(__file__).resolve().parents[2]
@@ -106,6 +107,7 @@ _RECEIVERS = (
     FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,
                  err_type=BuiltinType.I32),
     ForeignPtrType(),
+    IteratorType(BuiltinType.I32),
 )
 
 #: Every name any family answers to, plus names no family does.
@@ -235,3 +237,12 @@ def test_the_derive_pass_writes_only_hash_and_clone():
     assert sorted(registered) == ["clone", "hash"], (
         "the derive pass registers a name the family table does not claim: "
         + ", ".join(sorted(set(registered))))
+
+
+def test_no_family_answers_an_iterator():
+    """An `Iterator@(T)` has no built-in method, so a call on one is CE2008 (#1136)."""
+    receiver = IteratorType(BuiltinType.I32)
+    claimed = [f"{name}() -> {', '.join(_claims(receiver, name))}"
+               for name in _NAMES if _claims(receiver, name)]
+    assert not claimed, ("a family claims a method of an iterator:\n  "
+                         + "\n  ".join(claimed))
