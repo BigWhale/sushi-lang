@@ -40,7 +40,7 @@ _add(ErrorMessage("CE2007", Severity.ERROR,
 
 _add(ErrorMessage("CE2008", Severity.ERROR,
     "undefined function '{name}'",
-    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469)."))
+    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. Until #1136 a call on an iterator was not checked, and the backend stopped with an internal error and no location."))
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
     "wrong number of arguments: '{name}' expects {expected}, got {got}",

@@ -7,7 +7,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
-    StructType)
+    IteratorType, StructType)
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
@@ -15,10 +15,12 @@ from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
 from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
 
-# A receiver that can answer a method at all. `Own@(T)`, `List@(T)` and `HashMap@(K, V)`
-# are named StructTypes, so the tuple covers them with every other struct.
+# A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
+# `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
+# struct. An `Iterator@(T)` (a range too) answers no method, and it is here so that a
+# call on one is CE2008 at the call and not an internal error in the backend (#1136).
 RECEIVERS_WITH_METHODS = (BuiltinType, ArrayType, DynamicArrayType, EnumType,
-                          FunctionType, StructType)
+                          FunctionType, IteratorType, StructType)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -628,8 +630,12 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
             return
         if isinstance(call.receiver, Name) and call.receiver.id in validator.refused_bindings:
             return
-        er.emit(validator.reporter, er.ERR.CE2008, call.loc,
-                name=f"{display_type(receiver_type)}.{call.method}")
+        diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.loc,
+                            name=f"{display_type(receiver_type)}.{call.method}")
+        if isinstance(receiver_type, IteratorType):
+            diag.help("an iterator has no methods: walk it with 'foreach', or call the "
+                      "method on the collection it comes from")
+        diag.emit()
         return
 
     _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
