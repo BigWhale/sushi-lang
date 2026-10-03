@@ -219,11 +219,11 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
         return False
     source_type = deref_type(source_type)
     if not isinstance(source_type, (ArrayType, DynamicArrayType)):
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
                 expected="an array", got=display_type(source_type))
         return True
     if source_type.base_type != array_type.base_type:
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
                 expected=display_type(array_type), got=display_type(source_type))
         return True
     return False
@@ -482,7 +482,7 @@ def validate_builtin_array_method(call: MethodCall, array_type: ArrayReceiver,
         return
 
     if not _receiver_is_accepted(spec.receiver, array_type):
-        er.emit(reporter, er.ERR.CE2023, call.loc, method=call.method,
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="receiver", method=call.method,
                 expected=spec.receiver.value, got=display_type(array_type))
         return
 

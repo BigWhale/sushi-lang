@@ -102,8 +102,8 @@ _add(ErrorMessage("CE2020", Severity.ERROR,
 # Dynamic array-specific errors (compile-time only)
 
 _add(ErrorMessage("CE2023", Severity.ERROR,
-    "dynamic array method argument mismatch for '{method}': expected {expected}, got {got}",
-    Category.TYPE, "Dynamic array method called with incorrect argument types."))
+    "dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}",
+    Category.TYPE, "A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type. The text said \"argument\" for both until #1137, so a fixed-array receiver read as a wrong argument."))
 
 _add(ErrorMessage("CE2024", Severity.ERROR,
     "use of destroyed dynamic array '{name}'",
