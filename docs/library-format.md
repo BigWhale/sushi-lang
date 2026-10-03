@@ -206,7 +206,8 @@ is the authority, and the index is a cache of it.
     # explicit `Result@(T, E)` return carries its arms in `return_type`.
     #
     #   SIG = {
-    #       "params": [{"name": str, "type": str, "mode": str}],
+    #       "params": [{"name": str, "type": str, "mode": str,
+    #                   "is_pack": bool}],  # Present (true) for `...Ts args` alone
     #       "return_type": str,
     #       "has_channel": bool,       # Required: does a call answer a Result
     #       "error_type": str          # If the declaration says `| E`

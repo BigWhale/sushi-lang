@@ -582,8 +582,10 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return None
 
     def visit_rangeexpr(self, node: RangeExpr) -> Optional[Type]:
-        """Infer type of range expression - always Iterator<i32>."""
+        """Infer type of range expression - Iterator<i32>, or None once refused (CE2122)."""
         from sushi_lang.semantics.passes.types.inference import infer_range_expression_type
+        if id(node) in self.type_validator.refused_ranges:
+            return None
         return infer_range_expression_type(self.type_validator, node)
 
     def visit_borrow(self, node: Borrow) -> Optional[Type]:

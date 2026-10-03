@@ -1,0 +1,10 @@
+# A pack name held in another type: an array element and a type argument (#1167).
+# EXPECT_ERROR_CODES_EXACT: CE0147, CE0147
+fn f@(...Ts: Display)(Ts[] xs, ...Ts rest) List@(Ts):
+    println(xs.len())
+    expand(r in rest):
+        println(r)
+    return List.new()
+
+fn main() i32:
+    return 0

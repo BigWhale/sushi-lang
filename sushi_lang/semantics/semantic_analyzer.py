@@ -94,6 +94,7 @@ class SemanticAnalyzer:
         # import backend (Tier 4.1 layering invariant).
         self.library_linker = library_linker
         self.library_registry = library_registry
+        self._refused_pack_templates: list[str] = []
         # What the stdlib generators define, read from the manifest their build writes.
         # A NAME list and nothing else: no semantic table holds these symbols, which is
         # why CE5013 could not see them (#472).
@@ -210,6 +211,12 @@ class SemanticAnalyzer:
         self._check_ffi_clash(compilation_order)
         self._check_entrypoint(compilation_order)
 
+        # A template that names its type pack as ONE type (CE0147, #1167) has no copy
+        # the monomorphize pass can cut, and each call of it would only read the fault
+        # back, so the analysis stops before the generic passes.
+        if self._refused_pack_templates:
+            return
+
         instantiations = self._collect_instantiations(compilation_order, libraries)
         monomorphizer, concrete_extension_defs = self._monomorphize(
             compilation_order, instantiations)
@@ -291,6 +298,7 @@ class SemanticAnalyzer:
                                            if id(i) not in dropped]
 
         libraries.refused_types.extend(collector.refused_library_types)
+        self._refused_pack_templates = collector.refused_pack_templates
         self.tables = global_tables
         return libraries
 

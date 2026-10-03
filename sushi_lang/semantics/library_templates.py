@@ -124,8 +124,12 @@ def signature_record(func: "FuncDef | ExtendDef") -> dict:
         #
         # A parameter record carries no `doc`: per-parameter text lives in the
         # enclosing function's `doc.params`, keyed by name.
+        #
+        # `is_pack` is written for the parameter that takes a type pack (`...Ts args`)
+        # alone: its type string is the pack's bare name, and the report needs the `...`.
         "params": [
-            {"name": p.name, "type": type_string(p.ty), "mode": param_mode(p).value}
+            {"name": p.name, "type": type_string(p.ty), "mode": param_mode(p).value,
+             **({"is_pack": True} if p.is_pack else {})}
             for p in func.params
         ],
         "return_type": type_string(func.ret),

@@ -1,0 +1,12 @@
+# A range inside a constructor argument of a constrained generic call (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+struct Holder@(T):
+    T it
+
+fn k@(T: Display)(T x) i32:
+    println(x)
+    return 7
+
+fn main() i32:
+    println(k(Holder(0..3)))
+    return 0

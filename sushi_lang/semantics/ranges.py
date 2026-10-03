@@ -72,3 +72,35 @@ def read_range(expr: RangeExpr, read_int: ReadInt,
         inclusive=expr.inclusive,
         loc=expr.loc,
     )
+
+
+def holds_a_range_value(root: object) -> bool:
+    """True when a range under `root` is in neither of its two positions (CE2122, #1165).
+
+    The typecheck pass's rule, read off the shape: a range is a `foreach` iterable or an
+    array-literal element, and anything else is refused. A pass that types an expression
+    before the typecheck pass reports the range reads this, so it solves nothing from a
+    range -- a constraint judged against `Iterator@(i32)` was CE4006 in place of the
+    range's own error.
+    """
+    from sushi_lang.semantics.ast import ArrayElement, Foreach
+    from sushi_lang.semantics.ast_walk import children, walk_nodes
+
+    found = False
+
+    def visit(node) -> bool:
+        nonlocal found
+        if isinstance(node, RangeExpr):
+            found = True
+        if found:
+            return False
+        legal = (node.value if isinstance(node, ArrayElement)
+                 else node.iterable if isinstance(node, Foreach) else None)
+        if not isinstance(legal, RangeExpr):
+            return True
+        walk_nodes([legal.start, legal.end], visit)
+        walk_nodes([child for child in children(node) if child is not legal], visit)
+        return False
+
+    walk_nodes(root, visit)
+    return found

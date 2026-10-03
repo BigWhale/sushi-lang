@@ -159,6 +159,39 @@ def validate_type_pack_params(
                     message=f"type-pack value parameter '...{pack_param.name}' has no matching type-pack type parameter '...{pack_elem_name}'")
 
 
+def reject_pack_type_outside_its_parameter(
+    reporter: 'Reporter',
+    fn: FuncDef,
+    type_params_raw: Optional[List],
+    fallback_span: Optional[Span],
+) -> bool:
+    """CE0147: a pack name as a type anywhere but its own `...Ts name` parameter (#1167).
+
+    Judged where the template is written, over its signature and its body, so a template
+    no call instantiates is refused too. True when it refused something.
+    """
+    from sushi_lang.semantics.ast_walk import types_in_body
+    from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.typesys import UnknownType
+
+    packs = {tp.name for tp in (type_params_raw if isinstance(type_params_raw, list) else [])
+             if isinstance(tp, BoundedTypeParam) and tp.is_pack}
+    if not packs:
+        return False
+    mentions = [(p.ty, p.type_span or p.name_span) for p in fn.params or () if not p.is_pack]
+    mentions += [(fn.ret, fn.ret_span), (fn.err_type, fn.err_span)]
+    mentions += list(types_in_body(fn.body))
+    refused = False
+    for ty, span in mentions:
+        named = next((inner.name for inner in walk_named_types(ty, through_declarations=False)
+                      if isinstance(inner, (UnknownType, TypeParameter))
+                      and inner.name in packs), None)
+        if named is not None:
+            er.emit(reporter, ERR.CE0147, span or fallback_span, name=named)
+            refused = True
+    return refused
+
+
 @dataclass
 class Param:
     """Function parameter with type information."""
@@ -490,6 +523,8 @@ class FunctionCollector:
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
+        # The templates refused with CE0147 (#1167): no copy of one can be cut.
+        self.refused_pack_templates: List[str] = []
         # Who declared what, across the whole program: the one reader for the question
         # "did a library take this name already?" A struct table carries a file and not
         # a unit, so every collector that refuses a redeclaration asks this table.
@@ -788,6 +823,8 @@ class FunctionCollector:
         # a type-pack type-param). Keys on `is_pack`, disjoint from the CE0114
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
+        if reject_pack_type_outside_its_parameter(self.r, fn, type_params_raw, name_span):
+            self.refused_pack_templates.append(name)
 
         ret_ty = fn.ret
         ret_span = fn.ret_span or name_span

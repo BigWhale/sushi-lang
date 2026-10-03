@@ -1,0 +1,9 @@
+# The hybrid twin of a library whose public functions are all generic (#1163).
+# BUILD_LIB_HYBRID: alias_tpl_only.sushi
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_STDERR_EMPTY: true
+use <lib/alias_tpl_only> as b
+
+fn main() i32:
+    println(b.only_id(nom 6))
+    return 0

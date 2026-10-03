@@ -53,19 +53,20 @@ def _render_params(params: list, self_mode: str | None = None) -> str:
     rendered = [f"{self_mode} self"] if self_mode else []
     for param in params:
         mode = "nom " if param.get("mode") == "nom" else ""
-        rendered.append(f"{mode}{_surface(param['type'])} {param['name']}")
+        pack = "..." if param.get("is_pack") else ""
+        rendered.append(f"{mode}{pack}{_surface(param['type'])} {param['name']}")
     return ", ".join(rendered)
 
 
 def _render_type_params(records: list | None) -> str:
-    """The `@(T: Perk, U)` suffix of a generic declaration, or "" when there is none."""
+    """The `@(T: Perk, ...Ts)` suffix of a generic declaration, or "" when there is none."""
     if not records:
         return ""
     rendered = []
     for tp in records:
         constraints = tp.get('constraints') or []
-        rendered.append(f"{tp['name']}: {' + '.join(constraints)}"
-                        if constraints else tp['name'])
+        name = f"...{tp['name']}" if tp.get('is_pack') else tp['name']
+        rendered.append(f"{name}: {' + '.join(constraints)}" if constraints else name)
     return f"@({', '.join(rendered)})"
 
 

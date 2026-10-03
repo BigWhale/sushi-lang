@@ -944,6 +944,11 @@ range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop call
 it answers `None`, and that is the whole protocol. There is no type to implement and no
 perk to name, so a struct becomes walkable by gaining one method.
 
+**A range is not a value.** It has two positions: a `foreach` iterable and an element of
+an array literal (`from([0..n])`). A range anywhere else -- a function, method or
+constructor argument, a `return`, a `let` initializer, an operand -- is `CE2122`. Spell it
+into an array to keep it.
+
 <!-- docs-sweep: skip (a fragment: the narrative owns the struct) -->
 ```sushi
 extend Countdown next(poke self) Maybe@(i32):    # this makes a Countdown walkable

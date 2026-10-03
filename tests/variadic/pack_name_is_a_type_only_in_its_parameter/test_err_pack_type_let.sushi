@@ -1,0 +1,12 @@
+# A pack name as the type of a `let` in the body. It was the internal error CE0000 at
+# the first call (#1167).
+# EXPECT_ERROR_CODES_EXACT: CE0147
+fn f@(...Ts: Display)(...Ts rest) i32:
+    let Ts y = 1
+    println(y)
+    expand(r in rest):
+        println(r)
+    return 1
+
+fn main() i32:
+    return f(1)

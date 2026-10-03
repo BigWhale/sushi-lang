@@ -8,7 +8,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess
+from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
@@ -373,7 +373,11 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
 
 def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> None:
     """Validate foreach statement: check iterator type and item variable."""
-    validator.validate_expression(stmt.iterable)
+    if isinstance(stmt.iterable, RangeExpr):
+        from .expressions import validate_range_expression
+        validate_range_expression(validator, stmt.iterable)
+    else:
+        validator.validate_expression(stmt.iterable)
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
     if iterable_type is None:

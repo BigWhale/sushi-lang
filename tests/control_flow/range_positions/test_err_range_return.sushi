@@ -1,0 +1,7 @@
+# A range in a `return` (#1165).
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn f() i32:
+    return 0..3
+
+fn main() i32:
+    return f()

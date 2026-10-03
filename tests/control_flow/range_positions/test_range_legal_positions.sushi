@@ -1,0 +1,14 @@
+# The two positions of a range: a `foreach` iterable and an array-literal element, also
+# inside a generic function (#1165).
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n3\n4\n"
+fn walk@(T)(nom T x) T:
+    foreach(i in 0..2):
+        println(i)
+    return x
+
+fn main() i32:
+    let i32[] a = from([0..=2])
+    let i32 from_walk = walk(nom 2)
+    foreach(i in 0..a.len()):
+        println(a[i] + from_walk)
+    return 0

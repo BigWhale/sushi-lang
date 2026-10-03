@@ -29,6 +29,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program, UseStatement
 from sushi_lang.semantics.ast_walk import declarations
+from sushi_lang.semantics.library_registry import library_unit
 from sushi_lang.semantics.namespaces import (
     GENERIC_UNIT_TYPES,
     ExternalNamespace,
@@ -559,9 +560,28 @@ def _binary_unit_provider(metadata: LibraryMetadata, unit_name: str,
         if record.get("unit") == unit_name
         and (sig := tables.constants.by_name.get(record["name"])) is not None
     }
+    # A template is in the tables under the unit that declared it at the producer
+    # (#1163); a private one rides in the export closure and is no member of the unit.
+    templates = manifest.get("templates") or {}
+    key = library_unit(metadata.name, unit_name)
+    registered = tables.generic_funcs.by_unit.get(key, {})
+    generics = {
+        record["name"]: registered[record["name"]]
+        for record in templates.get("generic_functions", []) or []
+        if record.get("unit") == unit_name and not record.get("private")
+        and record["name"] in registered
+    }
+    others = _manifest_types(manifest, unit_name)
+    perks = tables.perks
+    others.update({
+        record["name"]: "perk"
+        for record in templates.get("perks", []) or []
+        if perks.library_units.get(record["name"]) == key
+        and getattr(perks.by_name.get(record["name"]), "is_public", False)
+    })
     return UnitNamespace(
         f"{metadata.name}/{unit_name}", functions=functions, constants=constants,
-        others=_manifest_types(manifest, unit_name),
+        generics=generics, others=others,
         reexports=_binary_reexports(metadata, unit_name, tables, units,
                                     library_registry, visited),
     )
@@ -622,13 +642,23 @@ def _manifest_unit(manifest: dict, wanted: str) -> Optional[str]:
 
 
 def _manifest_types(manifest: dict, unit_name: str) -> Dict[str, str]:
-    """The struct and enum names one unit of a binary library publishes."""
-    return {
-        record["name"]: kind
-        for key, kind in (("structs", "struct"), ("enums", "enum"))
-        for record in (manifest.get(key, []) or [])
-        if record.get("unit") == unit_name
-    }
+    """The struct and enum names one unit of a binary library publishes.
+
+    A generic type ships as a template record and not as a concrete one (#1163); a
+    private one ships there too, for the export closure, and is named in
+    `private_types`.
+    """
+    templates = manifest.get("templates") or {}
+    private = {record.get("name") for record in templates.get("private_types", []) or []
+               if record.get("unit") == unit_name}
+    records = [(kind, record)
+               for key, kind in (("structs", "struct"), ("enums", "enum"))
+               for record in (manifest.get(key, []) or [])]
+    records += [(kind, record)
+                for key, kind in (("generic_structs", "struct"), ("generic_enums", "enum"))
+                for record in (templates.get(key, []) or [])]
+    return {record["name"]: kind for kind, record in records
+            if record.get("unit") == unit_name and record["name"] not in private}
 
 
 def _one_of(items: Iterable[str], predicate: Callable[[str], bool]) -> Optional[str]:

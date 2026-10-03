@@ -107,6 +107,9 @@ class TypeValidator:
         # The `let` names whose initializer was refused; a method call on one is not
         # refused again (#1128).
         self.refused_bindings: set[str] = set()
+        # The ranges refused outside their two positions (#1165): each answers no type
+        # after the refusal, so the position that holds it adds no second error.
+        self.refused_ranges: set[int] = set()
 
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
