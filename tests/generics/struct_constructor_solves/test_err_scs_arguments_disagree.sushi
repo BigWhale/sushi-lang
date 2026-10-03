@@ -1,0 +1,12 @@
+# Two arguments of a generic struct constructor give one type parameter two
+# types: the error is at the constructor, and it is never CE2008 (#1150).
+# EXPECT_ERROR_CODES_EXACT: CE2065
+# EXPECT_STDERR_CONTAINS: "cannot infer the type of 'Both(...)': the arguments give 'T' two types, 'i32' and 'string'"
+# EXPECT_STDERR_CONTAINS: "let Both@(T) v = Both(...)"
+struct Both@(T):
+    T left
+    T right
+
+fn main() i32:
+    println(Both(1, "x").left)
+    return 0

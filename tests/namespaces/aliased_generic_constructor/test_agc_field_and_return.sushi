@@ -1,0 +1,18 @@
+# A generic struct constructor behind a unit alias in a field position and in a
+# return position (#1151).
+# EXPECT_STDOUT_EXACT: "3\n4\n8\n"
+use "helpers/agc_shapes" as sh
+
+struct Local:
+    sh.Box@(i32) b
+
+fn make(i32 x) sh.Box@(i32):
+    return sh.Box(x)
+
+fn main() i32:
+    let Local l = Local(sh.Box(3))
+    println(l.b.v)
+    println(make(4).v)
+    let sh.Holder h = sh.Holder(sh.Box(8))
+    println(h.inner.v)
+    return 0
