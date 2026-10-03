@@ -357,7 +357,10 @@ println("{Cage.holding(9).item}")       # T from the argument alone
 The instantiate pass collects what the arguments solve, through the same solver, so
 every copy is cut for `Cage<i32>` before the typecheck pass looks it up; an argument
 only the typecheck pass can type interns the instantiation late, through the seam the
-method-generic rung uses, with the static's own copy queued for the fixpoint round.
+method-generic rung uses, with the static's own copy queued for the fixpoint round. An
+inference in an EARLY pass reads the substituted signature of the static and queues
+nothing: the copy of an instance that the monomorphize pass reaches is cut by that pass,
+and a second copy from the queue was a duplicate symbol (#1153).
 
 The stamp is the reason a static is not only ergonomics. A free function whose `T`
 names only the RETURN cannot be inferred (CE2060) and has to spell `box_new@(i32)()`; a

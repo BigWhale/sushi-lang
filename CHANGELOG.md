@@ -132,6 +132,31 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A generic call that the early passes missed no longer fails with CE2061.** The
+  `typecheck` pass requests a missing function instance late, and the instance goes through
+  every pass that an early one goes through. The early walks also bind a `foreach` binder
+  and a `match` payload, resolve a nested name in a local's type, and the `monomorphize`
+  statement walk is total. A generic call on a `foreach` binder, on a field or a method
+  result of a generic-instance value (`k(b.v)`, `k(l.len())`, `k(Box.of(5))`), and inside
+  `println`, `print`, a rebind or an inline `match` arm of a generic body now compiles.
+- **A capturing lambda given `nom` to a generic pass-through is no longer freed two times.**
+  A solved type argument carries no lambda captures, so the instance moves the closure at
+  `return`.
+- **A generic struct constructor solves its type arguments from its arguments**, as a
+  generic function call does: `Feed(from([1, 2]), 7)` is a `Feed@(i32)` with no declared
+  type. Arguments that give one type parameter two types are the new `CE2065`; nothing
+  that gives a type parameter is `CE2112`. Before, this was `CE2008` "undefined function".
+  A generic struct constructor behind a unit alias (`sh.Box(1)`) works as the flat one does,
+  and a generic enum variant built from its payload (`one(Slot.Full(5))`) solves a generic
+  call.
+- **The result of an aliased generic call and of a type-pack call solves an outer generic
+  call** (`k(bx.sid(nom 5))`, `k(pk(1, 2))`). Before, both were `CE2060`.
+- **A generic static as a generic argument in a generic body** (`k(Box.of(x))`) is no longer
+  the internal error `CE0000` (a duplicate symbol), and a `let T` in the body of an
+  extension on a generic target no longer makes a generic call `CE2001` at the callee.
+- **A `T[]` array template inside a generic call argument** is checked with its resolved
+  element type, not the written one.
+
 - **A generic instance that only a generic body reaches gets all its methods.** When
   only a generic function instance named a generic type instance (the return type
   `Feed@(T)` of `feed_of@(T)`, called from `count@(T)` with `T = string`), an extension

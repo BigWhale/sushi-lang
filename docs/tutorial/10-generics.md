@@ -84,6 +84,9 @@ payload, so a `let`, a parameter, a field or a `return` must give its type. When
 position gives it, for example in `match Tree.Empty():`, the compiler stops with CE2112
 ("nothing gives 'T'").
 
+A generic struct works the same way: `Pair(1, "one")` is a `Pair@(i32, string)`, because
+its fields tell the types.
+
 ## Generic types that hold things
 
 A type parameter can go inside other types. A field can be a `List@(T)`, a `Maybe@(T)`, a

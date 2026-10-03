@@ -134,7 +134,12 @@ A generic enum constructor takes its type from the position that holds it: a `le
 a `match` scrutinee), the arguments give the type. `Maybe.Some(42)` is a `Maybe@(i32)`. A
 constructor whose arguments do not give every type parameter, such as `Maybe.None()` or
 `Tree.Empty()`, needs a declared type. If no position gives one, the compiler reports
-`CE2112`:
+`CE2112`.
+
+A generic STRUCT constructor follows the same rule: `Feed(from([1, 2]), 7)` is a
+`Feed@(i32)` when `Feed@(T)` has a `T[]` field, also with no declared type, and a declared
+type wins where one exists. Arguments that give one type parameter two types are `CE2065`
+at the constructor:
 
 ```sushi
 enum Tree@(T):
