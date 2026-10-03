@@ -5,6 +5,7 @@ import re
 
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type_name
 
 
 _BUILTIN_TYPES = {
@@ -148,7 +149,7 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
             return tables.enum_table.by_name[type_str]
         if type_str in tables.struct_table.by_name:
             return tables.struct_table.by_name[type_str]
-        raise_internal_error("CE0045", type=type_str)
+        raise_internal_error("CE0045", type=display_type_name(type_str))
 
     if type_str in tables.struct_table.by_name:
         return tables.struct_table.by_name[type_str]
