@@ -1,12 +1,12 @@
 # Design: Tuples
 
-**Status:** phases 1 and 2 are implemented. Phase 1: the tuple type in every type
+**Status:** phases 1, 2 and 3 are implemented. Phase 1: the tuple type in every type
 position, the tuple literal, element access (`.N`, `.N.M`), the element write and the
 element take, the `let` destructure, the derived contracts, generic inference through a
 tuple, the `| E` return, the `.slib` round trip and the `--lib-info` report. Phase 2: the
-`foreach` destructure and the destructuring rebind. Phase 3 (tuple patterns in a `match`)
-is not implemented yet. The grammar of all three phases is in place; the builder refuses
-the shapes of phase 3 with **CE6108** until they are implemented.
+`foreach` destructure and the destructuring rebind. Phase 3: tuple patterns in a `match`,
+an integer literal in every pattern position, the tuple-literal scrutinee that builds no
+tuple, and ONE pattern-matrix exhaustiveness checker for every match (section 5b).
 
 ## 1. Why
 
@@ -97,10 +97,11 @@ file of the corpus parses to the tree it had before.
 - **`| E` after a tuple return type** is the function's channel. In a function type,
   `fn(A) -> (B, C) | E` keeps the rule that a `| E` after a function type is that type's.
 
-The grammar of phases 2 and 3 is in place: `foreach_destructure`, `tuple_pattern` (and a
-literal inside a pattern item), and a tuple literal as a rebind target. Phase 2 gave the
-`foreach` destructure and the rebind target their meaning (section 5a). The builder refuses
-a tuple pattern and a literal inside a pattern with **CE6108** until phase 3.
+The grammar of phases 2 and 3 came with phase 1: `foreach_destructure`, `tuple_pattern`
+(and a literal inside a pattern item), and a tuple literal as a rebind target. Phase 2 gave
+the `foreach` destructure and the rebind target their meaning (section 5a), and phase 3
+gave a tuple pattern and a literal inside a pattern theirs (section 5b). A tuple pattern is
+the one arm that starts with `(`, so it adds no conflict.
 
 ## 4. Representation (rulings 1 and 2)
 
@@ -185,7 +186,7 @@ A bare pattern binding in a `match` BORROWS (S10b). Both rules stay; borrow-mode
 them in one place (S10e).
 
 **Ruling 3** (phase 3). `match (a, b):` matches in place: a tuple-literal scrutinee builds
-no tuple.
+no tuple (section 5b).
 
 ## 5a. The `foreach` destructure and the destructuring rebind (phase 2)
 
@@ -241,6 +242,79 @@ b := #rb1
   answers a list (`StatementParser.parse_stmts`), which a block and a one-statement
   `match` arm both splice.
 
+## 5b. Tuple patterns and the one exhaustiveness checker (phase 3)
+
+**The pattern.** A `TuplePattern` holds one item for each element. An item is a
+`PatternItem`: a binding (a name, `_`, `poke x`, `nom x`), an enum pattern, an integer
+literal, a tuple pattern, or an `Own(...)` pattern. A tuple pattern stands at the top of an
+arm, in an enum payload, and in another tuple pattern. A `bool`, `string`, float or struct
+position takes only a binding or `_`, because only an enum, an integer, a tuple and an
+`Own@(T)` have a pattern.
+
+**Decision D3.** An integer literal is legal in every pattern position: a literal arm, a
+tuple element and an enum payload (`Maybe.Some(0) ->`). Over a position that is not an
+integer it is **CE2119**; out of range for the position's type it is **CE2073**.
+
+**The modes (ruling 4).** A pattern binding takes the S10b modes of borrow-model.md, in a
+tuple pattern as in a payload: bare borrows, `poke` points into the element, `nom` takes
+it. A tuple pattern is not a `let` destructure: a bare binder of a destructure owns, and a
+bare binding of a pattern borrows. `nom` needs a scrutinee that the match owns (**CE2432**
+otherwise), and an arm that takes one owning position of a scrutinee takes all of them
+(**CE2433**). A `poke` binding is legal at the top of an arm: a payload of the arm's enum
+pattern, or an element of the arm's tuple pattern at any tuple depth. In a pattern nested
+in an enum payload, and in the payload of an enum pattern inside a tuple pattern, it stays
+**CE2424**.
+
+**Ruling 3: the tuple-literal scrutinee.** `match (a, b):` builds no tuple. Each element is
+a ROOT of its own: the typecheck pass types the literal as a tuple, so the patterns are
+checked against `(A, B)`, but the borrow pass and the backend read the elements one by one
+(`match_scrutinees`, `passes/borrow/statements.py`). Each element is evaluated once, from
+left to right, and it takes the rules of a named scrutinee: a name or a place is borrowed
+(a `poke` binding writes through to it), a temporary is owned. `match nom (a, b):` consumes
+each element (`ConsumingUse.MATCH_SCRUTINEE`), so a later use of an owning element is
+**CE2405**. The all-or-nothing rule of CE2433 holds per root, so an arm can take `a` and
+leave `b`; the match then destroys `b` at its end.
+
+**The backend.** `emit_match` keeps the switch on the tag for an enum scrutinee. A tuple
+scrutinee has no tag, so each arm tests its whole pattern, and the first arm that matches
+runs. One walk serves both (`_extract_pattern_bindings`, `backend/statements/matching.py`):
+it emits every test of an arm first (a tag compare, a literal compare, through tuple
+elements, payloads and `Own(...)` cells), and a failed test goes to the next candidate arm
+(the next arm of the same tag after a switch, the next arm after a tuple match). Only
+after every test passed does the arm clear the drop flag of a root it takes from, and make
+its bindings. So a failed test takes nothing and binds nothing. A `poke` binding computes
+its pointer into the root's own storage: a field of a tuple, a payload offset of an enum.
+After the last candidate arm is the run-time error **RE2023**, the backstop that
+exhaustiveness makes unreachable.
+
+**Ruling 17: one checker.** `passes/types/exhaustiveness.py` is the usefulness algorithm
+of Maranget ("Warnings for pattern matching", 2007) over a pattern matrix. Each arm is one
+row. A position is `WILD` (a binding, `_`, `Own(x)`) or a constructor with sub-positions.
+An enum column splits into its variants, a tuple column into its elements (one
+constructor), an `Own@(T)` column into its pointee (one constructor), and an integer
+column has no end of values: a literal is a constructor, and only a `WILD` covers the
+rest. The same checker reads an enum match, a nested enum match, an integer match and a
+tuple match. It gives two answers:
+
+- **The missing patterns.** A value vector that no row matches is a witness. CE2040 lists
+  the witnesses in source syntax (`(Color.Red, _)`, `Maybe.Some(Color.Green)`), at most 16.
+  A plain enum match, where no arm tests inside a payload, keeps the list of variant names.
+  An integer scrutinee keeps its own code, **CE2074**.
+- **The dead arms (ruling 18).** An arm that is not useful against the arms above it is
+  **CE2118**, an error. Its notes name the arms above it that share a value with it; those
+  arms cover it together, because an arm that shares no value with it covers none of its
+  values.
+
+Where an older rule names the fault, it is the one diagnostic for the arm: a second arm for
+the same enum pattern is **CE2041**, a `_` arm that is not last is **CE2041** (and the arms
+after it get no CE2118), and a second literal arm for the same value is **CE2075**. An arm
+with an error in its pattern stops the checker for that match: its coverage is not known,
+and a second report would only repeat the first fault.
+
+Before ruling 17 the checker compared only the outer variant names, so a nested match that
+did not cover a value compiled and stopped at run time with RE2023. It is a compile error
+now.
+
 ## 6. Derived contracts
 
 Free under the struct representation, because the derive pass treats a tuple as a struct:
@@ -266,7 +340,11 @@ types are a mixed comparison (**CE2513**), as two structs are.
 | A name or a `_` inside a tuple TYPE; a named element | CE6105 |
 | `t.1e3`, `t.0_1`, `t.01` | CE6106 |
 | A mode on a tuple element: a destructure element (D1) or a tuple type element | CE6107 |
-| A tuple pattern, a literal in a pattern (temporary, until phase 3) | CE6108 |
+| A tuple pattern names a count that is not the tuple's count | CE2116 |
+| A tuple pattern over a value that is not a tuple | CE2117 |
+| An integer literal pattern over a value that is not an integer | CE2119 |
+| A match that does not cover a value | CE2040 (CE2074 for an integer scrutinee) |
+| A match arm that the arms above it cover | CE2118 |
 | `t.N` past the last element | CE2106, with the type rendered as `(i32, string)` |
 | A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | CE2116 |
 | A destructure of a value that is not a tuple (a `let`, a `foreach`, a rebind) | CE2117 |
@@ -305,21 +383,13 @@ types are a mixed comparison (**CE2513**), as two structs are.
 
 Decisions taken for the execution: **D1**, no mode on a destructure element (a later change
 can add one); **D2**, the whole grammar lands in phase 1, and the builder refuses the shapes
-of the later phases until their phase.
+of the later phases until their phase; **D3**, an integer literal is legal in every pattern
+position, a tuple element and an enum payload included, and the one checker reads an
+integer column the same way in each.
 
-## 10. Notes for phase 3
+## 10. Notes for phase 3: done
 
-- Remove the CE6108 refusals in `ast_builder/statements/matching.py` (a tuple pattern at
-  the top of an arm, and a tuple pattern or a literal inside a pattern item), with their
-  fixtures (`tests/tuples/refusals/test_err_tuple_pattern_not_yet.sushi`,
-  `test_err_tuple_literal_pattern_not_yet.sushi`), and then the code CE6108 itself
-  (`internals/errors/syntax.py`, and `not_yet` in `matching.py`).
-- The destructure targets live on `Let.targets`; a reader that collects the locals of a body
-  reads `destructure_binders(stmt.targets)` beside `stmt.name`. A hidden binder (a
-  destructuring rebind) has no `name_span`, and the scope pass declares it with no span.
-- A one-statement `match` arm can hold a destructuring rebind, so its body `Block` can hold
-  more than one statement (`parse_stmts`). A pass that reads an inline arm must not assume
-  one statement.
-- A `match` pattern binding borrows (ruling 4), and the `foreach` destructure binder takes
-  the class of the item. Keep the two rules apart: a tuple pattern is not a `let`
-  destructure, and it takes the S10b modes.
+Phase 3 removed the temporary code CE6108 and its two fixtures, and every shape of the
+grammar of section 3 has its meaning now. A one-statement `match` arm can hold a
+destructuring rebind, so a pass that reads an inline arm reads a `Block` of any length.
+A hidden destructure binder has no `name_span`.

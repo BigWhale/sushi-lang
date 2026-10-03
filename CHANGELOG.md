@@ -28,9 +28,18 @@ All notable changes to Sushi Lang will be documented in this file.
   `let` destructure. A destructuring rebind (`(a, b) := f()`) assigns each element to a
   place that `:=` takes (a name, a field, an element); the whole right side is evaluated
   first, so `(a, b) := (b, a)` is a swap, and an owning swap frees nothing. The same place
-  twice in the target is `CE6109`. A tuple pattern in a `match` parses, and it is `CE6108`
-  until it is supported. `CE2110` covers a tuple type as an extension or
-  perk-implementation target. See `docs/design/tuples.md`.
+  twice in the target is `CE6109`. A `match` takes a tuple pattern
+  (`(Color.Red, n) ->`), at the top of an arm, in an enum payload (`Maybe.Some((a, b))`)
+  and in another tuple pattern, with the three binding modes; an integer literal is legal
+  in every pattern position (`Maybe.Some(0) ->`, `(0, _) ->`). `match (a, b):` builds no
+  tuple: each element is read once and matched in place, and `match nom (a, b):` hands
+  each element to the match. One exhaustiveness checker now reads every match, nested
+  patterns included: a nested match that does not cover a value is now the compile error
+  `CE2040`, not the run-time trap `RE2023`, and the message names the missing pattern
+  (`Maybe.Some(Color.Green)`). An arm that the arms above it cover is the new error
+  `CE2118`. A literal pattern over a value that is not an integer is `CE2119`. `CE2110`
+  covers a tuple type as an extension or perk-implementation target. See
+  `docs/design/tuples.md`.
 
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;

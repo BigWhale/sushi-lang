@@ -1456,7 +1456,7 @@ fn main() i32:
   the one rule of [ruling 4](design/borrow-model.md#10e-the-fifth-boundary-a-tuple-destructure-binder): a
   bare binder of a destructure owns, and a bare binding of a `match` pattern borrows.
 
-A tuple pattern in a `match` arm is not supported yet (**CE6108**).
+A `match` reads a tuple with a tuple pattern: see [Tuple Patterns](#tuple-patterns).
 
 ### Destructuring in a For-Each Loop
 
@@ -1650,7 +1650,12 @@ A `let` needs the block form: a local declared on the arrow has no line to read 
 
 A pattern may hold another pattern in a payload position. `open()` answers
 `Result@(File, IoError)`, so the inner pattern names an `IoError` variant; a pattern of
-another enum there is `CE2107`.
+another enum there is `CE2107`. A payload position takes an enum pattern, an integer
+literal (`Maybe.Some(0)`), a tuple pattern (`Maybe.Some((a, b))`), an `Own(...)`
+pattern, a binding or a `_`. A nested pattern over a payload that is not an enum is
+**CE2108**, a literal over a payload that is not an integer is **CE2119**, and a tuple
+pattern over a payload that is not a tuple is **CE2117**. The compiler checks a nested
+pattern for exhaustiveness as it checks an outer one (see [Exhaustiveness](#exhaustiveness)).
 
 ```sushi
 use <io/fs>
@@ -1711,9 +1716,20 @@ of that variant must be `nom` too (CE2433). `nom` is not valid inside an `Own(..
 pattern (CE2434), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
 read through a live owner has none (CE2404).
 
+A `peek`/`poke` binding is legal at the top of an arm: a payload of the arm's enum
+pattern, or an element of the arm's tuple pattern (also in a tuple pattern inside it).
+Inside a pattern that is nested in an enum payload, and in the payload of an enum pattern
+inside a tuple pattern, it is **CE2424**. A bare binding and a `nom` binding are legal at
+every depth.
+
 ### Exhaustiveness
 
-The compiler enforces that all variants are matched:
+One checker reads every match: an enum match, a nested enum match, an integer match and a
+tuple match. It gives two answers.
+
+**Every value must match an arm.** A match that does not cover a value is **CE2040**. For
+a plain enum match, the message lists the names of the missing variants. When an arm tests
+inside a payload or a tuple, the message lists the missing patterns in source syntax:
 
 ```sushi
 enum Color:
@@ -1721,11 +1737,42 @@ enum Color:
     Green()
     Blue()
 
-# ERROR: Non-exhaustive match (missing Blue)
+# ERROR CE2040: missing variants: Blue
 match color:
     Color.Red() -> println("Red")
     Color.Green() -> println("Green")
+
+# ERROR CE2040: missing variants: Maybe.Some(Color.Blue)
+match maybe_color:
+    Maybe.Some(Color.Red) -> println("red")
+    Maybe.Some(Color.Green) -> println("green")
+    Maybe.None -> println("none")
 ```
+
+An integer has no end of values, so an integer position is covered only by a `_` or a
+binding. A literal position covers one value. An integer match with no `_` arm is
+**CE2074**. In a tuple, the missing pattern shows `_` for such a position: `(_, _)`.
+
+**Every arm must match a value.** An arm is unreachable when the arms above it match every
+value that it matches. That is **CE2118**, an error, with a note at each arm that covers
+it. The arms can cover an arm together:
+
+```sushi
+# ERROR CE2118: unreachable match arm '(_, Color.Red)'
+match pair:
+    (Color.Red, _) -> println("first is red")
+    (Color.Green, _) -> println("first is green")
+    (Color.Blue, _) -> println("first is blue")
+    (_, Color.Red) -> println("second is red")    # the three arms above cover it
+```
+
+Remove the arm, or move it above the arms that cover it. Three older rules come first,
+and each is the one diagnostic for its arm: a second arm for the same enum pattern is
+**CE2041**; a `_` arm that is not the last arm is **CE2041**, and the arms after it get
+no second error; a second literal arm for the same integer value is **CE2075**.
+
+Because the checker reads nested patterns, a match that compiles has an arm for every
+value. The run-time check **RE2023** stays as a backstop, and no program reaches it.
 
 ### Integer Matching
 
@@ -1735,6 +1782,10 @@ is a bit pattern; out of range is CE2073). Two arms with the same value are one
 duplicate arm (CE2075), whatever their radix. Because integer values cannot be
 enumerated, the match must end with a `_` arm (CE2074). Literal arms and enum
 pattern arms never mix in one match (CE2076).
+
+An integer literal is also legal inside a pattern: in an enum payload
+(`Maybe.Some(0) ->`) and in a tuple element (`(0, n) ->`). It takes the type of its
+position by the same rule. A position that is not an integer takes no literal (**CE2119**).
 
 ```sushi
 fn tag_name(u8 t) string:
@@ -1751,6 +1802,61 @@ fn tag_name(u8 t) string:
 fn main() i32:
     let u8 tag = 0xc0
     println(tag_name(tag))
+    return 0
+```
+
+### Tuple Patterns
+
+A tuple pattern matches a tuple, one item for each element. An item is an enum pattern, an
+integer literal, a binding (bare, `poke` or `nom`), a `_`, or another tuple pattern. A
+`bool`, `string`, float or struct element takes only a binding or a `_`. A tuple pattern
+stands at the top of an arm, in an enum payload, and in another tuple pattern.
+
+```sushi
+enum Color:
+    Red
+    Green
+
+fn describe((Color, i32) p) ~:
+    match p:
+        (Color.Red, 0) -> println("red zero")
+        (Color.Red, n) -> println("red {n}")
+        (Color.Green, _) -> println("green")
+
+fn first(Maybe@((i32, i32)) m) i32:
+    match m:
+        Maybe.Some((x, _)) -> return x
+        Maybe.None -> return 0
+
+fn main() i32:
+    describe((Color.Red, 3))            # red 3
+    println(first(Maybe.Some((7, 8))))  # 7
+    return 0
+```
+
+- A tuple pattern names as many items as the tuple has elements (**CE2116**), and only a
+  tuple takes a tuple pattern (**CE2117**). An enum pattern arm and a literal arm do not
+  fit a tuple scrutinee (**CE2076**).
+- A bare binding BORROWS its element, as a payload binding does (ruling 4 of the tuple
+  design). `poke` points into the element, and `nom` takes it. The rules of
+  [Binding Modes](#binding-modes) apply: `nom` needs a scrutinee that the match owns, and an
+  arm that takes one owning element of a scrutinee takes all of them (**CE2433**).
+- **A tuple literal as the scrutinee builds no tuple** (ruling 3). `match (a, b):` reads
+  each element once, from left to right, and matches it in place, with the rules of a
+  named scrutinee. After the match, `a` and `b` are still usable, and a `poke` binding
+  writes through to them. `match nom (a, b):` hands each element to the match, so a `nom`
+  binding is legal and a later use of an owning element is **CE2405**. Each element is
+  its own scrutinee: an arm can take `a` and leave `b`, and the match destroys `b` at its
+  end.
+
+```sushi
+fn main() i32:
+    let i32 x = 0
+    let i32 y = 5
+    match (x, y):
+        (0, 0) -> println("origin")
+        (0, n) -> println("on the y axis at {n}")
+        (_, _) -> println("elsewhere")
     return 0
 ```
 

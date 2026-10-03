@@ -964,6 +964,8 @@ fn main() i32:
   side is evaluated first, so `(a, b) := (b, a)` is a swap, and an owning swap moves the
   values and frees nothing
 
+A `match` reads a tuple with a tuple pattern (see [Tuple patterns](#tuple-patterns)).
+
 ## Pattern Matching
 
 Pattern matching is Sushi's way of deconstructing enums and handling different cases. The compiler enforces **exhaustiveness checking** - you must handle all possible variants, ensuring you never forget a case.
@@ -1038,7 +1040,27 @@ fn main() i32:
     return 0
 ```
 
+**Literals inside a pattern**: an integer literal is also legal in a payload (`Maybe.Some(0)`) and in a tuple element (`(0, n)`).
+
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
+
+**Every value and every arm**: one checker reads every match, nested patterns included. A value that no arm matches is `CE2040`, and the message names the missing pattern, for example `Maybe.Some(Color.Green)`. An arm that the arms above it already cover can never run, and that is the error `CE2118`:
+
+<!-- docs-sweep: error CE2118 -->
+```sushi
+enum Color:
+    Red
+    Green
+
+fn name(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(_) -> return 1
+        Maybe.Some(Color.Red) -> return 2      # CE2118: the arm above matches it first
+        Maybe.None -> return 0
+
+fn main() i32:
+    return name(Maybe.None)
+```
 
 **Zero-cost compilation**: Pattern matching compiles to efficient jump tables or switch statements. There's no runtime overhead compared to hand-written if-else chains or switch statements in C.
 
@@ -1082,6 +1104,39 @@ is handed over, exactly as `take(nom r)` hands it over; `r` may not be read afte
 **An arm takes the variant whole.** If one binding in an arm is `nom`, every other owning
 payload of that variant must be `nom` as well -- what stops the match freeing the value is
 the whole scrutinee, not one slot of it.
+
+### Tuple Patterns
+
+A tuple pattern matches each element of a tuple. Its items are the items of a payload: an
+enum pattern, an integer literal, a binding in one of the three modes, a `_`, or another
+tuple pattern. With a tuple literal as the scrutinee, a `match` reads two values at once:
+
+```sushi
+enum Light:
+    Red
+    Green
+
+enum Event:
+    Timer
+    Button
+
+fn next(Light light, Event event) Light:
+    match (light, event):
+        (Light.Red, Event.Timer) -> return Light.Green
+        (Light.Green, Event.Timer) -> return Light.Red
+        (l, Event.Button) -> return l
+
+fn main() i32:
+    match next(Light.Red, Event.Timer):
+        Light.Green -> println("green")
+        Light.Red -> println("red")
+    return 0
+```
+
+`match (light, event):` builds no tuple. Each element is read once and matched in place,
+with the rules of a named scrutinee, so `light` and `event` are still usable after the
+match. `match nom (a, b):` hands each element to the match, and then a `nom` binding may
+take it.
 
 ## Generics
 
