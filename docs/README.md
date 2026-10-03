@@ -9,7 +9,7 @@ advanced features and compiler internals.
 - [Getting Started](getting-started.md) - Installation, setup, and your first program
 - [Tutorial](tutorial/index.md) - A guided, start-to-finish tutorial (19 chapters, every example compiled and run). Builds into a static site with MkDocs: `uv sync --extra docs && uv run mkdocs serve`
 - [Language Guide](language-guide.md) - Friendly tour of Sushi's key features
-- [Examples](examples/README.md) - Learn by example with 29 annotated programs
+- [Examples](examples/README.md) - Learn by example with 30 annotated programs
 
 ## Language Documentation
 

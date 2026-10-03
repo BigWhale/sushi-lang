@@ -2,8 +2,8 @@
 
 [← Back to Standard Library](../../standard-library.md)
 
-A MessagePack decoder, written in Sushi: `decode`, the map readers (`map_index`,
-`map_get`, `map_get_str`, `map_get_bool`), and `show`. Decode-only — there is no encoder.
+A MessagePack decoder, written in Sushi: `decode`, `decode_prefix`, the map readers
+(`map_index`, `map_get`, `map_get_str`, `map_get_bool`), and `show`. Decode-only — there is no encoder.
 
 ## Import
 
@@ -95,6 +95,23 @@ fn show_or_err(u8[] buf) string | StdError:
 fn main() i32:
     let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
     println(show_or_err(buf).realise("error"))    # {"a":1,"b":[2]}
+    return 0
+```
+
+### `decode_prefix(u8[] buf) -> (MsgValue, i32) | MpError`
+
+Decode ONE value from the start of the buffer, and answer it with the count of bytes it
+used. Bytes after the value are not an error, so a caller can read several values from one
+buffer, one after the other. An empty or a truncated buffer fails as `decode` fails.
+
+```sushi
+use <encoding/msgpack>
+
+fn main() i32:
+    let u8[] buf = from([0x01, 0xa2, 0x68, 0x69])
+    match decode_prefix(buf):
+        Result.Ok((v, used)) -> println("{show(v)} took {used} bytes")    # 1 took 1 bytes
+        Result.Err(_) -> println("decode error")
     return 0
 ```
 
@@ -230,7 +247,8 @@ fn main() i32:
 
 ## Limitations
 
-- Decode-only. No encoder, no streaming entry point.
+- Decode-only. No encoder. `decode_prefix` reads one value from the start of a buffer; there
+  is no entry point that reads from a handle.
 - `ext`, `fixext`, and timestamp tags give `MpError.Unsupported` with the tag byte.
 - `show` does not escape string contents.
 - The decoder targets buffers below 2 GiB. A length prefix is checked against what is

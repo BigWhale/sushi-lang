@@ -116,6 +116,19 @@ All notable changes to Sushi Lang will be documented in this file.
   answers `Result@(~, StdError)`, and `remove` answers `Maybe@(T)`. An index out of range
   is `Err` or `Maybe.None`, and a refused insert destroys its element. `insert` at the
   length appends. A fixed array has neither method (`CE2023`).
+- **Stdlib functions that answer a tuple.** `<math>` `divmod(a, b)` answers
+  `(a / b, a % b) | MathError` for every integer type: a zero divisor is
+  `MathError.DivisionByZero`, and a signed `MIN / -1` is `MathError.Overflow`.
+  `<collections/strings>` `s.split_once(sep)` and `s.rsplit_once(sep)` split at the first or
+  the last occurrence and answer `Maybe@((string, string))`. `<collections/iter>` adds
+  `enumerate`, `zip` and `partition` (free functions, and methods on `List@(T)` and `T[]`)
+  and the free function `unzip`. A `HashMap` adds `.pairs()`, an `Iterator@((K, V))` beside
+  `.entries()`. `<io/path>` adds `split(p)`, which is `(dirname(p), basename(p))`, and
+  `split_extension(p)`. `<net/tcp>` adds `s.peer() (IpAddr, i32) | NetError`, one
+  `getpeername` call. `<io/buf>` adds `r.into_parts()`, which answers the handle and the
+  buffered bytes that were not read. `<encoding/msgpack>` adds `decode_prefix(buf)` and
+  `<compression/zlib>` adds `inflate_raw_prefix(src)`: each one reads one value or stream
+  from the start of a buffer and answers the count of bytes it used.
 
 ### Fixed
 
@@ -206,6 +219,16 @@ All notable changes to Sushi Lang will be documented in this file.
   form. A `HashMap@(i32[2][2], V)` key was `CE2055`.
 
 ### Changed
+
+- **Breaking: `TcpListener.accept()` answers `(TcpStream, IpAddr) | NetError`.** The
+  address of the peer comes from the `accept(2)` call itself, so no second call is
+  necessary. Write `let (TcpStream s, _) = l.accept()??` where the address is not needed.
+  The primitive `sock_tcp_accept` answers `(i32, i32, u64, u64) | NetError`.
+
+- **Breaking: `MsgValue.Map` holds `(MsgValue, MsgValue)[]`,** one array of `(key, value)`
+  pairs in wire order, in place of two parallel arrays. A match arm is
+  `MsgValue.Map(pairs) ->`, and the value at a `map_index` position is `pairs[i].1`. The
+  wire format does not change.
 
 - **`EXPECT_ERROR_CODES_EXACT` counts each code**, so a fixture can assert that a fault
   is reported once. A library build directive accepts exit 0 only; a library that builds

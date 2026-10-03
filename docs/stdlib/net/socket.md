@@ -97,6 +97,10 @@ A **second descriptor over the same open socket**: `dup(2)`. It is the socket tw
 
 Who is at the other end. The address is rendered numerically and asks no resolver, so neither call makes a network request. They are separate so that a test can assert the address — which is fixed — without asserting an ephemeral port. This layer answers the address as text; `TcpStream.peer_ip()` in `<net/tcp>` reads it into an `IpAddr`, because every address that leaves the net modules is one.
 
+### `sock_peer(i32 fd) (string, i32) | NetError`
+
+The address text and the port of the other end, from one `getpeername(2)` call. The address is rendered numerically, as `sock_peer_ip` renders it. `TcpStream.peer()` in `<net/tcp>` reads the text into an `IpAddr`.
+
 ### `sock_set_recv_timeout(i32 fd, i32 ms)` and `sock_set_send_timeout(i32 fd, i32 ms)`
 
 Bound how long a read or a write may wait; both answer `Result@(i32, NetError)`. A bound that expires answers `NetError.TimedOut`. **A listening socket honours the receive bound**, which is what gives `sock_tcp_accept` a bound too.

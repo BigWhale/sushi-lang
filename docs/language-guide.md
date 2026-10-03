@@ -966,6 +966,32 @@ fn main() i32:
 
 A `match` reads a tuple with a tuple pattern (see [Tuple patterns](#tuple-patterns)).
 
+The standard library answers a tuple where a function has two results. A destructure takes
+them apart at the call:
+
+```sushi
+use <math>
+use <collections/strings>
+use <collections/iter>
+
+fn main() i32:
+    let (i32 q, i32 r) = divmod(17, 5).realise((0, 0))
+    println("{q} {r}")                                   # 3 2
+    let (key, value) = "port=8080".split_once("=").realise(("", ""))
+    println("{key}: {value}")                            # port: 8080
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    names.push("Ford")
+    foreach((i, name) in names.enumerate().iter()):
+        println("{i} {name}")                            # 0 Arthur, then 1 Ford
+    return 0
+```
+
+The others are `split` and `split_extension` in `<io/path>`, `zip`, `partition` and
+`unzip` in `<collections/iter>`, `.pairs()` on a `HashMap`, `TcpListener.accept()` and
+`TcpStream.peer()` in `<net/tcp>`, `BufReader.into_parts()` in `<io/buf>`,
+`decode_prefix` in `<encoding/msgpack>` and `inflate_raw_prefix` in `<compression/zlib>`.
+
 ## Pattern Matching
 
 Pattern matching is Sushi's way of deconstructing enums and handling different cases. The compiler enforces **exhaustiveness checking** - you must handle all possible variants, ensuring you never forget a case.

@@ -155,6 +155,21 @@ Bound how long a call may wait. **Set these before anything blocks.** Without th
 
 Who is at each end. All four carry the `| NetError` channel. Every address that leaves the net modules is an [`IpAddr`](ip.md), so `peer_ip()` answers one and `.text()` gives its canonical text. No resolver is asked. `local_port` exists on both types: the listener's is the one that reads back a port the kernel chose, and the stream's is this end of a connection.
 
+### `s.peer() (IpAddr, i32) | NetError`
+
+The address and the port of the other end, from ONE `getpeername(2)` call. Use it when you need both: two calls of `peer_ip()` and `peer_port()` ask the kernel twice.
+
+```sushi
+use <net/tcp>
+
+fn main() i32:
+    let TcpStream s = connect("127.0.0.1", 8080).realise(TcpStream(-1))
+    match s.peer():
+        Result.Ok((ip, port)) -> println("{ip.text()}:{port}")
+        Result.Err(_) -> println("no peer")
+    return 0
+```
+
 ### `s.is_open() bool` and `l.is_open() bool`
 
 Whether the handle still holds an open descriptor. A handle that `listen()` or `connect()`
