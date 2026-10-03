@@ -1,0 +1,15 @@
+# The result of a type-pack call solves the generic call that takes it as an
+# argument (#1160).
+# EXPECT_STDOUT_EXACT: "1 7\n1 7\n"
+
+fn k@(T: Display)(T x) i32:
+    print("{x} ")
+    return 7
+
+fn pk@(...Ts: Display)(...Ts args) i32:
+    return 1
+
+fn main() i32:
+    println(k(pk(1, 2)))
+    println(k(pk()))
+    return 0

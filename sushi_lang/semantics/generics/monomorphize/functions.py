@@ -5,7 +5,7 @@ import copy
 from collections import deque
 
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
-from sushi_lang.semantics.generics.types import TypePack
+from sushi_lang.semantics.generics.types import TypePack, type_param_substitution
 from sushi_lang.semantics.typesys import Type
 
 from .order import functions_in_site_order
@@ -136,55 +136,35 @@ class FunctionMonomorphizer:
         pack_indices = [i for i, tp in enumerate(tps) if tp.is_pack]
 
         if not pack_indices:
-            if len(type_args) != len(generic.type_params):
+            if len(type_args) != len(tps):
                 raise ValueError(
                     f"Type argument count mismatch: {generic.name} expects "
-                    f"{len(generic.type_params)} args, got {len(type_args)}"
+                    f"{len(tps)} args, got {len(type_args)}"
+                )
+        else:
+            if len(pack_indices) > 1:
+                raise ValueError(
+                    f"{generic.name} declares {len(pack_indices)} pack type-parameters; "
+                    f"at most one is allowed"
                 )
 
-            if not self._constraints_hold(generic, generic.type_params, type_args):
-                return None
+            k = pack_indices[0]
+            if k != len(tps) - 1:
+                raise ValueError(
+                    f"{generic.name} declares a pack type-parameter that is not the "
+                    f"last type-parameter (at index {k} of {len(tps)})"
+                )
 
-            substitution: Dict[str, "Type | TypePack"] = {}
-            for param, arg in zip(generic.type_params, type_args, strict=False):
-                param_name = param.name if hasattr(param, 'name') else str(param)
-                substitution[param_name] = arg
-            return substitution
-
-        if len(pack_indices) > 1:
-            raise ValueError(
-                f"{generic.name} declares {len(pack_indices)} pack type-parameters; "
-                f"at most one is allowed"
-            )
-
-        k = pack_indices[0]
-        if k != len(tps) - 1:
-            raise ValueError(
-                f"{generic.name} declares a pack type-parameter that is not the "
-                f"last type-parameter (at index {k} of {len(tps)})"
-            )
-
-        if len(type_args) < k:
-            raise ValueError(
-                f"Type argument count mismatch: {generic.name} expects at least "
-                f"{k} args, got {len(type_args)}"
-            )
-
-        leading_params = tps[:k]
-        leading_args = type_args[:k]
+            if len(type_args) < k:
+                raise ValueError(
+                    f"Type argument count mismatch: {generic.name} expects at least "
+                    f"{k} args, got {len(type_args)}"
+                )
 
         if not self._constraints_hold(generic, tps, type_args):
             return None
 
-        substitution = {}
-        for param, arg in zip(leading_params, leading_args, strict=False):
-            param_name = param.name if hasattr(param, 'name') else str(param)
-            substitution[param_name] = arg
-
-        pack_param = tps[k]
-        pack_name = pack_param.name if hasattr(pack_param, 'name') else str(pack_param)
-        substitution[pack_name] = TypePack(tuple(type_args[k:]))
-        return substitution
+        return type_param_substitution(generic, type_args)
 
     def monomorphize_function(
         self,

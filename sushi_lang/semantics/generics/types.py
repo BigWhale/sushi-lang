@@ -163,14 +163,32 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
         return ty
 
 
-def type_param_substitution(generic_func, type_args) -> Optional[dict[str, Type]]:
-    """Type parameter name -> type argument. A pack fans out and binds nothing here."""
-    params = [tp for tp in generic_func.type_params if not tp.is_pack]
-    args = [arg for arg in type_args if not isinstance(arg, TypePack)]
-    if len(params) != len(args):
+def type_param_substitution(generic_func, type_args
+                            ) -> Optional[dict[str, Union[Type, TypePack]]]:
+    """Type parameter name -> type argument, read from the FLAT tuple a call names.
+
+    The leading type parameters take the leading arguments one by one. A pack parameter
+    is always the last one, and it takes every argument after them as one `TypePack`.
+    ONE reader for the monomorphize pass, which builds the instance, and for the passes
+    that type a call before the instance exists (#1160). None when the count does not
+    fit the declaration.
+    """
+    params = list(generic_func.type_params)
+    pack = params.pop() if params and params[-1].is_pack else None
+    if any(tp.is_pack for tp in params):
         return None
-    return {(tp.name if hasattr(tp, "name") else str(tp)): arg
-            for tp, arg in zip(params, args, strict=True)}
+    args = tuple(type_args)
+    if len(args) < len(params) or (pack is None and len(args) != len(params)):
+        return None
+    substitution: dict[str, Union[Type, TypePack]] = {
+        _param_name(tp): arg for tp, arg in zip(params, args, strict=False)}
+    if pack is not None:
+        substitution[_param_name(pack)] = TypePack(args[len(params):])
+    return substitution
+
+
+def _param_name(tp) -> str:
+    return tp.name if hasattr(tp, "name") else str(tp)
 
 
 def substituted_call_result(generic_func, type_args) -> Optional[Type]:

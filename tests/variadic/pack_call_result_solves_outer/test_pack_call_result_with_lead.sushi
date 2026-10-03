@@ -1,0 +1,28 @@
+# The result of a type-pack call with a leading type parameter solves the generic
+# call that takes it as an argument: a call that answers a fixed type, and a call that
+# answers the leading `T` (#1160).
+# EXPECT_STDOUT_EXACT: "1 2 7\n4 7\n42\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+fn k@(T: Display)(T x) i32:
+    print("{x} ")
+    return 7
+
+fn idk@(T)(nom T x) T:
+    return x
+
+fn lead_count@(T: Display, ...Ts: Display)(T head, ...Ts rest) i32:
+    print("{head} ")
+    return 2
+
+fn lead_of@(T, ...Ts: Display)(nom T head, ...Ts rest) T:
+    return head
+
+fn main() i32:
+    println(k(lead_count(1, "a", 2.5)))
+    println(k(lead_of(nom 4, "a")))
+    println(idk(nom lead_of(nom 42, 1, 2)))
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    println(idk(nom lead_of(nom s, 3)))
+    return 0
