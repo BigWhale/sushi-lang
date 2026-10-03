@@ -1,0 +1,22 @@
+# A function instance that only an array-template copy names is made after the
+# per-unit passes. It goes through the typecheck, lift and borrow passes too, so a
+# method call in its body resolves.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "weight 3\n"
+
+struct P:
+    i32 x
+
+extend P weight() i32:
+    return self.x
+
+fn k@(T)(T x) i32:
+    return x.weight()
+
+extend T[] firstk() i32:
+    return k(self[0])
+
+fn main() i32:
+    let P[] ps = from([P(3)])
+    println("weight {ps.firstk()}")
+    return 0

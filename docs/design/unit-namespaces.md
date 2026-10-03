@@ -369,7 +369,9 @@ One phase runs BEFORE the fold: propagation, which stamps a GENERIC enum's const
 with the instantiation its position declares. It reads the enum's name through the alias
 for itself (`_enum_receiver_name`, `passes/types/propagation.py`), because a
 `my_math.Slot.Filled(x)` reaches it with the `MemberAccess` receiver still in place. The
-bare `my_math.Slot.Empty` takes the same reading.
+bare `my_math.Slot.Empty` takes the same reading. A GENERIC struct's constructor behind an
+alias (`my_math.Box(1)`) is stamped by the same phase; with no declared type, the
+arguments solve it through the one leading solver, as they solve the flat `Box(1)`.
 
 ### 5.1 The grammar
 

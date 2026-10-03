@@ -1,6 +1,7 @@
 """The borrow pass. The pass object holds the state; siblings hold the rules."""
 
 from __future__ import annotations
+from collections import ChainMap
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set
 
@@ -42,9 +43,12 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
     if tables is None:
         return CalleeModes()
     funcs = getattr(tables, "funcs", None)
-    struct_names = set(getattr(getattr(tables, "structs", None), "by_name", None) or ())
-    struct_names |= set(
-        getattr(getattr(tables, "generic_structs", None), "by_name", None) or ())
+    # A LIVE view of both tables: the typecheck pass runs after this is built, and it
+    # interns the instance a generic struct constructor solves from its arguments (#1150).
+    struct_names = ChainMap(*(
+        table.by_name for table in (getattr(tables, "structs", None),
+                                    getattr(tables, "generic_structs", None))
+        if getattr(table, "by_name", None) is not None))
     stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
     # A generic fn is called by its bare name in a template body but interned under a
     # mangled one, and the mode does not vary per instantiation. Concrete table first.
@@ -99,8 +103,14 @@ class BorrowChecker:
         self.unit_name = unit_name
         self.scope = scope
 
+    def refresh_callee_modes(self) -> None:
+        """Read the function tables again: the typecheck pass can declare a late instance
+        after this checker was built (#1155)."""
+        self.callee_modes = _build_callee_modes(self.tables, self.unit_name, self.scope)
+
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
+        self.refresh_callee_modes()
         for func in program.functions:
             # Whose body this is: the file its diagnostics belong to (#471), and whether
             # it is one of many copies of one source (#648).

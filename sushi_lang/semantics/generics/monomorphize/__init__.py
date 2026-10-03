@@ -51,6 +51,12 @@ class Monomorphizer:
     # drops the instantiation (issue #214). None on unit-test paths built from loose tables.
     tables: object | None = None
     pending_instantiations: Set[Tuple[str | None, str, Tuple[Type, ...]]] = field(default_factory=set)
+    # None while the monomorphize stage runs: a function copy goes into its home unit's
+    # AST at once, and the per-unit passes check it. The analyzer sets a list before the
+    # per-unit loop: a copy cut after that (a late request of the typecheck pass, or a
+    # call in an extension copy) waits here as (AST, body), and the analyzer puts it into
+    # its AST and checks it after the loop (#1155).
+    late_bodies: Optional[list] = None
     # The instantiate pass's site table (#579): the first span that named each
     # instantiation, keyed by interned name, so a constraint violation has a caret.
     sites: dict = field(default_factory=dict)
@@ -131,6 +137,10 @@ class Monomorphizer:
             if key is not None:
                 self._refused.add(key)
         return valid
+
+    def was_refused(self, key: object) -> bool:
+        """A constraint refused this instantiation, and it was reported one time."""
+        return key in self._refused
 
     def template_file(self, kind: str, name: str) -> str | None:
         """The file that declares the generic template `name`, when the tables know it."""

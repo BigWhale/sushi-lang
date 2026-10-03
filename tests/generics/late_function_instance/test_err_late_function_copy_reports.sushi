@@ -1,0 +1,17 @@
+# A function instance that only an array-template copy names is checked, so a fault in
+# its body is a diagnostic and not an internal error.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+struct P:
+    i32 x
+
+fn k@(T)(T x) i32:
+    return x.nope()
+
+extend T[] firstk() i32:
+    return k(self[0])
+
+fn main() i32:
+    let P[] ps = from([P(3)])
+    println(ps.firstk())
+    return 0

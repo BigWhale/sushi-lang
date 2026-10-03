@@ -553,10 +553,28 @@ Generate concrete types from generic definitions.
 ### A late instantiation
 
 A generic BODY names types the collector never saw: `let Box@(T) b` inside `outer@(T)` is
-a `Box@(string)` only once `outer@(string)` is substituted. A copy binds its `let` locals
-while it walks its body for nested generic calls, so a generic called with one is collected
-like one called with a parameter, and it interns every type its `let` annotations name,
-exactly as it interns its signature's.
+a `Box@(string)` only once `outer@(string)` is substituted. A copy binds its `let` locals,
+its `foreach` binders and its `match` payload bindings while it walks its body for nested
+generic calls, so a generic called with one is collected like one called with a parameter,
+and it interns every type its `let` annotations name, exactly as it interns its
+signature's. A statement that binds a name has an arm of its own in that walk; every other
+statement goes through the one node walk, so no statement kind is skipped (#1157,
+`tests/unit/test_monomorphize_statement_walk_is_total.py`). The `instantiate` pass binds a
+`foreach` binder in the same way (`generics/local_bindings.py`, #1155).
+
+### A late function request
+
+The two early walks are an optimisation, not the only source of function instances. A
+call that they cannot type -- an argument that is a field or a method result of a
+generic instance that does not exist yet, for example -- is not collected. The `typecheck`
+pass then types the call and asks the analyzer for the instance through
+`tables.request_function_instance`, as it asks for an extension copy at a call site
+(#1155, #1156). The analyzer cuts the copy at once, so the call has its signature, and
+the copy's body waits in `Monomorphizer.late_bodies`, because the per-unit loop is
+walking the ASTs. After the loop, `_check_array_extensions` puts each waiting body into
+its home unit and checks it with the `scope`, `typecheck`, `lift` and `borrow` passes of
+that unit (`_check_late_functions`), in the same fixpoint as the extension copies. A
+function copy that an extension copy's body names waits and is checked in the same way.
 
 A substituted type that is itself an instance -- the `Box<string>` a `Box@(B)` field
 becomes under `B := string`, a `Maybe<string>` payload, a `Pair<i32, string>` return --
@@ -624,7 +642,8 @@ at the constraint, which may stand in another file (a stdlib template's). It is 
 nowhere: not cached, not published, so no template copy is ever cut for it, and the
 whole-program analysis STOPS after the monomorphize step, as it does after
 CE2095. The per-unit passes would only have read the same fault back as a CE2008 from
-inside a copy's body.
+inside a copy's body. A late function request that a constraint refuses is CE4006 at the
+call that asked for it, and the analysis goes on; no CE2061 is added to it.
 
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after

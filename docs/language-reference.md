@@ -2471,7 +2471,7 @@ turns written text into a name takes one:
 | a named type | `my_math.Vec` |
 | a generic named type | `my_math.Box@(i32)` |
 | a called function, generic included | `my_math.sin(0.0)` |
-| a struct constructor | `my_math.Vec(1, 2)` (see the note below for a generic struct) |
+| a struct constructor, generic included | `my_math.Vec(1, 2)`, `my_math.Box(1)` |
 | an enum constructor | `my_math.Sign.Plus` |
 | an enum pattern | `my_math.Sign.Plus ->` |
 | a named value | `my_math.MAX_DEPTH` |
@@ -2504,9 +2504,9 @@ A qualifier naming no namespace, or a name the namespace does not hold, is `CE20
 type position, with a help line drawn from what the namespace holds, and `CE2008` in a
 call.
 
-**A generic struct is not constructed through an alias.** `my_math.Box@(i32)` is a legal
-type, but the construction `my_math.Box(1)` is `CE2001` (`unknown type 'Box'`). A flat
-import constructs it (`Box(1)`), and a function of the other unit can build the value.
+**A generic struct is constructed through an alias as it is under a flat import.**
+`my_math.Box(1)` is a `my_math.Box@(i32)`: a declared type gives the type arguments, and
+with no declared type the arguments give them (see [Generics](generics.md)).
 
 **Two units may export one name.** That is not an error by itself; it is an error only
 where the unqualified name is written and nothing says which one is meant, and then it is

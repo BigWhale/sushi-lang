@@ -38,6 +38,15 @@ def struct_takes_the_call(validator: 'TypeValidator', name: str) -> bool:
                                   validator.func_table, validator.current_unit_name)
 
 
+def generic_struct_takes_the_call(validator: 'TypeValidator', name: str) -> bool:
+    """Whether a bare call `name(...)` constructs an instance of the generic struct `name`.
+
+    The same ladder as the concrete struct: the unit's own function of that name wins.
+    """
+    return call_constructs_struct(name, validator.generic_struct_table.by_name,
+                                  validator.func_table, validator.current_unit_name)
+
+
 def validate_variadic_trailing_args(validator: 'TypeValidator', trailing: list,
                                     fixed_count: int, array_ty, element_ty) -> None:
     """Validate the trailing arguments of a variadic call (native '...T' or stdlib)."""
@@ -157,6 +166,13 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
         validate_struct_constructor(validator, call)
         return
 
+    # A GENERIC struct constructor that no declared type stamped: the arguments solve
+    # its type arguments, as they solve a generic call (#1150).
+    if generic_struct_takes_the_call(validator, function_name):
+        from .structs import validate_generic_struct_constructor
+        validate_generic_struct_constructor(validator, call, function_name)
+        return
+
     func_sig = validator.func_sig(function_name)
 
     # Section 8's ladder: a declaration wins over a name a flat `use` brought in, and a
@@ -187,12 +203,6 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
             return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
                             name=function_name)
-        # A generic struct constructor used inline is the most common cause; attach the
-        # hint as a real help line on the diagnostic instead of a hand-indented print
-        # faking a note underneath it.
-        if function_name in validator.generic_struct_table.by_name:
-            diag.help("generic struct constructors require explicit type parameters "
-                      "in variable declarations")
         missing = out_of_scope_help(validator, "function", function_name)
         if missing is not None:
             diag.help(missing)

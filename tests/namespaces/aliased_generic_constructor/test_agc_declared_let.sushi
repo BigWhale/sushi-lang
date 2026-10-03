@@ -1,0 +1,12 @@
+# A generic struct constructor behind a unit alias takes its type arguments from
+# a declared `let`, as the flat form does (#1151).
+# EXPECT_STDOUT_EXACT: "1\n5\n2\n"
+use "helpers/agc_shapes" as sh
+
+fn main() i32:
+    let sh.Box@(i32) a = sh.Box(1)
+    println(a.v)
+    let sh.Box@(i32)[] bs = from([sh.Box(5), sh.Box(6)])
+    println(bs[0].v)
+    println(bs.len())
+    return 0

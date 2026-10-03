@@ -1,0 +1,27 @@
+# The result of a type-pack call solves the generic call that makes a `foreach`
+# iterable, over a `List@(T)` and over a `T[]` (#1160).
+# EXPECT_STDOUT_EXACT: "2\n3\n"
+# EXPECT_NO_LEAKS: true
+
+fn listed@(T)(nom T x) List@(T):
+    let List@(T) out = List.new()
+    out.push(nom x)
+    return out
+
+fn arrayed@(T)(nom T x) T[]:
+    let T[] out = from([])
+    out.push(nom x)
+    return out
+
+fn pk@(...Ts: Display)(...Ts args) i32:
+    return 2
+
+fn lead_of@(T, ...Ts: Display)(nom T head, ...Ts rest) T:
+    return head
+
+fn main() i32:
+    foreach(e in listed(nom pk(1, "a")).iter()):
+        println(e)
+    foreach(f in arrayed(nom lead_of(nom 3, 1.5)).iter()):
+        println(f)
+    return 0

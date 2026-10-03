@@ -2,11 +2,17 @@
 from __future__ import annotations
 from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
+import typing
 from collections import deque
 
+from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
-from sushi_lang.semantics.generics.types import TypePack
+from sushi_lang.semantics.generics.types import TypePack, type_param_substitution
 from sushi_lang.semantics.typesys import Type
+
+from sushi_lang.semantics.generics.local_bindings import (
+    bind_locals, foreach_bindings, pattern_bindings, unbind_locals,
+)
 
 from .order import functions_in_site_order
 
@@ -46,6 +52,12 @@ def extract_type_instantiations(
         instantiations.add(entry)
         for arg in type_args:
             extract_type_instantiations(arg, instantiations)
+
+
+# Every node kind of the `Expr` union: the statement walk hands each one to the
+# expression collector, which `tests/unit/test_instantiation_collectors_are_total.py`
+# holds total over the union.
+EXPRESSION_KINDS = typing.get_args(Expr)
 
 
 def let_annotations(block) -> Iterator[Type]:
@@ -136,55 +148,35 @@ class FunctionMonomorphizer:
         pack_indices = [i for i, tp in enumerate(tps) if tp.is_pack]
 
         if not pack_indices:
-            if len(type_args) != len(generic.type_params):
+            if len(type_args) != len(tps):
                 raise ValueError(
                     f"Type argument count mismatch: {generic.name} expects "
-                    f"{len(generic.type_params)} args, got {len(type_args)}"
+                    f"{len(tps)} args, got {len(type_args)}"
+                )
+        else:
+            if len(pack_indices) > 1:
+                raise ValueError(
+                    f"{generic.name} declares {len(pack_indices)} pack type-parameters; "
+                    f"at most one is allowed"
                 )
 
-            if not self._constraints_hold(generic, generic.type_params, type_args):
-                return None
+            k = pack_indices[0]
+            if k != len(tps) - 1:
+                raise ValueError(
+                    f"{generic.name} declares a pack type-parameter that is not the "
+                    f"last type-parameter (at index {k} of {len(tps)})"
+                )
 
-            substitution: Dict[str, "Type | TypePack"] = {}
-            for param, arg in zip(generic.type_params, type_args, strict=False):
-                param_name = param.name if hasattr(param, 'name') else str(param)
-                substitution[param_name] = arg
-            return substitution
-
-        if len(pack_indices) > 1:
-            raise ValueError(
-                f"{generic.name} declares {len(pack_indices)} pack type-parameters; "
-                f"at most one is allowed"
-            )
-
-        k = pack_indices[0]
-        if k != len(tps) - 1:
-            raise ValueError(
-                f"{generic.name} declares a pack type-parameter that is not the "
-                f"last type-parameter (at index {k} of {len(tps)})"
-            )
-
-        if len(type_args) < k:
-            raise ValueError(
-                f"Type argument count mismatch: {generic.name} expects at least "
-                f"{k} args, got {len(type_args)}"
-            )
-
-        leading_params = tps[:k]
-        leading_args = type_args[:k]
+            if len(type_args) < k:
+                raise ValueError(
+                    f"Type argument count mismatch: {generic.name} expects at least "
+                    f"{k} args, got {len(type_args)}"
+                )
 
         if not self._constraints_hold(generic, tps, type_args):
             return None
 
-        substitution = {}
-        for param, arg in zip(leading_params, leading_args, strict=False):
-            param_name = param.name if hasattr(param, 'name') else str(param)
-            substitution[param_name] = arg
-
-        pack_param = tps[k]
-        pack_name = pack_param.name if hasattr(pack_param, 'name') else str(pack_param)
-        substitution[pack_name] = TypePack(tuple(type_args[k:]))
-        return substitution
+        return type_param_substitution(generic, type_args)
 
     def monomorphize_function(
         self,
@@ -358,6 +350,7 @@ class FunctionMonomorphizer:
                 from_library_template=getattr(
                     generic_func, "is_library_template", False),
                 origin=getattr(generic_func, "library_origin", None),
+                defer_to=self.monomorphizer.late_bodies,
             )
 
             worklist.extend(functions_in_site_order(
@@ -391,12 +384,17 @@ class FunctionMonomorphizer:
         own collector: one rule for every position, in a concrete body and in a copy.
         `declarations` is the copy as a `Program` field (`functions=`, `extensions=` or
         `perk_impls=`). An extension or perk copy carries no unit, so it reads the flat view.
+
+        The same walk solves a generic CONSTRUCTOR in a position that states no type
+        (#1150, #1152): `foreach(r in Feed(items, 0))` names `Feed@(i32)` only in the
+        copy. The collector's inference interns that instance, and the late cut gives it
+        its extension copies.
         """
         tables = self.monomorphizer.tables
         if tables is None:
             return
         namespaces = tables.namespaces.get(unit_name) if unit_name is not None else None
-        if not self._holds_fn_value_candidate(body, unit_name, namespaces):
+        if not self._holds_position_candidate(body, unit_name, namespaces):
             return
         from sushi_lang.semantics.ast import Program
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
@@ -420,11 +418,15 @@ class FunctionMonomorphizer:
             if key not in self.monomorphizer.func_cache:
                 self.monomorphizer.pending_instantiations.add(key)
 
-    def _holds_fn_value_candidate(self, body: 'Block', unit_name: Optional[str],
+    def _holds_position_candidate(self, body: 'Block', unit_name: Optional[str],
                                   namespaces) -> bool:
-        """The copy names a generic function, or a name behind an alias, as a VALUE."""
-        from sushi_lang.semantics.ast import Call, MemberAccess, Name
+        """The copy names a generic function, or a name behind an alias, as a VALUE, or
+        it constructs a generic type."""
+        from sushi_lang.semantics.ast import Call, DotCall, EnumConstructor, MemberAccess, Name
         from sushi_lang.semantics.ast_walk import walk_nodes
+        tables = self.monomorphizer.tables
+        generic_structs = tables.generic_structs.by_name
+        generic_enums = tables.generic_enums.by_name
         callees: Set[int] = set()
         found = False
 
@@ -434,6 +436,12 @@ class FunctionMonomorphizer:
                 return False
             if isinstance(node, Call) and isinstance(node.callee, Name):
                 callees.add(id(node.callee))
+                found = node.callee.id in generic_structs
+            elif isinstance(node, EnumConstructor):
+                found = node.enum_name in generic_enums
+            elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
+                found = node.receiver.id in generic_enums or (
+                    namespaces is not None and namespaces.is_namespace(node.receiver.id))
             elif isinstance(node, Name) and id(node) not in callees:
                 found = self._generic_def(unit_name, node.id) is not None
             elif (isinstance(node, MemberAccess) and isinstance(node.receiver, Name)
@@ -500,51 +508,80 @@ class FunctionMonomorphizer:
         body: 'Block',
         var_types: Dict[str, Type],
     ) -> None:
-        """The statement walk over a SUBSTITUTED body, shared by functions and extensions."""
-        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block, Lambda, Assert
+        """The statement walk over a SUBSTITUTED body, shared by functions and extensions.
+
+        A statement that BINDS a name (a `let`, a `foreach`, a `match`) has an arm of its
+        own, so the name is in scope where it is used. Every other statement is walked whole by
+        the one node walk, so no statement kind can be missed: `println`, `print` and a
+        rebind had no arm, and their generic calls were not collected (#1157).
+        `tests/unit/test_monomorphize_statement_walk_is_total.py` is the gate.
+        """
+        from sushi_lang.semantics.ast import Let, Match, Foreach, Block, Lambda
 
         for stmt in body.statements:
-            if isinstance(stmt, Let) and stmt.value:
-                self._collect_from_expr(stmt.value, var_types)
-                if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
-                    self._collect_block_instantiations(stmt.value.body, var_types)
+            if isinstance(stmt, Let):
+                if stmt.value is not None:
+                    self._collect_from_expr(stmt.value, var_types)
+                    if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
+                        self._collect_block_instantiations(stmt.value.body, var_types)
                 # A local is in scope for the calls after it, and a generic called with
-                # one needs its type as a parameter's is needed (#555). Only the
-                # parameters were bound, so `show_it(b)` over a `let Box@(T) b` was
-                # never collected and the copy was CE2061. The body is substituted, so
-                # the annotation is the local's type as it stands.
+                # one needs its type as a parameter's is needed (#555). The body is
+                # substituted, so the annotation is the local's type as it stands.
                 if stmt.ty is not None:
                     var_types[stmt.name] = stmt.ty
                 if stmt.targets is not None:
                     self._bind_destructure(stmt, var_types)
-            elif isinstance(stmt, ExprStmt):
-                self._collect_from_expr(stmt.expr, var_types)
-            elif isinstance(stmt, Return) and stmt.value:
-                self._collect_from_expr(stmt.value, var_types)
-            elif isinstance(stmt, Assert):
-                self._collect_from_expr(stmt.cond, var_types)
-                if stmt.message is not None:
-                    self._collect_from_expr(stmt.message, var_types)
-            elif isinstance(stmt, If):
-                for cond, block in stmt.arms:
-                    self._collect_from_expr(cond, var_types)
-                    self._collect_block_instantiations(block, var_types)
-                if stmt.else_block:
-                    self._collect_block_instantiations(stmt.else_block, var_types)
-            elif isinstance(stmt, While):
-                if stmt.cond:
-                    self._collect_from_expr(stmt.cond, var_types)
-                self._collect_block_instantiations(stmt.body, var_types)
             elif isinstance(stmt, Foreach):
-                if stmt.iterable:
-                    self._collect_from_expr(stmt.iterable, var_types)
+                self._collect_from_expr(stmt.iterable, var_types)
+                bound = bind_locals(var_types, foreach_bindings(
+                    stmt, self._inferred(var_types), self._resolved))
                 self._collect_block_instantiations(stmt.body, var_types)
+                unbind_locals(var_types, bound)
             elif isinstance(stmt, Match):
-                if stmt.scrutinee:
-                    self._collect_from_expr(stmt.scrutinee, var_types)
+                self._collect_from_expr(stmt.scrutinee, var_types)
+                scrutinee_type = self._inferred(var_types)(stmt.scrutinee)
                 for arm in stmt.arms:
-                    if isinstance(arm.body, Block):
-                        self._collect_block_instantiations(arm.body, var_types)
+                    bound = bind_locals(var_types, pattern_bindings(
+                        arm.pattern, scrutinee_type, self.monomorphizer.generic_enums,
+                        self._resolved))
+                    self._collect_from_statement_nodes(arm.body, var_types)
+                    unbind_locals(var_types, bound)
+            else:
+                self._collect_from_statement_nodes(stmt, var_types)
+
+    def _collect_from_statement_nodes(self, root, var_types: Dict[str, Type]) -> None:
+        """Every expression under a statement, through the one node walk.
+
+        A nested block is walked as a block, in the scope it opens; an expression goes
+        to the expression collector, which walks its own subtree.
+        """
+        from sushi_lang.semantics.ast import Block
+        from sushi_lang.semantics.ast_walk import walk_nodes
+
+        def visit(node) -> bool:
+            if isinstance(node, Block):
+                self._collect_block_instantiations(node, var_types)
+                return False
+            if isinstance(node, EXPRESSION_KINDS):
+                self._collect_from_expr(node, var_types)
+                return False
+            return True
+
+        walk_nodes(root, visit)
+
+    def _inferred(self, var_types: Dict[str, Type]):
+        """The type of an expression in this scope, or None when nothing can type it."""
+        def infer(expr) -> Optional[Type]:
+            inferrer = self._get_arg_inferrer(var_types)
+            return inferrer.infer_expression_type(expr) if inferrer is not None else None
+        return infer
+
+    def _resolved(self, ty: Type) -> Type:
+        """Every struct/enum name in `ty` resolved to its table entry."""
+        from sushi_lang.semantics.type_resolution import resolve_type_recursively
+        structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
+        enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
+        return resolve_type_recursively(ty, structs, enums)
 
     def _bind_destructure(self, stmt, var_types: Dict[str, Type]) -> None:
         """Each binder of a destructure is a local for the calls after it (#555's rule)."""

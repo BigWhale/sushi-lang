@@ -103,6 +103,12 @@ def validate_generic_function_call(
     home_unit = getattr(generic_func, "unit_name", None)
     func_sig = validator.func_table.lookup(mangled_name, home_unit)
     if func_sig is None:
+        func_sig, refused = _request_late_instance(validator, generic_func, type_args,
+                                                   mangled_name, call)
+        if refused:
+            _walk_unchecked_arguments(validator, call)
+            return
+    if func_sig is None:
         _walk_unchecked_arguments(validator, call)
         er.emit(
             validator.reporter,
@@ -119,6 +125,26 @@ def validate_generic_function_call(
     # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
     validate_call_arguments(validator, written, func_sig,
                             call.args, call.callee.loc)
+
+
+def _request_late_instance(validator: 'TypeValidator', call_generic, type_args,
+                           mangled_name: str, call: Call):
+    """Ask the analyzer for an instance that the early collection did not make (#1155).
+
+    The `instantiate` and `monomorphize` passes collect the generic calls before this
+    pass runs, and a call that they cannot type is not collected. The call is typed
+    here, so the instance is cut now, as an extension copy is cut at its call site.
+    The answer is the new signature (None when there is none) and whether a constraint
+    refused the type arguments: that refusal is the one diagnostic, and CE2061 is not
+    added to it.
+    """
+    request = getattr(validator.tables, "request_function_instance", None)
+    if request is None or not validator.requests_late_instances:
+        return None, False
+    home_unit = getattr(call_generic, "unit_name", None)
+    refused = request((home_unit, call_generic.name, tuple(type_args)),
+                      (call.callee.loc, validator.reporter.filename))
+    return validator.func_table.lookup(mangled_name, home_unit), refused
 
 
 def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,

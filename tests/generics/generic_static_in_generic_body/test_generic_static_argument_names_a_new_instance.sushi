@@ -1,0 +1,25 @@
+# The static's argument names an instance that nothing else in the program names: the
+# early inference reads the static and enters no copy, and the program still gets one
+# copy of each static (#1153).
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(T) static of(T v) Box@(T):
+    return Box(v)
+
+fn o@(T)(T x) i32:
+    let i32 zero = (x.hash() as i32) * 0
+    return k(Box.of(true)) + zero
+
+extend Box@(T) wrap() i32:
+    return k(Box.of(2.5))
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(o(5))
+    println(b.wrap())
+    return 0

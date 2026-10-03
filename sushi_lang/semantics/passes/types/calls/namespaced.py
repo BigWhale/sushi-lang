@@ -18,7 +18,7 @@ from sushi_lang.semantics.typesys import Type
 from ..externals import validate_external_call_args
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import DotCall, MemberAccess
+    from sushi_lang.semantics.ast import Call, DotCall, MemberAccess
     from sushi_lang.semantics.namespaces import Binding
     from sushi_lang.semantics.passes.types import TypeValidator
 
@@ -84,30 +84,49 @@ def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
     """
     from sushi_lang.semantics.ast import Call, Name
     from sushi_lang.semantics.passes.types.visibility import reject_private_type
-    from .structs import validate_struct_constructor
+    from .structs import validate_generic_struct_constructor, validate_struct_constructor
 
     if reject_private_type(validator, binding.name, node.loc):
         return
 
-    stand_in = Call(callee=Name(id=binding.name, loc=node.loc), args=node.args,
+    # A GENERIC struct is built as the flat form builds it (#1151): the instance the
+    # declared type stamped, or else the one the arguments solve (#1150).
+    stamped = getattr(node, "resolved_struct_type", None)
+    generic = binding.name in validator.generic_struct_table.by_name
+    name = stamped.name if generic and stamped is not None else binding.name
+    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
                     field_names=node.field_names, loc=node.loc)
-    validate_struct_constructor(validator, stand_in)
+    if generic and stamped is None:
+        constructed = validate_generic_struct_constructor(
+            validator, stand_in, _written(node.receiver, node.method))
+    else:
+        validate_struct_constructor(validator, stand_in)
+        constructed = validator.struct_table.by_name.get(name)
     # A named construction is put in declaration order on the stand-in, as the bare
     # form is on its own node. The node is what every later reader emits from, so
     # the order comes back with it, and the names are spent.
     node.args = stand_in.args
     node.field_names = stand_in.field_names
-    node.resolved_struct_type = _constructed_struct(validator, binding)
-    _stamp(node, binding)
+    node.resolved_struct_type = constructed
+    _stamp(node, binding, name=constructed.name if constructed is not None else None)
 
 
-def _constructed_struct(validator: 'TypeValidator', binding: 'Binding') -> Optional[Type]:
+def _constructed_struct(validator: 'TypeValidator', node: 'DotCall',
+                        binding: 'Binding') -> Optional[Type]:
     """The struct a constructor behind a dot builds: the one its name declares (Ruling 6).
 
     Both halves read it, so `sh.Pt(0)` has the type `Pt(0)` has under a flat import in
     every pass that infers it, the passes before the typecheck pass included (#1147).
+    A generic struct answers the instance the declared type stamped, or else the one
+    its arguments solve (#1150, #1151).
     """
-    return validator.struct_table.by_name.get(binding.name)
+    if binding.name not in validator.generic_struct_table.by_name:
+        return validator.struct_table.by_name.get(binding.name)
+    stamped = getattr(node, "resolved_struct_type", None)
+    if stamped is not None:
+        return stamped
+    from .structs import untyped_struct_instance
+    return untyped_struct_instance(validator, binding.name, node.args, node.field_names)
 
 
 def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
@@ -120,13 +139,10 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
     DECLARATION comes from the alias's provider, so two units' generics of one name
     cannot cross here (#495).
     """
-    from sushi_lang.semantics.ast import Call, Name
     from .generics import validate_generic_function_call
 
     name = binding.name
-    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
-                    type_args=node.type_args, type_args_loc=node.type_args_loc,
-                    loc=node.loc)
+    stand_in = _generic_stand_in(node, name)
     validate_generic_function_call(validator, stand_in, name,
                                    generic_func=binding.record,
                                    written_name=_written(node.receiver, node.method))
@@ -134,6 +150,14 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
     if instance != name:
         _stamp(node, binding, name=instance)
         _stamp_param_modes(node, validator.func_table.by_name.get(instance))
+
+
+def _generic_stand_in(node: 'DotCall', name: str) -> 'Call':
+    """The bare `Call` that a generic call behind a dot is measured and typed through."""
+    from sushi_lang.semantics.ast import Call, Name
+    return Call(callee=Name(id=name, loc=node.loc), args=node.args,
+                type_args=node.type_args, type_args_loc=node.type_args_loc,
+                loc=node.loc)
 
 
 def infer_namespaced_call(validator: 'TypeValidator',
@@ -148,9 +172,9 @@ def infer_namespaced_call(validator: 'TypeValidator',
         node.inferred_return_type = binding.record.ret_type
         return binding.record.ret_type
     if binding.kind == "generic function":
-        return _infer_generic_call(validator, node)
+        return _infer_generic_call(validator, node, binding)
     if binding.kind == "struct":
-        constructed = _constructed_struct(validator, binding)
+        constructed = _constructed_struct(validator, node, binding)
         node.inferred_return_type = constructed
         return constructed
     if binding.kind != "function":
@@ -403,20 +427,23 @@ def _materialize(validator: 'TypeValidator', declared) -> Optional[Type]:
     return validator.type_inference_visitor._materialize_wrapper(declared)
 
 
-def _infer_generic_call(validator: 'TypeValidator',
-                        node: 'DotCall') -> Optional[Type]:
-    """The type a monomorphized instance yields, once validation has named it.
+def _infer_generic_call(validator: 'TypeValidator', node: 'DotCall',
+                        binding: 'Binding') -> Optional[Type]:
+    """What a generic call behind a dot yields: the bare form's derivation (#1159).
 
-    Validation runs first -- `validate_expression` visits before it infers -- so the
-    stamp is there. Before it is, the answer is None, exactly as the bare form's is
-    before its own callee is rewritten.
+    Once validation names the instance, its concrete signature answers. Before that --
+    the call is the argument of another generic call, which solves its own type
+    arguments first -- the substituted template answers, read through a stand-in
+    `Call` with the declaration the alias's provider resolves, as the bare form does.
     """
     ref = getattr(node, "namespace_ref", None)
-    if ref is None:
-        return None
-    func_sig = validator.func_table.by_name.get(ref.name)
-    if func_sig is None:
-        return None
-    inferred = validator.type_inference_visitor.result_type_of(func_sig)
-    node.inferred_return_type = inferred
+    func_sig = validator.func_table.by_name.get(ref.name) if ref is not None else None
+    inferrer = validator.type_inference_visitor
+    if func_sig is not None:
+        inferred = inferrer.result_type_of(func_sig)
+    else:
+        inferred = inferrer.generic_result_type(_generic_stand_in(node, binding.name),
+                                                binding.record)
+    if inferred is not None:
+        node.inferred_return_type = inferred
     return inferred

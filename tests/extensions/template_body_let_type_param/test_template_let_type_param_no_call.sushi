@@ -1,0 +1,17 @@
+# The same template with no call of the extension: the template body is not a program
+# point, so it records no instance (#1158).
+# EXPECT_STDOUT_EXACT: "1\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(U) o() i32:
+    let U y = self.v
+    return k(y)
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.v)
+    return 0

@@ -49,6 +49,9 @@ def instantiate_array_extension(validator: 'TypeValidator',
     if template is None:
         return None
 
+    # The element as the tables know it: a receiver typed from a written `P[]` still
+    # holds the bare name, and a copy for it checks a body over an unknown type (#1161).
+    receiver_type = _resolved(validator, receiver_type)
     element = receiver_type.base_type
     substitution = {template.type_params[0]: element}
     ret = (substitute_type_params(template.ret_type, substitution)
@@ -97,11 +100,23 @@ def _intern_signature(validator: 'TypeValidator', *types) -> None:
             interner(ty)
 
 
+def _resolved(validator: 'TypeValidator', ty):
+    """The type with every name in it resolved to its table entry."""
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+    return resolve_type_recursively(ty, validator.struct_table.by_name,
+                                    validator.enum_table.by_name)
+
+
 def _queue_extension_instantiation(validator: 'TypeValidator', template, target_type,
                                    receiver_args, method_type_args) -> None:
-    """Queue one monomorphization request, deduped by (receiver, method, margs)."""
-    key = (str(target_type), template.name,
-           tuple(str(a) for a in method_type_args))
+    """Queue one monomorphization request, deduped by (receiver, method, margs).
+
+    The key holds the resolved TYPES, never their text: `P[]` with the element unknown
+    and `P[]` with the element resolved print the same, and the first request hid the
+    correct one (#1161).
+    """
+    key = (_resolved(validator, target_type), template.name,
+           tuple(_resolved(validator, a) for a in method_type_args))
     tables = validator.tables
     if key in tables.queued_extension_keys:
         return

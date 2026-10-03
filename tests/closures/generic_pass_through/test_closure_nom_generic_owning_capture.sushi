@@ -1,0 +1,19 @@
+# A lambda that captures an owning string, given `nom` to a generic pass-through. The
+# environment holds the string, and the caller frees it one time, after the call.
+# EXPECT_STDOUT_EXACT: "18\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn kb@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let string w = "Harmless"
+    let string s = "Mostly {w}"
+    let fn(i32) -> i32 r = kb(nom |i32 x| x + s.len())
+    println(r(3))
+    let string t = "Mostly {w}"
+    let fn(i32) -> string g = kb(nom |i32 n| t.s(0, n))
+    println(g(15))
+    return 0

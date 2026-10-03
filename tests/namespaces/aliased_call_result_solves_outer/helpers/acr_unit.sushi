@@ -1,0 +1,8 @@
+public fn sid@(T)(nom T x) T:
+    return x
+
+public fn count_two@(...Ts: Display)(...Ts args) i32:
+    return 2
+
+public fn lead_of@(T, ...Ts: Display)(nom T head, ...Ts rest) T:
+    return head

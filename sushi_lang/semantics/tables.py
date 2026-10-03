@@ -64,6 +64,12 @@ class SymbolTables:
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
+    # The analyzer's late function request: the typecheck pass hands it the
+    # (declaring unit, name, type arguments) of a generic call that has no instance,
+    # because the early collection did not see the call (#1155). The analyzer cuts the
+    # copy at once and checks its body after the per-unit loop. None outside the
+    # per-unit passes.
+    request_function_instance: object = None
 
     def __post_init__(self) -> None:
         from sushi_lang.semantics.generics.contract_walk import perk_override_of

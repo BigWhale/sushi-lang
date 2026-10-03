@@ -1,0 +1,18 @@
+# A `let T` in the body of an extension on a generic target, then a generic call. The
+# `instantiate` pass walked the template body and recorded `k<T>`, so the program was
+# CE2001 "unknown type 'T'" at the declaration of `k` (#1158).
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    return ((x.hash() as i32) * 0) + 7
+
+extend Box@(T) o() i32:
+    let T y = self.v
+    return k(y)
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.o())
+    return 0

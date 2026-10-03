@@ -1,0 +1,23 @@
+# A generic enum variant with an owning payload solves a generic call, and the
+# payload is freed once (#1152).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n16\n"
+# EXPECT_NO_LEAKS: true
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn label@(T: Display)(Slot@(T) s, string fb) string:
+    match s:
+        Slot.Full(v) -> return "{v}"
+        Slot.Empty -> return fb.clone()
+
+fn size@(T)(Slot@(T) s) i32:
+    match s:
+        Slot.Full(_) -> return 16
+        Slot.Empty -> return 0
+
+fn main() i32:
+    let string w = "Harmless"
+    println(label(Slot.Full("Mostly {w}"), "none"))
+    println(size(Slot.Full(from(["a {w}", "b"]))))
+    return 0

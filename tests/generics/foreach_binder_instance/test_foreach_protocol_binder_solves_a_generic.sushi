@@ -1,0 +1,21 @@
+# A generic call on the binder of a foreach over a type with next(). The item type is
+# the payload of the Maybe that next() answers. No other call makes k@(u8) (#1155).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+struct Count:
+    u8 left
+
+extend Count next(poke self) Maybe@(u8):
+    if (self.left == 0):
+        return Maybe.None()
+    self.left := self.left - 1
+    return Maybe.Some(self.left)
+
+fn main() i32:
+    foreach(n in Count(2)):
+        println(k(n))
+    return 0

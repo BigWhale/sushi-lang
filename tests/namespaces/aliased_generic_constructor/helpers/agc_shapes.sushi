@@ -1,0 +1,9 @@
+public struct Box@(T):
+    T v
+
+public struct Holder:
+    Box@(i32) inner
+
+public enum Slot@(T):
+    Full(T)
+    Empty

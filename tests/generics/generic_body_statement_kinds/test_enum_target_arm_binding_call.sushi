@@ -1,0 +1,21 @@
+# In an extension on a generic ENUM target, a generic call on a match binding. No other
+# call makes k@(u16) (#1157).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+extend Slot@(T) probe() i32:
+    match self:
+        Slot.Full(v) -> return k(v)
+        Slot.Empty -> return 0
+
+fn main() i32:
+    let Slot@(u16) s = Slot.Full(3)
+    println(s.probe())
+    return 0

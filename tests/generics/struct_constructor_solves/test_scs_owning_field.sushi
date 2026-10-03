@@ -1,0 +1,17 @@
+# A generic struct constructor with an owning field solves its type arguments
+# from its arguments, and the value it builds is freed once (#1150).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+struct Tagged@(T):
+    T value
+    string tag
+
+fn tag_of@(T)(Tagged@(T) t) string:
+    return t.tag.clone()
+
+fn main() i32:
+    let string w = "Harmless"
+    println(Tagged("Mostly {w}", "x").value)
+    println(Tagged(from([1, 2]), "y {w}").value.len())
+    println(tag_of(Tagged(from(["a"]), "Mostly {w}")))
+    return 0

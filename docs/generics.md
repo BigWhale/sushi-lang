@@ -134,7 +134,12 @@ A generic enum constructor takes its type from the position that holds it: a `le
 a `match` scrutinee), the arguments give the type. `Maybe.Some(42)` is a `Maybe@(i32)`. A
 constructor whose arguments do not give every type parameter, such as `Maybe.None()` or
 `Tree.Empty()`, needs a declared type. If no position gives one, the compiler reports
-`CE2112`:
+`CE2112`.
+
+A generic STRUCT constructor follows the same rule: `Feed(from([1, 2]), 7)` is a
+`Feed@(i32)` when `Feed@(T)` has a `T[]` field, also with no declared type, and a declared
+type wins where one exists. Arguments that give one type parameter two types are `CE2065`
+at the constructor:
 
 ```sushi
 enum Tree@(T):
@@ -1025,12 +1030,6 @@ let Box@(bool) b3 = Box(value: true)
 | A function type or a tuple type as an extension or perk-implementation target | `CE2110` |
 | A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | `CE2101` |
 | A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
-
-In an extension on a generic **enum** target, a call to a generic free function at the target's
-type parameter can give `CE2061` when no other code in the program uses that function at that
-type. The same call in an extension on a generic struct target works. To avoid it, use the
-function once at that type outside the extension, or write the logic as a generic free
-function.
 
 ---
 

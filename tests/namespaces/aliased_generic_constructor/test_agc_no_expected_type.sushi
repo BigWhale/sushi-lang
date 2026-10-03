@@ -1,0 +1,25 @@
+# A generic struct constructor and a generic variant behind a unit alias solve
+# their type arguments from their arguments, and solve a generic call, as the
+# flat forms do (#1150, #1151, #1152).
+# EXPECT_STDOUT_EXACT: "9\n2\n1\n7\n"
+use "helpers/agc_shapes" as sh
+
+fn unbox@(T)(sh.Box@(T) b) T:
+    return b.v
+
+fn one@(T)(sh.Slot@(T) s) i32:
+    if (s == s):
+        return 1
+    return 0
+
+fn inner@(T)(sh.Slot@(T) s, T fb) T:
+    match s:
+        sh.Slot.Full(v) -> return v
+        sh.Slot.Empty -> return fb
+
+fn main() i32:
+    println(sh.Box(9).v)
+    println(unbox(sh.Box(2)))
+    println(one(sh.Slot.Full(5)))
+    println(inner(sh.Slot.Full(7), 0))
+    return 0

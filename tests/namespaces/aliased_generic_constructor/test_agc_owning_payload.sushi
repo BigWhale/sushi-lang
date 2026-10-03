@@ -1,0 +1,20 @@
+# A generic struct constructor and a generic variant behind a unit alias with an
+# owning payload are freed once (#1151, #1152).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n2\nMostly Harmless\n16\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/agc_shapes" as sh
+
+fn size@(T)(sh.Slot@(T) s) i32:
+    match s:
+        sh.Slot.Full(_) -> return 16
+        sh.Slot.Empty -> return 0
+
+fn main() i32:
+    let string w = "Harmless"
+    let sh.Box@(string) s = sh.Box("Mostly {w}")
+    println(s.v)
+    let sh.Box@(string[]) xs = sh.Box(from(["a {w}", "b"]))
+    println(xs.v.len())
+    println(sh.Box("Mostly {w}").v)
+    println(size(sh.Slot.Full("Mostly {w}")))
+    return 0

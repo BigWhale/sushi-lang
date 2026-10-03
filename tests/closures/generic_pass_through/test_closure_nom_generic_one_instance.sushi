@@ -1,0 +1,18 @@
+# One instance, three spellings: an inferred capturing lambda, an explicit type
+# argument and a lambda that captures nothing. The instance must not depend on which
+# call names it first.
+# EXPECT_STDOUT_EXACT: "8\n15\n4\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn kb@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let i32 a = 5
+    let fn(i32) -> i32 r = kb(nom |i32 x| x + a)
+    let fn(i32) -> i32 q = kb@(fn(i32) -> i32)(nom |i32 x| x * a)
+    let fn(i32) -> i32 p = kb(nom |i32 x| x + 1)
+    println(r(3))
+    println(q(3))
+    println(p(3))
+    return 0

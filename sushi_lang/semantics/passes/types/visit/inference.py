@@ -344,7 +344,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """What a call to this callee yields, before the stamp is parked on the node."""
         from sushi_lang.semantics.typesys import FunctionType
         from sushi_lang.semantics.passes.types.calls.user_defined import (
-            struct_takes_the_call)
+            generic_struct_takes_the_call, struct_takes_the_call)
         # Call-through any expression yielding a function value (`env.f(x)`,
         # `obj.handler()`, `arr[0]()`). Yields what a direct call yields.
         if not isinstance(node.callee, Name):
@@ -362,6 +362,14 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if struct_takes_the_call(self.type_validator, function_name):
             return self.type_validator.struct_table.by_name[function_name]
 
+        # A generic struct constructor no declared type stamped: the instance its
+        # arguments solve, the answer the validating half reaches (#1150).
+        if generic_struct_takes_the_call(self.type_validator, function_name):
+            from sushi_lang.semantics.passes.types.calls.structs import (
+                untyped_struct_instance)
+            return untyped_struct_instance(self.type_validator, function_name,
+                                           node.args, node.field_names)
+
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library
         # first gave this unit's own `sin` the library's return type.
@@ -376,15 +384,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # interned early (#556).
         generic_func = self.type_validator.generic_sig(function_name)
         if generic_func is not None:
-            from sushi_lang.semantics.passes.types.calls.generics import (
-                generic_call_result_type)
-            substituted = generic_call_result_type(self.type_validator, node, generic_func)
+            substituted = self.generic_result_type(node, generic_func)
             if substituted is not None:
-                # A bare generic answers its substituted return, which may still be a
-                # spelling (`Crate`); a receiver chained on it needs the named type.
-                from sushi_lang.semantics.passes.types.utils import resolve_declared_type
-                return resolve_declared_type(self.type_validator,
-                                             self._materialize_wrapper(substituted))
+                return substituted
 
         from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
         if function_name == ERRNO_FUNCTION:
@@ -416,6 +418,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """
         from sushi_lang.semantics.passes.types.resolution import call_yield
         return call_yield(self.type_validator, func_sig.ret_type, func_sig.err_type)
+
+    def generic_result_type(self, call: Call, generic_func) -> Optional[Type]:
+        """What a call to a generic declaration yields before its instance exists.
+
+        One derivation, so a generic call written behind a namespace agrees with the bare
+        form (#1159). The substituted return may still be a spelling (`Crate`); a receiver
+        chained on it needs the named type.
+        """
+        from sushi_lang.semantics.passes.types.calls.generics import (
+            generic_call_result_type)
+        from sushi_lang.semantics.passes.types.utils import resolve_declared_type
+        substituted = generic_call_result_type(self.type_validator, call, generic_func)
+        if substituted is None:
+            return None
+        return resolve_declared_type(self.type_validator,
+                                     self._materialize_wrapper(substituted))
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""
