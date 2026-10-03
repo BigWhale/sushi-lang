@@ -1,0 +1,22 @@
+# A generic enum variant built from its payload solves a generic call beside a
+# second argument, also in the body of a generic function (#1152). No other
+# call makes the same instance.
+# EXPECT_STDOUT_EXACT: "7\ntrue\n9\n"
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn inner@(T)(Slot@(T) s, T fb) T:
+    match s:
+        Slot.Full(v) -> return v
+        Slot.Empty -> return fb
+
+fn outer@(U)(U u, U fb) U:
+    return inner(Slot.Full(u), fb)
+
+fn main() i32:
+    println(inner(Slot.Full(7), 0))
+    println(inner(Slot.Full(true), false))
+    let i64 big = 9
+    println(outer(big, big))
+    return 0

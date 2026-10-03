@@ -371,12 +371,17 @@ class FunctionMonomorphizer:
         own collector: one rule for every position, in a concrete body and in a copy.
         `declarations` is the copy as a `Program` field (`functions=`, `extensions=` or
         `perk_impls=`). An extension or perk copy carries no unit, so it reads the flat view.
+
+        The same walk solves a generic CONSTRUCTOR in a position that states no type
+        (#1150, #1152): `foreach(r in Feed(items, 0))` names `Feed@(i32)` only in the
+        copy. The collector's inference interns that instance, and the late cut gives it
+        its extension copies.
         """
         tables = self.monomorphizer.tables
         if tables is None:
             return
         namespaces = tables.namespaces.get(unit_name) if unit_name is not None else None
-        if not self._holds_fn_value_candidate(body, unit_name, namespaces):
+        if not self._holds_position_candidate(body, unit_name, namespaces):
             return
         from sushi_lang.semantics.ast import Program
         from sushi_lang.semantics.generics.instantiate import InstantiationCollector
@@ -400,11 +405,15 @@ class FunctionMonomorphizer:
             if key not in self.monomorphizer.func_cache:
                 self.monomorphizer.pending_instantiations.add(key)
 
-    def _holds_fn_value_candidate(self, body: 'Block', unit_name: Optional[str],
+    def _holds_position_candidate(self, body: 'Block', unit_name: Optional[str],
                                   namespaces) -> bool:
-        """The copy names a generic function, or a name behind an alias, as a VALUE."""
-        from sushi_lang.semantics.ast import Call, MemberAccess, Name
+        """The copy names a generic function, or a name behind an alias, as a VALUE, or
+        it constructs a generic type."""
+        from sushi_lang.semantics.ast import Call, DotCall, EnumConstructor, MemberAccess, Name
         from sushi_lang.semantics.ast_walk import walk_nodes
+        tables = self.monomorphizer.tables
+        generic_structs = tables.generic_structs.by_name
+        generic_enums = tables.generic_enums.by_name
         callees: Set[int] = set()
         found = False
 
@@ -414,6 +423,12 @@ class FunctionMonomorphizer:
                 return False
             if isinstance(node, Call) and isinstance(node.callee, Name):
                 callees.add(id(node.callee))
+                found = node.callee.id in generic_structs
+            elif isinstance(node, EnumConstructor):
+                found = node.enum_name in generic_enums
+            elif isinstance(node, DotCall) and isinstance(node.receiver, Name):
+                found = node.receiver.id in generic_enums or (
+                    namespaces is not None and namespaces.is_namespace(node.receiver.id))
             elif isinstance(node, Name) and id(node) not in callees:
                 found = self._generic_def(unit_name, node.id) is not None
             elif (isinstance(node, MemberAccess) and isinstance(node.receiver, Name)

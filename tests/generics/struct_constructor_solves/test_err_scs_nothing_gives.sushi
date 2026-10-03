@@ -1,0 +1,11 @@
+# A generic struct constructor whose arguments give no type parameter cannot be
+# solved: the error is at the constructor, and it is never CE2008 (#1150).
+# EXPECT_ERROR_CODES_EXACT: CE2112
+# EXPECT_STDERR_CONTAINS: "cannot infer the type of 'Marker(...)': nothing gives 'T'"
+# EXPECT_STDERR_CONTAINS: "let Marker@(T) v = Marker(...)"
+struct Marker@(T):
+    i32 id
+
+fn main() i32:
+    println(Marker(1).id)
+    return 0

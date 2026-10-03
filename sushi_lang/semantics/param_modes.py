@@ -145,7 +145,7 @@ class CalleeModes:
 
     def __init__(self, *, func_sigs=None, struct_names=None, stdlib_sigs=None):
         self._func_sigs = func_sigs or {}
-        self._struct_names = frozenset(struct_names or ())
+        self._struct_names = struct_names if struct_names is not None else frozenset()
         self._stdlib_sigs = stdlib_sigs or {}
 
     def kind_of(self, name: str, local_type: Optional[Type] = None) -> CalleeKind:

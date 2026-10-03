@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Sequence
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from ..visibility import name_is_contested
-from sushi_lang.semantics.typesys import BuiltinType, EnumType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from ..arguments import check_arguments
 from ..propagation import holds_declared_type
@@ -101,21 +101,29 @@ def solve_constructor_payload(validator: 'TypeValidator', enum_name: str, varian
 
 
 def untyped_constructor_instance(validator: 'TypeValidator', enum_name: str,
-                                 variant_name: str, args: Sequence['Expr']) -> Optional[EnumType]:
+                                 variant_name: str, args: Sequence['Expr']) -> Optional[Type]:
     """The instance an unstamped generic enum constructor builds, from its payload alone.
 
     The validating and the inferring half both read this one answer (#1005). None when an
-    argument does not give a type parameter.
+    argument does not give a type parameter. Before the `monomorphize` pass the answer
+    is the instance's shape (`intern_constructed_instance`).
     """
     solution = solve_constructor_payload(validator, enum_name, variant_name, args)
     if solution is None or any(t is None for t in solution.type_args):
         return None
-    return _intern_enum_instance(validator, enum_name, solution.type_args)
+    return intern_constructed_instance(validator, enum_name, solution.type_args)
 
 
-def _intern_enum_instance(validator: 'TypeValidator', base: str,
-                          type_args: tuple) -> Optional[EnumType]:
-    """Intern `base@(type_args)` through the seam that owns it, and answer the instance."""
+def intern_constructed_instance(validator: 'TypeValidator', base: str,
+                                type_args: tuple) -> Optional[Type]:
+    """The instance `base@(type_args)` that a generic constructor builds.
+
+    One seam for a struct constructor and a variant (#1150, #1152). The instance is
+    interned through the seam that owns it. The `instantiate` pass runs before the
+    interner exists, so there the answer is the instance's SHAPE, a `GenericTypeRef`:
+    the leading solver unifies it as it unifies an instance, and the pass collects it.
+    The typecheck pass always has the interner, so it never sees a shape.
+    """
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
     from sushi_lang.semantics.generics.interned import interned_name
@@ -127,13 +135,14 @@ def _intern_enum_instance(validator: 'TypeValidator', base: str,
     if base == "Maybe":
         return ensure_maybe_type_in_table(validator.enum_table, type_args[0], structs)
     key = interned_name(base, type_args)
-    instance = validator.enum_table.by_name.get(key)
+    instance = structs.get(key) or validator.enum_table.by_name.get(key)
     if instance is None:
+        shape = GenericTypeRef(base_name=base, type_args=tuple(type_args))
         interner = getattr(validator.tables, "intern_generic_ref", None)
         if interner is None:
-            return None
-        interner(GenericTypeRef(base_name=base, type_args=tuple(type_args)))
-        instance = validator.enum_table.by_name.get(key)
+            return shape
+        interner(shape)
+        instance = structs.get(key) or validator.enum_table.by_name.get(key)
     return instance
 
 

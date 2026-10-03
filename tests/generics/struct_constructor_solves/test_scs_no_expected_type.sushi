@@ -1,0 +1,17 @@
+# A generic struct constructor in a position with no expected type solves its
+# type arguments from its arguments, as a generic function call does (#1150).
+# EXPECT_STDOUT_EXACT: "7\n2\n3\nfalse\n"
+struct Feed@(T):
+    T[] items
+    i32 at
+
+struct Pair@(A, B):
+    A first
+    B second
+
+fn main() i32:
+    println(Feed(from([1, 2]), 7).at)
+    println(Feed(from([1, 2]), 0).items.len())
+    println(Pair(3, true).first)
+    println(Pair(second: false, first: 1).second)
+    return 0
