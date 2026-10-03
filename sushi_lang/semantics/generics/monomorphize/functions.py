@@ -2,11 +2,17 @@
 from __future__ import annotations
 from typing import Dict, Iterator, Tuple, Set, Optional, TYPE_CHECKING
 import copy
+import typing
 from collections import deque
 
+from sushi_lang.semantics.ast import Expr
 from sushi_lang.semantics.generics.name_mangling import mangle_function_name
 from sushi_lang.semantics.generics.types import TypePack
 from sushi_lang.semantics.typesys import Type
+
+from sushi_lang.semantics.generics.local_bindings import (
+    bind_locals, foreach_bindings, pattern_bindings, unbind_locals,
+)
 
 from .order import functions_in_site_order
 
@@ -46,6 +52,12 @@ def extract_type_instantiations(
         instantiations.add(entry)
         for arg in type_args:
             extract_type_instantiations(arg, instantiations)
+
+
+# Every node kind of the `Expr` union: the statement walk hands each one to the
+# expression collector, which `tests/unit/test_instantiation_collectors_are_total.py`
+# holds total over the union.
+EXPRESSION_KINDS = typing.get_args(Expr)
 
 
 def let_annotations(block) -> Iterator[Type]:
@@ -501,51 +513,80 @@ class FunctionMonomorphizer:
         body: 'Block',
         var_types: Dict[str, Type],
     ) -> None:
-        """The statement walk over a SUBSTITUTED body, shared by functions and extensions."""
-        from sushi_lang.semantics.ast import Let, ExprStmt, Return, If, While, Match, Foreach, Block, Lambda, Assert
+        """The statement walk over a SUBSTITUTED body, shared by functions and extensions.
+
+        A statement that BINDS a name (a `let`, a `foreach`, a `match`) has an arm of its
+        own, so the name is in scope where it is used. Every other statement is walked whole by
+        the one node walk, so no statement kind can be missed: `println`, `print` and a
+        rebind had no arm, and their generic calls were not collected (#1157).
+        `tests/unit/test_monomorphize_statement_walk_is_total.py` is the gate.
+        """
+        from sushi_lang.semantics.ast import Let, Match, Foreach, Block, Lambda
 
         for stmt in body.statements:
-            if isinstance(stmt, Let) and stmt.value:
-                self._collect_from_expr(stmt.value, var_types)
-                if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
-                    self._collect_block_instantiations(stmt.value.body, var_types)
+            if isinstance(stmt, Let):
+                if stmt.value is not None:
+                    self._collect_from_expr(stmt.value, var_types)
+                    if isinstance(stmt.value, Lambda) and isinstance(stmt.value.body, Block):
+                        self._collect_block_instantiations(stmt.value.body, var_types)
                 # A local is in scope for the calls after it, and a generic called with
-                # one needs its type as a parameter's is needed (#555). Only the
-                # parameters were bound, so `show_it(b)` over a `let Box@(T) b` was
-                # never collected and the copy was CE2061. The body is substituted, so
-                # the annotation is the local's type as it stands.
+                # one needs its type as a parameter's is needed (#555). The body is
+                # substituted, so the annotation is the local's type as it stands.
                 if stmt.ty is not None:
                     var_types[stmt.name] = stmt.ty
                 if stmt.targets is not None:
                     self._bind_destructure(stmt, var_types)
-            elif isinstance(stmt, ExprStmt):
-                self._collect_from_expr(stmt.expr, var_types)
-            elif isinstance(stmt, Return) and stmt.value:
-                self._collect_from_expr(stmt.value, var_types)
-            elif isinstance(stmt, Assert):
-                self._collect_from_expr(stmt.cond, var_types)
-                if stmt.message is not None:
-                    self._collect_from_expr(stmt.message, var_types)
-            elif isinstance(stmt, If):
-                for cond, block in stmt.arms:
-                    self._collect_from_expr(cond, var_types)
-                    self._collect_block_instantiations(block, var_types)
-                if stmt.else_block:
-                    self._collect_block_instantiations(stmt.else_block, var_types)
-            elif isinstance(stmt, While):
-                if stmt.cond:
-                    self._collect_from_expr(stmt.cond, var_types)
-                self._collect_block_instantiations(stmt.body, var_types)
             elif isinstance(stmt, Foreach):
-                if stmt.iterable:
-                    self._collect_from_expr(stmt.iterable, var_types)
+                self._collect_from_expr(stmt.iterable, var_types)
+                bound = bind_locals(var_types, foreach_bindings(
+                    stmt, self._inferred(var_types), self._resolved))
                 self._collect_block_instantiations(stmt.body, var_types)
+                unbind_locals(var_types, bound)
             elif isinstance(stmt, Match):
-                if stmt.scrutinee:
-                    self._collect_from_expr(stmt.scrutinee, var_types)
+                self._collect_from_expr(stmt.scrutinee, var_types)
+                scrutinee_type = self._inferred(var_types)(stmt.scrutinee)
                 for arm in stmt.arms:
-                    if isinstance(arm.body, Block):
-                        self._collect_block_instantiations(arm.body, var_types)
+                    bound = bind_locals(var_types, pattern_bindings(
+                        arm.pattern, scrutinee_type, self.monomorphizer.generic_enums,
+                        self._resolved))
+                    self._collect_from_statement_nodes(arm.body, var_types)
+                    unbind_locals(var_types, bound)
+            else:
+                self._collect_from_statement_nodes(stmt, var_types)
+
+    def _collect_from_statement_nodes(self, root, var_types: Dict[str, Type]) -> None:
+        """Every expression under a statement, through the one node walk.
+
+        A nested block is walked as a block, in the scope it opens; an expression goes
+        to the expression collector, which walks its own subtree.
+        """
+        from sushi_lang.semantics.ast import Block
+        from sushi_lang.semantics.ast_walk import walk_nodes
+
+        def visit(node) -> bool:
+            if isinstance(node, Block):
+                self._collect_block_instantiations(node, var_types)
+                return False
+            if isinstance(node, EXPRESSION_KINDS):
+                self._collect_from_expr(node, var_types)
+                return False
+            return True
+
+        walk_nodes(root, visit)
+
+    def _inferred(self, var_types: Dict[str, Type]):
+        """The type of an expression in this scope, or None when nothing can type it."""
+        def infer(expr) -> Optional[Type]:
+            inferrer = self._get_arg_inferrer(var_types)
+            return inferrer.infer_expression_type(expr) if inferrer is not None else None
+        return infer
+
+    def _resolved(self, ty: Type) -> Type:
+        """Every struct/enum name in `ty` resolved to its table entry."""
+        from sushi_lang.semantics.type_resolution import resolve_type_recursively
+        structs = self.monomorphizer.struct_table.by_name if self.monomorphizer.struct_table else {}
+        enums = self.monomorphizer.enum_table.by_name if self.monomorphizer.enum_table else {}
+        return resolve_type_recursively(ty, structs, enums)
 
     def _bind_destructure(self, stmt, var_types: Dict[str, Type]) -> None:
         """Each binder of a destructure is a local for the calls after it (#555's rule)."""
