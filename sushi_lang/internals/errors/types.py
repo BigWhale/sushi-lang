@@ -149,7 +149,7 @@ _add(ErrorMessage("CE2034", Severity.ERROR,
 
 _add(ErrorMessage("CE2035", Severity.ERROR,
     "cannot interpolate expression of type '{type}' into string",
-    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field. A `Maybe`, a `Result` and a bare array are not printed: handle the missing value or the error first, or print the elements."))
+    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. Before #1132 a top-level array, `List@(T)` and `Own@(T)` were refused here too, although a type that held one printed it."))
 
 _add(ErrorMessage("CE2036", Severity.ERROR,
     "Ok() requires a value. For blank return type use Ok(~)",
@@ -451,7 +451,7 @@ _add(ErrorMessage("CE2112", Severity.ERROR,
 
 _add(ErrorMessage("CE2115", Severity.ERROR,
     "cannot print a value of type '{type}'",
-    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)` -- and an array has no string form of its own at the top level: print its elements, or hold it in a struct. A type that holds something with no string form has none, and a note names the field. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
+    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
 
 _add(ErrorMessage("CE2116", Severity.ERROR,
     "the message of an assert must be a string, got {got}",

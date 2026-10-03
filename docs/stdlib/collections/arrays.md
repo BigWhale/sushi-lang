@@ -167,6 +167,27 @@ elements hash alike, at each level, so `[[1, 2], [3, 4]]` as an `i32[2][2]` and 
 **Limitation:** The element type must have a hash. An array whose element has no hash
 (today, `ptr[]`) is CE0052.
 
+### Printing
+
+An array goes into an interpolation hole and into `print` / `println` when its element has
+a string form. It prints its elements in brackets, in the form a struct that holds it
+prints: a string element in quotes, a nested array in its own brackets, and `[]` when it
+is empty. A `u8[]` prints as numbers; `.to_string()` gives the text.
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32[2][2] grid = [[1, 2], [3, 4]]
+    println("{xs}")                     # [1, 2, 3]
+    println(grid)                       # [[1, 2], [3, 4]]
+    println(from(["a, b", "c"]))        # ["a, b", "c"]
+    return 0
+```
+
+An element with no string form, such as a function value, is CE2035 in a hole and CE2115
+in `println`, and a note names the element type. An array prints, but it does not compare
+at the top level: `==` and `<` on two arrays are still CE2514.
+
 ### `arr[index] := value`
 
 Write one element, in place. Not a method -- it is the assignment form of `arr[index]`,

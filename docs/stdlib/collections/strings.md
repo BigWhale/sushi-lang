@@ -406,8 +406,8 @@ let string[] parts = "a,b,c".split(',')
 
 ```
 
-A `string[]` cannot go into an interpolation hole (CE2035). Join it first:
-`println("Parts: {','.join(parts)}")`.
+A `string[]` in an interpolation hole prints each element in quotes: `["a", "b", "c"]`.
+To write the parts as one string, join them: `println("Parts: {','.join(parts)}")`.
 
 ### `.split_once(string sep) -> Maybe@((string, string))`
 
