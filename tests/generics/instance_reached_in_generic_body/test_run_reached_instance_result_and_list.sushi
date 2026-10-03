@@ -1,0 +1,46 @@
+# A generic struct instance that only a generic body reaches, with an extension that
+# answers `Result@(T, E)`, one that answers `List@(T)`, and one that no call names. Each
+# signature names a type that is known for `Feed@(string)` (#1146).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Arthur\n2\nnone\n"
+
+enum Bad:
+    Oops
+
+struct Feed@(T):
+    T[] items
+    i32 at
+
+extend Feed@(T) first() Result@(T, Bad):
+    match self.items.get(0):
+        Maybe.Some(v) -> return Result.Ok(v.clone())
+        Maybe.None -> return Result.Err(Bad.Oops)
+
+extend Feed@(T) all() List@(T):
+    let List@(T) out = List.new()
+    foreach(v in self.items.iter()):
+        out.push(v.clone())
+    return out
+
+extend Feed@(T) never_called() Maybe@(Result@(T, Bad)):
+    return Maybe.None
+
+fn feed_of@(T)(nom T[] items) Feed@(T):
+    return Feed(items, 0)
+
+fn report@(T)(nom T[] items, nom T[] empty) i32:
+    let Feed@(T) f = feed_of(nom items)
+    match f.first():
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("none")
+    println(f.all().len())
+    let Feed@(T) g = feed_of(nom empty)
+    match g.first():
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("none")
+    return 0
+
+fn main() i32:
+    let string[] empty = from([])
+    return report(nom from(["Arthur", "Ford"]), nom empty)

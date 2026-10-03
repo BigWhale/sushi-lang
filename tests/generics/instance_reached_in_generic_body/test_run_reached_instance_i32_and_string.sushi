@@ -1,0 +1,40 @@
+# One generic chain, two instantiations: `Feed@(i32)` and `Feed@(string)` are both
+# reached only through `count@(T)` and `feed_of@(T)`. Each instance gets its own
+# methods, the one that no call names included (#1146).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+
+enum Bad:
+    Oops
+
+struct Feed@(T):
+    T[] items
+    i32 at
+
+extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
+        Maybe.None -> return Maybe.None
+
+extend Feed@(T) rest() Maybe@(List@(T)):
+    let List@(T) out = List.new()
+    foreach(v in self.items.iter()):
+        out.push(v.clone())
+    return Maybe.Some(out)
+
+fn feed_of@(T)(nom T[] items) Feed@(T):
+    return Feed(items, 0)
+
+fn count@(T)(nom T[] items) i32:
+    let i32 n = 0
+    foreach(_ in feed_of(nom items)):
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(count(nom from([1, 2, 3])))
+    println(count(nom from(["a", "b"])))
+    return 0
