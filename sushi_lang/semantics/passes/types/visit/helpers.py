@@ -47,7 +47,7 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
     """
     from sushi_lang.semantics.param_modes import declared_modes
     from sushi_lang.semantics.passes.types.utils import resolve_declared_type
-    from sushi_lang.semantics.typesys import FunctionType
+    from sushi_lang.semantics.typesys import BuiltinType, FunctionType
     expected = getattr(lam, "expected_type", None)
     cached = getattr(lam, "resolved_type", None)
     if stamp and cached is not None and not _channel_arrived_later(lam, cached, expected):
@@ -62,7 +62,7 @@ def infer_lambda_type(type_validator, lam: Lambda, *, stamp: bool = True):
             pty = expected.param_types[idx]
             if stamp:
                 p.ty = pty  # persist the inferred type for the lift pass / backend
-        else:
+        elif pty is not None and not isinstance(pty, BuiltinType):
             pty = resolve_declared_type(type_validator, pty)
         param_types.append(pty)
         if pty is not None:
