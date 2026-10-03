@@ -1,0 +1,26 @@
+# A spelled `Result@((A, B), E)` return carries an owning tuple, and a `??` hands it on.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "arthur 1\n("ford", 2)\nempty\n"
+
+fn lookup(i32 id) Result@((string, i32), StdError):
+    if (id == 0):
+        return Result.Err(StdError.Error)
+    if (id == 1):
+        return Result.Ok(("arthur", 1))
+    return Result.Ok(("ford", id))
+
+fn relay(i32 id) (string, i32) | StdError:
+    let (string, i32) found = lookup(id)??
+    return Result.Ok(found)
+
+fn main() i32:
+    let (string name, i32 n) = lookup(1).realise(("", 0))
+    println("{name} {n}")
+    match relay(2):
+        Result.Ok(p) -> println("{p}")
+        Result.Err(_) -> println("empty")
+    match relay(0):
+        Result.Ok(p) -> println("{p}")
+        Result.Err(_) -> println("empty")
+    return 0

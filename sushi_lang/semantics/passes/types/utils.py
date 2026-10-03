@@ -7,6 +7,7 @@ from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.tuples import TUPLE_BASE
 from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType, ForeignPtrType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
@@ -51,7 +52,8 @@ def names_no_type(validator: 'TypeValidator', type_obj: Optional[Type]) -> bool:
             if held.name not in structs and held.name not in enums:
                 return True
         elif isinstance(held, GenericTypeRef):
-            if (held.base_name not in validator.generic_enum_table.by_name
+            if (held.base_name != TUPLE_BASE
+                    and held.base_name not in validator.generic_enum_table.by_name
                     and held.base_name not in validator.generic_struct_table.by_name):
                 return True
     return False
@@ -133,7 +135,8 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             er.emit(validator.reporter, er.ERR.CE2419, span, ty=display_type(offender))
             return
 
-        if type_obj.base_name == "Result" and len(type_obj.type_args) == 2:
+        if (type_obj.base_name == TUPLE_BASE
+                or (type_obj.base_name == "Result" and len(type_obj.type_args) == 2)):
             for type_arg in type_obj.type_args:
                 _check_type_names(validator, type_arg, span)
             return
@@ -239,7 +242,7 @@ def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
     if isinstance(type_obj, GenericTypeRef):
         name = type_obj.base_name
         tables = generics
-        declared = name == "Result"
+        declared = name in ("Result", TUPLE_BASE)
     elif isinstance(type_obj, UnknownType):
         name = type_obj.name
         tables = (validator.struct_table.by_name, validator.enum_table.by_name, *generics)
@@ -329,7 +332,7 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
 
 def intern_declared_wrapper(validator: 'TypeValidator',
                             ty: Optional[Type]) -> Optional[Type]:
-    """The interned `Result@(T, E)` or `Maybe@(T)` a WRITTEN type names, else None (#755).
+    """The interned `Result@(T, E)`, `Maybe@(T)` or tuple a WRITTEN type names, else None.
 
     `resolve_declared_type` reads the table. A written wrapper is the one spelling that
     may name an entry nobody has built yet, because nothing instantiates a `Result@(T, E)`
@@ -338,7 +341,8 @@ def intern_declared_wrapper(validator: 'TypeValidator',
     payloads recursively, so nothing is resolved before the call.
 
     None means "not a written wrapper". That is what lets a caller fall through to the
-    lookup instead of reading the answer to tell a miss from a hit.
+    lookup instead of reading the answer to tell a miss from a hit (#755). A tuple goes to
+    its own interner, each element interned first (docs/design/tuples.md).
     """
     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
@@ -346,6 +350,20 @@ def intern_declared_wrapper(validator: 'TypeValidator',
 
     if not isinstance(ty, GenericTypeRef):
         return None
+
+    from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
+    from sushi_lang.semantics.type_walk import map_named_types
+
+    def written(held: Type) -> Type:
+        interned = intern_declared_wrapper(validator, held)
+        return interned if interned is not None else held
+
+    if ty.base_name == TUPLE_BASE:
+        elements: List[Type] = []
+        for arg in ty.type_args:
+            mapped = map_named_types(arg, written)
+            elements.append(arg if mapped is None else mapped)
+        return intern_tuple(validator.struct_table, validator.enum_table, elements)
 
     structs = validator.struct_table.by_name
     if ty.base_name == "Result" and len(ty.type_args) == 2:

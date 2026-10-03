@@ -1,0 +1,12 @@
+# A write of an owning element destroys the old element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "new 3\n"
+
+fn main() i32:
+    let string seed = "old"
+    let (string, i32[]) t = ("{seed}!", from([1]))
+    t.0 := "new"
+    t.1 := from([1, 2, 3])
+    println("{t.0} {t.1.len()}")
+    return 0

@@ -1,0 +1,28 @@
+# The three binding modes of a tuple pattern: bare borrows, `poke` writes through, and
+# `nom` takes, out of a temporary or out of `match nom t:`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "zaphod 2\n42\nate zaphod!\nate zaphod\nate zaphod deep\n"
+
+fn make(string s) (string, i32):
+    return ("{s}!", 1)
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn main() i32:
+    let string base = "zaphod"
+    let (string, i32) t = ("{base}", 2)
+    match t:
+        (s, n) -> println("{s} {n}")
+    match t:
+        (_, poke n) -> n := n + 40
+    println(t.1)
+    match make(base):
+        (nom s, _) -> eat(nom s)
+    match nom t:
+        (nom s, _) -> eat(nom s)
+    let ((string, i32), i32) deep = (("{base} deep", 1), 2)
+    match nom deep:
+        ((nom s, _), _) -> eat(nom s)
+    return 0

@@ -377,6 +377,9 @@ def _expr_types(expr) -> Iterator[TypeMention]:
             yield from _expr_types(expr.value)
         case a.Lambda():
             yield from _lambda_types(expr)
+        case a.TupleLiteral():
+            for element in expr.elements:
+                yield from _expr_types(element)
 
 
 def _stmt_types(stmt) -> Iterator[TypeMention]:
@@ -391,6 +394,8 @@ def _stmt_types(stmt) -> Iterator[TypeMention]:
             return
         case a.Let():
             yield stmt.ty, stmt.type_span or stmt.loc
+            for binder in a.destructure_binders(stmt.targets):
+                yield binder.ty, binder.type_span or binder.loc
             yield from _expr_types(stmt.value)
         case a.Rebind():
             yield from _expr_types(stmt.target)

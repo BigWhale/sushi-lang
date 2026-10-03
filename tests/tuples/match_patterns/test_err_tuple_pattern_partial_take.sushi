@@ -1,0 +1,11 @@
+# An arm that takes one owning element of a tuple scrutinee must take them all.
+# EXPECT_ERROR_CODES_EXACT: CE2433
+
+fn make() (string, string):
+    let string base = "a"
+    return ("{base}b", "{base}c")
+
+fn main() i32:
+    match make():
+        (nom s, t) -> println("{s} {t}")
+    return 0

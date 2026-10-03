@@ -1,0 +1,9 @@
+# Two tuples of different element types are a mixed comparison, as two structs are.
+# EXPECT_ERROR_CODES_EXACT: CE2513
+
+fn main() i32:
+    let (i32, string) a = (1, "b")
+    let (string, i32) b = ("b", 1)
+    if (a == b):
+        return 1
+    return 0

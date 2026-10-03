@@ -1,0 +1,11 @@
+# An integer match with no `_` is CE2074, and only CE2074.
+# EXPECT_ERROR_CODES_EXACT: CE2074
+
+fn f(i32 n) i32:
+    match n:
+        0 -> return 0
+        1 -> return 1
+    return 2
+
+fn main() i32:
+    return f(0)

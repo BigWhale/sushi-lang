@@ -1,0 +1,23 @@
+# A tuple behind a `peek` and a `poke` parameter: a destructure of a `peek` tuple borrows,
+# a `poke` tuple takes an element write, and a literal reads an element in place.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "5\n("changed", 2)\n2\n"
+use <collections/strings>
+
+fn peeked(peek (string, string) p) i32:
+    let (a, b) = p
+    return a.len() + b.len()
+
+fn poked(poke (string, i32) p) ~:
+    p.1 := p.1 + 1
+    p.0 := "changed"
+
+fn main() i32:
+    let (string, string) w = ("ab", "cde")
+    println(peeked(peek w))
+    let (string, i32) z = ("m", 1)
+    poked(poke z)
+    println("{z}")
+    println((1, 2).1)
+    return 0

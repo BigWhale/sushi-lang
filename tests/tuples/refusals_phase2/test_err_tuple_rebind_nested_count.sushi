@@ -1,0 +1,9 @@
+# A nested rebind target follows the count rule of the nested tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2120
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    let i32 c = 3
+    ((a, b), c) := ((1, 2, 3), 4)
+    return a + b + c

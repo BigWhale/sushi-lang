@@ -10,7 +10,7 @@ from sushi_lang.semantics.ast import (
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess,
     UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor,
     DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread,
-    Expand, Lambda
+    Expand, Lambda, TupleLiteral
 )
 
 T = TypeVar('T')
@@ -22,7 +22,7 @@ WALKED_IN_PARENT = frozenset({
     "ArrayElement",      # `visit_arrayliteral` reads .value and .count
     "MatchArm",          # `visit_match` hands the arm's BODY over; the pattern binds names
     "Pattern", "LiteralPattern", "WildcardPattern",
-    "OwnPattern", "RefBinding", "NomBinding",
+    "OwnPattern", "RefBinding", "NomBinding", "TuplePattern",
 })
 
 class NodeVisitor(ABC, Generic[T]):
@@ -164,6 +164,11 @@ class RecursiveVisitor(NodeVisitor[None]):
             self.visit(element.value)
             if element.count is not None:
                 self.visit(element.count)
+
+    def visit_tupleliteral(self, node: TupleLiteral) -> None:
+        """Visit a tuple literal. Default: visit every element."""
+        for element in node.elements:
+            self.visit(element)
 
     def visit_indexaccess(self, node: IndexAccess) -> None:
         """Visit an index access. Default: visit array and index."""

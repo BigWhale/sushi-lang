@@ -1,0 +1,7 @@
+# One name twice in the target of a destructuring rebind is refused.
+# EXPECT_ERROR_CODES_EXACT: CE6109
+
+fn main() i32:
+    let i32 a = 1
+    (a, a) := (2, 3)
+    return a

@@ -109,6 +109,7 @@ def _every_expression() -> dict[str, object]:
         "RangeExpr": a.RangeExpr(None, a.IntLit(None, 0), a.IntLit(None, 9), False),
         "Spread": a.Spread(None, a.Name(None, "args")),
         "Lambda": a.Lambda(None, [a.Param("p", None)], _block()),
+        "TupleLiteral": a.TupleLiteral(None, [a.IntLit(None, 1), a.Name(None, "x")]),
     }
 
 

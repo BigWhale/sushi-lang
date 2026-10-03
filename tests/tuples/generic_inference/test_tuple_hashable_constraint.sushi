@@ -1,0 +1,14 @@
+# A perk constraint on a tuple argument reads the derived contract of the tuple.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+fn same_hash@(K: Hashable)(K a, K b) bool:
+    return a.hash() == b.hash()
+
+fn same@(T: Eq)(T a, T b) bool:
+    return a == b
+
+fn main() i32:
+    println(same_hash((1, "a"), (1, "a")))
+    println(same(((1, 2), 3), ((1, 2), 3)))
+    return 0

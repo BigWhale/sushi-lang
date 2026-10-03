@@ -30,6 +30,7 @@ from sushi_lang.semantics.ast import (
     Spread,
     StringLit,
     TryExpr,
+    TupleLiteral,
     UnaryOp,
 )
 from sushi_lang.semantics import array_runs
@@ -99,6 +100,9 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
             check_expr(checker, expr.value)
         case EnumConstructor():
             _check_sink_elements(checker, expr.args)
+        case TupleLiteral():
+            # A tuple literal is a construction by position: each element is consumed.
+            _check_sink_elements(checker, expr.elements)
         case DynamicArrayFrom():
             _check_run_elements(checker, expr.elements.elements)
             _check_sink_elements(checker, array_runs.values(expr.elements.elements))

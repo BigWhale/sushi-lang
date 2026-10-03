@@ -1,0 +1,9 @@
+# A reference binding inside a pattern nested in an enum payload stays refused.
+# EXPECT_ERROR_CODES_EXACT: CE2424
+
+fn main() i32:
+    let Maybe@((i32, i32)) m = Maybe.Some((1, 2))
+    match m:
+        Maybe.Some((poke a, _)) -> a := 3
+        Maybe.None -> println(0)
+    return 0

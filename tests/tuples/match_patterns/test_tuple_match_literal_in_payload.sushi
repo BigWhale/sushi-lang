@@ -1,0 +1,29 @@
+# An integer literal is legal inside an enum payload pattern (decision D3).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "zero\nminus one\nhex 16\nsome 5\nnone\nescape\nkey 1 65\n"
+
+enum Event:
+    Key(i32, i32)
+
+fn f(Maybe@(i32) m) ~:
+    match m:
+        Maybe.Some(0) -> println("zero")
+        Maybe.Some(-1) -> println("minus one")
+        Maybe.Some(0x10) -> println("hex 16")
+        Maybe.Some(n) -> println("some {n}")
+        Maybe.None -> println("none")
+
+fn key(Event e) ~:
+    match e:
+        Event.Key(_, 27) -> println("escape")
+        Event.Key(m, c) -> println("key {m} {c}")
+
+fn main() i32:
+    f(Maybe.Some(0))
+    f(Maybe.Some(-1))
+    f(Maybe.Some(16))
+    f(Maybe.Some(5))
+    f(Maybe.None)
+    key(Event.Key(0, 27))
+    key(Event.Key(1, 65))
+    return 0

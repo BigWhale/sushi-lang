@@ -171,14 +171,59 @@ fn is_nil(MsgValue v) bool:
             return false
 
 ##:
-Changes an interned type name to the `@(...)` spelling that a user reads.
+Finds the last position of `mark` in `text`.
 
-The four rules are in `docs/design/slib-info.md` section 5.
+- Parameter text: The text to search.
+- Parameter mark: The text to find.
+- Returns: The position, or -1 when `text` holds no `mark`.
+:##
+fn last_index_of(string text, string mark) i32:
+    let i32 found = -1
+    let i32 cursor = 0
+    while (cursor < text.len()):
+        match text.s(cursor, text.len()).find(mark):
+            Maybe.Some(at) ->
+                found := cursor + at
+                cursor := cursor + at + 1
+            Maybe.None() ->
+                return found
+    return found
+
+##:
+Changes each tuple in an interned type name to its `(A, B)` spelling, the innermost first.
 
 - Parameter name: The interned name.
+- Returns: The name with each `$Tuple<...>` written as `(...)`.
+:##
+fn tuples_to_surface(string name) string:
+    let string out = name.clone()
+    let i32 start = last_index_of(out, "$Tuple<")
+    while (start >= 0):
+        let i32 i = start + 7
+        let i32 depth = 1
+        while (depth > 0 and i < out.len()):
+            let string c = out.char_at(i)
+            if (c == "<"):
+                depth := depth + 1
+            elif (c == ">" and out.char_at(i - 1) != "-"):
+                depth := depth - 1
+            i := i + 1
+        if (depth != 0):
+            return out
+        out := "{out.s(0, start)}({out.s(start + 7, i - 1)}){out.s(i, out.len())}"
+        start := last_index_of(out, "$Tuple<")
+    return out
+
+##:
+Changes an interned type name to the `@(...)` spelling that a user reads.
+
+The five rules are in `docs/design/slib-info.md` section 5.
+
+- Parameter interned: The interned name.
 - Returns: The name in the surface spelling.
 :##
-fn to_surface(string name) string:
+fn to_surface(string interned) string:
+    let string name = tuples_to_surface(interned)
     if (not name.contains("<")):
         return name.clone()
     if (name.contains("->")):

@@ -1,0 +1,19 @@
+# A tuple pattern nested in another tuple pattern.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "zero pair red\npair 1 2 green\nany 9\n"
+
+enum Color:
+    Red
+    Green
+
+fn show(((i32, i32), Color) v) ~:
+    match v:
+        ((0, 0), Color.Red) -> println("zero pair red")
+        ((a, b), Color.Green) -> println("pair {a} {b} green")
+        ((a, _), _) -> println("any {a}")
+
+fn main() i32:
+    show(((0, 0), Color.Red))
+    show(((1, 2), Color.Green))
+    show(((9, 9), Color.Red))
+    return 0

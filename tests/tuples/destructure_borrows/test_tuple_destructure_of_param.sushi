@@ -1,0 +1,16 @@
+# A destructure of a borrowed parameter: each binder borrows, and the caller keeps the tuple.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "zaphod beeblebrox 6\nzaphod\n"
+use <collections/strings>
+
+fn show((string, string) p) i32:
+    let (first, string last) = p
+    println("{first} {last} {first.len()}")
+    return last.len()
+
+fn main() i32:
+    let (string, string) t = ("zaphod", "beeblebrox")
+    let i32 n = show(t)
+    println(t.0)
+    return n - 10

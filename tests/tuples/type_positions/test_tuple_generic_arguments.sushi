@@ -1,0 +1,28 @@
+# A tuple is a type argument of List, HashMap and Maybe.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 ford 7\norigin\nmarvin android\n"
+use <collections/hashmap>
+use <collections/strings>
+
+fn first_word(string s) Maybe@((string, string)):
+    if (s.len() == 0):
+        return Maybe.None
+    return Maybe.Some((s.clone(), "android"))
+
+fn main() i32:
+    let List@((string, i32)) people = List.new()
+    people.push(("arthur", 1))
+    people.push(("ford", 7))
+    let (string, i32) second = people.get(1).realise(("", 0))
+    println("{people.len()} {second.0} {second.1}")
+
+    let HashMap@((i32, i32), string) grid = HashMap.new()
+    grid.insert((0, 0), "origin")
+    grid.insert((1, 2), "elsewhere")
+    println(grid.get((0, 0)).realise("missing"))
+
+    let (string, string) found = first_word("marvin").realise(("", ""))
+    println("{found.0} {found.1}")
+    grid.free()
+    return 0

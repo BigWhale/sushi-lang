@@ -528,17 +528,22 @@ class PerkCollector:
 
     def _reject_function_target(self, impl: ExtendWithDef,
                                 target_type: Optional[Type]) -> bool:
-        """CE2110: a function type is not a perk-implementation target (#864).
+        """CE2110: a function type or a tuple type is not a perk-implementation target.
 
-        The extension path's rule (#771). The caller drops the implementation from both
+        The extension path's rule (#771, #864, and ruling 5 of tuples). The caller drops the implementation from both
         lists, and its methods are recorded, so the one diagnostic is this.
         """
-        if not isinstance(target_type, FunctionType):
+        from sushi_lang.semantics.generics.tuples import is_tuple_type
+        if isinstance(target_type, FunctionType):
+            kind = "function type"
+        elif is_tuple_type(target_type):
+            kind = "tuple type"
+        else:
             return False
         from sushi_lang.semantics.generics.type_display import display_type
         target = display_type(target_type)
         er.emit(self.r, ERR.CE2110, impl.target_type_span or impl.perk_name_span,
-                target=target)
+                kind=kind, target=target)
         self._refuse_methods(target, impl)
         return True
 

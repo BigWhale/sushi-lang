@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
+    NomBinding, PatternItem, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
@@ -45,13 +46,16 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     """Parse match_arm: (pattern | wildcard_pattern) "->" (expr _NEWLINE | block)"""
     t = expect(t, "match_arm")
 
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern]
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]
     pattern_tree = first_tree(t.children, "pattern")
     literal_tree = (first_tree(t.children, "literal_pattern")
                     or first_tree(t.children, "neg_literal_pattern"))
     wildcard_tree = first_tree(t.children, "wildcard_pattern")
+    tuple_tree = first_tree(t.children, "tuple_pattern")
 
-    if pattern_tree is not None:
+    if tuple_tree is not None:
+        pattern = parse_tuple_pattern(tuple_tree, ast_builder, nested=False)
+    elif pattern_tree is not None:
         pattern = parse_pattern(pattern_tree, ast_builder)
     elif literal_tree is not None:
         pattern = parse_literal_pattern(literal_tree, ast_builder)
@@ -74,8 +78,8 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
                     # them and the grammar stays the only list. A bare expression is
                     # the one alternative that is not a statement.
                     if inline_child.data.endswith("_stmt"):
-                        stmt = ast_builder.stmt_parser.parse_stmt(inline_child)
-                        body = Block(statements=[stmt], loc=span_of(child))
+                        body = Block(statements=ast_builder.stmt_parser.parse_stmts(inline_child),
+                                     loc=span_of(child))
                     elif inline_child.data in EXPR_NODES:
                         body = ast_builder._expr(inline_child)
                     else:
@@ -115,14 +119,18 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
     return LiteralPattern(value=value, display=display, radix=radix, loc=span_of(t))
 
 
-def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder') -> Union[str, Pattern, 'OwnPattern']:
-    """Read one `pattern_item`: a nested pattern, a wildcard, an `Own(...)` or a NAME.
+def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder',
+                       tuple_nested: bool = True) -> PatternItem:
+    """Read one `pattern_item`: a nested pattern, a wildcard, an `Own(...)`, a tuple
+    pattern, an integer literal or a NAME.
 
     A binding MODE is not read here: `peek`/`poke` and `nom` rename the whole node
-    (`ref_binding`, `nom_binding`), so each caller reads a marked binding beside this
-    one. A fifth shape is grammar/builder drift and is an ICE with a location -- a
-    binding dropped without a word makes `Pattern.bindings` shorter than the payload,
-    and the arity check downstream then blames the count of the payload.
+    (`ref_binding`, `nom_binding`), and `_read_list_item` reads a marked binding beside
+    this one. `tuple_nested` is the CE2424 rule for a nested tuple pattern: a tuple in a
+    tuple keeps the rule of its parent, and a tuple anywhere else is nested. Another shape
+    is grammar/builder drift and is an ICE with a location -- a binding dropped without a
+    word makes `Pattern.bindings` shorter than the payload, and the arity check downstream
+    then blames the count of the payload.
     """
     inner_pattern = first_tree(node.children, "pattern")
     if inner_pattern is not None:
@@ -135,10 +143,66 @@ def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder') -> Union[str, Patt
     if inner_own is not None:
         return parse_own_pattern(inner_own, ast_builder)
 
+    inner_tuple = first_tree(node.children, "tuple_pattern")
+    if inner_tuple is not None:
+        return parse_tuple_pattern(inner_tuple, ast_builder, nested=tuple_nested)
+
+    literal = (first_tree(node.children, "literal_pattern")
+               or first_tree(node.children, "neg_literal_pattern"))
+    if literal is not None:
+        return parse_literal_pattern(literal, ast_builder)
+
     token = next((c for c in node.children if isinstance(c, Token)), None)
     if token is None or token.type != "NAME":
         ice(node, "invalid pattern item")
     return str(token.value)
+
+
+def _read_list_item(child: Tree, owner: Tree, ast_builder: 'ASTBuilder', nested: bool,
+                    tuple_nested: bool) -> PatternItem:
+    """Read one item of a payload list or of a tuple pattern, a marked binding included.
+
+    A reference binding (`poke x`) points into the scrutinee. It is legal at the top of an
+    arm: a payload of the arm's enum pattern, or an element of the arm's tuple pattern at
+    any tuple depth (#300 phase 3). In a NESTED position (`nested`) it stays CE2424:
+    nested extraction walks through temporary copies, so a pointer into one writes to
+    storage nobody reads.
+    """
+    if child.data == "ref_binding":
+        mode_tok = next((c for c in child.children
+                         if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
+        name_tok = next((c for c in child.children
+                         if isinstance(c, Token) and c.type == "NAME"), None)
+        if mode_tok is None or name_tok is None:
+            ice(owner, "malformed ref_binding in pattern")
+        if nested:
+            return ast_builder.recover(
+                SyntaxDiagnostic("CE2424", span=span_of(child))
+                .help("bind the payload by value in the nested pattern, or "
+                      "restructure to match the inner enum at the top level"),
+                str(name_tok.value))
+        return RefBinding(name=str(name_tok.value), mode=str(mode_tok.value),
+                          loc=span_of(child))
+    if child.data == "nom_binding":
+        # `Variant(nom x)` (ruling R11): the arm TAKES this payload. Legal nested as well
+        # as at the top level -- nothing here points into the scrutinee, so the
+        # temporary-copy hazard that fences `poke` (CE2424) does not apply.
+        name_tok = next((c for c in child.children
+                         if isinstance(c, Token) and c.type == "NAME"), None)
+        if name_tok is None:
+            ice(owner, "malformed nom_binding in pattern")
+        return NomBinding(name=str(name_tok.value), loc=span_of(child))
+    if child.data == "pattern_item":
+        return _read_pattern_item(child, ast_builder, tuple_nested=tuple_nested)
+    ice(child, "invalid pattern list child")
+
+
+def parse_tuple_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool) -> TuplePattern:
+    """Parse tuple_pattern: "(" pattern_item "," pattern_item ("," pattern_item)* ")"."""
+    t = expect(t, "tuple_pattern")
+    elements = [_read_list_item(child, t, ast_builder, nested=nested, tuple_nested=nested)
+                for child in t.children if isinstance(child, Tree)]
+    return TuplePattern(elements=elements, loc=span_of(t))
 
 
 def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> Pattern:
@@ -155,58 +219,17 @@ def parse_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool = False) -> P
     enum_name_tok = names[-2]
     variant_name_tok = names[-1]
 
-    bindings: List[Union[str, Pattern]] = []
+    bindings: List[PatternItem] = []
     pattern_list_tree = first_tree(t.children, "pattern_list")
     if pattern_list_tree is not None:
         # `pattern_list: pattern_item ("," pattern_item)*` and `pattern_item` carries no
         # `?`, so every child is a Tree -- a `pattern_item`, or one of the two aliases
-        # the marked forms rename it to. A fourth shape is grammar/builder drift and is
-        # an ICE with a location: a binding dropped without a word makes
-        # `Pattern.bindings` shorter than the payload, and the arity check downstream
-        # then blames the count of the payload (#635 closed the twin of this).
+        # the marked forms rename it to (#635 closed the drift that dropped one).
         for child in pattern_list_tree.children:
-            if isinstance(child, Tree):
-                # A reference binding (`Variant(poke x)`): legal in a TOP-LEVEL pattern
-                # (#300 phase 3, on the aligned enum payload layout). In a NESTED pattern
-                # it stays CE2424: nested extraction walks through temporary copies, so a
-                # pointer into one writes to storage nobody reads.
-                if child.data == "ref_binding":
-                    mode_tok = next((c for c in child.children
-                                     if isinstance(c, Token) and c.type == "BORROW_MODE"), None)
-                    name_tok = next((c for c in child.children
-                                     if isinstance(c, Token) and c.type == "NAME"), None)
-                    if mode_tok is None or name_tok is None:
-                        ice(t, "malformed ref_binding in pattern")
-                    if nested:
-                        bindings.append(ast_builder.recover(
-                            SyntaxDiagnostic("CE2424", span=span_of(child))
-                            .help("bind the payload by value in the nested pattern, or "
-                                  "restructure to match the inner enum at the top "
-                                  "level"),
-                            str(name_tok.value)))
-                        continue
-                    from sushi_lang.semantics.ast import RefBinding
-                    bindings.append(RefBinding(
-                        name=str(name_tok.value), mode=str(mode_tok.value),
-                        loc=span_of(child)))
-                    continue
-                if child.data == "nom_binding":
-                    # `Variant(nom x)` (ruling R11): the arm TAKES this payload. Legal
-                    # nested as well as at the top level -- nothing here points into the
-                    # scrutinee, so the temporary-copy hazard that fences `poke` (CE2424)
-                    # does not apply.
-                    name_tok = next((c for c in child.children
-                                     if isinstance(c, Token) and c.type == "NAME"), None)
-                    if name_tok is None:
-                        ice(t, "malformed nom_binding in pattern")
-                    from sushi_lang.semantics.ast import NomBinding
-                    bindings.append(NomBinding(name=str(name_tok.value),
-                                               loc=span_of(child)))
-                    continue
-                if child.data == "pattern_item":
-                    bindings.append(_read_pattern_item(child, ast_builder))
-                    continue
-            ice(child, "invalid pattern_list child")
+            if not isinstance(child, Tree):
+                ice(child, "invalid pattern_list child")
+            bindings.append(_read_list_item(child, t, ast_builder, nested=nested,
+                                            tuple_nested=True))
 
     return Pattern(
         enum_name=str(enum_name_tok.value),
@@ -264,7 +287,7 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
         ice(t, "own_pattern must contain a pattern_item")
 
     inner = _read_pattern_item(pattern_item_tree, ast_builder)
-    if isinstance(inner, Pattern):
+    if isinstance(inner, (Pattern, TuplePattern)):
         _refuse_takes_inside_own(inner, ast_builder)
     return OwnPattern(inner_pattern=inner, loc=span_of(t))
 
@@ -277,17 +300,16 @@ def _take_from_own(span) -> SyntaxDiagnostic:
                   "the payload that holds it"))
 
 
-def _refuse_takes_inside_own(pattern: 'Pattern', ast_builder: 'ASTBuilder') -> None:
+def _refuse_takes_inside_own(pattern: 'Pattern | TuplePattern',
+                             ast_builder: 'ASTBuilder') -> None:
     """Refuse each `nom` binding nested in an `Own(...)` pattern, and bind it by value.
 
     A nested `Own(...)` refused its own inner pattern when it was built, so the walk
     stops there.
     """
-    from sushi_lang.semantics.ast import NomBinding
-
-    for index, binding in enumerate(pattern.bindings):
+    items = pattern.bindings if isinstance(pattern, Pattern) else pattern.elements
+    for index, binding in enumerate(items):
         if isinstance(binding, NomBinding):
-            pattern.bindings[index] = ast_builder.recover(
-                _take_from_own(binding.loc), binding.name)
-        elif isinstance(binding, Pattern):
+            items[index] = ast_builder.recover(_take_from_own(binding.loc), binding.name)
+        elif isinstance(binding, (Pattern, TuplePattern)):
             _refuse_takes_inside_own(binding, ast_builder)

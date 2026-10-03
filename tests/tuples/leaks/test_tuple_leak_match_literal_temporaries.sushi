@@ -1,0 +1,23 @@
+# An element of a tuple literal scrutinee that is a temporary is owned by the match:
+# taken with `nom`, or destroyed at the end.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate t!\nkept u! 2\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn word(string s) string:
+    return "{s}!"
+
+fn main() i32:
+    let i32 n = 2
+    match (word("t"), n):
+        (nom s, 2) -> eat(nom s)
+        (_, _) -> println("no")
+    match (word("u"), n):
+        (s, m) -> println("kept {s} {m}")
+    return 0

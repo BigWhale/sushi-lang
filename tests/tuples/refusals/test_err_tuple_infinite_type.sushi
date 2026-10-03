@@ -1,0 +1,8 @@
+# A tuple is stored inline, so a struct that holds itself through a tuple has no finite size.
+# EXPECT_ERROR_CODES_EXACT: CE2095
+
+struct Node:
+    (i32, Node) next
+
+fn main() i32:
+    return 0

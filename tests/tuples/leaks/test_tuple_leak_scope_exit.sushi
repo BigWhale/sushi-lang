@@ -1,0 +1,19 @@
+# At scope exit, the elements of a tuple are destroyed in the order of the fields of a struct:
+# first to last.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "inner two\ndrop one\ndrop two\nend\n"
+
+struct Noisy:
+    string name
+
+extend Noisy with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+fn main() i32:
+    if (true):
+        let (Noisy, Noisy) pair = (Noisy("one"), Noisy("two"))
+        println("inner {pair.1.name}")
+    println("end")
+    return 0

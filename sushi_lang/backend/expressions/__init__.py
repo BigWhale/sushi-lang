@@ -49,7 +49,7 @@ class ExpressionEmitter:
             IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString,
             ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Name, Call, MethodCall,
             MemberAccess, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow,
-            EnumConstructor, DotCall, TryExpr, Lambda
+            EnumConstructor, DotCall, TryExpr, Lambda, TupleLiteral
         )
 
         match expr:
@@ -150,6 +150,10 @@ class ExpressionEmitter:
             case Lambda():
                 from sushi_lang.backend.runtime import closures
                 return closures.emit_lambda(self.codegen, expr, to_i1)
+
+            case TupleLiteral():
+                from sushi_lang.backend.expressions import structs
+                return structs.emit_tuple_literal(self.codegen, expr)
 
             case _:
                 raise NotImplementedError(f"Expression type not supported: {type(expr).__name__}")

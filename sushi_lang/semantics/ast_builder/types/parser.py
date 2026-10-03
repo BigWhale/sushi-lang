@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 from lark import Tree
 from sushi_lang.semantics.typesys import Type, type_from_rule_name
-from sushi_lang.semantics.ast_builder.types import user_defined, generics, arrays, references, functions
+from sushi_lang.semantics.ast_builder.types import (
+    user_defined, generics, arrays, references, functions, tuples)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -34,5 +35,7 @@ class TypeParser:
             return references.parse_reference_type(type_node, self.ast_builder)
         elif tag == "fn_type_t":
             return functions.parse_function_type(type_node, self.ast_builder)
+        elif tag == "tuple_t":
+            return tuples.parse_tuple_type(type_node, self.ast_builder)
         else:
             return type_from_rule_name(tag)

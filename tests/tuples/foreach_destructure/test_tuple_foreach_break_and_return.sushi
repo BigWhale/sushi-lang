@@ -1,0 +1,28 @@
+# The binders of an owned item are destroyed on every exit of the loop: the end of an
+# iteration, a `break` and a `return`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "item 4\nitem 3\nfound item 2\n"
+
+struct Items:
+    i32 n
+
+extend Items next(poke self) Maybe@((string, i32[])):
+    if (self.n == 0):
+        return Maybe.None()
+    self.n := self.n - 1
+    return Maybe.Some(("item {self.n}", from([self.n, self.n])))
+
+fn find(i32 wanted) i32:
+    foreach((label, values) in Items(5)):
+        if (values.len() == 2 and values.get(0).realise(0) == wanted):
+            println("found {label}")
+            return wanted
+    return -1
+
+fn main() i32:
+    foreach((label, values) in Items(5)):
+        if (values.get(0).realise(0) == 2):
+            break
+        println(label)
+    return find(2) - 2

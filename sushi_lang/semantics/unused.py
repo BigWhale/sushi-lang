@@ -13,7 +13,8 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter
-from sushi_lang.semantics.ast import FuncDef, Node, Param, Program, StringLit, UseStatement
+from sushi_lang.semantics.ast import (
+    DestructureTarget, FuncDef, Node, Param, Program, StringLit, UseStatement)
 from sushi_lang.semantics.ast_walk import (
     DESCENDED_FIELD_KINDS, declarations, field_kind, node_fields, signature_constraints,
     signature_types, walk_nodes)
@@ -121,6 +122,10 @@ def _read_value(value: object, names: Set[str]) -> None:
         names.add(value)
     elif isinstance(value, Param):
         names.update(spelled_names(value.ty))
+    elif isinstance(value, DestructureTarget):
+        names.update(spelled_names(value.ty))
+        for nested in value.nested or ():
+            _read_value(nested, names)
     else:
         names.update(spelled_names(value))
 

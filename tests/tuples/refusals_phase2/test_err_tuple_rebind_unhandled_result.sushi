@@ -1,0 +1,11 @@
+# The right side of a destructuring rebind is a tuple, and an unhandled Result is not one.
+# EXPECT_ERROR_CODES_EXACT: CE2505
+
+fn pair() (i32, i32) | StdError:
+    return Result.Ok((1, 2))
+
+fn main() i32:
+    let i32 a = 0
+    let i32 b = 0
+    (a, b) := pair()
+    return a + b

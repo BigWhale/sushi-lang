@@ -1,0 +1,28 @@
+# `match nom (a, b):` hands each element to the match. An arm takes each element on its own,
+# and an element that the arm does not take is destroyed at the end of the match.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate arthur\nate dent\nate ford\nkept\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn main() i32:
+    let string base = "arth"
+    let string a = "{base}ur"
+    let string b = "{base}"
+    b := "dent"
+    match nom (a, b):
+        (nom x, nom y) ->
+            eat(nom x)
+            eat(nom y)
+    let string c = "{base}"
+    c := "ford"
+    let string d = "{base}"
+    match nom (c, d):
+        (nom x, _) -> eat(nom x)
+    let string e = "{base}"
+    let string f = "{base}"
+    match nom (e, f):
+        (_, _) -> println("kept")
+    return 0

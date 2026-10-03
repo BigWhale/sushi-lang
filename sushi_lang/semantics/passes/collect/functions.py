@@ -48,6 +48,7 @@ from sushi_lang.semantics.generics.extension_targets import (
     reject_mixed_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.tuples import is_tuple_type
 
 
 def deep_type_params(ty: Optional[Type], names) -> Optional[Type]:
@@ -933,6 +934,14 @@ class FunctionCollector:
                 return              # filed as a template, or refused
             h.target_type = concrete_array
 
+        # A tuple type is not an extension target (ruling 5 of tuples): the rule of a
+        # function type, refused at the target, and its calls add nothing.
+        if is_tuple_type(h.target_type):
+            er.emit(self.r, ERR.CE2110, h.target_type_span or h.name_span,
+                    kind="tuple type", target=display_type(h.target_type))
+            self.generic_extensions.refuse(display_type(h.target_type), h.name)
+            return
+
         if isinstance(h.target_type, GenericTypeRef):
             self._collect_generic_extension(h, h.target_type)
         else:
@@ -1037,7 +1046,7 @@ class FunctionCollector:
         # and recorded so that a call of the method adds no CE2008.
         if isinstance(resolved_type, FunctionType):
             er.emit(self.r, ERR.CE2110, h.target_type_span or h.name_span,
-                    target=display_type(resolved_type))
+                    kind="function type", target=display_type(resolved_type))
             self.generic_extensions.refuse(display_type(resolved_type), h.name)
             return
 

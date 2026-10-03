@@ -6,13 +6,14 @@ from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ast import (
-    Expr, Name, Call, MemberAccess, MethodCall, DotCall, IndexAccess,
+    Expr, Name, Call, MemberAccess, MethodCall, DotCall, IndexAccess, TupleLiteral,
 )
 from sushi_lang.semantics.typesys import (
     UnknownType, StructType, ArrayType, DynamicArrayType, ReferenceType,
 )
 from sushi_lang.backend.expressions.names import resolve_name_semantic_type
 from sushi_lang.backend.ownership import ConsumingUse, consume
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -24,11 +25,24 @@ def emit_struct_constructor(codegen: 'LLVMCodegen', expr: Call, to_i1: bool = Fa
 
     struct_name = expr.callee.id
     struct_type = codegen.struct_table.by_name[struct_name]
+    return emit_struct_value(codegen, struct_type, expr.args)
 
+
+def emit_tuple_literal(codegen: 'LLVMCodegen', expr: TupleLiteral) -> ir.Value:
+    """Emit a tuple literal: a construction of its interned struct, element by position."""
+    tuple_type = expr.resolved_type
+    if not isinstance(tuple_type, StructType):
+        raise InternalCompilerError("CE0015", message="a tuple literal carries no type "
+                                                      "from the typecheck pass")
+    return emit_struct_value(codegen, tuple_type, expr.elements)
+
+
+def emit_struct_value(codegen: 'LLVMCodegen', struct_type: StructType, args) -> ir.Value:
+    """The value of `struct_type` built from `args`, one per field: each is consumed."""
     llvm_struct_type = codegen.types.get_struct_type(struct_type)
 
     field_values = []
-    for arg, (_field_name, field_type) in zip(expr.args, struct_type.fields, strict=True):
+    for arg, (_field_name, field_type) in zip(args, struct_type.fields, strict=True):
         if isinstance(field_type, DynamicArrayType):
             # A `from([...])` argument is emitted like any other expression: the typecheck
             # pass stamped the field's `T[]` on it, and the one emitter reads that stamp

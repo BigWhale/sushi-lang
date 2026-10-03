@@ -1,0 +1,17 @@
+# `t.N := v` writes an element, a nested element, and an owning element (the old value goes).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "43 Arthur\n43 Dent\n9 8\n"
+
+fn main() i32:
+    let (i32, string) t = (42, "Arthur")
+    t.0 := 43
+    println("{t.0} {t.1}")
+    let string surname = "Dent"
+    t.1 := surname.clone()
+    println("{t.0} {t.1}")
+    let ((i32, i32), i32) n = ((1, 2), 3)
+    n.0.0 := 9
+    n.0.1 := 8
+    println("{n.0.0} {n.0.1}")
+    return 0

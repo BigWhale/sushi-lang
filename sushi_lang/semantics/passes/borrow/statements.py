@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ast import (
     Assert,
+    destructure_binders,
     Block,
     Break,
     Continue,
@@ -25,6 +26,8 @@ from sushi_lang.semantics.ast import (
     Rebind,
     Return,
     Stmt,
+    TupleLiteral,
+    TuplePattern,
     While,
 )
 from sushi_lang.semantics.ownership import Provenance
@@ -41,9 +44,9 @@ from .bindings import (
     release_binding_borrow,
     walks_a_temporary,
 )
-from sushi_lang.semantics.generics.monomorphize.unroll import written_let
+from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from .borrows import clear_borrows
-from .diagnostics import emit_change_under_iterator
+from .diagnostics import emit_change_under_iterator, expr_to_string
 from .consume import (
     bind,
     binds_a_bare_literal_string,
@@ -161,7 +164,64 @@ def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
     # A `let` BINDS; it does not take ownership (#242). It inherits the source's
     # provenance, so a read through a live owner makes it a BORROW.
     bind(checker, stmt)
+    if stmt.targets is not None:
+        _split_destructure(checker, stmt)
     clear_borrows(checker)
+
+
+def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
+    """`let (a, b) = v`: each binder is what the hidden whole is (ruling 4 of tuples).
+
+    The hidden `Let` took the value by the rule of `let x = v`: it owns a temporary and an
+    owned local (which it spends), and it borrows a parameter, a field or a binding. Each
+    binder then OWNS its element when the whole is owned, and BORROWS it from the whole's
+    owner when the whole is a borrow, so a change of that owner is refused while a binder
+    lives.
+    """
+    whole = checker.borrow_state.get(stmt.name)
+    borrowed = whole is not None and whole.is_borrowed_binding
+    owner = whole.borrows_from if borrowed and whole is not None else None
+    owner_state = checker.borrow_state.get(owner) if owner is not None else None
+    shown = _element_spellings(stmt) if stmt.rebinds else {}
+    for binder in destructure_binders(stmt.targets):
+        state = BorrowState(name=binder.name, var_type=binder.element_type,
+                            declared_at_span=binder.loc,
+                            declared_branch_depth=checker.branch_depth)
+        if binder.name in shown:
+            state.written = WrittenLet(shown[binder.name])
+        checker.borrow_state[binder.name] = state
+        if not borrowed:
+            continue
+        state.is_borrowed_binding = True
+        state.is_let_borrow = True
+        state.bound_at_span = stmt.loc
+        if owner is not None and owner_state is not None:
+            state.borrows_from = owner
+            owner_state.binding_borrows.append((binder.name, stmt.loc))
+            checker._scope_binding_borrows[-1].append((owner, binder.name))
+
+
+def _element_spellings(stmt: Let) -> dict[str, str]:
+    """The hidden binders of `(a, b) := v`, each spelled as the element it takes (`v.0`).
+
+    A diagnostic then names `p.0`, which the user can read, and never the hidden binder.
+    The value has a spelling only when it is a place; a temporary needs none, because
+    each binder owns its element.
+    """
+    source = expr_to_string(stmt.value)
+    if "<expression>" in source:
+        return {}
+    shown: dict[str, str] = {}
+
+    def spell(targets, prefix: str) -> None:
+        for index, target in enumerate(targets):
+            if target.nested is not None:
+                spell(target.nested, f"{prefix}.{index}")
+            elif target.name is not None:
+                shown[target.name] = f"{prefix}.{index}"
+
+    spell(stmt.targets or [], source)
+    return shown
 
 
 def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
@@ -263,7 +323,7 @@ def _check_if(checker: 'BorrowChecker', stmt: If) -> None:
     restore_flow(checker, FlowFacts.join(paths))
 
 
-def _match_owns_its_scrutinee(checker: 'BorrowChecker', stmt: Match) -> bool:
+def _match_owns(checker: 'BorrowChecker', stmt: Match, scrutinee: Expr) -> bool:
     """May an arm TAKE a payload out of this scrutinee (ruling R11)?
 
     A TEMPORARY is owned by construction -- nothing else will ever free it, which is the
@@ -272,17 +332,47 @@ def _match_owns_its_scrutinee(checker: 'BorrowChecker', stmt: Match) -> bool:
     """
     if stmt.consumes_scrutinee:
         return True
-    return source_provenance(checker, stmt.scrutinee) is Provenance.FRESH
+    return source_provenance(checker, scrutinee) is Provenance.FRESH
+
+
+def match_scrutinees(stmt: Match) -> list[Expr]:
+    """The expressions a match reads: the scrutinee, or each element of a tuple literal.
+
+    A tuple-literal scrutinee builds no tuple (ruling 3 of the tuple design): each
+    element is matched in place, with the rules of a named scrutinee.
+    """
+    if isinstance(stmt.scrutinee, TupleLiteral):
+        return list(stmt.scrutinee.elements)
+    return [stmt.scrutinee]
+
+
+def _arm_positions(checker: 'BorrowChecker', stmt: Match,
+                   pattern: object) -> list[tuple[Expr, object, object]]:
+    """(scrutinee, its type, the pattern item that reads it) for one arm."""
+    if not isinstance(pattern, (Pattern, TuplePattern)):
+        return []
+    if not isinstance(stmt.scrutinee, TupleLiteral):
+        return [(stmt.scrutinee, stmt.resolved_scrutinee_type, pattern)]
+    if not isinstance(pattern, TuplePattern):
+        return []
+    types = checker.types.tuple_element_types(stmt.resolved_scrutinee_type)
+    return [(element, types[index] if index < len(types) else None, item)
+            for index, (element, item) in enumerate(
+                zip(stmt.scrutinee.elements, pattern.elements, strict=False))]
 
 
 def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
     """Match arms are EXCLUSIVE paths, so they take the same snapshot / restore / join."""
-    check_expr(checker, stmt.scrutinee)
-    owns = _match_owns_its_scrutinee(checker, stmt)
+    scrutinees = match_scrutinees(stmt)
+    for scrutinee in scrutinees:
+        check_expr(checker, scrutinee)
+    owns = {id(scrutinee): _match_owns(checker, stmt, scrutinee) for scrutinee in scrutinees}
     if stmt.consumes_scrutinee:
         # `match nom r:` consumes exactly as `f(nom r)` does: CE2411 when `r` is a
-        # borrow, and CE2405 at every later mention of it.
-        consume(checker, stmt.scrutinee)
+        # borrow, and CE2405 at every later mention of it. `match nom (a, b):` hands
+        # over each element.
+        for scrutinee in scrutinees:
+            consume(checker, scrutinee)
     clear_borrows(checker)
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []
@@ -292,13 +382,11 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
         # guards that). The scope closes BEFORE the path snapshot, so the join sees the
         # outer local's facts, never the binding's.
         with BindingScope(checker) as scope, _branch(checker):
-            if isinstance(arm.pattern, Pattern):
-                reject_partial_take(checker, arm.pattern,
-                                    stmt.resolved_scrutinee_type)
-                register_pattern_bindings(checker, scope, arm.pattern,
-                                          stmt.resolved_scrutinee_type,
-                                          scrutinee=stmt.scrutinee,
-                                          owns_scrutinee=owns)
+            for scrutinee, scrutinee_type, item in _arm_positions(checker, stmt, arm.pattern):
+                reject_partial_take(checker, item, scrutinee_type)
+                register_pattern_bindings(checker, scope, item, scrutinee_type,
+                                          scrutinee=scrutinee,
+                                          owns_scrutinee=owns[id(scrutinee)])
             if isinstance(arm.body, Block):
                 check_block(checker, arm.body)
             else:

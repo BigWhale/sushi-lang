@@ -1,0 +1,18 @@
+# An owning swap moves each value to its new name and destroys nothing.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "sb sa\n2 1\nsa sb\n"
+
+fn main() i32:
+    let string seed = "s"
+    let string a = "{seed}a"
+    let string b = "{seed}b"
+    (a, b) := (b, a)
+    println("{a} {b}")
+    let i32[] xs = from([1])
+    let i32[] ys = from([2, 3])
+    (xs, ys) := (ys, xs)
+    println("{xs.len()} {ys.len()}")
+    (a, b) := (b, a)
+    println("{a} {b}")
+    return 0

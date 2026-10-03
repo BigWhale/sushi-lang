@@ -1,0 +1,19 @@
+# A `_` element of an owned item is destroyed at the destructure, in every iteration.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "right 1\nright 0\n"
+
+struct Pairs:
+    i32 n
+
+extend Pairs next(poke self) Maybe@((string, string, i32[])):
+    if (self.n == 0):
+        return Maybe.None()
+    self.n := self.n - 1
+    return Maybe.Some(("left {self.n}", "right {self.n}", from([self.n])))
+
+fn main() i32:
+    let Pairs p = Pairs(2)
+    foreach((_, right, _) in p):
+        println(right)
+    return 0

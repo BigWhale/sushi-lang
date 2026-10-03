@@ -1,0 +1,16 @@
+# The arms above cover every payload of a variant, so a later arm of it is dead.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+enum Color:
+    Red
+    Green
+
+fn f(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(Color.Red) -> return 1
+        Maybe.Some(Color.Green) -> return 2
+        Maybe.Some(_) -> return 3
+        Maybe.None -> return 0
+
+fn main() i32:
+    return f(Maybe.None)

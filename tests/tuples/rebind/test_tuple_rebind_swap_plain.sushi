@@ -1,0 +1,13 @@
+# A destructuring rebind swaps plain values, and rotates three of them.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1\n3 2 1\n"
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := (b, a)
+    println("{a} {b}")
+    let i32 c = 3
+    (a, b, c) := (c, a, b)
+    println("{a} {b} {c}")
+    return 0

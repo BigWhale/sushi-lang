@@ -32,7 +32,10 @@ def composite_type_key(value_type: Type) -> str:
     return getattr(value_type, "name", type(value_type).__name__)
 
 
-_SYMBOL_CHAR_MAP = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": ""}
+# `$` starts a tuple's base name, `$Tuple`. A digit, because no written type name starts
+# with one, so a tuple's symbol is never a user type's (docs/design/tuples.md).
+_SYMBOL_CHAR_MAP = {"<": "_L", ">": "_G", ",": "_C", "[": "_A", "]": "_E", " ": "",
+                    "$": "0"}
 
 
 def lifecycle_symbol(prefix: str, value_type: Type) -> str:

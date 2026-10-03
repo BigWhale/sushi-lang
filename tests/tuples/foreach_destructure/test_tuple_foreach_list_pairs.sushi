@@ -1,0 +1,15 @@
+# A foreach destructure over the borrowed items of a List: each binder borrows its element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "arthur 42\nford 7\n2\n"
+
+fn main() i32:
+    let string seed = "ar"
+    let List@((string, i32)) people = List.new()
+    people.push(("{seed}thur", 42))
+    people.push(("ford", 7))
+    foreach((name, age) in people.iter()):
+        println("{name} {age}")
+    println(people.len())
+    people.free()
+    return 0

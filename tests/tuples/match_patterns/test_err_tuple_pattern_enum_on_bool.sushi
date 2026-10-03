@@ -1,0 +1,14 @@
+# An enum pattern inside a tuple pattern needs an enum element: a bool takes only a
+# binding or `_`.
+# EXPECT_ERROR_CODES_EXACT: CE2108
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let (bool, i32) t = (true, 2)
+    match t:
+        (Color.Red, n) -> println(n)
+        (_, _) -> println(1)
+    return 0

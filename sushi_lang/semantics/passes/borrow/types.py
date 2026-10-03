@@ -72,6 +72,13 @@ class TypeQueries:
         variant = resolved.get_variant(variant_name)
         return tuple(variant.associated_types) if variant is not None else ()
 
+    def tuple_element_types(self, tuple_type: Optional[Type]) -> tuple:
+        """The element types of a tuple, or () when the type is not a resolved tuple."""
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+
+        resolved = self.resolve_named(tuple_type)
+        return tuple_elements(resolved) if is_tuple_type(resolved) else ()
+
     def own_payload(self, ty: Optional[Type]) -> Optional[Type]:
         """The `T` inside an `Own@(T)`, for an OwnPattern's inner binding."""
         ty = self.resolve_named(ty)

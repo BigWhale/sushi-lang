@@ -1,0 +1,7 @@
+# A tuple is not a constant: a tuple literal is not a compile-time constant expression.
+# EXPECT_ERROR_CODES_EXACT: CE0108
+
+const (i32, i32) ORIGIN = (0, 0)
+
+fn main() i32:
+    return 0

@@ -1,0 +1,8 @@
+# A foreach destructure names as many elements as the item has.
+# EXPECT_ERROR_CODES_EXACT: CE2120
+
+fn main() i32:
+    let (i32, i32)[] pairs = from([(1, 2)])
+    foreach((a, b, c) in pairs.iter()):
+        println(a + b + c)
+    return 0

@@ -1,0 +1,12 @@
+# `match nom (a, b):` hands both elements to the match, so a later use of an owning
+# element is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+fn main() i32:
+    let string base = "a"
+    let string a = "{base}b"
+    let i32 n = 1
+    match nom (a, n):
+        (_, _) -> println(n)
+    println(a)
+    return 0

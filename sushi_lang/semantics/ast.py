@@ -460,12 +460,45 @@ class Block(Node):
 
 
 @dataclass(slots=True)
+class DestructureTarget:
+    """One element of a `let` destructure: a binder, a `_`, or a nested destructure.
+
+    A binder has a `name`, and `ty` is its written type or None for a bare binder. A `_`
+    has neither a name nor `nested`. The typecheck pass stamps `element_type`, and
+    `place_type` on a hidden binder of a destructuring rebind: the type of its place.
+    """
+    name: Optional[str] = None
+    ty: Optional[Type] = None
+    nested: Optional[List["DestructureTarget"]] = None
+    name_span: Optional[Span] = None
+    type_span: Optional[Span] = None
+    loc: Optional[Span] = None
+    element_type: Optional[Type] = None
+    place_type: Optional[Type] = None
+
+
+def destructure_binders(targets: Optional[List[DestructureTarget]]):
+    """Every binder of a destructure, nested ones included, in source order."""
+    for target in targets or ():
+        if target.nested is not None:
+            yield from destructure_binders(target.nested)
+        elif target.name is not None:
+            yield target
+
+
+@dataclass(slots=True)
 class Let(Stmt):
     name: str
     ty: Optional[Type]
     value: "Expr"
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
+    # `let (a, b) = v` (TUPLE.md 4.2): the `Let` binds the whole tuple under a hidden
+    # `name`, and the targets split it. None for an ordinary `let`.
+    targets: Optional[List[DestructureTarget]] = None
+    # The hidden whole of `(a, b) := v`: its binders are hidden, and the rebinds right
+    # after it (`a := #rb0`, ...) give each binder the type of its place.
+    rebinds: bool = False
 
 @dataclass(slots=True)
 class Rebind(Stmt):
@@ -556,7 +589,7 @@ class Pattern(Node):
     """Pattern for match arms: EnumName.VariantName(binding1, binding2, ...)"""
     enum_name: str
     variant_name: str
-    bindings: List[Union[str, 'Pattern', 'OwnPattern', 'RefBinding', 'NomBinding']]
+    bindings: List['PatternItem']
     enum_name_span: Optional[Span] = None
     variant_name_span: Optional[Span] = None
     # The alias the enum was written behind: `geo.Sign.Plus ->`. The enum name stays
@@ -603,14 +636,80 @@ class NomBinding(Node):
 @dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
-    inner_pattern: Union[str, 'Pattern']
+    inner_pattern: Union[str, 'Pattern', 'TuplePattern', 'LiteralPattern']
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
+
+
+@dataclass(slots=True)
+class TuplePattern(Node):
+    """A tuple pattern: `(Color.Red, n)`, one item for each element of the tuple.
+
+    It stands at the top of an arm, in an enum payload, or in another tuple pattern
+    (docs/design/tuples.md section 5b).
+    """
+    elements: List['PatternItem']
+
+
+# One position of a pattern: a binding (a name, `_`, `poke x`, `nom x`), an enum pattern,
+# an integer literal, a tuple pattern, or an `Own(...)` pattern.
+PatternItem = Union[str, Pattern, OwnPattern, RefBinding, NomBinding, LiteralPattern,
+                    TuplePattern]
+
+
+def pattern_bindings(item: object, parent: "Optional[Node]" = None):
+    """(name, owner, span) for each name that a pattern item binds, in source order.
+
+    The owner is the pattern node that holds the binding (a written-binder key); the span
+    is the binding's own span, or the owner's span for a bare name.
+    """
+    if isinstance(item, (Pattern, TuplePattern)):
+        for sub in (item.bindings if isinstance(item, Pattern) else item.elements):
+            yield from pattern_bindings(sub, item)
+    elif isinstance(item, OwnPattern):
+        inner = item.inner_pattern
+        if isinstance(inner, str):
+            if inner != "_":
+                yield inner, item, item.loc or (parent.loc if parent else None)
+        else:
+            yield from pattern_bindings(inner, item)
+    elif isinstance(item, str):
+        if item != "_" and parent is not None:
+            yield item, parent, parent.loc
+    elif isinstance(item, (RefBinding, NomBinding)):
+        yield item.name, parent, item.loc or (parent.loc if parent else None)
+
+
+def pattern_source(item: object) -> str:
+    """A pattern as it is written, for a diagnostic: `(Color.Red, nom s)`."""
+    if isinstance(item, Pattern):
+        head = f"{item.enum_name}.{item.variant_name}"
+        if item.namespace is not None:
+            head = f"{item.namespace}.{head}"
+        if not item.bindings:
+            return head
+        return f"{head}({', '.join(pattern_source(b) for b in item.bindings)})"
+    if isinstance(item, TuplePattern):
+        return f"({', '.join(pattern_source(e) for e in item.elements)})"
+    if isinstance(item, OwnPattern):
+        inner = pattern_source(item.inner_pattern)
+        if item.inner_borrow is not None:
+            inner = f"{item.inner_borrow} {inner}"
+        return f"Own({inner})"
+    if isinstance(item, RefBinding):
+        return f"{item.mode} {item.name}"
+    if isinstance(item, NomBinding):
+        return f"nom {item.name}"
+    if isinstance(item, LiteralPattern):
+        return item.display
+    if isinstance(item, str):
+        return item
+    return "_"
 
 @dataclass(slots=True)
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern]
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]
     body: Union["Expr", "Block"]
 
 @dataclass(slots=True)
@@ -721,6 +820,13 @@ class BinaryOp(Node):
     # The struct or enum a comparison compares, stamped by the typecheck pass when the
     # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
     operand_type: Optional["Type"] = None
+
+@dataclass(slots=True)
+class TupleLiteral(Node):
+    """A tuple literal: two or more expressions in parentheses, `(1, "a")`."""
+    elements: List["Expr"]
+    # The interned tuple type, stamped by the typecheck pass; the backend reads it.
+    resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Spread(Node):
@@ -937,7 +1043,7 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
 
-Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda]
+Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The three call shapes; each carries the whole set of callee stamps.
 CallLike = Union[Call, MethodCall, DotCall]
 # The two call shapes with a receiver and a method name.
@@ -981,8 +1087,8 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "Break", "Continue",
-    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "TuplePattern", "Break", "Continue",
+    "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]

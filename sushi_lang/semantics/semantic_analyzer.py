@@ -578,12 +578,15 @@ class SemanticAnalyzer:
                 for arg in type_args
             )
 
+        from sushi_lang.semantics.generics.tuples import TUPLE_BASE
+
         enum_instantiations = set()
         struct_instantiations = set()
         for base_name, type_args in type_instantiations:
             if base_name in self.tables.generic_enums.by_name:
                 enum_instantiations.add((base_name, _resolve_args(type_args)))
-            elif base_name in self.tables.generic_structs.by_name:
+            elif (base_name in self.tables.generic_structs.by_name
+                  or base_name == TUPLE_BASE):
                 struct_instantiations.add((base_name, _resolve_args(type_args)))
         return enum_instantiations, struct_instantiations
 
@@ -1035,6 +1038,7 @@ class SemanticAnalyzer:
         to repair it, and an older cycle stopped the analysis already (#677).
         """
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         struct_insts: set = set()
@@ -1051,6 +1055,8 @@ class SemanticAnalyzer:
             interned = self.tables.structs.by_name.get(key) or self.tables.enums.by_name.get(key)
             if interned is not None:
                 return interned
+            if ty.base_name == TUPLE_BASE:
+                return intern_tuple(self.tables.structs, self.tables.enums, args)
             if ty.base_name in self.tables.generic_structs.by_name:
                 struct_insts.add((ty.base_name, args))
             elif ty.base_name in self.tables.generic_enums.by_name:

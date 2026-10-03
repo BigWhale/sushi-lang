@@ -1,0 +1,14 @@
+# A binder of a destructure of a borrow is a borrow, so consuming it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn show((string, string) p) ~:
+    let (a, _) = p
+    eat(nom a)
+
+fn main() i32:
+    let (string, string) t = ("zaphod", "beeblebrox")
+    show(t)
+    return 0

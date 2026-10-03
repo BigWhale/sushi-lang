@@ -2,7 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
-from sushi_lang.semantics.ast import Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call
+from sushi_lang.semantics.ast import (
+    Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call, TupleLiteral)
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import read_method_name, unhandled
 from sushi_lang.internals.report import span_of
 
@@ -25,6 +26,11 @@ def expr_atom(atom: Tree | Token, ast_builder: 'ASTBuilder') -> Expr:
 
     if isinstance(atom, Tree) and atom.data == "dynamic_array_from":
         return arrays.dynamic_array_from(atom, ast_builder)
+
+    if isinstance(atom, Tree) and atom.data == "tuple_literal":
+        return TupleLiteral(elements=[ast_builder._expr(child) for child in atom.children
+                                      if isinstance(child, (Tree, Token))],
+                            loc=span_of(atom))
 
     if isinstance(atom, Tree) and atom.data == "blank_literal":
         return BlankLit(loc=span_of(atom))
@@ -119,6 +125,10 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
 
             elif call_node.data == "member_access":
                 result_expr = members.member_access_from_parts(
+                    result_expr, call_node, _span_through(t, call_node))
+
+            elif call_node.data in ("tuple_index", "tuple_index_pair"):
+                result_expr = members.tuple_index_from_parts(
                     result_expr, call_node, _span_through(t, call_node))
 
             elif call_node.data == "index":

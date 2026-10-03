@@ -1,0 +1,11 @@
+# A literal in an enum payload covers one value of an integer payload.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: Maybe.Some(_)
+
+fn f(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(0) -> return 0
+        Maybe.None -> return 1
+
+fn main() i32:
+    return f(Maybe.None)

@@ -27,8 +27,5 @@ fn main() i32:
             return 1
         Result.Err(StdError.Error) ->
             println("PASS: StdError.Error works")
-        Result.Err(_) ->
-            println("FAIL: Wrong error variant")
-            return 1
 
     return 0

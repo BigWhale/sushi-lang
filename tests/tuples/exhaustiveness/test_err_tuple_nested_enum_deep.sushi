@@ -1,0 +1,16 @@
+# A missing pattern two enum levels deep.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: Result.Ok(Maybe.Some(Color.Green))
+
+enum Color:
+    Red
+    Green
+
+fn f(Result@(Maybe@(Color), StdError) r) i32:
+    match r:
+        Result.Ok(Maybe.Some(Color.Red)) -> return 1
+        Result.Ok(Maybe.None) -> return 2
+        Result.Err(_) -> return 3
+
+fn main() i32:
+    return f(Result.Ok(Maybe.None))

@@ -1,0 +1,14 @@
+# An arm after a tuple pattern of wildcards can match no value.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+enum Color:
+    Red
+    Green
+
+fn f((Color, i32) p) i32:
+    match p:
+        (_, _) -> return 0
+        (Color.Red, _) -> return 1
+
+fn main() i32:
+    return f((Color.Red, 1))

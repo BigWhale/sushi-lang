@@ -1,0 +1,18 @@
+# A temporary tuple scrutinee that no arm takes from is destroyed at the end of the match.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a! 1\nzero b!\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn main() i32:
+    match make("a", 1):
+        (s, n) -> println("{s} {n}")
+    match make("b", 0):
+        (s, 0) -> println("zero {s}")
+        (_, _) -> println("other")
+    return 0

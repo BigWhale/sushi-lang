@@ -1,0 +1,8 @@
+# Each target of a destructuring rebind takes a value of its own type.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := (3, "four")
+    return a + b

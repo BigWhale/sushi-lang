@@ -1,0 +1,10 @@
+# Only a tuple destructures.
+# EXPECT_ERROR_CODES_EXACT: CE2117
+
+struct Pair:
+    i32 a
+    i32 b
+
+fn main() i32:
+    let (a, b) = Pair(1, 2)
+    return a + b

@@ -1,0 +1,12 @@
+# A destructure of an unhandled Result is the unhandled-Result error of a `let`: take the
+# value with `??`, `.realise(default)` or `match` first.
+# EXPECT_ERROR_CODES_EXACT: CE2505
+
+fn pair(i32 n) (i32, i32) | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok((n, n))
+
+fn main() i32:
+    let (a, b) = pair(1)
+    return a + b

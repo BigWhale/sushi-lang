@@ -1,0 +1,15 @@
+# A tuple pattern in an enum payload that misses a variant.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: Maybe.Some((Color.Green, _))
+
+enum Color:
+    Red
+    Green
+
+fn f(Maybe@((Color, i32)) m) i32:
+    match m:
+        Maybe.Some((Color.Red, n)) -> return n
+        Maybe.None -> return 0
+
+fn main() i32:
+    return f(Maybe.None)

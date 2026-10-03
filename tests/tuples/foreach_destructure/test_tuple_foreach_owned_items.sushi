@@ -1,0 +1,25 @@
+# A protocol iterator hands out owned items, so each binder owns its element and the body
+# may hand it away.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "word 2 2\nword 1 1\nword 0 0\n"
+
+struct Words:
+    i32 n
+
+extend Words next(poke self) Maybe@((string, i32)):
+    if (self.n == 0):
+        return Maybe.None()
+    self.n := self.n - 1
+    return Maybe.Some(("word {self.n}", self.n))
+
+fn eat(nom string s, i32 n) i32:
+    println("{s} {n}")
+    return n
+
+fn main() i32:
+    let Words w = Words(3)
+    let i32 total = 0
+    foreach((word, n) in w):
+        total := total + eat(nom word, n)
+    return total - 3

@@ -1,0 +1,32 @@
+# A tuple scrutinee read through a `peek` or a `poke` parameter; a `poke` binding writes
+# through the parameter to the caller's tuple.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n2\n"
+
+enum Color:
+    Red
+    Green
+
+fn look(peek (i32, Color) p) i32:
+    match p:
+        (n, Color.Red) -> return n
+        (_, Color.Green) -> return 0
+
+fn bump(poke (i32, Color) p) ~:
+    match p:
+        (poke n, Color.Red) -> n := n + 1
+        (_, _) -> println("green")
+
+fn first(Maybe@(Color)[] xs) i32:
+    match xs[0]:
+        Maybe.Some(Color.Red) -> return 1
+        Maybe.Some(Color.Green) -> return 2
+        Maybe.None -> return 0
+
+fn main() i32:
+    let (i32, Color) t = (4, Color.Red)
+    bump(poke t)
+    println(look(peek t))
+    let Maybe@(Color)[] xs = from([Maybe.Some(Color.Green)])
+    println(first(xs))
+    return 0

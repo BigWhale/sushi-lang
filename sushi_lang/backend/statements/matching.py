@@ -1,8 +1,8 @@
 """Pattern matching statement emission for the Sushi language compiler."""
 from __future__ import annotations
 import itertools
-from typing import TYPE_CHECKING
-from sushi_lang.semantics.type_predicates import is_instance_of
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, Optional
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
 from sushi_lang.backend.utils import require_both_initialized
@@ -12,7 +12,7 @@ from sushi_lang.backend.statements.control_flow import close_merge_block
 if TYPE_CHECKING:
     from llvmlite import ir
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.ast import Match, Expr, Pattern, OwnPattern
+    from sushi_lang.semantics.ast import Match, Expr, MatchArm
     from sushi_lang.semantics.typesys import EnumType, Type
 
 
@@ -26,6 +26,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # tag; the typecheck pass stamps `integer_match_type` on exactly those matches.
     if getattr(stmt, 'integer_match_type', None) is not None:
         _emit_integer_match(codegen, stmt)
+        return
+
+    # A tuple match has no tag to switch on: each arm tests its pattern in order. Its
+    # stamp is read BEFORE the scrutinee is emitted, because a tuple-literal scrutinee
+    # builds no tuple (ruling 3 of the tuple design).
+    from sushi_lang.semantics.generics.tuples import is_tuple_type
+    if is_tuple_type(stmt.resolved_scrutinee_type):
+        _emit_tuple_match(codegen, stmt)
         return
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
@@ -49,7 +57,9 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # its payload, so an owning payload was never freed (#159). It becomes an ordinary
     # owning local in a scope around the whole match -- an ordinary local rather than a new
     # temp registry, so every exit path and the move guard already work.
-    scrutinee_slot = _own_scrutinee(codegen, stmt, scrutinee_value, scrutinee_type)
+    scope = _MatchScope()
+    scrutinee_slot = _own_scrutinee(codegen, stmt, stmt.scrutinee, scrutinee_value,
+                                    scrutinee_type, [arm.pattern for arm in stmt.arms], scope)
 
     tag = enum_utils.extract_enum_tag(codegen, scrutinee_value, name="match_tag")
 
@@ -65,8 +75,8 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     _add_switch_cases(codegen, stmt, arm_blocks, switch, scrutinee_type)
 
-    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value,
-                                   scrutinee_type, end_bb, scrutinee_slot)
+    root = _Root(stmt.scrutinee, scrutinee_value, scrutinee_type, scrutinee_slot)
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, root, end_bb)
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
@@ -78,8 +88,7 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     # fall-through free; the early-exit paths (return / break / ??) already freed it through the
     # same registry before branching away. An arm that TOOK a payload cleared the drop flag,
     # so the free here reads it and does nothing on that path.
-    if scrutinee_slot.owns:
-        codegen.memory.pop_scope()
+    scope.close(codegen)
 
 
 def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
@@ -107,14 +116,85 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
             case_value = ir.Constant(scrutinee_value.type, arm.pattern.value)
             switch.add_case(case_value, arm_bb)
 
-    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, scrutinee_value, None, end_bb,
-                                   Scrutinee())
+    end_reached = _emit_match_arms(codegen, stmt, arm_blocks, None, end_bb)
 
     if unreachable_bb is not None:
         codegen.builder.position_at_end(unreachable_bb)
         codegen.builder.unreachable()
 
     close_merge_block(codegen, end_bb, end_reached)
+
+
+def _emit_tuple_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
+    """Emit a match on a tuple: each arm tests its whole pattern, first match wins.
+
+    A tuple-literal scrutinee builds no tuple (ruling 3): each element is one root,
+    evaluated once and from left to right, with the ownership rules of a named
+    scrutinee. Any other tuple scrutinee is one root. A failed test goes to the next
+    arm; after the last arm is the RE2023 backstop, which exhaustiveness makes
+    unreachable.
+    """
+    from sushi_lang.semantics.ast import TupleLiteral
+    from sushi_lang.semantics.generics.tuples import tuple_elements
+
+    tuple_type = stmt.resolved_scrutinee_type
+    patterns = [arm.pattern for arm in stmt.arms]
+    scope = _MatchScope()
+    roots: list[_Root] = []
+    if isinstance(stmt.scrutinee, TupleLiteral):
+        element_types = tuple_elements(tuple_type)
+        values = [codegen.expressions.emit_expr(element)
+                  for element in stmt.scrutinee.elements]
+        for index, (element, value, element_type) in enumerate(
+                zip(stmt.scrutinee.elements, values, element_types, strict=True)):
+            value = _consume_if_handed_over(codegen, stmt, element, value, element_type)
+            items = [_element_item(pattern, index) for pattern in patterns]
+            slot = _own_scrutinee(codegen, stmt, element, value, element_type, items, scope)
+            roots.append(_Root(element, value, element_type, slot))
+    else:
+        value = codegen.expressions.emit_expr(stmt.scrutinee)
+        value = _consume_if_handed_over(codegen, stmt, stmt.scrutinee, value, tuple_type)
+        slot = _own_scrutinee(codegen, stmt, stmt.scrutinee, value, tuple_type, patterns,
+                              scope)
+        roots.append(_Root(stmt.scrutinee, value, tuple_type, slot))
+
+    end_bb = codegen.func.append_basic_block(name="match.end")
+    arm_blocks = [codegen.func.append_basic_block(name=f"match.arm{i}")
+                  for i in range(len(stmt.arms))]
+    codegen.builder.branch(arm_blocks[0])
+
+    end_reached = False
+    for index, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
+        codegen.builder.position_at_end(arm_bb)
+        codegen.memory.push_scope()
+        if len(roots) == 1:
+            positions = [(arm.pattern, roots[0])]
+        else:
+            positions = [(_element_item(arm.pattern, i), root) for i, root in enumerate(roots)]
+        next_bb = arm_blocks[index + 1] if index + 1 < len(arm_blocks) else None
+        _extract_pattern_bindings(codegen, positions, _failure_target(codegen, arm, next_bb))
+        end_reached = _emit_arm_body(codegen, arm, end_bb) or end_reached
+
+    close_merge_block(codegen, end_bb, end_reached)
+    scope.close(codegen)
+
+
+def _element_item(pattern: object, index: int) -> object:
+    """The item of a top-level tuple pattern that reads element `index`; `_` for a `_` arm."""
+    from sushi_lang.semantics.ast import TuplePattern
+    if isinstance(pattern, TuplePattern):
+        return pattern.elements[index]
+    return "_"
+
+
+def _consume_if_handed_over(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee: 'Expr',
+                            value: 'ir.Value', semantic_type: 'Type') -> 'ir.Value':
+    """`match nom r:` and `match nom (a, b):` hand each scrutinee to the match (R11)."""
+    if not stmt.consumes_scrutinee:
+        return value
+    from sushi_lang.backend import ownership
+    return ownership.consume(codegen, scrutinee, value, semantic_type,
+                             ownership.ConsumingUse.MATCH_SCRUTINEE)
 
 
 # A counter, not a fixed name: two matches in one function would otherwise register the same
@@ -138,50 +218,83 @@ class Scrutinee:
         self.owns = owns
 
 
-def _arm_takes_a_payload(stmt: 'Match') -> bool:
-    """Does any arm bind a payload `nom`? Then ownership at match.end is a run-time fact."""
-    from sushi_lang.semantics.ast import Pattern
-    return any(isinstance(arm.pattern, Pattern) and _pattern_takes(arm.pattern)
-               for arm in stmt.arms)
+class _MatchScope:
+    """The one scope around a match that holds the scrutinees the match owns."""
+
+    def __init__(self) -> None:
+        """No scope until a scrutinee needs one."""
+        self.pushed = False
+
+    def open(self, codegen: 'LLVMCodegen') -> None:
+        """Push the scope once, before the first owned scrutinee is registered."""
+        if not self.pushed:
+            codegen.memory.push_scope()
+            self.pushed = True
+
+    def close(self, codegen: 'LLVMCodegen') -> None:
+        """Pop the scope at match.end: the fall-through free of each owned scrutinee."""
+        if self.pushed:
+            codegen.memory.pop_scope()
 
 
-def _pattern_takes(pattern: 'Pattern') -> bool:
-    """Does this pattern, at any depth, take a payload out of the scrutinee?"""
-    from sushi_lang.semantics.ast import NomBinding, Pattern as PatternNode
-    return any(isinstance(b, NomBinding)
-               or (isinstance(b, PatternNode) and _pattern_takes(b))
-               for b in pattern.bindings)
+@dataclass
+class _Root:
+    """One value a match reads: the scrutinee, or one element of a tuple-literal one."""
+    expr: 'Expr'
+    value: 'ir.Value'
+    semantic_type: 'Type'
+    storage: Scrutinee
 
 
-def _arm_binds_a_reference(stmt: 'Match') -> bool:
-    """Does any arm bind a payload `peek` / `poke`? Then the scrutinee needs an address."""
-    from sushi_lang.semantics.ast import Pattern, RefBinding
-    return any(isinstance(arm.pattern, Pattern)
-               and any(isinstance(b, RefBinding) for b in arm.pattern.bindings)
-               for arm in stmt.arms)
+def _pattern_takes(item: object) -> bool:
+    """Does this pattern item, at any depth, take a value out of the scrutinee?"""
+    from sushi_lang.semantics.ast import NomBinding, Pattern, TuplePattern
+    if isinstance(item, NomBinding):
+        return True
+    if isinstance(item, Pattern):
+        return any(_pattern_takes(b) for b in item.bindings)
+    if isinstance(item, TuplePattern):
+        return any(_pattern_takes(e) for e in item.elements)
+    return False
 
 
-def _own_scrutinee(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee_value: 'ir.Value',
-                   scrutinee_type: 'EnumType | None') -> Scrutinee:
-    """Give a scrutinee the match owns its storage, and an owner where it needs one."""
+def _pattern_binds_a_reference(item: object) -> bool:
+    """Does this pattern item bind a `peek` / `poke` reference into the scrutinee?"""
+    from sushi_lang.semantics.ast import Pattern, RefBinding, TuplePattern
+    if isinstance(item, RefBinding):
+        return True
+    if isinstance(item, Pattern):
+        return any(_pattern_binds_a_reference(b) for b in item.bindings)
+    if isinstance(item, TuplePattern):
+        return any(_pattern_binds_a_reference(e) for e in item.elements)
+    return False
+
+
+def _own_scrutinee(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee: 'Expr',
+                   scrutinee_value: 'ir.Value', scrutinee_type: 'Type | None',
+                   items: list, scope: _MatchScope) -> Scrutinee:
+    """Give a scrutinee the match owns its storage, and an owner where it needs one.
+
+    `items` are the pattern items that read this scrutinee, one for each arm.
+    """
     from sushi_lang.backend.expressions.memory import expression_is_temporary
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-    from sushi_lang.semantics.typesys import EnumType
 
     # A TEMPORARY is owned by construction; `match nom r:` says the local was handed over.
     # The same predicate the borrow pass makes, so the two sides cannot disagree.
-    if not (expression_is_temporary(codegen, stmt.scrutinee) or stmt.consumes_scrutinee):
+    if not (expression_is_temporary(codegen, scrutinee) or stmt.consumes_scrutinee):
         return Scrutinee()
 
     # `needs_cleanup` is table-free -- an unresolved UnknownType answers False, which is how a
     # Result's owning payload escaped every RAII predicate in #179. Resolve first.
     resolved = resolve_named_type(codegen, scrutinee_type) if scrutinee_type is not None else None
-    if isinstance(resolved, EnumType) and needs_cleanup(codegen, resolved):
-        codegen.memory.push_scope()
+    if resolved is not None and needs_cleanup(codegen, resolved):
+        scope.open(codegen)
         name = f"__match_temp_{next(_TEMP_SCRUTINEE_SEQ)}"
         slot = codegen.memory.create_local(name, scrutinee_value.type, scrutinee_value,
-                                           resolved)
-        if _arm_takes_a_payload(stmt):
+                                           resolved, register_cleanup=False)
+        codegen.memory.register_owning_value(name, resolved, slot)
+        if any(_pattern_takes(item) for item in items):
             # One arm takes the payload and another may not, so whether this local still
             # owns its value at match.end is a RUN-TIME fact -- the same drop flag a
             # conditional move of an ordinary local gets (#414).
@@ -189,7 +302,7 @@ def _own_scrutinee(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee_value: 'ir.V
         return Scrutinee(slot, name, owns=True)
 
     # Nothing to free, but a reference binding still needs somewhere to point.
-    if not _arm_binds_a_reference(stmt):
+    if not any(_pattern_binds_a_reference(item) for item in items):
         return Scrutinee()
     slot = codegen.memory.entry_alloca(scrutinee_value.type, "match_scrutinee")
     codegen.builder.store(scrutinee_value, slot)
@@ -274,13 +387,12 @@ def _emit_match_arms(
     codegen: 'LLVMCodegen',
     stmt: 'Match',
     arm_blocks: list['ir.Block'],
-    scrutinee_value: 'ir.Value',
-    scrutinee_type: 'EnumType | None',
+    root: '_Root | None',
     end_bb: 'ir.Block',
-    scrutinee: Scrutinee,
 ) -> bool:
-    """Emit all match arms. Answer whether an arm branches to `end_bb`."""
-    from sushi_lang.semantics.ast import Pattern, Block
+    """Emit the arms of a switch match. Answer whether an arm branches to `end_bb`."""
+    from sushi_lang.semantics.ast import Pattern
+    from sushi_lang.semantics.typesys import EnumType
 
     end_reached = False
     for i, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
@@ -289,203 +401,315 @@ def _emit_match_arms(
 
         if isinstance(arm.pattern, Pattern):
             # Only an enum match has Pattern arms, and emit_match refuses one with no type.
-            if scrutinee_type is None:
+            if root is None or not isinstance(root.semantic_type, EnumType):
                 raise_internal_error("CE0121", pattern=_first_arm_pattern(stmt))
-            next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks, scrutinee_type, i)
+            # The switch tested the outer tag. A test inside the payload that fails goes
+            # to the next arm of the same tag.
+            next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks,
+                                                       root.semantic_type, i)
+            _extract_pattern_bindings(codegen, [(arm.pattern, root)],
+                                      _failure_target(codegen, arm, next_arm_bb),
+                                      tag_known=True)
 
-            # This arm TAKES a payload, so the match must not free the scrutinee on this
-            # path (ruling R11). Cleared here, at the head of the arm: the flag the free
-            # at match.end reads is a run-time value, and only this path stores 0 into it.
-            if scrutinee.name is not None and _pattern_takes(arm.pattern):
-                from sushi_lang.backend.ownership import relinquish_temp
-                relinquish_temp(codegen, scrutinee.name)
-
-            # Extract and bind pattern variables. The scrutinee EXPRESSION rides along
-            # for reference bindings (#300 phase 3), which need a pointer into the
-            # scrutinee's own storage rather than into the arm's temporary copy.
-            _extract_pattern_bindings(codegen, arm.pattern, scrutinee_value, scrutinee_type, next_arm_bb,
-                                      scrutinee_expr=stmt.scrutinee,
-                                      scrutinee_slot=scrutinee.slot)
-
-        if isinstance(arm.body, Block):
-            _emit_block(codegen, arm.body)
-        else:
-            codegen.expressions.emit_expr(arm.body)
-
-        codegen.memory.pop_scope()
-
-        if codegen.builder.block.terminator is None:
-            codegen.builder.branch(end_bb)
-            end_reached = True
+        end_reached = _emit_arm_body(codegen, arm, end_bb) or end_reached
 
     return end_reached
 
 
-def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: 'Pattern', scrutinee_value: 'ir.Value', scrutinee_type: 'EnumType', next_arm_bb: 'ir.Block | None' = None, scrutinee_expr: 'Expr | None' = None, scrutinee_slot: 'ir.Value | None' = None) -> None:
-    """Extract and bind pattern variables from enum data."""
+def _emit_arm_body(codegen: 'LLVMCodegen', arm: 'MatchArm', end_bb: 'ir.Block') -> bool:
+    """Emit an arm's body and close its scope. Answer whether it branches to `end_bb`."""
+    from sushi_lang.semantics.ast import Block
+
+    if isinstance(arm.body, Block):
+        _emit_block(codegen, arm.body)
+    else:
+        codegen.expressions.emit_expr(arm.body)
+
+    codegen.memory.pop_scope()
+
+    if codegen.builder.block.terminator is None:
+        codegen.builder.branch(end_bb)
+        return True
+    return False
+
+
+def _failure_target(codegen: 'LLVMCodegen', arm: 'MatchArm',
+                    next_bb: 'ir.Block | None') -> Callable[[], 'ir.Block']:
+    """Where a failed test of `arm` goes: the next candidate arm, or the RE2023 backstop."""
+    from sushi_lang.semantics.ast import pattern_source
+
+    made: list = []
+
+    def target() -> 'ir.Block':
+        if next_bb is not None:
+            return next_bb
+        if not made:
+            here = codegen.builder.block
+            block = codegen.func.append_basic_block(name="match.no_arm")
+            codegen.builder.position_at_end(block)
+            codegen.runtime.errors.emit_runtime_error(
+                "RE2023", pattern=pattern_source(arm.pattern))
+            codegen.builder.unreachable()
+            codegen.builder.position_at_end(here)
+            made.append(block)
+        return made[0]
+
+    return target
+
+
+@dataclass
+class _Position:
+    """One position of the value a pattern reads: its value, its type, and its address.
+
+    `address` computes a pointer into the scrutinee's own storage, or is None where the
+    position has none; a `poke` binding asks it, after every test passed.
+    """
+    value: 'ir.Value'
+    semantic_type: 'Type'
+    address: Optional[Callable[[], 'ir.Value']]
+
+
+@dataclass
+class _Bind:
+    """A binding to make once the whole pattern matched."""
+    kind: str                 # "value" | "nom" | "ref" | "own_value" | "own_ref"
+    name: str
+    position: _Position
+    mode: Optional[str] = None
+    own_value: Optional['ir.Value'] = None
+
+
+def _root_address(codegen: 'LLVMCodegen', root: _Root) -> Callable[[], 'ir.Value']:
+    """The address of a root: the slot the match parked it in, or the place it names.
+
+    A temporary has no expression to take an address of, and ruling R11 made that shape
+    legal by giving it storage for the whole statement. A place is a name, or a member or
+    index chain off one (the borrow pass refuses anything else with CE2404).
+    """
+    def address() -> 'ir.Value':
+        if root.storage.slot is not None:
+            return root.storage.slot
+        from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
+        return emit_receiver_as_pointer(codegen, root.expr)
+    return address
+
+
+def _extract_pattern_bindings(codegen: 'LLVMCodegen', positions: list,
+                              on_fail: Callable[[], 'ir.Block'],
+                              tag_known: bool = False) -> None:
+    """Test each pattern item against its root, then bind, in that order.
+
+    Every test comes first, so a failed test leaves the arm before anything is bound or
+    taken. Then an arm that TAKES a value clears its root's drop flag (ruling R11): the
+    free at match.end reads that flag, and only this path stores 0 into it. Then the
+    bindings are made. `tag_known` says the switch already tested the outer tag.
+    """
+    from sushi_lang.backend.destructors import resolve_named_type
+
+    binds: list[_Bind] = []
+    for item, root in positions:
+        position = _Position(root.value, resolve_named_type(codegen, root.semantic_type),
+                             _root_address(codegen, root))
+        _test_item(codegen, item, position, on_fail, binds, tag_known=tag_known)
+
+    for item, root in positions:
+        if root.storage.name is not None and _pattern_takes(item):
+            from sushi_lang.backend.ownership import relinquish_temp
+            relinquish_temp(codegen, root.storage.name)
+
+    for bind in binds:
+        _make_binding(codegen, bind)
+
+
+def _branch_unless(codegen: 'LLVMCodegen', matches: 'ir.Value',
+                   on_fail: Callable[[], 'ir.Block']) -> None:
+    """Go on in a new block when `matches` holds; go to the failure target when not."""
+    go_on = codegen.func.append_basic_block(name="match.test_ok")
+    codegen.builder.cbranch(matches, go_on, on_fail())
+    codegen.builder.position_at_end(go_on)
+
+
+def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
+               on_fail: Callable[[], 'ir.Block'], binds: list,
+               tag_known: bool = False) -> None:
+    """Emit the tests of one pattern item, and collect the bindings it makes."""
     from llvmlite import ir
-    from sushi_lang.semantics.ast import Pattern as PatternNode, OwnPattern
-    from sushi_lang.semantics.ast import NomBinding as NomBindingNode
-    from sushi_lang.semantics.ast import RefBinding as RefBindingNode
+    from sushi_lang.semantics.ast import (
+        LiteralPattern, NomBinding, OwnPattern, Pattern, RefBinding, TuplePattern,
+    )
+
+    if isinstance(item, str):
+        if item != "_":
+            binds.append(_Bind("value", item, position))
+    elif isinstance(item, NomBinding):
+        binds.append(_Bind("nom", item.name, position))
+    elif isinstance(item, RefBinding):
+        binds.append(_Bind("ref", item.name, position, mode=item.mode))
+    elif isinstance(item, LiteralPattern):
+        expected = ir.Constant(position.value.type, item.value)
+        _branch_unless(codegen, codegen.builder.icmp_signed("==", position.value, expected,
+                                                            name="literal_matches"), on_fail)
+    elif isinstance(item, TuplePattern):
+        _test_tuple(codegen, item, position, on_fail, binds)
+    elif isinstance(item, Pattern):
+        _test_variant(codegen, item, position, on_fail, binds, tag_known)
+    elif isinstance(item, OwnPattern):
+        _test_own(codegen, item, position, on_fail, binds)
+
+
+def _test_tuple(codegen: 'LLVMCodegen', pattern, position: _Position,
+                on_fail: Callable[[], 'ir.Block'], binds: list) -> None:
+    """A tuple pattern: test each element, from left to right."""
+    from sushi_lang.backend.destructors import resolve_named_type
+    from sushi_lang.semantics.generics.tuples import tuple_elements
+
+    for index, (item, element_type) in enumerate(
+            zip(pattern.elements, tuple_elements(position.semantic_type), strict=True)):
+        value = codegen.builder.extract_value(position.value, index, name=f"elem{index}")
+        _test_item(codegen, item, _Position(value, resolve_named_type(codegen, element_type),
+                                            _field_address(codegen, position, index)),
+                   on_fail, binds)
+
+
+def _field_address(codegen: 'LLVMCodegen', position: _Position,
+                   index: int) -> Optional[Callable[[], 'ir.Value']]:
+    """The address of element `index` of a tuple position, when the tuple has one."""
+    parent = position.address
+    if parent is None:
+        return None
+    return lambda: gep_utils.gep_struct_field(codegen, parent(), index, f"elem{index}_ptr")
+
+
+def _test_variant(codegen: 'LLVMCodegen', pattern, position: _Position,
+                  on_fail: Callable[[], 'ir.Block'], binds: list, tag_known: bool) -> None:
+    """An enum pattern: test the tag, then each payload position."""
+    from sushi_lang.backend.destructors import resolve_named_type
+    from sushi_lang.semantics.typesys import EnumType
+
+    enum_type = position.semantic_type
+    if not isinstance(enum_type, EnumType):
+        raise_internal_error("CE0121", pattern=f"{pattern.enum_name}.{pattern.variant_name}")
+    variant = enum_type.get_variant(pattern.variant_name)
+    tag = enum_type.get_variant_index(pattern.variant_name)
+    if variant is None or tag is None:
+        raise_internal_error("CE0121", pattern=f"{pattern.enum_name}.{pattern.variant_name}")
+
+    if not tag_known:
+        _branch_unless(codegen, enum_utils.check_enum_variant(
+            codegen, position.value, tag, signed=True, name="variant_matches"), on_fail)
 
     if not pattern.bindings:
         return
 
-    variant = scrutinee_type.get_variant(pattern.variant_name)
-    if not variant or not variant.associated_types:
-        return
-
-    data_array = enum_utils.extract_enum_data(codegen, scrutinee_value, name="match_data")
-
-    data_array_type = scrutinee_value.type.elements[1]
     # ENTRY block, not the current position: a match inside a loop would otherwise
     # allocate again every iteration and never release it (BUGS.md B1). Reuse is safe
-    # because every value binding is loaded OUT of this copy below, and a reference
-    # binding deliberately points into the scrutinee instead (#253).
-    temp_alloca = codegen.memory.entry_alloca(data_array_type, "match_data_storage")
-    codegen.builder.store(data_array, temp_alloca)
+    # because every value binding is loaded OUT of this copy, and a reference binding
+    # points into the scrutinee instead (#253).
+    data_array = enum_utils.extract_enum_data(codegen, position.value, name="match_data")
+    storage = codegen.memory.entry_alloca(position.value.type.elements[1], "match_data_storage")
+    codegen.builder.store(data_array, storage)
+    data_ptr = codegen.builder.bitcast(storage, codegen.types.str_ptr, name="data_ptr")
 
-    data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
-
-    # Extract each binding at its offset from the ONE layout authority (#300 phase 2);
-    # the offsets are naturally aligned and the payload base is 8-aligned, so the loads
-    # need no `align=1` any more.
-    field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
-    for (binding_item, binding_type), field_offset in zip(
-            zip(pattern.bindings, variant.associated_types, strict=True), field_offsets,
-            strict=True):
-        binding_llvm_type = codegen.types.ll_type(binding_type)
-
-        # A reference binding points into the SCRUTINEE'S own payload storage, never this
-        # arm's temporary copy -- a pointer into the copy makes every write silently lost
-        # (#253). The payload base is 8-aligned, so the interior pointer is naturally
-        # aligned; the borrow pass guarantees the scrutinee is a place -- a name, or a
-        # member or index chain off one (CE2404 otherwise).
-        if isinstance(binding_item, RefBindingNode):
-            from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
-            from sushi_lang.backend.statements.loops import bind_element_reference
-            # The slot the match parked its own scrutinee in, where there is one: a
-            # temporary has no expression to take an address of, and ruling R11 made that
-            # shape legal by giving it storage for the whole statement.
-            scrutinee_ptr = (scrutinee_slot if scrutinee_slot is not None
-                             else emit_receiver_as_pointer(codegen, scrutinee_expr))
-            orig_data_ptr = gep_utils.gep_struct_field(
-                codegen, scrutinee_ptr, 1, "scrutinee_data_ptr")
-            orig_data_i8 = codegen.builder.bitcast(
-                orig_data_ptr, codegen.types.str_ptr, name="scrutinee_data_i8")
-            payload_field_ptr = codegen.builder.gep(
-                orig_data_i8, [ir.Constant(codegen.types.i32, field_offset)],
-                name="ref_binding_field_i8")
-            payload_field_typed = codegen.builder.bitcast(
-                payload_field_ptr, ir.PointerType(binding_llvm_type),
-                name="ref_binding_field_ptr")
-            bind_element_reference(codegen, binding_item.name, binding_item.mode,
-                                   binding_type, payload_field_typed)
-            continue
-
-        field_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, field_offset)], name="field_ptr")
-        field_ptr_typed = codegen.builder.bitcast(field_ptr_i8, ir.PointerType(binding_llvm_type), name="field_ptr_typed")
-        field_value = codegen.builder.load(field_ptr_typed, name="field_value")
-
-        if isinstance(binding_item, NomBindingNode):
-            # `Variant(nom x)` (ruling R11): the arm TAKES the payload, so it IS
-            # registered -- through `register_owning_value`, the complete registry router,
-            # because a dynamic array, a `List@(T)` and an `Own@(T)` each have a registry
-            # of their own that `create_local` alone does not reach (#382). What stops the
-            # second free is the scrutinee's drop flag, cleared at the head of the arm.
-            slot = codegen.memory.create_local(binding_item.name, binding_llvm_type,
-                                               field_value, binding_type,
-                                               register_cleanup=False)
-            codegen.memory.register_owning_value(binding_item.name, binding_type, slot)
-        elif isinstance(binding_item, str):
-            # The binding BORROWS the enum's payload, so it is NOT registered for its own
-            # RAII free -- the enum frees it, and registering both double-frees (#139).
-            if binding_item != "_":
-                codegen.memory.create_local(binding_item, binding_llvm_type, field_value, binding_type, register_cleanup=False)
-        elif isinstance(binding_item, PatternNode):
-            _extract_nested_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
-        elif isinstance(binding_item, OwnPattern):
-            _extract_own_pattern(codegen, binding_item, field_value, binding_type, next_arm_bb)
+    # Each payload sits at its offset from the ONE layout authority (#300 phase 2); the
+    # offsets are naturally aligned and the payload base is 8-aligned.
+    offsets = codegen.types.payload_field_offsets(variant.associated_types)
+    for item, payload_type, offset in zip(pattern.bindings, variant.associated_types,
+                                          offsets, strict=True):
+        resolved = resolve_named_type(codegen, payload_type)
+        value = _load_payload(codegen, data_ptr, offset, resolved)
+        _test_item(codegen, item, _Position(value, resolved,
+                                            _payload_address(codegen, position, offset,
+                                                             resolved)),
+                   on_fail, binds)
 
 
-def _extract_nested_pattern(codegen: 'LLVMCodegen', nested_pattern: 'Pattern', enum_value: 'ir.Value', enum_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and validate a nested pattern from an enum value."""
-    from sushi_lang.semantics.typesys import EnumType
-
-    concrete_enum_type = enum_type
-    if not isinstance(concrete_enum_type, EnumType):
-        if hasattr(codegen, 'enum_table'):
-            concrete_enum_type = codegen.enum_table.by_name.get(nested_pattern.enum_name)
-
-    if not isinstance(concrete_enum_type, EnumType):
-        return
-
-    variant = concrete_enum_type.get_variant(nested_pattern.variant_name)
-    if not variant:
-        return
-
-    expected_tag = concrete_enum_type.get_variant_index(nested_pattern.variant_name)
-    if expected_tag is None:
-        return
-
-    tag_matches = enum_utils.check_enum_variant(
-        codegen, enum_value, expected_tag, signed=True, name="nested_tag_matches"
-    )
-
-    match_bb = codegen.func.append_basic_block(name="nested_pattern_match")
-    mismatch_bb = codegen.func.append_basic_block(name="nested_pattern_mismatch")
-
-    codegen.builder.cbranch(tag_matches, match_bb, mismatch_bb)
-
-    codegen.builder.position_at_end(mismatch_bb)
-    if next_arm_bb is not None:
-        codegen.builder.branch(next_arm_bb)
-    else:
-        codegen.runtime.errors.emit_runtime_error(
-            "RE2023",
-            pattern=f"{nested_pattern.enum_name}.{nested_pattern.variant_name}",
-        )
-        codegen.builder.unreachable()
-
-    codegen.builder.position_at_end(match_bb)
-
-    _extract_pattern_bindings(codegen, nested_pattern, enum_value, concrete_enum_type)
+def _load_payload(codegen: 'LLVMCodegen', data_ptr: 'ir.Value', offset: int,
+                  payload_type: 'Type') -> 'ir.Value':
+    """Load one payload value out of the arm's copy of the enum data."""
+    from llvmlite import ir
+    field_ptr = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)],
+                                    name="field_ptr")
+    typed = codegen.builder.bitcast(field_ptr, ir.PointerType(codegen.types.ll_type(payload_type)),
+                                    name="field_ptr_typed")
+    return codegen.builder.load(typed, name="field_value")
 
 
-def _extract_own_pattern(codegen: 'LLVMCodegen', own_pattern: 'OwnPattern', own_value: 'ir.Value', own_type: 'Type', next_arm_bb: 'ir.Block | None' = None) -> None:
-    """Extract and bind an Own<T> pattern by auto-unwrapping."""
-    from sushi_lang.semantics.ast import Pattern as PatternNode
-    from sushi_lang.semantics.typesys import StructType
+def _payload_address(codegen: 'LLVMCodegen', position: _Position, offset: int,
+                     payload_type: 'Type') -> Optional[Callable[[], 'ir.Value']]:
+    """The address of a payload inside the scrutinee's own storage, never the copy.
+
+    A pointer into the copy makes every write silently lost (#253).
+    """
+    from llvmlite import ir
+    parent = position.address
+    if parent is None:
+        return None
+
+    def address() -> 'ir.Value':
+        data = gep_utils.gep_struct_field(codegen, parent(), 1, "scrutinee_data_ptr")
+        data_i8 = codegen.builder.bitcast(data, codegen.types.str_ptr, name="scrutinee_data_i8")
+        field = codegen.builder.gep(data_i8, [ir.Constant(codegen.types.i32, offset)],
+                                    name="ref_binding_field_i8")
+        return codegen.builder.bitcast(
+            field, ir.PointerType(codegen.types.ll_type(payload_type)),
+            name="ref_binding_field_ptr")
+    return address
+
+
+def _test_own(codegen: 'LLVMCodegen', pattern, position: _Position,
+              on_fail: Callable[[], 'ir.Block'], binds: list) -> None:
+    """An `Own(...)` pattern: read through the heap cell to the pointee."""
+    from sushi_lang.backend.destructors import resolve_named_type
     from sushi_lang.backend.generics import own as own_module
     from sushi_lang.semantics.generics.own import get_own_element_type
+    from sushi_lang.semantics.type_predicates import is_instance_of
+    from sushi_lang.semantics.typesys import StructType
 
+    own_type = position.semantic_type
     if not isinstance(own_type, StructType) or not is_instance_of(own_type, "Own"):
         raise_internal_error("CE0022", type=str(own_type))
+    element_type = resolve_named_type(codegen, get_own_element_type(own_type))
+    unwrapped = own_module.emit_own_get(codegen, position.value, element_type)
 
-    element_type = get_own_element_type(own_type)
+    inner = pattern.inner_pattern
+    if isinstance(inner, str):
+        if inner == "_":
+            return
+        # `Own(poke x)` binds the heap POINTER, so a write lands in the allocation the Own
+        # owns. A bare binding BORROWS the pointee, which the Own@(T) still owns.
+        kind = "own_ref" if pattern.inner_borrow is not None else "own_value"
+        binds.append(_Bind(kind, inner, _Position(unwrapped, element_type, None),
+                           mode=pattern.inner_borrow, own_value=position.value))
+        return
+    _test_item(codegen, inner, _Position(unwrapped, element_type, None), on_fail, binds)
 
-    unwrapped_value = own_module.emit_own_get(codegen, own_value, element_type)
 
-    element_llvm_type = codegen.types.ll_type(element_type)
-
-    inner_pattern = own_pattern.inner_pattern
-    if isinstance(inner_pattern, str):
-        # The binding BORROWS the Own's pointee, which the Own<T> still owns, so it must
-        # NOT be registered -- the same rule as the plain arm binding above. It was latent
-        # until #162/#183 stopped the enum destructor no-opping on an Own payload.
-        if inner_pattern != "_":
-            if own_pattern.inner_borrow is not None:
-                # `Own(poke x)` binds the heap POINTER, not a copy of the pointee, so a
-                # write lands in the allocation the Own owns. The slot mimics a reference
-                # parameter's `T**`, and the `ReferenceType` flips every deref consumer.
-                from sushi_lang.semantics.param_modes import borrow_mode
-                from sushi_lang.semantics.typesys import ReferenceType
-                pointee_ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
-                ref_type = ReferenceType(element_type, borrow_mode(own_pattern.inner_borrow))
-                codegen.memory.create_local(inner_pattern, pointee_ptr.type, pointee_ptr,
-                                            ref_type, register_cleanup=False)
-            else:
-                codegen.memory.create_local(inner_pattern, element_llvm_type, unwrapped_value,
-                                            element_type, register_cleanup=False)
-    elif isinstance(inner_pattern, PatternNode):
-        _extract_nested_pattern(codegen, inner_pattern, unwrapped_value, element_type, next_arm_bb)
+def _make_binding(codegen: 'LLVMCodegen', bind: _Bind) -> None:
+    """Make one binding, after every test of the arm passed."""
+    position = bind.position
+    llvm_type = codegen.types.ll_type(position.semantic_type)
+    if bind.kind == "nom":
+        # `Variant(nom x)` (ruling R11): the arm TAKES the value, so it IS registered --
+        # through `register_owning_value`, the complete registry router (#382). What
+        # stops the second free is the scrutinee's drop flag, cleared before the bindings.
+        slot = codegen.memory.create_local(bind.name, llvm_type, position.value,
+                                           position.semantic_type, register_cleanup=False)
+        codegen.memory.register_owning_value(bind.name, position.semantic_type, slot)
+    elif bind.kind == "ref":
+        from sushi_lang.backend.statements.loops import bind_element_reference
+        if position.address is None:
+            raise_internal_error("CE0121", pattern=f"{bind.mode} {bind.name}")
+        bind_element_reference(codegen, bind.name, bind.mode, position.semantic_type,
+                               position.address())
+    elif bind.kind == "own_ref":
+        from sushi_lang.semantics.param_modes import borrow_mode
+        from sushi_lang.semantics.typesys import ReferenceType
+        pointee_ptr = codegen.builder.extract_value(bind.own_value, 0, name="own_ptr")
+        ref_type = ReferenceType(position.semantic_type, borrow_mode(bind.mode))
+        codegen.memory.create_local(bind.name, pointee_ptr.type, pointee_ptr, ref_type,
+                                    register_cleanup=False)
+    else:
+        # A bare binding BORROWS the value the scrutinee owns, so it is NOT registered for
+        # its own free -- the owner frees it, and registering both double-frees (#139).
+        codegen.memory.create_local(bind.name, llvm_type, position.value,
+                                    position.semantic_type, register_cleanup=False)

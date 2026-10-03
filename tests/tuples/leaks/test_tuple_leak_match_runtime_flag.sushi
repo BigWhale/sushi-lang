@@ -1,0 +1,18 @@
+# One arm takes and another borrows, so whether the match still owns its scrutinee at
+# the end is a run-time fact.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate i0!\nkept i1!\nate i2!\nkept i3!\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn main() i32:
+    foreach(i in 0..4):
+        match make("i{i}", i % 2):
+            (nom s, 0) -> eat(nom s)
+            (s, _) -> println("kept {s}")
+    return 0

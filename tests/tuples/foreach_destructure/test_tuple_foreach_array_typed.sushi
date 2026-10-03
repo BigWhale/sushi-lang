@@ -1,0 +1,15 @@
+# A foreach destructure over a dynamic array, with typed binders and with bare binders.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "21\n9\n"
+
+fn main() i32:
+    let (i32, i32)[] points = from([(1, 2), (3, 4), (5, 6)])
+    let i32 total = 0
+    foreach((i32 x, i32 y) in points.iter()):
+        total := total + x + y
+    println(total)
+    let i32 xs = 0
+    foreach((x, _) in points.iter()):
+        xs := xs + x
+    println(xs)
+    return 0

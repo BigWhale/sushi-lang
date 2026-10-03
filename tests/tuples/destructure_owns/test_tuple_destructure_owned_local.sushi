@@ -1,0 +1,17 @@
+# A destructure of an owned local spends the local, and each binder owns its part.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ford prefect\n3\n"
+use <collections/strings>
+
+fn eat(nom string s) i32:
+    return s.len()
+
+fn main() i32:
+    let (string, string) t = ("ford", "prefect")
+    let (string first, string last) = t
+    println("{first} {last}")
+    let (string[], string) u = (from(["a", "b"]), "cd")
+    let (xs, s) = u
+    println(xs.len() + eat(nom s) - 1)
+    return 0

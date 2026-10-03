@@ -1,0 +1,14 @@
+# An enum pattern arm and a literal arm do not fit a tuple scrutinee.
+# EXPECT_ERROR_CODES_EXACT: CE2076, CE2076
+
+enum Color:
+    Red
+    Green
+
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    match t:
+        Color.Red -> println(0)
+        0 -> println(1)
+        _ -> println(2)
+    return 0

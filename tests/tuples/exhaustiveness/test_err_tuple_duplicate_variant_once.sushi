@@ -1,0 +1,15 @@
+# A duplicate variant arm is CE2041, and it is the one diagnostic for that arm.
+# EXPECT_ERROR_CODES_EXACT: CE2041
+
+enum Color:
+    Red
+    Green
+
+fn f(Color c) i32:
+    match c:
+        Color.Red -> return 0
+        Color.Red -> return 1
+        Color.Green -> return 2
+
+fn main() i32:
+    return f(Color.Red)

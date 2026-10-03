@@ -1,0 +1,17 @@
+# A destructure of a temporary: each binder owns its element and may hand it away.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly\nHarmless 42\n"
+
+fn make() (string, (string, i32)):
+    return ("Mostly", ("Harmless", 42))
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let (string a, (string, i32) rest) = make()
+    eat(nom a)
+    let (string b, i32 n) = rest
+    println("{b} {n}")
+    return 0

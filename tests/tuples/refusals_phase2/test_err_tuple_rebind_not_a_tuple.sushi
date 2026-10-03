@@ -1,0 +1,8 @@
+# The right side of a destructuring rebind is a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2117
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := 5
+    return a + b

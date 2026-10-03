@@ -165,7 +165,7 @@ def _differs_only_in_nested_resolution(stored, rebuilt, structs, enums) -> bool:
     return True
 
 
-def _names_an_unbuilt_instance(ty: Type, structs: dict, enums: dict) -> bool:
+def names_an_unbuilt_instance(ty: Type, structs: dict, enums: dict) -> bool:
     """Does a payload still spell a generic instance the monomorphize pass has not built?
 
     Asked AFTER `resolve_type_recursively`, which turns every reference whose instance
@@ -259,7 +259,7 @@ def intern_wrapper_enum(
         return EnumType(name=name, variants=variants, generic_base=base,
                         generic_args=resolved)
 
-    if any(is_abstract_type(t, structs, enums) or _names_an_unbuilt_instance(t, structs, enums)
+    if any(is_abstract_type(t, structs, enums) or names_an_unbuilt_instance(t, structs, enums)
            for t in resolved):
         return build()
 

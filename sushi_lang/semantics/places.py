@@ -20,7 +20,7 @@ from sushi_lang.semantics.ast import (
     ArrayLiteral, BinaryOp, BlankLit, BoolLit, Borrow, Call, CastExpr, DotCall,
     DynamicArrayFrom, DynamicArrayNew, EnumConstructor, Expr, FloatLit, IndexAccess,
     InterpolatedString, IntLit, Lambda, MemberAccess, MethodCall, Name, RangeExpr, Spread,
-    StringLit, TryExpr, UnaryOp,
+    StringLit, TryExpr, TupleLiteral, UnaryOp,
 )
 
 
@@ -38,7 +38,7 @@ class Step(enum.Flag):
 NOT_A_STEP: tuple[type, ...] = (
     Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString,
     ArrayLiteral, UnaryOp, BinaryOp, Call, EnumConstructor, DynamicArrayNew,
-    DynamicArrayFrom, CastExpr, Borrow, RangeExpr, Spread, Lambda,
+    DynamicArrayFrom, CastExpr, Borrow, RangeExpr, Spread, Lambda, TupleLiteral,
 )
 
 MethodLike = Union[MethodCall, DotCall]

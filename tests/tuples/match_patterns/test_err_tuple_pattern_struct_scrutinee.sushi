@@ -1,0 +1,13 @@
+# A struct is still no match scrutinee: CE2048 keeps every type that is not an enum, an
+# integer or a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2048
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    match p:
+        _ -> println(0)
+    return 0

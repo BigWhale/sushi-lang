@@ -1,0 +1,6 @@
+# An index past the last element is a field the tuple type does not have.
+# EXPECT_ERROR_CODES_EXACT: CE2106
+
+fn main() i32:
+    let (i32, string) t = (1, "a")
+    return t.2

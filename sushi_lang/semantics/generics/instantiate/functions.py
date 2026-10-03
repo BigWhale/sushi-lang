@@ -86,6 +86,27 @@ class FunctionCollector:
             inferred = self.expression_scanner.generic_call_type(scrutinee)
         return inferred
 
+    def _bind_destructure(self, targets, value_type) -> None:
+        """A destructure's binders are locals: a written type is collected, and each
+        binder takes its written type or the element type of the value."""
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+
+        elements: tuple = (tuple_elements(value_type) if is_tuple_type(value_type)
+                           else (None,) * len(targets))
+        if len(elements) != len(targets):
+            elements = (None,) * len(targets)
+        for target, element in zip(targets, elements, strict=True):
+            if target.nested is not None:
+                self._bind_destructure(target.nested, element)
+                continue
+            if target.ty is not None:
+                self._collect_from_type(target.ty, target.type_span)
+            if target.name is None:
+                continue
+            bound = self._resolve_local_type(target.ty) if target.ty is not None else element
+            if bound is not None:
+                self.variable_types[target.name] = bound
+
     def _variant_payload_types(self, scrutinee_type, variant_name):
         """The payload types of one variant, or () when they cannot be read here.
 
@@ -130,17 +151,25 @@ class FunctionCollector:
         is returned rather than the scope being cleared -- an arm must not see the arm
         before it, and it must not lose an outer local of the same name.
         """
-        from sushi_lang.semantics.ast import Pattern, NomBinding
+        from sushi_lang.semantics.ast import Pattern, NomBinding, TuplePattern
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 
-        if not isinstance(pattern, Pattern) or scrutinee_type is None:
+        if scrutinee_type is None:
             return []
-
-        payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        if isinstance(pattern, TuplePattern):
+            if not is_tuple_type(scrutinee_type):
+                return []
+            items, payloads = pattern.elements, list(tuple_elements(scrutinee_type))
+        elif isinstance(pattern, Pattern):
+            items = pattern.bindings
+            payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        else:
+            return []
         if not payloads:
             return []
 
         saved: list[tuple[str, "Type | None"]] = []
-        for binding, raw_payload in zip(pattern.bindings, payloads, strict=False):
+        for binding, raw_payload in zip(items, payloads, strict=False):
             # Resolve before binding, exactly as a `let` local's annotation is resolved. A
             # template's payload can be a bare name -- an UnknownType("NetError") displays
             # as "NetError" while the enum table holds the real EnumType -- and binding the
@@ -158,7 +187,7 @@ class FunctionCollector:
                 # no reference wrapper (borrow-model.md S10b).
                 saved.append((binding.name, self.variable_types.get(binding.name)))
                 self.variable_types[binding.name] = payload
-            elif isinstance(binding, Pattern):
+            elif isinstance(binding, (Pattern, TuplePattern)):
                 saved.extend(self._bind_pattern_payloads(binding, payload))
             # A `peek`/`poke` RefBinding carries a ReferenceType rather than the payload's
             # own type, and a reference is not a type argument a generic can be called
@@ -319,6 +348,8 @@ class FunctionCollector:
                 self.expression_scanner.scan_expression(stmt.value)
                 if stmt.ty is not None:
                     self._scan_fn_value(stmt.value, stmt.ty)
+            if stmt.targets is not None:
+                self._bind_destructure(stmt.targets, self._infer_scrutinee_type(stmt.value))
 
         elif isinstance(stmt, Foreach):
             if stmt.item_type is not None:

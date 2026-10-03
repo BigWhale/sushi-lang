@@ -1,0 +1,14 @@
+# A `_` element of a destructure of a temporary is destroyed at the destructure.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "kept 2\n"
+
+fn make() (string, string[], string):
+    let string s = "kept"
+    return ("{s} away", from(["a", "b"]), "{s}")
+
+fn main() i32:
+    let (_, xs, k) = make()
+    let ((_, i32 n), _) = (("{xs.len()}", 2), from([1]))
+    println("{k} {n}")
+    return 0

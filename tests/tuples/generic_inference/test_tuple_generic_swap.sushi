@@ -1,0 +1,23 @@
+# A generic function infers its type parameters through a tuple parameter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "answer 42\n2.5 true\n"
+
+fn swap@(T, U)(nom (T, U) p) (U, T):
+    let (a, b) = p
+    return (b, a)
+
+fn first@(T, U)((T, U) p) T:
+    return p.0
+
+fn main() i32:
+    let (i32, string) t = (42, "answer")
+    let (string, i32) s = swap(nom t)
+    println("{s.0} {s.1}")
+    let (bool, f64) u = (true, 2.5)
+    let (f64, bool) v = swap(nom u)
+    println("{v.0} {first(u2())}")
+    return 0
+
+fn u2() (bool, i32):
+    return (true, 1)

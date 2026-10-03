@@ -1,0 +1,18 @@
+# A `nom` binding takes an owning element out of a temporary tuple scrutinee.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate a!\nate b!\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn main() i32:
+    match make("a", 1):
+        (nom s, _) -> eat(nom s)
+    match make("b", 0):
+        (nom s, 0) -> eat(nom s)
+        (nom s, _) -> eat(nom s)
+    return 0

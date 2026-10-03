@@ -1,0 +1,7 @@
+# A cast does not build a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+
+fn main() i32:
+    let i32 x = 1
+    let (i32, i32) t = x as (i32, i32)
+    return t.0

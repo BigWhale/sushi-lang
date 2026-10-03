@@ -88,3 +88,19 @@ _add(ErrorMessage("CE6104", Severity.ERROR,
                      "parser cannot know what the callee is; the rule is refused where the "
                      "callee is known, which is the typecheck pass, as CE6102 is. Write "
                      "the arguments in declaration order."))
+
+_add(ErrorMessage("CE6105", Severity.ERROR,
+    "invalid tuple element: {reason}",
+    Category.SYNTAX, "A tuple TYPE and a `let` destructure share one list rule, `(elem, elem, ...)`, and the token after the `)` tells them apart: `=` is a destructure, a NAME is a typed binding. The AST builder judges each element by its position. In a TYPE position every element is a type and nothing else: a name (`(i32 quot, i32 rem)`) and a `_` are refused, because a tuple has no named elements (ruling 9 of the tuple design) -- a record with names is a struct. In a DESTRUCTURE position an element is a bare name (`q`, the type is the element type), a typed name (`i32 q`), a `_`, or a nested destructure (`(a, b)`); a type with no name (`i32` alone) binds nothing and is refused. Added with tuples (docs/design/tuples.md)."))
+
+_add(ErrorMessage("CE6106", Severity.ERROR,
+    "'.{index}' is not a tuple element index: {reason}",
+    Category.SYNTAX, "A tuple element is read with `.N`, where N is a plain decimal number that starts at 0: `t.0`, `t.1`, and `t.0.1` for an element of a nested tuple. The element type depends on the index, so the index is a literal and never a value (`t[i]` is not a tuple access). The lexer reads `t.0.1` as `t` `.` and the number `0.1`, and the builder splits it in two steps; a number with an underscore (`t.0_1`), an exponent (`t.1e3`) or a leading zero (`t.01`) names no element and is refused here. Added with tuples (docs/design/tuples.md)."))
+
+_add(ErrorMessage("CE6107", Severity.ERROR,
+    "a tuple element takes no mode: '{mode}'",
+    Category.SYNTAX, "A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused (spec decision D1 of the tuple design; a later change can add a mode). A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. Added with tuples (docs/design/tuples.md)."))
+
+_add(ErrorMessage("CE6109", Severity.ERROR,
+    "'{place}' is written twice in one destructuring rebind",
+    Category.SYNTAX, "A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns each target from left to right (rulings 13 and 16 of the tuple design). A place written twice, as in `(a, a) := (1, 2)` or `(p.x, p.x) := f()`, gets two values, and the second assignment silently replaces the first. So the same place twice in the target, nested targets included, is refused, with a note at its first position. The check compares the written places: a name, a field chain, a tuple element, and an index that is a literal or a name. Two different places of one value are legal: `(p.x, p.y) := (p.y, p.x)` is a swap, and `(i, xs[i]) := (1, 9)` assigns `i` first, so `xs[i]` reads the new `i`. Added with tuples (docs/design/tuples.md)."))

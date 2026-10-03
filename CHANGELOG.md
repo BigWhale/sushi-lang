@@ -11,6 +11,36 @@ All notable changes to Sushi Lang will be documented in this file.
   of the `assert`, then the message. The message is any `string`, and the program builds
   it only on failure. An assert is always on, and `assert(false)` does not end the path.
   `assert` is a reserved word now. A message that is not a `string` is `CE2116`.
+
+- **Tuples.** `(i32, string)` is an anonymous product type, in every type position: a
+  parameter, a return (with a `| E` channel too), a field, a payload, a type argument
+  (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element, a function
+  type and a lambda parameter. `(42, "Arthur")` is the literal, and `t.0`, `t.0.1` read an
+  element; `t.0 := v` writes one and `nom t.0` takes one. A `let` destructures:
+  `let (i32 q, i32 r) = divmod(7, 2)`, `let (q, _) = ...`, `let ((a, b), c) = ...`. Each
+  binder owns its element from an owned value and borrows it from a borrow. A tuple
+  compares element by element (the orders are lexicographic), hashes, prints as
+  `(1, "a")`, clones, is a `HashMap` key, infers through a generic (`swap@(T, U)`) and
+  crosses a `.slib` of each kind. There is no tuple constant and no tuple `var`, by design.
+  A named element is `CE6105`, a bad element index `CE6106`, a mode on an element `CE6107`,
+  a destructure count `CE2120` and a destructure of a value that is not a tuple `CE2117`.
+  A `foreach` destructures each item (`foreach((k, v) in pairs.iter()):`) by the rule of a
+  `let` destructure. A destructuring rebind (`(a, b) := f()`) assigns each element to a
+  place that `:=` takes (a name, a field, an element); the whole right side is evaluated
+  first, so `(a, b) := (b, a)` is a swap, and an owning swap frees nothing. The same place
+  twice in the target is `CE6109`. A `match` takes a tuple pattern
+  (`(Color.Red, n) ->`), at the top of an arm, in an enum payload (`Maybe.Some((a, b))`)
+  and in another tuple pattern, with the three binding modes; an integer literal is legal
+  in every pattern position (`Maybe.Some(0) ->`, `(0, _) ->`). `match (a, b):` builds no
+  tuple: each element is read once and matched in place, and `match nom (a, b):` hands
+  each element to the match. One exhaustiveness checker now reads every match, nested
+  patterns included: a nested match that does not cover a value is now the compile error
+  `CE2040`, not the run-time trap `RE2023`, and the message names the missing pattern
+  (`Maybe.Some(Color.Green)`). An arm that the arms above it cover is the new error
+  `CE2118`. A literal pattern over a value that is not an integer is `CE2119`. `CE2110`
+  covers a tuple type as an extension or perk-implementation target. See
+  `docs/design/tuples.md`.
+
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;
   `fn(i32) -> i32[]` is still a function that returns `i32[]`, and a message prints the

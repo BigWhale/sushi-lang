@@ -1,0 +1,8 @@
+# A tuple type names no binding: a named element is refused (a record with names is a struct).
+# EXPECT_ERROR_CODES_EXACT: CE6105
+
+fn divmod(i32 a, i32 b) (i32 quot, i32 rem):
+    return (a / b, a % b)
+
+fn main() i32:
+    return 0

@@ -1,0 +1,18 @@
+# A destructure of a field: each binder borrows, and the struct keeps its tuple.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "heart of gold\nheart\n0\n"
+use <collections/strings>
+
+struct Ship:
+    (string, string) name
+    i32 crew
+
+fn main() i32:
+    let Ship s = Ship(("heart of", "gold"), 4)
+    let (a, b) = s.name
+    println("{a} {b}")
+    let (string w, _) = s.name
+    println(w.s(0, 5))
+    println(s.name.0.len() - 8)
+    return 0

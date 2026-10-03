@@ -14,6 +14,7 @@ This guide provides a friendly tour of Sushi's features. If you're new to Sushi,
 - [Error Handling](#error-handling)
 - [Collections](#collections)
 - [Structs and Enums](#structs-and-enums)
+- [Tuples](#tuples)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
 - [Units and Imports](#units-and-imports)
@@ -890,6 +891,81 @@ When you pattern match, the compiler generates a switch on the discriminant, the
 - **Optional complex data**: Use `Maybe@(T)` (which is an enum) for values that might not exist
 - **Algebraic data types**: Build sophisticated recursive data structures
 
+## Tuples
+
+A tuple groups two or more values with no names. It is the shape for a function that
+returns more than one value:
+
+```sushi
+fn min_max(i32[] xs) (i32, i32):
+    let i32 low = xs[0]
+    let i32 high = xs[0]
+    foreach(x in xs.iter()):
+        if (x < low):
+            low := x
+        if (x > high):
+            high := x
+    return (low, high)
+
+fn main() i32:
+    let i32[] values = from([4, 8, 15, 16, 23, 42])
+    let (low, high) = min_max(values)       # a destructure: one name per element
+    println("{low} to {high}")              # 4 to 42
+
+    let (i32, string) answer = (42, "the answer")
+    println(answer.1)                       # an element read: .0, .1, ...
+    answer.0 := 43                          # an element write
+    println("{answer}")                     # (43, "the answer")
+    return 0
+```
+
+**Key features**:
+- **The type and the literal** are both written in parentheses: `(i32, string)` and
+  `(42, "Arthur")`. A tuple type stands wherever a type does: a parameter, a field, a type
+  argument (`List@((string, i32))`), an array element, and a return with a channel
+  (`fn divmod(i32 a, i32 b) (i32, i32) | MathError`)
+- **Element access** is `.0`, `.1`, ... and `.0.1` for a nested tuple. The index is a
+  literal, so `t[i]` is not a tuple access
+- **A destructure** takes a typed binder (`i32 q`), a bare binder (`q`), a `_` that
+  discards, or a nested destructure: `let ((a, b), c) = nested()`
+- **Ownership**: each binder OWNS its element when the value is owned (a temporary, or a
+  local that the destructure spends), and BORROWS it when the value is a borrow (a
+  parameter or a field). So a destructure takes two owned strings out of one value, which
+  two field reads cannot do
+- **Comparison, hashing and printing** come from the elements: `==` compares element by
+  element, `<` is lexicographic, and a tuple of hashable elements is a `HashMap` key
+
+**When to use a struct instead**: a value whose parts have a meaning (a point, a file
+status, a configuration) is a struct, because a struct names its fields. There are no
+named tuple elements, and there is no tuple constant.
+
+A `foreach` destructures each item, and a tuple on the left of `:=` rebinds more than one
+place at once:
+
+```sushi
+fn main() i32:
+    let (string, i32)[] scores = from([("arthur", 42), ("ford", 7)])
+    foreach((name, score) in scores.iter()):     # one name per element of each item
+        println("{name}: {score}")
+
+    let i32 a = 0
+    let i32 b = 1
+    foreach(_ in 0..10):
+        (a, b) := (b, a + b)                     # the right side first, then a, then b
+    println(a)                                   # 55
+    return 0
+```
+
+- **A `foreach` destructure** follows the rules of a `let` destructure. The binders of a
+  borrowed item (`.iter()`) borrow, and the binders of an owned item (a `next()` iterator)
+  own
+- **A destructuring rebind** takes any tuple value on the right. Each target is a place
+  that `:=` takes: a name, a field, an array element or a tuple element. The whole right
+  side is evaluated first, so `(a, b) := (b, a)` is a swap, and an owning swap moves the
+  values and frees nothing
+
+A `match` reads a tuple with a tuple pattern (see [Tuple patterns](#tuple-patterns)).
+
 ## Pattern Matching
 
 Pattern matching is Sushi's way of deconstructing enums and handling different cases. The compiler enforces **exhaustiveness checking** - you must handle all possible variants, ensuring you never forget a case.
@@ -964,7 +1040,27 @@ fn main() i32:
     return 0
 ```
 
+**Literals inside a pattern**: an integer literal is also legal in a payload (`Maybe.Some(0)`) and in a tuple element (`(0, n)`).
+
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
+
+**Every value and every arm**: one checker reads every match, nested patterns included. A value that no arm matches is `CE2040`, and the message names the missing pattern, for example `Maybe.Some(Color.Green)`. An arm that the arms above it already cover can never run, and that is the error `CE2118`:
+
+<!-- docs-sweep: error CE2118 -->
+```sushi
+enum Color:
+    Red
+    Green
+
+fn name(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(_) -> return 1
+        Maybe.Some(Color.Red) -> return 2      # CE2118: the arm above matches it first
+        Maybe.None -> return 0
+
+fn main() i32:
+    return name(Maybe.None)
+```
 
 **Zero-cost compilation**: Pattern matching compiles to efficient jump tables or switch statements. There's no runtime overhead compared to hand-written if-else chains or switch statements in C.
 
@@ -1008,6 +1104,39 @@ is handed over, exactly as `take(nom r)` hands it over; `r` may not be read afte
 **An arm takes the variant whole.** If one binding in an arm is `nom`, every other owning
 payload of that variant must be `nom` as well -- what stops the match freeing the value is
 the whole scrutinee, not one slot of it.
+
+### Tuple Patterns
+
+A tuple pattern matches each element of a tuple. Its items are the items of a payload: an
+enum pattern, an integer literal, a binding in one of the three modes, a `_`, or another
+tuple pattern. With a tuple literal as the scrutinee, a `match` reads two values at once:
+
+```sushi
+enum Light:
+    Red
+    Green
+
+enum Event:
+    Timer
+    Button
+
+fn next(Light light, Event event) Light:
+    match (light, event):
+        (Light.Red, Event.Timer) -> return Light.Green
+        (Light.Green, Event.Timer) -> return Light.Red
+        (l, Event.Button) -> return l
+
+fn main() i32:
+    match next(Light.Red, Event.Timer):
+        Light.Green -> println("green")
+        Light.Red -> println("red")
+    return 0
+```
+
+`match (light, event):` builds no tuple. Each element is read once and matched in place,
+with the rules of a named scrutinee, so `light` and `event` are still usable after the
+match. `match nom (a, b):` hands each element to the match, and then a `nom` binding may
+take it.
 
 ## Generics
 

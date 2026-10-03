@@ -1,0 +1,15 @@
+# A tuple match that misses a pair of variants names the missing pattern.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: (Color.Red, Color.Green)
+
+enum Color:
+    Red
+    Green
+
+fn f((Color, Color) p) i32:
+    match p:
+        (Color.Red, Color.Red) -> return 0
+        (Color.Green, _) -> return 1
+
+fn main() i32:
+    return f((Color.Red, Color.Red))

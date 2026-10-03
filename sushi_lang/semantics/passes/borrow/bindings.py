@@ -7,7 +7,8 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
-    DotCall, Expr, MethodCall, Name, NomBinding, Pattern, RefBinding,
+    DotCall, Expr, LiteralPattern, MethodCall, Name, NomBinding, Pattern, RefBinding,
+    TuplePattern,
 )
 from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
@@ -280,51 +281,63 @@ class ScrutineeKind(Enum):
 
 
 def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
-                              pattern: Pattern,
+                              pattern: object,
                               scrutinee_type: Optional[Type] = None,
                               scrutinee: Optional[Expr] = None,
                               owns_scrutinee: bool = False) -> None:
-    """Register a match arm's payload bindings, WITH their types."""
+    """Register the bindings of a pattern that reads `scrutinee`, WITH their types."""
     kind = ScrutineeKind.OWNED if owns_scrutinee else ScrutineeKind.BORROWED
-    _register_bindings(checker, scope, pattern, scrutinee_type, scrutinee, kind)
+    _register_item(checker, scope, pattern, scrutinee_type, scrutinee, kind, None)
 
 
-def _register_bindings(checker: 'BorrowChecker', scope: BindingScope, pattern: Pattern,
-                       scrutinee_type: Optional[Type], scrutinee: Optional[Expr],
-                       kind: ScrutineeKind) -> None:
-    """Register one pattern's bindings, read through a scrutinee of `kind`."""
-    variant_types = checker.types.variant_payload_types(
-        scrutinee_type, pattern.variant_name)
-    span = pattern.variant_name_span or pattern.loc
+def _sub_items(checker: 'BorrowChecker', item: object,
+               ty: Optional[Type]) -> list[tuple[object, Optional[Type]]]:
+    """The positions directly inside an enum or a tuple pattern, each with its type."""
+    if isinstance(item, Pattern):
+        types = checker.types.variant_payload_types(ty, item.variant_name)
+        items = item.bindings
+    elif isinstance(item, TuplePattern):
+        types = checker.types.tuple_element_types(ty)
+        items = item.elements
+    else:
+        return []
+    return [(sub, types[index] if index < len(types) else None)
+            for index, sub in enumerate(items)]
 
-    for index, binding in enumerate(pattern.bindings):
-        payload_type = variant_types[index] if index < len(variant_types) else None
-        match binding:
-            case "_":
-                pass                      # an explicit discard binds nothing
-            case str():
-                scope.bind_value(binding, payload_type, span)
-                freeze_for_a_view(checker, scope, binding, payload_type, span,
-                                   scrutinee, kind)
-            case NomBinding():
-                # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may
-                # only do out of a scrutinee the match owns. A take out of an `Own(...)`
-                # cell never reaches here: the AST builder refuses it.
-                if kind is ScrutineeKind.BORROWED:
-                    _reject_take_from_a_borrow(checker, binding, scrutinee)
-                scope.bind_owned(binding.name, payload_type, binding.loc or span)
-            case RefBinding():
-                # `Variant(poke x)` (#300): a REFERENCE into the scrutinee's payload. The
-                # scrutinee is frozen for the arm -- rebinding it would change the
-                # variant tag under the pointer.
-                _bind_payload_ref(checker, scope, binding.name, payload_type,
-                                  binding.mode, binding.loc or span, scrutinee, kind)
-            case Pattern():
-                _register_bindings(checker, scope, binding, payload_type, scrutinee,
-                                   kind)
-            case _:
-                _register_own_pattern(checker, scope, binding, payload_type, span,
-                                      scrutinee)
+
+def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
+                   ty: Optional[Type], scrutinee: Optional[Expr], kind: ScrutineeKind,
+                   span: Optional[Span]) -> None:
+    """Register one pattern position, read through a scrutinee of `kind`.
+
+    `span` is the span of the pattern that holds the position, for a bare name.
+    """
+    match item:
+        case "_" | LiteralPattern():
+            pass                      # a discard and a literal bind nothing
+        case str():
+            scope.bind_value(item, ty, span)
+            freeze_for_a_view(checker, scope, item, ty, span, scrutinee, kind)
+        case NomBinding():
+            # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may only
+            # do out of a scrutinee the match owns. A take out of an `Own(...)` cell never
+            # reaches here: the AST builder refuses it.
+            if kind is ScrutineeKind.BORROWED:
+                _reject_take_from_a_borrow(checker, item, scrutinee)
+            scope.bind_owned(item.name, ty, item.loc or span)
+        case RefBinding():
+            # `Variant(poke x)` (#300): a REFERENCE into the scrutinee's storage. The
+            # scrutinee is frozen for the arm -- rebinding it would change the variant tag
+            # under the pointer.
+            _bind_payload_ref(checker, scope, item.name, ty, item.mode, item.loc or span,
+                              scrutinee, kind)
+        case Pattern() | TuplePattern():
+            inner_span = (item.variant_name_span or item.loc
+                          if isinstance(item, Pattern) else item.loc)
+            for sub, sub_type in _sub_items(checker, item, ty):
+                _register_item(checker, scope, sub, sub_type, scrutinee, kind, inner_span)
+        case _:
+            _register_own_pattern(checker, scope, item, ty, span, scrutinee)
 
 
 def freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
@@ -359,16 +372,18 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     diag.emit()
 
 
-def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,
+def reject_partial_take(checker: 'BorrowChecker', pattern: object,
                         scrutinee_type: Optional[Type]) -> None:
     """Report CE2433: an arm that takes one owning payload must take them all.
 
-    All-or-nothing per arm, for the reason the code's text states: what suppresses the
-    match's free is the WHOLE scrutinee, so a payload left behind in a taking arm is
-    freed by nobody.
+    All-or-nothing per arm and per scrutinee, for the reason the code's text states:
+    what suppresses the match's free is the WHOLE scrutinee, so a payload left behind in
+    a taking arm is freed by nobody. Each element of a tuple-literal scrutinee is its own
+    scrutinee (ruling 3 of the tuple design), and the caller asks once for each.
     """
-    taken, left = [], []
-    _survey_arm(checker, pattern, scrutinee_type, taken, left)
+    taken: list = []
+    left: list = []
+    _survey_arm(checker, pattern, scrutinee_type, None, taken, left)
     if not taken or not left:
         return
     name, span = left[0]
@@ -382,30 +397,27 @@ def reject_partial_take(checker: 'BorrowChecker', pattern: Pattern,
     diag.emit()
 
 
-def _survey_arm(checker: 'BorrowChecker', pattern: Pattern,
-                scrutinee_type: Optional[Type],
-                taken: list, left: list) -> None:
-    """Collect an arm's taking bindings and the OWNING payloads it leaves behind."""
-    variant_types = checker.types.variant_payload_types(
-        scrutinee_type, pattern.variant_name)
-    span = pattern.variant_name_span or pattern.loc
-
-    for index, binding in enumerate(pattern.bindings):
-        payload_type = variant_types[index] if index < len(variant_types) else None
-        if isinstance(binding, Pattern):
-            _survey_arm(checker, binding, payload_type, taken, left)
-            continue
-        if isinstance(binding, NomBinding):
-            taken.append((binding.name, binding.loc or span))
-            continue
-        # Everything else keeps the payload where it is: a bare binding, a `poke` / `peek`
-        # reference into it, an `Own(...)` unwrap, and a `_` discard, which is the same
-        # slot with no name.
-        if checker.types.type_class(payload_type) is not TypeClass.MOVE:
-            continue
-        name = getattr(binding, "name", None) or (
-            binding if isinstance(binding, str) else "_")
-        left.append((name, getattr(binding, "loc", None) or span))
+def _survey_arm(checker: 'BorrowChecker', item: object, ty: Optional[Type],
+                span: Optional[Span], taken: list, left: list) -> None:
+    """Collect an arm's taking bindings and the OWNING positions it leaves behind."""
+    if isinstance(item, (Pattern, TuplePattern)):
+        inner_span = (item.variant_name_span or item.loc
+                      if isinstance(item, Pattern) else item.loc)
+        for sub, sub_type in _sub_items(checker, item, ty):
+            _survey_arm(checker, sub, sub_type, inner_span, taken, left)
+        return
+    if isinstance(item, NomBinding):
+        taken.append((item.name, item.loc or span))
+        return
+    if isinstance(item, LiteralPattern) or span is None:
+        return
+    # Everything else keeps the payload where it is: a bare binding, a `poke` / `peek`
+    # reference into it, an `Own(...)` unwrap, and a `_` discard, which is the same slot
+    # with no name.
+    if checker.types.type_class(ty) is not TypeClass.MOVE:
+        return
+    name = getattr(item, "name", None) or (item if isinstance(item, str) else "_")
+    left.append((name, getattr(item, "loc", None) or span))
 
 
 def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding,
@@ -416,9 +428,9 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
     inner_borrow = getattr(binding, "inner_borrow", None)
     pointee = checker.types.own_payload(payload_type)
 
-    if isinstance(inner, Pattern):
-        _register_bindings(checker, scope, inner, pointee, scrutinee,
-                           ScrutineeKind.OWN_PAYLOAD)
+    if isinstance(inner, (Pattern, TuplePattern)):
+        _register_item(checker, scope, inner, pointee, scrutinee,
+                       ScrutineeKind.OWN_PAYLOAD, span)
     elif isinstance(inner, str) and inner != "_":
         if inner_borrow is None:
             scope.bind_value(inner, pointee, span)

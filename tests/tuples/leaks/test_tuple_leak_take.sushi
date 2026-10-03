@@ -1,0 +1,11 @@
+# A take of one owning element destroys every other owning element at the take.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "middle\n"
+
+fn main() i32:
+    let string seed = "m"
+    let (string, string, i32[]) t = ("{seed}first", "{seed}iddle", from([1, 2]))
+    let string got = nom t.1
+    println(got)
+    return 0

@@ -97,6 +97,7 @@ println_stmt: "println" "(" expr ")" _NEWLINE
 assert_stmt: "assert" "(" expr ["," expr] ")" _NEWLINE
 
 let_stmt: "let" [type] NAME "=" NOM? expr _NEWLINE
+        | "let" tuple_list "=" NOM? expr _NEWLINE -> let_destructure
         | "let" [type] NAME "=" lambda_block       -> let_stmt
 call_stmt: postfix _NEWLINE
 
@@ -111,11 +112,12 @@ while_stmt: WHILE "(" expr ")" ":" block
 // or `poke` binding points INTO storage, and there is nothing to unwrap there.
 // A `_` binder discards the item, as `_` does in a `match` pattern (#968).
 foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr ")" ":" block
+            | FOREACH "(" tuple_list "in" expr ")" ":" block -> foreach_destructure
             | FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block -> foreach_ref
 expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
-match_arm: (pattern | literal_pattern | wildcard_pattern) "->" (match_arm_inline | block)
+match_arm: (pattern | literal_pattern | wildcard_pattern | tuple_pattern) "->" (match_arm_inline | block)
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT)
 # A one-statement arm on the arrow. Every alternative here is a STATEMENT the
@@ -124,11 +126,14 @@ literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
 match_arm_inline: (return_stmt | print_stmt | println_stmt | assert_stmt | call_stmt | rebind_stmt | break_stmt | continue_stmt | expr _NEWLINE)
 pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 pattern_list: pattern_item ("," pattern_item)*
-pattern_item: pattern | NAME | wildcard_pattern | own_pattern
+pattern_item: pattern | NAME | wildcard_pattern | own_pattern | tuple_pattern | literal_pattern
             | BORROW_MODE NAME -> ref_binding
             | NOM NAME -> nom_binding
 own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
+tuple_list: "(" tuple_elem "," tuple_elem ("," tuple_elem)* ")"
+tuple_elem: type NAME? | UNDERSCORE
+tuple_pattern: "(" pattern_item "," pattern_item ("," pattern_item)* ")"
 
 break_stmt: BREAK _NEWLINE
 continue_stmt: CONTINUE _NEWLINE
@@ -147,6 +152,7 @@ continue_stmt: CONTINUE _NEWLINE
            | (array_type | atom_type | paren_type) "[" "]" -> dynamic_array_t
 
 ?paren_type: "(" type ")"
+           | tuple_list -> tuple_t
 
 ?atom_type: "i8" -> i8_t
           | "i16" -> i16_t
@@ -206,6 +212,8 @@ fn_param_type: NOM? type
 call: [AT "(" type_list ")"] "(" [args] ")"
 method_call: "." method_name "(" [args] ")"
 member_access: "." method_name
+             | "." INT -> tuple_index
+             | "." FLOAT -> tuple_index_pair
 index: "[" expr "]"
 try_op: DOUBLE_QUESTION
 // A keyword after a DOT is a method name, never a statement: `new` has been admitted
@@ -232,6 +240,7 @@ method_name: NAME | NEW | EXTEND
      | dynamic_array_from
      | lambda_def
      | "(" expr ")"
+     | "(" expr "," expr ("," expr)* ")" -> tuple_literal
 
 // Lambda literals (closures). The opening `|` only appears where an atom is
 // expected (prefix position), so it never collides with the infix bitwise-or

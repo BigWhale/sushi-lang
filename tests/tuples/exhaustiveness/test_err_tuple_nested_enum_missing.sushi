@@ -1,0 +1,16 @@
+# A nested pattern is checked: this match compiled and stopped at run time with
+# RE2023 before one checker read every match.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: Maybe.Some(Color.Green)
+
+enum Color:
+    Red
+    Green
+
+fn name(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(Color.Red) -> return 1
+        Maybe.None -> return 0
+
+fn main() i32:
+    return name(Maybe.Some(Color.Green))

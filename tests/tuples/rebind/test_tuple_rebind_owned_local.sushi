@@ -1,0 +1,13 @@
+# A destructuring rebind from an owned local spends it, and each target takes its element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "sx sy\n"
+
+fn main() i32:
+    let string seed = "s"
+    let (string, string) t = ("{seed}x", "{seed}y")
+    let string a = "{seed}1"
+    let string b = "{seed}2"
+    (a, b) := t
+    println("{a} {b}")
+    return 0

@@ -1,0 +1,19 @@
+# A foreach destructure over the tuple keys of a HashMap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10 26\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@((i32, i32), string) grid = HashMap.new()
+    grid.insert((1, 2), "a")
+    grid.insert((3, 4), "b")
+    grid.insert((6, 20), "c")
+    let i32 xs = 0
+    let i32 ys = 0
+    foreach((x, y) in grid.keys()):
+        xs := xs + x
+        ys := ys + y
+    println("{xs} {ys}")
+    grid.free()
+    return 0

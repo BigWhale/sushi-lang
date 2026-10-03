@@ -1,0 +1,15 @@
+# A nested pattern after a `_` payload of the same variant can match no value.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+enum Color:
+    Red
+    Green
+
+fn f(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(_) -> return 1
+        Maybe.Some(Color.Red) -> return 2
+        Maybe.None -> return 0
+
+fn main() i32:
+    return f(Maybe.None)

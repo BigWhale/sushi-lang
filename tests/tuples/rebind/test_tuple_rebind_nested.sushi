@@ -1,0 +1,15 @@
+# Nested targets follow the destructure shape.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "1 2 sc\n2 1 sc\n"
+
+fn main() i32:
+    let string seed = "s"
+    let i32 a = 0
+    let i32 b = 0
+    let string c = ""
+    ((a, b), c) := ((1, 2), "{seed}c")
+    println("{a} {b} {c}")
+    ((a, b), c) := ((b, a), c)
+    println("{a} {b} {c}")
+    return 0

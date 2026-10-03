@@ -1,0 +1,11 @@
+# A duplicate literal arm is CE2075, and it is the one diagnostic for that arm.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(i32 n) i32:
+    match n:
+        0 -> return 0
+        0 -> return 1
+        _ -> return 2
+
+fn main() i32:
+    return f(0)

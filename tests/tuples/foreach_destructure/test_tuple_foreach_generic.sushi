@@ -1,0 +1,22 @@
+# A foreach destructure in a generic body: the binder types follow the instance.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "6\n9\n"
+
+fn total@(T)(List@((T, i32)) xs) i32:
+    let i32 sum = 0
+    foreach((_, n) in xs.iter()):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    let List@((string, i32)) named = List.new()
+    named.push(("a", 1))
+    named.push(("b", 5))
+    let List@((bool, i32)) flags = List.new()
+    flags.push((true, 9))
+    println(total(named))
+    println(total(flags))
+    named.free()
+    flags.free()
+    return 0

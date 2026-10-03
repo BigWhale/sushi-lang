@@ -1,0 +1,6 @@
+# A destructure names as many elements as the tuple has.
+# EXPECT_ERROR_CODES_EXACT: CE2120
+
+fn main() i32:
+    let (a, b, c) = (1, 2)
+    return a + b + c

@@ -70,6 +70,7 @@ def _every_expression() -> dict[str, object]:
         "TryExpr": a.TryExpr(None, _carrier()),
         "Spread": a.Spread(None, _carrier()),
         "Lambda": a.Lambda(None, [a.Param("p", _marker())], a.IntLit(None, 0)),
+        "TupleLiteral": a.TupleLiteral(None, [a.IntLit(None, 0), _carrier()]),
     }
 
 

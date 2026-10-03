@@ -1,0 +1,8 @@
+# A tuple holds values: an element of a tuple type takes no mode.
+# EXPECT_ERROR_CODES_EXACT: CE6107
+
+fn first((peek i32, i32) p) i32:
+    return p.1
+
+fn main() i32:
+    return first((1, 2))

@@ -1,0 +1,7 @@
+# A unit variable takes a constant initializer, so a tuple unit variable is refused too.
+# EXPECT_ERROR_CODES_EXACT: CE0108
+
+var (i32, i32) cursor = (0, 0)
+
+fn main() i32:
+    return 0

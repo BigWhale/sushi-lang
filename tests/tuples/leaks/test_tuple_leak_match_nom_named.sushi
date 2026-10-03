@@ -1,0 +1,22 @@
+# `match nom t:` hands a named tuple to the match, and the arm takes both elements.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate x1\nate x2\nnone\n"
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn make(string s, i32 n) (string, i32):
+    return ("{s}!", n)
+
+fn main() i32:
+    let string base = "x"
+    let (string, string) t = ("{base}1", "{base}2")
+    match nom t:
+        (nom a, nom b) ->
+            eat(nom a)
+            eat(nom b)
+    let (string, string) u = ("{base}3", "{base}4")
+    match nom u:
+        (_, _) -> println("none")
+    return 0

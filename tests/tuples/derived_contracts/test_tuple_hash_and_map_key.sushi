@@ -1,0 +1,19 @@
+# A tuple hashes by its elements, and a tuple of hashable elements is a HashMap key.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true false\nmilliways\n2 true false\n"
+use <collections/hashmap>
+
+fn main() i32:
+    let (i32, string) a = (42, "dent")
+    let (i32, string) b = (42, "dent")
+    let (i32, string) c = (42, "prefect")
+    println("{a.hash() == b.hash()} {a.hash() == c.hash()}")
+
+    let HashMap@((i32, string), string) places = HashMap.new()
+    places.insert((1, "end"), "milliways")
+    places.insert((2, "start"), "magrathea")
+    println(places.get((1, "end")).realise("nowhere"))
+    println("{places.len()} {places.contains_key((2, 'start'))} {places.contains_key((2, 'end'))}")
+    places.free()
+    return 0

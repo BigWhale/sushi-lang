@@ -14,6 +14,7 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Control Flow](#control-flow)
 - [Arrays](#arrays)
 - [Structs](#structs)
+- [Tuples](#tuples)
 - [Enums](#enums)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
@@ -317,6 +318,10 @@ x := 30     # OK
 # ERROR: Cannot rebind without prior declaration
 # y := 5    # CE1002: assignment to undeclared variable 'y'
 ```
+
+A tuple rebinds more than one place at once: `(a, b) := (b, a)` evaluates the whole right
+side first and then assigns from left to right, so it is a swap. See
+[Destructuring Rebind](#destructuring-rebind).
 
 A name that is a **view of another value's storage** cannot be rebound. A `match` or
 `foreach` binding is **CE2414**, a `let` bound from a field read, an index or a container
@@ -984,6 +989,10 @@ INTO storage, and there is nothing to unwrap there.
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
 by `break` and by `return` as well as at the end of the input.
 
+**A tuple item destructures.** `foreach((k, v) in pairs.iter()):` splits each item into
+its elements by the rule of a `let` destructure, and a binder's ownership follows from the
+item. See [Destructuring in a For-Each Loop](#destructuring-in-a-for-each-loop).
+
 The argument behind all of this -- why the failure rides in the ITEM rather than on the
 loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
 [Iteration (design)](design/iteration.md).
@@ -1363,6 +1372,196 @@ let Rectangle rect = Rectangle(
 println(rect.top_left.x)
 ```
 
+## Tuples
+
+A tuple is an anonymous, fixed-size product of two or more values of any types. Its type
+and its literal are both written in parentheses. The design record is
+[docs/design/tuples.md](design/tuples.md).
+
+### Type and Literal
+
+```sushi
+fn divmod(i32 a, i32 b) (i32, i32):
+    return (a / b, a % b)
+
+fn main() i32:
+    let (i32, string) t = (42, "Arthur")
+    let ((i32, i32), bool) nested = ((1, 2), true)
+    let (i32, i32) q = divmod(7, 2)
+    println("{t} {nested} {q.0}")       # (42, "Arthur") ((1, 2), true) 3
+    return 0
+```
+
+- A tuple type has two or more elements. `(T)` is grouping, as `(fn(i32) -> i32)[]` is,
+  and `~` is the unit type, so there is no one-element and no empty tuple.
+- A tuple type stands in every type position: a parameter, a return type (with or without a
+  `| E` channel), a struct field, an enum payload, a type argument
+  (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element
+  (`(i32, i32)[]`, `(i32, i32)[4]`), a function type and a lambda parameter.
+- A tuple type names no binding: `(i32 quot, i32 rem)` is **CE6105**. A record with names
+  is a struct. An element takes no mode either: `(peek i32, i32)` is **CE6107**.
+- A literal is two or more expressions in parentheses. Each element is a consuming
+  position, as an argument of a struct construction is.
+- A statement that has its own parentheses keeps them: `println(1, 2)` is a parse error,
+  and `println((1, 2))` prints a tuple.
+
+### Element Access
+
+An element is read with `.N`, a literal decimal index that starts at 0. `t.0.1` reads an
+element of a nested tuple. The index is a literal because the element type depends on it,
+so `t[i]` is not a tuple access.
+
+```sushi
+fn main() i32:
+    let (i32, (string, i32)) t = (1, ("deep", 2))
+    println(t.1.0)                      # deep
+    t.0 := 5                            # an element write, as a field write
+    println(t.0 + t.1.1)                # 7
+    return 0
+```
+
+The element access follows the struct field rules: a read is a borrow (consuming it is
+**CE2411**), a write consumes its value and destroys the old element, and `nom t.0` is a
+field take that spends all of `t` (see [Ownership Operations](#ownership-operations)). An
+index past the last element is **CE2106**, and a number with an underscore, an exponent or
+a leading zero (`t.0_1`, `t.1e3`, `t.01`) is **CE6106**.
+
+### Destructuring
+
+A `let` destructure splits a tuple into one binder per element:
+
+```sushi
+fn pair() (string, (i32, i32)):
+    return ("towel", (4, 2))
+
+fn main() i32:
+    let (string name, (a, b)) = pair()  # a typed binder, and a nested destructure
+    let (_, n) = (name, a * 10 + b)     # `_` discards an element
+    println(n)                          # 42
+    return 0
+```
+
+- An element is a typed binder (`i32 q`), a bare binder (`q`, which takes the element
+  type), a `_`, or a nested destructure. A typed binder of the wrong type is the type
+  mismatch of a `let` (**CE2002**).
+- The destructure names as many elements as the tuple has (**CE2120**), and only a tuple
+  destructures (**CE2117**). An unhandled `Result` is **CE2505**: take the value with
+  `??`, `.realise(default)` or `match` first.
+- A destructure element takes no mode: `let (peek i32 a, b) = t` is **CE6107**.
+- **Ownership.** Each binder OWNS its element when the value is owned: a temporary, or an
+  owned local, which the destructure spends whole (a later use of it is **CE2405**). Each
+  binder BORROWS its element when the value is a borrow: a parameter, a field, or a
+  binding. Consuming such a binder is **CE2411**, and a change of the owner while it lives
+  is **CE2412**. A `_` element of an owned value is destroyed at the destructure. This is
+  the one rule of [ruling 4](design/borrow-model.md#10e-the-fifth-boundary-a-tuple-destructure-binder): a
+  bare binder of a destructure owns, and a bare binding of a `match` pattern borrows.
+
+A `match` reads a tuple with a tuple pattern: see [Tuple Patterns](#tuple-patterns).
+
+### Destructuring in a For-Each Loop
+
+A `foreach` destructures each item with the same element list:
+
+```sushi
+fn main() i32:
+    let List@((string, i32)) people = List.new()
+    people.push(("arthur", 42))
+    people.push(("ford", 7))
+    foreach((name, age) in people.iter()):
+        println("{name} {age}")
+    foreach((string who, _) in people.iter()):
+        println(who)
+    people.free()
+    return 0
+```
+
+The loop is a `let` destructure of the item at the top of the body, so every rule of
+[Destructuring](#destructuring) applies: the elements, the count (**CE2120**), a tuple item
+(**CE2117**), a typed binder (**CE2002**), and no mode on an element (**CE6107**). A
+binder's ownership follows from the item. The items of `.iter()` are borrowed, so each
+binder borrows its element and consuming one is **CE2411**. A `next()` protocol iterator
+hands out owned items, so each binder owns its element and the body may hand it away. The
+binders of an owned item are destroyed at the end of each iteration, at a `break` and at a
+`return`.
+
+### Destructuring Rebind
+
+A destructuring rebind assigns the elements of a tuple to existing places:
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := (b, a)                    # a swap
+    let Point p = Point(0, 0)
+    let i32[] xs = from([0, 0])
+    (p.x, xs[1]) := (a * 10, b)         # a field and an element
+    println("{a} {b} {p.x} {xs[1]}")    # 2 1 20 1
+    return 0
+```
+
+- The right side is any tuple value: a literal, a call (`(q, r) := divmod(7, 2)`), a
+  local or a parameter. A value that is not a tuple is **CE2117**, an unhandled `Result`
+  is **CE2505**, and a count that is not the tuple's count is **CE2120**.
+- Each target is a place that a plain `:=` takes: a name, a field, an array element, a
+  tuple element (`t.0`) or a unit variable. Each target is a rebind or a field write by
+  the rule of `x := v`, so it destroys the old value and gives its type to a literal
+  element: `(small, big) := (200, 5000000000)` types `200` as the `u8` of `small`. A value
+  of the wrong type is **CE2002**, and a read-only target is the error of a plain `:=`
+  (for example **CE2408** for a `peek` parameter).
+- Nested targets follow the destructure shape: `((a, b), c) := ((1, 2), 3)`.
+- The same place twice in the target, nested targets included, is **CE6109**:
+  `(a, a) := (1, 2)` would replace the first value with the second.
+- **The order** (ruling 13): the whole right side is evaluated first, then each target is
+  assigned from left to right. So `(a, b) := (b, a)` is a swap, and `(i, xs[i]) := (1, 9)`
+  assigns `i` first, so `xs[i]` reads the new `i`.
+- **Ownership.** The right side is taken as a `let` destructure takes it: a temporary is
+  owned, an owned local is spent whole (a later use is **CE2405**), and a borrow cannot
+  give up an owning element (**CE2411**, once for each element). So an owning swap
+  `(s, t) := (t, s)` moves each value to its new name and destroys nothing.
+
+### Comparison, Hashing and Display
+
+A tuple derives `Eq`, `Ord`, `Display`, `hash()` and `clone()` from its elements, as a
+struct does from its fields:
+
+- `==` and `!=` compare element by element, and `<`, `<=`, `>`, `>=` are LEXICOGRAPHIC:
+  the first element that differs decides. Two tuples of different element types do not
+  compare (**CE2513**).
+- `hash()` reads the elements in order, so a tuple of hashable elements is a `HashMap` key.
+- A tuple prints as `(1, "a")`: the elements in order, a held string quoted.
+- `.clone()` is deep, and it is refused when an element declares a resource.
+
+### Generics
+
+A type parameter infers through a tuple, and a written `(T, U)` substitutes in a template:
+
+```sushi
+fn swap@(T, U)(nom (T, U) p) (U, T):
+    let (a, b) = p
+    return (b, a)
+
+fn main() i32:
+    let (i32, string) t = (42, "answer")
+    let (string, i32) s = swap(nom t)
+    println("{s}")                      # ("answer", 42)
+    return 0
+```
+
+### What a Tuple Is Not
+
+- There is no tuple constant and no tuple unit variable (see [Constants](#constants)).
+- A tuple has no C layout, so it is not a type of an FFI signature (**CE5003**).
+- A tuple type is not an extension target and not a perk-implementation target
+  (**CE2110**). Write a struct and extend it, or a free function that takes the tuple.
+- A tuple does not bloom into a variadic argument list (`f(t...)` is **CE2006**), and
+  `expand` walks a type pack and never a tuple.
+- A cast does not build a tuple (`x as (i32, i32)` is **CE2014**).
+
 ## Enums
 
 ### Definition
@@ -1451,7 +1650,12 @@ A `let` needs the block form: a local declared on the arrow has no line to read 
 
 A pattern may hold another pattern in a payload position. `open()` answers
 `Result@(File, IoError)`, so the inner pattern names an `IoError` variant; a pattern of
-another enum there is `CE2107`.
+another enum there is `CE2107`. A payload position takes an enum pattern, an integer
+literal (`Maybe.Some(0)`), a tuple pattern (`Maybe.Some((a, b))`), an `Own(...)`
+pattern, a binding or a `_`. A nested pattern over a payload that is not an enum is
+**CE2108**, a literal over a payload that is not an integer is **CE2119**, and a tuple
+pattern over a payload that is not a tuple is **CE2117**. The compiler checks a nested
+pattern for exhaustiveness as it checks an outer one (see [Exhaustiveness](#exhaustiveness)).
 
 ```sushi
 use <io/fs>
@@ -1512,9 +1716,20 @@ of that variant must be `nom` too (CE2433). `nom` is not valid inside an `Own(..
 pattern (CE2434), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
 read through a live owner has none (CE2404).
 
+A `peek`/`poke` binding is legal at the top of an arm: a payload of the arm's enum
+pattern, or an element of the arm's tuple pattern (also in a tuple pattern inside it).
+Inside a pattern that is nested in an enum payload, and in the payload of an enum pattern
+inside a tuple pattern, it is **CE2424**. A bare binding and a `nom` binding are legal at
+every depth.
+
 ### Exhaustiveness
 
-The compiler enforces that all variants are matched:
+One checker reads every match: an enum match, a nested enum match, an integer match and a
+tuple match. It gives two answers.
+
+**Every value must match an arm.** A match that does not cover a value is **CE2040**. For
+a plain enum match, the message lists the names of the missing variants. When an arm tests
+inside a payload or a tuple, the message lists the missing patterns in source syntax:
 
 ```sushi
 enum Color:
@@ -1522,11 +1737,42 @@ enum Color:
     Green()
     Blue()
 
-# ERROR: Non-exhaustive match (missing Blue)
+# ERROR CE2040: missing variants: Blue
 match color:
     Color.Red() -> println("Red")
     Color.Green() -> println("Green")
+
+# ERROR CE2040: missing variants: Maybe.Some(Color.Blue)
+match maybe_color:
+    Maybe.Some(Color.Red) -> println("red")
+    Maybe.Some(Color.Green) -> println("green")
+    Maybe.None -> println("none")
 ```
+
+An integer has no end of values, so an integer position is covered only by a `_` or a
+binding. A literal position covers one value. An integer match with no `_` arm is
+**CE2074**. In a tuple, the missing pattern shows `_` for such a position: `(_, _)`.
+
+**Every arm must match a value.** An arm is unreachable when the arms above it match every
+value that it matches. That is **CE2118**, an error, with a note at each arm that covers
+it. The arms can cover an arm together:
+
+```sushi
+# ERROR CE2118: unreachable match arm '(_, Color.Red)'
+match pair:
+    (Color.Red, _) -> println("first is red")
+    (Color.Green, _) -> println("first is green")
+    (Color.Blue, _) -> println("first is blue")
+    (_, Color.Red) -> println("second is red")    # the three arms above cover it
+```
+
+Remove the arm, or move it above the arms that cover it. Three older rules come first,
+and each is the one diagnostic for its arm: a second arm for the same enum pattern is
+**CE2041**; a `_` arm that is not the last arm is **CE2041**, and the arms after it get
+no second error; a second literal arm for the same integer value is **CE2075**.
+
+Because the checker reads nested patterns, a match that compiles has an arm for every
+value. The run-time check **RE2023** stays as a backstop, and no program reaches it.
 
 ### Integer Matching
 
@@ -1536,6 +1782,10 @@ is a bit pattern; out of range is CE2073). Two arms with the same value are one
 duplicate arm (CE2075), whatever their radix. Because integer values cannot be
 enumerated, the match must end with a `_` arm (CE2074). Literal arms and enum
 pattern arms never mix in one match (CE2076).
+
+An integer literal is also legal inside a pattern: in an enum payload
+(`Maybe.Some(0) ->`) and in a tuple element (`(0, n) ->`). It takes the type of its
+position by the same rule. A position that is not an integer takes no literal (**CE2119**).
 
 ```sushi
 fn tag_name(u8 t) string:
@@ -1552,6 +1802,61 @@ fn tag_name(u8 t) string:
 fn main() i32:
     let u8 tag = 0xc0
     println(tag_name(tag))
+    return 0
+```
+
+### Tuple Patterns
+
+A tuple pattern matches a tuple, one item for each element. An item is an enum pattern, an
+integer literal, a binding (bare, `poke` or `nom`), a `_`, or another tuple pattern. A
+`bool`, `string`, float or struct element takes only a binding or a `_`. A tuple pattern
+stands at the top of an arm, in an enum payload, and in another tuple pattern.
+
+```sushi
+enum Color:
+    Red
+    Green
+
+fn describe((Color, i32) p) ~:
+    match p:
+        (Color.Red, 0) -> println("red zero")
+        (Color.Red, n) -> println("red {n}")
+        (Color.Green, _) -> println("green")
+
+fn first(Maybe@((i32, i32)) m) i32:
+    match m:
+        Maybe.Some((x, _)) -> return x
+        Maybe.None -> return 0
+
+fn main() i32:
+    describe((Color.Red, 3))            # red 3
+    println(first(Maybe.Some((7, 8))))  # 7
+    return 0
+```
+
+- A tuple pattern names as many items as the tuple has elements (**CE2120**), and only a
+  tuple takes a tuple pattern (**CE2117**). An enum pattern arm and a literal arm do not
+  fit a tuple scrutinee (**CE2076**).
+- A bare binding BORROWS its element, as a payload binding does (ruling 4 of the tuple
+  design). `poke` points into the element, and `nom` takes it. The rules of
+  [Binding Modes](#binding-modes) apply: `nom` needs a scrutinee that the match owns, and an
+  arm that takes one owning element of a scrutinee takes all of them (**CE2433**).
+- **A tuple literal as the scrutinee builds no tuple** (ruling 3). `match (a, b):` reads
+  each element once, from left to right, and matches it in place, with the rules of a
+  named scrutinee. After the match, `a` and `b` are still usable, and a `poke` binding
+  writes through to them. `match nom (a, b):` hands each element to the match, so a `nom`
+  binding is legal and a later use of an owning element is **CE2405**. Each element is
+  its own scrutinee: an arm can take `a` and leave `b`, and the match destroys `b` at its
+  end.
+
+```sushi
+fn main() i32:
+    let i32 x = 0
+    let i32 y = 5
+    match (x, y):
+        (0, 0) -> println("origin")
+        (0, n) -> println("on the y axis at {n}")
+        (_, _) -> println("elsewhere")
     return 0
 ```
 
@@ -2734,6 +3039,12 @@ Constants cannot use:
 - Dynamic arrays
 - A compile-time loop, so a generated table has to be spelled out element by element
 
+There is no tuple constant, by design: a tuple literal is not a constant expression, so
+`const (i32, i32) ORIGIN = (0, 0)` is **CE0108**. A value that a program keeps for its
+whole run and that has parts with a meaning is a struct constant. This is a decision of the
+tuple design ([ruling 11](design/tuples.md#9-rulings)), not a limitation that a later
+change removes.
+
 ```sushi
 # ERROR: Not allowed in constants
 const i32 X = get_value()     # CE0108: function calls forbidden
@@ -2803,6 +3114,10 @@ fn remember(nom string s) ~:
 
 `HashMap.new()` mallocs its buckets and is refused, and so is a `from([1, 2])` with
 elements (**CE0108** either way).
+
+There is no tuple unit variable, by design: its initializer would be a tuple literal, which
+is not a constant expression, so `var (i32, i32) cursor = (0, 0)` is **CE0108**, the rule
+of a [tuple constant](#restrictions).
 
 ### Borrowing, rebinding, and what is refused
 

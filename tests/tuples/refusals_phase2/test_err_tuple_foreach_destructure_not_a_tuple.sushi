@@ -1,0 +1,8 @@
+# A foreach destructure splits a tuple item, and an i32 is not a tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2117
+
+fn main() i32:
+    let i32[] values = from([1, 2])
+    foreach((a, b) in values.iter()):
+        println(a + b)
+    return 0

@@ -443,6 +443,18 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
             propagate_declared_type_to_value(validator, body, expected_type.ok_type)
         return
 
+    # A tuple literal hands each element its element type, and stamps nothing itself: the
+    # literal's type is read from its elements, so a mismatch stays visible.
+    from sushi_lang.semantics.ast import TupleLiteral as _TupleLiteral
+    from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
+    if isinstance(value_expr, _TupleLiteral):
+        if is_tuple_type(expected_type):
+            elements = tuple_elements(expected_type)
+            if len(elements) == len(value_expr.elements):
+                for element, element_type in zip(value_expr.elements, elements, strict=True):
+                    propagate_types_to_value(validator, element, element_type)
+        return
+
     # Generic enum propagation -- Result, Maybe, Either, user-defined. Result used to have a
     # parallel path of its own here, because it arrived as a ResultType rather than an EnumType.
     if isinstance(expected_type, EnumType):

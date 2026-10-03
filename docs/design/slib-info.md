@@ -51,10 +51,11 @@ doc record for `Nil` (`is_nil`) before it reads the record.
 
 The manifest holds an interned identity name, for example `List<i32>`, because a consumer
 parses that string back. That spelling is a wire format. Angle brackets are never text that
-a user sees (R45). `to_surface` changes the name to the `@(...)` spelling. Its four rules
-are the four rules of `display_type_name` on the Python side: a name with no `<` stays; a
-function type (`->`) stays; a name whose `<` and `>` do not balance stays; else each `<`
-becomes `@(` and each `>` becomes `)`.
+a user sees (R45). `to_surface` changes the name to the `@(...)` spelling. Its five rules
+are the five rules of `display_type_name` on the Python side: first each tuple
+`$Tuple<A, B>` becomes `(A, B)`, the innermost first, in every position; then a name with
+no `<` stays; a function type (`->`) stays; a name whose `<` and `>` do not balance stays;
+else each `<` becomes `@(` and each `>` becomes `)`.
 
 ## 6. The rendered Markdown subset
 
