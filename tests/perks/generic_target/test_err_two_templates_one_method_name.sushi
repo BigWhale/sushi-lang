@@ -1,0 +1,24 @@
+# A name has one home: two templates of two perks on one base both give `f` to
+# every instantiation, and the template is judged where it is written.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn f() i32
+
+perk B:
+    fn f() i32
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with A:
+    fn f() i32:
+        return 1
+
+extend Box@(T) with B:
+    fn f() i32:
+        return 2
+
+fn main() i32:
+    println(Box(1).f())
+    return 0

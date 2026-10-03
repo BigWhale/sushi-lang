@@ -3,7 +3,7 @@
 from sushi_lang.semantics.ast import ExtendWithDef, PerkDef, FuncDef, PerkMethodSignature
 from typing import Optional
 
-from sushi_lang.semantics.typesys import ReceiverType, Type
+from sushi_lang.semantics.typesys import DynamicArrayType, ReceiverType, Type
 from sushi_lang.semantics.passes.collect import ExtensionTable
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
@@ -269,19 +269,28 @@ def check_no_conflicts_with_regular_methods(
 
 
 def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
-    """CE4007 for a generic-target implementation, judged on the template (#861).
+    """CE4007 for a template implementation, judged on the template (#861, #699).
 
     The template covers every instantiation of its base, so an extension method of the
     same name on that base -- a template or one concrete instantiation -- gives the name
-    a second home.
+    a second home. An array template's base is every dynamic array, so an extension on
+    one concrete array type is on it too.
     """
-    base_name = getattr(impl.target_type, "base_name", None)
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    is_array = isinstance(impl.target_type, DynamicArrayType)
+    base_name = (ARRAY_BASE_KEY if is_array
+                 else getattr(impl.target_type, "base_name", None))
     if base_name is None:
         return
     existing = {}
     for (name, _key), method in validator.generic_extension_table.by_type.get(
             base_name, {}).items():
         existing.setdefault(name, method)
+    if is_array:
+        for target, methods in validator.extension_table.by_type.items():
+            if isinstance(target, DynamicArrayType):
+                for name, method in methods.items():
+                    existing.setdefault(name, method)
     _reject_name_conflicts(impl, existing, validator.reporter)
 
 

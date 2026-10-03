@@ -549,13 +549,35 @@ class PerkCollector:
         A name has one home. Two perks that each provide `compare` on one type leave a
         call of it naming neither, and both bodies would take one symbol.
         """
+        others = []
         for other_perk in sorted(self.perk_impls.by_type.get(type_name, set())):
+            other = self.perk_impls.get(type_name, other_perk)
+            if other is not None:
+                others.append(_Written(other, None, None))
+        return self._reject_shared_name(impl, others)
+
+    def _reject_second_home_on_base(self, impl: ExtendWithDef, base: str, *,
+                                    template: bool) -> bool:
+        """CE4015 where a template takes part: the template and every type it covers.
+
+        A perk's method names are its contract's, so one implementation of each other
+        perk on the base is enough to read. A template meets the templates and the
+        concrete implementations of its base; a concrete one meets the templates.
+        """
+        others = [_Written(t.impl, t.filename, t.unit_name)
+                  for t in self.generic_perk_impls.templates(base)]
+        if template:
+            others += [w for (b, _perk), w in sorted(self._concretes.items())
+                       if b == base]
+        return self._reject_shared_name(impl, others)
+
+    def _reject_shared_name(self, impl: ExtendWithDef, others: List[_Written]) -> bool:
+        """One CE4015 for the first method name another perk's implementation gives."""
+        for other in others:
+            other_perk = other.impl.perk_name
             if other_perk == impl.perk_name:
                 continue
-            other = self.perk_impls.get(type_name, other_perk)
-            if other is None:
-                continue
-            taken = {m.name: m for m in other.methods}
+            taken = {m.name: m for m in other.impl.methods}
             for method in impl.methods or []:
                 previous = taken.get(method.name)
                 if previous is None:
@@ -567,7 +589,7 @@ class PerkCollector:
                 prev_span = previous.name_span or previous.loc
                 if prev_span is not None:
                     diag.note_at(f"perk '{other_perk}' provides '{method.name}' here",
-                                 prev_span)
+                                 prev_span, other.filename)
                 diag.emit()
                 return True
         return False
@@ -625,7 +647,9 @@ class PerkCollector:
             return True
         if not shape.param_names:
             return False
-        if self._reject_overlap(impl, target_type, target_type.base_name, template=True):
+        if (self._reject_overlap(impl, target_type, target_type.base_name, template=True)
+                or self._reject_second_home_on_base(impl, target_type.base_name,
+                                                    template=True)):
             return True
 
         self._add_template(impl, target_type.base_name, shape.param_names)
@@ -653,7 +677,8 @@ class PerkCollector:
             return True
         if not shape.param_names:
             return False
-        if self._reject_overlap(impl, target_type, ARRAY_BASE_KEY, template=True):
+        if (self._reject_overlap(impl, target_type, ARRAY_BASE_KEY, template=True)
+                or self._reject_second_home_on_base(impl, ARRAY_BASE_KEY, template=True)):
             return True
         self._add_template(impl, ARRAY_BASE_KEY, shape.param_names)
         return True
@@ -783,8 +808,9 @@ class PerkCollector:
             return True
 
         base = _covering_base(target_type)
-        if base is not None and self._reject_overlap(impl, target_type, base,
-                                                     template=False):
+        if base is not None and (
+                self._reject_overlap(impl, target_type, base, template=False)
+                or self._reject_second_home_on_base(impl, base, template=False)):
             return False
 
         if self._reject_second_home(impl, type_name):
