@@ -1,0 +1,26 @@
+# A written type on a `??` binder in a GENERIC function body names the unwrapped value,
+# as it does in a plain body (#1140). The walk ends with no Err, so the sum is answered.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "walk 7\nok 6\n"
+
+struct Steps:
+    i32 n
+
+extend Steps next(poke self) Maybe@(Result@(i32, StdError)):
+    if (self.n >= 3):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
+
+fn total@(T: Display)(T label) i32 | StdError:
+    println("walk {label}")
+    let i32 sum = 0
+    foreach(i32 x?? in Steps(0)):
+        sum := sum + x
+    return Result.Ok(sum)
+
+fn main() i32:
+    match total(7):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    return 0

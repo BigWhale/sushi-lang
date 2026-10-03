@@ -1,0 +1,43 @@
+# A `??` binder on a `foreach` over a value of a PERK-CONSTRAINED type parameter compiles
+# (#1140). Two types implement the perk, so the template has two instances.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ok 6\nerr\n"
+
+enum Bad:
+    Broken()
+
+perk Source:
+    fn next(poke self) Maybe@(Result@(i32, Bad))
+
+struct Clean:
+    i32 n
+
+struct Faulty:
+    i32 n
+
+extend Clean with Source:
+    fn next(poke self) Maybe@(Result@(i32, Bad)):
+        if (self.n >= 3):
+            return Maybe.None
+        self.n := self.n + 1
+        return Maybe.Some(Result.Ok(self.n))
+
+extend Faulty with Source:
+    fn next(poke self) Maybe@(Result@(i32, Bad)):
+        self.n := self.n + 1
+        return Maybe.Some(Result.Err(Bad.Broken))
+
+fn drain@(S: Source)(nom S src) i32 | Bad:
+    let i32 sum = 0
+    foreach(x?? in src):
+        sum := sum + x
+    return Result.Ok(sum)
+
+fn main() i32:
+    match drain(nom Clean(0)):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    match drain(nom Faulty(0)):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("err")
+    return 0
