@@ -6,8 +6,9 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.generics.instantiate.expressions import ExpressionScanner
 
-from sushi_lang.semantics.generics.types import (
-    GenericTypeRef, substitute_type_params, type_param_substitution,
+from sushi_lang.semantics.generics.types import GenericTypeRef
+from sushi_lang.semantics.generics.local_bindings import (
+    bind_locals, foreach_bindings, pattern_bindings, unbind_locals, variant_payload_types,
 )
 from sushi_lang.semantics.generics.instantiate.type_collection import (
     collect_type_instantiations,
@@ -44,15 +45,16 @@ class FunctionCollector:
         self.variable_types.clear()
 
     def _resolve_local_type(self, ty):
-        """Resolve a bare struct/enum name (UnknownType) to its concrete type."""
-        from sushi_lang.semantics.typesys import UnknownType
-        if not isinstance(ty, UnknownType):
-            return ty
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        """Resolve every struct/enum name in a local's type to its table entry.
+
+        A name nested in the type is resolved too (#1156): the element of a written
+        `P[]` reaches the fields of `P`, and an array-template copy for it has the
+        element the tables know (#1161).
+        """
+        from sushi_lang.semantics.type_resolution import resolve_type_recursively
         structs = self.expression_scanner.type_inferrer.struct_table or {}
         enums = self.expression_scanner.type_inferrer.enum_table or {}
-        resolved = resolve_unknown_type(ty, structs, enums)
-        return resolved if resolved is not None else ty
+        return resolve_type_recursively(ty, structs, enums)
 
     def _bind_self(self, target_type) -> None:
         """Bind `self` to the receiver type, mirroring the typecheck pass (signatures.py)."""
@@ -108,99 +110,19 @@ class FunctionCollector:
                 self.variable_types[target.name] = bound
 
     def _variant_payload_types(self, scrutinee_type, variant_name):
-        """The payload types of one variant, or () when they cannot be read here.
-
-        Two shapes reach this. A monomorphized `EnumType` carries its payload types
-        already substituted. A `GenericTypeRef` does not -- the interned instance does not
-        exist until the monomorphize pass -- so the generic TEMPLATE is read and its type
-        parameters are substituted with the reference's own arguments. That keeps the rule
-        general: `Result` and `Maybe` take the same path as a user's generic enum.
-        """
-        from sushi_lang.semantics.typesys import EnumType
-
-        if isinstance(scrutinee_type, EnumType):
-            for variant in scrutinee_type.variants:
-                if variant.name == variant_name:
-                    return tuple(variant.associated_types or ())
-            return ()
-
-        if isinstance(scrutinee_type, GenericTypeRef):
-            tables = getattr(self.expression_scanner, "generic_enums", None)
-            if tables is None:
-                return ()
-            template = tables.get(scrutinee_type.base_name)
-            if template is None:
-                return ()
-            substitution = type_param_substitution(template, scrutinee_type.type_args)
-            if substitution is None:
-                return ()
-            for variant in template.variants:
-                if variant.name == variant_name:
-                    return tuple(
-                        substitute_type_params(payload, substitution)
-                        for payload in (variant.associated_types or ())
-                    )
-            return ()
-
-        return ()
+        """The payload types of one variant, or () when they cannot be read here."""
+        return variant_payload_types(scrutinee_type, variant_name,
+                                     getattr(self.expression_scanner, "generic_enums", None))
 
     def _bind_pattern_payloads(self, pattern, scrutinee_type) -> list[tuple[str, "Type | None"]]:
-        """Record an arm's payload bindings, and answer what to put back afterwards.
-
-        A binding lives for its own arm only, so the previous value of every name touched
-        is returned rather than the scope being cleared -- an arm must not see the arm
-        before it, and it must not lose an outer local of the same name.
-        """
-        from sushi_lang.semantics.ast import Pattern, NomBinding, TuplePattern
-        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
-
-        if scrutinee_type is None:
-            return []
-        if isinstance(pattern, TuplePattern):
-            if not is_tuple_type(scrutinee_type):
-                return []
-            items, payloads = pattern.elements, list(tuple_elements(scrutinee_type))
-        elif isinstance(pattern, Pattern):
-            items = pattern.bindings
-            payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
-        else:
-            return []
-        if not payloads:
-            return []
-
-        saved: list[tuple[str, "Type | None"]] = []
-        for binding, raw_payload in zip(items, payloads, strict=False):
-            # Resolve before binding, exactly as a `let` local's annotation is resolved. A
-            # template's payload can be a bare name -- an UnknownType("NetError") displays
-            # as "NetError" while the enum table holds the real EnumType -- and binding the
-            # unresolved one interns a Result whose element differs from the canonical
-            # instance, which is the poisoned intern CE0126 reports with two identical
-            # spellings.
-            payload = self._resolve_local_type(raw_payload)
-            if isinstance(binding, str):
-                if binding == "_":
-                    continue
-                saved.append((binding, self.variable_types.get(binding)))
-                self.variable_types[binding] = payload
-            elif isinstance(binding, NomBinding):
-                # A taken payload is the arm's own VALUE, so its type is the payload's --
-                # no reference wrapper (borrow-model.md S10b).
-                saved.append((binding.name, self.variable_types.get(binding.name)))
-                self.variable_types[binding.name] = payload
-            elif isinstance(binding, (Pattern, TuplePattern)):
-                saved.extend(self._bind_pattern_payloads(binding, payload))
-            # A `peek`/`poke` RefBinding carries a ReferenceType rather than the payload's
-            # own type, and a reference is not a type argument a generic can be called
-            # with, so nothing is recorded for one.
-        return saved
+        """Record an arm's payload bindings, and answer what to put back afterwards."""
+        return bind_locals(self.variable_types, pattern_bindings(
+            pattern, scrutinee_type, getattr(self.expression_scanner, "generic_enums", None),
+            self._resolve_local_type))
 
     def _unbind(self, saved: list[tuple[str, "Type | None"]]) -> None:
         """Put back what an arm's bindings displaced."""
-        for name, previous in reversed(saved):
-            if previous is None:
-                self.variable_types.pop(name, None)
-            else:
-                self.variable_types[name] = previous
+        unbind_locals(self.variable_types, saved)
 
     def collect_from_function(self, func) -> None:
         """Collect generic instantiations from function signature and body."""
@@ -357,7 +279,11 @@ class FunctionCollector:
                 self._collect_from_type(stmt.item_type, getattr(stmt, "item_type_span", None))
             if stmt.iterable is not None:
                 self.expression_scanner.scan_expression(stmt.iterable, False)
+            # The binder is a LOCAL of the body, as a `let` local is (#1155).
+            bound = bind_locals(self.variable_types, foreach_bindings(
+                stmt, self._infer_scrutinee_type, self._resolve_local_type))
             self._collect_from_block(stmt.body)
+            self._unbind(bound)
 
         elif isinstance(stmt, If):
             for cond, block in stmt.arms:

@@ -103,8 +103,14 @@ class BorrowChecker:
         self.unit_name = unit_name
         self.scope = scope
 
+    def refresh_callee_modes(self) -> None:
+        """Read the function tables again: the typecheck pass can declare a late instance
+        after this checker was built (#1155)."""
+        self.callee_modes = _build_callee_modes(self.tables, self.unit_name, self.scope)
+
     def run(self, program: Program) -> None:
         """Run borrow checking on the entire program."""
+        self.refresh_callee_modes()
         for func in program.functions:
             # Whose body this is: the file its diagnostics belong to (#471), and whether
             # it is one of many copies of one source (#648).

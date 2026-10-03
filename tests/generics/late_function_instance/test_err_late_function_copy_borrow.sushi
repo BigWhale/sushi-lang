@@ -1,0 +1,14 @@
+# A late function instance goes through the borrow pass: its body hands out a borrowed
+# parameter (#1156).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+struct Box@(T):
+    T v
+
+fn give@(T)(T x) T:
+    return x
+
+fn main() i32:
+    let Box@(string) b = Box("{1}b")
+    println(give(b.v))
+    return 0

@@ -1,0 +1,22 @@
+# A foreach over the List an array template answers, with a generic call on the
+# binder (#1161).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+
+struct P:
+    i32 x
+
+extend T[] gather() List@(T):
+    let List@(T) out = List.new()
+    foreach(e in self.iter()):
+        out.push(e)
+    return out
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+fn main() i32:
+    let P[] ps = from([P(3), P(4)])
+    foreach(p in ps.gather().iter()):
+        println(k(p))
+    return 0

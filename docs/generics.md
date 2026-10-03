@@ -1026,12 +1026,6 @@ let Box@(bool) b3 = Box(value: true)
 | A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | `CE2101` |
 | A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
 
-In an extension on a generic **enum** target, a call to a generic free function at the target's
-type parameter can give `CE2061` when no other code in the program uses that function at that
-type. The same call in an extension on a generic struct target works. To avoid it, use the
-function once at that type outside the extension, or write the logic as a generic free
-function.
-
 ---
 
 **See also:**

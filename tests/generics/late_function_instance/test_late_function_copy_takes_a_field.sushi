@@ -1,0 +1,17 @@
+# A late function instance with a `nom` parameter, called with a field take. The borrow
+# pass of the caller reads the parameter mode of the late copy (#1156).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1b\n"
+# EXPECT_NO_LEAKS
+
+struct Box@(T):
+    T v
+
+fn take@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let Box@(string) b = Box("{1}b")
+    let string s = take(nom b.v)
+    println(s)
+    return 0

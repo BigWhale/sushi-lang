@@ -1,0 +1,17 @@
+# A late function request whose type argument breaks a perk constraint is one CE4006, at
+# the call that asked for it. No CE2061 is added (#1156).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+perk Shout:
+    fn shout() string
+
+struct Box@(T):
+    T v
+
+fn k@(T: Shout)(T x) string:
+    return x.shout()
+
+fn main() i32:
+    let Box@(i32) b = Box(3)
+    println(k(b.v))
+    return 0

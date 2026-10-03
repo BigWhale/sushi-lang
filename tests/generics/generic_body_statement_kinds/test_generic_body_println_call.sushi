@@ -1,0 +1,15 @@
+# In a generic body, a generic call inside println. No other call makes k@(i32)
+# (#1157).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n1\n"
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+fn o@(T)(T x) i32:
+    println(k(x))
+    return 1
+
+fn main() i32:
+    println(o(5))
+    return 0

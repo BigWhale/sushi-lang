@@ -1,0 +1,13 @@
+# A generic call on the binder of a foreach over an array's iter(). No other call makes
+# k@(string) (#1155).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+fn main() i32:
+    let string[] xs = from(["a", "b"])
+    foreach(e in xs.iter()):
+        println(k(e))
+    return 0
