@@ -1,0 +1,29 @@
+# A foreach over a nom parameter with next() moves the parameter into the loop, so the
+# callee frees it one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n5\ndone\n"
+# EXPECT_NO_LEAKS
+
+enum Bad:
+    Oops
+
+struct Feed:
+    i32[] items
+    i32 at
+
+extend Feed next(poke self) Maybe@(Result@(i32, Bad)):
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v))
+        Maybe.None -> return Maybe.None
+
+fn walk(nom Feed f) ~:
+    foreach(r in f):
+        println(r.realise(0))
+
+fn main() i32:
+    let Feed f = Feed(from([4, 5]), 0)
+    walk(nom f)
+    println("done")
+    return 0

@@ -1,0 +1,26 @@
+# A foreach consumes its iterable, and a peek parameter borrows the caller's value: the
+# loop cannot take it.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+enum Bad:
+    Oops
+
+struct Feed:
+    i32[] items
+    i32 at
+
+extend Feed next(poke self) Maybe@(Result@(i32, Bad)):
+    let i32 at = self.at
+    self.at := self.at + 1
+    match self.items.get(at):
+        Maybe.Some(v) -> return Maybe.Some(Result.Ok(v))
+        Maybe.None -> return Maybe.None
+
+fn walk(peek Feed f) ~:
+    foreach(r in f):
+        println(r.realise(0))
+
+fn main() i32:
+    let Feed f = Feed(from([4, 5]), 0)
+    walk(peek f)
+    return 0
