@@ -132,6 +132,24 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A compiled library's templates are reachable behind a unit alias.** With
+  `use <lib/x> as b`, a binary or hybrid library now gives its public generic functions,
+  generic structs, generic enums and perks behind `b.`. A call `b.lsid(nom 6)` was
+  `CE2008`, and a library with only generic functions gave the warning `CW3004` (an empty
+  namespace). A source library worked before.
+- **`--lib-info` prints a type pack with its `...`.** The report printed
+  `fn lcount@(Ts: Display)(Ts args) i32` for `fn lcount@(...Ts: Display)(...Ts args) i32`.
+  A parameter record in the manifest now has the field `is_pack`.
+- **A range outside its two positions is `CE2122`.** A range is a `foreach` iterable or
+  an element of an array literal (`from([0..n])`), and nothing more. As a function, method
+  or constructor argument, a `return` value, a `let` initializer, an operand or a method
+  receiver, it is `CE2122` at the range, and the position adds no second error. A range
+  given to a generic function was the internal error `CE0000`. With a constraint on the
+  type parameter it was `CE4006` for `Iterator@(i32)`, and `(0..3).len()` was `CE2008`.
+- **A type pack names a type only in its own `...Ts args` parameter.** A parameter `Ts x`,
+  a return type, a `let` type, `Ts[]` and `List@(Ts)` are `CE0147` where the function is
+  written. A parameter `Ts x` was read as a second pack, so the function took the wrong
+  count of arguments. A `let Ts y` was the internal error `CE0000` at the first call.
 - **A generic call that the early passes missed no longer fails with CE2061.** The
   `typecheck` pass requests a missing function instance late, and the instance goes through
   every pass that an early one goes through. The early walks also bind a `foreach` binder
