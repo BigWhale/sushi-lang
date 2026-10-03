@@ -132,6 +132,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A generic instance that only a generic body reaches gets all its methods.** When
+  only a generic function instance named a generic type instance (the return type
+  `Feed@(T)` of `feed_of@(T)`, called from `count@(T)` with `T = string`), an extension
+  method of that instance was `CE2001` (unknown type) on its signature and `CE2112` in its
+  body. The `Result`, `Maybe` and `List` types in such a signature are now interned as for
+  an instance that `main` writes, also for a method that no call names.
+- **A constructor behind a unit alias solves a generic call.** `one(sh.Pt(0))` was
+  `CE2060` and `cnt(ms, sh.Mark.Off())` was `CE2061`, while the flat form `one(Pt(0))`
+  compiled. A struct constructor and an enum variant behind an alias now have, in every
+  pass, the type that the flat form has.
 - **A built-in method on a field of a temporary works.** `w().l.len()`,
   `two().0.iter()` and `nums.partition(f).0.iter()` were the internal error CE0000. The
   compiler now keeps the temporary in a slot that it owns, gives the address of the field
