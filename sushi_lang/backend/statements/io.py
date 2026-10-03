@@ -29,7 +29,8 @@ def _register_owned_string_arg(codegen: 'LLVMCodegen', expr, val: 'ir.Value') ->
 
 
 def _printed_value(codegen: 'LLVMCodegen', stmt: 'Print | PrintLn') -> 'ir.Value':
-    """The value a print writes. A struct or an enum writes its `Display` form.
+    """The value a print writes. A struct, an enum, an array or a container writes its
+    `Display` form.
 
     The typecheck pass stamped the type. The value is only read, so a temporary that
     owns something gets an owner, and the string form is freed with the print frame.

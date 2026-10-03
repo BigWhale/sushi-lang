@@ -1,0 +1,13 @@
+# A `List@(T)` whose element has no string form is still refused in `println`, and the
+# note names the element type.
+# EXPECT_ERROR_CODES_EXACT: CE2115
+# EXPECT_STDERR_CONTAINS: no derived Display: holds -> a function value
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let List@(fn(i32) -> i32) fs = List.new()
+    fs.push(twice)
+    println(fs)
+    return 0

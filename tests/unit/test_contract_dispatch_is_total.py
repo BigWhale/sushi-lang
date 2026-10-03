@@ -14,11 +14,12 @@ import pytest
 
 from sushi_lang.semantics import typesys
 from sushi_lang.semantics.generics.contracts import (
-    ACCEPTED_KINDS, CONTRACTS, REFUSED_KINDS, WALKED_KINDS, contract_of, operand_contract)
+    ACCEPTED_KINDS, CONTRACTS, REFUSED_KINDS, WALKED_KINDS, contract_of, operand_contract,
+    printed_contract)
 from sushi_lang.semantics.generics.types import (
     GenericEnumType, GenericStructType, GenericTypeRef, TypePack, TypeParameter)
 from sushi_lang.semantics.typesys import (
-    BuiltinType, EnumType, EnumVariantInfo, ForeignPtrType, FunctionType, IteratorType,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, ForeignPtrType, FunctionType, IteratorType,
     ReferenceType, StructType)
 
 OFF_UNION_KINDS = {"GenericStructType", "GenericEnumType", "TypePack"}
@@ -99,3 +100,18 @@ def test_the_top_level_keeps_the_primitive_sets():
     assert not operand_contract(BuiltinType.BOOL, "Ord")[0]
     assert operand_contract(BuiltinType.STRING, "Ord")[0]
     assert not operand_contract(BuiltinType.BLANK, "Display")[0]
+
+
+def test_a_printed_array_reads_its_elements_and_the_operators_do_not():
+    """`Display` alone takes a top-level array (#1132); `==` and `<` keep their rule."""
+    fn_type = FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,
+                           err_type=None)
+    ints = DynamicArrayType(base_type=BuiltinType.I32)
+    assert printed_contract(ints)[0]
+    assert printed_contract(ArrayType(base_type=BuiltinType.STRING, size=2))[0]
+    assert printed_contract(ReferenceType(ints, typesys.BorrowMode.PEEK))[0]
+    answer, reason = printed_contract(DynamicArrayType(base_type=fn_type))
+    assert not answer and "element -> a function value" in reason
+    assert not operand_contract(ints, "Display")[0]
+    assert not operand_contract(ints, "Eq")[0]
+    assert not operand_contract(ints, "Ord")[0]

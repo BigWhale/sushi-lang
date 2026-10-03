@@ -516,8 +516,8 @@ class Return(Stmt):
 @dataclass(slots=True)
 class Print(Stmt):
     value: "Expr"
-    # The struct or enum the value prints through `Display`, stamped by the typecheck
-    # pass; the backend reads it.
+    # The struct, enum, array or container the value prints through `Display`, stamped
+    # by the typecheck pass; the backend reads it.
     display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
@@ -777,8 +777,8 @@ class StringLit(Node):
 class InterpolatedString(Node):
     """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
-    # For each hole that prints through `Display` (a struct or an enum), its type; None
-    # elsewhere. Stamped by the typecheck pass; the backend reads it.
+    # For each hole that prints through `Display` (a struct, an enum, an array or a
+    # container), its type; None elsewhere. Stamped by the typecheck pass; the backend reads it.
     display_types: Optional[List[Optional["Type"]]] = None
 
 @dataclass(slots=True)

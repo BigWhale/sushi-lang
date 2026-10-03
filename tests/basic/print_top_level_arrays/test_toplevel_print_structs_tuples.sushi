@@ -1,0 +1,18 @@
+# A struct element prints as its named construction, and a tuple element as its
+# literal.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[Point(x: 1, y: 2), Point(x: 3, y: 4)]\n[(1, "a"), (2, "b")]\n[Point(x: 1, y: 2), Point(x: 3, y: 4)]\n[(1, "a"), (2, "b")]\n"
+# EXPECT_NO_LEAKS: true
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] ps = from([Point(1, 2), Point(3, 4)])
+    let (i32, string)[] pairs = from([(1, "a"), (2, "b")])
+    println("{ps}")
+    println("{pairs}")
+    println(ps)
+    println(pairs)
+    return 0

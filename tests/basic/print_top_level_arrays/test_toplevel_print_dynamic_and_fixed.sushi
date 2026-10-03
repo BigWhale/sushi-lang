@@ -1,0 +1,20 @@
+# A top-level dynamic array and a fixed array print in a hole, in `print` and in
+# `println`, in the form a held array has: the elements in brackets.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "dyn: [1, 2, 3]\nfixed: [4, 5, 6]\nempty: []\n[1, 2, 3]\n[4, 5, 6]\n[]\n[1, 2, 3][4, 5, 6]\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32[3] f = [4, 5, 6]
+    let i32[] e = from([])
+    println("dyn: {a}")
+    println("fixed: {f}")
+    println("empty: {e}")
+    println(a)
+    println(f)
+    println(e)
+    print(a)
+    print(f)
+    println("")
+    return 0
