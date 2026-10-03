@@ -8,7 +8,7 @@ from typing import Dict, Iterator, List, Optional, Tuple, cast
 
 from sushi_lang.semantics.ast import (
     Block, Expand, Name, Lambda, Let, Foreach, Stmt, Match, MatchArm, Pattern, OwnPattern,
-    destructure_binders,
+    TuplePattern, destructure_binders, pattern_bindings,
 )
 from sushi_lang.semantics.hidden_names import expand_copy_local_name
 from sushi_lang.internals.report import Span
@@ -43,10 +43,10 @@ def written_let(stmt: Let) -> Optional[WrittenLet]:
 
 
 # The nodes that bind a name without a `let`: an `Expand` (its loop variable), a
-# `Foreach` (its item), a `Pattern` / `OwnPattern` (its bindings) and a `Lambda` (its
-# parameters). A node -> the records of its written names, one dict for the written
+# `Foreach` (its item), a `Pattern` / `TuplePattern` / `OwnPattern` (its bindings) and a
+# `Lambda` (its parameters). A node -> the records of its written names, one dict for the written
 # node and all its copies. Same keying rule as `_WRITTEN`.
-_BINDER_NODES = (Expand, Foreach, Pattern, OwnPattern, Lambda)
+_BINDER_NODES = (Expand, Foreach, Pattern, TuplePattern, OwnPattern, Lambda)
 _WRITTEN_BINDERS: Dict[int, Tuple[object, Dict[str, WrittenLet]]] = {}
 
 
@@ -104,26 +104,8 @@ def _is_frozen_dataclass(obj) -> bool:
 
 
 def _pattern_binding_names(pattern) -> set:
-    """Collect the variable names bound by a match-arm ``Pattern``."""
-    names: set = set()
-    if isinstance(pattern, Pattern):
-        for b in pattern.bindings:
-            if isinstance(b, str):
-                if b != "_":
-                    names.add(b)
-            elif isinstance(b, (Pattern, OwnPattern)):
-                names |= _pattern_binding_names(b)
-            else:
-                # A RefBinding (#300 phase 3) shadows its name like a plain binding.
-                names.add(b.name)
-    elif isinstance(pattern, OwnPattern):
-        inner = pattern.inner_pattern
-        if isinstance(inner, str):
-            if inner != "_":
-                names.add(inner)
-        elif isinstance(inner, (Pattern, OwnPattern)):
-            names |= _pattern_binding_names(inner)
-    return names
+    """Collect the variable names bound by a match-arm pattern."""
+    return {name for name, _owner, _span in pattern_bindings(pattern)}
 
 
 def unroll_expands(

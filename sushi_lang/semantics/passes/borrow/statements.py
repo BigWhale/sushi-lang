@@ -26,6 +26,8 @@ from sushi_lang.semantics.ast import (
     Rebind,
     Return,
     Stmt,
+    TupleLiteral,
+    TuplePattern,
     While,
 )
 from sushi_lang.semantics.ownership import Provenance
@@ -321,7 +323,7 @@ def _check_if(checker: 'BorrowChecker', stmt: If) -> None:
     restore_flow(checker, FlowFacts.join(paths))
 
 
-def _match_owns_its_scrutinee(checker: 'BorrowChecker', stmt: Match) -> bool:
+def _match_owns(checker: 'BorrowChecker', stmt: Match, scrutinee: Expr) -> bool:
     """May an arm TAKE a payload out of this scrutinee (ruling R11)?
 
     A TEMPORARY is owned by construction -- nothing else will ever free it, which is the
@@ -330,17 +332,47 @@ def _match_owns_its_scrutinee(checker: 'BorrowChecker', stmt: Match) -> bool:
     """
     if stmt.consumes_scrutinee:
         return True
-    return source_provenance(checker, stmt.scrutinee) is Provenance.FRESH
+    return source_provenance(checker, scrutinee) is Provenance.FRESH
+
+
+def match_scrutinees(stmt: Match) -> list[Expr]:
+    """The expressions a match reads: the scrutinee, or each element of a tuple literal.
+
+    A tuple-literal scrutinee builds no tuple (ruling 3 of the tuple design): each
+    element is matched in place, with the rules of a named scrutinee.
+    """
+    if isinstance(stmt.scrutinee, TupleLiteral):
+        return list(stmt.scrutinee.elements)
+    return [stmt.scrutinee]
+
+
+def _arm_positions(checker: 'BorrowChecker', stmt: Match,
+                   pattern: object) -> list[tuple[Expr, object, object]]:
+    """(scrutinee, its type, the pattern item that reads it) for one arm."""
+    if not isinstance(pattern, (Pattern, TuplePattern)):
+        return []
+    if not isinstance(stmt.scrutinee, TupleLiteral):
+        return [(stmt.scrutinee, stmt.resolved_scrutinee_type, pattern)]
+    if not isinstance(pattern, TuplePattern):
+        return []
+    types = checker.types.tuple_element_types(stmt.resolved_scrutinee_type)
+    return [(element, types[index] if index < len(types) else None, item)
+            for index, (element, item) in enumerate(
+                zip(stmt.scrutinee.elements, pattern.elements, strict=False))]
 
 
 def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
     """Match arms are EXCLUSIVE paths, so they take the same snapshot / restore / join."""
-    check_expr(checker, stmt.scrutinee)
-    owns = _match_owns_its_scrutinee(checker, stmt)
+    scrutinees = match_scrutinees(stmt)
+    for scrutinee in scrutinees:
+        check_expr(checker, scrutinee)
+    owns = {id(scrutinee): _match_owns(checker, stmt, scrutinee) for scrutinee in scrutinees}
     if stmt.consumes_scrutinee:
         # `match nom r:` consumes exactly as `f(nom r)` does: CE2411 when `r` is a
-        # borrow, and CE2405 at every later mention of it.
-        consume(checker, stmt.scrutinee)
+        # borrow, and CE2405 at every later mention of it. `match nom (a, b):` hands
+        # over each element.
+        for scrutinee in scrutinees:
+            consume(checker, scrutinee)
     clear_borrows(checker)
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []
@@ -350,13 +382,11 @@ def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:
         # guards that). The scope closes BEFORE the path snapshot, so the join sees the
         # outer local's facts, never the binding's.
         with BindingScope(checker) as scope, _branch(checker):
-            if isinstance(arm.pattern, Pattern):
-                reject_partial_take(checker, arm.pattern,
-                                    stmt.resolved_scrutinee_type)
-                register_pattern_bindings(checker, scope, arm.pattern,
-                                          stmt.resolved_scrutinee_type,
-                                          scrutinee=stmt.scrutinee,
-                                          owns_scrutinee=owns)
+            for scrutinee, scrutinee_type, item in _arm_positions(checker, stmt, arm.pattern):
+                reject_partial_take(checker, item, scrutinee_type)
+                register_pattern_bindings(checker, scope, item, scrutinee_type,
+                                          scrutinee=scrutinee,
+                                          owns_scrutinee=owns[id(scrutinee)])
             if isinstance(arm.body, Block):
                 check_block(checker, arm.body)
             else:

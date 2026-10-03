@@ -151,7 +151,7 @@ _add(ErrorMessage("CE2423", Severity.ERROR,
 
 _add(ErrorMessage("CE2424", Severity.ERROR,
     "a reference binding in a NESTED match pattern is not supported",
-    Category.BORROW, "A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level."))
+    Category.BORROW, "A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level. A tuple pattern follows the same line: an element of the arm's own tuple pattern, also in a tuple pattern inside it, takes `poke` (`(poke n, _) ->`), and a tuple pattern in an enum payload (`Maybe.Some((poke a, b))`) and an enum pattern inside a tuple pattern are nested."))
 
 _add(ErrorMessage("CE2425", Severity.ERROR,
     "a 'peek self'/'poke self' receiver parameter is not valid here",

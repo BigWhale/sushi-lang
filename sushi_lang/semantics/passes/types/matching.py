@@ -1,6 +1,7 @@
 """Pattern matching validation for type validation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Set, Tuple
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple
 
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
@@ -11,14 +12,16 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    NomBinding, RefBinding,
+    NomBinding, RefBinding, TupleLiteral, TuplePattern, pattern_source,
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.param_modes import ParamMode, borrow_mode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.own import own_payload_type
+from sushi_lang.semantics.generics.tuples import display_tuple, is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.type_display import display_type
+from .exhaustiveness import OWN_KEY, TUPLE_KEY, WILD, Ctor, Pat, Signature, Wild, analyze
 from .utils import resolve_declared_type
 from sushi_lang.semantics.type_predicates import BUILTIN_INTEGER_TYPES
 
@@ -28,7 +31,10 @@ _INTEGER_SCRUTINEES = BUILTIN_INTEGER_TYPES
 if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.ast import EnumVariant
+
+# Where the type of a pattern position comes from, for the relational note of CE2107: a
+# label and the span it points at.
+_Note = Tuple[str, Optional["Span"]]
 
 
 def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
@@ -51,13 +57,28 @@ def _walk_arm_body(validator: 'TypeValidator', arm: MatchArm) -> None:
         validator.validate_expression(arm.body)
 
 
+@dataclass
+class _ArmRows:
+    """What the arms of one match give the checker.
+
+    `rows[i]` is arm i's pattern for the matrix, or None for an arm left out (a duplicate
+    that CE2041 or CE2075 reported). `reported` holds the arms whose own rule spoke, so the
+    dead-arm error does not speak again. `invalid` says that an arm has an error in its
+    pattern: the checker then gives no answer, because the coverage is not known.
+    """
+    rows: List[Optional[Pat]] = field(default_factory=list)
+    reported: Set[int] = field(default_factory=set)
+    invalid: bool = False
+    after_wildcard: Optional[int] = None
+
+
 def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
-    """Validate match statement: check enum type, exhaustiveness, and pattern types."""
+    """Validate a match statement: the scrutinee, each arm's pattern, and the coverage."""
     scrutinee_type = validate_match_scrutinee(validator, stmt)
     if scrutinee_type is None:
         return
 
-    if not isinstance(scrutinee_type, EnumType):
+    if not isinstance(scrutinee_type, EnumType) and not is_tuple_type(scrutinee_type):
         # An integer scrutinee dispatches on literal arms (#415).
         validate_integer_match(validator, stmt, scrutinee_type)
         return
@@ -66,19 +87,20 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
     # the name itself and already heard why its own declaration lost (CE0004, CE2046,
     # CE3011). Checking its arms against the winner's variants would report a variant it
     # never wrote and an exhaustiveness it cannot satisfy (D2).
-    if name_is_contested(validator, "enum", scrutinee_type.name):
+    if isinstance(scrutinee_type, EnumType) and name_is_contested(
+            validator, "enum", scrutinee_type.name):
         return
 
-    # Stash the resolved concrete enum type on the node so the backend does not
-    # have to re-derive it from the scrutinee expression (which it cannot always
-    # do; a miss there silently drops pattern bindings and surfaces as CE0055).
+    # Stash the resolved concrete type on the node so the backend does not have to
+    # re-derive it from the scrutinee expression (which it cannot always do; a miss there
+    # silently drops pattern bindings and surfaces as CE0055).
     stmt.resolved_scrutinee_type = scrutinee_type
 
     reject_poke_binding_into_a_constant(validator, stmt)
 
-    covered_variants, has_wildcard = collect_and_validate_patterns(validator, stmt, scrutinee_type)
+    arms = collect_and_validate_patterns(validator, stmt, scrutinee_type)
 
-    check_match_exhaustiveness(validator, stmt, scrutinee_type, covered_variants, has_wildcard)
+    check_match_exhaustiveness(validator, stmt, scrutinee_type, arms)
 
 
 def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
@@ -89,47 +111,50 @@ def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
     it reaches that storage. A constant is read-only there, so the write landed in
     `.rodata` and the program stopped -- the same question a `poke self` call asks, at
     the one position that never asked it. A `peek` and a bare binding READ the payload,
-    and reading a constant is legal.
+    and reading a constant is legal. Each element of a tuple-literal scrutinee is its own
+    scrutinee (ruling 3 of the tuple design), so each element asks it for the bindings
+    of its own position.
     """
-    root = walk_place(stmt.scrutinee, Step.MEMBER | Step.INDEX).name
-    if root is None or root.id in validator.variable_types:
+    for scrutinee, items in _scrutinee_positions(stmt):
+        root = walk_place(scrutinee, Step.MEMBER | Step.INDEX).name
+        if root is None or root.id in validator.variable_types:
+            continue
+        binding = next((b for item in items for b in _poke_bindings(item)), None)
+        if binding is None:
+            continue
+        reject_borrow_of_constant(validator.err, root.id,
+                                  validator.const_sig(root.id),
+                                  binding.loc or stmt.loc, mode=binding.mode)
+
+
+def _scrutinee_positions(stmt: Match) -> Iterator[Tuple[Expr, List[object]]]:
+    """Each scrutinee expression with the pattern items that read it."""
+    if not isinstance(stmt.scrutinee, TupleLiteral):
+        yield stmt.scrutinee, [arm.pattern for arm in stmt.arms]
         return
-    binding = _first_poke_binding(stmt)
-    if binding is None:
-        return
-    reject_borrow_of_constant(validator.err, root.id,
-                              validator.const_sig(root.id),
-                              binding.loc or stmt.loc, mode=binding.mode)
+    for index, element in enumerate(stmt.scrutinee.elements):
+        yield element, [arm.pattern.elements[index] for arm in stmt.arms
+                        if isinstance(arm.pattern, TuplePattern)
+                        and index < len(arm.pattern.elements)]
 
 
-def _first_poke_binding(stmt: Match) -> Optional[RefBinding]:
-    """The first `poke` binding any arm of this match declares, at any depth."""
-    def walk(pattern) -> Optional[RefBinding]:
-        for binding in getattr(pattern, "bindings", ()):
-            if isinstance(binding, RefBinding) \
-                    and receiver_mode(binding.mode) is ParamMode.POKE:
-                return binding
-            if isinstance(binding, Pattern):
-                found = walk(binding)
-                if found is not None:
-                    return found
-            elif isinstance(binding, OwnPattern):
-                inner = binding.inner_pattern
-                if isinstance(inner, Pattern):
-                    found = walk(inner)
-                    if found is not None:
-                        return found
-        return None
-
-    for arm in stmt.arms:
-        found = walk(arm.pattern)
-        if found is not None:
-            return found
-    return None
+def _poke_bindings(item: object) -> Iterator[RefBinding]:
+    """The `poke` bindings of a pattern item, at any depth, in source order."""
+    if isinstance(item, RefBinding):
+        if receiver_mode(item.mode) is ParamMode.POKE:
+            yield item
+    elif isinstance(item, Pattern):
+        for binding in item.bindings:
+            yield from _poke_bindings(binding)
+    elif isinstance(item, TuplePattern):
+        for element in item.elements:
+            yield from _poke_bindings(element)
+    elif isinstance(item, OwnPattern) and not isinstance(item.inner_pattern, str):
+        yield from _poke_bindings(item.inner_pattern)
 
 
-def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[EnumType | BuiltinType]:
-    """Validate the scrutinee is matchable: an enum, or an integer (#415)."""
+def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[Type]:
+    """Validate the scrutinee is matchable: an enum, an integer (#415), or a tuple."""
     validator.validate_expression(stmt.scrutinee)
     scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
 
@@ -147,8 +172,12 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     # Resolve it to its concrete monomorphized enum so pattern matching sees a real
     # EnumType instead of rejecting it (CE2048).
     scrutinee_type = _resolve(validator, scrutinee_type)
+    if isinstance(scrutinee_type, ReferenceType) and is_tuple_type(scrutinee_type):
+        scrutinee_type = _resolve(validator, scrutinee_type.referenced_type)
 
     if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
+        return scrutinee_type
+    if isinstance(scrutinee_type, StructType) and is_tuple_type(scrutinee_type):
         return scrutinee_type
 
     # A type name this unit lost (#863): the value has the winner's type, and the
@@ -162,47 +191,60 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
 
 
 def validate_integer_match(validator: 'TypeValidator', stmt: Match,
-                           scrutinee_type: BuiltinType) -> None:
+                           scrutinee_type: Type) -> None:
     """Validate a match on an integer scrutinee: literal arms + a trailing `_` (#415).
 
     A literal takes the scrutinee's type under the same fit rule as any
     context-typed literal (a non-decimal literal is a bit pattern); duplicates
     are duplicates by VALUE; the wildcard is required because integer values
-    cannot be enumerated.
+    cannot be enumerated, which the one checker answers with CE2074.
     """
-    from sushi_lang.semantics.passes.types.inference import int_literal_fits
-
     # The backend dispatches on this stamp; EnumType matches use
     # `resolved_scrutinee_type` instead.
     stmt.integer_match_type = scrutinee_type
 
+    arms = _ArmRows()
     seen: dict[int, str] = {}
-    has_wildcard = False
     for idx, arm in enumerate(stmt.arms):
         pattern = arm.pattern
 
         if isinstance(pattern, WildcardPattern):
-            has_wildcard = True
-            if idx != len(stmt.arms) - 1:
-                er.emit(validator.reporter, er.ERR.CE2041, pattern.loc, variant="_")
+            _wildcard_row(validator, arms, idx, len(stmt.arms), pattern)
         elif isinstance(pattern, LiteralPattern):
-            if not int_literal_fits(pattern.value, pattern.radix, scrutinee_type):
-                er.emit(validator.reporter, er.ERR.CE2073, pattern.loc,
-                        literal=pattern.display, type=scrutinee_type.value)
+            row = _check_literal(validator, pattern, scrutinee_type)
+            if row is None:
+                arms.invalid = True
             elif pattern.value in seen:
                 er.emit(validator.reporter, er.ERR.CE2075, pattern.loc,
                         value=pattern.value, first=seen[pattern.value])
+                arms.reported.add(idx)
+                row = None
             else:
                 seen[pattern.value] = pattern.display
+            arms.rows.append(row)
+        elif isinstance(pattern, TuplePattern):
+            _check_tuple_pattern(validator, pattern, scrutinee_type, ("", None))
+            arms.invalid = True
+            arms.rows.append(None)
         else:
             er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
-                    arm_kind="enum-pattern", scrutinee_type=scrutinee_type.value)
+                    arm_kind="enum-pattern", scrutinee_type=display_type(scrutinee_type))
+            arms.invalid = True
+            arms.rows.append(None)
 
         _walk_arm_body(validator, arm)
 
-    if not has_wildcard:
-        stmt.not_exhaustive = True
-        er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
+    check_match_exhaustiveness(validator, stmt, scrutinee_type, arms)
+
+
+def _wildcard_row(validator: 'TypeValidator', arms: _ArmRows, idx: int, count: int,
+                  pattern: WildcardPattern) -> None:
+    """A `_` arm: it must be the last arm (CE2041), and it matches every value."""
+    if idx != count - 1:
+        er.emit(validator.reporter, er.ERR.CE2041, pattern.loc, variant="_")
+        if arms.after_wildcard is None:
+            arms.after_wildcard = idx + 1
+    arms.rows.append(WILD)
 
 
 def reject_other_enum(validator: 'TypeValidator', written: str,
@@ -222,257 +264,342 @@ def reject_other_enum(validator: 'TypeValidator', written: str,
     diagnostic.emit()
 
 
-def collect_and_validate_patterns(
-    validator: 'TypeValidator', stmt: Match, scrutinee_type: EnumType
-) -> Tuple[Set[str], bool]:
-    """Collect and validate all match arms, checking pattern validity."""
-    covered_variants: Set[str] = set()
-    has_wildcard = False
+def collect_and_validate_patterns(validator: 'TypeValidator', stmt: Match,
+                                  scrutinee_type: Type) -> _ArmRows:
+    """Validate each arm of an enum or tuple match, and give the checker its rows."""
+    arms = _ArmRows()
+    signatures: Set[str] = set()
+    top_note: _Note = ("the value matched here is", stmt.scrutinee.loc)
 
     for idx, arm in enumerate(stmt.arms):
         pattern = arm.pattern
 
         if isinstance(pattern, WildcardPattern):
-            has_wildcard = True
-            if idx != len(stmt.arms) - 1:
-                er.emit(validator.reporter, er.ERR.CE2041, pattern.loc,
-                       variant="_")  # Reuse duplicate arm error for now
-
+            _wildcard_row(validator, arms, idx, len(stmt.arms), pattern)
             _walk_arm_body(validator, arm)
-
             continue
 
-        if isinstance(pattern, LiteralPattern):
-            # A literal arm needs an integer scrutinee (#415).
+        if isinstance(pattern, LiteralPattern) or (
+                isinstance(pattern, Pattern) and not isinstance(scrutinee_type, EnumType)):
+            # A literal arm needs an integer scrutinee (#415), and an enum pattern arm
+            # an enum scrutinee.
+            kind = "literal" if isinstance(pattern, LiteralPattern) else "enum-pattern"
             er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
-                    arm_kind="literal", scrutinee_type=display_type(scrutinee_type))
+                    arm_kind=kind, scrutinee_type=display_type(scrutinee_type))
+            arms.invalid = True
+            arms.rows.append(None)
             continue
 
-        if not isinstance(pattern, Pattern):
-            continue
-
-        # `geo.Sign.Plus ->`: the qualifier is checked here and folds away, so every
-        # rule below reads the bare enum name (unit-namespaces.md section 5.2).
-        if pattern.namespace is not None:
-            from .qualified import reject_qualified_name
-            if reject_qualified_name(validator, pattern.namespace, pattern.enum_name,
-                                     pattern.enum_name_span or pattern.loc,
-                                     kind="type"):
+        if isinstance(pattern, Pattern):
+            signature = get_pattern_signature(pattern)
+            if signature in signatures and isinstance(scrutinee_type, EnumType) \
+                    and _names_the_scrutinee(validator, pattern, scrutinee_type):
+                er.emit(validator.reporter, er.ERR.CE2041, pattern.loc,
+                        variant=pattern.variant_name)
+                arms.reported.add(idx)
+                arms.rows.append(None)
                 continue
+            signatures.add(signature)
 
-        # Validate that the enum name matches the scrutinee's enum type
-        # For generic enums, the pattern uses the base name (e.g., "Maybe")
-        # but the scrutinee type includes type args (e.g., "Maybe<i32>")
-        enum_names_match = False
-        if pattern.enum_name == scrutinee_type.name:
-            enum_names_match = True
-        elif pattern.enum_name in validator.generic_enum_table.by_name:
-            if generic_base_of(scrutinee_type) == pattern.enum_name:
-                enum_names_match = True
-
-        if not enum_names_match:
-            reject_other_enum(validator, pattern.enum_name,
-                              pattern.enum_name_span or pattern.loc, scrutinee_type,
-                              "the value matched here is", stmt.scrutinee.loc)
-            continue
-
-        variant = scrutinee_type.get_variant(pattern.variant_name)
-        if variant is None:
-            er.emit(validator.reporter, er.ERR.CE2045, pattern.variant_name_span or pattern.loc,
-                   variant=pattern.variant_name, enum=display_type(scrutinee_type))
-            continue
-
-        pattern_signature = get_pattern_signature(pattern)
-        if pattern_signature in covered_variants:
-            er.emit(validator.reporter, er.ERR.CE2041, pattern.loc,
-                   variant=pattern.variant_name)
-            continue
-
-        covered_variants.add(pattern_signature)
-
-        if not validate_pattern_bindings(validator, pattern, variant, scrutinee_type):
+        row = _check_item(validator, pattern, scrutinee_type, top_note)
+        arms.rows.append(row)
+        if row is None:
+            arms.invalid = True
             continue
 
         saved_vars = validator.variable_types.copy()
-        register_pattern_bindings(validator, pattern, variant)
+        _register_bindings(validator, pattern, scrutinee_type)
 
         _walk_arm_body(validator, arm)
 
         validator.variable_types = saved_vars
 
-    return covered_variants, has_wildcard
+    return arms
 
 
-def check_match_exhaustiveness(
-    validator: 'TypeValidator', stmt: Match, scrutinee_type: EnumType, covered_variants: Set[str], has_wildcard: bool
-) -> None:
-    """Check if match statement covers all enum variants."""
-    if not has_wildcard:
-        all_variants = {variant.name for variant in scrutinee_type.variants}
-        covered_outer_variants = set()
-        for sig in covered_variants:
-            outer_variant = sig.split("(")[0]
-            covered_outer_variants.add(outer_variant)
-
-        missing_variants = all_variants - covered_outer_variants
-
-        if missing_variants:
-            missing_list = ", ".join(sorted(missing_variants))
-            stmt.not_exhaustive = True
-            er.emit(validator.reporter, er.ERR.CE2040, stmt.loc, variants=missing_list)
+def _names_the_scrutinee(validator: 'TypeValidator', pattern: Pattern,
+                         scrutinee_type: EnumType) -> bool:
+    """Does an arm's enum pattern name a variant of the scrutinee's own enum?"""
+    return (_names_enum(validator, pattern.enum_name, scrutinee_type)
+            and scrutinee_type.get_variant(pattern.variant_name) is not None)
 
 
-def validate_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant', parent_enum_type: 'EnumType') -> bool:
-    """Validate pattern bindings match variant's associated types (supports nested patterns)."""
-    expected_bindings = len(variant.associated_types)
-    actual_bindings = len(pattern.bindings)
+def _names_enum(validator: 'TypeValidator', written: str, enum_type: EnumType) -> bool:
+    """Does a pattern's written enum name name `enum_type`?
 
-    if expected_bindings != actual_bindings:
-        er.emit(validator.reporter, er.ERR.CE2044, pattern.loc,
-               variant=pattern.variant_name,
-               expected=expected_bindings,
-               got=actual_bindings)
-        return False
-
-    for _i, (binding, binding_type) in enumerate(zip(pattern.bindings, variant.associated_types, strict=False)):
-        if isinstance(binding, Pattern):
-            resolved_type = _resolve(validator, binding_type)
-
-            if not isinstance(resolved_type, EnumType):
-                er.emit(validator.reporter, er.ERR.CE2108, binding.loc,
-                        got=display_type(resolved_type))
-                return False
-
-            if binding.enum_name != resolved_type.name:
-                if not (binding.enum_name in validator.generic_enum_table.by_name and
-                        generic_base_of(resolved_type) == binding.enum_name):
-                    reject_other_enum(
-                        validator, binding.enum_name,
-                        binding.enum_name_span or binding.loc, resolved_type,
-                        f"variant '{pattern.variant_name}' of "
-                        f"'{display_type(parent_enum_type)}' carries",
-                        pattern.variant_name_span or pattern.loc)
-                    return False
-
-            nested_variant = resolved_type.get_variant(binding.variant_name)
-            if nested_variant is None:
-                er.emit(validator.reporter, er.ERR.CE2045, binding.variant_name_span or binding.loc,
-                       variant=binding.variant_name, enum=display_type(resolved_type))
-                return False
-
-            if not validate_pattern_bindings(validator, binding, nested_variant, resolved_type):
-                return False
-        elif isinstance(binding, OwnPattern):
-            resolved_type = _resolve(validator, binding_type)
-
-            if not is_own_type(resolved_type):
-                er.emit(validator.reporter, er.ERR.CE2109, binding.loc,
-                        got=display_type(resolved_type))
-                return False
-
-            if isinstance(binding.inner_pattern, Pattern):
-                element_type = own_payload_type(resolved_type)
-                if element_type is None:
-                    er.emit(validator.reporter, er.ERR.CE2109, binding.loc,
-                            got=display_type(resolved_type))
-                    return False
-
-                element_type = _resolve(validator, element_type)
-
-                if not isinstance(element_type, EnumType):
-                    er.emit(validator.reporter, er.ERR.CE2108, binding.inner_pattern.loc,
-                            got=display_type(element_type))
-                    return False
-
-                inner_variant = element_type.get_variant(binding.inner_pattern.variant_name)
-                if inner_variant is None:
-                    er.emit(validator.reporter, er.ERR.CE2045,
-                           binding.inner_pattern.variant_name_span or binding.inner_pattern.loc,
-                           variant=binding.inner_pattern.variant_name,
-                           enum=display_type(element_type))
-                    return False
-
-                if not validate_pattern_bindings(validator, binding.inner_pattern, inner_variant, element_type):
-                    return False
-
-    return True
-
-
-def register_pattern_bindings(validator: 'TypeValidator', pattern: 'Pattern', variant: 'EnumVariant') -> None:
-    """Register pattern bindings in variable_types table (recursive for nested and Own patterns).
+    For a generic enum the pattern uses the base name (`Maybe`), and the type carries its
+    type arguments (`Maybe<i32>`).
     """
-    for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=False):
-        if isinstance(binding, NomBinding):
-            # `Variant(nom x)` (ruling R11): the arm OWNS the payload, so the binding has
-            # the payload's own type -- no reference wrapper, and every consumer that
-            # asks "may this be given away?" answers yes.
-            validator.variable_types[binding.name] = _resolve(validator, binding_type)
-        elif isinstance(binding, str):
-            if binding != "_":  # Skip wildcards
-                validator.variable_types[binding] = _resolve(validator, binding_type)
-        elif isinstance(binding, RefBinding):
-            # `Variant(poke x)` (#300 phase 3): the binding IS a reference into the
-            # scrutinee's payload storage, so register the reference type -- every
-            # consumer that asks "is this name a borrow?" answers truthfully, and
-            # inference auto-derefs the name.
-            resolved_type = _resolve(validator, binding_type)
-            validator.variable_types[binding.name] = ReferenceType(
-                resolved_type, borrow_mode(binding.mode))
-        elif isinstance(binding, Pattern):
-            resolved_type = _resolve(validator, binding_type)
-            if isinstance(resolved_type, EnumType):
-                nested_variant = resolved_type.get_variant(binding.variant_name)
-                if nested_variant:
-                    register_pattern_bindings(validator, binding, nested_variant)
-        elif isinstance(binding, OwnPattern):
-            element_type = own_payload_type(_resolve(validator, binding_type))
+    if written == enum_type.name:
+        return True
+    return (written in validator.generic_enum_table.by_name
+            and generic_base_of(enum_type) == written)
 
-            if element_type is not None:
-                element_type = _resolve(validator, element_type)
 
-                inner_pattern = binding.inner_pattern
-                if isinstance(inner_pattern, str):
-                    if inner_pattern != "_":
-                        if binding.inner_borrow is not None:
-                            # `Own(poke x)` (#300 phase 1): the binding IS a reference
-                            # to the pointee, so register the reference type -- every
-                            # consumer that asks "is this name a borrow?" then answers
-                            # truthfully, and inference auto-derefs the name.
-                            validator.variable_types[inner_pattern] = ReferenceType(
-                                element_type, borrow_mode(binding.inner_borrow))
-                        else:
-                            validator.variable_types[inner_pattern] = element_type
-                elif isinstance(inner_pattern, Pattern):
-                    if isinstance(element_type, EnumType):
-                        inner_variant = element_type.get_variant(inner_pattern.variant_name)
-                        if inner_variant:
-                            register_pattern_bindings(validator, inner_pattern, inner_variant)
+def _check_item(validator: 'TypeValidator', item: object, ty: Type,
+                note: _Note) -> Optional[Pat]:
+    """Validate one pattern position against the type of the value it reads.
+
+    The answer is the position for the checker's matrix, or None after an error.
+    """
+    ty = _resolve(validator, ty)
+    if isinstance(item, (str, RefBinding, NomBinding)):
+        return WILD
+    if isinstance(item, LiteralPattern):
+        return _check_literal(validator, item, ty)
+    if isinstance(item, TuplePattern):
+        return _check_tuple_pattern(validator, item, ty, note)
+    if isinstance(item, Pattern):
+        return _check_enum_pattern(validator, item, ty, note)
+    if isinstance(item, OwnPattern):
+        return _check_own_pattern(validator, item, ty, note)
+    raise_internal_error("CE0121", pattern=pattern_source(item))
+    return None
+
+
+def _check_literal(validator: 'TypeValidator', pattern: LiteralPattern,
+                   ty: Type) -> Optional[Pat]:
+    """An integer literal pattern: an integer value, and a literal that fits its type."""
+    from sushi_lang.semantics.passes.types.inference import int_literal_fits
+
+    if not isinstance(ty, BuiltinType) or ty not in _INTEGER_SCRUTINEES:
+        er.emit(validator.reporter, er.ERR.CE2119, pattern.loc, got=display_type(ty))
+        return None
+    if not int_literal_fits(pattern.value, pattern.radix, ty):
+        er.emit(validator.reporter, er.ERR.CE2073, pattern.loc,
+                literal=pattern.display, type=display_type(ty))
+        return None
+    return Ctor(pattern.value)
+
+
+def _check_tuple_pattern(validator: 'TypeValidator', pattern: TuplePattern, ty: Type,
+                         note: _Note) -> Optional[Pat]:
+    """A tuple pattern: a tuple value, one item for each element (CE2117, CE2116)."""
+    if not is_tuple_type(ty):
+        er.emit(validator.reporter, er.ERR.CE2117, pattern.loc, type=display_type(ty))
+        return None
+    elements = tuple_elements(ty)
+    if len(pattern.elements) != len(elements):
+        er.emit(validator.reporter, er.ERR.CE2116, pattern.loc,
+                count=len(pattern.elements), type=display_type(ty), arity=len(elements))
+        return None
+    spelling = display_type(ty)
+    args = []
+    for index, (item, element_type) in enumerate(zip(pattern.elements, elements, strict=True)):
+        sub = _check_item(validator, item, element_type,
+                          (f"element {index} of '{spelling}' is", note[1]))
+        if sub is None:
+            return None
+        args.append(sub)
+    return Ctor(TUPLE_KEY, tuple(args))
+
+
+def _check_enum_pattern(validator: 'TypeValidator', pattern: Pattern, ty: Type,
+                        note: _Note) -> Optional[Pat]:
+    """An enum pattern: the enum of the value, one of its variants, and its payload."""
+    # `geo.Sign.Plus ->`: the qualifier is checked here and folds away, so every rule
+    # below reads the bare enum name (unit-namespaces.md section 5.2).
+    if pattern.namespace is not None:
+        from .qualified import reject_qualified_name
+        if reject_qualified_name(validator, pattern.namespace, pattern.enum_name,
+                                 pattern.enum_name_span or pattern.loc, kind="type"):
+            return None
+
+    if not isinstance(ty, EnumType):
+        er.emit(validator.reporter, er.ERR.CE2108, pattern.loc, got=display_type(ty))
+        return None
+
+    if not _names_enum(validator, pattern.enum_name, ty):
+        reject_other_enum(validator, pattern.enum_name,
+                          pattern.enum_name_span or pattern.loc, ty, note[0], note[1])
+        return None
+
+    variant = ty.get_variant(pattern.variant_name)
+    if variant is None:
+        er.emit(validator.reporter, er.ERR.CE2045, pattern.variant_name_span or pattern.loc,
+                variant=pattern.variant_name, enum=display_type(ty))
+        return None
+
+    if len(variant.associated_types) != len(pattern.bindings):
+        er.emit(validator.reporter, er.ERR.CE2044, pattern.loc,
+                variant=pattern.variant_name,
+                expected=len(variant.associated_types),
+                got=len(pattern.bindings))
+        return None
+
+    payload_note: _Note = (f"variant '{pattern.variant_name}' of '{display_type(ty)}' carries",
+                           pattern.variant_name_span or pattern.loc)
+    args = []
+    for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=True):
+        sub = _check_item(validator, binding, binding_type, payload_note)
+        if sub is None:
+            return None
+        args.append(sub)
+    return Ctor(pattern.variant_name, tuple(args))
+
+
+def _check_own_pattern(validator: 'TypeValidator', pattern: OwnPattern, ty: Type,
+                       note: _Note) -> Optional[Pat]:
+    """An `Own(...)` pattern: an `Own@(T)` value, and a pattern of its pointee."""
+    if not is_own_type(ty):
+        er.emit(validator.reporter, er.ERR.CE2109, pattern.loc, got=display_type(ty))
+        return None
+    if isinstance(pattern.inner_pattern, str):
+        return WILD
+    element_type = own_payload_type(ty)
+    if element_type is None:
+        er.emit(validator.reporter, er.ERR.CE2109, pattern.loc, got=display_type(ty))
+        return None
+    sub = _check_item(validator, pattern.inner_pattern, element_type, note)
+    return None if sub is None else Ctor(OWN_KEY, (sub,))
+
+
+def _register_bindings(validator: 'TypeValidator', item: object, ty: Type) -> None:
+    """Register the names a pattern item binds in `variable_types`, with their types."""
+    ty = _resolve(validator, ty)
+    if isinstance(item, NomBinding):
+        # `Variant(nom x)` (ruling R11): the arm OWNS the payload, so the binding has the
+        # payload's own type -- no reference wrapper, and every consumer that asks "may
+        # this be given away?" answers yes.
+        validator.variable_types[item.name] = ty
+    elif isinstance(item, str):
+        if item != "_":
+            validator.variable_types[item] = ty
+    elif isinstance(item, RefBinding):
+        # `Variant(poke x)` (#300 phase 3): the binding IS a reference into the
+        # scrutinee's storage, so register the reference type -- every consumer that asks
+        # "is this name a borrow?" answers truthfully, and inference auto-derefs the name.
+        validator.variable_types[item.name] = ReferenceType(ty, borrow_mode(item.mode))
+    elif isinstance(item, Pattern):
+        variant = ty.get_variant(item.variant_name) if isinstance(ty, EnumType) else None
+        if variant is not None:
+            for binding, binding_type in zip(item.bindings, variant.associated_types,
+                                             strict=False):
+                _register_bindings(validator, binding, binding_type)
+    elif isinstance(item, TuplePattern):
+        for element, element_type in zip(item.elements, tuple_elements(ty), strict=False):
+            _register_bindings(validator, element, element_type)
+    elif isinstance(item, OwnPattern):
+        pointee = own_payload_type(ty)
+        if pointee is None:
+            return
+        inner = item.inner_pattern
+        if isinstance(inner, str) and inner != "_" and item.inner_borrow is not None:
+            # `Own(poke x)` (#300 phase 1): the binding IS a reference to the pointee.
+            validator.variable_types[inner] = ReferenceType(
+                _resolve(validator, pointee), borrow_mode(item.inner_borrow))
+        else:
+            _register_bindings(validator, inner, pointee)
+
+
+def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutinee_type: Type,
+                               arms: _ArmRows) -> None:
+    """Run the one checker over the arms: the missing patterns, and the dead arms."""
+    if arms.invalid:
+        return
+    result = analyze(lambda ty: _signature(validator, ty), arms.rows, scrutinee_type)
+
+    if result.missing:
+        stmt.not_exhaustive = True
+        if scrutinee_type in _INTEGER_SCRUTINEES:
+            er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
+        else:
+            er.emit(validator.reporter, er.ERR.CE2040, stmt.loc,
+                    variants=_render_missing(validator, result.missing, scrutinee_type,
+                                             arms.rows))
+
+    for index, covers in result.dead:
+        if index in arms.reported or (arms.after_wildcard is not None
+                                      and index >= arms.after_wildcard):
+            continue
+        dead = stmt.arms[index].pattern
+        diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, dead.loc,
+                                  pattern=pattern_source(dead))
+        for above in covers:
+            cover = stmt.arms[above].pattern
+            if cover.loc is not None:
+                diagnostic.note_at(
+                    f"the arm '{pattern_source(cover)}' matches these values first",
+                    cover.loc)
+        diagnostic.emit()
+
+
+def _signature(validator: 'TypeValidator', ty: Type) -> Signature:
+    """The constructors of a column type for the checker, or None when they cannot be listed."""
+    ty = _resolve(validator, ty)
+    if isinstance(ty, EnumType):
+        return [(variant.name, tuple(variant.associated_types)) for variant in ty.variants]
+    if is_tuple_type(ty):
+        return [(TUPLE_KEY, tuple_elements(ty))]
+    if is_own_type(ty):
+        payload = own_payload_type(ty)
+        return None if payload is None else [(OWN_KEY, (payload,))]
+    return None
+
+
+def _render_missing(validator: 'TypeValidator', missing: List[Pat], ty: Type,
+                    rows: List[Optional[Pat]]) -> str:
+    """The `{variants}` slot of CE2040: the missing patterns, in source syntax.
+
+    A plain enum match, where no arm tests inside a payload, lists the names of the
+    missing variants as it always has.
+    """
+    if isinstance(ty, EnumType) and all(_is_shallow(row) for row in rows + missing):
+        return ", ".join(sorted(str(w.key) for w in missing if isinstance(w, Ctor)))
+    return ", ".join(_render_witness(validator, w, ty) for w in missing)
+
+
+def _is_shallow(row: Optional[Pat]) -> bool:
+    """Does a pattern test no more than an outer variant?"""
+    return not isinstance(row, Ctor) or all(isinstance(a, Wild) for a in row.args)
+
+
+def _render_witness(validator: 'TypeValidator', pat: Pat, ty: Type) -> str:
+    """One missing pattern in source syntax: `Maybe.Some(Color.Green)`, `(_, Color.Red)`."""
+    if isinstance(pat, Wild):
+        return "_"
+    ty = _resolve(validator, ty)
+    if pat.key == TUPLE_KEY:
+        return display_tuple(_render_witness(validator, a, t)
+                             for a, t in zip(pat.args, tuple_elements(ty), strict=False))
+    if pat.key == OWN_KEY:
+        payload = own_payload_type(ty)
+        inner = _render_witness(validator, pat.args[0], payload) if payload else "_"
+        return f"Own({inner})"
+    if isinstance(ty, EnumType):
+        variant = ty.get_variant(str(pat.key))
+        head = f"{generic_base_of(ty) or ty.name}.{pat.key}"
+        if variant is None or not variant.associated_types:
+            return head
+        inner = ", ".join(_render_witness(validator, a, t)
+                          for a, t in zip(pat.args, variant.associated_types, strict=False))
+        return f"{head}({inner})"
+    return str(pat.key)
 
 
 def get_pattern_signature(pattern: 'Pattern') -> str:
     """Generate a unique signature for a pattern including nested and Own patterns."""
     signature = pattern.variant_name
-
     if pattern.bindings:
-        binding_signatures = []
-        for binding in pattern.bindings:
-            if isinstance(binding, str):
-                binding_signatures.append("_")
-            elif isinstance(binding, Pattern):
-                nested_sig = get_pattern_signature(binding)
-                binding_signatures.append(nested_sig)
-            elif isinstance(binding, OwnPattern):
-                if isinstance(binding.inner_pattern, str):
-                    binding_signatures.append("Own")
-                elif isinstance(binding.inner_pattern, Pattern):
-                    inner_sig = get_pattern_signature(binding.inner_pattern)
-                    binding_signatures.append(f"Own({inner_sig})")
-            else:
-                # A RefBinding (#300 phase 3) and a NomBinding (ruling R11) bind like a
-                # plain name: the marker changes how the binding is materialized, not
-                # which values the arm matches, so `Poly(p)`, `Poly(poke p)` and
-                # `Poly(nom p)` are duplicates of each other.
-                binding_signatures.append("_")
-        signature += "(" + ",".join(binding_signatures) + ")"
-
+        signature += "(" + ",".join(_item_signature(b) for b in pattern.bindings) + ")"
     return signature
+
+
+def _item_signature(item: object) -> str:
+    """The signature of one payload position; every binding reads as `_`.
+
+    A RefBinding (#300 phase 3) and a NomBinding (ruling R11) bind like a plain name: the
+    marker changes how the binding is materialized, not which values the arm matches, so
+    `Poly(p)`, `Poly(poke p)` and `Poly(nom p)` are duplicates of each other.
+    """
+    if isinstance(item, Pattern):
+        return get_pattern_signature(item)
+    if isinstance(item, TuplePattern):
+        return "(" + ",".join(_item_signature(e) for e in item.elements) + ")"
+    if isinstance(item, LiteralPattern):
+        return str(item.value)
+    if isinstance(item, OwnPattern):
+        if isinstance(item.inner_pattern, str):
+            return "Own"
+        return f"Own({_item_signature(item.inner_pattern)})"
+    return "_"

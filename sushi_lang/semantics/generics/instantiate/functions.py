@@ -151,17 +151,25 @@ class FunctionCollector:
         is returned rather than the scope being cleared -- an arm must not see the arm
         before it, and it must not lose an outer local of the same name.
         """
-        from sushi_lang.semantics.ast import Pattern, NomBinding
+        from sushi_lang.semantics.ast import Pattern, NomBinding, TuplePattern
+        from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 
-        if not isinstance(pattern, Pattern) or scrutinee_type is None:
+        if scrutinee_type is None:
             return []
-
-        payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        if isinstance(pattern, TuplePattern):
+            if not is_tuple_type(scrutinee_type):
+                return []
+            items, payloads = pattern.elements, list(tuple_elements(scrutinee_type))
+        elif isinstance(pattern, Pattern):
+            items = pattern.bindings
+            payloads = self._variant_payload_types(scrutinee_type, pattern.variant_name)
+        else:
+            return []
         if not payloads:
             return []
 
         saved: list[tuple[str, "Type | None"]] = []
-        for binding, raw_payload in zip(pattern.bindings, payloads, strict=False):
+        for binding, raw_payload in zip(items, payloads, strict=False):
             # Resolve before binding, exactly as a `let` local's annotation is resolved. A
             # template's payload can be a bare name -- an UnknownType("NetError") displays
             # as "NetError" while the enum table holds the real EnumType -- and binding the
@@ -179,7 +187,7 @@ class FunctionCollector:
                 # no reference wrapper (borrow-model.md S10b).
                 saved.append((binding.name, self.variable_types.get(binding.name)))
                 self.variable_types[binding.name] = payload
-            elif isinstance(binding, Pattern):
+            elif isinstance(binding, (Pattern, TuplePattern)):
                 saved.extend(self._bind_pattern_payloads(binding, payload))
             # A `peek`/`poke` RefBinding carries a ReferenceType rather than the payload's
             # own type, and a reference is not a type argument a generic can be called

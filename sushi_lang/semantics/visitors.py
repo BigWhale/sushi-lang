@@ -22,7 +22,7 @@ WALKED_IN_PARENT = frozenset({
     "ArrayElement",      # `visit_arrayliteral` reads .value and .count
     "MatchArm",          # `visit_match` hands the arm's BODY over; the pattern binds names
     "Pattern", "LiteralPattern", "WildcardPattern",
-    "OwnPattern", "RefBinding", "NomBinding",
+    "OwnPattern", "RefBinding", "NomBinding", "TuplePattern",
 })
 
 class NodeVisitor(ABC, Generic[T]):

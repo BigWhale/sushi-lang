@@ -7,10 +7,10 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.ast import (
-    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, Assert, While, Foreach, Expand, Match, MatchArm, Pattern, OwnPattern, Break,
+    Program, FuncDef, ConstDef, ExtendDef, ExtendWithDef, Block, Stmt, Let, ExprStmt, Return, Print, PrintLn, Assert, While, Foreach, Expand, Match, MatchArm, Break,
     If, Expr, Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall,
     DynamicArrayNew, DynamicArrayFrom, Rebind, Continue, CastExpr, MemberAccess, EnumConstructor, TryExpr, Borrow, RangeExpr, Spread, Lambda, Param,
-    TupleLiteral, destructure_binders,
+    TupleLiteral, destructure_binders, pattern_bindings,
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
@@ -641,9 +641,8 @@ class ScopeAnalyzer:
         """Check a match arm with pattern bindings (supports nested patterns)."""
         self._push_scope()
 
-        pattern = arm.pattern
-        if isinstance(pattern, Pattern):
-            self._declare_pattern_bindings(pattern)
+        for name, owner, span in pattern_bindings(arm.pattern):
+            self._declare_variable(name, span, written_binder(owner, name))
 
         if isinstance(arm.body, Block):
             self._check_block(arm.body)
@@ -651,29 +650,6 @@ class ScopeAnalyzer:
             self._check_expression(arm.body)
 
         self._pop_scope()
-
-    def _declare_pattern_bindings(self, pattern: Pattern) -> None:
-        """Recursively declare variables from pattern bindings (including Own patterns)."""
-        for binding_item in pattern.bindings:
-            if isinstance(binding_item, str):
-                if binding_item != "_":
-                    self._declare_variable(binding_item, pattern.loc,
-                                           written_binder(pattern, binding_item))
-            elif isinstance(binding_item, Pattern):
-                self._declare_pattern_bindings(binding_item)
-            elif isinstance(binding_item, OwnPattern):
-                inner = binding_item.inner_pattern
-                if isinstance(inner, str):
-                    if inner != "_":
-                        self._declare_variable(inner, binding_item.loc or pattern.loc,
-                                               written_binder(binding_item, inner))
-                elif isinstance(inner, Pattern):
-                    self._declare_pattern_bindings(inner)
-            else:
-                # A RefBinding (#300 phase 3) declares its name like a plain binding;
-                # it carries its own span.
-                self._declare_variable(binding_item.name, binding_item.loc or pattern.loc,
-                                       written_binder(pattern, binding_item.name))
 
     def _check_break(self, stmt: Break) -> None:
         """Check a break statement (only legal inside a loop)."""
