@@ -469,18 +469,3 @@ def reject_named_args(validator: 'TypeValidator', node) -> None:
         .help("pass the arguments in declaration order") \
         .emit()
     node.field_names = None
-
-
-def mark_array_destroyed(validator: 'TypeValidator', name: str) -> None:
-    """Mark a dynamic array as destroyed in the current scope."""
-    if validator.destroyed_arrays:
-        validator.destroyed_arrays[-1].add(name)
-
-
-def is_array_destroyed(validator: 'TypeValidator', name: str) -> bool:
-    """Check if a dynamic array has been destroyed in any current scope."""
-    for destroyed_set in validator.destroyed_arrays:
-        if name in destroyed_set:
-            return True
-    return False
-

@@ -13,7 +13,7 @@ from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
-from ..utils import is_array_destroyed, mark_array_destroyed, reject_spread_args
+from ..utils import reject_spread_args
 
 # A receiver that can answer a method at all. `Own@(T)`, `List@(T)` and `HashMap@(K, V)`
 # are named StructTypes, so the tuple covers them with every other struct.
@@ -459,9 +459,6 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
     if reject_spread_args(validator, call.args):
         return
 
-    if _reject_destroyed_receiver(validator, call):
-        return
-
     validator.validate_expression(call.receiver)
     receiver_type = validator.infer_expression_type(call.receiver)
 
@@ -498,16 +495,6 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
         return
 
     _validate_extension_call(validator, call, receiver_type)
-
-
-def _reject_destroyed_receiver(validator: 'TypeValidator', call: MethodCall) -> bool:
-    """CE2024: the array this name held was destroyed, so it answers no method."""
-    if not isinstance(call.receiver, Name):
-        return False
-    if not is_array_destroyed(validator, call.receiver.id):
-        return False
-    er.emit(validator.reporter, er.ERR.CE2024, call.receiver.loc, name=call.receiver.id)
-    return True
 
 
 def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
@@ -695,10 +682,6 @@ def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
     from sushi_lang.semantics.passes.types.arrays import validate_builtin_array_method
     validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
-    if (call.method == "destroy"
-            and isinstance(receiver_type, DynamicArrayType)
-            and isinstance(call.receiver, Name)):
-        mark_array_destroyed(validator, call.receiver.id)
 
 
 @METHOD_TYPE_REGISTRY.validator("string")

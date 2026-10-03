@@ -485,7 +485,7 @@ Free memory and invalidate (unusable).
 
 ```sushi
 arr.destroy()
-# arr.len()  # ERROR CE2024 (use of destroyed dynamic array) and CE2406
+# arr.len()  # ERROR CE2406 (use of destroyed variable)
 ```
 
 ## Byte Array Only (u8[])

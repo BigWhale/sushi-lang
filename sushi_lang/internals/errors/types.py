@@ -105,9 +105,10 @@ _add(ErrorMessage("CE2023", Severity.ERROR,
     "dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}",
     Category.TYPE, "A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type. The text said \"argument\" for both until #1137, so a fixed-array receiver read as a wrong argument."))
 
-_add(ErrorMessage("CE2024", Severity.ERROR,
-    "use of destroyed dynamic array '{name}'",
-    Category.TYPE, "Attempted to use a dynamic array after it was explicitly destroyed."))
+# CE2024 ("use of destroyed dynamic array '{name}'") was RETIRED by #1137. It came from
+# the typecheck pass, which kept a scope stack of destroyed names and read no flow, and
+# every use it reported was reported again by CE2406 from the borrow pass, which reads the
+# flow and covers every type. One fault is one code: a use after `.destroy()` is CE2406.
 
 _add(ErrorMessage("CE2026", Severity.ERROR,
     "unterminated interpolation in string literal",
