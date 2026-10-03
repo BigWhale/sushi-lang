@@ -557,6 +557,15 @@ instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
 
+A late instance gets its generic-target extension copies in
+`_cut_templates_for_late_instantiations`, a fixpoint after the function round. The
+instantiate pass collects the signature of an EARLY instance's copy, but it ended before
+a late instance existed. So each round sends the types that its new copies name -- the
+return, the channel, the parameters and the `let` annotations -- through
+`collect_type_instantiations` and monomorphizes them, before `resolve` and `derive`. A
+method that no call names still has a signature of known types, and an instance found
+this way gets its own copies in the next round (#1146).
+
 ### One source, one report
 
 Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
