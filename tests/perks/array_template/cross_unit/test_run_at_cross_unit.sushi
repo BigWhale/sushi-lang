@@ -1,0 +1,14 @@
+# The template is declared in another unit. The copy for each element type is made
+# where this unit calls it, and its body is resolved in the scope of the declaring unit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "array_named 2\narray_named 1\narray_named 3\n"
+use "helpers/array_named"
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let bool[] flags = from([true])
+    println(xs.name())
+    println(flags.name())
+    println(describe(from(["a", "b", "c"])))
+    return 0

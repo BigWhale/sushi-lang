@@ -139,6 +139,11 @@ codegen dispatcher runs its perk step before the auto-derived ones. The array, s
 `Result`, `Maybe`, `Own`, `HashMap` and `List` families are `beats_perk=True`: a perk
 implementation does not take a name from one of them. `tests/perks/hashable/test_perk_override_hash.sushi` pins it.
 
+The one exception is the `hash` of an array. It is a family of its own, `array_hash`, and it
+yields to a perk (#699): a `Hashable` implementation wins in every position, so a direct
+`xs.hash()` reads it as a struct field and a `HashMap` probe do. The codegen step is
+`try_emit_array_hash`, after the perk step.
+
 ```sushi
 struct Point:
     i32 x
@@ -194,6 +199,17 @@ A separate question from precedence, and settled by the same principle. Status: 
 | `extend Box@(i32) f()` **and** `extend Box@(string) f()` | legal -- two types, two methods |
 | `extend Box@(T) f()` **and** `extend Box@(i32) f()` | **rejected** -- `CE0101`, relational |
 | `extend Pair@(i32, U) f()` -- partially concrete | **rejected** -- `CE2098` |
+| `extend T[] f()` -- an array template | every dynamic array |
+| `extend T[] f()` **and** `extend i32[] f()` | **rejected** -- `CE0101`, relational, in either order |
+| `extend Box@(T) with P` **and** `extend Box@(i32) with P` | **rejected** -- `CE4002`, relational, in either order |
+| `extend T[] with P` **and** `extend i32[] with P` | **rejected** -- `CE4002`, relational, in either order |
+
+The overlap rule has three positions: a generic extension, an array extension and a perk
+implementation (a generic target or an array target). In each position the SECOND
+declaration is refused, and a note points at the first. Two templates of one perk on one
+base are the same fault. A library's implementation is the one exception: a consumer may
+replace it (decision 11 of `docs/design/visibility.md`), so the consumer's concrete
+implementation wins and the library template's copy for that type is not registered.
 
 **A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
 and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
@@ -223,6 +239,29 @@ The late copy's signature and `let` annotations are collected by the instantiate
 own walk in the same round, as the pass collects them for an early copy: the
 `Maybe@(Result@(string, Bad))` that a late `Feed@(string)` names in its `next()` is an
 instance too, and the next round cuts its own copies (#1146).
+
+**An ARRAY template is cut on demand (#699).** `extend T[] with P` covers every dynamic
+array, and the collect pass files it under the array base `$array`. An array type has no
+instantiation set, because a program writes, infers and nests `i32[]` anywhere. So the copy
+for one array type is cut when a lookup of the perk-implementation table misses for that
+type: `PerkImplementationTable.on_array_miss` is the hook, and `ArrayPerkCopies`
+(`semantics/generics/array_perk_copies.py`) is the one seam that cuts. The hook cuts only a
+template that gives the perk or the method that the lookup asked for, so a `u8[]` in a
+stdlib body does not get a copy that no question needs. Every reader of the table then
+agrees with no edit: a method call, a constraint, a contract walk and the hash override.
+
+The analyzer installs the hook with the monomorphizer, because the constraint check of the
+`monomorphize` stage is the first reader that can miss, and it removes the hook at the end of
+the analysis. In the backend a miss is a miss. A cut copy is registered at once, so the
+lookup that asked gets its answer. Its body waits until `_check_array_extensions`: the
+analyzer puts the copy in the home unit of its template and checks it with the passes of that
+unit, after the per-unit loop, so no body is checked twice. A fault in the body is told for
+each element type that has it, and one time for each of them.
+
+A template header is judged once, where it is written (#811): `fn take(T x)` against a
+contract `fn take(i32 x)` is CE4004. A method name the template shares with an `extend T[]`
+extension or with an extension on one array type is CE4007, and a name that another perk
+gives an array type is CE4015. `extend T[][] with P` is CE2101, as for an extension.
 
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations

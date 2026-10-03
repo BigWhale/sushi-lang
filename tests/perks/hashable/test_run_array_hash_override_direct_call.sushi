@@ -1,0 +1,12 @@
+# A `Hashable` implementation on an array wins everywhere, a direct call included.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+
+extend i32[] with Hashable:
+    fn hash() u64:
+        return 7 as u64
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    println(xs.hash())
+    return 0

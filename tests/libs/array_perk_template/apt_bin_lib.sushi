@@ -1,0 +1,15 @@
+# A library that implements a perk on the array template.
+
+public perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "lib {self.len()}"
+
+public fn describe@(N: Named)(N thing) string:
+    return thing.name()
+
+public fn own_ints() string:
+    let i32[] xs = from([1, 2, 3, 4])
+    return xs.name()

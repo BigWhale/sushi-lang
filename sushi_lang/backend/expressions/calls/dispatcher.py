@@ -405,6 +405,7 @@ RECEIVER_HANDLERS = (
     intrinsics.try_emit_array_method,
     intrinsics.try_emit_string_method,
     intrinsics.try_emit_perk_method,
+    intrinsics.try_emit_array_hash,
     intrinsics.try_emit_struct_hash,
     intrinsics.try_emit_enum_hash,
     intrinsics.try_emit_struct_clone,

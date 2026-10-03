@@ -910,6 +910,7 @@ class LibraryManifestGenerator:
         source. The keys name those copies, so the concrete index can leave them out.
         """
         from sushi_lang.semantics.library_templates import serialize_generic_perk_impl
+        from sushi_lang.semantics.passes.collect.perks import covering_base
 
         records: list[dict] = []
         template_keys: set[tuple[str, str]] = set()
@@ -917,7 +918,10 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for impl in getattr(unit.ast, "generic_perk_impls", None) or []:
-                template_keys.add((impl.target_type.base_name, impl.perk_name))
+                base = covering_base(impl.target_type)
+                if base is None:
+                    continue
+                template_keys.add((base, impl.perk_name))
                 if self._impl_exposes_ptr(impl):
                     continue
                 record = serialize_generic_perk_impl(impl, self._source(unit))
@@ -956,7 +960,7 @@ class LibraryManifestGenerator:
                              template_keys: set[tuple[str, str]]) -> list[dict]:
         """Every concrete implementation of a shipped perk, once per (type, perk)."""
         from sushi_lang.semantics.library_templates import serialize_perk_impl
-        from sushi_lang.semantics.passes.collect.perks import _get_type_name
+        from sushi_lang.semantics.passes.collect.perks import _get_type_name, covering_base
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         records: list[dict] = []
@@ -976,7 +980,8 @@ class LibraryManifestGenerator:
                 # design, and its source slice is the TEMPLATE's: shipping it as a
                 # concrete record re-parsed to `Box@(T)` at the consumer (#543). The
                 # template ships instead, and the consumer cuts its own copies.
-                base_name = getattr(impl.target_type, "generic_base", None) or type_name
+                base_name = (covering_base(impl.target_type)
+                             or getattr(impl.target_type, "generic_base", None) or type_name)
                 if (base_name, impl.perk_name) in template_keys:
                     continue
                 if self._impl_exposes_ptr(impl):

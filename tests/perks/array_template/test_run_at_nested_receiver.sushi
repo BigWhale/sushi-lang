@@ -1,0 +1,18 @@
+# A nested array is an array of arrays: `extend T[]` binds `T = i32[]` for the outer
+# array and `T = i32` for a row, and each gets its own copy.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "rows 2\nrows 3\n"
+
+perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "rows {self.len()}"
+
+fn main() i32:
+    let i32[][] grid = from([from([1, 2, 3]), from([4])])
+    println(grid.name())
+    println(grid[0].name())
+    return 0

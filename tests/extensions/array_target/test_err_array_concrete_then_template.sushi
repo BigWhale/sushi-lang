@@ -1,0 +1,14 @@
+# Sushi has no specialization: a `two()` on `i32[]` and `extend T[] two()` are two
+# declarations for `i32[]`, and the second is the duplicate.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+
+extend i32[] two() i32:
+    return 3
+
+extend T[] two() i32:
+    return 2
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.two())
+    return 0

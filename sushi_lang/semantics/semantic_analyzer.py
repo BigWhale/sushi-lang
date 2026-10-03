@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.library_registry import LibraryRegistry
     from sushi_lang.semantics.generics.instantiate import InstantiationCollector
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
+    from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -110,6 +111,8 @@ class SemanticAnalyzer:
         self.tables: SymbolTables = SymbolTables()
         self.monomorphized_extensions: list['ExtendDef'] = []  # Concrete ExtendDef nodes for codegen
         self.library_perk_impls: list['ExtendWithDef'] = []  # Library-shipped impls registered here (declare-only at codegen)
+        # The array-template perk copies cut on demand (#699); set with the monomorphizer.
+        self.array_perk_copies: Optional['ArrayPerkCopies'] = None
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
 
@@ -167,7 +170,11 @@ class SemanticAnalyzer:
         pass; and the backend. The last two share the collect pass's table, and with it
         the fold memo (#597).
         """
-        self._check_multi_file()
+        try:
+            self._check_multi_file()
+        finally:
+            # A miss in the backend is a miss: every copy it needs was cut here.
+            self.tables.perk_impls.on_array_miss = None
 
     @staticmethod
     def _unit_reporter(unit, gate_env: Optional[str] = None) -> Reporter:
@@ -571,6 +578,12 @@ class SemanticAnalyzer:
         # because the pass has no monomorphizer of its own.
         self.tables.intern_generic_ref = (
             lambda ty: self._intern_generic_type_refs(monomorphizer, (ty,)))
+
+        # The array-template perk copies are cut on demand from here on (#699): the
+        # constraint check of the next stage is the first reader that can miss.
+        from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
+        self.array_perk_copies = ArrayPerkCopies(self.tables, monomorphizer.substitutor)
+        self.tables.perk_impls.on_array_miss = self.array_perk_copies
         return monomorphizer
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
@@ -842,14 +855,17 @@ class SemanticAnalyzer:
         checked = 0
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
+            perk_copies = self._place_array_perk_copies(monomorphizer, compilation_order)
             batch = self.monomorphized_extensions[checked:]
             functions = self._place_late_functions(monomorphizer, compilation_order)
-            if not batch and not functions:
+            if not batch and not functions and not perk_copies:
                 break
             checked = len(self.monomorphized_extensions)
             self._check_monomorphized_extensions(compilation_order, monomorphizer,
                                                  libraries, destroy_effects, enum_names,
                                                  batch)
+            self._check_array_perk_copies(monomorphizer, libraries, destroy_effects,
+                                          enum_names, perk_copies)
             self._check_late_functions(monomorphizer, libraries, destroy_effects,
                                        enum_names, functions)
 
@@ -892,6 +908,60 @@ class SemanticAnalyzer:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
+    def _place_array_perk_copies(self, monomorphizer, compilation_order: list[Unit]
+                                 ) -> list[tuple[Unit, ExtendWithDef]]:
+        """Put each array-template perk copy cut since the last round in its home unit.
+
+        A copy is cut on demand (`generics/array_perk_copies.py`), at any point from the
+        `monomorphize` stage on, and its body waits until here: placed during the
+        per-unit loop, a copy in a unit the loop has not reached would be checked twice.
+        """
+        placed: list[tuple[Unit, ExtendWithDef]] = []
+        if self.array_perk_copies is None:
+            return placed
+        fn_instantiations: set = set()
+        for template, impl in self.array_perk_copies.take_pending():
+            home = self._adopt_perk_copy(template, impl, compilation_order,
+                                         monomorphizer, fn_instantiations)
+            if home is not None:
+                placed.append((home, impl))
+        if fn_instantiations:
+            monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+        return placed
+
+    def _check_array_perk_copies(self, monomorphizer, libraries: LibraryRegistration,
+                                 destroy_effects, enum_names: set[str],
+                                 copies: list[tuple[Unit, ExtendWithDef]]) -> None:
+        """scope, typecheck, lift and borrow over each array-template perk copy (#699).
+
+        Each copy is checked with the passes of its home unit, in the per-unit order. A
+        fault in the template body is the same diagnostic in every copy that has it, and
+        it is merged one time.
+        """
+        from sushi_lang.semantics.passes.types import validate_perk_implementation_method
+
+        by_home: dict[str, tuple[Unit, list[ExtendWithDef]]] = {}
+        for home, impl in copies:
+            by_home.setdefault(home.name, (home, []))[1].append(impl)
+
+        seen = {diagnostic_identity(d) for d in self.reporter.items}
+        for home, impls in by_home.values():
+            scratch = self._unit_reporter(home)
+            passes = self._unit_passes(home, scratch, scratch, monomorphizer, libraries,
+                                       destroy_effects, enum_names)
+            for impl in impls:
+                passes.scope._check_perk_implementation(impl)
+                scratch.leave_body()
+                validate_perk_implementation_method(passes.typecheck, impl)
+                scratch.leave_body()
+                lifted = passes.lifter.lift_perk_impl(impl)
+                passes.borrow.refresh_callee_modes()
+                passes.borrow._check_perk_impl(impl)
+                for fn in lifted:
+                    passes.borrow._check_function(fn)
+            scratch.leave_body()
+            self._merge_new(scratch, seen)
 
     def _start_late_requests(self, monomorphizer, compilation_order: list[Unit]) -> None:
         """From the per-unit loop on, a function copy is LATE (#1155).
@@ -984,6 +1054,10 @@ class SemanticAnalyzer:
         rule a monomorphized generic function follows (#495): its methods are emitted
         with that unit's symbol prefix, and a second unit's copy of one name would be a
         second definition of one symbol.
+
+        A copy that does not register meets a consumer's implementation of a LIBRARY
+        template, which is the sanctioned override. A user's template beside a concrete
+        implementation of the same perk is refused in the collect pass (CE4002).
         """
         from sushi_lang.semantics.generics.extensions import monomorphize_all_perk_impls
 
@@ -1002,15 +1076,26 @@ class SemanticAnalyzer:
             if not self.tables.perk_impls.register(impl, type_name,
                                             unit_name=template.unit_name):
                 continue
-            home = self._home_unit(template.unit_name, compilation_order)
-            scope_unit = self._library_scope(template.unit_name, home)
-            for method in impl.methods:
-                method.scope_unit = scope_unit
-            if home is not None:
-                home.ast.perk_impls.append(impl)
-            for method in impl.methods:
-                fn_instantiations |= monomorphizer.collect_from_perk_method_body(
-                    impl.target_type, method)
+            self._adopt_perk_copy(template, impl, compilation_order, monomorphizer,
+                                  fn_instantiations)
+
+    def _adopt_perk_copy(self, template, impl, compilation_order: list[Unit],
+                         monomorphizer, fn_instantiations: set) -> Optional[Unit]:
+        """Put a perk-implementation copy in the home unit of its template.
+
+        The function instances its bodies name are added to `fn_instantiations`.
+        Answers the home unit.
+        """
+        home = self._home_unit(template.unit_name, compilation_order)
+        scope_unit = self._library_scope(template.unit_name, home)
+        for method in impl.methods:
+            method.scope_unit = scope_unit
+        if home is not None:
+            home.ast.perk_impls.append(impl)
+        for method in impl.methods:
+            fn_instantiations |= monomorphizer.collect_from_perk_method_body(
+                impl.target_type, method)
+        return home
 
     def _cut_templates_for_late_instantiations(self, monomorphizer, compilation_order,
                                                concrete_extension_defs,

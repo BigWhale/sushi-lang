@@ -1,0 +1,21 @@
+perk Describable:
+    fn describe() string
+
+extend T[] with Describable:
+    fn describe() string:
+        if (self.len() == 0):
+            return "nothing at all"
+        let T first = self[0]
+        return "{self.len()} items, the first is {first}"
+
+fn announce@(T: Describable)(T item) ~:
+    println(item.describe())
+
+fn main() i32:
+    let i32[] answers = from([42, 6, 9])
+    let string[] crew = from(["Arthur", "Ford"])
+    let bool[] towels = from([])
+    announce(answers)
+    announce(crew)
+    println(towels.describe())
+    return 0

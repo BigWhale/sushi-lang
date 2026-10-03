@@ -1,0 +1,18 @@
+# The body of an array template is checked per element type: it is legal over i32 and
+# a type error over string, and the error is reported once, for the string copy.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+perk Probe:
+    fn probe() i32
+
+extend T[] with Probe:
+    fn probe() i32:
+        let i32 n = self[0]
+        return n
+
+fn main() i32:
+    let i32[] ok = from([1])
+    let string[] bad = from(["x"])
+    println(ok.probe())
+    println(bad.probe())
+    return 0

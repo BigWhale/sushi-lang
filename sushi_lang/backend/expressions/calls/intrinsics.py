@@ -84,9 +84,35 @@ def try_emit_struct_constructor(codegen: 'LLVMCodegen', expr: Union[MethodCall, 
 
 def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                            receiver_value: ir.Value, receiver_type: ir.Type, semantic_type: 'Type', to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit as array method. Returns None if not an array method."""
-    from sushi_lang.backend.expressions import type_utils
+    """Try to emit as array method. Returns None if not an array method.
+
+    `hash` is not asked here: it yields to a `Hashable` implementation, so it is asked
+    after the perk rung (`try_emit_array_hash`).
+    """
     from sushi_lang.backend.types.arrays import is_builtin_array_method, emit_array_method
+
+    if expr.method == "hash" or not is_builtin_array_method(expr.method):
+        return None
+    if not _is_array_receiver(codegen, receiver_type, semantic_type):
+        return None
+    return emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+
+
+def try_emit_array_hash(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                        receiver_value: ir.Value, receiver_type: ir.Type, semantic_type: 'Type',
+                        to_i1: bool) -> Optional[ir.Value]:
+    """The built-in `hash` of an array, when no `Hashable` implementation answered it."""
+    from sushi_lang.backend.types.arrays import emit_array_method
+
+    if expr.method != "hash" or not _is_array_receiver(codegen, receiver_type, semantic_type):
+        return None
+    return emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+
+
+def _is_array_receiver(codegen: 'LLVMCodegen', receiver_type: ir.Type,
+                       semantic_type: 'Type') -> bool:
+    """A fixed or a dynamic array receiver, and not a container of the same shape."""
+    from sushi_lang.backend.expressions import type_utils
 
     is_dynamic_array = (codegen.types.is_dynamic_array_type(receiver_type) or
                        type_utils.is_dynamic_array_pointer(codegen, receiver_type))
@@ -100,20 +126,15 @@ def try_emit_array_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
         and isinstance(receiver_type.pointee, ir.ArrayType))
 
     if not is_fixed_array and not is_dynamic_array:
-        return None
+        return False
 
     # A `List@(T)` is `{i32 len, i32 capacity, T* data}`, which is the dynamic-array
     # descriptor's own shape, so the LLVM type alone cannot tell the two apart. The
     # SEMANTIC type can, and it is already here. Without this the array path claimed
     # `List@(i32).hash()` and then refused its own receiver with CE0042 (#628).
     from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
-    if isinstance(semantic_type, StructType) and is_instance_of(semantic_type, *CONTAINER_BASES):
-        return None
-
-    if not is_builtin_array_method(expr.method):
-        return None
-
-    return emit_array_method(codegen, expr, receiver_value, receiver_type, semantic_type, to_i1)
+    return not (isinstance(semantic_type, StructType)
+                and is_instance_of(semantic_type, *CONTAINER_BASES))
 
 
 def try_emit_string_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

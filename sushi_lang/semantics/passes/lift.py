@@ -111,6 +111,14 @@ class LambdaLifter:
         self._owner_scope_unit = None
         return self._lifted[before:]
 
+    def lift_perk_impl(self, impl) -> List[FuncDef]:
+        """Lift every method body of one perk implementation copy (#699)."""
+        lifted: List[FuncDef] = []
+        for method in impl.methods:
+            lifted.extend(self.lift_body(method.body,
+                                         scope_unit=getattr(method, "scope_unit", None)))
+        return lifted
+
     def _walk(self, node) -> None:
         """Find and lift Lambda nodes anywhere under `node` (not into their bodies)."""
         walk_nodes(node, self._lift_if_lambda)

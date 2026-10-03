@@ -1,0 +1,21 @@
+# Sushi has no specialization: `extend Box@(T) with Named` already covers `Box@(i32)`,
+# so a second implementation of the same perk on `Box@(i32)` is refused.
+# EXPECT_ERROR_CODES_EXACT: CE4002
+
+perk Named:
+    fn name() string
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Named:
+    fn name() string:
+        return "box"
+
+extend Box@(i32) with Named:
+    fn name() string:
+        return "intbox"
+
+fn main() i32:
+    println(Box(1).name())
+    return 0

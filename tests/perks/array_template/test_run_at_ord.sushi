@@ -1,0 +1,22 @@
+# `Ord` on an array template: a direct call and an array held in a struct read it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "-1 0\n1\ntrue false\n"
+
+extend T[] with Ord:
+    fn compare(T[] other) i32:
+        return self.len() - other.len()
+
+struct Wrap:
+    i32[] xs
+
+fn main() i32:
+    let i32[] a = from([9, 9])
+    let i32[] b = from([1, 1])
+    let i32[] c = from([1, 1, 1])
+    println("{a.compare(c)} {a.compare(b)}")
+    let string[] s = from(["x", "y"])
+    let string[] t = from(["z"])
+    println("{s.compare(t)}")
+    println("{Wrap(a.clone()) < Wrap(c.clone())} {Wrap(c.clone()) < Wrap(a.clone())}")
+    return 0

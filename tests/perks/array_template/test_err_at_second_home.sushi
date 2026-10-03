@@ -1,0 +1,20 @@
+# A name has one home: an array template of one perk and a concrete array
+# implementation of another perk both give `f` to `i32[]`.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn f() i32
+
+perk B:
+    fn f() i32
+
+extend T[] with A:
+    fn f() i32:
+        return 1
+
+extend i32[] with B:
+    fn f() i32:
+        return 2
+
+fn main() i32:
+    return 0

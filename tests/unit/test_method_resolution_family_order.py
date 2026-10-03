@@ -29,6 +29,7 @@ CODEGEN = SOURCE_ROOT / "backend" / "expressions" / "calls" / "dispatcher.py"
 # The canonical family order, highest priority first.
 CANONICAL_ORDER = [
     "PERK",
+    "ARRAY_HASH",
     "DERIVED_HASH",
     "DERIVED_CLONE",
     "CONTRACT",
@@ -41,6 +42,7 @@ CANONICAL_ORDER = [
 # family -- the perk implementation and the extension -- are the ladder's, and the
 # markers below find them in the dispatcher's own body.
 TABLE_ROWS = {
+    "array_hash": "ARRAY_HASH",
     "derived_hash": "DERIVED_HASH",
     "derived_clone": "DERIVED_CLONE",
     "contract": "CONTRACT",
@@ -63,6 +65,7 @@ LADDER_MARKERS = {
 VALIDATION_SCOPE = "def validate_method_call("
 CODEGEN_MARKERS = {
     "PERK": r"try_emit_perk_method",
+    "ARRAY_HASH": r"try_emit_array_hash",
     "DERIVED_HASH": r"try_emit_struct_hash",
     "DERIVED_CLONE": r"try_emit_struct_clone",
     "CONTRACT": r"try_emit_contract_method",

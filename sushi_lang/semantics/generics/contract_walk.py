@@ -24,25 +24,38 @@ def perk_override_of(perk_name: str, perk_impls: Any,
                      generic_perk_impls: Any = None) -> Override:
     """The override predicate of one perk, over the perk-implementation tables (#891).
 
-    An explicit implementation answers, and so does a generic-target template whose
-    copy for this instantiation is not cut yet. The tables fill in place, so the
-    predicate reads them when it is asked and not when it is built.
+    An explicit implementation answers, and so does a template whose copy for this type
+    is not cut yet. The tables fill in place, so the predicate reads them when it is
+    asked and not when it is built.
     """
-    from sushi_lang.semantics.passes.collect.perks import _get_type_name
-
     def overridden(ty: Type) -> bool:
-        type_name = _get_type_name(ty)
-        if type_name is not None and perk_impls.implements(type_name, perk_name):
-            return True
-        base = getattr(ty, "generic_base", None)
-        args = getattr(ty, "generic_args", None)
-        if not generic_perk_impls or not base or not args:
-            return False
-        return any(template.impl.perk_name == perk_name
-                   and len(template.type_params) == len(args)
-                   for template in generic_perk_impls.templates(base))
+        return (perk_impls.implements_type(ty, perk_name)
+                or template_covers(generic_perk_impls, ty, perk_name))
 
     return overridden
+
+
+def template_covers(generic_perk_impls: Any, ty: Type, perk_name: str) -> bool:
+    """Does a template implementation of the perk cover this type (#555, #699)?
+
+    `extend Box@(T) with P` covers every `Box@(...)`, and `extend T[] with P` every
+    dynamic array. A copy for a late instantiation is cut after the question can be
+    asked, and the template already answers it.
+    """
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    from sushi_lang.semantics.typesys import DynamicArrayType
+    if not generic_perk_impls:
+        return False
+    if isinstance(ty, DynamicArrayType):
+        return any(template.impl.perk_name == perk_name
+                   for template in generic_perk_impls.templates(ARRAY_BASE_KEY))
+    base = getattr(ty, "generic_base", None)
+    args = getattr(ty, "generic_args", None)
+    if not base or not args:
+        return False
+    return any(template.impl.perk_name == perk_name
+               and len(template.type_params) == len(args)
+               for template in generic_perk_impls.templates(base))
 
 
 @dataclass

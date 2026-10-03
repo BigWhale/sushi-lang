@@ -1,0 +1,21 @@
+# `Display` on an array template is the string form of every array: `println`, a hole,
+# a direct call and an array held in a struct all read it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "(3 items)\n(3 items)\n(2 items)\nBag(xs: (3 items))\n"
+
+extend T[] with Display:
+    fn to_str() string:
+        return "({self.len()} items)"
+
+struct Bag:
+    i32[] xs
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let string[] names = from(["arthur", "ford"])
+    println(xs)
+    println("{xs}")
+    println(names.to_str())
+    println(Bag(xs.clone()))
+    return 0

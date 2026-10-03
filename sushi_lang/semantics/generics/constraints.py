@@ -5,11 +5,11 @@ from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.passes.collect import (
     PerkTable, PerkImplementationTable, StructTable, EnumTable)
-from sushi_lang.semantics.passes.collect.perks import PerkCollector, _get_type_name
+from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.passes.resolve import table_resolver
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.generics.contract_walk import perk_override_of
+from sushi_lang.semantics.generics.contract_walk import perk_override_of, template_covers
 from sushi_lang.semantics.generics.contracts import CONTRACTS, operand_contract
 from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
 from sushi_lang.semantics.generics.type_display import display_type
@@ -68,10 +68,8 @@ class ConstraintValidator:
         if self.perk_table.get(constraint_name) is None:
             return True
 
-        type_name = _get_type_name(type_arg)
-
-        if not (self.perk_impl_table.implements(type_name, constraint_name)
-                or self._template_implements(type_arg, constraint_name)
+        if not (self.perk_impl_table.implements_type(type_arg, constraint_name)
+                or template_covers(self.generic_perk_impls, type_arg, constraint_name)
                 or self._derived_implements(type_arg, constraint_name)):
             if pack_index is None:
                 diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span,
@@ -89,23 +87,6 @@ class ConstraintValidator:
             return False
 
         return True
-
-    def _template_implements(self, type_arg: Type, constraint_name: str) -> bool:
-        """Does a GENERIC-target implementation cover this instantiation (#555)?
-
-        `extend Box@(T) with Show` applies to every `Box@(...)` by construction, and the
-        copy for a LATE instantiation is cut only after the functions are monomorphized
-        -- so the table cannot answer yet, while the template already can. Without this
-        the answer depended on the order the copies were cut in.
-        """
-        templates = self.generic_perk_impls
-        base = getattr(type_arg, "generic_base", None)
-        args = getattr(type_arg, "generic_args", None)
-        if templates is None or not base or not args:
-            return False
-        return any(template.impl.perk_name == constraint_name
-                   and len(template.type_params) == len(args)
-                   for template in templates.templates(base))
 
     def _derived_implements(self, type_arg: Type, constraint_name: str) -> bool:
         """Does the compiler derive this contract for the type? Then it satisfies it.

@@ -1035,17 +1035,13 @@ class FunctionCollector:
         is fully handled here -- filed as a template, or refused.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            ARRAY_BASE_KEY, classify_array_extension_target)
+            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
 
         element = target_type.base_type
         shape = classify_array_extension_target(element, self.is_declared_type)
         h.ext.target_shape = shape
-        if shape is None:
-            er.emit_with(self.r, ERR.CE2101, h.target_type_span or h.name_span,
-                         element=display_type(element)) \
-                .help("write a bare type-parameter name ('extend T[]') or a plain "
-                      "declared type ('extend i32[]'); 'extend T[]' also applies to a "
-                      "nested array, with T the inner array type").emit()
+        if reject_array_target(self.r, shape, element,
+                               h.target_type_span or h.name_span):
             return None
 
         if not shape.param_names:
@@ -1069,6 +1065,13 @@ class FunctionCollector:
                 existing.filename)
             return None
 
+        concrete = self._concrete_array_extension(h.name)
+        if concrete is not None:
+            self._emit_overlapping_extension(
+                f"extension method '{h.name}' for '{display_type(target_type)}'",
+                h.name_span, concrete.name_span, concrete.filename)
+            return None
+
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=ARRAY_BASE_KEY, type_params=(param_name,),
             target_key="", type_param_names=(param_name, *h.method_type_params)))
@@ -1086,6 +1089,14 @@ class FunctionCollector:
                     kind="function type", target=display_type(resolved_type))
             self.generic_extensions.refuse(display_type(resolved_type), h.name)
             return
+
+        if isinstance(resolved_type, DynamicArrayType):
+            from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+            for template in self.generic_extensions.declarations(ARRAY_BASE_KEY, h.name):
+                self._emit_overlapping_extension(
+                    f"extension method '{h.name}' for '{display_type(resolved_type)}'",
+                    h.name_span, template.name_span, template.filename)
+                return
 
         if h.method_type_params and resolved_type is not None:
             self._collect_method_generic(h, resolved_type)
@@ -1232,6 +1243,36 @@ class FunctionCollector:
             diag.note_at("first defined here", other_span, other_filename)
         diag.emit()
 
+    def _emit_overlapping_extension(self, name_text: str, name_span: Optional[Span],
+                                    first_span: Optional[Span],
+                                    first_filename: Optional[str]) -> None:
+        """CE0101 for a template and a concrete target that both cover one type."""
+        diag = er.emit_with(self.r, ERR.CE0101, name_span, name=name_text)
+        if first_span is not None:
+            diag.note_at("this declaration already covers that target",
+                         first_span, first_filename)
+        diag.help("Sushi has no specialization: make both targets fully concrete, "
+                  "or implement a perk on the concrete target -- a perk "
+                  "implementation outranks an extension method by design.")
+        diag.emit()
+
+    def _concrete_array_extension(self, name: str) -> Optional[ExtensionMethod]:
+        """An extension method of this name on one concrete dynamic-array type, if any.
+
+        A method-generic one (`extend i32[] pick@(U)`) is filed under the receiver's
+        display name in the generic table, with the receiver kept on its declaration.
+        """
+        for target, methods in self.extensions.by_type.items():
+            if isinstance(target, DynamicArrayType) and name in methods:
+                return methods[name]
+        for methods in self.generic_extensions.by_type.values():
+            for (method_name, _key), method in methods.items():
+                if (method_name == name and method.decl is not None
+                        and not method.type_params
+                        and isinstance(method.decl.target_type, DynamicArrayType)):
+                    return method
+        return None
+
     def _reject_overlapping_target(self, method: GenericExtensionMethod,
                                    target_type: GenericTypeRef,
                                    name_span: Optional[Span]) -> bool:
@@ -1255,16 +1296,9 @@ class FunctionCollector:
                     name_span, existing.unit_name, existing.name_span,
                     existing.filename)
                 return True
-            diag = er.emit_with(
-                self.r, ERR.CE0101, name_span,
-                name=f"extension method '{method.name}' for '{display_type(target_type)}'")
-            if existing.name_span is not None:
-                diag.note_at("this declaration already covers that target",
-                             existing.name_span)
-            diag.help("Sushi has no specialization: make both targets fully concrete, "
-                      "or implement a perk on the concrete target -- a perk "
-                      "implementation outranks an extension method by design.")
-            diag.emit()
+            self._emit_overlapping_extension(
+                f"extension method '{method.name}' for '{display_type(target_type)}'",
+                name_span, existing.name_span, existing.filename)
             return True
 
         return False

@@ -4,14 +4,44 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-03
+
+Sushi has tuples now. `(i32, string)` is an anonymous product type in every type position,
+with a destructuring `let`, `foreach` and rebind, and tuple patterns in a `match`. An array
+element can be an array at any depth. `Eq`, `Ord` and `Display` are predefined perks: every
+struct and enum compares, orders and prints, and an implementation replaces the derived
+form. A perk can be implemented once for every array
+(`extend T[] with P:`), and `assert` stops a program on a false condition.
+
+The FFI reads and writes C memory: a nullable C pointer is a `Maybe`, a `ptr` loads and
+stores at an offset, `errno()` and `<sys/platform>` give the C values, and a `u8[]` crosses
+as its data pointer.
+
+The error channel is now opt-in. A callable has a channel only when it writes `| E`, and
+`main` returns its exit code. This is a breaking change: a function that relied on the
+implicit `Result@(T, StdError)` must write `| StdError`, and every `??` or `.realise` on a
+bare call goes. `TcpListener.accept()` answers a tuple, `MsgValue.Map` holds pairs, and
+several stdlib functions that could never fail are bare now. The `.slib` format changed: a
+`.slib` built by 0.13 needs a rebuild.
+
+Many generic-inference faults are fixed: a generic call that the early passes missed, a
+generic constructor, a call behind a unit alias, and a call inside a generic body.
+
 ### Added
 
+- **A perk on every array: `extend T[] with P:`.** One implementation covers every dynamic
+  array, and `T` is the element type (an `i32[][]` receiver has `T = i32[]`). The compiler
+  makes the copy for an array type when the program uses that type with the perk, and it
+  checks the body for each element type. The predefined perks are legal: `Display` gives
+  `println(xs)` its string form, and `Eq`, `Ord` and `Hashable` are read by a direct call
+  and by an array that a struct holds. A library of each kind ships an array template, and
+  `--lib-info` prints it as `extend T[] with P`. `extend T[][] with P` is `CE2101`, as for
+  an extension (#699).
 - **`assert(cond)` and `assert(cond, message)`** stop the program with `RE2026` and exit
   code 1 when the condition is false. The output names the file, the line and the column
   of the `assert`, then the message. The message is any `string`, and the program builds
   it only on failure. An assert is always on, and `assert(false)` does not end the path.
   `assert` is a reserved word now. A message that is not a `string` is `CE2116`.
-
 - **Tuples.** `(i32, string)` is an anonymous product type, in every type position: a
   parameter, a return (with a `| E` channel too), a field, a payload, a type argument
   (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element, a function
@@ -40,13 +70,11 @@ All notable changes to Sushi Lang will be documented in this file.
   `CE2118`. A literal pattern over a value that is not an integer is `CE2119`. `CE2110`
   covers a tuple type as an extension or perk-implementation target. See
   `docs/design/tuples.md`.
-
 - **An array of function values is `(fn(i32) -> i32)[]`**, and `(fn(i32) -> i32)[3]` for a
   fixed one. Parentheses around a function type are legal in every type position;
   `fn(i32) -> i32[]` is still a function that returns `i32[]`, and a message prints the
   parentheses.
 - **`extend T with ns.Perk`** names a perk behind an alias in an implementation.
-
 - **A nullable C pointer is a `Maybe` at the FFI boundary.** `Maybe@(string)` and
   `Maybe@(ptr)` in an extern parameter or return mean "may be NULL": a NULL return answers
   `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A plain `string` or `ptr`
@@ -70,7 +98,6 @@ All notable changes to Sushi Lang will be documented in this file.
 - **`s[i]` reads a string's byte in place**, bounds-checked like `arr[i]`, and
   **`string.from_bytes(nom b)`** makes a string that takes the array's buffer with no
   copy. A write through `s[i]` is `CE2113`.
-
 - **`Eq`, `Ord` and `Display` are predefined perks.** They sit beside `Drop` and
   `Hashable`: `fn eq(Self other) bool`, `fn compare(Self other) i32` and
   `fn to_str() string`. They need no import, and a declaration of one of the names is
@@ -130,6 +157,113 @@ All notable changes to Sushi Lang will be documented in this file.
   `<compression/zlib>` adds `inflate_raw_prefix(src)`: each one reads one value or stream
   from the start of a buffer and answers the count of bytes it used.
 
+### Changed
+
+- **Breaking: the error channel is opt-in for every callable.** A function, a lambda and a function
+  type have a channel only when they write `| E` (or return `Result@(T, E)`); there is no
+  implicit `Result@(T, StdError)` any more. `fn f() u32:` is bare: its body writes
+  `return x` and a call yields `u32`, so a `??` or `.realise` on the call goes. A function
+  that can fail writes `| StdError` or its own enum. In a bare body `??` is CE0131 and
+  `return Result.Ok/Err` is CE2091. `main` is bare and returns the exit code
+  (`return 0`); `| E` on it is CE0106, and CW2511 is retired. A lambda takes its channel
+  from its annotation or its expected type. A bare function is the exception, for a total
+  function; see `docs/design/error-channel.md`.
+- **Breaking: the `.slib` format changed.** Every function, helper and method record states
+  `has_channel`; the templates schema is 8 and the container version is 5. Rebuild every
+  library: an older one is refused (CE3512, CE3509).
+- **A top-level array prints.** A `T[]`, a `T[N]` and a `List@(T)` go into an
+  interpolation hole and into `print` / `println`, in the form that a struct which holds
+  them prints: `[1, 2, 3]`, `[]` when empty, a string element in quotes (`["a, b", "c"]`),
+  a nested array as `[[1], [2, 3]]`. A top-level `Own@(T)` prints its payload. A `u8[]`
+  prints as numbers; `.to_string()` gives the text. An element with no string form is
+  still `CE2035` in a hole and `CE2115` in `println`, and the note names the element type.
+  A `HashMap` is still refused, because its iteration order is not specified, and a note
+  now gives this reason. `==`, `<`, `.to_str()` and a `Display` constraint on a top-level
+  array do not change.
+- **Seven array diagnostics are correct.** `CE2023` says "receiver" when the receiver is
+  at fault (`push` on a fixed array). `CE2422` says "function" for a parameter of a free
+  function. `CE0108` names the expression as the source writes it ("a `from(...)` call is
+  not a compile-time constant"). A use after `destroy()` is one error, `CE2406`; `CE2024`
+  is retired. `CE2060` names a wrong fixed array size ("the parameter is 'T[3]', the
+  argument is 'i32[4]'"). A value of the wrong type in an index, a repeat count or a range
+  bound is the new error `CE2121`, which names the position ("an array index is i32, got
+  i64"); before, it was `CE2002`, "cannot assign". A method argument stays `CE2006`. A
+  named-constant index on a fixed array (`a[K]`, `a.get(K)`) is checked at compile time as
+  a literal index is: `CE2012` past the end, `CE2056` when negative. Before, it compiled
+  and stopped with `RE2020` at run time.
+- **Breaking: `TcpListener.accept()` answers `(TcpStream, IpAddr) | NetError`.** The
+  address of the peer comes from the `accept(2)` call itself, so no second call is
+  necessary. Write `let (TcpStream s, _) = l.accept()??` where the address is not needed.
+  The primitive `sock_tcp_accept` answers `(i32, i32, u64, u64) | NetError`.
+- **Breaking: `MsgValue.Map` holds `(MsgValue, MsgValue)[]`,** one array of `(key, value)`
+  pairs in wire order, in place of two parallel arrays. A match arm is
+  `MsgValue.Map(pairs) ->`, and the value at a `map_index` position is `pairs[i].1`. The
+  wire format does not change.
+- **`EXPECT_ERROR_CODES_EXACT` counts each code**, so a fixture can assert that a fault
+  is reported once. A library build directive accepts exit 0 only; a library that builds
+  with a warning is `BUILD_LIB_WARNS: x.sushi [kind] -> CW3003`.
+- **A peer address is an `IpAddr`.** `TcpStream.peer_ip()` answers `IpAddr | NetError`,
+  and `Datagram.peer()` reads the sender as an `IpAddr`. `<net/tcp>` and `<net/udp>`
+  re-export `<net/ip>`, so `use <net/tcp>` alone names `IpAddr`. Print one with `.text()`.
+- **A constant and a `HashMap` key refuse a dynamic array at any depth.** A constant is
+  `CE2015` and a key is `CE2058` for `i32[]`, `i32[2][]` and `i32[][2]`. A
+  `const i32[][2]` was `CE0108`, which named an AST class (`DynamicArrayFrom`), and a key
+  `i32[][2]` was `CE2055`.
+- **`CE2514` and `CE2035` carry a note.** When a type holds something with no equality, no
+  order or no string form, a note names the field: `no derived Eq: field 'f' -> a function
+  value`. `CE2055` reads the `Eq` contract, and `contains` and `index_of` read it too
+  (`CE2100`).
+- **The hash of a NaN is one value.** `f64.hash()` and `f32.hash()` hash every NaN alike.
+  The hash of a NaN changed.
+- **A binary `.slib` ships its implementations of `Hashable`, `Eq`, `Ord` and `Display`.**
+  A consumer's derived methods read them.
+- **`println` of a value with no string form is `CE2115`.** It was the internal error
+  `CE0017`.
+- **An index on a value that is not an array or a string is `CE2114`.** It was `CE2002`,
+  whose text described an assignment the program did not write.
+- **The `ptr` guarantee note of `CW5001`** no longer says that a returned `ptr` may be
+  null.
+- **The combinators of `<collections/iter>` are bare,** and so are `adler32`, `join`,
+  `basename`, `dirname`, `extension`, `normalize` and the msgpack `map_index`,
+  `map_get`, `map_get_str`, `map_get_bool` and `show`: drop the `??` or `.realise` after
+  each call.
+- **`now()` and `monotonic_ns()` of `<time>` are bare and answer `i64`.** Neither
+  could fail: drop the `.realise(0)` after each call, and a `match` over the call becomes a
+  plain binding.
+- **A one-argument `Result@(T)` is CE2062.** A Result names its error type.
+- **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
+  `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`
+  names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file
+  larger than 1 GiB (`TooLarge`), as `read_library` did. A match on `SlibError.Truncated()`
+  becomes `SlibError.Truncated(_, _, _)`.
+- **`BufReader.new` and `BufWriter.new` have no error channel.** Neither could fail, so
+  every call wrote `??`. Each now answers the buffered type: drop the `??`, and a `match`
+  over the call becomes a plain binding.
+- **The four well-known IP addresses are constants.** `v4_loopback()`, `v4_any()`,
+  `v6_loopback()` and `v6_any()` are now `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK` and
+  `V6_ANY`, with no `??`.
+- **`Url.port_or_default()` answers `Maybe@(i32)`.** An unknown scheme with no written
+  port answered `-1`; it now answers `Maybe.None()`.
+- **`close_socket` moved to `<net/handle>`.** `<net/tcp>` and `<net/udp>` re-export it, so
+  a program that imports either one reaches it as before; `<net/error>` no longer has it.
+- **Every public error enum of the Sushi-source stdlib has `text()`.** `ZError`,
+  `MpError` and `SlibError` now give one stable line through `e.text()`, as `UrlError`
+  did. `zlib_error_text(e)` is gone: write `e.text()`, with no `??`.
+- **`File.readln()` takes `poke self`,** as `readch()`, `writeln()` and `tell()` do: all
+  four move the file position. A read-only `File` (a plain parameter, a `peek` binding, a
+  bare-`self` extension) cannot call it any more (CE2421 / CE2422); declare the receiver
+  `poke`.
+- **`s := s.concat(x)` appends in place.** A loop of appends took quadratic time, because
+  each step copied the whole string. The rebind now grows the buffer of an owned string
+  with `realloc` and copies `x` to its end. A literal or a borrowed copy is copied as
+  before. The target is a local, a unit variable or a `poke` reference.
+- **Two extern declarations of one C symbol must agree.** Each parameter, the return and
+  `var_arg` must have the same C type, or the second declaration is `CE5001`, with a note
+  at the first. A user declaration no longer changes the compiler's own calls: `println`
+  used a user's `write` before. Only `malloc`, `free` and `exit` stay reserved.
+- **`CE5013` compares an extern's link name with the symbol each declaration emits**
+  (`<unit>$<name>`, `main`, a library's link symbol), not with its Sushi name.
+
 ### Fixed
 
 - **A compiled library's templates are reachable behind a unit alias.** With
@@ -150,6 +284,19 @@ All notable changes to Sushi Lang will be documented in this file.
   a return type, a `let` type, `Ts[]` and `List@(Ts)` are `CE0147` where the function is
   written. A parameter `Ts x` was read as a second pack, so the function took the wrong
   count of arguments. A `let Ts y` was the internal error `CE0000` at the first call.
+- **A template and a concrete target that cover one type are an error.**
+  `extend Box@(T) with P` beside `extend Box@(i32) with P` compiled, and the concrete
+  implementation won; it is `CE4002` now. `extend T[] f()` beside `extend i32[] f()`
+  compiled the same way; it is `CE0101` now, as for `extend Box@(T) f()` beside
+  `extend Box@(i32) f()`. Each is refused in either order, with a note at the first
+  declaration. Two templates of two perks that give one method name are `CE4015`; one such
+  pair stopped the build with an internal error.
+- **`Drop` on a type that no unit declares is `CE4016`.** `extend i32[] with Drop:` and
+  `extend i32 with Drop:` compiled, and `drop()` never ran. A primitive, a `string`, an
+  array, an array template, `List`, `HashMap`, `Own`, `Maybe`, `Result` and a predefined
+  error enum are refused.
+- **A direct `xs.hash()` on an array reads a `Hashable` implementation.** A struct field and
+  a `HashMap` probe read it, and the direct call answered the built-in hash.
 - **A generic call that the early passes missed no longer fails with CE2061.** The
   `typecheck` pass requests a missing function instance late, and the instance goes through
   every pass that an early one goes through. The early walks also bind a `foreach` binder
@@ -174,7 +321,6 @@ All notable changes to Sushi Lang will be documented in this file.
   extension on a generic target no longer makes a generic call `CE2001` at the callee.
 - **A `T[]` array template inside a generic call argument** is checked with its resolved
   element type, not the written one.
-
 - **A generic instance that only a generic body reaches gets all its methods.** When
   only a generic function instance named a generic type instance (the return type
   `Feed@(T)` of `feed_of@(T)`, called from `count@(T)` with `T = string`), an extension
@@ -246,7 +392,6 @@ All notable changes to Sushi Lang will be documented in this file.
   says that an array has no top-level `==` and names the struct-row escape; the `CE6001`
   help follows the context (`while`, `elif`, a type parameter on a perk method); an import
   help writes a stdlib module as `use <io/fs>`.
-
 - **A library's dependencies load transitively; their names do not.** A library records
   every `use <lib/...>` it writes, plain or public, with the version it was built
   against, and the consumer's build loads the whole graph. A plain `use` gives the
@@ -273,7 +418,6 @@ All notable changes to Sushi Lang will be documented in this file.
   function of a binary or hybrid library.
 - **`CE5013` refuses only the symbol a library unit keeps**, and it sees the symbol of a
   monomorphized instance.
-
 - **`.free()` on a dynamic array gives back its buffer and allocates nothing.** It left
   an 8-slot buffer (`capacity()` was 8), which leaked on a unit-level `var`. It now
   leaves the empty array, as `new()` does, and a later `push` grows from it.
@@ -285,7 +429,6 @@ All notable changes to Sushi Lang will be documented in this file.
   statics and templates travel in the manifest, and so do the methods of an
   implementation of a private perk; `--lib-info` lists them. They were dropped with no
   warning before. A consumer's own extension that clashes with one is `CE0101`.
-
 - **A temporary string given to an `unsafe external` function is freed.** The marshalled
   `char*` was freed at scope exit, but the Sushi string it was copied from had no owner,
   so `libc.strlen("{n}")` leaked it.
@@ -307,109 +450,15 @@ All notable changes to Sushi Lang will be documented in this file.
 - **A type that holds a nested array has its derived methods.** A struct field
   `i32[2][3]` or `i32[][]` had no `.hash()` (`CE2008`) and no derived `==`, `<` or string
   form. A `HashMap@(i32[2][2], V)` key was `CE2055`.
-
-### Changed
-
-- **A top-level array prints.** A `T[]`, a `T[N]` and a `List@(T)` go into an
-  interpolation hole and into `print` / `println`, in the form that a struct which holds
-  them prints: `[1, 2, 3]`, `[]` when empty, a string element in quotes (`["a, b", "c"]`),
-  a nested array as `[[1], [2, 3]]`. A top-level `Own@(T)` prints its payload. A `u8[]`
-  prints as numbers; `.to_string()` gives the text. An element with no string form is
-  still `CE2035` in a hole and `CE2115` in `println`, and the note names the element type.
-  A `HashMap` is still refused, because its iteration order is not specified, and a note
-  now gives this reason. `==`, `<`, `.to_str()` and a `Display` constraint on a top-level
-  array do not change.
-- **Seven array diagnostics are correct.** `CE2023` says "receiver" when the receiver is
-  at fault (`push` on a fixed array). `CE2422` says "function" for a parameter of a free
-  function. `CE0108` names the expression as the source writes it ("a `from(...)` call is
-  not a compile-time constant"). A use after `destroy()` is one error, `CE2406`; `CE2024`
-  is retired. `CE2060` names a wrong fixed array size ("the parameter is 'T[3]', the
-  argument is 'i32[4]'"). A value of the wrong type in an index, a repeat count or a range
-  bound is the new error `CE2121`, which names the position ("an array index is i32, got
-  i64"); before, it was `CE2002`, "cannot assign". A method argument stays `CE2006`. A
-  named-constant index on a fixed array (`a[K]`, `a.get(K)`) is checked at compile time as
-  a literal index is: `CE2012` past the end, `CE2056` when negative. Before, it compiled
-  and stopped with `RE2020` at run time.
-- **Breaking: `TcpListener.accept()` answers `(TcpStream, IpAddr) | NetError`.** The
-  address of the peer comes from the `accept(2)` call itself, so no second call is
-  necessary. Write `let (TcpStream s, _) = l.accept()??` where the address is not needed.
-  The primitive `sock_tcp_accept` answers `(i32, i32, u64, u64) | NetError`.
-
-- **Breaking: `MsgValue.Map` holds `(MsgValue, MsgValue)[]`,** one array of `(key, value)`
-  pairs in wire order, in place of two parallel arrays. A match arm is
-  `MsgValue.Map(pairs) ->`, and the value at a `map_index` position is `pairs[i].1`. The
-  wire format does not change.
-
-- **`EXPECT_ERROR_CODES_EXACT` counts each code**, so a fixture can assert that a fault
-  is reported once. A library build directive accepts exit 0 only; a library that builds
-  with a warning is `BUILD_LIB_WARNS: x.sushi [kind] -> CW3003`.
-
-- **A peer address is an `IpAddr`.** `TcpStream.peer_ip()` answers `IpAddr | NetError`,
-  and `Datagram.peer()` reads the sender as an `IpAddr`. `<net/tcp>` and `<net/udp>`
-  re-export `<net/ip>`, so `use <net/tcp>` alone names `IpAddr`. Print one with `.text()`.
-
-- **A constant and a `HashMap` key refuse a dynamic array at any depth.** A constant is
-  `CE2015` and a key is `CE2058` for `i32[]`, `i32[2][]` and `i32[][2]`. A
-  `const i32[][2]` was `CE0108`, which named an AST class (`DynamicArrayFrom`), and a key
-  `i32[][2]` was `CE2055`.
-- **`CE2514` and `CE2035` carry a note.** When a type holds something with no equality, no
-  order or no string form, a note names the field: `no derived Eq: field 'f' -> a function
-  value`. `CE2055` reads the `Eq` contract, and `contains` and `index_of` read it too
-  (`CE2100`).
-- **The hash of a NaN is one value.** `f64.hash()` and `f32.hash()` hash every NaN alike.
-  The hash of a NaN changed.
-- **A binary `.slib` ships its implementations of `Hashable`, `Eq`, `Ord` and `Display`.**
-  A consumer's derived methods read them.
-- **`println` of a value with no string form is `CE2115`.** It was the internal error
-  `CE0017`.
-- **An index on a value that is not an array or a string is `CE2114`.** It was `CE2002`,
-  whose text described an assignment the program did not write.
-- **The `ptr` guarantee note of `CW5001`** no longer says that a returned `ptr` may be
-  null.
-
-- **The error channel is opt-in for every callable.** A function, a lambda and a function
-  type have a channel only when they write `| E` (or return `Result@(T, E)`); there is no
-  implicit `Result@(T, StdError)` any more. `fn f() u32:` is bare: its body writes
-  `return x` and a call yields `u32`, so a `??` or `.realise` on the call goes. A function
-  that can fail writes `| StdError` or its own enum. In a bare body `??` is CE0131 and
-  `return Result.Ok/Err` is CE2091. `main` is bare and returns the exit code
-  (`return 0`); `| E` on it is CE0106, and CW2511 is retired. A lambda takes its channel
-  from its annotation or its expected type. A bare function is the exception, for a total
-  function; see `docs/design/error-channel.md`.
-- **The combinators of `<collections/iter>` are bare,** and so are `adler32`, `join`,
-  `basename`, `dirname`, `extension`, `normalize` and the msgpack `map_index`,
-  `map_get`, `map_get_str`, `map_get_bool` and `show`: drop the `??` or `.realise` after
-  each call.
-- **`now()` and `monotonic_ns()` of `<time>` are bare and answer `i64`.** Neither
-  could fail: drop the `.realise(0)` after each call, and a `match` over the call becomes a
-  plain binding.
-- **The `.slib` format changed.** Every function, helper and method record states
-  `has_channel`; the templates schema is 8 and the container version is 5. Rebuild every
-  library: an older one is refused (CE3512, CE3509).
-- **A one-argument `Result@(T)` is CE2062.** A Result names its error type.
-
-- **`<toolchain/slib>` has one reader stack and one error enum.** `SlibFault` is gone:
-  `SlibError` now has its variants, and every reader answers it. `SlibError.Truncated`
-  names the section and the byte counts, and `read_metadata` and `sizes` now refuse a file
-  larger than 1 GiB (`TooLarge`), as `read_library` did. A match on `SlibError.Truncated()`
-  becomes `SlibError.Truncated(_, _, _)`.
-- **`BufReader.new` and `BufWriter.new` have no error channel.** Neither could fail, so
-  every call wrote `??`. Each now answers the buffered type: drop the `??`, and a `match`
-  over the call becomes a plain binding.
-- **The four well-known IP addresses are constants.** `v4_loopback()`, `v4_any()`,
-  `v6_loopback()` and `v6_any()` are now `V4_LOOPBACK`, `V4_ANY`, `V6_LOOPBACK` and
-  `V6_ANY`, with no `??`.
-- **`Url.port_or_default()` answers `Maybe@(i32)`.** An unknown scheme with no written
-  port answered `-1`; it now answers `Maybe.None()`.
-- **`close_socket` moved to `<net/handle>`.** `<net/tcp>` and `<net/udp>` re-export it, so
-  a program that imports either one reaches it as before; `<net/error>` no longer has it.
-- **Every public error enum of the Sushi-source stdlib has `text()`.** `ZError`,
-  `MpError` and `SlibError` now give one stable line through `e.text()`, as `UrlError`
-  did. `zlib_error_text(e)` is gone: write `e.text()`, with no `??`.
-- **`File.readln()` takes `poke self`,** as `readch()`, `writeln()` and `tell()` do: all
-  four move the file position. A read-only `File` (a plain parameter, a `peek` binding, a
-  bare-`self` extension) cannot call it any more (CE2421 / CE2422); declare the receiver
-  `poke`.
+- **A rebind of an `f64` or `f32` binding** (`s := 1.5`) and **of a fixed-size array
+  binding** were the internal error `CE0022`. Both store the new value now; an owning
+  element type destroys the old elements first.
+- **A native variadic parameter in a perk implementation method is `CE0115`**, as in the
+  perk declaration and in an extension method. It compiled, and the call crashed at run
+  time.
+- **A consumer function with the name of a binary library's public constant links.** The
+  constant is named with the prefix of the library unit that declares it. It was the
+  internal error `CE0000`.
 
 ## [0.13.0] - 2026-09-29
 

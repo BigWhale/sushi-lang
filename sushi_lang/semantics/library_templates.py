@@ -271,12 +271,17 @@ def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict
     and link: it ships as source alone, and the consumer cuts one copy per instantiation
     of `Box` it names, exactly as it does for its own template. `type` is the target's
     BASE name and `type_args` the parameters as written, so a reader can list it without
-    a parser; `deserialize_perk_impl` reads the source back.
+    a parser; `deserialize_perk_impl` reads the source back. An array template
+    (`extend T[] with P`, #699) has the array base and its element parameter.
     """
+    from sushi_lang.semantics.passes.collect.perks import covering_base
+    from sushi_lang.semantics.typesys import DynamicArrayType
     target = impl.target_type
+    type_args = ([target.base_type] if isinstance(target, DynamicArrayType)
+                 else target.type_args)
     return with_doc({
-        "type": target.base_name,
-        "type_args": [str(a) for a in target.type_args],
+        "type": covering_base(target),
+        "type_args": [str(a) for a in type_args],
         "perk": impl.perk_name,
         "source": slice_decl_source(impl, source_text),
         # No symbol: there is no copy to link. The signatures are written in the

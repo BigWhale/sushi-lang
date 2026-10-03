@@ -1,0 +1,23 @@
+# `Eq` on an array template: a direct call and an array held in a struct read it. An
+# array is not an operand of `==` at the top level, with or without an implementation.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true false\ntrue\ntrue false\n"
+
+extend T[] with Eq:
+    fn eq(T[] other) bool:
+        return self.len() == other.len()
+
+struct Wrap:
+    i32[] xs
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    let i32[] b = from([3, 4])
+    let i32[] c = from([5])
+    println("{a.eq(b)} {a.eq(c)}")
+    let string[] s = from(["x"])
+    let string[] t = from(["y"])
+    println("{s.eq(t)}")
+    println("{Wrap(a.clone()) == Wrap(b.clone())} {Wrap(a.clone()) == Wrap(c.clone())}")
+    return 0

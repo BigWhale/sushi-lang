@@ -1,0 +1,31 @@
+# `Hashable` on an array template wins everywhere: a direct call and a struct that
+# holds the array as a HashMap key both read it. The key compares by `Eq`, which the
+# template also gives. An array is not a HashMap key at the top level.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2 1\ntrue\n42\n"
+use <collections/hashmap>
+
+extend T[] with Hashable:
+    fn hash() u64:
+        return self.len() as u64
+
+extend T[] with Eq:
+    fn eq(T[] other) bool:
+        return self.len() == other.len()
+
+struct Key:
+    i32[] xs
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    let string[] s = from(["x"])
+    println("{a.hash()} {s.hash()}")
+    let Key k1 = Key(from([1, 2]))
+    let Key k2 = Key(from([7, 8]))
+    println("{k1.hash() == k2.hash()}")
+    let HashMap@(Key, i32) m = HashMap.new()
+    m.insert(k1, 42)
+    println("{m.get(k2).realise(0)}")
+    m.free()
+    return 0

@@ -226,6 +226,32 @@ Robot Marvin (battery: 42%)
 Ship Heart of Gold (crew: 5)
 ```
 
+## A perk on every array
+
+`extend T[] with PerkName:` implements a perk for every dynamic array. `T` is the element
+type, as in `extend T[] count()` above. The compiler makes a copy for each array type
+that the program uses with the perk.
+
+```sushi
+--8<-- "docs/tutorial/examples/11-perks-and-extensions/array-perk.sushi"
+```
+
+One implementation covers `i32[]`, `string[]` and `bool[]`. The body names `T` to hold the
+first element. `announce` accepts each array, because each array type implements
+`Describable`.
+
+Output:
+
+```
+3 items, the first is 42
+2 items, the first is Arthur
+nothing at all
+```
+
+There is no specialization. If `extend T[] with Describable` exists, a second
+`extend i32[] with Describable` is a duplicate (`CE4002`). Implement the perk on the
+template, or on each concrete array type.
+
 ## `Hashable` is predefined
 
 One perk describes behaviour that the compiler already derives: hashing. Almost every type

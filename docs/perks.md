@@ -198,6 +198,50 @@ whose fields already own needs no `Drop` of its own -- destroying its fields des
 handle -- so declare one when the wrapper has something of its OWN to say, such as
 flushing a buffer before the handle closes.
 
+There is no specialization. A template and a concrete target of one perk on one base are
+two implementations for that instance, and the second one is **CE4002**, in either order,
+with a note at the first. Implement the perk on the template, or on each concrete target.
+
+### Every array may implement a perk
+
+`extend T[] with P` is a template over the element type. It covers every dynamic array:
+`i32[]`, `string[]`, a nested `i32[][]` (with `T = i32[]`) and an array of a struct. The
+compiler makes the copy for an array type when the program uses that array type with the
+perk:
+
+```sushi
+perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "{self.len()} items"
+
+fn show@(N: Named)(N thing) string:
+    return thing.name()
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let string[] names = from(["arthur", "ford", "trillian"])
+    println(xs.name())          # 2 items
+    println(show(names))        # 3 items
+    return 0
+```
+
+The body may name `T`: `let T head = self[0]` holds an element. The compiler checks the
+body for each element type that the program uses, so a body that is correct for `i32[]`
+and not for `string[]` is an error at the `string[]` copy only.
+
+The predefined perks are legal on an array template. `Display` gives `println(xs)` and a
+hole their string form. `Eq`, `Ord` and `Hashable` are read by a direct call and by an array
+that a struct holds, a struct that is a `HashMap` key included. An array is not an operand
+of `==` or `<` at the top level, and it is not a `HashMap` key, with an implementation or
+not. A `Hashable` implementation also answers a direct `xs.hash()`.
+
+The rules of an array extension apply: `extend i32[] with P` is ONE array type, a nested
+target `extend T[][] with P` is **CE2101**, and a library ships an array template in each
+library kind. `extend T[] with Drop` is **CE4016**: no unit declares an array type.
+
 ## Generic Constraints
 
 Perks enable type constraints on generic types:
@@ -571,7 +615,7 @@ Perk-related compiler errors:
 | Code | Description | Example |
 |------|-------------|---------|
 | CE4001 | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
-| CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks |
+| CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks, or `extend T[] with P` and `extend i32[] with P` |
 | CE4003 | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
 | CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
 | CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
@@ -580,6 +624,7 @@ Perk-related compiler errors:
 | CE4010 | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
 | CE4011 | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
 | CE4012 | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
+| CE4016 | `Drop` on a type that no unit declares | `extend i32[] with Drop:`, `extend T[] with Drop:`, `extend string with Drop:` |
 | CE4015 | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare` |
 | CE4014 | Static method in a perk | `static fn get() i32` in an implementation |
 | CE0133 | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |

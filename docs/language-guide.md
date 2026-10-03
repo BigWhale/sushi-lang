@@ -1660,7 +1660,8 @@ fn main() i32:
 **The `Drop` perk**: a type that owns something no field walk can see (a file descriptor, a
 socket) implements the predefined perk `Drop` with `fn drop(poke self) ~`. Such a type owns a
 resource: it moves, `.clone()` on it is `CE2431`, and only the unit that declares the type may
-implement `Drop` for it (`CE4012`):
+implement `Drop` for it (`CE4012`). No unit declares a built-in type such as `i32[]`, so
+`Drop` on one is `CE4016`:
 
 ```sushi
 struct Guard:
