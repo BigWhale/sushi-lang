@@ -1,0 +1,30 @@
+# A foreach over a peek or a poke parameter whose type owns nothing walks a copy: the
+# value of the caller does not change.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n1\n2\n1\n2\n"
+# EXPECT_NO_LEAKS
+
+struct Countdown:
+    i32 at
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.at <= 0):
+        return Maybe.None
+    let i32 now = self.at
+    self.at := self.at - 1
+    return Maybe.Some(now)
+
+fn walk_peek(peek Countdown c) ~:
+    foreach(n in c):
+        println(n)
+
+fn walk_poke(poke Countdown c) ~:
+    foreach(n in c):
+        println(n)
+
+fn main() i32:
+    let Countdown c = Countdown(2)
+    walk_peek(peek c)
+    walk_poke(poke c)
+    println(c.at)
+    return 0
