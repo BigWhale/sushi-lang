@@ -984,6 +984,10 @@ class SemanticAnalyzer:
         rule a monomorphized generic function follows (#495): its methods are emitted
         with that unit's symbol prefix, and a second unit's copy of one name would be a
         second definition of one symbol.
+
+        A copy that does not register meets a consumer's implementation of a LIBRARY
+        template, which is the sanctioned override. A user's template beside a concrete
+        implementation of the same perk is refused in the collect pass (CE4002).
         """
         from sushi_lang.semantics.generics.extensions import monomorphize_all_perk_impls
 

@@ -194,6 +194,26 @@ def _get_type_name(ty: Optional[Type]) -> Optional[str]:
     return str(ty)
 
 
+@dataclass(frozen=True)
+class _Written:
+    """One implementation as written: the node, its file and its unit."""
+    impl: ExtendWithDef
+    filename: Optional[str]
+    unit_name: Optional[str]
+
+
+def _covering_base(ty: Optional[Type]) -> Optional[str]:
+    """The base a template of this target covers: a generic name, or every array."""
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.typesys import DynamicArrayType
+    if isinstance(ty, GenericTypeRef):
+        return ty.base_name
+    if isinstance(ty, DynamicArrayType):
+        return ARRAY_BASE_KEY
+    return None
+
+
 class PerkCollector:
     """Collector for perk definitions and implementations."""
 
@@ -234,6 +254,10 @@ class PerkCollector:
         self.shadowed_impls: List[ExtendWithDef] = []
         # Who declared what, for the perk-contract rule (CE4011).
         self.visibility: Optional[VisibilityTable] = None
+        # The first template and the first concrete implementation of each perk on
+        # each base, with the file and the unit that wrote it: the overlap rule.
+        self._templates: Dict[Tuple[str, str], _Written] = {}
+        self._concretes: Dict[Tuple[str, str], _Written] = {}
 
     def collect_definitions(self, root: Program) -> None:
         """Collect all perk definitions from program AST."""
@@ -575,6 +599,8 @@ class PerkCollector:
             return True
         if not shape.param_names:
             return False
+        if self._reject_overlap(impl, target_type, target_type.base_name, template=True):
+            return True
 
         for method in impl.methods or []:
             method.ret = deep_type_params(method.ret, shape.param_names)
@@ -591,6 +617,44 @@ class PerkCollector:
             filename=self.current_unit_file,
         ))
         return True
+
+    def _reject_overlap(self, impl: ExtendWithDef, target_type: Optional[Type],
+                        base: str, *, template: bool) -> bool:
+        """CE4002 for a second implementation of one perk that covers the same type.
+
+        A template covers every instantiation of its base, so a concrete implementation
+        of the same perk on that base is a second implementation for one type, in either
+        order, and two templates are the same fault. Sushi has no specialization: the
+        most specific does not win (`docs/design/method-resolution.md`). A library's
+        implementation stays the one a consumer may replace (`taken_by_a_library`).
+        """
+        key = (base, impl.perk_name)
+        first = self._templates.get(key)
+        if first is None and template:
+            first = self._concretes.get(key)
+        if first is None or taken_by_a_library(
+                first.unit_name, current_unit=self.current_unit_name,
+                library_units=self.library_units):
+            record = self._templates if template else self._concretes
+            record.setdefault(key, _Written(impl, self.current_unit_file,
+                                            self.current_unit_name))
+            return False
+        self._emit_duplicate_impl(impl, target_type, first)
+        return True
+
+    def _emit_duplicate_impl(self, impl: ExtendWithDef, target_type: Optional[Type],
+                             first: Optional[_Written]) -> None:
+        """CE4002, with a note at the implementation that came first."""
+        from sushi_lang.semantics.generics.type_display import display_type
+        diag = er.emit_with(self.r, ERR.CE4002, impl.loc,
+                            type=display_type(target_type), perk=impl.perk_name)
+        if first is not None:
+            span = first.impl.target_type_span or first.impl.loc
+            if span is not None:
+                diag.note_at("this implementation already covers that type",
+                             span, first.filename)
+        diag.help("Sushi has no specialization: implement the perk once, on the "
+                  "template or on each concrete target").emit()
 
     def _collect_perk_impl(self, impl: ExtendWithDef) -> bool:
         """Collect one perk implementation. Answers True when it is a TEMPLATE.
@@ -658,6 +722,11 @@ class PerkCollector:
         if self._register_generic_template(impl, target_type):
             return True
 
+        base = _covering_base(target_type)
+        if base is not None and self._reject_overlap(impl, target_type, base,
+                                                     template=False):
+            return False
+
         if self._reject_second_home(impl, type_name):
             return False
 
@@ -666,9 +735,11 @@ class PerkCollector:
             owner = self.perk_impls.owner(type_name, perk_name)
             if not taken_by_a_library(owner, current_unit=self.current_unit_name,
                                       library_units=self.library_units):
-                from sushi_lang.semantics.generics.type_display import display_type
-                er.emit(self.r, ERR.CE4002, impl.loc,
-                        type=display_type(target_type), perk=perk_name)
+                first = self.perk_impls.get(type_name, perk_name)
+                self._emit_duplicate_impl(
+                    impl, target_type,
+                    _Written(first, self.current_unit_file, owner)
+                    if first is not None and owner == self.current_unit_name else None)
                 return False
             previous = self.perk_impls.replace(impl, type_name,
                                                unit_name=self.current_unit_name)
