@@ -358,6 +358,7 @@ class FunctionMonomorphizer:
                 from_library_template=getattr(
                     generic_func, "is_library_template", False),
                 origin=getattr(generic_func, "library_origin", None),
+                defer_to=self.monomorphizer.late_bodies,
             )
 
             worklist.extend(functions_in_site_order(

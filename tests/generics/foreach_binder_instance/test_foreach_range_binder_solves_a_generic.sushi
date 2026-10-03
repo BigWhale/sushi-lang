@@ -1,0 +1,11 @@
+# A generic call on a foreach binder over a range. No other call makes k@(i32) (#1155).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n7\n"
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+fn main() i32:
+    foreach(i in 0..2):
+        println(k(i))
+    return 0

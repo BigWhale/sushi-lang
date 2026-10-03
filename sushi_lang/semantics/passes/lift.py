@@ -55,11 +55,7 @@ class LambdaLifter:
         for fn in list(self.program.functions):
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
-            self._owner_is_library = bool(getattr(fn, "is_library_template", False))
-            self._owner_origin = getattr(fn, "library_origin", None)
-            self._owner_instance_of = getattr(fn, "instance_of", None)
-            self._owner_scope_unit = getattr(fn, "scope_unit", None)
-            self._walk(fn.body)
+            self._walk_function(fn)
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
@@ -76,6 +72,28 @@ class LambdaLifter:
                 self._owner_scope_unit = getattr(method, "scope_unit", None)
                 self._walk(method.body)
         self._owner_scope_unit = None
+
+    def _walk_function(self, fn: FuncDef) -> None:
+        """Lift the lambdas of one function body, as the owner of what they become."""
+        self._owner_is_library = bool(getattr(fn, "is_library_template", False))
+        self._owner_origin = getattr(fn, "library_origin", None)
+        self._owner_instance_of = getattr(fn, "instance_of", None)
+        self._owner_scope_unit = getattr(fn, "scope_unit", None)
+        self._walk(fn.body)
+
+    def lift_function(self, fn: FuncDef) -> List[FuncDef]:
+        """Lift one function and answer the FuncDefs this call produced.
+
+        A late function copy (#1155) is put into its AST after the per-unit loop, so the
+        analyzer lifts it here and borrow-checks what this call lifted.
+        """
+        before = len(self._lifted)
+        self._walk_function(fn)
+        self._owner_is_library = False
+        self._owner_origin = None
+        self._owner_instance_of = None
+        self._owner_scope_unit = None
+        return self._lifted[before:]
 
     def lift_body(self, body, scope_unit: Optional[str] = None) -> List[FuncDef]:
         """Lift one body and answer the FuncDefs this call produced (#399).

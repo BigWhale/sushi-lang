@@ -1,0 +1,17 @@
+# A generic call on the result of a generic static. No other call makes
+# k@(Box@(i32)) (#1156).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+
+struct Box@(T):
+    T v
+
+extend Box@(T) static of(T v) Box@(T):
+    return Box(v)
+
+fn k@(T)(T x) i32:
+    return 7 + (x.hash() * 0) as i32
+
+fn main() i32:
+    println(k(Box.of(5)))
+    return 0

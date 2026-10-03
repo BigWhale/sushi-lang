@@ -15,6 +15,7 @@ def register_synthesized_function(
     home_unit: Optional[str] = None,
     from_library_template: bool = False,
     origin: Optional[Origin] = None,
+    defer_to: Optional[list] = None,
 ) -> bool:
     """Register a synthesized concrete function and queue it for backend emission.
 
@@ -28,6 +29,10 @@ def register_synthesized_function(
 
     A lifted lambda passes no `home_unit`: its name already carries the per-unit
     lifter's counter (#402), and it keeps its bare symbol.
+
+    `defer_to` is a list when the body must not go into its AST yet: an instance cut
+    while the per-unit passes run is put on the list as (AST, body), and the analyzer
+    puts it into that AST and checks it after the per-unit loop (#1155).
     """
     from sushi_lang.semantics.passes.collect import FuncSig
 
@@ -80,9 +85,19 @@ def register_synthesized_function(
         # and named for the library (#471).
         funcdef.library_origin = origin
 
-    if program is not None:
-        program.functions.append(funcdef)
-    elif units:
+    container = program if program is not None else _home_ast(units, home_unit)
+    if container is None:
+        return True
+    if defer_to is not None:
+        defer_to.append((container, funcdef))
+    else:
+        container.functions.append(funcdef)
+    return True
+
+
+def _home_ast(units: Optional[List], home_unit: Optional[str]) -> Optional[Program]:
+    """The AST of the unit a synthesized body goes into, or None when it is dropped."""
+    if units:
         target = None
         if home_unit is not None:
             target = next((u for u in units if u.name == home_unit and u.ast), None)
@@ -99,6 +114,5 @@ def register_synthesized_function(
             # never asked for it.
             target = units[0]
         if target is not None and target.ast:
-            target.ast.functions.append(funcdef)
-
-    return True
+            return target.ast
+    return None

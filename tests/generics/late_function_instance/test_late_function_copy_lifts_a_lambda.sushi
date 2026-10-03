@@ -1,0 +1,18 @@
+# A function instance that only the typecheck pass can request: the early passes cannot
+# type a field of a generic instance. The late copy holds a lambda, so the lift pass
+# runs over it as it runs over an early copy (#1156).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS
+
+struct Box@(T):
+    T v
+
+fn k@(T)(T x) i32:
+    let fn(i32) -> i32 add = |i32 v| v + 7
+    return add((x.hash() * 0) as i32)
+
+fn main() i32:
+    let Box@(i32) b = Box(3)
+    println(k(b.v))
+    return 0

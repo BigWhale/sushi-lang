@@ -33,6 +33,10 @@ from .signatures import (
 class TypeValidator:
     """The typecheck pass: type validation and inference."""
 
+    # The typecheck pass may ask the analyzer for a function instance that the early
+    # collection did not make (#1155). An early pass only reads, so its inferrer may not.
+    requests_late_instances = True
+
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
@@ -285,6 +289,8 @@ class ReadOnlyInferrer(TypeValidator):
     pass gives it: `sh.Pt(0)` names what `Pt(0)` names under a flat import only when
     the inferrer knows the alias (#1147). Without it the inferrer has no unit.
     """
+
+    requests_late_instances = False
 
     def __init__(self, tables: 'SymbolTables',
                  namespaces: Optional['NamespaceTable'] = None) -> None:

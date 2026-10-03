@@ -5,7 +5,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
-from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef
+from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, FuncDef
 from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.tables import SymbolTables
 
@@ -237,6 +237,7 @@ class SemanticAnalyzer:
         # while its constructor is written `Result.Ok(...)`.
         enum_names = enum_base_names(self.tables.enums, self.tables.generic_enums)
 
+        self._start_late_requests(monomorphizer, compilation_order)
         self._check_units(compilation_order, monomorphizer, libraries,
                           destroy_effects, enum_names)
         self._check_array_extensions(compilation_order, monomorphizer, libraries,
@@ -824,16 +825,23 @@ class SemanticAnalyzer:
         # another. The bound mirrors MAX_EXPANSION_ROUNDS in the instantiate pass:
         # reaching it drops an instantiation, which surfaces as the ordinary CE2008,
         # never as a hang.
+        #
+        # A function copy cut after the per-unit loop started -- a late request of the
+        # typecheck pass, or a call in an extension copy -- is checked in the same round
+        # (#1155). Checking it can request another, so it is part of the same fixpoint.
         checked = 0
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
             batch = self.monomorphized_extensions[checked:]
-            if not batch:
+            functions = self._place_late_functions(monomorphizer, compilation_order)
+            if not batch and not functions:
                 break
             checked = len(self.monomorphized_extensions)
             self._check_monomorphized_extensions(compilation_order, monomorphizer,
                                                  libraries, destroy_effects, enum_names,
                                                  batch)
+            self._check_late_functions(monomorphizer, libraries, destroy_effects,
+                                       enum_names, functions)
 
     # Rounds an expansion fixpoint may take before it drops the rest. The same shape
     # and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS. TWO readers, and
@@ -874,6 +882,52 @@ class SemanticAnalyzer:
             fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
+
+    def _start_late_requests(self, monomorphizer, compilation_order: list[Unit]) -> None:
+        """From the per-unit loop on, a function copy is LATE (#1155).
+
+        The typecheck pass can ask for an instance that the early collection did not
+        make, through `tables.request_function_instance`. A copy cut from now on does
+        not go into its AST at once, because the per-unit loop is walking the ASTs: it
+        waits in `late_bodies`, and `_check_array_extensions` puts it in and checks it.
+        """
+        monomorphizer.late_bodies = []
+        self.tables.request_function_instance = (
+            lambda key, site: self._request_function_instance(
+                monomorphizer, compilation_order, key, site))
+
+    def _request_function_instance(self, monomorphizer, compilation_order: list[Unit],
+                                   key, site) -> bool:
+        """Cut the function instance a call asks for. True when a constraint refused it.
+
+        `key` is (declaring unit, name, type arguments) and `site` the (span, file) of
+        the call, which is where a constraint refusal points. The copy goes through the
+        monomorphizer as an early instance does: its signature is declared now, so the
+        call has it, and every instance its body names is cut with it.
+        """
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.passes.finite_types import table_marks
+
+        _unit, name, type_args = key
+        site_key = ("fn", instantiation_key(name, type_args))
+        if site[0] is not None:
+            monomorphizer.sites.setdefault(site_key, site)
+        marks = table_marks(self.tables.structs, self.tables.enums)
+        monomorphizer.monomorphize_all_functions({key}, compilation_order)
+        self._settle_new_instances(marks)
+        return monomorphizer.was_refused(site_key)
+
+    def _place_late_functions(self, monomorphizer,
+                              compilation_order: list[Unit]) -> list[tuple[Unit, FuncDef]]:
+        """Put each waiting function copy into its AST, and answer (home unit, copy)."""
+        waiting = monomorphizer.late_bodies or []
+        monomorphizer.late_bodies = []
+        placed = []
+        for ast, funcdef in waiting:
+            ast.functions.append(funcdef)
+            home = next(u for u in compilation_order if u.ast is ast)
+            placed.append((home, funcdef))
+        return placed
 
     def _drop_unreached_perk_impls(self, compilation_order) -> None:
         """Forget an implementation whose `@(...)` target names no instance (#698).
@@ -1103,11 +1157,20 @@ class SemanticAnalyzer:
         if not struct_insts and not enum_insts:
             return
 
-        from sushi_lang.semantics.passes.finite_types import (
-            check_infinite_size_types, names_since, table_marks)
+        from sushi_lang.semantics.passes.finite_types import table_marks
         marks = table_marks(self.tables.structs, self.tables.enums)
         monomorphizer.monomorphize_all(self.tables.generic_enums.by_name, enum_insts)
         monomorphizer.monomorphize_all_structs(self.tables.generic_structs.by_name, struct_insts)
+        self._settle_new_instances(marks)
+
+    def _settle_new_instances(self, marks) -> None:
+        """Resolve, size-check and derive every instance the tables gained after `marks`.
+
+        Two callers: the late interner above, and the late function request, whose copy
+        can name a type for the first time.
+        """
+        from sushi_lang.semantics.passes.finite_types import (
+            check_infinite_size_types, names_since)
 
         # One list for both tables: a type name is one per program, so each table takes
         # the names it holds.
@@ -1172,16 +1235,51 @@ class SemanticAnalyzer:
                 passes.typecheck._validate_extension_method(extend_def)
                 lifted = passes.lifter.lift_body(extend_def.body,
                                                  scope_unit=extend_def.scope_unit)
+                passes.borrow.refresh_callee_modes()
                 passes.borrow._check_extension(extend_def)
                 for fn in lifted:
                     passes.borrow._check_function(fn)
+            self._merge_new(scratch, seen)
 
-            for diagnostic in in_source_order(scratch.items):
-                identity = diagnostic_identity(diagnostic)
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                self.reporter.items.append(diagnostic)
+    def _merge_new(self, scratch: Reporter, seen: set) -> None:
+        """Hand a copy check's findings to the program reporter, each one time."""
+        for diagnostic in in_source_order(scratch.items):
+            identity = diagnostic_identity(diagnostic)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            self.reporter.items.append(diagnostic)
+
+    def _check_late_functions(self, monomorphizer, libraries: LibraryRegistration,
+                              destroy_effects, enum_names: set[str],
+                              functions: list[tuple[Unit, FuncDef]]) -> None:
+        """scope, typecheck, lift and borrow over each late function copy (#1155).
+
+        An early copy is in its unit's AST when the per-unit loop walks it. A late copy
+        is put into the AST after that loop, so it is checked here, with the passes of
+        its home unit, in the same order. A function template is not checked itself, so
+        the findings of the scope pass are kept too; one diagnostic that two copies
+        give is merged one time.
+        """
+        by_home: dict[str, tuple[Unit, list[FuncDef]]] = {}
+        for home, funcdef in functions:
+            by_home.setdefault(home.name, (home, []))[1].append(funcdef)
+
+        seen = {diagnostic_identity(d) for d in self.reporter.items}
+        for home, copies in by_home.values():
+            scratch = self._unit_reporter(home)
+            passes = self._unit_passes(home, scratch, scratch, monomorphizer, libraries,
+                                       destroy_effects, enum_names)
+            for funcdef in copies:
+                passes.scope._check_function(funcdef)
+                passes.typecheck._validate_function(funcdef)
+                lifted = passes.lifter.lift_function(funcdef)
+                passes.borrow.refresh_callee_modes()
+                for fn in (funcdef, *lifted):
+                    scratch.enter_body(fn)
+                    passes.borrow._check_function(fn)
+            scratch.leave_body()
+            self._merge_new(scratch, seen)
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""
