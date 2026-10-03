@@ -54,7 +54,7 @@ meaning here.
 ```python
 class ConsumingUse(Enum):
     CALL_ARG          # f(x), including struct/enum constructor calls and indirect calls
-    LET               # let T x = <source>
+    LET               # let T x = <source>, and the hidden slot of a `next()` foreach
     REBIND            # x := <source>
     FIELD_ASSIGN      # obj.field := <source>
     STRUCT_FIELD      # S(field: <source>)

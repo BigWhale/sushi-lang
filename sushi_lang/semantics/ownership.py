@@ -26,7 +26,7 @@ class ConsumingUse(Enum):
     """Every position that takes ownership of a value. A CLOSED set."""
 
     CALL_ARG = "call_arg"                # f(x), constructor calls, indirect calls, bloom
-    LET = "let"                          # let T x = <source>
+    LET = "let"                          # let T x = <source>, and a `next()` foreach slot
     REBIND = "rebind"                    # x := <source>
     FIELD_ASSIGN = "field_assign"        # obj.field := <source>
     STRUCT_FIELD = "struct_field"        # S(field: <source>)

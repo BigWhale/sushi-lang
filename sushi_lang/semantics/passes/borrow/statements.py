@@ -403,9 +403,13 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     """The loop variable lives for the LOOP and no longer; what it is depends on the walk.
 
     Over a container the item BORROWS the element. Over a `next()` protocol iterator
-    the item is the value `next()` answered, and the iteration OWNS it.
+    the item is the value `next()` answered, and the iteration OWNS it. The loop also
+    takes the protocol iterator itself, as `f(nom it)` does: CE2411 for a borrow, and
+    CE2405 at a later mention of a local (#1145).
     """
     check_expr(checker, stmt.iterable)
+    if stmt.protocol_next is not None:
+        consume(checker, stmt.iterable)
     clear_borrows(checker)
     # A value binding matches the backend's `register_cleanup=False`. A reference binding
     # (#300) and a value binding of an owning element (#919) freeze the container for the

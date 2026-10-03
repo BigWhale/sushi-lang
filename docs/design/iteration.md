@@ -177,6 +177,19 @@ end block, registered through `register_owning_value` — the complete registry 
 Every exit path destroys it: the end of the input, a `break`, a `return` from the
 body, and the propagation path a `??` binder takes.
 
+The move into that local is a consuming position, the same as `let T x = it`: it goes
+through the ownership seam (`consume`), and the borrow pass consumes the iterable the same
+way. So the loop destroys the iterator and nothing else does (#1145):
+
+- a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
+  later mention of it is **CE2405**;
+- a borrow that owns a resource (a parameter, a `peek` or `poke` parameter, a field read)
+  is **CE2411**, because another owner still frees it; `.clone()` gives the loop a value
+  of its own;
+- a value that owns nothing is copied, and the loop walks the copy, so the source does
+  not change;
+- a temporary (`foreach(line?? in r.lines())`) has no owner, and the loop adopts it.
+
 The item of a protocol iterator is registered as an owner too: it is the payload of a
 fresh `Maybe@(T)` nobody else frees, so the iteration owns it, the body may hand it away,
 and the scope exit destroys what the body did not take. The `??` binder is the same rule

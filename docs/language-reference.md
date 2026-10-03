@@ -987,7 +987,10 @@ A `??` binder over an item that is not a `Result` has nothing to unwrap and is
 INTO storage, and there is nothing to unwrap there.
 
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
-by `break` and by `return` as well as at the end of the input.
+by `break` and by `return` as well as at the end of the input. A protocol iterator held in a
+local is MOVED into the loop: a later mention of the local is **CE2405**, and a borrowed one
+that owns a resource (a parameter, a field) is **CE2411** -- walk a `.clone()` of it. A
+protocol iterator that owns nothing is copied, and the loop walks the copy.
 
 **A tuple item destructures.** `foreach((k, v) in pairs.iter()):` splits each item into
 its elements by the rule of a `let` destructure, and a binder's ownership follows from the

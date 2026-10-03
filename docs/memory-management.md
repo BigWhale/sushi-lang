@@ -100,8 +100,8 @@ Move-ness is **compositional** and answers one question: **does this type own he
 free?** A value moves iff it does -- a **dynamic array (`T[]`), `List@(T)`, `Own@(T)`,
 `HashMap@(K, V)`, a `string`, a capturing closure, or any struct/enum/fixed array holding one of
 those**. Putting such a value in a constructor field or array literal, inserting it into a
-container, binding it to a new name, capturing it in a closure, or handing it to a **`nom`**
-parameter transfers ownership; the source is consumed and using it afterward is a use-after-move
+container, binding it to a new name, capturing it in a closure, walking it in a `foreach` as a
+`next()` iterator, or handing it to a **`nom`** parameter transfers ownership; the source is consumed and using it afterward is a use-after-move
 error (`CE2405`).
 
 **A plain call argument does NOT transfer.** A parameter is a borrow unless it says otherwise, so
