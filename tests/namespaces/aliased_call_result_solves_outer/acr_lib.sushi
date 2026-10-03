@@ -1,0 +1,5 @@
+public fn lsid@(T)(nom T x) T:
+    return x
+
+public fn lcount@(...Ts: Display)(...Ts args) i32:
+    return 3

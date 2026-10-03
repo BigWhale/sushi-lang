@@ -376,15 +376,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # interned early (#556).
         generic_func = self.type_validator.generic_sig(function_name)
         if generic_func is not None:
-            from sushi_lang.semantics.passes.types.calls.generics import (
-                generic_call_result_type)
-            substituted = generic_call_result_type(self.type_validator, node, generic_func)
+            substituted = self.generic_result_type(node, generic_func)
             if substituted is not None:
-                # A bare generic answers its substituted return, which may still be a
-                # spelling (`Crate`); a receiver chained on it needs the named type.
-                from sushi_lang.semantics.passes.types.utils import resolve_declared_type
-                return resolve_declared_type(self.type_validator,
-                                             self._materialize_wrapper(substituted))
+                return substituted
 
         from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
         if function_name == ERRNO_FUNCTION:
@@ -416,6 +410,22 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """
         from sushi_lang.semantics.passes.types.resolution import call_yield
         return call_yield(self.type_validator, func_sig.ret_type, func_sig.err_type)
+
+    def generic_result_type(self, call: Call, generic_func) -> Optional[Type]:
+        """What a call to a generic declaration yields before its instance exists.
+
+        One derivation, so a generic call written behind a namespace agrees with the bare
+        form (#1159). The substituted return may still be a spelling (`Crate`); a receiver
+        chained on it needs the named type.
+        """
+        from sushi_lang.semantics.passes.types.calls.generics import (
+            generic_call_result_type)
+        from sushi_lang.semantics.passes.types.utils import resolve_declared_type
+        substituted = generic_call_result_type(self.type_validator, call, generic_func)
+        if substituted is None:
+            return None
+        return resolve_declared_type(self.type_validator,
+                                     self._materialize_wrapper(substituted))
 
     def visit_methodcall(self, node: MethodCall) -> Optional[Type]:
         """Infer method call type and annotate node with inferred return type."""

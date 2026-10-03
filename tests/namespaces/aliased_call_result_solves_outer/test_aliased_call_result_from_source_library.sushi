@@ -1,0 +1,14 @@
+# The result of a generic call behind a source-library alias solves the generic call
+# that takes it as an argument (#1159).
+# BUILD_LIB: acr_lib.sushi -> acr_src.slib
+# EXPECT_STDOUT_EXACT: "5 7\n3 7\n"
+use <lib/acr_src> as s
+
+fn k@(T: Display)(T x) i32:
+    print("{x} ")
+    return 7
+
+fn main() i32:
+    println(k(s.lsid(nom 5)))
+    println(k(s.lcount(1, "a")))
+    return 0
