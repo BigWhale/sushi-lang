@@ -434,13 +434,6 @@ struct ZOut:
     ##: The number of bits in `acc`. :##
     i32 cnt
 
-##: One Huffman code of the encoder. :##
-struct ZCode:
-    ##: The code bits. :##
-    u32 bits
-    ##: The number of bits in the code. :##
-    i32 len
-
 ##:
 Writes `n` bits of `v`, low bit first, which is how DEFLATE packs a plain value.
 
@@ -489,16 +482,16 @@ fn flush(poke u8[] out, poke ZOut w) ~:
 Gives the fixed literal and length code of one symbol, RFC 1951 section 3.2.6.
 
 - Parameter sym: The symbol, 0 to 287.
-- Returns: The code.
+- Returns: The code bits, and the number of bits in the code.
 :##
-fn fixed_code(i32 sym) ZCode:
+fn fixed_code(i32 sym) (u32, i32):
     if (sym < 144):
-        return ZCode((48 + sym) as u32, 8)
+        return ((48 + sym) as u32, 8)
     if (sym < 256):
-        return ZCode((400 + (sym - 144)) as u32, 9)
+        return ((400 + (sym - 144)) as u32, 9)
     if (sym < 280):
-        return ZCode((sym - 256) as u32, 7)
-    return ZCode((192 + (sym - 280)) as u32, 8)
+        return ((sym - 256) as u32, 7)
+    return ((192 + (sym - 280)) as u32, 8)
 
 ##:
 Gives the length code of a match of 3 to 258 bytes.
@@ -537,8 +530,8 @@ code needs no table.
 :##
 fn emit_match(poke u8[] out, poke ZOut w, i32 length, i32 dist) ~:
     let i32 li = len_index(length)
-    let ZCode lc = fixed_code(257 + li)
-    put_code(poke out, poke w, lc.bits, lc.len)
+    let (u32 lbits, i32 llen) = fixed_code(257 + li)
+    put_code(poke out, poke w, lbits, llen)
     let i32 lextra = ZLIB_LEN_EXTRA[li]
     if (lextra > 0):
         put_bits(poke out, poke w, (length - ZLIB_LEN_BASE[li]) as u32, lextra)
@@ -666,12 +659,12 @@ fn deflate_fixed(peek u8[] src, poke u8[] out, i32 level) ~:
                     head[hh] := p
             pos := pos + best_len
         else:
-            let ZCode c = fixed_code(src[pos] as i32)
-            put_code(poke out, poke w, c.bits, c.len)
+            let (u32 cbits, i32 clen) = fixed_code(src[pos] as i32)
+            put_code(poke out, poke w, cbits, clen)
             pos := pos + 1
 
-    let ZCode eob = fixed_code(256)
-    put_code(poke out, poke w, eob.bits, eob.len)
+    let (u32 eob_bits, i32 eob_len) = fixed_code(256)
+    put_code(poke out, poke w, eob_bits, eob_len)
     flush(poke out, poke w)
 
 ##:
