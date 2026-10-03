@@ -212,6 +212,18 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
     return None, None
 
 
+def _unsolved_margs_help(args, count: int) -> str:
+    """The help of CE2063, from its cause: a bare-param lambda, or no argument at all."""
+    from sushi_lang.semantics.ast import Lambda
+    if any(isinstance(arg, Lambda) and any(p.ty is None for p in arg.params)
+           for arg in args):
+        return ("annotate the lambda's parameter types ('|i32 x| ...'), or pass a named "
+                "function -- a bare-param lambda has no type of its own to infer from")
+    pronoun = "them" if count > 1 else "it"
+    return (f"no argument of this call has a type that holds {pronoun}; a method call has "
+            f"no '@(...)' slot, so write the type parameter in a parameter type")
+
+
 def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, call,
                                      report: bool = True):
     """Resolve a call against a method-generic template (`name@(U)`, Phase 4).
@@ -243,17 +255,15 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     arg_types = [infer_call_arg_type(validator, arg) if expected is not None else None
                  for arg, expected in zip(call.args, expected_params, strict=False)]
     type_param_map, unsolved = solve_leading_type_args(
-        template, arg_types, None, None, partial=True,
-        param_types=expected_params, type_param_names=margs_names)
+        template, arg_types, validator.struct_table.by_name, validator.enum_table.by_name,
+        partial=True, param_types=expected_params, type_param_names=margs_names)
     if unsolved:
         if report:
             names = ", ".join(f"'{n}'" for n in unsolved)
             er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
                          plural="s" if len(unsolved) > 1 else "",
                          names=names, method=call.method) \
-                .help("annotate the lambda's parameter types "
-                      "('|i32 x| ...'), or pass a named function -- a bare-param "
-                      "lambda has no type of its own to infer from").emit()
+                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
             return RESOLUTION_REPORTED
         return None
 
