@@ -87,22 +87,29 @@ def _validate_element_argument(call: MethodCall, element_type: Type, reporter: R
 # ------------------------------------------------------------------ an i32 position
 
 
+# The positions that are not a method argument, as CE2121 names them.
+ARRAY_INDEX = "an array index"
+STRING_INDEX = "a string index"
+REPEAT_COUNT = "a repeat count"
+RANGE_BOUND = "a range bound"
+
+
 def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], *,
-                   argument: Optional[int] = None) -> bool:
+                   position: Optional[str] = None, argument: Optional[int] = None) -> bool:
     """The one rule for an index, a count and a range bound: the value is an i32 (#870).
 
     `got` is the type the caller's walk of `expr` answered. A bare literal is already an
     i32, because that is its default when no position gives it a type. Any other type is
     refused, and there is no implicit widening: the backend used to zero-extend a narrow
     value, so `-1 as i8` counted 255. A method argument reads CE2006 at its `argument`
-    position; every other position reads CE2002, as `arr[i]` did first. Answers whether
-    the value was refused.
+    position; every other position reads CE2121, which names the `position` the caller
+    gives. Answers whether the value was refused.
     """
     if got is None or got == BuiltinType.I32:
         return False
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2002, expr.loc,
-                              got=display_type(got), expected=display_type(BuiltinType.I32))
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, expr.loc,
+                              position=position, got=display_type(got))
     else:
         report = er.emit_with(validator.reporter, er.ERR.CE2006, expr.loc, index=argument,
                               expected=display_type(BuiltinType.I32), got=display_type(got))

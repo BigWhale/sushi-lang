@@ -11,7 +11,8 @@ from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExp
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
-from .arrays import reject_non_i32
+from .arrays import (
+    ARRAY_INDEX, RANGE_BOUND, REPEAT_COUNT, STRING_INDEX, reject_non_i32)
 from .compatibility import is_valid_cast
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
@@ -30,7 +31,8 @@ def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> No
         validator.validate_expression(element.value)
         if element.count is not None:
             reject_non_i32(validator, element.count,
-                           validator.validate_expression(element.count))
+                           validator.validate_expression(element.count),
+                           position=REPEAT_COUNT)
 
     # CE2017 for a repeat count that is not a count, CE2019 for a range that yields nothing,
     # and CE2020 for a range carrying a count. A `const` never arrives here with one, because
@@ -72,10 +74,11 @@ def is_indexable(ty) -> bool:
 def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None:
     """Validate array indexing - array must be array type, index must be int."""
     validator.validate_expression(expr.array)
-
-    reject_non_i32(validator, expr.index, validator.validate_expression(expr.index))
-
     array_type = validator.infer_expression_type(expr.array)
+
+    reject_non_i32(validator, expr.index, validator.validate_expression(expr.index),
+                   position=STRING_INDEX if array_type == BuiltinType.STRING else ARRAY_INDEX)
+
     if array_type is not None and not is_indexable(array_type):
         er.emit(validator.reporter, er.ERR.CE2114, expr.array.loc,
                 type=display_type(array_type))
@@ -127,7 +130,7 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
             er.emit(validator.reporter, er.ERR.CE2072, bound.loc,
                    got=display_type(bound_type), expected="integer type")
             continue
-        reject_non_i32(validator, bound, bound_type)
+        reject_non_i32(validator, bound, bound_type, position=RANGE_BOUND)
 
 
 class _Arms(NamedTuple):

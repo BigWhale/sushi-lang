@@ -653,7 +653,7 @@ fn main() i32:
 `.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
 
 **Indices are `i32`**: an index, a count and a range bound are `i32` positions. A bare literal
-is an `i32`; a typed value of another integer type is `CE2002` (`CE2006` as a method argument,
+is an `i32`; a typed value of another integer type is `CE2121` (`CE2006` as a method argument,
 for example to `.get()`), and the fix is `as i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
