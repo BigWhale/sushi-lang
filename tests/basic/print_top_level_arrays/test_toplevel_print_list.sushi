@@ -1,0 +1,17 @@
+# A top-level `List@(T)` prints its elements in brackets, and an empty one prints `[]`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "list: [1, 2]\nempty: []\n[1, 2]\n[]\n[1, 2]\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let List@(i32) none = List.new()
+    println("list: {xs}")
+    println("empty: {none}")
+    println(xs)
+    println(none)
+    print(xs)
+    println("")
+    return 0

@@ -1,0 +1,14 @@
+# A `HashMap@(K, V)` is still refused in a hole and in `println`: its iteration order
+# is not specified, so it has no one string form. The note says why.
+# EXPECT_ERROR_CODES_EXACT: CE2035, CE2115
+# EXPECT_STDERR_CONTAINS: no derived Display: a HashMap (its slot order is not its entry order)
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(i32, i32) m = HashMap.new()
+    m.insert(1, 2)
+    println("{m}")
+    println(m)
+    m.free()
+    return 0

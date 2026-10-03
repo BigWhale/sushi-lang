@@ -1,0 +1,19 @@
+# A nested array prints each inner array in its own brackets, at every depth and for
+# every kind of array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[[1], [2, 3]]\n[[1, 2], [3, 4], [5, 6]]\n[[7], []]\n[[1], [2, 3]]\n[[1, 2], [3, 4], [5, 6]]\n[[7], []]\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32[][] jag = from([from([1]), from([2, 3])])
+    let i32[2][3] grid = [[1, 2], [3, 4], [5, 6]]
+    let List@(i32[]) rows = List.new()
+    rows.push(from([7]))
+    rows.push(from([]))
+    println("{jag}")
+    println("{grid}")
+    println("{rows}")
+    println(jag)
+    println(grid)
+    println(rows)
+    return 0

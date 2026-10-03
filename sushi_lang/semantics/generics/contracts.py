@@ -12,11 +12,15 @@ Two questions, two readers:
   a `List@(T)` by their elements, an `Own@(T)` by its payload. A recursive type is
   legal, because the backend emits one function per type and a nested value of the
   same type is a call of it.
-- `operand_contract` is the TOP-LEVEL rule, for the operators, the interpolation hole,
-  `println`, the method call and a constraint: a primitive keeps its closed set, a
-  struct or an enum that is not a container asks the held rule, and everything else is
-  refused. `Maybe` and `Result` take `==` and `<`, and they are not printed: a hole
-  and `println` make the program handle them first.
+- `operand_contract` is the TOP-LEVEL rule, for the operators, the method call and a
+  constraint: a primitive keeps its closed set, a struct or an enum that is not a
+  container asks the held rule, and everything else is refused. `Maybe` and `Result`
+  take `==` and `<`.
+- `printed_contract` is the TOP-LEVEL rule of the interpolation hole and `print` /
+  `println`: an array, a `List@(T)`, an `Own@(T)` and a `HashMap@(K, V)` ask the held
+  rule, so they print in the form a type that holds them prints (#1132), and the map
+  is refused with its reason. `Maybe` and `Result` are not printed: a hole and
+  `println` make the program handle them first. Everything else is `operand_contract`.
 
 The dispatch is total over the type kinds, and
 `tests/unit/test_contract_dispatch_is_total.py` is the gate.
@@ -203,6 +207,23 @@ def operand_contract(ty: Optional[Type], contract: str, *,
     if contract == DISPLAY and is_instance_of(ty, "Maybe", "Result"):
         return False, None
     return contract_of(ty, contract, resolve=resolve, overridden=overridden)
+
+
+def printed_contract(ty: Optional[Type], *,
+                     overridden: Optional[Override] = None,
+                     resolve: Optional[Callable[[Type], Type]] = None
+                     ) -> tuple[bool, Optional[str]]:
+    """The TOP-LEVEL rule of a hole and `print`/`println`: may a value of `ty` print?"""
+    if ty is None:
+        return False, None
+    if isinstance(ty, ReferenceType):
+        ty = ty.referenced_type
+    if resolve is not None:
+        ty = resolve(ty)
+    if (isinstance(ty, (ArrayType, DynamicArrayType))
+            or is_instance_of(ty, "HashMap", *HELD_CONTAINERS)):
+        return contract_of(ty, DISPLAY, resolve=resolve, overridden=overridden)
+    return operand_contract(ty, DISPLAY, overridden=overridden, resolve=resolve)
 
 
 def override_of(derived: 'DerivedMethodTable', contract: str) -> Optional[Override]:

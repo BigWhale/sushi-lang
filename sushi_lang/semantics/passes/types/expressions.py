@@ -376,11 +376,15 @@ def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
     and the method call (CE2100 cites CE2514 for a reason); `Display` is an
     interpolation hole and `print`/`println`. THE rule, in one place, so the positions
     cannot drift apart: a primitive keeps its closed set, and a struct or an enum asks
-    the derived contract, with the compilation's override.
+    the derived contract, with the compilation's override. A printed position also
+    takes an array, a `List@(T)` and an `Own@(T)` (`printed_contract`).
     """
-    from sushi_lang.semantics.generics.contracts import operand_contract, override_of
-    return operand_contract(ty, contract,
-                            overridden=override_of(validator.derived_methods, contract))
+    from sushi_lang.semantics.generics.contracts import (
+        DISPLAY, operand_contract, override_of, printed_contract)
+    overridden = override_of(validator.derived_methods, contract)
+    if contract == DISPLAY:
+        return printed_contract(ty, overridden=overridden)
+    return operand_contract(ty, contract, overridden=overridden)
 
 
 def has_equality(validator: 'TypeValidator', ty: 'Type') -> bool:

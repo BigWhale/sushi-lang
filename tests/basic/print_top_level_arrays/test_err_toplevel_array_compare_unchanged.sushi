@@ -1,0 +1,10 @@
+# A top-level array prints, but it still does not compare: `==` and `<` keep their
+# rule.
+# EXPECT_ERROR_CODES_EXACT: CE2514, CE2514, CW1001, CW1001
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    let i32[] b = from([1, 2])
+    let bool same = a == b
+    let bool less = a < b
+    return 0

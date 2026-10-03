@@ -1,0 +1,18 @@
+# An enum element prints as its variant, with the payload in parentheses, as it does
+# when a type holds the array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[Maybe.Some(1), Maybe.None]\n[Colour.Red, Colour.Mix(2, 3)]\n[Maybe.Some(1), Maybe.None]\n[Colour.Red, Colour.Mix(2, 3)]\n"
+# EXPECT_NO_LEAKS: true
+
+enum Colour:
+    Red
+    Mix(i32, i32)
+
+fn main() i32:
+    let Maybe@(i32)[] ms = from([Maybe.Some(1), Maybe.None()])
+    let Colour[2] cs = [Colour.Red(), Colour.Mix(2, 3)]
+    println("{ms}")
+    println("{cs}")
+    println(ms)
+    println(cs)
+    return 0

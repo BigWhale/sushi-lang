@@ -1,0 +1,11 @@
+# A top-level array prints, but it does not meet a `Display` constraint: the
+# constraint keeps its rule.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+fn show@(T: Display)(T x) ~:
+    println("{x}")
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    show(a)
+    return 0

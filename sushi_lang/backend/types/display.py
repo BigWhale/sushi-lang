@@ -50,7 +50,7 @@ _NUMBER_SLOT = 64
 
 
 def emit_value_to_str(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.Value:
-    """The string form of a struct or an enum, as a fresh owned string."""
+    """The string form of a value that is not a primitive, as a fresh owned string."""
     override = contract_override(codegen, ty, DISPLAY)
     if override is not None:
         from sushi_lang.backend.types.contracts import call_override

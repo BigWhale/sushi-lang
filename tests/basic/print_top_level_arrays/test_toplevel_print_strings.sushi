@@ -1,0 +1,15 @@
+# A string element of a top-level array prints in quotes, so that its bounds are
+# visible. A string in a hole of its own still prints bare.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "["a, b", "c"] has a, b\n["x"]\n["a, b", "c"]\n["x"]\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let string[] words = from(["a, b", "c"])
+    let List@(string) names = List.new()
+    names.push("x".clone())
+    println("{words} has {words[0]}")
+    println("{names}")
+    println(words)
+    println(names)
+    return 0

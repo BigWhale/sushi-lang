@@ -1,0 +1,11 @@
+# A `u8[]` prints as numbers. `.to_string()` gives the text.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[72, 105]\n[72, 105]\nHi\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let u8[] bytes = from([72, 105])
+    println("{bytes}")
+    println(bytes)
+    println(bytes.to_string())
+    return 0

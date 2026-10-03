@@ -1,0 +1,12 @@
+# An array whose element has no string form is still refused in a hole, and the note
+# names the element type.
+# EXPECT_ERROR_CODES_EXACT: CE2035
+# EXPECT_STDERR_CONTAINS: no derived Display: element -> a function value
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([twice])
+    println("{fs}")
+    return 0

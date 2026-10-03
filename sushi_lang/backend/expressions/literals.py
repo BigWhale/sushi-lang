@@ -97,8 +97,9 @@ def _emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) 
             string_values.append(codegen.runtime.strings.emit_string_literal(part))
             fresh_flags.append(False)
         elif shown_as is not None:
-            # A struct or an enum: its `Display` form, a fresh string this interpolation
-            # frees once the concat has copied it. The value is only read.
+            # A struct, an enum, an array or a container: its `Display` form, a fresh
+            # string this interpolation frees once the concat has copied it. The value
+            # is only read.
             from sushi_lang.backend.expressions.memory import own_temporary
             from sushi_lang.backend.types.contracts import load_operand
             from sushi_lang.backend.types.display import emit_value_to_str

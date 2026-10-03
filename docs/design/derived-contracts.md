@@ -61,8 +61,9 @@ name, so it prints by position. `Maybe` and `Result` print as any enum does.
 A string that a type holds prints in quotes: `User(name: "Arthur Dent", age: 42)`. The quotes
 show where the string starts and stops. The bytes are written as they are, with no escaping.
 A string in a hole of its own prints bare, as before. An array and a `List@(T)` print as
-`[1, 2, 3]`, and an empty one as `[]`. An `Own@(T)` prints its payload. A float prints as
-`%g`, as a float hole does.
+`[1, 2, 3]`, and an empty one as `[]`, as a field and at the top level alike (#1132). An
+`Own@(T)` prints its payload. A float prints as `%g`, as a float hole does. A `u8[]` prints
+as numbers, `[72, 105]`; `.to_string()` gives the text.
 
 ### 4. One equality for operators, search and map keys
 
@@ -111,19 +112,32 @@ The semantic walk (`semantics/generics/contracts.py`) answers two questions.
   row by row. A `HashMap@(K, V)`, a `ptr`, a function value, a closure and an
   iterator have no contract, and neither has a type that holds one. A note names the field:
   `no derived Eq: field 'f' -> a function value`.
-- **`operand_contract` is the top-level rule**, for an operator, a hole, `println`, a method
-  call and a constraint. A primitive keeps its closed set. A struct or an enum asks the held
-  rule. An array, a `List@(T)` and an `Own@(T)` are refused at the top level: they compare
-  and print only when a type holds them.
+- **`operand_contract` is the top-level rule**, for an operator, a method call and a
+  constraint. A primitive keeps its closed set. A struct or an enum asks the held rule. An
+  array, a `List@(T)` and an `Own@(T)` are refused at the top level: they compare, take
+  `.to_str()` and meet a constraint only when a type holds them.
+- **`printed_contract` is the top-level rule of a hole and `print` / `println`.** It is
+  `operand_contract`, with one difference: an array, a `List@(T)` and an `Own@(T)` ask the
+  held rule (#1132). So `println(xs)` prints `[1, 2, 3]`, the form a struct that holds `xs`
+  prints, and an element with no string form is refused with the note that names it
+  (`no derived Display: element -> a function value`). A `HashMap@(K, V)` stays refused,
+  with the held rule's reason: its iteration order is not specified, so its printed form
+  could change from one run to the next.
+
+  The reason for the difference: Sushi has one string channel. There is no second
+  channel, such as `{:?}` in Rust, to send a programmer to. The form of a held array
+  exists, so a refusal at the top level only forced a wrapper struct or a hand-written
+  `join`. The operators, the method call and the constraint do not change.
 
 `Maybe` and `Result` take `==` and `<`. A bare variant on one side takes its type from the
 other side, so `m == Maybe.None` is legal. They are not PRINTED at the top level. A
 `Maybe` in a hole would hide a missing value, and a `Result` would hide an error. The program
 has to handle them: `match`, `.realise(default)` or `??`. A type that holds one prints it.
 
-The diagnostics follow. A top-level `Maybe` or array in `print` or `println` is CE2115. A
-top-level `Result` stays CE2037. In a hole, every one of them is CE2035, and the error has a
-note that names the field when a field is the cause. CE2115 closes a gap: the typecheck pass
+The diagnostics follow. A top-level `Maybe`, or an array whose element has no string form,
+in `print` or `println` is CE2115. A top-level `Result` stays CE2037. In a hole, every one of
+them is CE2035, and the error has a note that names the field or the element when it is the
+cause. CE2115 closes a gap: the typecheck pass
 asked nothing but CE2037, and such a value reached the backend and became the internal error
 CE0017.
 
@@ -173,7 +187,7 @@ ignore the override.
 
 | Piece | File |
 |---|---|
-| The held rule and the top-level rule | `semantics/generics/contracts.py` (`contract_of`, `operand_contract`) |
+| The held rule and the top-level rules | `semantics/generics/contracts.py` (`contract_of`, `operand_contract`, `printed_contract`) |
 | The walk mechanics, shared with the hash | `semantics/generics/contract_walk.py` (`hashing.py` also uses it) |
 | The receiver placeholder | `ReceiverType`, `semantics/typesys.py`; built only by `register_predefined_perks` |
 | The implementation matcher | `passes/types/perks.py` |

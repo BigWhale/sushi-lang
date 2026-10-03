@@ -259,6 +259,22 @@ list.destroy()
 
 ## Debugging
 
+### Printing
+
+A `List@(T)` goes into an interpolation hole and into `print` / `println` when its element
+has a string form, in the form an array prints: `[1, 2, 3]`, a string element in quotes,
+and `[]` when it is empty. An element with no string form is CE2035 in a hole and CE2115 in
+`println`.
+
+```sushi
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("Ford")
+    names.push("Arthur")
+    println("{names}")                  # ["Ford", "Arthur"]
+    return 0
+```
+
 ### `.debug() -> ~`
 
 Print internal state (length, capacity, elements).
