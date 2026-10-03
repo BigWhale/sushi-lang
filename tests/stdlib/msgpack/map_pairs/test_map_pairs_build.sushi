@@ -1,0 +1,40 @@
+# A map built by hand is one array of (key, value) pairs. The map readers, show() and a
+# deep clone read it in the order of the array; a key of any kind is kept; an empty
+# map and a map inside a map work.
+# EXPECT_STDOUT_EXACT: "{"s":"hi","b":true,1:nil}\nindex b 1\nstr s hi\nbool b true\nget s "hi"\nint key 1 is not a string key true\n{}\n{"in":{"s":"hi","b":true,1:nil},"none":{}}\ncopy {"in":{"s":"hi","b":true,1:nil},"none":{}}\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn main() i32:
+    let (MsgValue, MsgValue)[] pairs = from([
+        (MsgValue.Str("s"), MsgValue.Str("hi")),
+        (MsgValue.Str("b"), MsgValue.Bool(true)),
+        (MsgValue.Int(1), MsgValue.Nil())
+    ])
+    let MsgValue m = MsgValue.Map(pairs)
+    println(show(m))
+    let i32 at = map_index(m, "b").realise(-1)
+    println("index b {at}")
+    let string got = map_get_str(m, "s").realise("none")
+    println("str s {got}")
+    let bool flag = map_get_bool(m, "b").realise(false)
+    println("bool b {flag}")
+    match map_get(m, "s"):
+        Maybe.Some(v) -> println("get s {show(v)}")
+        Maybe.None() -> println("get s none")
+    let bool absent = map_index(m, "1").is_none()
+    println("int key 1 is not a string key {absent}")
+
+    let MsgValue empty = MsgValue.Map(from([]))
+    println(show(empty))
+
+    let (MsgValue, MsgValue)[] outer_pairs = from([
+        (MsgValue.Str("in"), m),
+        (MsgValue.Str("none"), empty)
+    ])
+    let MsgValue outer = MsgValue.Map(outer_pairs)
+    println(show(outer))
+    let MsgValue copy = outer.clone()
+    println("copy {show(copy)}")
+    return 0

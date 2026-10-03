@@ -1,0 +1,52 @@
+# A decoded map is one array of (key, value) pairs in wire order. A fixmap, a map16, a
+# nested map and an empty map all decode to it, and a foreach destructure walks it.
+# EXPECT_STDOUT_EXACT: "{"a":1,"b":[2]}\npairs 2\n"a" -> 1\n"b" -> [2]\n{"o":{"x":true}}\ninner x true\n{}\npairs 0\n{"k":7}\nk is 7\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/msgpack>
+
+fn walk(MsgValue m) ~:
+    match m:
+        MsgValue.Map(pairs) ->
+            println("pairs {pairs.len()}")
+            foreach((k, v) in pairs.iter()):
+                println("{show(k)} -> {show(v)}")
+        _ ->
+            println("not a map")
+
+fn run_test() ~ | MpError:
+    let u8[] flat = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
+    let MsgValue m = decode(flat)??
+    println(show(m))
+    walk(m)
+
+    let u8[] nested = from([0x81, 0xa1, 0x6f, 0x81, 0xa1, 0x78, 0xc3])
+    let MsgValue n = decode(nested)??
+    println(show(n))
+    match map_get(n, "o"):
+        Maybe.Some(inner) ->
+            let bool x = map_get_bool(inner, "x").realise(false)
+            println("inner x {x}")
+        Maybe.None() -> println("no inner map")
+
+    let u8[] empty = from([0x80])
+    let MsgValue e = decode(empty)??
+    println(show(e))
+    walk(e)
+
+    let u8[] wide = from([0xde, 0x00, 0x01, 0xa1, 0x6b, 0x07])
+    let MsgValue w = decode(wide)??
+    println(show(w))
+    match map_index(w, "k"):
+        Maybe.Some(at) ->
+            match w:
+                MsgValue.Map(pairs) -> println("k is {show(pairs[at].1)}")
+                _ -> println("not a map")
+        Maybe.None() -> println("no k")
+    return Result.Ok(~)
+
+fn main() i32:
+    match run_test():
+        Result.Ok(_) -> return 0
+        Result.Err(e) -> println("decode failed: {e.text()}")
+    return 1

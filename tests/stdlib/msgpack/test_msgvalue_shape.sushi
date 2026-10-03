@@ -1,7 +1,7 @@
 # Construct and match each MsgValue variant by hand, before the decoder exists.
-# This test fires the first-user enum shapes: two owned-array payloads in one
-# variant (Map), string and u8[] payloads (Str, Bin), and the recursive Arr.
-# EXPECT_STDOUT_EXACT: "nil\nbool true\nint -42\nuint 18446744073709551615\nfloat 4614253070214989087\nstr Mostly Harmless\nbin 3\narr 2\nmap 1 1\n"
+# This test fires the first-user enum shapes: an owned array of (key, value) tuples
+# (Map), string and u8[] payloads (Str, Bin), and the recursive Arr.
+# EXPECT_STDOUT_EXACT: "nil\nbool true\nint -42\nuint 18446744073709551615\nfloat 4614253070214989087\nstr Mostly Harmless\nbin 3\narr 2\nmap 1\n"
 # EXPECT_NO_LEAKS: true
 
 use <encoding/msgpack>
@@ -26,8 +26,8 @@ fn describe(MsgValue v) string:
             return "bin {b.len()}"
         MsgValue.Arr(items) ->
             return "arr {items.len()}"
-        MsgValue.Map(keys, vals) ->
-            return "map {keys.len()} {vals.len()}"
+        MsgValue.Map(pairs) ->
+            return "map {pairs.len()}"
 
 fn run_test() i32:
     let MsgValue v_nil = MsgValue.Nil()
@@ -56,9 +56,8 @@ fn run_test() i32:
     let MsgValue v_arr = MsgValue.Arr(kids)
     println(describe(v_arr))
 
-    let MsgValue[] keys = from([MsgValue.Str("k")])
-    let MsgValue[] vals = from([MsgValue.Int(7)])
-    let MsgValue v_map = MsgValue.Map(keys, vals)
+    let (MsgValue, MsgValue)[] pairs = from([(MsgValue.Str("k"), MsgValue.Int(7))])
+    let MsgValue v_map = MsgValue.Map(pairs)
     println(describe(v_map))
 
     return 0

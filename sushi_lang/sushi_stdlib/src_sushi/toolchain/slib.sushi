@@ -484,7 +484,7 @@ fn value_kind(MsgValue v) string:
     match v:
         MsgValue.Str(_) -> return "str"
         MsgValue.Bool(_) -> return "bool"
-        MsgValue.Map(_, _) -> return "map"
+        MsgValue.Map(_) -> return "map"
         MsgValue.Arr(_) -> return "list"
         MsgValue.Nil() -> return "nil"
         _ -> return "other"
@@ -522,8 +522,8 @@ fn record_fault(MsgValue rec, string kind, string where) Maybe@(string):
             match map_index(rec, row.key):
                 Maybe.Some(at) ->
                     match rec:
-                        MsgValue.Map(_, vals) ->
-                            let Maybe@(string) fault = value_fault(vals[at], row.spec, name)
+                        MsgValue.Map(pairs) ->
+                            let Maybe@(string) fault = value_fault(pairs[at].1, row.spec, name)
                             if (fault.is_some()):
                                 return fault
                         _ ->
@@ -586,11 +586,11 @@ fn value_fault(MsgValue v, string spec, string name) Maybe@(string):
         return record_fault(v, spec.s(1, spec.len()), name)
     let string value_spec = "@{spec.s(2, spec.len())}"
     match v:
-        MsgValue.Map(keys, vals) ->
-            foreach(i in 0..keys.len()):
-                match keys[i]:
+        MsgValue.Map(pairs) ->
+            foreach((key, value) in pairs.iter()):
+                match key:
                     MsgValue.Str(k) ->
-                        let Maybe@(string) fault = value_fault(vals[i], value_spec, "{name}.{k}")
+                        let Maybe@(string) fault = value_fault(value, value_spec, "{name}.{k}")
                         if (fault.is_some()):
                             return fault
                     _ ->

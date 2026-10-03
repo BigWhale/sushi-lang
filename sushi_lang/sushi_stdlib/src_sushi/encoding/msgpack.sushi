@@ -13,8 +13,8 @@ use <collections/strings>
 ##:
 One decoded MessagePack value.
 
-A map is two parallel arrays and not a hash table: a MessagePack key can be of any
-kind, and the wire order stays visible.
+A map is one array of (key, value) pairs and not a hash table: a MessagePack key can be
+of any kind, and the wire order stays visible.
 :##
 public enum MsgValue:
     ##: The `nil` value. :##
@@ -33,8 +33,8 @@ public enum MsgValue:
     Bin(u8[])
     ##: An array of values, in wire order. :##
     Arr(MsgValue[])
-    ##: A map: the keys and the values as parallel arrays, in wire order. :##
-    Map(MsgValue[], MsgValue[])
+    ##: A map: the (key, value) pairs, in wire order. :##
+    Map((MsgValue, MsgValue)[])
 
 ##: Why a buffer did not decode. :##
 public enum MpError:
@@ -188,7 +188,7 @@ fn take_arr(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
     return Result.Ok(MsgValue.Arr(items))
 
 ##:
-Decodes the key and value pairs of a map into parallel arrays, in wire order.
+Decodes the key and value pairs of a map, in wire order.
 
 - Parameter buf: The buffer.
 - Parameter cur: The cursor. It moves past each key and each value.
@@ -197,14 +197,12 @@ Decodes the key and value pairs of a map into parallel arrays, in wire order.
 - Errors: The first error of a key or a value.
 :##
 fn take_map(peek u8[] buf, poke MpCursor cur, i32 count) MsgValue | MpError:
-    let MsgValue[] keys = from([])
-    let MsgValue[] vals = from([])
+    let (MsgValue, MsgValue)[] pairs = from([])
     foreach(_ in 0..count):
         let MsgValue k = decode_value(peek buf, poke cur)??
-        keys.push(k)
         let MsgValue v = decode_value(peek buf, poke cur)??
-        vals.push(v)
-    return Result.Ok(MsgValue.Map(keys, vals))
+        pairs.push((k, v))
+    return Result.Ok(MsgValue.Map(pairs))
 
 ##:
 Reads one tag byte and decodes one value.
@@ -334,19 +332,30 @@ fn is_key(MsgValue k, string key) bool:
 The position of a string key in a map.
 
 The scan goes in wire order, and the first key that matches wins. Use the position to
-borrow the value in place (`vals[i]` inside a `MsgValue.Map(keys, vals)` arm) instead of
-a copy of it.
+borrow the value in place (`pairs[i].1` inside a `MsgValue.Map(pairs)` arm) instead of a
+copy of it.
 
 - Parameter m: The map to scan.
 - Parameter key: The string key to find.
 - Returns: The position of the key, or `Maybe.None()` when the key is absent or `m` is not
   a map.
+- Example:
+```sushi
+let u8[] buf = from([0x82, 0xa1, 0x61, 0x01, 0xa1, 0x62, 0x91, 0x02])
+let MsgValue m = decode(buf).realise(MsgValue.Nil())
+match map_index(m, "b"):
+    Maybe.Some(i) ->
+        match m:
+            MsgValue.Map(pairs) -> println(show(pairs[i].1))
+            _ -> println("not a map")
+    Maybe.None() -> println("no key b")
+```
 :##
 public fn map_index(MsgValue m, string key) Maybe@(i32):
     match m:
-        MsgValue.Map(keys, _) ->
-            foreach(i in 0..keys.len()):
-                if (is_key(keys[i], key)):
+        MsgValue.Map(pairs) ->
+            foreach(i in 0..pairs.len()):
+                if (is_key(pairs[i].0, key)):
                     return Maybe.Some(i)
             return Maybe.None()
         _ ->
@@ -364,9 +373,9 @@ without a copy, use `map_index`.
 :##
 public fn map_get(MsgValue m, string key) Maybe@(MsgValue):
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
-                Maybe.Some(i) -> return Maybe.Some(vals[i].clone())
+                Maybe.Some(i) -> return Maybe.Some(pairs[i].1.clone())
                 Maybe.None() -> return Maybe.None()
         _ ->
             return Maybe.None()
@@ -381,10 +390,10 @@ The string under a string key. Only the string is copied, never the map.
 :##
 public fn map_get_str(MsgValue m, string key) Maybe@(string):
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
                 Maybe.Some(i) ->
-                    match vals[i]:
+                    match pairs[i].1:
                         MsgValue.Str(s) -> return Maybe.Some(s.clone())
                         _ -> return Maybe.None()
                 Maybe.None() -> return Maybe.None()
@@ -401,10 +410,10 @@ The bool under a string key.
 :##
 public fn map_get_bool(MsgValue m, string key) Maybe@(bool):
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
                 Maybe.Some(i) ->
-                    match vals[i]:
+                    match pairs[i].1:
                         MsgValue.Bool(b) -> return Maybe.Some(b)
                         _ -> return Maybe.None()
                 Maybe.None() -> return Maybe.None()
@@ -448,13 +457,13 @@ public fn show(MsgValue v) string:
                 arr_parts.push(show(item))
             let string arr_body = ",".join(arr_parts)
             return "[{arr_body}]"
-        MsgValue.Map(keys, vals) ->
+        MsgValue.Map(pairs) ->
             let string open_brace = '{'
             let string close_brace = '}'
             let string[] map_parts = from([])
-            foreach(k in 0..keys.len()):
-                let string ks = show(keys[k])
-                let string vs = show(vals[k])
+            foreach((k, v) in pairs.iter()):
+                let string ks = show(k)
+                let string vs = show(v)
                 map_parts.push("{ks}:{vs}")
             let string map_body = ",".join(map_parts)
             return "{open_brace}{map_body}{close_brace}"

@@ -116,9 +116,9 @@ Gives the number of elements of the `Arr` value under a string key.
 :##
 fn len_at(MsgValue m, string key) i32:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
-                Maybe.Some(at) -> return len(vals[at])
+                Maybe.Some(at) -> return len(pairs[at].1)
                 Maybe.None() -> return 0
         _ ->
             return 0
@@ -150,9 +150,9 @@ Joins the `Str` elements of the `Arr` value under a string key with a separator.
 :##
 fn join_at(MsgValue m, string key, string sep) string:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
-                Maybe.Some(at) -> return join_strs(vals[at], sep)
+                Maybe.Some(at) -> return join_strs(pairs[at].1, sep)
                 Maybe.None() -> return ""
         _ ->
             return ""
@@ -428,10 +428,10 @@ owner.
 fn print_param_tags_at(MsgValue owner, MsgValue doc, string indent, bool printed,
                        Opts o) bool:
     match owner:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(owner, "params"):
                 Maybe.Some(at) ->
-                    return print_param_tags(vals[at], doc, indent, printed, o)
+                    return print_param_tags(pairs[at].1, doc, indent, printed, o)
                 Maybe.None() -> return printed
         _ ->
             return printed
@@ -475,9 +475,9 @@ Gives the text of one `- Parameter` tag.
 :##
 fn param_text(MsgValue doc, string name) string:
     match doc:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(doc, "params"):
-                Maybe.Some(at) -> return get_str(vals[at], name)
+                Maybe.Some(at) -> return get_str(pairs[at].1, name)
                 Maybe.None() -> return ""
         _ ->
             return ""
@@ -493,9 +493,9 @@ Prints the examples of a doc record.
 :##
 fn print_examples_at(MsgValue doc, string indent, bool printed, Opts o) bool:
     match doc:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(doc, "examples"):
-                Maybe.Some(at) -> return print_examples(vals[at], indent, printed, o)
+                Maybe.Some(at) -> return print_examples(pairs[at].1, indent, printed, o)
                 Maybe.None() -> return printed
         _ ->
             return printed
@@ -566,10 +566,10 @@ Prints the doc record under a string key of a map.
 :##
 fn print_doc_at(MsgValue m, string key, MsgValue owner, string indent, Opts o) bool:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
                 Maybe.Some(at) ->
-                    return print_doc_record(vals[at], owner, indent, o)
+                    return print_doc_record(pairs[at].1, owner, indent, o)
                 Maybe.None() -> return false
         _ ->
             return false
@@ -596,9 +596,9 @@ fn render_params(MsgValue f) string:
     if (head != ""):
         head := "{head} self"
     match f:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(f, "params"):
-                Maybe.Some(at) -> return render_param_list(vals[at], nom head)
+                Maybe.Some(at) -> return render_param_list(pairs[at].1, nom head)
                 Maybe.None() -> return head
         _ ->
             return head
@@ -668,9 +668,9 @@ Prints one section of function records.
 :##
 fn print_signatures_at(MsgValue m, string key, string title, Opts o) ~:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
-                Maybe.Some(at) -> print_signatures(vals[at], title, o)
+                Maybe.Some(at) -> print_signatures(pairs[at].1, title, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -705,9 +705,9 @@ Writes the `@(...)` type parameters of a generic record.
 :##
 fn render_type_params(MsgValue gf) string:
     match gf:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(gf, "type_params"):
-                Maybe.Some(at) -> return render_type_param_list(vals[at])
+                Maybe.Some(at) -> return render_type_param_list(pairs[at].1)
                 Maybe.None() -> return ""
         _ ->
             return ""
@@ -749,9 +749,9 @@ Prints one section of constant or variable records.
 :##
 fn print_bindings_at(MsgValue m, string key, string title, string keyword, Opts o) ~:
     match m:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(m, key):
-                Maybe.Some(at) -> print_bindings(vals[at], title, keyword, o)
+                Maybe.Some(at) -> print_bindings(pairs[at].1, title, keyword, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -802,9 +802,9 @@ Prints the section of public structs.
 :##
 fn print_structs(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "structs"):
-                Maybe.Some(at) -> print_struct_list(vals[at], o)
+                Maybe.Some(at) -> print_struct_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -842,9 +842,9 @@ Prints the fields of a struct record.
 :##
 fn print_fields_at(MsgValue s, bool pending, Opts o) bool:
     match s:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(s, "fields"):
-                Maybe.Some(at) -> return print_fields(vals[at], pending, o)
+                Maybe.Some(at) -> return print_fields(pairs[at].1, pending, o)
                 Maybe.None() -> return pending
         _ ->
             return pending
@@ -879,9 +879,9 @@ Prints the section of public enums.
 :##
 fn print_enums(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "enums"):
-                Maybe.Some(at) -> print_enum_list(vals[at], o)
+                Maybe.Some(at) -> print_enum_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -919,9 +919,9 @@ Prints the variants of an enum record.
 :##
 fn print_variants_at(MsgValue e, bool pending, Opts o) bool:
     match e:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(e, "variants"):
-                Maybe.Some(at) -> return print_variants(vals[at], pending, o)
+                Maybe.Some(at) -> return print_variants(pairs[at].1, pending, o)
                 Maybe.None() -> return pending
         _ ->
             return pending
@@ -934,10 +934,10 @@ Writes the payload types of a variant record, each in the `@(...)` spelling.
 :##
 fn render_data_types(MsgValue v) string:
     match v:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(v, "data_types"):
                 Maybe.Some(at) ->
-                    match vals[at]:
+                    match pairs[at].1:
                         MsgValue.Arr(types) ->
                             let string[] parts = from([])
                             foreach(t in types.iter()):
@@ -986,9 +986,9 @@ Prints one section of generic structs or of generic enums.
 fn print_generic_named(MsgValue templates, string key, string title, string keyword,
                        Opts o) ~:
     match templates:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(templates, key):
-                Maybe.Some(at) -> print_generic_named_list(vals[at], title, keyword, o)
+                Maybe.Some(at) -> print_generic_named_list(pairs[at].1, title, keyword, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1027,9 +1027,9 @@ Prints the method records of a perk or of an implementation.
 :##
 fn print_methods(MsgValue owner, bool pending, Opts o) bool:
     match owner:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(owner, "methods"):
-                Maybe.Some(at) -> return print_method_list(vals[at], pending, o)
+                Maybe.Some(at) -> return print_method_list(pairs[at].1, pending, o)
                 Maybe.None() -> return pending
         _ ->
             return pending
@@ -1063,9 +1063,9 @@ Prints the section of perks.
 :##
 fn print_perks(MsgValue templates, Opts o) ~:
     match templates:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(templates, "perks"):
-                Maybe.Some(at) -> print_perk_list(vals[at], o)
+                Maybe.Some(at) -> print_perk_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1116,9 +1116,9 @@ Prints one array of implementation records.
 :##
 fn print_impls_at(MsgValue templates, string key, bool pending, Opts o) bool:
     match templates:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(templates, key):
-                Maybe.Some(at) -> return print_impl_records(vals[at], pending, o)
+                Maybe.Some(at) -> return print_impl_records(pairs[at].1, pending, o)
                 Maybe.None() -> return pending
         _ ->
             return pending
@@ -1173,9 +1173,9 @@ Prints one array of extension method records.
 :##
 fn print_extensions_at(MsgValue templates, string key, bool pending, Opts o) bool:
     match templates:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(templates, key):
-                Maybe.Some(at) -> return print_extension_records(vals[at], pending, o)
+                Maybe.Some(at) -> return print_extension_records(pairs[at].1, pending, o)
                 Maybe.None() -> return pending
         _ ->
             return pending
@@ -1229,9 +1229,9 @@ Prints the section of the types that the library extends and does not declare.
 :##
 fn print_foreign_extensions(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "foreign_extensions"):
-                Maybe.Some(at) -> print_foreign_list(vals[at], o)
+                Maybe.Some(at) -> print_foreign_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1263,9 +1263,9 @@ Prints the section of the units that the library holds.
 :##
 fn print_units(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "units"):
-                Maybe.Some(at) -> print_unit_list(vals[at], meta, o)
+                Maybe.Some(at) -> print_unit_list(pairs[at].1, meta, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1302,10 +1302,10 @@ Prints the doc record of one unit from the `unit_docs` map.
 :##
 fn print_unit_doc(MsgValue meta, string name, Opts o) bool:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "unit_docs"):
                 Maybe.Some(at) ->
-                    return print_doc_at(vals[at], name, MsgValue.Nil(), "    ", o)
+                    return print_doc_at(pairs[at].1, name, MsgValue.Nil(), "    ", o)
                 Maybe.None() -> return false
         _ ->
             return false
@@ -1318,9 +1318,9 @@ Prints the section of re-exports.
 :##
 fn print_reexports(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "reexports"):
-                Maybe.Some(at) -> print_reexport_list(vals[at], o)
+                Maybe.Some(at) -> print_reexport_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1367,9 +1367,9 @@ Prints the section of dependencies.
 :##
 fn print_dependencies(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "dependencies"):
-                Maybe.Some(at) -> print_dependency_list(vals[at], o)
+                Maybe.Some(at) -> print_dependency_list(pairs[at].1, o)
                 Maybe.None() -> return ~
         _ ->
             return ~
@@ -1429,9 +1429,9 @@ Prints each declaration section, with the `templates` map when the library has o
 :##
 fn print_declarations_at(MsgValue meta, Opts o) ~:
     match meta:
-        MsgValue.Map(_, vals) ->
+        MsgValue.Map(pairs) ->
             match map_index(meta, "templates"):
-                Maybe.Some(at) -> print_declarations(meta, vals[at], o)
+                Maybe.Some(at) -> print_declarations(meta, pairs[at].1, o)
                 Maybe.None() -> print_declarations(meta, MsgValue.Nil(), o)
         _ ->
             print_declarations(meta, MsgValue.Nil(), o)
