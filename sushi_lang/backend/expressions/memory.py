@@ -14,6 +14,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.types.core.sizing import align_up
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 
 if TYPE_CHECKING:
@@ -56,36 +57,43 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
 
 
 def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
-    """Calculate the size in bytes of an LLVM type for offset calculations."""
-    if isinstance(llvm_type, ir.IntType):
-        return llvm_type.width // 8
-    elif isinstance(llvm_type, ir.PointerType):
-        return 8
-    elif isinstance(llvm_type, ir.FloatType):
-        return 4
-    elif isinstance(llvm_type, ir.DoubleType):
-        return 8
-    elif isinstance(llvm_type, ir.types.BaseStructType):
-        # The ALIGNED sizeof (16), not the field sum (13): the owned byte at offset 12 must
-        # survive a round-trip through an enum payload sized from this (#145).
-        #
-        # The sniff stays on the LITERAL type deliberately -- a string is an anonymous fat
-        # pointer, so a user struct shaped `{i8*, i32, i8}` must not be mistaken for one.
-        els = llvm_type.elements
-        if (isinstance(llvm_type, ir.LiteralStructType)
-                and len(els) == 3 and isinstance(els[0], ir.PointerType)
-                and isinstance(els[1], ir.IntType) and els[1].width == 32
-                and isinstance(els[2], ir.IntType) and els[2].width == 8):
-            return 16
-        total_size = 0
+    """The ABI size in bytes of an LLVM type, padding included, as the data layout gives it.
+
+    A struct is laid out field by field at each field's alignment, then rounded up to its
+    own alignment, so a string `{i8*, i32, i8}` is 16 and not 13 (#145), and a tuple
+    `(i32, u64, u64, i32)` is 32 and not 24. A generator copies this many bytes into a
+    Result or Maybe payload, so a short answer cuts the last field off.
+    """
+    if isinstance(llvm_type, ir.types.BaseStructType):
+        offset = 0
         for element_type in llvm_type.elements:
-            total_size += calculate_llvm_type_size(element_type)
-        return total_size
-    elif isinstance(llvm_type, ir.ArrayType):
-        element_size = calculate_llvm_type_size(llvm_type.element)
-        return element_size * llvm_type.count
-    else:
-        return 16
+            offset = align_up(offset, _llvm_type_alignment(element_type))
+            offset += calculate_llvm_type_size(element_type)
+        return align_up(offset, _llvm_type_alignment(llvm_type))
+    if isinstance(llvm_type, ir.ArrayType):
+        return calculate_llvm_type_size(llvm_type.element) * llvm_type.count
+    if isinstance(llvm_type, ir.IntType):
+        return max(llvm_type.width // 8, 1)
+    if isinstance(llvm_type, ir.FloatType):
+        return 4
+    if isinstance(llvm_type, (ir.PointerType, ir.DoubleType)):
+        return 8
+    return 16
+
+
+def _llvm_type_alignment(llvm_type: 'ir.Type') -> int:
+    """The ABI alignment of an LLVM type on the 64-bit targets Sushi builds for."""
+    if isinstance(llvm_type, ir.types.BaseStructType):
+        return max((_llvm_type_alignment(e) for e in llvm_type.elements), default=1)
+    if isinstance(llvm_type, ir.ArrayType):
+        return _llvm_type_alignment(llvm_type.element)
+    if isinstance(llvm_type, ir.IntType):
+        return min(max(llvm_type.width // 8, 1), 8)
+    if isinstance(llvm_type, ir.FloatType):
+        return 4
+    return 8
+
+
 
 
 def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Value) -> ir.Value:
