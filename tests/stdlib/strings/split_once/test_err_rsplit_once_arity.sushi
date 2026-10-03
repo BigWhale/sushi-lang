@@ -1,0 +1,10 @@
+# `rsplit_once` takes one argument, the separator.
+# EXPECT_ERROR_CODE: CE2009
+use <collections/strings>
+
+fn main() i32:
+    let string s = "a=b"
+    match s.rsplit_once():
+        Maybe.Some(_) -> println("some")
+        Maybe.None -> println("none")
+    return 0

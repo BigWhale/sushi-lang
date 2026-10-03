@@ -6,6 +6,7 @@ import llvmlite.ir as ir
 from llvmlite import binding as llvm
 
 from sushi_lang.semantics.ast import MethodCall
+from sushi_lang.semantics.generics.tuples import tuple_ref
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType
 from sushi_lang.internals import errors as er
@@ -41,6 +42,8 @@ from .methods.search import (
     emit_string_find,
     emit_string_find_last,
     emit_string_count,
+    emit_string_split_once,
+    emit_string_rsplit_once,
 )
 from .methods.trim import (
     emit_string_trim,
@@ -89,7 +92,7 @@ class MethodSpec:
 _S, _I32, _BOOL = BuiltinType.STRING, BuiltinType.I32, BuiltinType.BOOL
 
 
-def _maybe(payload: BuiltinType) -> GenericTypeRef:
+def _maybe(payload: Type | GenericTypeRef) -> GenericTypeRef:
     return GenericTypeRef(base_name="Maybe", type_args=(payload,))
 
 
@@ -130,6 +133,8 @@ METHOD_SPECS = {name: _spec(name, args, returns) for name, args, returns in (
     ("ss", (_I32, _I32), _S),
 
     ("split", (_S,), DynamicArrayType(_S)),
+    ("split_once", (_S,), _maybe(tuple_ref((_S, _S)))),
+    ("rsplit_once", (_S,), _maybe(tuple_ref((_S, _S)))),
     ("join", (DynamicArrayType(_S),), _S),
 
     ("replace", (_S, _S), _S),
@@ -218,6 +223,8 @@ def generate_module_ir() -> ir.Module:
     emit_string_find(module)
     emit_string_find_last(module)
     emit_string_count(module)
+    emit_string_split_once(module)
+    emit_string_rsplit_once(module)
 
     emit_string_trim(module)
     emit_string_tleft(module)

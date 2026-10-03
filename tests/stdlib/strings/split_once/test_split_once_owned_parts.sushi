@@ -1,0 +1,45 @@
+# The two parts of `split_once` and `rsplit_once` are owned strings: a destructure
+# takes them, `nom` hands one away, and nothing leaks. A multi-byte UTF-8
+# separator splits at its bytes, and a hole prints the tuple.
+# EXPECT_STDOUT_EXACT: "a b→c\na→b c\nhéllo wörld\nkey value=1\nfallback\nkept Ford\nboth Arthur Dent\nparts ("x", "y")\nborrowed zaphod beeblebrox\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn keep(nom string s) string:
+    return s
+
+fn first_word(string s) string:
+    let (head, _) = s.split_once(" ").realise((s.clone(), ""))
+    return head
+
+fn main() i32:
+    let (a, b) = "a→b→c".split_once("→").realise(("", ""))
+    println("{a} {b}")
+    let (c, d) = "a→b→c".rsplit_once("→").realise(("", ""))
+    println("{c} {d}")
+
+    match "héllo wörld".split_once(" "):
+        Maybe.Some((h, w)) -> println("{h} {w}")
+        Maybe.None -> println("none")
+
+    let (string k, string v) = "key: value=1".split_once(": ").realise(("", ""))
+    println("{k} {v}")
+
+    let (f, _) = "no separator".split_once(": ").realise(("fallback", ""))
+    println(f)
+
+    let (e, _) = "Ford Prefect".split_once(" ").realise(("", ""))
+    let string kept = keep(nom e)
+    println("kept {kept}")
+
+    let (string, string) both = "Arthur Dent".rsplit_once(" ").realise(("", ""))
+    println("both {both.0} {both.1}")
+
+    let (string, string) parts = "x,y".split_once(",").realise(("", ""))
+    println("parts {parts}")
+
+    let string name = "zaphod beeblebrox".clone()
+    let (_, last) = name.rsplit_once(" ").realise(("", ""))
+    println("borrowed {first_word(name)} {last}")
+    return 0

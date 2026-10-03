@@ -1,0 +1,10 @@
+# The separator of `split_once` is a string: an i32 is refused.
+# EXPECT_ERROR_CODE: CE2006
+use <collections/strings>
+
+fn main() i32:
+    let string s = "a=b"
+    match s.split_once(1):
+        Maybe.Some(_) -> println("some")
+        Maybe.None -> println("none")
+    return 0
