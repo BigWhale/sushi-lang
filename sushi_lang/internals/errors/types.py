@@ -257,7 +257,10 @@ _add(ErrorMessage("CE2060", Severity.ERROR,
     "two steps, as one resolution (#573): from the arguments, for every target type "
     "parameter a parameter names, then from the declared type at the binding site for "
     "the rest. A parameter neither step reaches is this error, and the text names both "
-    "sources and the parameter. History: from #542 to #573 a static read the stamp "
+    "sources and the parameter. When the unifier knows why an argument does not fit, "
+    "the reason names it: a fixed-size parameter takes an array of that size alone, so "
+    "`T[3]` against an `i32[4]` says 'the parameter is 'T[3]', the argument is "
+    "'i32[4]'' (#1137). History: from #542 to #573 a static read the stamp "
     "alone, which left a `| E` static unwritable -- a Result-valued call is never "
     "stamped."))
 
