@@ -24,6 +24,3 @@ fn main() i32:
         Result.Err(MyError.Error) ->
             println("PASS: Error propagated with RAII cleanup")
             return 0
-        Result.Err(_) ->
-            println("FAIL: Wrong error")
-            return 1
