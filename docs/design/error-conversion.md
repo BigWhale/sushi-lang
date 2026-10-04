@@ -10,7 +10,8 @@ gives the order of the work.
 - The `E` of every `Result@(T, E)` in the program is an error type.
 - `extend FileError as IoError:` declares a conversion from one error type to another.
   `e as IoError` calls it explicitly, and `??` calls it when the two error types differ.
-- `??` on a `Maybe` in a body with a channel is refused. `m.or_err(e)??` is the form.
+- `??` takes a `Result@(T, E)` and nothing else. On a `Maybe`, `m.or_err(nom e)??` is the
+  form.
 - `r.map_err(f)??` converts at one site, with no declaration.
 
 ## The rulings
@@ -19,18 +20,19 @@ gives the order of the work.
 |---|---|---|
 | **E1** | An error type is declared with the keyword `error`. It is an enum with an `is_error` flag, not a new type kind | 2.1, 2.2 |
 | **E2** | An error type is ordinary data in every position | 2.3 |
-| **E3** | The `E` of every `Result@(T, E)` in the program is an error type. One code replaces CE2084 and CE2086 | 2.4 |
+| **E3** | The `E` of every `Result@(T, E)` in the program is an error type. CE2084 carries the rule, and CE2086 is retired | 2.4 |
 | **E4** | E3 is judged at every written type and at each generic instance, not at the `Result` interning seam | 2.5 |
 | **C1** | A conversion is a declaration: `extend <Source> as <Target>:` with a block body | 3.1 |
-| **C2** | `e as <Target>` is the explicit use of a conversion | 3.2 |
+| **C2** | `e as <Target>` is the explicit use of a conversion. `as` consumes its operand by position, unmarked | 3.2 |
 | **C3** | `??` calls the declared conversion when the two error types differ | 3.3 |
 | **C4** | A conversion is one step. A chain is never followed | 3.4 |
 | **C5** | Only the unit that declares the target type may declare a conversion into it | 3.5 |
 | **C6** | The source and the target are non-generic error types | 3.6 |
 | **C7** | The body is bare, and it consumes `self` | 3.7 |
-| **C8** | `??` on a `Maybe` in a body with a channel is refused. `or_err(e)` is the form (#1168) | 4 |
+| **C8** | `??` takes a `Result@(T, E)` only. A `Maybe` and an enum shaped like a `Result` or a `Maybe` are refused. `or_err(nom e)` is the form for a `Maybe` (#1168) | 4 |
 | **C9** | `map_err` is in the library from the first version | 5 |
 | **C10** | A `from` marker on a variant is deferred | 12.1 |
+| **C11** | A conversion has no leak check | 3.8 |
 
 ---
 
@@ -63,6 +65,14 @@ deeper. At `82d6bf94`, the stdlib has 14 of these matches (10 in `io/fs.sushi`, 
 In a body with `| E`, `??` on a `Maybe` that holds `None` returns `Result.Err` built from
 `undef` (#1168). The caller reads an `E` that the program never made, and the answer
 changes with `--opt`.
+
+### 1.4 `??` reads the shape of its operand
+
+`??` accepts any enum with `Ok`/`Err` variants or `Some`/`None` variants, not only
+`Result` and `Maybe` (`_unwrapped_arms`, `passes/types/expressions.py`; the CE2507 text
+says "result-like enum"). A user `enum Outcome: Ok(i32), Err(E)` propagates through
+`??`. The `Err` payload of such an enum is not a `Result`, so no rule on error types
+reaches it, and a user enum with `Some`/`None` has the fault of 1.3.
 
 ---
 
@@ -120,8 +130,9 @@ value of an error channel, and only an error fits into an error channel.
   contract, a perk implementation, a lambda and a function type (`fn(i32) -> i32 | E`),
   and also a `let`, a field, a payload, a parameter and a generic argument.
 - One code refuses every other type: a plain enum, a struct, a primitive, an array, a
-  function type, `Maybe` and `Result`. CE2084 and CE2086 are retired, and with them the
-  list of refused names.
+  function type, `Maybe` and `Result`. CE2084 carries the rule with new wording: its
+  meaning stays "`E` is not an error type", and only the predicate changes. CE2086 is
+  retired, and with it the list of refused names.
 - The rule changes at once. No release accepts both a plain enum and an error type as
   an `E`.
 
@@ -171,6 +182,12 @@ target, and `self` is the source value. The wrapping case is one line.
 the language, so a conversion between two types is one more case of it. Today `as` casts
 between numeric types only (`is_valid_cast`). It now also accepts a pair of error types
 that has a declaration. Every other pair stays an invalid cast.
+
+`as` consumes its operand by POSITION, with no marker, as a constructor argument does.
+For a plain error type this is a copy, and every stdlib error type is plain. For an
+error type that owns a resource, `e` is spent. When `e` is a borrow (a `match` binding
+such as `Result.Err(e) ->`), the cast is the consuming use of a borrow and is refused.
+The form is then `e.clone() as AppError`.
 
 ### 3.3 The implicit use: `??`
 
@@ -238,25 +255,44 @@ every conversion into it.
 
 Behind an alias, the declaration spells the qualified names:
 `extend fs.FileError as AppError:`. A private target makes the conversion usable in its
-own unit only. The leak rule applies to a conversion as it applies to a public
-signature.
+own unit only.
+
+A conversion has no leak check. Take a public target and a private source in one unit:
+no other unit can hold a value of the private source, so the conversion never runs
+outside its unit and gives nothing away. A public function that answers the private
+source is a leak, and the leak check already refuses that function.
 
 ---
 
-## 4. `??` on a `Maybe`
+## 4. What `??` takes
 
-`??` on a `Maybe` in a body with a channel is refused, with its own code. The program
-writes the error value:
+`??` takes a `Result@(T, E)`, by type identity, and nothing else. CE2507 refuses every
+other operand:
+
+- **A `Maybe`.** A `??` in a bare body is CE0131 as before, so `??` never applies to a
+  `Maybe`. The CE2507 help names `or_err`.
+- **A user enum shaped like a `Result` or a `Maybe`** (1.4). Its `Err` payload is out of
+  reach of E3, and its `None` has the fault of #1168. The type identity of Sushi is
+  nominal, so `??` reads the type and not its variant names.
+
+For a `Maybe`, the program writes the error value:
 
 <!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 fn first(i32[] xs) i32 | AppError:
-    let i32 v = xs.get(0).or_err(AppError.Empty)??
+    let i32 v = xs.get(0).or_err(nom AppError.Empty)??
     return Result.Ok(v)
 ```
 
-`extend Maybe@(T) or_err@(E)(nom E e) Result@(T, E)` is in the library. `E` is judged
-by E3 at each instance.
+`extend Maybe@(T) or_err@(E)(nom self, nom E e) Result@(T, E)` is in the library. `E` is
+judged by E3 at each instance.
+
+- The parameter is `nom`, because the value moves into the `Err` and a pass-through
+  generic needs `nom`. A mode is marked at both ends, so the call writes
+  `or_err(nom AppError.Empty)`, as `BufReader.new(nom f, 8192)` does.
+- The receiver is `nom self`, because the `Some` payload moves into the `Ok`. On a
+  temporary (`xs.get(0)`) nothing changes. A named `Maybe` is spent, which is the rule
+  `??` already has for a named wrapper.
 
 A `None` has no error value, so a conversion from "nothing" to an `E` is written at the
 site. Otherwise the compiler would have to invent a value, which is the fault of #1168.
@@ -274,14 +310,21 @@ A conversion that one site needs does not need a declaration:
 
 <!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
-let File f = open(path, FileMode.Read()).map_err(|IoError e| AppError.Config(e))??
+let File f = open(path, FileMode.Read()).map_err(|nom IoError e| AppError.Config(e))??
 ```
 
-`extend Result@(T, E) map_err@(F)(fn(nom E) -> F f) Result@(T, F)` is in the library,
-on the model of `ufcs-combinators.md`. Two existing limits apply. A bare lambda
-parameter is not inferred, so the parameter type is written. A lambda parameter cannot
-have an owning type, so for an error type that owns a resource the argument is a named
-function.
+`extend Result@(T, E) map_err@(F)(nom self, fn(nom E) -> F f) Result@(T, F)` is in the
+library, on the model of `ufcs-combinators.md`.
+
+- The function takes the error `nom`, because the error moves into the new value, as it
+  does in a conversion. A mode is part of a function type, so the lambda writes
+  `|nom IoError e|`.
+- The receiver is `nom self`, because the `Ok` value and the error both move into the new
+  `Result`. A named `Result` is spent.
+- Two existing limits apply. A bare lambda parameter is not inferred, so the parameter
+  type is written. A lambda parameter cannot have an owning type, so for an error type
+  that owns a resource the argument is a named function
+  (`fn wrap(nom ParseError e) AppError`).
 
 ---
 
@@ -381,16 +424,18 @@ fn notify(string host, string msg) ~ | AppError:
 
 | Fault | Diagnostic |
 |---|---|
-| The `E` of a `Result`, in either spelling and any position, is not an error type | One new code in place of CE2084 and CE2086. The message says what the type is. For a plain enum, the help says to declare it with `error` |
+| The `E` of a `Result`, in either spelling and any position, is not an error type | CE2084, with new wording. The message says what the type is. For a plain enum, the help says to declare it with `error`. CE2086 is retired |
 | A generic instance puts a non-error type in the `E` position | The same code at the instance, with a note at the template |
 | `??` with two error types and no declaration | CE2511. The help names `extend <E_in> as <E_out>`. "Not supported yet" is removed from its doc text |
 | `e as T` between two error types with no declaration | The invalid-cast error. The help names the declaration |
+| `e as T` on a borrowed error that owns a resource | The consuming-use-of-a-borrow error. The help names `e.clone() as T` |
 | A conversion outside the unit of its target type | New code, with a note at the target's declaration |
 | A generic or non-error source or target | New code |
 | An identity conversion | New code |
 | Two declarations of one pair | The duplicate-function error, with a note at the first declaration |
 | A `\| E` on a conversion | New code |
-| `??` on a `Maybe` in a body with a channel | New code in the CE25xx range. The help names `or_err(e)` |
+| `??` on a `Maybe` | CE2507, with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |
+| `??` on a user enum shaped like a `Result` or a `Maybe` | CE2507. The help says to answer a `Result@(T, E)` |
 | `as` with a conversion in a `const` initializer | The not-a-constant-expression error |
 
 The numbers are chosen when the work is built, each in the module that owns its range
@@ -413,7 +458,8 @@ The numbers are chosen when the work is built, each in the module that owns its 
 - **E3.** One predicate, "is an error type". It is called from `signature_result_arms`
   (`semantics/generics/results.py`), where CE2084 and CE2086 are emitted today, from the
   written-type walk (`validate_type_name`, `passes/types/utils.py`), and from the
-  monomorphizer where it validates type arguments.
+  monomorphizer where it validates type arguments. Every call emits CE2084. CE2086 is
+  removed from `internals/errors/types.py`.
 - **Libraries.** The `enum` row of a binary or hybrid manifest gets an `is_error` field
   (`backend/library_format.py`, read by `semantics/library_registration.py`). A source
   `.slib` carries the keyword as text. `--lib-info` and `slib-info` print `error`.
@@ -434,6 +480,10 @@ The numbers are chosen when the work is built, each in the module that owns its 
   The `??` check (`_error_arms_agree`, `passes/types/expressions.py`) and the cast check
   (`is_valid_cast`, `passes/types/compatibility.py`) both call it, and nothing else reads
   the table. A gate refuses a second reader.
+- **What `??` takes.** `_unwrapped_arms` (`passes/types/expressions.py`) asks whether
+  the operand IS a `Result` instance (`is_instance_of`, `semantics/type_predicates.py`),
+  and no longer reads variant names. The Maybe branch is removed, and so is the
+  `error_type=None` path into the backend.
 - **`typecheck`.** `validate_try_expression` and `validate_cast_expression` ask the seam
   and stamp the answer on the node (`TryExpr.inferred_conversion`,
   `CastExpr.inferred_conversion`). In a generic function the question is asked per
@@ -490,9 +540,11 @@ type and needs nothing from the IR.
    become `error`: `UrlError` (`net/url.sushi`), `ZError` (`compression/zlib.sushi`),
    `MpError` (`encoding/msgpack.sushi`) and `SlibError` (`toolchain/slib.sushi`). The
    seven predefined error types get the flag. Every test and doc enum used as an `E`
-   becomes `error`. The CE2084 and CE2086 fixtures move to the new code.
-2. **`??` on a `Maybe` (C8) and `or_err`.** This fixes #1168. Every `??` on a `Maybe` in a
-   body with a channel becomes `.or_err(e)??`; #1168 has the count.
+   becomes `error`. The CE2086 fixtures move to CE2084, and the CE2084 fixtures keep
+   their code.
+2. **What `??` takes (C8) and `or_err`.** This fixes #1168. Every `??` on a `Maybe` in a
+   body with a channel becomes `.or_err(nom e)??`; #1168 has the count. No fixture uses
+   `??` on a user enum shaped like a `Result`.
 3. **The conversion.** `FileError.to_io()` and `NetError.to_io()` become
    `extend FileError as IoError` and `extend NetError as IoError` in their home modules,
    and the `to_io()` methods are deleted. The 14 matches in `io/fs.sushi` and
@@ -503,7 +555,7 @@ type and needs nothing from the IR.
 Each step is a breaking change, and no compatibility form is kept. The docs that change
 are `docs/error-handling.md`, `docs/tutorial/06-error-handling.md`,
 `docs/stdlib/result.md`, `docs/stdlib/maybe.md`, `docs/language-reference.md`, and the
-doc text of CE2508 and CE2511.
+doc text of CE2084, CE2507, CE2508 and CE2511.
 
 ---
 
@@ -528,8 +580,11 @@ Test-first, under `tests/types/result/error_types/` and
 | a conversion in a lambda, in `foreach(x?? in ...)` and in a generic instance | `EXPECT_STDOUT_EXACT` |
 | a conversion behind an alias | `EXPECT_STDOUT_EXACT` |
 | a chain is not followed | `test_err_`, CE2511 |
-| `??` on a `Maybe` in a body with a channel, and `or_err` | `test_err_`; a run fixture at `--opt none` and `--opt O2` with one `EXPECT_STDOUT_EXACT` |
-| `map_err` with a lambda and with a named function | `EXPECT_STDOUT_EXACT` |
+| `??` on a `Maybe` in a body with a channel, and `or_err` | `test_err_` CE2507; a run fixture at `--opt none` and `--opt O2` with one `EXPECT_STDOUT_EXACT` |
+| `??` on a user enum with `Ok`/`Err` variants, and one with `Some`/`None` | `test_err_` CE2507 |
+| `or_err` on a named `Maybe`, used again after the call | `test_err_`, the use-after-move error |
+| `as` on a borrowed owning error, and `e.clone() as T` | `test_err_` for the first; `EXPECT_NO_LEAKS` for the second |
+| `map_err` with a `nom` lambda and with a named function | `EXPECT_STDOUT_EXACT` |
 | each refusal in section 7 | `test_err_`, one fixture per code |
 | a new conversion or flag rebuilds the dependent unit | REBUILD form, `EXPECT_REBUILT` |
 
@@ -578,3 +633,13 @@ follows every rule of section 3.
 `??` would stay legal on a `Maybe` where `E` is `StdError`, and build `StdError.Error`.
 Fewer sites change, but the compiler still supplies a value that the source does not
 spell.
+
+### 12.6 Other choices on the details
+
+| Choice | Why not |
+|---|---|
+| A new code for E3, and CE2084 and CE2086 both retired | CE2084 already means "`E` is not an error type". Only its predicate changes, and its fixtures keep their code |
+| `as` with a `nom` marker (`nom e as T`) | `??` spends the error with no marker, and a constructor consumes its argument by position. `as` is one more position of that kind |
+| `as` that borrows its operand | One body cannot have two receiver modes. The conversion consumes `self` for `??`, so `as` consumes too |
+| A leak check on a conversion | A conversion with a private source never runs outside its unit, so the check would refuse nothing that matters |
+| `??` that keeps reading variant names | It leaves a path around E3 and around the fix of #1168, and it reads the shape of a type, where identity is nominal |
