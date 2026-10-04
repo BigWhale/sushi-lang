@@ -38,7 +38,8 @@ class ConsumingUse(Enum):
     CAPTURE = "capture"                  # a lambda's captured environment slot
     OWN_ALLOC = "own_alloc"              # Own.alloc(<source>)
     MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
-    RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25
+    RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25,
+                                         # and `e as T`, whose conversion takes `nom self`
     TRY = "try"                          # r?? -- the unwrap spends a wrapper the writer owns (#548)
 
 

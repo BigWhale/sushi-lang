@@ -8,6 +8,7 @@ from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
 from sushi_lang.semantics.generics.results import signature_result_arms
 from sushi_lang.semantics.error_types import reject_non_error_type
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.collect.functions import is_explicit_result_type
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
@@ -225,7 +226,11 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
     # Whether this body is one of many copies of one source: a perk-implementation
     # method cut per instantiation is (#800); an extension method never is.
     self.reporter.enter_body(method)
-    _enter_body(self, method, method.name, "method", method.ret, method.err_type,
+    name, kind = method.name, "method"
+    if getattr(method, "is_conversion", False):
+        name = f"{display_type(target_type)} as {display_type(method.ret)}"
+        kind = "conversion"
+    _enter_body(self, method, name, kind, method.ret, method.err_type,
                 method.err_span or method.name_span)
 
     _register_self(self, target_type, getattr(method, "self_mode", None))

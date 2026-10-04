@@ -541,8 +541,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return inferred
 
     def visit_castexpr(self, node: CastExpr) -> Optional[Type]:
-        """Cast expression - return the target type."""
-        return node.target_type
+        """Cast expression - return the target type, resolved when it names a declaration."""
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        validator = self.type_validator
+        return resolve_unknown_type(node.target_type, validator.struct_table.by_name,
+                                    validator.enum_table.by_name)
 
     def visit_enumconstructor(self, node: EnumConstructor) -> Optional[Type]:
         """EnumConstructor - return the enum type (including Result.Ok/Result.Err)."""

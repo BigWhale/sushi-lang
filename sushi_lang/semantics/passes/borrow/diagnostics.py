@@ -195,7 +195,7 @@ def no_clone_reason(text: str) -> str:
 
 
 def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
-                handover: bool = True) -> str:
+                handover: bool = True, converted_to: Optional[str] = None) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
@@ -204,9 +204,13 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     owner is `.share()` when the type of `text` has one (#1023); otherwise the help names
     only the escapes that compile. `value_type` is the type of `text` when `ty` is the
     type of its owner. `handover` is False where a `nom` parameter is no escape (a write
-    through a pattern binding).
+    through a pattern binding). `converted_to` names the target of an `as` conversion,
+    which consumes its operand (docs/design/error-conversion.md section 3.2).
     """
     if not refuses_clone(checker, ty):
+        if converted_to is not None:
+            return (f"clone it, and convert the copy: "
+                    f"`{text}.clone() as {converted_to}`")
         return f"clone it to take an independent value: `{text}.clone()`"
     no_clone = f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`"
     if answers_share(checker, ty if value_type is None else value_type):
@@ -243,7 +247,8 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
     return " -- otherwise " + escape_help(checker, text, ty, handover=False)
 
 
-def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
+def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
+                         converted_to: Optional[str] = None) -> None:
     """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
     text = expr_to_string(expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
@@ -258,12 +263,14 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr)))
+    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr),
+                          converted_to=converted_to))
     diag.emit()
 
 
 def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
-                           use_span: Optional[Span], state: BorrowState) -> None:
+                           use_span: Optional[Span], state: BorrowState,
+                           converted_to: Optional[str] = None) -> None:
     """Report CE2411, pointing at the binding or declaration as well as the use."""
     diag = checker.err.emit_with(er.ERR.CE2411, use_span, name=name)
     for kind in BORROW_KINDS:
@@ -273,7 +280,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             if note_span is not None:
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
-    diag.help(escape_help(checker, name, state.var_type))
+    diag.help(escape_help(checker, name, state.var_type, converted_to=converted_to))
     diag.emit()
 
 

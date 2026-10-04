@@ -34,6 +34,7 @@ from sushi_lang.semantics.ast import (
     UnaryOp,
 )
 from sushi_lang.semantics import array_runs
+from sushi_lang.semantics.generics.type_display import display_type
 
 from .borrows import check_borrow
 from .calls import (
@@ -79,7 +80,14 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case BinaryOp():
             check_expr(checker, expr.left)
             check_expr(checker, expr.right)
-        case UnaryOp() | CastExpr():
+        case CastExpr():
+            check_expr(checker, expr.expr)
+            # `as` with a conversion consumes its operand by POSITION, unmarked, as a
+            # constructor argument does (docs/design/error-conversion.md section 3.2).
+            if expr.inferred_conversion is not None:
+                consume(checker, expr.expr,
+                        converted_to=display_type(expr.inferred_conversion.target))
+        case UnaryOp():
             check_expr(checker, expr.expr)
         case TryExpr():
             # `r??` is a consuming position of its own: an owned wrapper is spent here

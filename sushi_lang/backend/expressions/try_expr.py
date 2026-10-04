@@ -48,6 +48,14 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
 
     codegen.builder.position_at_end(propagate_block)
 
+    # Two error types: the declared conversion takes the error BEFORE the scope cleanup
+    # runs (docs/design/error-conversion.md section 8.2). The extracted error has no
+    # cleanup registration, so the conversion is its one owner and it is freed once.
+    conversion = expr.inferred_conversion
+    if conversion is not None:
+        from sushi_lang.backend.expressions.casts import emit_conversion_call
+        error_value = emit_conversion_call(codegen, conversion, error_value)
+
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen)
 

@@ -3,11 +3,28 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import CastExpr, IntLit, UnaryOp
 from sushi_lang.backend.utils import require_builder
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.conversions import Conversion
+
+
+def emit_conversion_call(codegen: 'LLVMCodegen', conversion: 'Conversion',
+                         error_value: ir.Value) -> ir.Value:
+    """Call the body of a declared conversion on one error value, and answer the target.
+
+    The ONE call site of a conversion, for `as` and for the propagate path of `??`
+    (docs/design/error-conversion.md section 8.2). The body takes `nom self`, so the
+    value crosses BY VALUE and the body frees what it does not put in the target. The
+    caller has already given the value to it: the body is its one owner.
+    """
+    llvm_fn = codegen.funcs.get(conversion.symbol)
+    if llvm_fn is None:
+        raise_internal_error("CE0025", name=conversion.symbol)
+    return codegen.builder.call(llvm_fn, [error_value], name="converted")
 
 
 def classify_type_for_cast(llvm_type: ir.Type) -> str:
@@ -82,6 +99,16 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
             return ir.Constant(target_ll, literal & mask)
 
     source_value = codegen.expressions.emit_expr(expr.expr)
+
+    # Between two error types, `as` calls the declared conversion, and the conversion
+    # consumes its operand by position (design 3.2): the operand is its `nom self`.
+    conversion = expr.inferred_conversion
+    if conversion is not None:
+        from sushi_lang.backend import ownership
+        source_value = ownership.consume(codegen, expr.expr, source_value,
+                                         conversion.source,
+                                         ownership.ConsumingUse.RECEIVER)
+        return emit_conversion_call(codegen, conversion, source_value)
 
     source_llvm_type = source_value.type
     target_llvm_type = codegen.types.ll_type(expr.target_type)

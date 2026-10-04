@@ -8,8 +8,9 @@ from sushi_lang.semantics.typesys import (
     BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, deref_type)
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
+from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.type_predicates import (
-    BUILTIN_INTEGER_TYPES, is_instance_of, is_integer_type, is_numeric_type)
+    BUILTIN_INTEGER_TYPES, is_error_type, is_instance_of, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .arrays import (
@@ -20,6 +21,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
+    from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.typesys import Type
 
 
@@ -117,9 +119,24 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     if source_type is None:
         return
 
-    if not is_valid_cast(source_type, target_type):
-        er.emit(validator.reporter, er.ERR.CE2014, expr.loc,
-               source=display_type(source_type), target=display_type(target_type))
+    # Between two error types, `as` calls the declared conversion of the pair (design
+    # 3.2), the one lookup of `semantics/conversions.py`. The target is stamped resolved,
+    # so the backend and every later reader see the type and not the written name.
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    resolved_target = resolve_unknown_type(target_type, structs, enums)
+    conversion = find_conversion(validator.tables, source_type, resolved_target)
+    expr.inferred_conversion = conversion
+    if conversion is not None:
+        expr.target_type = conversion.target
+
+    if not is_valid_cast(source_type, resolved_target, conversion):
+        diag = er.emit_with(validator.reporter, er.ERR.CE2014, expr.loc,
+                            source=display_type(source_type),
+                            target=display_type(target_type))
+        if is_error_type(source_type) and is_error_type(resolved_target):
+            diag.help(conversion_help(source_type, resolved_target))
+        diag.emit()
 
 
 def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
@@ -181,10 +198,11 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
     if arms is None:
         return
 
-    if not _error_arms_agree(validator, expr, arms, channel):
+    agreed, conversion = _error_arms_agree(validator, expr, arms, channel)
+    if not agreed:
         return
 
-    _annotate_try_expr(expr, inner_type, arms, channel)
+    _annotate_try_expr(expr, inner_type, arms, channel, conversion)
 
 
 def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
@@ -239,41 +257,73 @@ def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional[
     return None
 
 
-def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr',
-                      arms: _Arms, channel: 'Type') -> bool:
-    """Whether the operand's failure arm names the channel's, or CE2511.
+def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
+                      channel: 'Type') -> Tuple[bool, Optional['Conversion']]:
+    """Whether the operand's failure arm reaches the channel's, and through which conversion.
 
-    Strict matching with no conversion. The two sides used to be compared as STRINGS,
-    because one Result had many instances; both are interned now, so they compare as
-    types.
+    The same type propagates unchanged. Two error types propagate through the declared
+    conversion of the pair, the one lookup of `semantics/conversions.py`, and nothing
+    else (docs/design/error-conversion.md section 3.3): a chain is never followed.
+    Otherwise it is CE2511, and the help names the declaration to write. In a generic
+    function the pair is asked per instance, because the typecheck pass checks each
+    instance's own copy of the body.
     """
     outer_ok_type, outer_err_type = result_ok_err(channel)
     inner_err_type = arms.error_type
 
     if inner_err_type is None:
-        return True
+        return True, None
 
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
-    if (resolve_unknown_type(inner_err_type, structs, enums)
-            == resolve_unknown_type(outer_err_type, structs, enums)):
-        return True
+    inner = resolve_unknown_type(inner_err_type, structs, enums)
+    outer = resolve_unknown_type(outer_err_type, structs, enums)
+    if inner == outer:
+        return True, None
 
-    er.emit(validator.reporter, er.ERR.CE2511, expr.loc,
-            ok_type=display_type(outer_ok_type),
-            inner_err=display_type(inner_err_type),
-            outer_err=display_type(outer_err_type))
-    return False
+    conversion = find_conversion(validator.tables, inner, outer)
+    if conversion is not None:
+        return True, conversion
+
+    er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
+                 ok_type=display_type(outer_ok_type),
+                 inner_err=display_type(inner_err_type),
+                 outer_err=display_type(outer_err_type)) \
+        .help(conversion_help(inner, outer)).emit()
+    return False, None
+
+
+def conversion_help(source: 'Type', target: 'Type') -> str:
+    """The help that names the conversion to declare, for `??` (CE2511) and `as` (CE2014).
+
+    It never offers `r?? as T`: `as` binds after `??`, so that spelling casts the VALUE.
+    """
+    from sushi_lang.semantics.passes.collect.enums import PREDEFINED_ENUM_HOMES
+    source_text, target_text = display_type(source), display_type(target)
+    declaration = f"`extend {source_text} as {target_text}:`"
+    name = getattr(target, "name", None)
+    if name in PREDEFINED_ENUM_HOMES:
+        home = PREDEFINED_ENUM_HOMES[name]
+        if home is None:
+            return (f"no unit may declare a conversion into '{target_text}', because it "
+                    f"has no home module; answer an error type of your own, and "
+                    f"declare {declaration} with it")
+        return (f"only <{home}> may declare {declaration}; answer an error type of "
+                f"your own, and convert both errors into it")
+    return (f"declare {declaration} in the unit that declares '{target_text}', and "
+            f"return the converted value")
 
 
 def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
-                       arms: _Arms, channel: 'Type') -> None:
+                       arms: _Arms, channel: 'Type',
+                       conversion: Optional['Conversion']) -> None:
     """Annotate TryExpr AST node with inferred type information."""
     expr.inferred_inner_type = inner_type
     expr.inferred_unwrapped_type = arms.value_type
     expr.inferred_success_tag = arms.success_tag
     expr.inferred_error_type = arms.error_type
     expr.inferred_func_return_type = channel
+    expr.inferred_conversion = conversion
 
 
 def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
