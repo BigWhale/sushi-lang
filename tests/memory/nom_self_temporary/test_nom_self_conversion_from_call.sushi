@@ -1,0 +1,43 @@
+# A conversion is a `nom self` body. Its operand is an error temporary that a function
+# call answers, and the error holds a string. The conversion keeps the string in one
+# target and destroys it in the other, so each value is freed once (#1169). A named
+# local operand is spent by the `as`, and its scope exit frees nothing.
+# EXPECT_STDOUT_EXACT: "AppError.Token(TokenError.Bad("bad 1"))\nAppError.Short(4)\nAppError.Token(TokenError.Bad("bad 3"))\nAppError.Token(TokenError.Bad("bad 4"))\n"
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+error TokenError:
+    Bad(string)
+
+error NoteError:
+    Note(string)
+
+error AppError:
+    Token(TokenError)
+    Short(i32)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+extend NoteError as AppError:
+    match self:
+        NoteError.Note(s) -> return AppError.Short(s.len())
+
+fn make_err(i32 n) TokenError:
+    return TokenError.Bad("bad {n}")
+
+fn make_note(i32 n) NoteError:
+    return NoteError.Note("n {n}!")
+
+fn show(AppError e) ~:
+    println(e)
+
+fn main() i32:
+    let AppError a = make_err(1) as AppError
+    println(a)
+    println(make_note(2) as AppError)
+    show(make_err(3) as AppError)
+    let TokenError t = make_err(4)
+    let AppError b = t as AppError
+    println(b)
+    return 0
