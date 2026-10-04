@@ -69,6 +69,14 @@ def _named_type(ty: Type, structs: dict, enums: dict) -> Optional[Type]:
     return ty
 
 
+def non_error_type(ty: Type, structs: dict, enums: dict) -> Optional[Type]:
+    """The type an `E` position names when it is NOT an error type; else None (E3)."""
+    named = _named_type(ty, structs, enums)
+    if named is None or is_error_type(named):
+        return None
+    return named
+
+
 def _kind_of(ty: Type) -> str:
     """What the refused type is, in the words of the message."""
     if isinstance(ty, EnumType):
@@ -102,8 +110,8 @@ def reject_non_error_type(reporter: Reporter, ty: Type, span: Optional[Span],
     caller judges a generic instance. A plain enum that a unit declares gets the help to
     declare it with `error`; a predefined plain enum (`FileMode`, `SeekFrom`) does not.
     """
-    named = _named_type(ty, structs, enums)
-    if named is None or is_error_type(named):
+    named = non_error_type(ty, structs, enums)
+    if named is None:
         return False
     diagnostic = er.emit_with(reporter, er.ERR.CE2084, span, filename=filename,
                               type_name=display_type(named), kind=_kind_of(named))

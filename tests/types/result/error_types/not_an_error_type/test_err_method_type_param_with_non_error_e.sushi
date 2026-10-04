@@ -1,0 +1,19 @@
+# Design 2.5 item 2 (E4): a method-level type parameter in the `E` position is judged at
+# each instance. The diagnostic is at the call, and a note points at the template.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: = note:
+# EXPECT_STDERR_CONTAINS: test_err_method_type_param_with_non_error_e.sushi:13:
+# EXPECT_STDERR_CONTAINS: test_err_method_type_param_with_non_error_e.sushi:18:
+enum Color:
+    Red
+
+struct Holder:
+    i32 n
+
+extend Holder fail@(E)(nom E e) i32 | E:
+    return Result.Err(e)
+
+fn main() i32:
+    let Holder h = Holder(1)
+    println(h.fail(nom Color.Red).realise(0))
+    return 0

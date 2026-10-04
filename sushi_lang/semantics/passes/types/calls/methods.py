@@ -313,6 +313,11 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     full_subst = dict(receiver_subst)
     full_subst.update(dict(zip(margs_names, margs, strict=True)))
 
+    # E3 at the call, which is the instance: no copy is cut for a refused argument.
+    if _refuses_non_error_arguments(validator, template, receiver_type, full_subst, call,
+                                    report):
+        return RESOLUTION_REPORTED if report else None
+
     ret = (substitute_type_params(template.ret_type, full_subst)
            if template.ret_type is not None else None)
     err = (substitute_type_params(template.err_type, full_subst)
@@ -343,6 +348,44 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     _queue_extension_instantiation(validator, template, receiver_type,
                                    receiver_args, margs)
     return concrete
+
+
+def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_type,
+                                 substitution, call, report: bool) -> bool:
+    """CE2084 for a type argument of this call in an `E` position of the template (E3).
+
+    docs/design/error-conversion.md section 2.5, item 2: the call that solves the
+    arguments is the instance, and the note is at the template. One instance is
+    reported one time, at its first call. `report=False` asks the same question and
+    emits nothing.
+    """
+    from sushi_lang.semantics.error_types import non_error_type, reject_non_error_type
+    from sushi_lang.semantics.generics.monomorphize.functions import (
+        callable_error_parameters)
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    positions = callable_error_parameters(
+        template.ret_type, template.err_type, template.err_span or template.ret_span,
+        template.params, template.body, template.name_span, substitution)
+    key = (_resolved(validator, receiver_type), template.name,
+           tuple(_resolved(validator, substitution[name]) for name in sorted(positions)))
+    refused_keys = getattr(validator.tables, "refused_extension_keys", None)
+    if refused_keys is not None and key in refused_keys:
+        return True
+    if not report:
+        return any(non_error_type(substitution[name], structs, enums) is not None
+                   for name in positions)
+    refused = False
+    for name, note_span in positions.items():
+        note = (f"the template uses the type parameter '{name}' as an error type here",
+                note_span, template.filename)
+        if reject_non_error_type(validator.reporter, substitution[name], call.loc,
+                                 structs, enums, note=note):
+            refused = True
+    if refused and refused_keys is not None:
+        refused_keys.add(key)
+    return refused
 
 
 def _perk_answers(validator: 'TypeValidator', call: MethodCall, receiver_type) -> bool:

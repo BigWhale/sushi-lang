@@ -1,0 +1,20 @@
+# Design 2.5 item 2 (E4): a type parameter of a generic extension target in the `E`
+# position is judged at each instance. The written type `Box@(Color)` makes the copy, so
+# the diagnostic is there, and a note points at the template.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: = note:
+# EXPECT_STDERR_CONTAINS: test_err_generic_extension_target_with_non_error_e.sushi:14:
+# EXPECT_STDERR_CONTAINS: test_err_generic_extension_target_with_non_error_e.sushi:18:
+enum Color:
+    Red
+
+struct Box@(T):
+    T v
+
+extend Box@(T) fail() i32 | T:
+    return Result.Err(self.v)
+
+fn main() i32:
+    let Box@(Color) b = Box(Color.Red)
+    println(b.fail().realise(0))
+    return 0

@@ -153,15 +153,31 @@ class Monomorphizer:
         from sushi_lang.semantics.error_types import reject_non_error_type
         valid = True
         for position, param in enumerate(type_params):
-            if param.name not in error_params or param.is_pack or position >= len(type_args):
+            name = getattr(param, "name", param)
+            if (name not in error_params or getattr(param, "is_pack", False)
+                    or position >= len(type_args)):
                 continue
-            note = (f"the template uses the type parameter '{param.name}' as an error type here",
-                    error_params[param.name], template_file)
+            note = (f"the template uses the type parameter '{name}' as an error type here",
+                    error_params[name], template_file)
             if reject_non_error_type(self.reporter, type_args[position], span,
                                      self.struct_table.by_name, self.enum_table.by_name,
                                      filename=filename, note=note):
                 valid = False
         return valid
+
+    def error_arguments_hold(self, type_params, type_args, error_params, site_key,
+                             template_file) -> bool:
+        """E3 at a copy that no constraint check reads: a generic-target extension's.
+
+        The type instance that cuts the copy is the instance: the diagnostic is at the
+        site that named it. A refusal stops the analysis, as a refused constraint does.
+        """
+        span, filename = self.sites.get(site_key, (None, None))
+        if self._error_arguments_hold(type_params, type_args, error_params, span,
+                                      filename, template_file):
+            return True
+        self.constraint_violations += 1
+        return False
 
     def was_refused(self, key: object) -> bool:
         """A constraint refused this instantiation, and it was reported one time."""

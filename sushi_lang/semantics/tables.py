@@ -61,6 +61,9 @@ class SymbolTables:
     # (receiver, method, margs), which is also what keeps the copy's symbol unique.
     pending_extension_instantiations: list = field(default_factory=list)
     queued_extension_keys: set = field(default_factory=set)
+    # The (receiver, method, margs) keys that E3 refused at a call: one CE2084 for each,
+    # at the first call, as for a generic function's instance.
+    refused_extension_keys: set = field(default_factory=set)
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
