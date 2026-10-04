@@ -44,6 +44,15 @@ def reexported_libraries(manifest: dict) -> tuple[str, ...]:
                  if record.get("kind") == "library" and record.get("path"))
 
 
+def manifest_conversions(manifest: dict) -> tuple[dict, ...]:
+    """One library's `conversions` records: `{"source", "target", "link_symbol"}` each.
+
+    The ONE reader of the key (docs/design/error-conversion.md 8.2). A manifest with no
+    key has no conversion: a library that declares none writes none.
+    """
+    return tuple((manifest or {}).get("conversions") or ())
+
+
 def manifest_dependencies(manifest: dict) -> tuple[dict, ...]:
     """One library's `dependencies` records: `{"path", "kind", ...}` each (#1120).
 

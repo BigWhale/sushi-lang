@@ -214,6 +214,7 @@ class LibraryRegistration:
         self._register_generic_perk_impls()
         self._reject_foreign_drops(compilation_order)
         self._register_extensions(build_units)
+        self._register_conversions()
         self._register_generic_extensions(build_units)
         self._register_generic_functions(build_units, consumer_units)
 
@@ -868,6 +869,54 @@ class LibraryRegistration:
                 ret=sig.ret_type, body=Block(loc=None, statements=[]),
                 self_mode=self_mode,
                 err_type=sig.err_type, is_static=is_static))
+
+    def _register_conversions(self) -> None:
+        """Register the conversions the libraries ship (docs/design/error-conversion.md 8.2).
+
+        A record is a pair of type names and the symbol of the body, which is in the
+        library's bitcode. The pair goes to the conversion table, and a declaration of
+        the body goes to the backend, as for an extension method; the conversion is not
+        filed in the extension table (ruling P6). The types are read against a copy of
+        the tables taken after the private types, as for an extension method.
+
+        Only the unit that declares the target may declare a conversion (C5), so a pair
+        that the table holds already means that two libraries declare one target type:
+        that clash has its own diagnostic, and the second record adds nothing.
+        """
+        from sushi_lang.semantics.ast import CONVERSION_METHOD, Block, ExtendDef
+        from sushi_lang.semantics.conversions import Conversion, conversion_symbol
+        from sushi_lang.semantics.library_registry import manifest_conversions
+        from sushi_lang.semantics.type_resolution import parse_type_string
+        from sushi_lang.semantics.typesys import EnumType
+
+        struct_table, enum_table = self._type_tables()
+        for lib_name, manifest in self._manifests():
+            lib_file = self._library_file(lib_name)
+            for record in manifest_conversions(manifest):
+                source = parse_type_string(record["source"], struct_table, enum_table)
+                target = parse_type_string(record["target"], struct_table, enum_table)
+                symbol = record["link_symbol"]
+                if not (isinstance(source, EnumType) and source.is_error
+                        and isinstance(target, EnumType) and target.is_error):
+                    raise SushiError(
+                        "CE3512", path=lib_file,
+                        reason=f"conversion '{record['source']} as {record['target']}' "
+                               "does not name two error types")
+                if symbol != conversion_symbol(source, target):
+                    raise SushiError(
+                        "CE3512", path=lib_file,
+                        reason=f"conversion '{source.name} as {target.name}' names the "
+                               f"symbol '{symbol}'")
+                first = self.tables.conversions.file(Conversion(
+                    source=source, target=target, symbol=symbol,
+                    unit_name=library_unit(lib_name, record.get("unit")),
+                    filename=lib_file))
+                if first is not None:
+                    continue
+                self.shipped_extensions.append(ExtendDef(
+                    loc=None, target_type=source, name=CONVERSION_METHOD, params=[],
+                    ret=target, body=Block(loc=None, statements=[]), self_mode="nom",
+                    method_type_args=(target,)))
 
     def _register_generic_extensions(self, build_units: set[str]) -> None:
         """Register the extension TEMPLATES the libraries ship.

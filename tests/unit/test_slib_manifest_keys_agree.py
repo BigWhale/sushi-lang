@@ -72,6 +72,7 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "reexport": [(MANIFEST, G + "_extract_reexports")],
     "not_exported": [(MANIFEST, G + "_extract_not_exported")],
     "foreign_extension": [(MANIFEST, G + "_extract_foreign_extensions")],
+    "conversion": [(MANIFEST, G + "_extract_conversions"), _DOCUMENTED],
     "dependency": [(MANIFEST, G + "_extract_dependencies")],
     "closure_summary": [(MANIFEST, G + "_closure_records")],
 }
@@ -95,6 +96,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRATION, R + "_record_public_types"): {
         "manifest": "manifest", "record": ("struct", "enum")},
     (REGISTRATION, R + "_register_extensions"): {"record": "extension"},
+    (REGISTRATION, R + "_register_conversions"): {"record": "conversion"},
     (REGISTRATION, R + "_register_functions"): {
         "manifest": "manifest", "record": "function"},
     (REGISTRATION, R + "_register_generic_extensions"): {
@@ -106,6 +108,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (REGISTRY, "manifest_reexports"): {},
     (REGISTRY, "reexported_libraries"): {"record": "reexport"},
     (REGISTRY, "manifest_dependencies"): {},
+    (REGISTRY, "manifest_conversions"): {},
     (REGISTRY, "library_dependencies"): {"record": "dependency"},
     (REGISTRY, "stdlib_dependencies"): {"record": "dependency"},
     (NAMESPACES, "build_compiled_library_namespaces"): {"record": "dependency"},
@@ -139,6 +142,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (LIB_INFO, "_impl_line"): {"impl": "perk_impl"},
     (LIB_INFO, "_extension_line"): {"ext": "extension"},
     (LIB_INFO, "_foreign_line"): {"claim": "foreign_extension"},
+    (LIB_INFO, "_conversion_line"): {"conv": "conversion"},
     (LIB_INFO, "_dependency_line"): {"dep": "dependency"},
     (LIB_INFO, "_own_doc"): {"record": "function"},
     (LIB_INFO, "_unit_doc"): {"metadata": "manifest"},
@@ -155,7 +159,7 @@ SUSHI_READER: dict[str, set[str]] = {
                  "platform", "compiler_version", "compiled_at", "sushi_lib_version",
                  "units", "unit_docs", "reexports", "public_functions",
                  "public_constants", "public_variables", "structs", "enums",
-                 "templates", "foreign_extensions", "dependencies"},
+                 "templates", "foreign_extensions", "conversions", "dependencies"},
     "templates": {"generic_functions", "generic_structs", "generic_enums", "perks",
                   "perk_impls", "generic_perk_impls", "extensions", "generic_extensions"},
     "function": {"name", "params", "return_type", "error_type", "type_params", "doc"},
@@ -176,6 +180,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "example": {"code", "caption"},
     "reexport": {"unit", "path", "kind"},
     "foreign_extension": {"type", "method"},
+    "conversion": {"source", "target", "doc"},
     "dependency": {"path", "kind", "library_name", "library_version", "units"},
 }
 

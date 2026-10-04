@@ -168,7 +168,8 @@ def _skip_source_section(f: BinaryIO, path: str) -> int:
 # receiver mode (#537). 8: every function, helper and method record states `has_channel`,
 # because a signature without `| E` is bare and no longer means `| StdError`
 # (docs/design/error-channel.md). 9: an `enum` row and a `generic_type` record of a
-# generic enum state `is_error` (docs/design/error-conversion.md section 8.1).
+# generic enum state `is_error` (docs/design/error-conversion.md section 8.1), and the
+# manifest lists its `conversions` (section 8.2).
 TEMPLATES_SCHEMA_VERSION = 9
 
 
@@ -199,6 +200,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "templates", "@templates", "no"),
     ("manifest", "not_exported", "[]not_exported", "no"),
     ("manifest", "foreign_extensions", "[]foreign_extension", "no"),
+    ("manifest", "conversions", "[]conversion", "no"),
     ("manifest", "dependencies", "[]dependency", "no"),
     ("templates", "generic_functions", "[]function", "no"),
     ("templates", "generic_structs", "[]generic_type", "no"),
@@ -297,6 +299,11 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("extension", "link_symbol", "str", "no"),
     ("extension", "source", "str", "no"),
     ("extension", "doc", "@doc", "no"),
+    ("conversion", "source", "str", "yes"),
+    ("conversion", "target", "str", "yes"),
+    ("conversion", "link_symbol", "str", "yes"),
+    ("conversion", "unit", "str", "no"),
+    ("conversion", "doc", "@doc", "no"),
     ("doc", "summary", "str", "no"),
     ("doc", "body", "str", "no"),
     ("doc", "params", "map", "no"),
