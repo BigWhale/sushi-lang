@@ -29,7 +29,7 @@ Status: ACCEPTED. The rulings are David's (2026-10-04). Nothing is built yet.
 | **C6** | The source and the target are non-generic error types | 3.6 |
 | **C7** | The body is bare, and it consumes `self` | 3.7 |
 | **C8** | `??` takes a `Result@(T, E)` only. A `Maybe` and an enum shaped like a `Result` or a `Maybe` are refused. `or_err(nom e)` is the form for a `Maybe` (#1168) | 4 |
-| **C9** | `map_err` is in the library from the first version | 5 |
+| **C9** | `or_err` and `map_err` are built-in methods, beside `.realise()` and `.err()`, and need no import. `map_err` ships in the first version | 4, 5 |
 | **C10** | A `from` marker on a variant is deferred | 9.1 |
 | **C11** | A conversion has no leak check | 3.8 |
 
@@ -283,8 +283,10 @@ fn first(i32[] xs) i32 | AppError:
     return Result.Ok(v)
 ```
 
-`extend Maybe@(T) or_err@(E)(nom self, nom E e) Result@(T, E)` is in the library. `E` is
-judged by E3 at each instance.
+`or_err` is a built-in method of `Maybe@(T)`, beside `.realise()`, so it needs no import.
+Its signature, written as an extension, is
+`extend Maybe@(T) or_err@(E)(nom self, nom E e) Result@(T, E)`. `E` is judged by E3 at
+each instance.
 
 - The parameter is `nom`, because the value moves into the `Err` and a pass-through
   generic needs `nom`. A mode is marked at both ends, so the call writes
@@ -312,8 +314,11 @@ A conversion that one site needs does not need a declaration:
 let File f = open(path, FileMode.Read()).map_err(|nom IoError e| AppError.Config(e))??
 ```
 
-`extend Result@(T, E) map_err@(F)(nom self, fn(nom E) -> F f) Result@(T, F)` is in the
-library, on the model of `ufcs-combinators.md`.
+`map_err` is a built-in method of `Result@(T, E)`, beside `.realise()` and `.err()`, so it
+needs no import. Its signature, written as an extension, is
+`extend Result@(T, E) map_err@(F)(nom self, fn(nom E) -> F f) Result@(T, F)`. The
+method-level type parameter `F` is solved from the function argument, as for the
+combinators of `ufcs-combinators.md`.
 
 - The function takes the error `nom`, because the error moves into the new value, as it
   does in a conversion. A mode is part of a function type, so the lambda writes
