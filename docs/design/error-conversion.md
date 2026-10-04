@@ -310,6 +310,11 @@ each instance.
   `or_err` answers then carries the borrow, so `let string s = xs.get(0).or_err(nom e)??`
   binds a borrow, exactly as `xs.get(0)??` did, and consuming it is the
   consuming-use-of-a-borrow error. No clone is needed (ruled 2026-10-04).
+- A read-through `or_err` (a borrowed `Maybe` whose payload owns a resource) is legal
+  only as the operand of `??`. Its `Result` holds a borrowed `Ok` and an owned `Err`, and
+  only `??` takes both apart: the `Err` moves out, and the `Ok` binds a borrow. Anywhere
+  else (a `let`, a method call such as `.is_ok()`, a `match`, an argument) it is refused,
+  and the help names `.clone().or_err(...)` and the `??` form (ruled 2026-10-04).
 
 A `None` has no error value, so a conversion from "nothing" to an `E` is written at the
 site. Otherwise the compiler would have to invent a value, which is the fault of #1168.
