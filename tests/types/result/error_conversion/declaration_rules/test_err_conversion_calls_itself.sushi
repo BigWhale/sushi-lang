@@ -1,0 +1,19 @@
+# A conversion that casts a value of its own source into its own target calls itself:
+# `self` is always a value of the source, so the call never ends. It is refused at the
+# cast, with the conversion's declaration in a note.
+# EXPECT_ERROR_CODES_EXACT: CE2523
+# EXPECT_STDERR_CONTAINS: = note:
+error LowError:
+    Bad
+    Gone
+
+error AppError:
+    Low
+
+extend LowError as AppError:
+    match self:
+        LowError.Bad -> return LowError.Gone as AppError
+        LowError.Gone -> return self as AppError
+
+fn main() i32:
+    return 0
