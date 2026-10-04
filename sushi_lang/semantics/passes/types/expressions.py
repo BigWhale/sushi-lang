@@ -135,7 +135,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
                             source=display_type(source_type),
                             target=display_type(target_type))
         if is_error_type(source_type) and is_error_type(resolved_target):
-            diag.help(conversion_help(source_type, resolved_target))
+            diag.help(conversion_help(source_type, resolved_target, at_try=False))
         diag.emit()
 
 
@@ -289,14 +289,17 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
                  ok_type=display_type(outer_ok_type),
                  inner_err=display_type(inner_err_type),
                  outer_err=display_type(outer_err_type)) \
-        .help(conversion_help(inner, outer)).emit()
+        .help(conversion_help(inner, outer, at_try=True)).emit()
     return False, None
 
 
-def conversion_help(source: 'Type', target: 'Type') -> str:
+def conversion_help(source: 'Type', target: 'Type', *, at_try: bool) -> str:
     """The help that names the conversion to declare, for `??` (CE2511) and `as` (CE2014).
 
-    It never offers `r?? as T`: `as` binds after `??`, so that spelling casts the VALUE.
+    It names only a declaration that the collect pass accepts. When no declaration of
+    the pair is legal, it names the form at the site: `.map_err(f)??` for a `??`, and a
+    function that takes the error `nom` for an `as`. It never offers `r?? as T`: `as`
+    binds after `??`, so that spelling casts the VALUE.
     """
     from sushi_lang.semantics.passes.collect.enums import PREDEFINED_ENUM_HOMES
     source_text, target_text = display_type(source), display_type(target)
@@ -306,12 +309,21 @@ def conversion_help(source: 'Type', target: 'Type') -> str:
         home = PREDEFINED_ENUM_HOMES[name]
         if home is None:
             return (f"no unit may declare a conversion into '{target_text}', because it "
-                    f"has no home module; answer an error type of your own, and "
-                    f"declare {declaration} with it")
+                    f"has no home module; {_site_form(source_text, target_text, at_try)}, "
+                    f"or use an error type of your own as the target, and declare "
+                    f"`extend {source_text} as <YourError>:` in the unit that declares it")
         return (f"only <{home}> may declare {declaration}; answer an error type of "
                 f"your own, and convert both errors into it")
     return (f"declare {declaration} in the unit that declares '{target_text}', and "
             f"return the converted value")
+
+
+def _site_form(source_text: str, target_text: str, at_try: bool) -> str:
+    """The conversion at one site, with no declaration: `map_err` for `??`, a call for `as`."""
+    if at_try:
+        return (f"convert the error at this site with `.map_err(f)??`, where `f` takes "
+                f"'{source_text}' `nom` and answers '{target_text}'")
+    return f"call a function that takes the error `nom` and answers '{target_text}'"
 
 
 def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
