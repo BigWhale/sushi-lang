@@ -1,0 +1,26 @@
+# Design 3.6 (C6): a conversion never takes a generic error type, as the source or as the
+# target. So the help of a `??` between a generic error and another error names no
+# declaration. It names `.map_err(f)??` at the site.
+# EXPECT_ERROR_CODES_EXACT: CE2511, CE2511
+# EXPECT_STDERR_CONTAINS: a conversion cannot take the generic error type 'DecodeError@(i32)'; convert the error at this site with `.map_err(f)??`, where `f` takes 'DecodeError@(i32)' `nom` and answers 'AppError'
+# EXPECT_STDERR_CONTAINS: a conversion cannot take the generic error type 'DecodeError@(i32)'; convert the error at this site with `.map_err(f)??`, where `f` takes 'AppError' `nom` and answers 'DecodeError@(i32)'
+error DecodeError@(T):
+    Bad(T)
+
+error AppError:
+    Other
+
+fn decode() i32 | DecodeError@(i32):
+    return Result.Err(DecodeError.Bad(1))
+
+fn load() i32 | AppError:
+    return Result.Err(AppError.Other)
+
+fn from_generic() i32 | AppError:
+    return Result.Ok(decode()??)
+
+fn into_generic() i32 | DecodeError@(i32):
+    return Result.Ok(load()??)
+
+fn main() i32:
+    return 0
