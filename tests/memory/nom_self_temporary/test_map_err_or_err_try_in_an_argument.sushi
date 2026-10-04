@@ -1,0 +1,77 @@
+# `map_err` and `or_err` take their receiver `nom`. The receiver is a temporary that a
+# function call answers, or a named local, and it holds a string. The argument holds a
+# `??`. When the `??` propagates, the method does not run, so the caller frees the
+# receiver. When the `??` continues, the method takes the receiver. Each value is freed
+# one time.
+# EXPECT_STDOUT_EXACT: "fail\ntok 1\nfail\nval 1\nfail\ntok 2\nfail\nval 2\n"
+# EXPECT_NO_LEAKS: true
+
+error ParseError:
+    Bad(i32)
+
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(string)
+    Missing(i32)
+
+fn parse(i32 n) i32 | ParseError:
+    if (n < 0):
+        return Result.Err(ParseError.Bad(n))
+    return Result.Ok(n)
+
+fn tokenize(i32 n) string | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok("tok {n}")
+
+fn find(i32 n) Maybe@(string):
+    if (n < 0):
+        return Maybe.None()
+    return Maybe.Some("val {n}")
+
+fn to_app(nom TokenError e) AppError:
+    match nom e:
+        TokenError.Bad(nom s) -> return AppError.Token(s)
+
+fn to_missing(nom TokenError e) AppError:
+    match nom e:
+        TokenError.Bad(_) -> return AppError.Missing(0)
+
+fn pick(i32 k) fn(nom TokenError) -> AppError:
+    if (k > 100):
+        return to_missing
+    return to_app
+
+fn missing(i32 k) AppError:
+    return AppError.Missing(k)
+
+fn map_temporary(i32 n) string | ParseError:
+    let Result@(string, AppError) r = tokenize(1).map_err(pick(parse(n)??))
+    return Result.Ok(r.realise("none"))
+
+fn map_local(i32 n) string | ParseError:
+    let Result@(string, TokenError) t = tokenize(2)
+    let Result@(string, AppError) r = t.map_err(pick(parse(n)??))
+    return Result.Ok(r.realise("none"))
+
+fn or_err_temporary(i32 n) string | ParseError:
+    let Result@(string, AppError) r = find(1).or_err(nom missing(parse(n)??))
+    return Result.Ok(r.realise("none"))
+
+fn or_err_local(i32 n) string | ParseError:
+    let Maybe@(string) m = find(2)
+    let Result@(string, AppError) r = m.or_err(nom missing(parse(n)??))
+    return Result.Ok(r.realise("none"))
+
+fn main() i32:
+    println(map_temporary(-1).realise("fail"))
+    println(map_temporary(3).realise("fail"))
+    println(or_err_temporary(-1).realise("fail"))
+    println(or_err_temporary(3).realise("fail"))
+    println(map_local(-1).realise("fail"))
+    println(map_local(3).realise("fail"))
+    println(or_err_local(-1).realise("fail"))
+    println(or_err_local(4).realise("fail"))
+    return 0
