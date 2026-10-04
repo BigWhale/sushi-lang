@@ -1,0 +1,20 @@
+# Design 3.5 and 6.1: the stdlib declares `FileError as IoError` and `NetError as IoError`
+# in <io/error>. A user body that answers IoError calls the first through `??`, and
+# `e as IoError` calls the second on a value.
+# EXPECT_STDOUT_EXACT: "err IoError.NotFound\nIoError.TimedOut\nIoError.Other\n"
+use <io/fs>
+use <net/error>
+
+fn size_of(string path) i64 | IoError:
+    let FileStat st = stat(path)??
+    return Result.Ok(st.size)
+
+fn main() i32:
+    match size_of("no/such/file/at/all"):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) -> println("err {e}")
+    let IoError t = NetError.TimedOut as IoError
+    println(t)
+    let NetError n = NetError.ResolveFailed
+    println(n as IoError)
+    return 0
