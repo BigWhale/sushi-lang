@@ -1,6 +1,5 @@
 # A numeric cast in the initializer of a `let ptr`. The operand is a plain value, so the
-# cast copies it. The borrow pass does not walk a `ptr` initializer, and the backend
-# needs no ownership decision for a plain operand.
+# cast copies it, and the backend needs no ownership decision for a plain operand.
 # EXPECT_STDOUT_EXACT: "done\n"
 unsafe external "C" as libc because "an allocation for a cast operand":
     fn malloc(i64 n) ptr = "malloc"

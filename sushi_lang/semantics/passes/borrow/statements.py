@@ -31,7 +31,7 @@ from sushi_lang.semantics.ast import (
     While,
 )
 from sushi_lang.semantics.ownership import Provenance
-from sushi_lang.semantics.typesys import ForeignPtrType, ReferenceType
+from sushi_lang.semantics.typesys import ReferenceType
 
 from .bindings import (
     bind_let_reference,
@@ -155,12 +155,11 @@ def _check_let(checker: 'BorrowChecker', stmt: Let) -> None:
         # Option B: a string bound straight from a literal owns no heap, so consuming it
         # transfers nothing and CE2405 must not fire on it.
         owns_no_heap=binds_a_bare_literal_string(stmt.ty, stmt.value))
-    if not isinstance(stmt.ty, ForeignPtrType):
-        # A foreign `ptr` is exempt from ALIASING analysis but NOT from the ownership
-        # stamp below: skipping the stamp is CE0129 on the first FFI program that binds
-        # one.
-        check_expr(checker, stmt.value)
-        reconcile_closure_bind(checker, stmt)
+    # Every initializer is walked, a `let ptr` one too (#1175): a consuming use in it (a
+    # cast, a constructor) is decided here like anywhere else. A foreign `ptr` VALUE is
+    # exempt from aliasing analysis: its type owns nothing, so `bind` copies it.
+    check_expr(checker, stmt.value)
+    reconcile_closure_bind(checker, stmt)
     # A `let` BINDS; it does not take ownership (#242). It inherits the source's
     # provenance, so a read through a live owner makes it a BORROW.
     bind(checker, stmt)

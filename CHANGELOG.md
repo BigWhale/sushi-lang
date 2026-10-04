@@ -96,6 +96,10 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
 - A `??` binder of a `foreach` (`foreach(n?? in it)`) in a bare body gave CE0131 two
   times for one `??`. The node walk visited the hidden `let` through the loop body and
   through the loop's alias of it (#1174).
+- The borrow pass did not walk the initializer of a `let ptr`, so a consuming use there
+  (`let ptr p = libc.strdup(s as string)`) had no ownership decision: a double free on
+  0.14.0, and an internal error (CE0129) after the cast fix. The initializer is now walked
+  like every other one; the `ptr` value stays outside the aliasing analysis (#1175).
 
 ## [0.14.0] - 2026-10-03
 
