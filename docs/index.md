@@ -24,7 +24,7 @@ compiler internals in one place.
 
 ## Guides
 
-- [Error Handling](error-handling.md) — `Result@(T, E)`, `Maybe@(T)`, and the `??` operator
+- [Error Handling](error-handling.md) — `Result@(T, E)`, `Maybe@(T)`, error types, the `??` operator and error conversion
 - [Memory Management](memory-management.md) — RAII, references, borrowing, and `Own@(T)`
 - [Generics](generics.md) — generic types, functions, and monomorphization
 - [Perks](perks.md) — traits/interfaces for polymorphism with static dispatch

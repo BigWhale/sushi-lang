@@ -70,7 +70,8 @@ and LLVM-powered code generation.
   `Maybe@(T)`, `List@(T)`, `HashMap@(K, V)`, user-defined structs, enums, and functions)
 - Generic functions with automatic type inference and perk constraints
 - Perks (traits/interfaces) for polymorphic behavior with static dispatch
-- Error propagation operator (`??`) for ergonomic error handling
+- Error types declared with `error`, the error propagation operator (`??`), and declared
+  conversions between error types (`extend FileError as AppError:`)
 - Parameter modes: a parameter borrows by default, `nom` hands the value over, and
   `peek`/`poke` borrow by pointer, all with compile-time borrow checking
 - `Own@(T)` heap allocation for recursive types (linked lists, trees)
@@ -139,7 +140,7 @@ fn main() i32:
 - [Standard Library](https://bigwhale.github.io/sushi-lang/standard-library/) - Built-in types and
   functions
 - [Error Handling](https://bigwhale.github.io/sushi-lang/error-handling/) - `Result@(T, E)`,
-  `Maybe@(T)`, and `??` operator
+  `Maybe@(T)`, error types, the `??` operator and error conversion
 - [Memory Management](https://bigwhale.github.io/sushi-lang/memory-management/) - RAII, references,
   and ownership
 - [Generics](https://bigwhale.github.io/sushi-lang/generics/) - Generic types and compile-time
@@ -181,7 +182,8 @@ fn main() i32:
 
 ### Error Propagation
 
-The `??` operator unwraps values or propagates errors automatically:
+The `??` operator unwraps a `Result` or propagates its error. When the two error types
+differ, it calls a conversion that the program declares:
 
 ```sushi
 use <io/fs>
@@ -191,6 +193,15 @@ fn read_config() string | IoError:
     let string content = f.read_all()??
     f.close()??
     return Result.Ok(content)
+
+error AppError:
+    Io(IoError)
+
+extend IoError as AppError:
+    return AppError.Io(self)
+
+fn load() string | AppError:
+    return Result.Ok(read_config()??)     # IoError as AppError
 ```
 
 ### Pattern Matching

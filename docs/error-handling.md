@@ -2,7 +2,7 @@
 
 [← Back to Documentation](index.md)
 
-Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)`, and the `??` operator.
+Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)`, error types declared with `error`, the `??` operator, and conversions between error types.
 
 ## Table of Contents
 
@@ -11,12 +11,14 @@ Comprehensive guide to error handling in Sushi using `Result@(T, E)`, `Maybe@(T)
   - [A Bare Function Is the Exception](#a-bare-function-is-the-exception)
 - [Result@(T, E)](#resultt-e)
   - [Error Type Syntax](#error-type-syntax)
-  - [Standard Error Enums](#standard-error-enums)
+  - [Declaring an Error Type](#declaring-an-error-type)
+  - [Standard Error Types](#standard-error-types)
   - [Creating Results](#creating-results)
   - [Handling Results](#handling-results)
   - [Result Methods](#result-methods)
 - [Maybe@(T)](#maybet)
 - [Error Propagation](#error-propagation)
+- [Error Conversion](#error-conversion)
 - [Error Channels on Methods](#error-channels-on-methods)
 - [Patterns and Best Practices](#patterns-and-best-practices)
 - [Traps Are Not Errors](#traps-are-not-errors)
@@ -29,7 +31,8 @@ Sushi makes errors explicit and impossible to ignore:
 1. **A function that can fail says so** - Its signature writes the error channel `| E`, and the call returns `Result@(T, E)`
 2. **Compiler-enforced handling** - Cannot ignore errors accidentally
 3. **No exceptions** - Control flow is always visible
-4. **Type-safe error propagation** - Error types must match for propagation
+4. **Type-safe error propagation** - `??` propagates an error of the same type, or calls a
+   conversion that the program declares
 5. **Zero runtime cost** - Compiles to efficient LLVM code
 
 ## The Rule: A Channel Is Written
@@ -107,13 +110,14 @@ fn divide(i32 a, i32 b) i32 | MathError:
 # Returns Result@(i32, MathError)
 ```
 
-`MathError` is a predefined enum, and `use <math>` brings its name. Do not declare your own
-`enum MathError`: a predefined name cannot be declared again (**CE2046**), also in a unit
-with no `use <math>`. Give your own error enum a new name. The examples below use this
+`MathError` is a predefined error type, and `use <math>` brings its name. Do not declare your
+own `MathError`: a predefined name cannot be declared again (**CE2046**), also in a unit
+with no `use <math>`. Give your own error type a new name. The examples below use this
 `divide`.
 
-The error type `E` must be an enum, in both spellings (`T | E` and `Result@(T, E)`). Do not
-mix the two spellings in one signature (**CE2085**).
+The error type `E` must be an ERROR TYPE, in both spellings (`T | E` and `Result@(T, E)`)
+and in every position (**CE2084**): an enum declared with `error`, or a predefined error
+type. Do not mix the two spellings in one signature (**CE2085**).
 
 #### Explicit Result@(T, E) Syntax
 
@@ -122,7 +126,52 @@ fn foo() Result@(i32, MyError):
     return Result.Ok(42)
 ```
 
-### Standard Error Enums
+### Declaring an Error Type
+
+An error type is declared with `error`. The body is the body of an `enum`: variants,
+payloads, type parameters and doc blocks.
+
+```sushi
+error ConfigError:
+    Missing
+    BadValue(string)
+
+fn port(string text) i32 | ConfigError:
+    if (text == ""):
+        return Result.Err(ConfigError.Missing)
+    if (text == "80"):
+        return Result.Ok(80)
+    return Result.Err(ConfigError.BadValue(text.clone()))
+
+fn main() i32:
+    match port("eighty"):
+        Result.Ok(p) -> println("port {p}")
+        Result.Err(e) -> println("bad config: {e}")    # bad config: ConfigError.BadValue("eighty")
+    return 0
+```
+
+An error type is an enum with a flag. Everything an enum does, it does: `match`,
+payloads, derived equality and printing, extension methods. It is also ordinary data: a
+field, a parameter or a list element can hold one.
+
+The `E` of every `Result` must be an error type. A plain `enum` there is **CE2084**, and
+the help says to declare it with `error`:
+
+<!-- docs-sweep: error CE2084 -->
+```sushi
+enum Color:
+    Red
+
+fn pick() i32 | Color:      # CE2084: 'Color' is a plain enum, not an error type
+    return Result.Err(Color.Red)
+
+fn main() i32:
+    return 0
+```
+
+`error` is a reserved word, so it is not a variable name: write `err` or `e`.
+
+### Standard Error Types
 
 Sushi provides built-in error types for common error conditions. Each but `StdError` has
 a HOME module, and the import brings the bare name (`use <math>` for `MathError`). A module
@@ -312,6 +361,11 @@ let i32 value = result.expect("Division should succeed")
 
 **Warning:** Use `.expect()` sparingly. It terminates the program on error.
 
+#### `.map_err(f) -> Result@(T, F)`
+
+Convert the error with the function `f`, and keep the Ok value. `f` takes the error `nom`.
+See [`map_err`](#map_err) under Error Conversion.
+
 See [Result@(T, E) API Reference](stdlib/result.md) for complete method documentation.
 
 ### Compiler Enforcement
@@ -389,6 +443,12 @@ let Maybe@(i32) empty = Maybe.None()
 ```
 
 **Warning:** Use `.expect()` only when absence is truly impossible.
+
+#### Using `.or_err(nom e)`
+
+Turn the `Maybe` into a `Result@(T, E)` with an error value you choose: `Some(v)` becomes
+`Ok(v)`, and `None` becomes `Err(e)`. It is the form for `??` on a `Maybe` (see
+[Propagating from a Maybe](#propagating-from-a-maybe)).
 
 #### Using Pattern Matching
 
@@ -468,9 +528,12 @@ fn main() i32:
 
 ## Error Propagation
 
-The `??` operator unwraps `Result@(T, E)` or `Maybe@(T)`, propagating errors automatically.
+The `??` operator unwraps a `Result@(T, E)`, and it propagates the error to the caller.
 
-**Important:** For Result@(T, E), error types must match exactly. The `??` operator does not perform automatic error type conversion.
+**Important:** `??` takes a `Result@(T, E)` and nothing else (**CE2507**). The error type
+of the operand must be the error type of the enclosing body, or the program must declare
+a conversion between the two (see [Error Conversion](#error-conversion)). Sushi converts
+no error on its own.
 
 ### Basic Usage
 
@@ -509,12 +572,11 @@ fn read_config() string | IoError:
 
 For `Result@(T, E)`:
 - `Result.Ok(value)?? → value` (unwraps)
-- `Result.Err(e)?? → return Result.Err(e)` (propagates; `E` must be the error type of the
-  enclosing function)
+- `Result.Err(e)?? → return Result.Err(e)` (propagates; `E` is the error type of the
+  enclosing function, or a declared conversion turns `e` into it)
 
-For `Maybe@(T)`:
-- `Maybe.Some(value)?? → value` (unwraps)
-- `Maybe.None()??` returns early with an `Err` (propagates as an error)
+A `Maybe@(T)` holds no error value, so `??` on it is **CE2507**. Write the error value with
+`or_err`: `m.or_err(nom e)??` (see [Propagating from a Maybe](#propagating-from-a-maybe)).
 
 ### Chaining Operations
 
@@ -555,7 +617,7 @@ fn process_with_cleanup(bool succeed) i32 | StdError:
 ### `??` over a named Result
 
 `??` moves the payload out of its wrapper. Over a call the wrapper is a temporary and the
-payload simply lands where it is taken. Over a NAMED `Result` or `Maybe` that owns
+payload simply lands where it is taken. Over a NAMED `Result` that owns
 something -- a string, an array, a handle, in EITHER arm -- the `??` spends the local:
 
 ```sushi
@@ -606,7 +668,8 @@ fn main() i32:
         Result.Err(_) -> return 1
 ```
 
-It is the same `??`, in one more position: the error types must match exactly (CE2511),
+It is the same `??`, in one more position: the error types must match, or a declared
+conversion runs (CE2511),
 the loop's own scope is cleaned up on the way out, and it is refused in `main` (CE0131),
 because `main` is bare.
 
@@ -634,13 +697,17 @@ fn main() i32:
 
 A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
 
-### Using ?? with Maybe@(T)
+### Propagating from a Maybe
+
+A `Maybe@(T)` says that a value is absent. It does not say why, so it holds no error
+value, and `??` on it is **CE2507**. `m.or_err(nom e)` turns it into a `Result@(T, E)`:
+`Some(v)` becomes `Ok(v)`, and `None` becomes `Err(e)`. Then `??` propagates it.
 
 ```sushi
 use <collections/strings>
 
 fn find_and_parse(string text) i32 | StdError:
-    # If find() returns None, ?? propagates as Err
+    # or_err turns a None into an Err, and ?? propagates it
     let i32 pos = text.find("x").or_err(nom StdError.Error)??
     return Result.Ok(pos * 2)
 
@@ -656,10 +723,32 @@ fn main() i32:
     return 0
 ```
 
+- The argument is `nom`: the error value moves into the `Err`. A missing marker is
+  **CE2427**. The error value must be an error type (**CE2084**).
+- The receiver is `nom self`. A named `Maybe` that owns something (a `Maybe@(string)`) is
+  spent by the call (**CE2435**). A `Maybe` that owns nothing is copied.
+- A BORROWED `Maybe` is read through: a get-out such as `xs.get(0)`, a parameter, a
+  pattern binding. Under `??` the value binds a borrow, as a get-out always does. When the
+  payload owns something, the call must be the operand of `??` (**CE2522**): its `Result`
+  holds a borrowed `Ok` and an owned `Err`, and only `??` takes the two apart. In a `let`,
+  a `match` or a method call, take an owned copy first: `xs.get(0).clone().or_err(nom e)`.
+
+<!-- docs-sweep: error CE2522 -->
+```sushi
+error AppError:
+    Missing
+
+fn main() i32:
+    let List@(string) names = List.new()
+    names.push("Arthur")
+    let Result@(string, AppError) r = names.get(0).or_err(nom AppError.Missing)   # CE2522
+    return 0
+```
+
 ### Compile-Time Safety
 
 ```sushi
-# ERROR CE2507: Using ?? on non-Result/non-Maybe type
+# ERROR CE2507: Using ?? on a type that is not a Result (a Maybe included)
 # let i32 x = 5??
 
 # ERROR CE0131: ?? in a BARE body (no `| E`), which has no Result to return
@@ -678,7 +767,7 @@ fn inner() i32 | ErrorA:
     return Result.Ok(42)
 
 fn outer() i32 | ErrorB:
-    # let i32 x = inner()??  # Cannot propagate ErrorA to ErrorB
+    # let i32 x = inner()??  # Cannot propagate ErrorA to ErrorB: no `extend ErrorA as ErrorB:`
     return Result.Ok(0)
 ```
 
@@ -733,9 +822,114 @@ fn main() i32:
     return 0
 ```
 
-A helper that CAN fail declares the error type of its caller, or `??` does not compose
-through it (**CE2511**). Keep a channel on a public helper when there is any doubt (see
+A helper that CAN fail declares the error type of its caller, or the caller's error type
+declares a conversion from the helper's, or `??` does not compose through it
+(**CE2511**). Keep a channel on a public helper when there is any doubt (see
 [A Bare Function Is the Exception](#a-bare-function-is-the-exception)).
+
+## Error Conversion
+
+`??` propagates an error of the same type unchanged. When a function calls a module with
+another error type, the program declares a CONVERSION, and `??` calls it:
+
+```sushi
+error ParseError:
+    Empty
+
+error AppError:
+    Parse(ParseError)
+    Config
+
+extend ParseError as AppError:
+    return AppError.Parse(self)
+
+fn parse(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    return Result.Ok(42)
+
+fn load(string s) i32 | AppError:
+    let i32 v = parse(s)??          # a ParseError becomes an AppError here
+    return Result.Ok(v)
+
+fn main() i32:
+    println(load("x").realise(-1))  # 42
+    match load(""):
+        Result.Ok(v) -> println(v)
+        Result.Err(e) -> println(e) # AppError.Parse(ParseError.Empty)
+    return 0
+```
+
+`extend <Source> as <Target>:` declares the conversion. The body returns the target, and
+`self` is the source value. It has no name, no parameters and no return type.
+
+- **`??`** calls the conversion when the two error types differ. With no declaration, the
+  `??` is **CE2511**, and the help names the declaration to write.
+- **`e as AppError`** calls it explicitly. With no declaration, the cast is **CE2014**.
+  `as` consumes its operand: for a borrowed error that owns a `string`, write
+  `e.clone() as AppError` (**CE2411**).
+- **One step.** `A as B` and `B as C` do not give `A` to `C`. Declare `A as C` when a
+  function needs it.
+- **Only the unit that declares the target type** may declare a conversion into it
+  (**CE2519**). An application's error type lists the errors it absorbs, beside its own
+  declaration. A predefined error type belongs to its home module, so the stdlib declares
+  `FileError as IoError` and `NetError as IoError` in `<io/error>`, and no unit may declare
+  a conversion into `StdError`. A library declares its own error type and converts
+  `IoError` into it.
+- **Two non-generic error types** (**CE2520**), never one type into itself (**CE2521**),
+  and one declaration per pair (**CE0101**).
+- **The body is bare**: a `| E` on a conversion is a parse error, and a `??` in it is
+  **CE0131**. The body consumes `self`, so it can move a payload into the target.
+- **No import is needed.** A conversion is found by its pair of types, and it is as
+  visible as its target type.
+
+The stdlib uses the same mechanism. With `use <io/files>`, a body that answers `IoError`
+can `??` a call that answers `FileError`:
+
+```sushi
+use <io/files>
+
+fn count_entries(string dir) i32 | IoError:
+    let string[] names = read_dir(dir)??    # FileError as IoError, from <io/error>
+    return Result.Ok(names.len())
+
+fn main() i32:
+    match count_entries("/no/such/dir"):
+        Result.Ok(n) -> println("{n} entries")
+        Result.Err(e) -> println("error: {e}")      # error: IoError.NotFound
+    return 0
+```
+
+### `map_err`
+
+`r.map_err(f)` converts the error of one `Result` at one site, with no declaration. Use it
+when only one call needs the conversion:
+
+```sushi
+error LowError:
+    Bad
+
+error AppError:
+    Wrapped(LowError)
+
+fn low() i32 | LowError:
+    return Result.Err(LowError.Bad)
+
+fn app() i32 | AppError:
+    let i32 v = low().map_err(|nom LowError e| AppError.Wrapped(e))??
+    return Result.Ok(v)
+
+fn main() i32:
+    match app():
+        Result.Ok(v) -> println(v)
+        Result.Err(e) -> println(e)     # AppError.Wrapped(LowError.Bad)
+    return 0
+```
+
+`f` takes the error `nom`, so the lambda writes `|nom LowError e|`. A lambda parameter
+cannot own a resource, so for an error that holds a `string` pass a named function:
+`fn wrap(nom ParseError e) AppError`. The receiver is `nom self`: a named `Result` that
+owns something is spent, and a borrowed one is **CE2411** (write `r.clone().map_err(f)`).
 
 ## Error Channels on Methods
 
@@ -750,7 +944,8 @@ A method that can fail declares an error channel `| E`, as a function does. Then
   `match`
 - the body spells both constructors, `return Result.Ok(...)` and `return Result.Err(...)`;
   a bare `return value` is **CE2030**
-- `??` is legal in the body, and the error types must match exactly (**CE2511**)
+- `??` is legal in the body, and the error types must match, or a declared conversion runs
+  (**CE2511**)
 
 ```sushi
 error OddError:
@@ -806,24 +1001,26 @@ fn validate_input(i32 x) i32 | StdError:
 
 ### 3. Use ?? for Sequential Operations
 
-`??` requires the error types to match EXACTLY, so a function that reads a file and then
-calls `StdError` helpers is two functions: one per channel, with a `match` at the seam
-that converts.
+A pipeline that calls modules with different error types declares one error type of its
+own and a conversion into it for each module. Every step is then one `??`.
 
 <!-- docs-sweep: skip (calls parse/validate/transform, which the narrative owns) -->
 ```sushi
 use <io/fs>
 
+error PipelineError:
+    Io(IoError)
+    Invalid
+
+extend IoError as PipelineError:
+    return PipelineError.Io(self)
+
 fn read_input() string | IoError:
     let File f = open("input.txt", FileMode.Read())??
     return Result.Ok(f.read_all()??)
 
-fn process_pipeline() string | StdError:
-    let string raw = ""
-    match read_input():
-        Result.Ok(text) -> raw := text.clone()          # the one conversion point
-        Result.Err(_) -> return Result.Err(StdError.Error())
-
+fn process_pipeline() string | PipelineError:
+    let string raw = read_input()??                     # IoError as PipelineError
     let string cleaned = parse(raw)??
     let string validated = validate(cleaned)??
     let string transformed = transform(validated)??
@@ -934,6 +1131,8 @@ Common error codes related to error handling:
 - **CE2008**: `.realise()` on the call of a bare function (the value is not a Result)
 - **CE2009**: `.realise()` wrong argument count (the code of every miscount)
 - **CE2030**: A bare `return value` in a body that answers a Result
+- **CE2084**: The `E` of a `Result@(T, E)` is not an error type (declare it with `error`)
+- **CE2014**: `e as T` between two error types with no declared conversion
 - **CE2050**: `Result.Err()` with no error value
 - **CE2085**: `| E` together with an explicit `Result@(T, E)` return type
 - **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare body: a function, a method or a lambda (no `| E`)
@@ -941,11 +1140,15 @@ Common error codes related to error handling:
 - **CE2116**: The message of an `assert` is not a `string`
 - **CE2503**: `.realise()` default type mismatch
 - **CE2505**: Assigning a `Result@(T, E)` to a non-Result without handling
-- **CE2507**: Using `??` on a non-Result, non-Maybe type, the call of a bare function included
-- **CE2511**: `??` with an error type that differs from the function's error type
+- **CE2507**: `??` on an operand that is not a `Result@(T, E)`: a `Maybe` (use `or_err`), or the call of a bare function
+- **CE2511**: `??` with an error type that differs from the function's error type, and no declared conversion
 - **CE2515**: A method chain continues past an unhandled channel
 - **CE2516**: A `Result` or a `Maybe` used as a condition, an `assert` condition included
 - **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
+- **CE2519**: A conversion declared outside the unit of its target type
+- **CE2520**: A conversion whose source or target is not a non-generic error type
+- **CE2521**: A conversion from a type into itself
+- **CE2522**: A read-through `or_err` (a borrowed `Maybe` that owns its payload) outside `??`
 - **CW2001**: Unused `Result@(T, E)` value (warning)
 
 `main` is bare, so a `??` in `main()` is CE0131.

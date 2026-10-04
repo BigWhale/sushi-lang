@@ -150,9 +150,10 @@ The jump failed: out of fuel.
 ```
 
 Here `jump` returns `string | NavError`, i.e. `Result@(string, NavError)`, and can fail in
-two named ways. We consume it in `main` with the same `if (result.is_ok()):` pattern as before.
-This is only a taste — designing error types, propagating them with `??`, and pattern
-matching on the specific failure is the subject of
+two named ways. `NavError` is declared with the keyword `error`: it is an enum that may be
+the error type of a `Result`. We consume it in `main` with the same `if (result.is_ok()):`
+pattern as before. This is only a taste — declaring error types, propagating and
+converting them with `??`, and pattern matching on the specific failure is the subject of
 [Chapter 6](06-error-handling.md).
 
 ## Public and private declarations

@@ -120,8 +120,8 @@ function that returns a function type with a channel.
 
 A function value doesn't have to sit in a plain variable to be called. You can call through any
 expression that produces one — a `List` element or a parenthesized expression. (This
-fragment is the body of a function with a channel, because `??` unwraps the `Maybe` that
-`.get(0)` gives.)
+fragment is the body of a function with a channel: `.or_err(nom StdError.Error)` turns the
+`Maybe` that `.get(0)` gives into a `Result`, and `??` unwraps it.)
 
 ```sushi
 let List@(fn(i32) -> i32) table = List.new()
@@ -173,7 +173,7 @@ identifier.
 - A plain function reference has **no captured state**: no allocation and no cleanup. Sushi
   also has **closures** (capturing lambda literals) — see the next chapter.
 - Call a function-valued **struct field** directly (`obj.field(x)`); a same-named method would win.
-  You can also call through any expression that yields a function value (`table.get(0)??(x)`).
+  You can also call through any expression that yields a function value (`table.get(0).or_err(nom StdError.Error)??(x)`).
 - Reference a **generic function** as a value in any position that states the function type
   (`let fn(i32) -> i32 g = identity`, `apply(identity, 42)`); a position with no function
   type is **CE2093**.

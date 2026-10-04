@@ -16,6 +16,7 @@ Complete syntax and semantics reference for Sushi Lang. For a gentler introducti
 - [Structs](#structs)
 - [Tuples](#tuples)
 - [Enums](#enums)
+- [Error Types and Conversions](#error-types-and-conversions)
 - [Pattern Matching](#pattern-matching)
 - [Generics](#generics)
 - [Extension Methods](#extension-methods)
@@ -192,10 +193,12 @@ let u32 unsigned = x as u32 # signed to unsigned
 ```
 
 **Rules:**
-- Only numeric types can be cast
+- A cast is between two numeric types, or between two error types that have a declared
+  conversion (`e as AppError`, see [Error Types and Conversions](#error-types-and-conversions))
 - Float-to-integer truncates toward zero
 - No implicit conversions
 - No casting to/from strings or arrays
+- Every other pair is `CE2014`
 
 ### Array Types
 
@@ -291,7 +294,7 @@ own function before an imported function of the same name.
 
 You can also call through any expression that evaluates to a function value, not just a bare name —
 a fn-typed struct field (`obj.handler(x)`, when no method of that name exists), a container get-out
-(`fns.get(0)??(x)`), or a parenthesized expression (`(e)(x)`). See the
+(`fns.get(0).or_err(nom StdError.Error)??(x)`), or a parenthesized expression (`(e)(x)`). See the
 [First-Class Functions guide](first-class-functions.md) and the [Closures guide](closures.md).
 
 ## Variables
@@ -433,8 +436,10 @@ three forms:
 | `fn f() T` | `T`: the function is BARE |
 
 The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
-The error type `E` is an enum. There is no default error type: `fn f() T` is bare and
-returns `T`.
+The error type `E` is an ERROR TYPE: an enum declared with `error`, or a predefined one
+such as `StdError`. Any other type is `CE2084` (see
+[Error Types and Conversions](#error-types-and-conversions)). There is no default error
+type: `fn f() T` is bare and returns `T`.
 
 **A bare function is the exception.** Use it seldom: only when the function is total over
 its inputs and will stay so (a checksum, a pure arithmetic or string helper, a path join),
@@ -470,9 +475,11 @@ home in `<math>`, and `StdError` is global.
 
 The caller takes the value out of the `Result` in one of three ways: `??` returns the error
 from the calling function at once, `.realise(default)` gives the default for an error, and
-`match` reads each arm. `??` needs the same error type in the caller. It also works on a
-`Maybe@(T)`. The call of a bare function returns the value, so `??` on it is `CE2507` and
-`.realise` on it is `CE2008`.
+`match` reads each arm. `??` needs the same error type in the caller, or a declared
+conversion from the callee's error type into it. `??` takes a `Result@(T, E)` and nothing
+else: on a `Maybe@(T)` it is `CE2507`, and `m.or_err(nom e)??` writes the error value. The
+call of a bare function returns the value, so `??` on it is `CE2507` and `.realise` on it
+is `CE2008`.
 
 `main` is bare. It returns the exit code (`return 0`), and a `| E` on it is `CE0106`. A `??`
 in `main` is `CE0131`; use `match` or `.realise()` there. The full guide is
@@ -869,7 +876,7 @@ An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` 
 
 ### Other
 
-- `as` - Type casting
+- `as` - Type casting, and a declared conversion between two error types
 - `??` - Error propagation. Postfix on an expression, and also on a `foreach` binder
   (`foreach(line?? in it)`), where it unwraps the loop's item
 
@@ -1660,6 +1667,187 @@ match s2:
         println("Error: {msg}")
 ```
 
+## Error Types and Conversions
+
+### Error Types
+
+An error type is declared with the keyword `error`. The body is the body of an `enum`:
+variants, payloads, type parameters, doc blocks and `public`. Only the keyword is
+different.
+
+```sushi
+error ParseError:
+    Empty
+    BadDigit(string)
+
+fn parse_digit(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    if (s == "7"):
+        return Result.Ok(7)
+    return Result.Err(ParseError.BadDigit(s.clone()))
+
+fn main() i32:
+    println(parse_digit("7").realise(-1))   # 7
+    println(parse_digit("x").realise(-1))   # -1
+    return 0
+```
+
+An error type is an enum with a flag, so every enum rule applies to it: `match` and
+exhaustiveness, payloads, the generic form (`error DecodeError@(T)`), the derived `Eq`,
+`Ord`, `Display`, `hash` and `clone`, extension methods, perks, `Drop`, visibility and
+libraries. An error type is ordinary data in every position: a field, a payload, a
+parameter, a `let`, an array element and a generic argument.
+
+The seven predefined error types are `StdError`, `IoError`, `FileError`, `NetError`,
+`ProcessError`, `EnvError` and `MathError`. `FileMode` and `SeekFrom` are plain enums.
+
+**The `E` of every `Result@(T, E)` is an error type**, in both spellings (`T | E` is
+`Result@(T, E)`) and in every position: a signature of a function, a method, a perk, a
+lambda and a function type, and also a `let`, a field, a payload, a parameter and a
+generic argument. Any other type is `CE2084`, and the message says what the type is. For
+a plain enum, the help says to declare it with `error`. A type parameter in the `E`
+position is judged at each instance, with a note at the template.
+
+<!-- docs-sweep: error CE2084 -->
+```sushi
+enum Color:
+    Red
+
+fn pick() i32 | Color:          # CE2084: 'Color' is a plain enum, not an error type
+    return Result.Err(Color.Red)
+
+fn main() i32:
+    return 0
+```
+
+`error` is a reserved word: it cannot be the name of a variable or a function. The import
+paths `<io/error>` and `<net/error>` keep the word.
+
+### What `??` Takes
+
+`??` takes a `Result@(T, E)` and nothing else. Any other operand is `CE2507`: a
+`Maybe@(T)`, and a user enum with `Ok`/`Err` variants (`??` reads the type, not the names
+of its variants). A `Maybe` holds no error value, so the program writes one with
+`or_err`:
+
+```sushi
+error AppError:
+    Empty
+
+fn first(i32[] xs) i32 | AppError:
+    let i32 v = xs.get(0).or_err(nom AppError.Empty)??
+    return Result.Ok(v)
+
+fn main() i32:
+    let i32[] full = from([4, 5])
+    let i32[] none = new()
+    println(first(full).realise(-1))    # 4
+    println(first(none).realise(-1))    # -1
+    return 0
+```
+
+`m.or_err(nom e)` is a built-in method of `Maybe@(T)` and answers `Result@(T, E)`:
+`Some(v)` becomes `Ok(v)`, and `None` becomes `Err(e)`. The argument is `nom`, because the
+error value moves into the `Err`. The receiver is `nom self`: a named `Maybe` that owns
+something is spent by the call (`CE2435`). A BORROWED `Maybe` (a get-out such as
+`xs.get(0)`, a parameter, a pattern binding) is read through, as `??` reads a borrowed
+`Result`. When its payload owns something, the call is legal only as the operand of
+`??` (`CE2522`); elsewhere, take an owned copy first: `xs.get(0).clone().or_err(nom e)`.
+
+### Conversions
+
+A conversion turns a value of one error type into another. It is declared with
+`extend <Source> as <Target>:` and a body that returns the target. `self` is the source
+value. The declaration has no name, no parameter list and no return type.
+
+```sushi
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+    Empty
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n)
+
+fn app(i32 n) i32 | AppError:
+    let i32 v = low(n)??                    # calls the conversion on an Err
+    return Result.Ok(v * 2)
+
+fn main() i32:
+    println(app(4).realise(-1))             # 8
+    match app(-3):
+        Result.Ok(v) -> println(v)
+        Result.Err(e) -> println(e)         # AppError.Low(LowError.Bad(-3))
+    let AppError a = LowError.Bad(9) as AppError
+    println(a)                              # AppError.Low(LowError.Bad(9))
+    return 0
+```
+
+- **`??`** calls the conversion when the error type of its operand differs from the
+  channel of the enclosing body. With no declaration, the `??` is `CE2511`, and the help
+  names the declaration to write.
+- **`e as T`** calls the conversion explicitly. With no declaration, the cast is
+  `CE2014`. `as` consumes its operand by position, with no marker: for a borrowed error
+  that owns something, the form is `e.clone() as T` (`CE2411`).
+- **One step.** `A as B` and `B as C` do not give `A` to `C`. The lookup is an exact match
+  on the pair.
+- **Who may declare it.** Only the unit that declares the TARGET type (`CE2519`). For a
+  predefined type that unit is its home module, so `FileError as IoError` lives in
+  `<io/error>`, and no unit may declare a conversion into `StdError`. A program declares its
+  own error type and converts into it.
+- **Which types.** The source and the target are non-generic error types (`CE2520`). A
+  conversion from a type into itself is `CE2521`. Two declarations of one pair are
+  `CE0101`.
+- **The body is bare.** A `| E` on a conversion is a parse error, and a `??` in the body
+  is `CE0131`. The body consumes `self`.
+- **Visibility.** A conversion is found by its pair of types, not by a name, so an import
+  neither brings nor hides it. It is as visible as its target type.
+- A conversion is not a constant expression: `as` into an error type in a `const` is
+  `CE0108`.
+
+### `map_err`
+
+`r.map_err(f)` converts the error of one `Result` at one site, with no declaration. It
+answers `Result@(T, F)`: `Ok(v)` stays `Ok(v)`, and `Err(e)` becomes `Err(f(e))`.
+
+```sushi
+error LowError:
+    Bad
+
+error AppError:
+    Wrapped(LowError)
+
+fn low() i32 | LowError:
+    return Result.Err(LowError.Bad)
+
+fn app() i32 | AppError:
+    let i32 v = low().map_err(|nom LowError e| AppError.Wrapped(e))??
+    return Result.Ok(v)
+
+fn main() i32:
+    match app():
+        Result.Ok(v) -> println(v)
+        Result.Err(e) -> println(e)         # AppError.Wrapped(LowError.Bad)
+    return 0
+```
+
+The function takes the error `nom` (`fn(nom E) -> F`), so a lambda writes `|nom LowError e|`.
+A lambda parameter cannot have an owning type, so for an error that owns a `string` the
+argument is a named function. The receiver is `nom self`: a named `Result` that owns
+something is spent, and a borrowed one is `CE2411` (the form is `r.clone().map_err(f)`).
+`F` must be an error type (`CE2084`).
+
+The guide is [Error Handling](error-handling.md), and the design record is
+[Error types and error conversion](design/error-conversion.md).
+
 ## Pattern Matching
 
 ### Basic Match
@@ -2173,7 +2361,7 @@ value goes out of scope, `drop()` runs first, and then the owning fields are des
 At the end of a scope, the values are destroyed in the reverse order of their declaration.
 Only the unit that declares the type may implement `Drop` for it (`CE4012`). No unit
 declares a primitive, a `string`, an array, `List`, `HashMap`, `Own`, `Maybe`, `Result` or
-a predefined error enum, so `Drop` on one of them is `CE4016`. A channel on `drop()` is
+a predefined error type, so `Drop` on one of them is `CE4016`. A channel on `drop()` is
 `CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
 
 **`Hashable`** is the constraint for a type that has a hash. Every type
@@ -2262,8 +2450,14 @@ memory and copies. Every other type copies. These operations change ownership:
   owning field out of a local that the function owns. The take spends the whole receiver:
   the other owning fields are destroyed at the take, `drop()` does not run, and a later
   use of the local is `CE2405`. A take through a borrow, and `nom a.b.c`, are `CE2411`.
-- **`??` over a named wrapper** spends the wrapper when the `Result` or `Maybe` owns
-  something in either arm: after `let string got = r??`, a use of `r` is `CE2405`.
+- **`??` over a named wrapper** spends the wrapper when the `Result` owns something in
+  either arm: after `let string got = r??`, a use of `r` is `CE2405`.
+- **`m.or_err(nom e)`** and **`r.map_err(f)`** take their receiver `nom self`: a named
+  `Maybe` or `Result` that owns something is spent by the call (`CE2435`). A borrowed
+  `Maybe` is read through by `or_err` under `??`; a borrowed `Result` that owns something
+  is `CE2411` for `map_err`.
+- **`e as T`** with a declared conversion consumes `e` by position, with no marker. A
+  borrowed error that owns something is `CE2411`, and the form is `e.clone() as T`.
 
 The guides are [Memory Management](memory-management.md) and
 [the borrow model](design/borrow-model.md).
@@ -2676,8 +2870,8 @@ every diagnostic.
 These words are reserved. A variable, a function or a type cannot take one of them as
 its name (`CE6001`):
 
-- Declarations: `fn`, `let`, `const`, `var`, `struct`, `enum`, `perk`, `extend`, `with`,
-  `static`, `public`, `use`
+- Declarations: `fn`, `let`, `const`, `var`, `struct`, `enum`, `error`, `perk`, `extend`,
+  `with`, `static`, `public`, `use`
 - Control flow: `if`, `elif`, `else`, `while`, `foreach`, `in`, `break`, `continue`,
   `match`, `return`, `expand`, `assert`
 - Operators and literals: `and`, `or`, `xor`, `not`, `as`, `true`, `false`
@@ -2799,7 +2993,7 @@ fn main() i32:
   printed form could change from one run to the next.
 - A top-level `Result` stays `CE2037` in `print` and `println`, and is `CE2035` in a hole.
 - A top-level `Maybe` is `CE2115` in `print` and `println`, and `CE2035` in a hole. Handle
-  the value first (`match`, `.realise(default)`, `??`). A type that HOLDS a `Maybe` or a
+  the value first (`match`, `.realise(default)`, or `.or_err(nom e)??`). A type that HOLDS a `Maybe` or a
   `Result` prints them.
 - Only the printed positions take a top-level array: `==`, `<`, `.to_str()` and a
   `Display` constraint on one are still refused.

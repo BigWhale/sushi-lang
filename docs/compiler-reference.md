@@ -150,7 +150,18 @@ each method's signature, receiver mode included (`fn read(poke self, u8[] buf) i
 IoError`), and `Perk Implementations` lists every type that implements it, a generic-target
 template (`extend Box@(T) with Show`) beside the concrete ones. `Extension Methods` lists
 each extension method as it was declared (`extend Vec static at(i32 x, i32 y) Vec`), the
-templates beside the concrete ones.
+templates beside the concrete ones. An enum declared with `error` prints with that keyword
+(`error ParseError:`), a generic one too (`error DecodeError@(T):`). `Conversions` lists
+each conversion between two error types that the library declares, one line per pair, in
+the form of its declaration without the colon:
+
+```text
+Conversions (1):
+  extend LowError as LibError
+```
+
+A binary or hybrid library carries its conversions in its manifest, so a consumer's `??`
+and `as` call them with no source.
 
 `--docs` prints each symbol's documentation block under its signature. It is opt-in
 because prose is what makes a report long -- a library of forty documented functions runs
@@ -666,14 +677,14 @@ fn main() i32:
 
 **Fix:** Use `.realise()`: `let i32 x = get_value().realise(0)`.
 
-#### CE2507: Using ?? on Non-Result Type
+#### CE2507: Using ?? on an Operand That Is Not a Result
 
 <!-- docs-sweep: error CE2507 -->
 ```sushi
 fn run() i32 | StdError:
     let i32 x = 5
 
-    # ERROR CE2507: ?? operator requires Result@(T, E), Maybe@(T), or result-like enum
+    # ERROR CE2507: `??` takes a `Result@(T, E)`, got 'i32'
     let i32 y = x??
 
     return Result.Ok(0)
@@ -684,7 +695,9 @@ fn main() i32:
         Result.Err(_) -> return 1
 ```
 
-**Fix:** Only use `??` with `Result@(T, E)` or `Maybe@(T)`.
+**Fix:** Use `??` only on a `Result@(T, E)`. A `Maybe@(T)` is refused too, because it holds
+no error value: write one with `m.or_err(nom e)??`. A user enum with `Ok`/`Err` variants is
+not a `Result`, because `??` reads the type and not the names of its variants.
 
 #### CE0131: Using ?? in a Bare Body
 

@@ -284,8 +284,33 @@ is the authority, and the index is a cache of it.
                     "doc": DOC         # If documented
                 }
             ],
+            "is_error": bool,          # True for an enum declared with `error`
+                                       #   (docs/design/error-conversion.md 2.1);
+                                       #   only such an enum may be the E of a
+                                       #   Result. A missing key reads False
             "is_generic": False,       # Always False; a generic enum is a template
             "type_params": [],         # Always empty, for the same reason
+            "doc": DOC                 # If documented
+        }
+    ],
+
+    # The CONVERSIONS between two error types that the library's own units declare
+    # (`extend LowError as LibError:`, docs/design/error-conversion.md section 3). A
+    # conversion lives in the unit of its TARGET, and it is as visible as that type,
+    # so only a conversion into a public error type of the library ships. `source` and
+    # `target` are the names of two non-generic error types, in the internal spelling.
+    # The body is in the bitcode under `link_symbol`, which is always the symbol made
+    # from the pair (`conversion_symbol`, `<Source>_as__<Target>`); the consumer
+    # declares it and files the pair, so its `??` and `as` call it. A record whose
+    # sides are not two error types, or whose symbol is another one, is refused
+    # (CE3512). A conversion is not an `extension` record and makes no
+    # `foreign_extensions` claim. The whole key is absent when there is no record.
+    "conversions": [
+        {
+            "source": str,             # The source error type: "LowError"
+            "target": str,             # The target error type: "LibError"
+            "link_symbol": str,        # Its symbol in the shipped bitcode
+            "unit": str,               # The unit that declared it; optional
             "doc": DOC                 # If documented
         }
     ],
@@ -360,7 +385,7 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 8,                  # Templates schema version. A binary or
+        "version": 9,                  # Templates schema version. A binary or
                                        #   hybrid .slib with another schema is
                                        #   refused (CE3512) and must be rebuilt.
                                        #   The one constant is
@@ -394,7 +419,8 @@ is the authority, and the index is a cache of it.
         ],
 
         # Generic structs/enums, same record shape MINUS the signature: neither declares
-        # parameters.
+        # parameters. A generic enum declared with `error` also carries
+        # `"is_error": true`, so each instance at the consumer is an error type.
         "generic_structs": [ ... ],
         "generic_enums": [ ... ],
 
@@ -606,7 +632,7 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | CE3510 | Metadata section truncated |
 | CE3511 | Bitcode section truncated |
 | CE3507 | The bitcode of a binary or hybrid library does not link |
-| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, or a binary or hybrid library's templates schema is not version 8 |
+| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 9 (a library built before schema 9 is rebuilt) |
 | CE3513 | File exceeds maximum size (1GB) |
 | CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | CE3516 | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |

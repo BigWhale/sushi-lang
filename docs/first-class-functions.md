@@ -153,7 +153,8 @@ fn dispatch(List@(fn(i32) -> i32) ops, i32 v) i32:
 ```
 
 `.get(i)` returns `Maybe@(fn(...))`, the same as for every element type. Unwrap it and call it
-in one expression: `ops.get(0)??(v)`, in a function that has a channel.
+in one expression: `ops.get(0).or_err(nom StdError.Error)??(v)`, in a function that has a
+channel. `??` takes a `Result`, so `.or_err(nom e)` writes the error for a `None` first.
 
 An array of function values puts the function type in parentheses. Without them, the `[]` in
 `fn() -> T[]` binds to the return type `T[]`:
@@ -240,7 +241,7 @@ an external only through its namespace.
   pass the value where a parameter type gives it. There is no `identity@(i32)` value spelling.
 
 A call through any expression works: a struct field (`h.op(1)`), a container get-out
-(`ops.get(0)??(2)`), a call result (`get_fn()(3)`, or `get_fn()??(3)` when `get_fn` has a
+(`ops.get(0).or_err(nom StdError.Error)??(2)`), a call result (`get_fn()(3)`, or `get_fn()??(3)` when `get_fn` has a
 channel) and a parenthesized expression (`(f)(6)`).
 The [Closures guide](closures.md) gives the capture rules and the `<collections/iter>`
 combinators (`map`, `filter`, `fold`, `compose`).

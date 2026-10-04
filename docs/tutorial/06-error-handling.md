@@ -71,9 +71,12 @@ decision, and [Error handling](../error-handling.md) has the full text.
 ## Custom error types
 
 `StdError.Error` is fine for quick programs, but real code wants to say *what* went wrong.
-Define an `enum` and name it as the error type with the `T | ErrorEnum` syntax. Now callers
-can `match` on the specific variant. The error type must be an enum, in both spellings
-(`T | E` and `Result@(T, E)`); `fn f() i32 | i32` is the error `CE2084`.
+Declare an error type with the keyword `error`, and name it in the `T | MyError` syntax.
+Now callers can `match` on the specific variant. The body of an `error` declaration is the
+body of an `enum`: variants and payloads. The `E` of a `Result` must be an error type, in
+both spellings (`T | E` and `Result@(T, E)`): a plain `enum`, a struct or `i32` there is
+the error `CE2084`, and for a plain `enum` the help says to write `error` in place of
+`enum`.
 
 ```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/custom-errors.sushi"
@@ -87,7 +90,7 @@ cannot divide by zero
 ```
 
 `fn safe_divide(i32 a, i32 b) i32 | JumpError` reads as "returns an `i32`, or fails with a
-`JumpError`" — that is, `Result@(i32, JumpError)`. Because the error is an enum, the `match`
+`JumpError`" — that is, `Result@(i32, JumpError)`. Because an error type is an enum, the `match`
 can name each failure mode (`DivisionByZero`, `NegativeInput`) and the compiler checks that
 you covered them all.
 
@@ -122,7 +125,11 @@ let i32 fuel = fetch_fuel(tank_present)??
 
 If `fetch_fuel` returned `Result.Err`, `plan_jump` returns that same error right there, and
 the lines below never run. If it returned `Result.Ok(50)`, `fuel` is plainly `50`. The
-error types must match exactly — `??` does not silently convert one error enum into another.
+error types must match, or the program declares a conversion between them (see
+[Converting between error types](#converting-between-error-types)). `??` converts nothing
+on its own.
+
+`??` takes a `Result` and nothing else. On any other value it is **CE2507**.
 
 !!! note "`??` is RAII-safe and zero-cost"
     When `??` bails out early, Sushi still runs the cleanup for anything you'd allocated so
@@ -181,12 +188,13 @@ says "I don't care about it" without tripping an unused-variable warning.)
 `crew` is an ordinary parameter, so `find_index` only borrows it. `main` keeps the array
 and can search it again.
 
-### `??` on a `Maybe`
+### From a `Maybe` to an error: `or_err`
 
-`??` also works on a `Maybe@(T)`, in a function that returns a `Result`. `Maybe.Some(value)`
-unwraps to `value`. `Maybe.None()` makes the function return an error at once. An array's
-`.get(i)` returns a `Maybe`, so `??` is a short way to say "stop if there is no element
-here":
+A `Maybe` says that a value is absent, but not why. It holds no error value, so `??` on a
+`Maybe` is **CE2507**. `.or_err(nom e)` writes the error value: it turns `Maybe.Some(value)`
+into `Result.Ok(value)` and `Maybe.None()` into `Result.Err(e)`. Then `??` propagates it.
+An array's `.get(i)` returns a `Maybe`, so `.get(i).or_err(nom e)??` is a short way to say
+"stop with this error if there is no element here":
 
 ```sushi
 --8<-- "docs/tutorial/examples/06-error-handling/maybe-propagation.sushi"
@@ -198,6 +206,39 @@ Output:
 second of three, doubled: 42
 second of one, doubled:   -1
 ```
+
+The argument carries `nom`, because the error value moves into the `Result`.
+
+## Converting between error types
+
+A program that calls two modules gets two error types. A conversion joins them. Declare it
+once, beside the target type, with `extend <Source> as <Target>:`, and every `??` that
+meets the pair calls it:
+
+```sushi
+--8<-- "docs/tutorial/examples/06-error-handling/conversion.sushi"
+```
+
+Output:
+
+```
+warp 2
+refused: AppError.Parse(ParseError.NotADigit)
+refused: AppError.TooFast
+```
+
+`parse_digit` fails with a `ParseError`, and `warp_factor` answers `AppError`. Without the
+`extend ParseError as AppError:` block, the `??` in `warp_factor` is **CE2511**, and the
+help names the declaration to write. The body is an ordinary function body: `self` is the
+`ParseError`, and it returns the `AppError`.
+
+- `e as AppError` calls the same conversion on one value.
+- A conversion is one step. `A as B` and `B as C` do not give `A` to `C`.
+- Only the unit that declares the target type may declare a conversion into it
+  (**CE2519**). The stdlib declares `FileError as IoError` and `NetError as IoError`, so a
+  function that answers `IoError` can `??` a call that answers `FileError`.
+- For one call, `.map_err(f)` converts with no declaration:
+  `parse_digit(s).map_err(|nom ParseError e| AppError.Parse(e))??`.
 
 ## `main` is bare: no `??` there
 
@@ -263,12 +304,14 @@ error: write the channel and return `Result.Err(...)`. If no, it is a bug: `asse
 
 - A function that can fail writes an error channel, `fn f() T | E:`. The call gives
   `Result@(T, E)`, and the body returns `Result.Ok(value)` or `Result.Err(error)`. The error
-  type must be an enum (`CE2084`).
+  type is declared with `error` (`CE2084` for any other type).
 - A function without `| E` is bare: it returns the value, and the call gives the value.
   There is no default error type. Use the bare form only for a total function.
 - `??` unwraps `Ok` or propagates `Err` from the enclosing function — RAII-safe, zero-cost,
-  and legal only in a body with a channel. On a `Maybe`, `??` unwraps `Some` and
-  returns an error for `None`.
+  and legal only in a body with a channel. It takes a `Result` only: on a `Maybe`, write the
+  error value with `.or_err(nom e)??`.
+- `extend A as B:` declares a conversion, and `??` and `as` call it. `.map_err(f)`
+  converts at one call.
 - `.realise(default)` unwraps with a fallback; `if (result.is_ok()):` splits Ok from Err.
 - `Maybe@(T)` (`Maybe.Some` / `Maybe.None`) models presence vs. absence — Sushi's `null`
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.

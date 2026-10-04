@@ -158,8 +158,8 @@ so no import can choose between the two bodies.
 
 ### Public Declarations
 
-Only declarations marked `public` are accessible from other compilation units. Six kinds
-carry the marker -- `fn`, `const`, `var`, `struct`, `enum` and `perk` -- and private is the
+Only declarations marked `public` are accessible from other compilation units. Seven kinds
+carry the marker -- `fn`, `const`, `var`, `struct`, `enum`, `error` and `perk` -- and private is the
 default for all of them. A `public var` is storage that a consumer can read and write:
 
 ```sushi
@@ -357,7 +357,7 @@ Kind: source
 Compiler: 0.14.0
 Requires compiler: ~0.14
 Compiled: 2026-09-28T19:18:00+00:00
-Protocol: 2.3
+Protocol: 2.4
 
 Units (1):
   mylib
@@ -396,13 +396,14 @@ Public Enums (1):
     Green
     Blue
 
-Dependencies (6):
+Dependencies (7):
   <collections/strings>
   <io/contracts>
   <io/error>
   <io/files>
-  <io/fs>
+  <io/fs>, used by mylib
   <io/path>
+  <net/error>
 
 Source: 643 bytes
 ```
@@ -414,9 +415,12 @@ has no block, so it prints as a bare line and the run of bare lines stays dense.
 a report long, and a reader asking what a library exports usually does not want ten
 screens of it. A `nom` parameter shows its mode, which is the one mode a type cannot
 spell, and it prints either way. `Dependencies` lists every stdlib module the library
-needs, the modules that its imports bring in included: one `use <io/fs>` gives six lines.
+needs, the modules that its imports bring in included: one `use <io/fs>` gives seven lines
+(`<io/error>` imports `<net/error>` for the conversion `NetError as IoError`).
 It also lists each library that the library's own units use, with the name and the
-version that its build found: `<lib/b> (b 0.1.0)`. See
+version that its build found: `<lib/b> (b 0.1.0)`. An enum declared with `error` prints
+as `error Name:`, and a `Conversions` section lists each conversion between two error
+types that the library declares, one line per pair (`extend LowError as LibError`). See
 [Documentation Blocks](documentation-blocks.md#what-travels-in-a-slib) for the record and
 for the few things that do not travel in it.
 
@@ -685,7 +689,7 @@ Current limitations of the library system:
    (`...Ts`), and generic *structs*/*enums* can be instantiated across `.slib` boundaries.
 
    The library producer ships a re-parsable source template in the `.slib` `templates`
-   section (templates version 8); the consumer re-parses it, registers it alongside its own
+   section (templates version 9); the consumer re-parses it, registers it alongside its own
    definitions, and monomorphizes it at consumer call sites using the standard `instantiate`/`monomorphize`
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk

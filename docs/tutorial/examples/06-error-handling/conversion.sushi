@@ -1,0 +1,35 @@
+# Two error types: one for parsing, one for the whole program.
+error ParseError:
+    Empty
+    NotADigit
+
+error AppError:
+    Parse(ParseError)
+    TooFast
+
+# A conversion. `??` calls it when a ParseError meets an AppError channel.
+extend ParseError as AppError:
+    return AppError.Parse(self)
+
+fn parse_digit(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    if (s == "2"):
+        return Result.Ok(2)
+    if (s == "9"):
+        return Result.Ok(9)
+    return Result.Err(ParseError.NotADigit)
+
+fn warp_factor(string s) i32 | AppError:
+    let i32 n = parse_digit(s)??
+    if (n > 5):
+        return Result.Err(AppError.TooFast)
+    return Result.Ok(n)
+
+fn main() i32:
+    let string[] inputs = from(["2", "x", "9"])
+    foreach(s in inputs.iter()):
+        match warp_factor(s):
+            Result.Ok(n) -> println("warp {n}")
+            Result.Err(e) -> println("refused: {e}")
+    return 0

@@ -187,7 +187,7 @@ fn free(ptr p) ~        = "free"     # ~ here is genuine C void, NOT Result@(~)
 ```
 
 Because `libc.strlen(s)` yields a plain `i64`, you **cannot** apply `??` or
-`.realise()` to it - it is not a `Result`/`Maybe`. Attempting `libc.strlen(s)??`
+`.realise()` to it - it is not a `Result`. Attempting `libc.strlen(s)??`
 is a clean type error (**`CE2507`**), as it is on the call of any bare function.
 
 ### String auto-marshalling (and the no-leak contract)

@@ -170,6 +170,10 @@ fn main() i32:
     return 0
 ```
 
+`as` also converts between two error types when the program declares the conversion
+(see [Error Types and Conversion](#error-types-and-conversion)). Every other cast is
+`CE2014`.
+
 ### Strings
 
 Strings have full UTF-8 support:
@@ -480,6 +484,7 @@ fn main() i32:
 
 **Key Concepts**:
 - A function declared `i32 | StdError` returns `Result@(i32, StdError)`; a function declared `i32` returns `i32`
+- The `E` of a `Result` is an error type: `StdError`, another predefined error type, or an enum that your program declares with `error` (any other type is CE2084)
 - In a function with a channel, success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
@@ -539,6 +544,10 @@ fn main() i32:
 1. If the `Result` is `Ok(value)`, `??` extracts and returns the value
 2. If the `Result` is `Err(e)`, `??` immediately returns `Result.Err(e)` from the current function
 3. The error propagates up the call stack until someone handles it
+
+`??` takes a `Result@(T, E)` and nothing else (CE2507). The error type of the operand must be
+the error type of the current function, or the program declares a conversion between the two
+(CE2511 otherwise).
 
 **RAII Safety**: The `??` operator is fully integrated with Sushi's RAII (Resource Acquisition Is Initialization) system. When an error is propagated, all resources in the current scope are properly cleaned up before the function returns. This means you never leak memory or file handles when errors occur.
 
@@ -607,6 +616,10 @@ fn main() i32:
 - `.is_none()` - returns `true` if the Maybe is empty
 - `.realise(default)` - extracts the value or returns the default if None
 - `.expect(message)` - extracts the value or terminates with an error message
+- `.or_err(nom e)` - turns the Maybe into a `Result`: `Some(v)` becomes `Ok(v)` and `None` becomes `Err(e)`
+
+A `Maybe` holds no error value, so `??` on a `Maybe` is CE2507. Write the error value with
+`or_err`, and then propagate: `let i32 v = xs.get(0).or_err(nom AppError.Empty)??`.
 
 **Common Use Cases**:
 - Search operations (return `Maybe.Some(index)` if found, `Maybe.None()` if not)
@@ -615,6 +628,46 @@ fn main() i32:
 - HashMap lookups (`.get()` returns `Maybe@(V)` since the key might not exist)
 
 **Composing Maybe with Result**: Since functions return `Result@(T, E)`, you often see `Result@(Maybe@(T), E)` - a result that might be an error, or might be a success with an optional value. The type system helps you handle all cases correctly.
+
+### Error Types and Conversion
+
+An error type is declared with `error`. Its body is the body of an `enum`. A conversion
+`extend <Source> as <Target>:` turns one error type into another, and `??` calls it when the
+two error types differ:
+
+```sushi
+error ParseError:
+    Empty
+
+error AppError:
+    Parse(ParseError)
+
+extend ParseError as AppError:
+    return AppError.Parse(self)
+
+fn parse(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    return Result.Ok(7)
+
+fn run(string s) i32 | AppError:
+    let i32 n = parse(s)??          # ParseError as AppError
+    return Result.Ok(n * 6)
+
+fn main() i32:
+    println(run("x").realise(-1))   # 42
+    match run(""):
+        Result.Ok(n) -> println(n)
+        Result.Err(e) -> println(e) # AppError.Parse(ParseError.Empty)
+    return 0
+```
+
+- `e as AppError` calls the same conversion on one value.
+- A conversion is one step, and only the unit that declares the target type may declare it.
+- For one call, `r.map_err(f)` converts with no declaration:
+  `parse(s).map_err(|nom ParseError e| AppError.Parse(e))??`.
+
+The full guide is [Error Handling](error-handling.md#error-conversion).
 
 ## Collections
 
@@ -887,7 +940,7 @@ When you pattern match, the compiler generates a switch on the discriminant, the
 
 **Common use cases**:
 - **State machines**: Represent different states with different associated data
-- **Error types**: Different error variants with relevant information
+- **Error types**: declare them with `error` in place of `enum`, so they can be the `E` of a `Result`
 - **Optional complex data**: Use `Maybe@(T)` (which is an enum) for values that might not exist
 - **Algebraic data types**: Build sophisticated recursive data structures
 
