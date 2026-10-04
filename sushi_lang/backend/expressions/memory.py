@@ -292,6 +292,7 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
     slot = codegen.memory.create_local(name, slot_type or value.type, value, resolved,
                                        register_cleanup=False)
     codegen.memory.register_owning_value(name, resolved, slot)
+    codegen.memory.hold_in_temporary(expr, name)
     return slot
 
 

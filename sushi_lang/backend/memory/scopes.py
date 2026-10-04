@@ -71,6 +71,10 @@ class ScopeManager:
         # borrows with a cleared owned bit.
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
+        # id(expr) -> the name of the scope temporary that holds the value of expr. A
+        # consuming use of that expression reads it, so the temporary gives the value up.
+        self._held_by_temporary: Dict[int, str] = {}
+
     @staticmethod
     def _stack_pop_at_depth(reg: Dict[str, List], name: str, depth: int) -> None:
         """Drop `name`'s top entry from a stacked cleanup registry if it is at `depth`."""
@@ -319,6 +323,14 @@ class ScopeManager:
             elif arrays.is_list_type(resolved):
                 arrays.register_list(name, resolved, slot)
 
+    def hold_in_temporary(self, expr, name: str) -> None:
+        """Record that the scope temporary `name` holds the value of `expr`."""
+        self._held_by_temporary[id(expr)] = name
+
+    def temporary_holding(self, expr) -> Optional[str]:
+        """The name of the scope temporary that holds the value of `expr`, or None."""
+        return self._held_by_temporary.get(id(expr))
+
     def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
                              register_cleanup: bool = True) -> ir.AllocaInstr:
         """Create local variable without initialization."""
@@ -361,6 +373,7 @@ class ScopeManager:
         self._struct_cleanup.clear()
         self._closure_cleanup.clear()
         self._string_cleanup.clear()
+        self._held_by_temporary.clear()
         self._cstr_cleanup = []
         self._closure_temp_cleanup = []
 
