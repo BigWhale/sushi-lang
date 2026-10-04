@@ -93,6 +93,25 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
         validate_constant_array_index(validator, expr.index, array_type.size)
 
 
+def _reject_self_conversion(validator: 'TypeValidator', expr: CastExpr,
+                            conversion: 'Conversion') -> None:
+    """CE2523: a cast of a conversion's own pair inside that conversion's body.
+
+    `self` is always a value of the source, so the call never ends. A cast of another
+    pair in the body is legal.
+    """
+    if conversion != validator.body_conversion:
+        return
+    diag = er.emit_with(validator.reporter, er.ERR.CE2523, expr.loc,
+                        source=display_type(conversion.source),
+                        target=display_type(conversion.target))
+    if conversion.name_span is not None:
+        diag.note_at("the conversion is declared here", conversion.name_span,
+                     conversion.filename)
+    diag.help("build the target value directly, for example with one of its "
+              "variants").emit()
+
+
 def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:
     """Validate a cast expression and check if the cast is valid."""
     # An integer literal (or negated literal) cast directly to an integer type
@@ -129,6 +148,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
     expr.inferred_conversion = conversion
     if conversion is not None:
         expr.target_type = conversion.target
+        _reject_self_conversion(validator, expr, conversion)
 
     if not is_valid_cast(source_type, resolved_target, conversion):
         diag = er.emit_with(validator.reporter, er.ERR.CE2014, expr.loc,

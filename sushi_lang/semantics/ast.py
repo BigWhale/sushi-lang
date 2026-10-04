@@ -370,6 +370,9 @@ class ExtendDef(Node):
     library_origin: Optional[Origin] = None
     # The scope the names of the body resolve in; see `FuncDef`.
     scope_unit: Optional[str] = None
+    # A conversion: the pair the collect pass filed, with its types resolved. None on
+    # every other extension, and on a refused conversion.
+    declared_conversion: Optional["Conversion"] = None
 
     @property
     def is_conversion(self) -> bool:

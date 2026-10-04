@@ -69,15 +69,17 @@ def collect_conversion(collector: 'FunctionCollector', ext: ExtendDef, *,
 
     # The declaration keeps its WRITTEN types: a name behind an alias (`ie.FileError`)
     # is checked as written in the typecheck pass, and its symbol is the same either way.
-    first = collector.conversions.file(Conversion(
+    conversion = Conversion(
         source=source, target=target, symbol=conversion_symbol(source, target),
         unit_name=collector.current_unit_name, filename=collector.current_unit_file,
-        name_span=ext.name_span))
+        name_span=ext.name_span)
+    first = collector.conversions.file(conversion)
     if first is not None:
         collector._emit_duplicate_extension(
             f"conversion '{display_type(source)} as {display_type(target)}'",
             ext.name_span, first.unit_name, first.name_span, first.filename)
         return Filed.REFUSED
+    ext.declared_conversion = conversion
     return Filed.FILED
 
 
