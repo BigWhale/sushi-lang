@@ -301,9 +301,15 @@ each instance.
 - The parameter is `nom`, because the value moves into the `Err` and a pass-through
   generic needs `nom`. A mode is marked at both ends, so the call writes
   `or_err(nom AppError.Empty)`, as `BufReader.new(nom f, 8192)` does.
-- The receiver is `nom self`, because the `Some` payload moves into the `Ok`. On a
-  temporary (`xs.get(0)`) nothing changes. A named `Maybe` is spent, which is the rule
-  `??` already has for a named wrapper.
+- The receiver is `nom self`, because the `Some` payload moves into the `Ok`. A `Maybe`
+  that the call owns (a temporary that owns its payload, `Maybe.Some(s)`, or a named
+  local) is spent, which is the rule `??` already has for a named wrapper.
+- A BORROWED `Maybe` is read through, as `??` reads through a borrowed wrapper
+  (`borrow-model.md` S10d). A get-out (`xs.get(0)`, also from a temporary owner such as
+  `give().get(0)`), a parameter and a pattern binding are borrows. The `Result` that
+  `or_err` answers then carries the borrow, so `let string s = xs.get(0).or_err(nom e)??`
+  binds a borrow, exactly as `xs.get(0)??` did, and consuming it is the
+  consuming-use-of-a-borrow error. No clone is needed (ruled 2026-10-04).
 
 A `None` has no error value, so a conversion from "nothing" to an `E` is written at the
 site. Otherwise the compiler would have to invent a value, which is the fault of #1168.
