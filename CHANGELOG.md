@@ -88,6 +88,8 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
 - `??` on a borrowed `Result` (a parameter, a binding, a field read) whose error type owns
   heap memory freed the error two times on the `Err` path. It is now CE2411, the consuming
   use of a borrow, with the help `r.clone()??`; a plain error type stays legal (#1171).
+- `.realise(default)` on a temporary `Result` (a call result) that holds an `Err` whose
+  error type owns heap memory did not free the error (#1172).
 
 ## [0.14.0] - 2026-10-03
 

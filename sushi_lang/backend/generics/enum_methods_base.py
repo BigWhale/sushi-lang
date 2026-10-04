@@ -86,6 +86,8 @@ def emit_enum_realise(
         else:
             raise_internal_error("CE0017", src=str(default_value.type), dst=str(value_llvm_type))
 
+    _destroy_the_untaken_arm(codegen, call.receiver, enum_value, enum_type, is_success)
+
     # LLVM `select` on an aggregate whose fields are themselves aggregates miscompiles:
     # the top-level scalars survive but the nested aggregate is corrupted. So for any
     # aggregate T, select the POINTERS and load through the choice -- always a scalar
@@ -108,6 +110,23 @@ def emit_enum_realise(
     result = codegen.builder.select(is_success, unpacked_value, default_value, name="realise_result")
 
     return result
+
+
+def _destroy_the_untaken_arm(codegen: 'LLVMCodegen', receiver, enum_value: ir.Value,
+                             enum_type: EnumType, is_success: ir.Value) -> None:
+    """Destroy a temporary receiver on the path where `realise` answers the default (#1172).
+
+    No other owner frees a temporary. On the success path its payload moves into the
+    answer and nothing is left. On the default path the temporary holds the other arm (an
+    error that owns heap), so it is destroyed whole.
+    """
+    from sushi_lang.backend.expressions.memory import destroy_enum_temp, expression_is_temporary
+    if not expression_is_temporary(codegen, receiver):
+        return
+    if not needs_cleanup(codegen, resolve_named_type(codegen, enum_type)):
+        return
+    with codegen.builder.if_then(codegen.builder.not_(is_success)):
+        destroy_enum_temp(codegen, receiver, enum_value, enum_type)
 
 
 def emit_enum_expect(

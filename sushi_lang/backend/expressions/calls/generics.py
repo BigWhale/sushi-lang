@@ -15,7 +15,8 @@ if TYPE_CHECKING:
 # When their receiver is an unbound temporary, nothing else will ever free that payload, so the
 # receiver is destroyed after the tag is read (#159). The extracting methods -- `realise`,
 # `expect` -- are deliberately absent: they hand the payload to a new owner, and destroying the
-# receiver as well would double-free it.
+# receiver as well would double-free it. `realise` destroys a temporary receiver itself, on
+# the path where it answers the default (#1172).
 TAG_ONLY_METHODS = frozenset({"is_ok", "is_err", "is_some", "is_none"})
 
 
