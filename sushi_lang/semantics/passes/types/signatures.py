@@ -3,14 +3,12 @@ from __future__ import annotations
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
-from sushi_lang.semantics.typesys import (
-    BuiltinType, UnknownType, EnumType
-)
+from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
-from sushi_lang.semantics.generics.results import (
-    is_builtin_wrapper_enum, signature_result_arms)
-from sushi_lang.semantics.generics.types import TypeParameter
+from sushi_lang.semantics.generics.results import signature_result_arms
+from sushi_lang.semantics.error_types import reject_non_error_type
+from sushi_lang.semantics.passes.collect.functions import is_explicit_result_type
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
@@ -20,7 +18,6 @@ from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
     validate_perk_implementation,
 )
-from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.namespaces import in_body_scope
 
 
@@ -69,49 +66,26 @@ def validate_declared_types(self, program) -> None:
 
 
 def validate_error_channel(self, ret, err_type, span) -> None:
-    """The Err arm of the Result a signature answers, in EITHER spelling.
+    """The `E` of the Result a signature answers, in EITHER spelling (E3).
 
-    `T | E` is SUGAR for `Result@(T, E)` and nothing else, so the two must admit the
-    same `E`. They did not: CE2084 was a rule on the SHORT form alone, and
-    `fn f() Result@(i32, Bad):` with a struct error compiled while `fn f() i32 | Bad:`
-    was refused (#668). `signature_result_arms` is the one derivation of the arms a
-    signature answers -- an explicit Result is its own two arms, anything else is
-    wrapped with the spelled `| E`, and a bare signature has none -- so reading the Err
-    arm off it is what makes the short form sugar in the checker too.
+    `T | E` is SUGAR for `Result@(T, E)`, so the two admit the same `E` (#668): an error
+    type (docs/design/error-conversion.md section 2.4). `signature_result_arms` is the one
+    derivation of the arms a signature answers. A bare signature has none.
 
-    The rule: the arm must be an ENUM. A struct, a primitive, an array and a function
-    type are CE2084. A built-in WRAPPER is an enum by representation and not by intent,
-    so it is named and refused (CE2086): the Err arm already means failure, and
-    `Result@(i32, Maybe@(string))` asks a reader to read an absence as one.
-
-    "Enum" is a PROXY for "error type" and NEEDS.md records the want. Until that lands
-    this is the line.
+    One fault, one diagnostic: the long form is a WRITTEN `Result`, and the walk of the
+    return type (`validate_type_name`) judges its `E`. This function judges the spelled
+    `| E`, which no written `Result` holds. A channel with no span was not written: a
+    lambda takes it from the type of its position, and that position was judged
+    (section 2.5, item 3).
     """
     if err_type is not None:
         validate_type_name(self, err_type, span)
 
     arms = signature_result_arms(ret, err_type)
-    if arms is None:
+    if arms is None or span is None or is_explicit_result_type(ret):
         return
-    err_arm = arms[1]
-
-    resolved = resolve_unknown_type(
-        err_arm, self.struct_table.by_name, self.enum_table.by_name)
-
-    # A name that spells nothing was refused where it was written -- CE2001 for the
-    # short form's own name, and the return walk for the long form's. Each already says
-    # everything a reader can act on, and a kind complaint beside one is a second
-    # diagnostic about one fault (#663). A type PARAMETER is not this rule's either: it
-    # names no type until the instance is monomorphized.
-    if isinstance(resolved, (UnknownType, TypeParameter)):
-        return
-
-    if not isinstance(resolved, EnumType):
-        self.err.emit(er.ERR.CE2084, span, type_name=display_type(err_arm))
-        return
-
-    if is_builtin_wrapper_enum(resolved):
-        self.err.emit(er.ERR.CE2086, span, type_name=display_type(err_arm))
+    reject_non_error_type(self.reporter, arms[1], span,
+                          self.struct_table.by_name, self.enum_table.by_name)
 
 
 def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> None:

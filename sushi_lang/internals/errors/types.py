@@ -331,16 +331,17 @@ _add(ErrorMessage("CE2083", Severity.ERROR,
     Category.TYPE, "Named struct constructor field type mismatch."))
 
 _add(ErrorMessage("CE2084", Severity.ERROR,
-    "error type must be an enum, not '{type_name}'",
-    Category.TYPE, "Custom error types (fn foo() T | E) must be enums. Structs and primitives are not allowed as error types. ONE rule over the four kinds that write a channel: a free function, an extension method, a perk contract and a perk implementation (#663). A name that spells nothing stops at CE2001, which already says everything a reader can act on. A GENERIC enum qualifies: `| MyErr@(i32)` is an enum and is legal, which this rule denied on every kind until #668 -- the written instantiation is resolved before the kind is asked."))
+    "'{type_name}' is {kind}, not an error type",
+    Category.TYPE, "The `E` of every `Result@(T, E)` is an error type: an enum declared with `error`, or one of the seven predefined error types (rule E3, docs/design/error-conversion.md section 2.4). A `Result` is the value of an error channel, and only an error fits into an error channel. The rule covers both spellings, because `T | E` is sugar for `Result@(T, E)`. It covers every position: the channel of a function, a method, a perk contract, a perk implementation, a lambda and a function type, and also a `let`, a field, a payload, a parameter and a generic argument, at any depth. The diagnostic points at the written type that holds the `E`. A type parameter in the `E` position is judged at each instance: the diagnostic is at the instance and names the type argument, and a note points at the template. A `Result` that the compiler infers is not judged, because the position that it comes from was judged. A plain enum, a struct, a primitive, an array, a function type, `Maybe` and `Result` are refused, and the message says which one the type is. For a plain enum, the help says to declare it with `error`. Before E3 the rule was 'the E is an enum' (#663, #668), and CE2086 refused `Maybe` and `Result` by name. A name that spells nothing stops at CE2001."))
 
 _add(ErrorMessage("CE2085", Severity.ERROR,
     "cannot use '| {err_type}' syntax with explicit Result@(T, E) return type",
     Category.TYPE, "When using explicit Result@(T, E) syntax, the error type is already specified. Remove the '| ErrorType' syntax or use implicit return type."))
 
-_add(ErrorMessage("CE2086", Severity.ERROR,
-    "error type cannot be a wrapper: '{type_name}'",
-    Category.TYPE, "A built-in wrapper is an enum, so CE2084 does not catch it, and it is still not an error vocabulary. `Result@(T, E)` models failure and `Maybe@(T)` models absence; the Err arm of the channel already says that something went wrong, so `fn f() i32 | Maybe@(string)` asks a reader to read an absence as a failure and says nothing they can act on. It also nests: the declared return becomes `Result@(i32, Maybe@(string))`. Write a plain enum that names the failures. A user's GENERIC enum is fine -- `| MyErr@(i32)` is legal (#668); this rule reads the OUTERMOST name only, so it refuses `Maybe` and `Result` and nothing else."))
+# CE2086 ("error type cannot be a wrapper: '{type_name}'") was RETIRED by rule E3 of
+# docs/design/error-conversion.md (section 2.4). It refused `Maybe` and `Result` by name,
+# because CE2084 asked only "is the E an enum". CE2084 now asks "is the E an error type",
+# and that question refuses both wrappers.
 
 # CE2087-CE2089 reserved for future extensions
 _add(ErrorMessage("CE2090", Severity.ERROR,

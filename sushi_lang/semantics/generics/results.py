@@ -113,8 +113,8 @@ def is_result_enum(t: Any) -> bool:
 def is_builtin_wrapper_enum(t: Any) -> bool:
     """Whether ``t`` is a built-in wrapper: a ``Result<T, E>`` or a ``Maybe<T>``.
 
-    Both are ordinary interned enums, so an "is this an enum" test admits them. The
-    positions that mean an error VOCABULARY have to ask this as well (CE2086, #668).
+    Both are ordinary interned enums, so an "is this an enum" test admits them. A
+    position that takes a value out of a wrapper asks this as well (CE2106).
     """
     return isinstance(t, EnumType) and t.generic_base in ("Result", "Maybe")
 

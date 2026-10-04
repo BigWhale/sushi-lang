@@ -97,6 +97,21 @@ def let_annotations(block) -> Iterator[Type]:
                 yield from let_annotations(arm.body)
 
 
+def _error_parameters_of(generic, params) -> dict:
+    """The type parameters a function template writes in an `E` position (E3).
+
+    The signature, with `T | E` read as the `Result@(T, E)` it is sugar for, and every
+    `let` in the body. A `let` has no span on this path, so its note is at the name.
+    """
+    from sushi_lang.semantics.error_types import as_written_result, error_parameters
+
+    written = [(as_written_result(generic.ret, generic.err_type),
+                generic.err_span or generic.ret_span)]
+    written += [(param.ty, param.type_span) for param in generic.params]
+    written += [(ty, generic.name_span) for ty in let_annotations(generic.body)]
+    return error_parameters(written, {param.name for param in params})
+
+
 class FunctionMonomorphizer:
     """Handles monomorphization of generic functions."""
 
@@ -132,7 +147,8 @@ class FunctionMonomorphizer:
         return self.monomorphizer._validate_type_constraints(
             params, args,
             key=("fn", instantiation_key(generic.name, tuple(args))),
-            template_file=getattr(generic, "filename", None))
+            template_file=getattr(generic, "filename", None),
+            error_params=_error_parameters_of(generic, params))
 
     def build_substitution(
         self,

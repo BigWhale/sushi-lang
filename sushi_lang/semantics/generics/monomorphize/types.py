@@ -63,6 +63,13 @@ class TypeMonomorphizer:
 
         return concrete_enums
 
+    def _error_parameters_of(self, kind: str, generic, held) -> dict:
+        """The type parameters a type template holds in an `E` position (E3), for the note."""
+        from sushi_lang.semantics.error_types import error_parameters
+        span = self.monomorphizer.template_span(kind, generic.name)
+        return error_parameters(((ty, span) for ty in held),
+                                {param.name for param in generic.type_params})
+
     def monomorphize_enum(
         self,
         generic: GenericEnumType,
@@ -83,7 +90,10 @@ class TypeMonomorphizer:
         # total; the analyzer stops before anything reads it.
         if not self.monomorphizer._validate_type_constraints(
                 generic.type_params, type_args, key=concrete_name,
-                template_file=self.monomorphizer.template_file("enum", generic.name)):
+                template_file=self.monomorphizer.template_file("enum", generic.name),
+                error_params=self._error_parameters_of(
+                    "enum", generic, (ty for variant in generic.variants
+                                      for ty in variant.associated_types))):
             return EnumType(name=interned_name(generic.name, ("error",)), variants=())
 
         substitution: Dict[str, Type] = {}
@@ -179,7 +189,9 @@ class TypeMonomorphizer:
         # total; the analyzer stops before anything reads it.
         if not self.monomorphizer._validate_type_constraints(
                 generic.type_params, type_args, key=concrete_name,
-                template_file=self.monomorphizer.template_file("struct", generic.name)):
+                template_file=self.monomorphizer.template_file("struct", generic.name),
+                error_params=self._error_parameters_of(
+                    "struct", generic, (ty for _name, ty in generic.fields))):
             return StructType(name=interned_name(generic.name, ("error",)), fields=())
 
         substitution: Dict[str, Type] = {}
