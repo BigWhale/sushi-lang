@@ -1,0 +1,13 @@
+# #1173: `realise` on a Result borrows its default. A `nom` marker on it is the
+# mode-mismatch error.
+# EXPECT_ERROR_CODES_EXACT: CE2427
+# EXPECT_STDERR_CONTAINS: drop the `nom`
+fn count(i32 n) i32 | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n)
+
+fn main() i32:
+    let i32 d = 3
+    println(count(-1).realise(nom d))
+    return 0

@@ -1,0 +1,10 @@
+# #1173: the index of `List.get` is a plain parameter. A `nom` marker on it is the
+# mode-mismatch error.
+# EXPECT_ERROR_CODES_EXACT: CE2427
+# EXPECT_STDERR_CONTAINS: drop the `nom`
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let i32 i = 0
+    println(xs.get(nom i).realise(0))
+    return 0

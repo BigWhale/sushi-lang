@@ -1,0 +1,10 @@
+# #1173: the default of `realise` is a borrow, so a `nom` at the call site is the
+# mode-mismatch error, as for a user method with a plain parameter.
+# EXPECT_ERROR_CODES_EXACT: CE2427, CE2427
+# EXPECT_STDERR_CONTAINS: argument mode does not match the declared mode
+# EXPECT_STDERR_CONTAINS: drop the `nom`
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.get(0).realise(nom 3))
+    println(xs.get(5).realise(nom 3))
+    return 0

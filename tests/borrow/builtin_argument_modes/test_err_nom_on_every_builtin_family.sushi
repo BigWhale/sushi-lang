@@ -1,0 +1,25 @@
+# #1173: one `nom` marker on a plain parameter in each built-in method family: a Result,
+# a dynamic array, a string, a HashMap, a List static, a contract method and a primitive
+# static. Each is the mode-mismatch error.
+# EXPECT_ERROR_CODES_EXACT: CE2427, CE2427, CE2427, CE2427, CE2427, CE2427, CE2427
+use <collections/strings>
+use <collections/hashmap>
+
+fn main() i32:
+    let Result@(i32, StdError) r = Result.Ok(1)
+    println(r.expect(nom "no value"))
+    let i32[] xs = from([1, 2])
+    println(xs.contains(nom 2))
+    let string s = "Mostly Harmless"
+    let string t = "Harmless"
+    println(s.contains(nom t))
+    let HashMap@(i32, string) m = HashMap.new()
+    println(m.contains_key(nom 1))
+    let List@(i32) ys = List.with_capacity(nom 4)
+    println(ys.len())
+    let i32 n = 1
+    println(n.eq(nom n))
+    let u64 bits = 0
+    println(f64.from_bits(nom bits))
+    m.free()
+    return 0
