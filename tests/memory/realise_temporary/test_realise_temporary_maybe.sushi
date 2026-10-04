@@ -1,0 +1,13 @@
+# #1172: `.realise(default)` on a temporary Maybe. `None` holds nothing, and `Some`
+# moves its owning payload into the answer.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "word 2\nnone\n"
+fn word(i32 n) Maybe@(string):
+    if (n < 0):
+        return Maybe.None
+    return Maybe.Some("word {n}")
+
+fn main() i32:
+    println(word(2).realise("none"))
+    println(word(-2).realise("none"))
+    return 0

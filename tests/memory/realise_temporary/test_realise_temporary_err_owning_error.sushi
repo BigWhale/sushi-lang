@@ -1,0 +1,17 @@
+# #1172: `.realise(default)` on a temporary Result that holds an Err whose error owns a
+# string. The answer is the default, and the temporary is destroyed with its error.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "fallback\nfallback 2\n"
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) string | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok("tok {n}")
+
+fn main() i32:
+    println(tokenize(-6).realise("fallback"))
+    let string s = tokenize(-7).realise("fallback 2")
+    println(s)
+    return 0

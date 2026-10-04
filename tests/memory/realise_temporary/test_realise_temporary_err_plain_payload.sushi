@@ -1,0 +1,16 @@
+# #1172: the Ok payload is plain and the error owns a string. On the Err path the
+# default is the answer, and the error of the temporary is destroyed.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n5\n"
+error TokenError:
+    Bad(string)
+
+fn count(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn main() i32:
+    println(count(-1).realise(0))
+    println(count(5).realise(0))
+    return 0

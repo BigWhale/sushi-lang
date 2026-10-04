@@ -1,0 +1,17 @@
+# #1172: the Ok path of `.realise(default)` on a temporary. The owning Ok payload moves
+# into the answer, the default is destroyed, and nothing is freed two times.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "tok 3\ntok 4\n"
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) string | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok("tok {n}")
+
+fn main() i32:
+    println(tokenize(3).realise("fallback"))
+    let string s = tokenize(4).realise("fallback")
+    println(s)
+    return 0
