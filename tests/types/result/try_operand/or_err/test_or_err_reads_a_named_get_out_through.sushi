@@ -1,0 +1,24 @@
+# Design 4: a get-out is a borrow, so `or_err` reads it through and the owner keeps the
+# element. The `let` binds a borrow, as `xs.get(0)??` does. An error value that owns a
+# string is freed one time on the `Some` path, and it travels to the caller on the
+# `None` path.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ford 1\n2\nerr AppError.Missing("no element 5")\nford 1\n"
+error AppError:
+    Missing(string)
+
+fn at(string[] xs, i32 i) i32 | AppError:
+    let string s = xs.get(i).or_err(nom AppError.Missing("no element {i}"))??
+    println(s)
+    return Result.Ok(xs.len())
+
+fn main() i32:
+    let string[] xs = from(["ford {1}", "arthur {2}"])
+    match at(xs, 0):
+        Result.Ok(n) -> println(n)
+        Result.Err(e) -> println("err {e}")
+    match at(xs, 5):
+        Result.Ok(n) -> println(n)
+        Result.Err(e) -> println("err {e}")
+    println(xs.get(0).realise("none"))
+    return 0

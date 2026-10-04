@@ -1,0 +1,31 @@
+# Design 4: a parameter and a pattern binding are borrows. `or_err` reads a borrowed
+# `Maybe` through, so the caller keeps its value and frees it one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "word 1\nword 1\nword 2\nword 2\n"
+error AppError:
+    Empty
+
+enum Holder:
+    Has(Maybe@(string))
+
+fn from_parameter(Maybe@(string) m) i32 | AppError:
+    let string w = m.or_err(nom AppError.Empty)??
+    println(w)
+    return Result.Ok(0)
+
+fn from_binding(Holder h) i32 | AppError:
+    match h:
+        Holder.Has(m) ->
+            let string w = m.or_err(nom AppError.Empty)??
+            println(w)
+    return Result.Ok(0)
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some("word {1}")
+    println(from_parameter(m).realise(1))
+    println(m.realise("none"))
+    let Holder h = Holder.Has(Maybe.Some("word {2}"))
+    println(from_binding(h).realise(1))
+    match h:
+        Holder.Has(inner) -> println(inner.realise("none"))
+    return 0

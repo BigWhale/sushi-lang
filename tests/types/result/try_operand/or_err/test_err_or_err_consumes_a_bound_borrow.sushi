@@ -1,0 +1,16 @@
+# Design 4: `or_err` reads a get-out through, so the `let` binds a borrow, as
+# `xs.get(0)??` does. Giving that binding away is the consuming use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 's'
+fn take(nom string s) ~:
+    println(s)
+
+fn first(string[] xs) i32 | StdError:
+    let string s = xs.get(0).or_err(nom StdError.Error)??
+    take(nom s)
+    return Result.Ok(0)
+
+fn main() i32:
+    let string[] xs = from(["word {1}"])
+    println(first(xs).realise(1))
+    return 0
