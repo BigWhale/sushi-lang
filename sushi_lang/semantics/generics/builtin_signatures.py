@@ -68,6 +68,21 @@ def builtin_signature_of(receiver_type: Any, method_name: str) -> Optional[Built
     return None
 
 
+def read_through_receiver_of(expr: Any) -> Optional[Any]:
+    """The receiver of a built-in call that reads a borrowed receiver through, or None.
+
+    `m.or_err(nom e)` is such a call (`reads_borrow_through`). The question is about the
+    call's shape and its stamped receiver type, not about who owns the receiver.
+    """
+    from sushi_lang.semantics.ast import DotCall, MethodCall
+    if not isinstance(expr, (MethodCall, DotCall)):
+        return None
+    signature = builtin_signature_of(expr.resolved_enum_type, expr.method)
+    if signature is None or not signature.reads_borrow_through:
+        return None
+    return expr.receiver
+
+
 def receiver_type_arguments(receiver_type: Any) -> Optional[tuple[Type, ...]]:
     """The type arguments of an interned instance or of a written generic reference."""
     if isinstance(receiver_type, (EnumType, StructType)):

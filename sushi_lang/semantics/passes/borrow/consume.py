@@ -6,8 +6,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    DotCall, Expr, Lambda, Let, MethodCall, Name, Spread, StringLit, TryExpr)
+from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
@@ -106,19 +105,17 @@ def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr
     `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` whose payload owns a resource
     is read through, as `??` reads through a borrowed wrapper
     (docs/design/error-conversion.md section 4). The answer then carries the borrow. A
-    receiver that owns nothing is copied, so it is not read through. A `??` around the
-    call is stripped first.
+    receiver that owns nothing is copied, so it is not read through. Under a `??` the call
+    is transparent (`places.try_operand`), so this asks about the call itself.
     """
-    from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
-    call = unwrap_try(expr)
-    if not isinstance(call, (MethodCall, DotCall)):
+    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
+    receiver = read_through_receiver_of(expr)
+    if receiver is None:
         return None
-    signature = builtin_signature_of(call.resolved_enum_type, call.method)
-    if signature is None or not signature.reads_borrow_through:
+    if checker.types.type_class(getattr(expr, "resolved_enum_type", None)) \
+            is not TypeClass.MOVE:
         return None
-    if checker.types.type_class(call.resolved_enum_type) is not TypeClass.MOVE:
-        return None
-    return call.receiver
+    return receiver
 
 
 def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:

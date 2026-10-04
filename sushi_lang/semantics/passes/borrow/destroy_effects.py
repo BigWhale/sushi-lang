@@ -20,9 +20,9 @@ from sushi_lang.semantics.ast import (
     Program,
     Rebind,
     Stmt,
-    TryExpr,
     While,
 )
+from sushi_lang.semantics.places import unwrap_try
 from sushi_lang.semantics.typesys import ReferenceType
 
 
@@ -45,8 +45,7 @@ def _iter_stmts(block: Block) -> Iterator[Stmt]:
 
 def _leading_call(expr: Optional[Expr]) -> Optional[Call]:
     """The Call an expression evaluates to, unwrapping `??` -- None if it is not a call."""
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
+    expr = unwrap_try(expr)
     return expr if isinstance(expr, Call) else None
 
 

@@ -196,9 +196,8 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
 
 def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
     """Is `expr` a `.get()`/`.first()`/`.last()` reading out of storage its receiver owns?"""
-    from sushi_lang.semantics.ast import TryExpr
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
+    from sushi_lang.semantics.places import unwrap_try
+    expr = unwrap_try(expr)
 
     if getattr(expr, "method", None) not in ("get", "first", "last"):
         return False
@@ -231,22 +230,20 @@ def reads_a_borrow_through(codegen: 'LLVMCodegen', expr) -> bool:
     pass stamped it BORROWED (a parameter, a pattern binding, a field), and its payload
     owns a resource. The owner frees the payload, so the answer has no owner of its own.
     """
-    from sushi_lang.semantics.ast import DotCall, MethodCall, TryExpr
-    from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
+    from sushi_lang.semantics.ast import TryExpr
+    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
     from sushi_lang.semantics.ownership import Provenance
+    # The `??` is stripped by hand and not by `unwrap_try`, because `unwrap_try` reads
+    # through the very call that this predicate asks about.
     while isinstance(expr, TryExpr):
         expr = expr.expr
-    if not isinstance(expr, (MethodCall, DotCall)):
-        return False
+    receiver = read_through_receiver_of(expr)
     receiver_type = getattr(expr, "resolved_enum_type", None)
-    signature = builtin_signature_of(receiver_type, expr.method)
-    if (receiver_type is None or signature is None
-            or not signature.reads_borrow_through):
+    if receiver is None or receiver_type is None:
         return False
     from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
     if not needs_cleanup(codegen, resolve_named_type(codegen, receiver_type)):
         return False
-    receiver = expr.receiver
     return (getattr(receiver, "ownership_provenance", None) is Provenance.BORROWED
             or is_container_get_call(codegen, receiver))
 
