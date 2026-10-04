@@ -1,0 +1,14 @@
+# Design 3.5 (C12): no unit may declare a conversion into `StdError`. So the help of an
+# `as` into `StdError` names only what is legal: a function that takes the error `nom`,
+# or an error type of the program's own as the target.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+# EXPECT_STDERR_CONTAINS: call a function that takes the error `nom` and answers 'StdError'
+# EXPECT_STDERR_CONTAINS: declare `extend AppError as <YourError>:` in the unit that declares it
+error AppError:
+    Broken
+
+fn widen(nom AppError e) StdError:
+    return e as StdError
+
+fn main() i32:
+    return 0

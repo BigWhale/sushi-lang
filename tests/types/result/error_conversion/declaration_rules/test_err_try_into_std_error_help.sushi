@@ -1,0 +1,14 @@
+# Design 3.5 (C12): no unit may declare a conversion into `StdError`. So the help of a
+# `??` into a `| StdError` channel names only what is legal: `.map_err(f)??` at the site,
+# or an error type of the program's own as the target.
+# EXPECT_ERROR_CODES_EXACT: CE2511
+# EXPECT_STDERR_CONTAINS: convert the error at this site with `.map_err(f)??`
+# EXPECT_STDERR_CONTAINS: declare `extend EnvError as <YourError>:` in the unit that declares it
+use <sys/env>
+
+fn put() i32 | StdError:
+    setenv("A", "b")??
+    return Result.Ok(0)
+
+fn main() i32:
+    return 0
