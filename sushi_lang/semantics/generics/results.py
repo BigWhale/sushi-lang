@@ -10,7 +10,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
-from sushi_lang.semantics.param_modes import ParamMode
+from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
 from sushi_lang.semantics.passes.derive import derive_for_enum
 from sushi_lang.semantics.typesys import FunctionType
 
@@ -33,6 +33,10 @@ RESULT_METHOD_SIGNATURES: Mapping[str, BuiltinSignature] = MappingProxyType({
         ret_type=GenericTypeRef("Result", (TypeParameter("T"), TypeParameter("F"))),
         self_mode="nom"),
 })
+
+#: The parameter modes of the `Result@(T, E)` methods (#1173). A method with a signature
+#: row reads its modes from that row; every other parameter borrows.
+RESULT_METHOD_MODES = BuiltinModes.from_signatures(RESULT_METHOD_SIGNATURES)
 
 
 def is_builtin_result_method(method_name: str) -> bool:

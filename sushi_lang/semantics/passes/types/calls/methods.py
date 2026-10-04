@@ -12,7 +12,7 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
-from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
+from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
 from ..utils import reject_spread_args
 
 # A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
@@ -624,6 +624,7 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
             reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
         elif call.method == "alloc":
             _validate_own_alloc_payload(validator, call)
+        stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family(family).modes)
 
 
 #: The statics a built-in container answers on its type NAME, and the family whose count

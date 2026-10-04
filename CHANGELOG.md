@@ -90,6 +90,9 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
   use of a borrow, with the help `r.clone()??`; a plain error type stays legal (#1171).
 - `.realise(default)` on a temporary `Result` (a call result) that holds an `Err` whose
   error type owns heap memory did not free the error (#1172).
+- A `nom` marker on an argument of a built-in method (`m.realise(nom 3)`, `xs.get(nom i)`)
+  was not checked. Every built-in method family now has a table of parameter modes, and a
+  `nom` on a parameter that borrows is CE2427, as for a user method (#1173).
 
 ## [0.14.0] - 2026-10-03
 

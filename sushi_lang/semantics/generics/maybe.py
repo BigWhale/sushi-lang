@@ -9,6 +9,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.param_modes import BuiltinModes
 
 
 #: Every built-in `Maybe@(T)` method and the number of arguments it takes. The count is
@@ -26,6 +27,10 @@ MAYBE_METHOD_SIGNATURES: Mapping[str, BuiltinSignature] = MappingProxyType({
         ret_type=GenericTypeRef("Result", (TypeParameter("T"), TypeParameter("E"))),
         self_mode="nom", reads_borrow_through=True),
 })
+
+#: The parameter modes of the `Maybe@(T)` methods (#1173). A method with a signature row
+#: reads its modes from that row; every other parameter borrows.
+MAYBE_METHOD_MODES = BuiltinModes.from_signatures(MAYBE_METHOD_SIGNATURES)
 
 
 def is_builtin_maybe_method(method_name: str) -> bool:

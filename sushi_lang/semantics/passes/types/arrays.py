@@ -24,7 +24,8 @@ from sushi_lang.internals.errors import ErrorMessage, Span
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import Expr, MethodCall
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.method_effects import effect_of
+from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS, effect_of
+from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           IteratorType, Type, deref_type)
@@ -399,6 +400,10 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
     "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }
+
+#: The parameter modes of the array methods (#1173). `push` and `insert` store into a
+#: slot, which takes ownership by position; every other parameter borrows.
+ARRAY_METHOD_MODES = BuiltinModes(slots=CONTAINER_INSERT_METHODS & _ARRAY_METHODS.keys())
 
 
 # -------------------------------------------------------------- writing to a constant

@@ -40,12 +40,14 @@ from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscoun
 from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
 from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
 from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
-from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY
-from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
-from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY
-from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
-from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY
+from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY, HASHMAP_METHOD_MODES
+from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY, LIST_METHOD_MODES
+from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY, MAYBE_METHOD_MODES
+from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
+from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.param_modes import BuiltinModes
+from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
     FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
 
@@ -95,6 +97,9 @@ class MethodFamily:
     `arity` is the argument count of each method the family answers. The count is read
     before `validate` runs, and a miscount is CE2009 like every other callee (#799). A
     family whose module keeps its own count leaves the table empty.
+
+    `modes` is the parameter mode of each argument (#1173). The typecheck pass stamps it
+    on the call, and the `borrow` pass checks each marker by the rule of a user method.
     """
     name: str
     beats_perk: bool
@@ -102,6 +107,7 @@ class MethodFamily:
     infer: Optional[InferHook] = None
     validate: Optional[ValidateHook] = None
     arity: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
+    modes: BuiltinModes = field(default_factory=BuiltinModes)
 
     def claims(self, receiver_type: 'Type', method_name: str,
                validator: 'TypeValidator') -> bool:
@@ -185,7 +191,18 @@ class MethodTypeRegistry:
                                    family.arity):
             return True
         family.validate(validator, call, receiver_type)
+        stamp_builtin_modes(call, family.modes)
         return True
+
+
+def stamp_builtin_modes(call: 'MethodCall', modes: BuiltinModes) -> None:
+    """Stamp the parameter modes of a built-in call for the `borrow` pass (#1173).
+
+    A method with a signature row (`or_err`, `map_err`) stamped its own in `validate`. A
+    call into a container slot gets no stamp: the slot takes ownership by position.
+    """
+    if call.callee_param_modes is None:
+        call.callee_param_modes = modes.of(call.method, len(call.args))
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
@@ -613,25 +630,30 @@ def _answers_primitive(receiver_type, method_name, derived_methods):
 
 
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="array", beats_perk=True, answers=_answers_array,
+    name="array", beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="string", beats_perk=True, answers=_answers_string,
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
+    modes=RESULT_METHOD_MODES,
     infer=lambda rt, call, v: ResultMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="maybe", beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
+    modes=MAYBE_METHOD_MODES,
     infer=lambda rt, call, v: MaybeMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="own", beats_perk=True, answers=_answers_own, arity=OWN_METHOD_ARITY,
+    modes=OWN_METHOD_MODES,
     infer=lambda rt, call, v: OwnMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="hashmap", beats_perk=True, answers=_answers_hashmap, arity=HASHMAP_METHOD_ARITY,
+    modes=HASHMAP_METHOD_MODES,
     infer=lambda rt, call, v: HashMapMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, answers=_answers_list, arity=LIST_METHOD_ARITY,
+    modes=LIST_METHOD_MODES,
     infer=lambda rt, call, v: ListMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,

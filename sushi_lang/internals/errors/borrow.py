@@ -180,7 +180,7 @@ _add(ErrorMessage("CE2426", Severity.ERROR,
 
 _add(ErrorMessage("CE2427", Severity.ERROR,
     "argument mode does not match the declared mode of parameter '{name}'",
-    Category.BORROW, "A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (docs/design/borrow-model.md S3). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`."))
+    Category.BORROW, "A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (docs/design/borrow-model.md S3). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`. A built-in method follows the same rule (#1173): its parameters borrow unless its family's table says otherwise, so `m.realise(nom 3)` is this error; a container slot (`push`, `insert`, `Own.alloc`) takes ownership by position, with or without the marker."))
 
 _add(ErrorMessage("CE2428", Severity.ERROR,
     "`nom` has no meaning on the foreign parameter '{name}'",

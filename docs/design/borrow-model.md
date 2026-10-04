@@ -118,6 +118,7 @@ frees. The damage appears later, and somewhere else.
 | lambda / closure | borrow | yes |
 | stdlib function | borrow | yes, in a Sushi-source module (`compose` in `<collections/iter>`) |
 | `.slib` concrete function | borrow | yes; the manifest carries the mode |
+| built-in method (`realise`, `get`, `contains`, `expect`, ...) | borrow | only in its family's table (`or_err(nom e)`) |
 | struct or enum constructor | **consume** — a field takes ownership | not written |
 | container insert (`List.push`, `HashMap.insert`, `Own.alloc`) | **consume** | not written |
 | FFI extern | not applicable — **CE2428** on `nom` | no |
@@ -129,6 +130,13 @@ each has its own rule:
   `Person(name)` moves `name`. The borrow checker sees a constructor and a function call as
   the same `Call` node, so the mode lookup applies to the function call only.
 - **A container insert is its own consuming use.** It is not a call argument.
+- **A built-in method reads its modes from its family's table (#1173).** Each method family
+  (`method_registry.py`) carries a `BuiltinModes` table: a row for a method whose parameter
+  declares a mode (the signature rows of `or_err` and `map_err`), the container slots
+  (`push`, `insert`, `Own.alloc`), and a borrow for every other parameter. The typecheck
+  pass stamps the modes on the call, and `apply_mode` checks each marker by the rule of a
+  user method: `m.realise(nom 3)` is **CE2427**. A container slot takes its argument with
+  or without `nom`, as the table row above says.
 - **FFI is outside the mode system.** A C callee never receives a Sushi value. The compiler
   marshals the string into a fresh `char*` that the caller owns and frees. `nom` on an
   extern parameter has no meaning, and is **CE2428**.
