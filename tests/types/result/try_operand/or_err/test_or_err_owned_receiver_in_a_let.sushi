@@ -1,0 +1,35 @@
+# Design 4: an owned receiver, and a borrowed receiver whose payload owns nothing, give
+# a `Result` that owns both arms. It is legal in every position, and an error value that
+# owns a string is freed one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok x 1\nerr AppError.Missing("m 2")\nok x 3\nok 4\nerr AppError.Missing("m 5")\n"
+error AppError:
+    Missing(string)
+
+fn find(i32 n) Maybe@(string):
+    if (n < 0):
+        return Maybe.None
+    return Maybe.Some("x {n}")
+
+fn show(Result@(string, AppError) r) ~:
+    match r:
+        Result.Ok(w) -> println("ok {w}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    let Result@(string, AppError) a = find(1).or_err(nom AppError.Missing("m {1}"))
+    show(a)
+    let Result@(string, AppError) b = find(-1).or_err(nom AppError.Missing("m {2}"))
+    show(b)
+    let Maybe@(string) m = find(3)
+    let Result@(string, AppError) c = m.or_err(nom AppError.Missing("m {3}"))
+    show(c)
+    let i32[] ns = from([4])
+    let Result@(i32, AppError) d = ns.get(0).or_err(nom AppError.Missing("m {4}"))
+    match d:
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) -> println("err {e}")
+    match ns.get(1).or_err(nom AppError.Missing("m {5}")):
+        Result.Ok(n) -> println("ok {n}")
+        Result.Err(e) -> println("err {e}")
+    return 0
