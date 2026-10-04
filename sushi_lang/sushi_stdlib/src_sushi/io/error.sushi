@@ -9,12 +9,18 @@ behind the dot (`fs.IoError.NotFound`). `<io/files>` hands `FileError` on the sa
 
 IoError is the ONE channel every io contract method answers -- a read, a write, a seek,
 `open()` and `close()`. FileError is what the path utilities (`stat`, `walk`, `mkdir_all`,
-`remove_all`) and the `fd_*` primitives answer. The conversion between the two runs
-inside the stdlib and never at a call site.
+`remove_all`) and the `fd_*` primitives answer. The conversion between the two is
+`FileError as IoError` below: a `??` in a body that answers IoError calls it, and
+`e as IoError` calls it on a value.
+
+A conversion lives in the unit that declares its TARGET, so this module also holds
+`NetError as IoError`, and it imports `<net/error>` for that one name.
 
 The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
 into a Result payload, so a variant is only ever appended.
 :##
+
+use <net/error>
 
 ##:
 Turns a file-system error into the one channel the io contracts answer.
@@ -25,7 +31,7 @@ its errno away, so it collapses to Other rather than pretending to carry a numbe
 
 - Returns: The IoError that says the same thing.
 :##
-extend FileError to_io() IoError:
+extend FileError as IoError:
     match self:
         FileError.NotFound -> return IoError.NotFound
         FileError.PermissionDenied -> return IoError.PermissionDenied
@@ -36,3 +42,31 @@ extend FileError to_io() IoError:
         FileError.InvalidPath -> return IoError.InvalidInput
         FileError.IOError -> return IoError.Other
         FileError.Other -> return IoError.Other
+
+##:
+Turns a socket error into the one channel the io contracts answer.
+
+Every NetError variant with no twin in IoError belongs to a connect, a bind or a resolve,
+so nothing a contract method can answer is lost here. A stream that is already connected
+cannot report AddressInUse. The match names every variant, so a new variant does not
+compile until it has its own row.
+
+- Returns: The IoError that says the same thing.
+:##
+extend NetError as IoError:
+    match self:
+        NetError.ConnectionReset -> return IoError.ConnectionReset
+        NetError.TimedOut -> return IoError.TimedOut
+        NetError.Closed -> return IoError.Closed
+        NetError.PermissionDenied -> return IoError.PermissionDenied
+        NetError.TooManyOpen -> return IoError.TooManyOpen
+        NetError.InvalidAddress -> return IoError.InvalidInput
+        NetError.Interrupted -> return IoError.Interrupted
+        NetError.ConnectionRefused -> return IoError.Other
+        NetError.AddressInUse -> return IoError.Other
+        NetError.AddressNotAvailable -> return IoError.Other
+        NetError.NetworkUnreachable -> return IoError.Other
+        NetError.HostUnreachable -> return IoError.Other
+        NetError.ResolveFailed -> return IoError.Other
+        NetError.MessageTooLarge -> return IoError.Other
+        NetError.Other -> return IoError.Other

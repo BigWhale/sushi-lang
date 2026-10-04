@@ -101,9 +101,7 @@ extend TcpStream with Reader:
     - Errors: IoError, when the read failed.
     :##
     fn read_bytes(poke self, i32 max) u8[] | IoError:
-        match sock_recv(self.fd, max):
-            Result.Ok(nom chunk) -> return Result.Ok(chunk)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        return Result.Ok(sock_recv(self.fd, max)??)
 
 ##:
 Writes bytes to the stream, and flushes what an unbuffered socket has no need to flush.
@@ -120,9 +118,8 @@ extend TcpStream with Writer:
         # A socket has no send_str primitive, so the text is copied into bytes here. A file
         # avoids that with fd_write_str, which hands write(2) the string's own fat pointer.
         # One allocation against one syscall is not worth a new generator yet.
-        match self.send_all(data.to_bytes()):
-            Result.Ok(_) -> return Result.Ok(~)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        self.send_all(data.to_bytes())??
+        return Result.Ok(~)
 
     ##:
     Writes bytes, and does not stop until every one has gone.
@@ -132,9 +129,8 @@ extend TcpStream with Writer:
     - Errors: IoError, when a write failed before the buffer was gone.
     :##
     fn write_bytes(poke self, u8[] data) ~ | IoError:
-        match self.send_all(data):
-            Result.Ok(_) -> return Result.Ok(~)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        self.send_all(data)??
+        return Result.Ok(~)
 
     ##:
     Does nothing, successfully.
@@ -265,9 +261,8 @@ descriptor. This is the operation that means one, and its name says so.
 - Errors: IoError, when the descriptor could not be duplicated.
 :##
 extend TcpListener share() TcpListener | IoError:
-    match sock_dup(self.fd):
-        Result.Ok(fd) -> return Result.Ok(TcpListener(fd))
-        Result.Err(e) -> return Result.Err(e.to_io())
+    let i32 fd = sock_dup(self.fd)??
+    return Result.Ok(TcpListener(fd))
 
 ##:
 Writes bytes, and answers how many of them went.

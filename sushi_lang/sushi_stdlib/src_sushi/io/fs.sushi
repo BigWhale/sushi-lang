@@ -226,9 +226,8 @@ fn close_handle(poke File h) ~ | IoError:
         return Result.Ok(~)
     let i32 fd = h.fd
     h.fd := -1
-    match fd_close(fd):
-        Result.Ok(_) -> return Result.Ok(~)
-        Result.Err(e) -> return Result.Err(e.to_io())
+    fd_close(fd)??
+    return Result.Ok(~)
 
 ##:
 What a FileMode asks the platform for.
@@ -278,9 +277,8 @@ reads it carries ONE channel from end to end.
 - Errors: IoError, when the path could not be opened.
 :##
 public fn open(string path, FileMode mode) File | IoError:
-    match fd_open(path, mode.intent(), 420):
-        Result.Ok(fd) -> return Result.Ok(File(fd: fd, owned: true))
-        Result.Err(e) -> return Result.Err(e.to_io())
+    let i32 fd = fd_open(path, mode.intent(), 420)??
+    return Result.Ok(File(fd: fd, owned: true))
 
 ##:
 Reads bytes from the file, as one read and as one write.
@@ -314,9 +312,7 @@ extend File with Reader:
     - Errors: IoError, when the read failed.
     :##
     fn read_bytes(poke self, i32 max) u8[] | IoError:
-        match fd_read(self.fd, max):
-            Result.Ok(nom chunk) -> return Result.Ok(chunk)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        return Result.Ok(fd_read(self.fd, max)??)
 
 ##:
 Writes to the file, and flushes what a descriptor has no need to flush.
@@ -332,9 +328,8 @@ extend File with Writer:
     - Errors: IoError, when the write failed.
     :##
     fn write(poke self, string data) ~ | IoError:
-        match fd_write_str(self.fd, data):
-            Result.Ok(_) -> return Result.Ok(~)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        fd_write_str(self.fd, data)??
+        return Result.Ok(~)
 
     ##:
     Writes bytes, and does not stop until every one has gone.
@@ -344,9 +339,8 @@ extend File with Writer:
     - Errors: IoError, when the write failed.
     :##
     fn write_bytes(poke self, u8[] data) ~ | IoError:
-        match fd_write(self.fd, data):
-            Result.Ok(_) -> return Result.Ok(~)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        fd_write(self.fd, data)??
+        return Result.Ok(~)
 
     ##:
     Does nothing, successfully.
@@ -378,9 +372,7 @@ extend File with Seek:
     - Errors: IoError, when the descriptor cannot seek -- a pipe cannot.
     :##
     fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError:
-        match fd_seek(self.fd, offset, origin.whence()):
-            Result.Ok(at) -> return Result.Ok(at)
-            Result.Err(e) -> return Result.Err(e.to_io())
+        return Result.Ok(fd_seek(self.fd, offset, origin.whence())??)
 
 ##:
 Reads the rest of the file, from the current position, as text.
@@ -408,9 +400,7 @@ by line wants BufReader from <io/buf>.
 - Errors: IoError, when the read failed.
 :##
 extend File readln(poke self) Maybe@(string) | IoError:
-    match fd_readln(self.fd):
-        Result.Ok(nom line) -> return Result.Ok(line)
-        Result.Err(e) -> return Result.Err(e.to_io())
+    return Result.Ok(fd_readln(self.fd)??)
 
 ##:
 Reads one byte, as text.
@@ -460,9 +450,7 @@ the file.
 - Errors: IoError, when the read failed. A pipe cannot be read at an offset.
 :##
 extend File read_at(i64 offset, i32 count) u8[] | IoError:
-    match fd_pread(self.fd, offset, count):
-        Result.Ok(nom chunk) -> return Result.Ok(chunk)
-        Result.Err(e) -> return Result.Err(e.to_io())
+    return Result.Ok(fd_pread(self.fd, offset, count)??)
 
 ##:
 Writes bytes at an offset, without moving the file position.
@@ -477,9 +465,7 @@ caller's, exactly as it is for a socket's send().
 - Errors: IoError, when the write failed.
 :##
 extend File write_at(i64 offset, u8[] data) i32 | IoError:
-    match fd_pwrite(self.fd, offset, data):
-        Result.Ok(n) -> return Result.Ok(n)
-        Result.Err(e) -> return Result.Err(e.to_io())
+    return Result.Ok(fd_pwrite(self.fd, offset, data)??)
 
 ##:
 Opens a second handle over the same open file description.
@@ -498,9 +484,8 @@ descriptor. This is the operation that means one, and its name says so.
 - Errors: IoError, when the descriptor could not be duplicated.
 :##
 extend File share() File | IoError:
-    match fd_dup(self.fd):
-        Result.Ok(fd) -> return Result.Ok(File(fd: fd, owned: true))
-        Result.Err(e) -> return Result.Err(e.to_io())
+    let i32 fd = fd_dup(self.fd)??
+    return Result.Ok(File(fd: fd, owned: true))
 
 ##:
 Whether this handle still holds a descriptor.
