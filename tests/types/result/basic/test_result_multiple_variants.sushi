@@ -4,7 +4,7 @@
 
 # Tests Result with error enum containing multiple variants
 
-enum HttpError:
+error HttpError:
     BadRequest
     Unauthorized
     Forbidden

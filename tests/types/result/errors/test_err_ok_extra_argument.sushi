@@ -1,7 +1,7 @@
 # Tests error for Ok with extra arguments
 # EXPECT_ERROR_CODE: CE2050
 
-enum MyError:
+error MyError:
     Error
 
 fn test_func() i32 | MyError:

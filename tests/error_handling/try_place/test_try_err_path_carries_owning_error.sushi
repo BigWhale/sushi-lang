@@ -5,7 +5,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
-enum Fail:
+error Fail:
     Reason(string)
 
 fn make(i32 x) i32 | Fail:

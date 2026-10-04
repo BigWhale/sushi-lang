@@ -4,7 +4,7 @@
 
 # Tests pattern matching on specific error variants
 
-enum MyFileError:
+error MyFileError:
     NotFound
     PermissionDenied
     AlreadyExists

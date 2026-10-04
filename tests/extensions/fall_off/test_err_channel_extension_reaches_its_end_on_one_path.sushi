@@ -1,6 +1,6 @@
 # One path of a `~ | E` extension body reaches its end: CE0107.
 # EXPECT_ERROR_CODE: CE0107
-enum Why:
+error Why:
     Bad
 
 extend i32 check() ~ | Why:

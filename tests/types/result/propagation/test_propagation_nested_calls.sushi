@@ -4,7 +4,7 @@
 
 # Tests chained function calls with error propagation
 
-enum ParseError:
+error ParseError:
     InvalidSyntax
     UnexpectedToken
 

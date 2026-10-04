@@ -7,7 +7,7 @@
 # EXPECT_STDOUT_CONTAINS: "err taken"
 # EXPECT_NO_LEAKS: true
 
-enum MyErr:
+error MyErr:
     Boom
 
 fn mk() string | StdError:

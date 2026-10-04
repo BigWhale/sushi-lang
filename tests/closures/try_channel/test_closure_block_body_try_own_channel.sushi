@@ -1,7 +1,7 @@
 # Control: the block-body twin always used its own channel. Pins the boundary
 # of #403.
 # EXPECT_STDOUT_EXACT: "4\n"
-enum CalcError:
+error CalcError:
     Boom
 
 fn may_fail(i32 n) i32 | CalcError:

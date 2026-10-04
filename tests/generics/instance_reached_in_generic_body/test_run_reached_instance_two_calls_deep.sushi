@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "Arthur\nFord\n2\n"
 
-enum Bad:
+error Bad:
     Oops
 
 struct Feed@(T):

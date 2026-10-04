@@ -1,7 +1,7 @@
 # The channel rule is one rule over every declaration kind (#663), so an extension
 # method takes a generic enum in its channel exactly as a free function does (#668).
 # EXPECT_STDOUT_EXACT: "got 5\nbad 9\n"
-enum MyErr@(T):
+error MyErr@(T):
     Bad(T)
     Worse
 

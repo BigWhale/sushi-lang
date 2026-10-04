@@ -2,7 +2,7 @@ public struct Vec:
     i32 x
     i32 y
 
-public enum VecError:
+public error VecError:
     Negative
 
 public perk Area:

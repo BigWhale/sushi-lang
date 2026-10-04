@@ -6,7 +6,7 @@
 # EXPECT_STDOUT_EXACT: "got a\ngot b\nstopped\n"
 # EXPECT_NO_LEAKS
 
-enum Bad:
+error Bad:
     Broken()
 
 struct Words:

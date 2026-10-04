@@ -4,7 +4,7 @@
 
 # Tests exhaustive pattern matching on Result
 
-enum MyError:
+error MyError:
     Error
 
 fn get_result(i32 code) i32 | MyError:

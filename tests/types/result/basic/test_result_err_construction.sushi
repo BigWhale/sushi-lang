@@ -4,7 +4,7 @@
 
 # Tests basic Err variant construction with implicit Result syntax
 
-enum MyError:
+error MyError:
     ErrorA
     ErrorB
 

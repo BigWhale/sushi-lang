@@ -2,7 +2,7 @@
 # cannot take it.
 # EXPECT_ERROR_CODES_EXACT: CE2411
 
-enum Bad:
+error Bad:
     Oops
 
 struct Feed:

@@ -10,7 +10,7 @@ struct Big:
     i64 d
     i64 e
 
-enum BigErr:
+error BigErr:
     Huge(Big)
     Small
 

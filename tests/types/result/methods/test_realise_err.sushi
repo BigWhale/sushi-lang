@@ -4,7 +4,7 @@
 
 # Tests realise method on Err variant
 
-enum MyError:
+error MyError:
     Error
 
 fn get_error() i32 | MyError:

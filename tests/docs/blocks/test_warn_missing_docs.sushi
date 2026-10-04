@@ -9,7 +9,7 @@ struct Ship:
     i32 hull
 
 ##: A fault the divider can raise. :##
-enum DriveError:
+error DriveError:
     ##: The divisor was nought. :##
     DivisionByZero
 

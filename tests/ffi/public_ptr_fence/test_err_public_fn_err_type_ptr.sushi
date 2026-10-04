@@ -4,7 +4,7 @@
 unsafe external "C" as libc because "intentional public ptr exposure":
     fn free(ptr p) ~ = "free"
 
-enum AllocError:
+error AllocError:
     Failed(ptr)
 
 public fn grab() i32 | AllocError:

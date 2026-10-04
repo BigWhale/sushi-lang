@@ -4,7 +4,7 @@
 
 # Tests that error propagation preserves error data
 
-enum ValidationError:
+error ValidationError:
     TooShort
     TooLong
     InvalidFormat

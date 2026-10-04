@@ -4,10 +4,10 @@
 
 # Tests nested Result@(Result@(T, E1), E2) (edge case)
 
-enum InnerError:
+error InnerError:
     InnerFailed
 
-enum OuterError:
+error OuterError:
     OuterFailed
 
 fn inner_operation() Result@(i32, InnerError):

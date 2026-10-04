@@ -5,7 +5,7 @@
 unsafe external "C" as libc because "removing a file":
     fn unlink(string path) i32 = "unlink"
 
-enum RemoveError:
+error RemoveError:
     Missing
     Other(i32)
 

@@ -8,7 +8,7 @@ struct Person:
     string name
     i32 age
 
-enum CustomError:
+error CustomError:
     InvalidAge
     InvalidName
 

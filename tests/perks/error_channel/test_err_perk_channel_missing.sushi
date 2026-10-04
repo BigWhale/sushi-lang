@@ -2,7 +2,7 @@
 # relational: the primary at the implementation, a note at the contract method.
 # EXPECT_ERROR_CODE: CE0133
 # EXPECT_STDERR_CONTAINS: "perk 'Source' declares"
-enum SourceError:
+error SourceError:
     Closed
 
 perk Source:

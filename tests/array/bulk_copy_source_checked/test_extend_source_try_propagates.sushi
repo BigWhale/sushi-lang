@@ -1,7 +1,7 @@
 # The Err of a `??` in the source of `extend` leaves the function (#1144).
 # EXPECT_STDOUT_EXACT: "7\n"
 # EXPECT_NO_LEAKS
-enum E:
+error E:
     Bad
 
 fn give() string[] | E:

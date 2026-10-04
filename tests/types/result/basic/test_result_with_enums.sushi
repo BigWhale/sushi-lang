@@ -9,7 +9,7 @@ enum Color:
     Green
     Blue
 
-enum ParseError:
+error ParseError:
     InvalidColor
     EmptyString
 

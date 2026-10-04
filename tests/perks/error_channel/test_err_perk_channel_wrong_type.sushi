@@ -1,6 +1,6 @@
 # Both sides declare a channel and the error types differ. Still CE0133.
 # EXPECT_ERROR_CODE: CE0133
-enum SourceError:
+error SourceError:
     Closed
 
 perk Source:

@@ -4,7 +4,7 @@
 
 # Tests pattern matching on Err variant with binding
 
-enum MyError:
+error MyError:
     BadValue
     EmptyInput
 

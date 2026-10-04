@@ -2,7 +2,7 @@
 # a move.
 # EXPECT_ERROR_CODES_EXACT: CE2405
 
-enum Bad:
+error Bad:
     Oops
 
 struct Feed:

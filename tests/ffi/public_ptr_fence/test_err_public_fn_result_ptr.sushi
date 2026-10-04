@@ -3,7 +3,7 @@
 unsafe external "C" as libc because "intentional public ptr exposure":
     fn malloc(i64 n) ptr = "malloc"
 
-enum AllocError:
+error AllocError:
     OutOfMemory
 
 public fn grab() Result@(ptr, AllocError):

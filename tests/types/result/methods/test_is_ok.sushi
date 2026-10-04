@@ -4,7 +4,7 @@
 
 # Tests is_ok method
 
-enum MyError:
+error MyError:
     Error
 
 fn get_ok() i32 | MyError:

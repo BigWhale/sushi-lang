@@ -1,7 +1,7 @@
 # A generic enum is a legal error type. The explicit Result@(T, E) spelling of the same
 # type has always compiled, so the `| E` spelling of it must compile too (#668).
 # EXPECT_STDOUT_EXACT: "ok 3\nbad 7\n"
-enum MyErr@(T):
+error MyErr@(T):
     Bad(T)
     Worse
 

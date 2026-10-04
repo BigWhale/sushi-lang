@@ -4,7 +4,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "first close ok\nthe field reads -1\nsecond close ok\n"
-enum PortError:
+error PortError:
     Broken
 
 struct Port:

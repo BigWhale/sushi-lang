@@ -3,7 +3,7 @@
 # the refusal must not reach any of them.
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 
-enum OddError:
+error OddError:
     TooOdd
 
 struct Holder:

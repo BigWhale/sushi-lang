@@ -2,7 +2,7 @@
 # 'return value' is refused with the free-function code (#848).
 # EXPECT_ERROR_CODE: CE2030
 # EXPECT_STDERR_CONTAINS: test_err_channel_bare_return.sushi:11:
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:

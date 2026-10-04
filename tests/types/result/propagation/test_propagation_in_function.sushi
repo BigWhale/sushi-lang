@@ -4,7 +4,7 @@
 
 # Tests multiple error propagations in one function
 
-enum MyFileError:
+error MyFileError:
     NotFound
     PermissionDenied
 

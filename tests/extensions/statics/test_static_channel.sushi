@@ -1,7 +1,7 @@
 # The opt-in `| E` channel rides a static exactly as it rides an instance method: the
 # body spells `Result.Ok(...)` and `Result.Err(...)`, and `??` is legal.
 # EXPECT_STDOUT_EXACT: "4\nodd\n"
-enum OddError:
+error OddError:
     TooOdd
 
 struct Half:

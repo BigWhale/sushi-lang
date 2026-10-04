@@ -1,7 +1,7 @@
 # First-class functions: the function type captures a custom error type, so an
 # indirect call threads it through Result. 10/2 = 5; 10/0 errors -> realise(-1).
 # EXPECT_STDOUT_EXACT: "5\n-1\n"
-enum DivError:
+error DivError:
     DivByZero
 
 fn safe_div(i32 a, i32 b) i32 | DivError:

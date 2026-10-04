@@ -8,7 +8,7 @@ struct ErrorInfo:
     i32 code
     string message
 
-enum ApiError:
+error ApiError:
     NetworkError
     AuthError
     ServerError

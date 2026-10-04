@@ -6,7 +6,7 @@
 # EXPECT_STDERR_EMPTY: true
 # EXPECT_NO_LEAKS
 
-enum Bad:
+error Bad:
     Broken()
 
 struct Steps:

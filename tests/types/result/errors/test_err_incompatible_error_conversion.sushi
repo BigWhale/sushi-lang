@@ -1,10 +1,10 @@
 # Tests error for incompatible error type conversion
 # EXPECT_ERROR_CODE: CE2002
 
-enum ErrorA:
+error ErrorA:
     Variant1
 
-enum ErrorB:
+error ErrorB:
     Variant2
 
 fn returns_a() i32 | ErrorA:
