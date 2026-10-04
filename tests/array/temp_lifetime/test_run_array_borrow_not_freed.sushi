@@ -18,7 +18,7 @@ fn run_test() i32 | StdError:
 
     let List@(i32[]) rows = List.new()
     rows.push(from([7, 8]))
-    println(rows.get(0)??[0])
+    println(rows.get(0).or_err(nom StdError.Error)??[0])
     rows.destroy()
 
     let Holder h = Holder(from([7, 8]))

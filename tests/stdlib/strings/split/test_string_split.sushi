@@ -15,63 +15,63 @@ fn run_test() i32 | StdError:
     let string s1 = "hello,world,test"
     let string[] parts1 = s1.split(",")
     println(parts1.len())  # 3
-    println(parts1.get(0).clone().or_err(nom StdError.Error)??)
-    println(parts1.get(1).clone().or_err(nom StdError.Error)??)
-    println(parts1.get(2).clone().or_err(nom StdError.Error)??)
+    println(parts1.get(0).or_err(nom StdError.Error)??)
+    println(parts1.get(1).or_err(nom StdError.Error)??)
+    println(parts1.get(2).or_err(nom StdError.Error)??)
 
     # Test 2: Split with multi-character delimiter
     let string s2 = "foo::bar::baz"
     let string[] parts2 = s2.split("::")
     println(parts2.len())  # 3
-    println(parts2.get(0).clone().or_err(nom StdError.Error)??)
-    println(parts2.get(1).clone().or_err(nom StdError.Error)??)
-    println(parts2.get(2).clone().or_err(nom StdError.Error)??)
+    println(parts2.get(0).or_err(nom StdError.Error)??)
+    println(parts2.get(1).or_err(nom StdError.Error)??)
+    println(parts2.get(2).or_err(nom StdError.Error)??)
 
     # Test 3: No delimiter found (return single element)
     let string s3 = "nodashes"
     let string[] parts3 = s3.split("-")
     println(parts3.len())  # 1
-    println(parts3.get(0).clone().or_err(nom StdError.Error)??)
+    println(parts3.get(0).or_err(nom StdError.Error)??)
 
     # Test 4: Empty string split
     let string s4 = ""
     let string[] parts4 = s4.split(",")
     println(parts4.len())  # 1
-    println(parts4.get(0).clone().or_err(nom StdError.Error)??)  # empty
+    println(parts4.get(0).or_err(nom StdError.Error)??)  # empty
 
     # Test 5: Multiple consecutive delimiters (creates empty strings)
     let string s5 = "a,,b"
     let string[] parts5 = s5.split(",")
     println(parts5.len())  # 3
-    println(parts5.get(0).clone().or_err(nom StdError.Error)??)
-    println(parts5.get(1).clone().or_err(nom StdError.Error)??)  # empty
-    println(parts5.get(2).clone().or_err(nom StdError.Error)??)
+    println(parts5.get(0).or_err(nom StdError.Error)??)
+    println(parts5.get(1).or_err(nom StdError.Error)??)  # empty
+    println(parts5.get(2).or_err(nom StdError.Error)??)
 
     # Test 6: UTF-8 string split
     let string s6 = "hello|world|café"
     let string[] parts6 = s6.split("|")
     println(parts6.len())  # 3
-    println(parts6.get(0).clone().or_err(nom StdError.Error)??)
-    println(parts6.get(1).clone().or_err(nom StdError.Error)??)
-    println(parts6.get(2).clone().or_err(nom StdError.Error)??)
+    println(parts6.get(0).or_err(nom StdError.Error)??)
+    println(parts6.get(1).or_err(nom StdError.Error)??)
+    println(parts6.get(2).or_err(nom StdError.Error)??)
 
     # Test 7: Split at start
     let string s7 = ",starts,with,comma"
     let string[] parts7 = s7.split(",")
     println(parts7.len())  # 4
-    println(parts7.get(0).clone().or_err(nom StdError.Error)??)  # empty
-    println(parts7.get(1).clone().or_err(nom StdError.Error)??)
-    println(parts7.get(2).clone().or_err(nom StdError.Error)??)
-    println(parts7.get(3).clone().or_err(nom StdError.Error)??)
+    println(parts7.get(0).or_err(nom StdError.Error)??)  # empty
+    println(parts7.get(1).or_err(nom StdError.Error)??)
+    println(parts7.get(2).or_err(nom StdError.Error)??)
+    println(parts7.get(3).or_err(nom StdError.Error)??)
 
     # Test 8: Split at end
     let string s8 = "ends,with,comma,"
     let string[] parts8 = s8.split(",")
     println(parts8.len())  # 4
-    println(parts8.get(0).clone().or_err(nom StdError.Error)??)
-    println(parts8.get(1).clone().or_err(nom StdError.Error)??)
-    println(parts8.get(2).clone().or_err(nom StdError.Error)??)
-    println(parts8.get(3).clone().or_err(nom StdError.Error)??)  # empty
+    println(parts8.get(0).or_err(nom StdError.Error)??)
+    println(parts8.get(1).or_err(nom StdError.Error)??)
+    println(parts8.get(2).or_err(nom StdError.Error)??)
+    println(parts8.get(3).or_err(nom StdError.Error)??)  # empty
 
     return Result.Ok(0)
 

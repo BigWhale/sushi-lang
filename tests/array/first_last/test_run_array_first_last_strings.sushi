@@ -6,14 +6,14 @@
 fn run_test() i32 | StdError:
     let string[] words = from(["alpha", "beta", "gamma"])
 
-    let string head = words.first()??
+    let string head = words.first().or_err(nom StdError.Error)??
     println(head)
 
-    let string tail = words.last()??
+    let string tail = words.last().or_err(nom StdError.Error)??
     println(tail)
 
     println(words.len())
-    println(words.first()??)
+    println(words.first().or_err(nom StdError.Error)??)
 
     return Result.Ok(0)
 

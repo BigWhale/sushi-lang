@@ -15,8 +15,8 @@ fn read_rows() i32 | StdError:
     let i32[] w = from([10, 20, 30])
     m.insert("b", w)
 
-    let i32[] a = m.get("a")??
-    let i32[] b = m.get("b")??
+    let i32[] a = m.get("a").or_err(nom StdError.Error)??
+    let i32[] b = m.get("b").or_err(nom StdError.Error)??
     println("a={a.len()} b={b.len()}")
     println("first={a[0]} last={b[2]}")
     m.free()

@@ -12,7 +12,7 @@ fn mk(bool good) string[] | StdError:
 
 fn probe() ~ | StdError:
     let string[] words = mk(true).realise(new())
-    println("ok = {words.get(0)??}")
+    println("ok = {words.get(0).or_err(nom StdError.Error)??}")
 
     let string[] empty = mk(false).realise(new())
     println("err = {empty.len()}")

@@ -56,7 +56,7 @@ fn run_test() i32 | StdError:
     println("Buffer array length: {buffers.len()}")
 
     # Access nested byte array
-    let DataBuffer first_buf = buffers.get(0).clone().or_err(nom StdError.Error)??
+    let DataBuffer first_buf = buffers.get(0).or_err(nom StdError.Error)??
     println("First buffer data length: {first_buf.data.len()}")
 
     # Test 5: Nested structs with byte arrays

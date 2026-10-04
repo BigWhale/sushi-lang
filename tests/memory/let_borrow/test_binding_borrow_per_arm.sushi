@@ -8,7 +8,7 @@
 fn run_test(bool flag) i32 | StdError:
     let List@(string) c = List.new()
     c.push("one-{1}")
-    let string v = c.get(0)??
+    let string v = c.get(0).or_err(nom StdError.Error)??
     if (flag):
         c.clear()
     else:

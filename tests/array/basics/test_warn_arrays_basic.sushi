@@ -17,7 +17,7 @@ fn run_test() i32 | StdError:
 
     # Test get method
     print(numbers.get(1).or_err(nom StdError.Error)??) # Should print: 2
-    print(names.get(0).clone().or_err(nom StdError.Error)??)   # Should print: Arthur
+    print(names.get(0).or_err(nom StdError.Error)??)   # Should print: Arthur
 
     return Result.Ok(0)
 

@@ -10,7 +10,7 @@ fn run_tool(peek string[] args) i32 | StdError:
     if (args.len() < 2):
         println("usage: dump <file.mp>")
         return Result.Ok(2)
-    let string path = args.get(1).clone().or_err(nom StdError.Error)??
+    let string path = args.get(1).or_err(nom StdError.Error)??
     let i32 size = 0
     match file_size(path):
         Result.Ok(n) ->

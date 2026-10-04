@@ -11,7 +11,7 @@ fn run_test() i32 | StdError:
     let string[] towels = from(["dirty".upper(), "wet".upper()])
     towels.fill("clean")
 
-    println("{towels.get(0)??} {towels.get(1)??}")
+    println("{towels.get(0).or_err(nom StdError.Error)??} {towels.get(1).or_err(nom StdError.Error)??}")
     return Result.Ok(0)
 
 fn main() i32:

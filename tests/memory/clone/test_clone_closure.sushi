@@ -34,13 +34,13 @@ fn run() i32 | StdError:
     # A container insert is a consuming use; the list owns and frees its own copy.
     let List@(fn(i32) -> i32) fns = List.new()
     fns.push(h.handler.clone())
-    let i32 a = fns.get(0)??(5)
+    let i32 a = fns.get(0).or_err(nom StdError.Error)??(5)
 
     let fn(i32) -> i32 g = pick(peek h)
     let i32 b = g(7)
 
     # A container get-out borrows for the same reason a field read does.
-    let fn(i32) -> i32 from_list = fns.get(0)??.clone()
+    let fn(i32) -> i32 from_list = fns.get(0).or_err(nom StdError.Error)??.clone()
     let i32 c = from_list(9)
 
     # Every owner above is independent, so the original still works.

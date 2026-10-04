@@ -36,8 +36,8 @@ fn run_test() i32 | StdError:
   print(words.push("hello"))  # Push returns void (0)
   print(words.push("world"))  # Push returns void (0)
   print(words.len())        # Should print 2
-  print(words.get(0).clone().or_err(nom StdError.Error)??)       # Should print "hello"
-  print(words.get(1).clone().or_err(nom StdError.Error)??)       # Should print "world"
+  print(words.get(0).or_err(nom StdError.Error)??)       # Should print "hello"
+  print(words.get(1).or_err(nom StdError.Error)??)       # Should print "world"
 
   # Validate all operations worked correctly
   let i32 validation_count = 0
@@ -51,7 +51,7 @@ fn run_test() i32 | StdError:
     validation_count := validation_count + 1
 
   # Check string array contents
-  if (words.get(0).clone().or_err(nom StdError.Error)?? == "hello" and words.get(1).clone().or_err(nom StdError.Error)?? == "world"):
+  if (words.get(0).or_err(nom StdError.Error)?? == "hello" and words.get(1).or_err(nom StdError.Error)?? == "world"):
     validation_count := validation_count + 1
 
   # Cleanup arrays

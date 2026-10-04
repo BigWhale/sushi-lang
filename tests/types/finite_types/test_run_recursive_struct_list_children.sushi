@@ -30,9 +30,9 @@ fn run_test() i32 | StdError:
     # Bound with `let ... = .get(i)??` rather than `foreach(c in kids.iter())` because
     # reading a field of a List-iterator binding is a separate open bug (#263, CE0056)
     # that reproduces with no recursion at all.
-    let Tree c0 = root.kids.get(0)??
-    let Tree c1 = root.kids.get(1)??
-    let Tree c2 = root.kids.get(2)??
+    let Tree c0 = root.kids.get(0).or_err(nom StdError.Error)??
+    let Tree c1 = root.kids.get(1).or_err(nom StdError.Error)??
+    let Tree c2 = root.kids.get(2).or_err(nom StdError.Error)??
     println("each: {c0.value} {c1.value} {c2.value}")
 
     let i32 acc = root.value + c0.value + c1.value + c2.value

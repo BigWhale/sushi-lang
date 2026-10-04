@@ -50,7 +50,7 @@ fn run_test() i32 | StdError:
     if (numbers.len() == 2 and numbers.get(0).or_err(nom StdError.Error)?? == 10 and numbers.get(1).or_err(nom StdError.Error)?? == 20):
         validation_count := validation_count + 1
 
-    if (words.len() == 2 and words.get(0).clone().or_err(nom StdError.Error)?? == "hello" and words.get(1).clone().or_err(nom StdError.Error)?? == "world"):
+    if (words.len() == 2 and words.get(0).or_err(nom StdError.Error)?? == "hello" and words.get(1).or_err(nom StdError.Error)?? == "world"):
         validation_count := validation_count + 1
 
     # Cleanup

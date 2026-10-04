@@ -10,7 +10,7 @@ fn run_test() i32 | StdError:
     pairs.push(["c", "d"])
     println("len={pairs.len()}")
 
-    let string[2] g = pairs.get(1)??
+    let string[2] g = pairs.get(1).or_err(nom StdError.Error)??
     println("get={g[0]} {g[1]}")
 
     foreach(row in pairs.iter()):
@@ -20,7 +20,7 @@ fn run_test() i32 | StdError:
     println("pop={p[0]} {p[1]} len={pairs.len()}")
 
     let List@(string[2]) copy = pairs.clone()
-    let string[2] c = copy.get(0)??
+    let string[2] c = copy.get(0).or_err(nom StdError.Error)??
     println("clone={copy.len()} {c[0]} {c[1]}")
     return Result.Ok(0)
 
