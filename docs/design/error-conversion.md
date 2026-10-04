@@ -232,7 +232,11 @@ predefined type, the declaring unit is its home module (`EnumType.home_module`).
 - `StdError` has no home module, so no unit may declare a conversion into it. A program
   that wants a target for its conversions declares its own error type.
 - `NetError as IoError` lives in `<io/error>`, the home of `IoError`. That unit then
-  imports `<net/error>`, so `<net/error>` no longer imports `<io/error>`.
+  imports `<net/error>`, so `<net/error>` no longer imports `<io/error>`, and a program
+  that uses `<io/fs>` also loads the `<net/error>` unit. The conversion exists because the
+  io contracts answer `IoError` only, and `TcpStream` implements them over primitives
+  that answer `NetError` (ruled 2026-10-04: keep the declared conversion, accept the
+  import).
 
 ### 3.6 Which types
 
@@ -345,7 +349,10 @@ combinators of `ufcs-combinators.md`.
   does in a conversion. A mode is part of a function type, so the lambda writes
   `|nom IoError e|`.
 - The receiver is `nom self`, because the `Ok` value and the error both move into the new
-  `Result`. A named `Result` is spent.
+  `Result`. A named `Result` is spent. A BORROWED `Result` whose payload owns a resource
+  (a parameter, a binding, a get-out) is not read through, because the error moves into
+  `f`: the call is the consuming use of a borrow (CE2411), and the help names
+  `r.clone().map_err(f)` (ruled 2026-10-04).
 - Two existing limits apply. A bare lambda parameter is not inferred, so the parameter
   type is written. A lambda parameter cannot have an owning type, so for an error type
   that owns a resource the argument is a named function
