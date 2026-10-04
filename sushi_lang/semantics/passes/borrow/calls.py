@@ -283,15 +283,32 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
         return
     receiver = expr.receiver
     # A built-in that reads a borrowed receiver through (`or_err`) leaves it to its owner.
-    if (read_through_receiver(expr) is not None
+    if (read_through_receiver(checker, expr) is not None
             and source_provenance(checker, receiver) is Provenance.BORROWED):
         receiver.ownership_provenance = Provenance.BORROWED
+        reject_read_through_outside_try(checker, expr)
         return
     consume(checker, receiver)
     if isinstance(receiver, Name):
         state = checker.borrow_state.get(receiver.id)
         if state is not None and state.is_moved:
             state.consumed_by_method = state.consumed_by_method or expr.method
+
+
+def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) -> None:
+    """CE2522: a read-through `or_err` stands under `??` and nowhere else.
+
+    Its Result holds a borrowed Ok and an owned Err. Only `??` takes the two apart: the
+    Err moves out, and the Ok binds a borrow (docs/design/error-conversion.md section 4).
+    """
+    if id(expr) in checker.try_operands:
+        return
+    from sushi_lang.semantics.generics.type_display import display_type
+    receiver = expr_to_string(expr.receiver)
+    checker.err.emit_with(er.ERR.CE2522, expr.loc,
+                          maybe=display_type(expr.resolved_enum_type)) \
+        .help(f"put the call under '??': `{receiver}.{expr.method}(...)??`, or take an "
+              f"owned copy first: `{receiver}.clone().{expr.method}(...)`").emit()
 
 
 def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:

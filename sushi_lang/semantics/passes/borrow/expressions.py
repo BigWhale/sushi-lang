@@ -84,6 +84,7 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
         case TryExpr():
             # `r??` is a consuming position of its own: an owned wrapper is spent here
             # (#548), and a use of `r` after it is CE2405.
+            checker.try_operands.add(id(expr.expr))
             check_expr(checker, expr.expr)
             unwrap_place(checker, expr)
         case IndexAccess():

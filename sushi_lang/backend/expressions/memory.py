@@ -228,8 +228,8 @@ def reads_a_borrow_through(codegen: 'LLVMCodegen', expr) -> bool:
 
     `m.or_err(nom e)` over a borrowed `Maybe` answers a view of what the owner keeps
     (docs/design/error-conversion.md section 4): the receiver is a get-out, or the borrow
-    pass stamped it BORROWED (a parameter, a pattern binding, a field). The owner frees
-    the payload, so the answer has no owner of its own.
+    pass stamped it BORROWED (a parameter, a pattern binding, a field), and its payload
+    owns a resource. The owner frees the payload, so the answer has no owner of its own.
     """
     from sushi_lang.semantics.ast import DotCall, MethodCall, TryExpr
     from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
@@ -238,8 +238,13 @@ def reads_a_borrow_through(codegen: 'LLVMCodegen', expr) -> bool:
         expr = expr.expr
     if not isinstance(expr, (MethodCall, DotCall)):
         return False
-    signature = builtin_signature_of(getattr(expr, "resolved_enum_type", None), expr.method)
-    if signature is None or not signature.reads_borrow_through:
+    receiver_type = getattr(expr, "resolved_enum_type", None)
+    signature = builtin_signature_of(receiver_type, expr.method)
+    if (receiver_type is None or signature is None
+            or not signature.reads_borrow_through):
+        return False
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+    if not needs_cleanup(codegen, resolve_named_type(codegen, receiver_type)):
         return False
     receiver = expr.receiver
     return (getattr(receiver, "ownership_provenance", None) is Provenance.BORROWED

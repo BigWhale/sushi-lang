@@ -8,7 +8,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
     DotCall, Expr, Lambda, Let, MethodCall, Name, Spread, StringLit, TryExpr)
-from sushi_lang.semantics.ownership import Ownership, Provenance, classify
+from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import (
@@ -77,7 +77,7 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
 
     # `m.or_err(nom e)` answers what `m` holds, by the same rule as `m??` below: a
     # borrowed `m` is read through, and an owned `m` was spent by the call (design 4).
-    receiver = read_through_receiver(expr)
+    receiver = read_through_receiver(checker, expr)
     if receiver is not None:
         if source_provenance(checker, receiver) is Provenance.BORROWED:
             return Provenance.BORROWED
@@ -100,12 +100,14 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     return Provenance.FRESH
 
 
-def read_through_receiver(expr: Expr) -> Optional[Expr]:
+def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr]:
     """The receiver of a built-in call that reads a borrowed receiver through, or None.
 
-    `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` is read through, as `??` reads
-    through a borrowed wrapper (docs/design/error-conversion.md section 4). The answer
-    then carries the borrow. A `??` around the call is stripped first.
+    `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` whose payload owns a resource
+    is read through, as `??` reads through a borrowed wrapper
+    (docs/design/error-conversion.md section 4). The answer then carries the borrow. A
+    receiver that owns nothing is copied, so it is not read through. A `??` around the
+    call is stripped first.
     """
     from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
     call = unwrap_try(expr)
@@ -113,6 +115,8 @@ def read_through_receiver(expr: Expr) -> Optional[Expr]:
         return None
     signature = builtin_signature_of(call.resolved_enum_type, call.method)
     if signature is None or not signature.reads_borrow_through:
+        return None
+    if checker.types.type_class(call.resolved_enum_type) is not TypeClass.MOVE:
         return None
     return call.receiver
 
