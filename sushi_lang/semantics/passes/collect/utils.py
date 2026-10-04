@@ -238,7 +238,7 @@ def reject_try_in_body(reporter, body: Any, context: str,
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          node.loc, context=context) \
-                .help(help_text or "handle the Result or the Maybe in the body (match, "
+                .help(help_text or "handle the value in the body (match, "
                       ".realise(default)), or write '| E' in the signature").emit()
         return True
 

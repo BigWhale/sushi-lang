@@ -450,18 +450,20 @@ def extension_call_result_type(validator: 'TypeValidator', method):
 
 
 def _unhandled_channel_payload(receiver_type):
-    """The Ok/Some payload when the receiver is result-like or maybe-like, else None."""
-    if not isinstance(receiver_type, EnumType):
-        return None
-    ok_variant = receiver_type.get_variant("Ok")
-    err_variant = receiver_type.get_variant("Err")
-    if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
-        return ok_variant.associated_types[0]
-    some_variant = receiver_type.get_variant("Some")
-    none_variant = receiver_type.get_variant("None")
-    if (some_variant and none_variant and len(some_variant.associated_types) == 1
-            and len(none_variant.associated_types) == 0):
-        return some_variant.associated_types[0]
+    """The payload when the receiver is a `Result` or a `Maybe` instance, else None.
+
+    It reads the type identity, never the variant names: a user enum with `Ok`/`Err`
+    variants is not a `Result` (docs/design/error-conversion.md section 4).
+    """
+    from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
+    from sushi_lang.semantics.type_predicates import is_instance_of
+
+    if is_result_enum(receiver_type):
+        return result_ok_err(receiver_type)[0]
+    if isinstance(receiver_type, EnumType) and is_instance_of(receiver_type, "Maybe"):
+        some_variant = receiver_type.get_variant("Some")
+        if some_variant is not None and len(some_variant.associated_types) == 1:
+            return some_variant.associated_types[0]
     return None
 
 
@@ -472,9 +474,11 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     Fires only when resolution missed on a Result/Maybe receiver AND the method exists
     on the payload type -- which is what tells an unhandled channel from a typo. The
     diagnostic is relational: the primary names the missing method, the note points at
-    the call that returned the wrapper, and the help spells the `??` fix.
+    the call that returned the wrapper, and the help spells the fix: `??` for a Result,
+    `.or_err(nom e)??` for a Maybe, because `??` takes a Result only.
     """
     from sushi_lang.semantics.ast import DotCall
+    from sushi_lang.semantics.type_predicates import is_instance_of
 
     payload = _unhandled_channel_payload(receiver_type)
     if payload is None or not _method_exists_on(validator, payload, call.method):
@@ -486,9 +490,14 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     receiver_loc = getattr(receiver, "loc", None)
     if receiver_loc is not None:
         diag.note_at("the unhandled channel comes from this call", receiver_loc)
-    fix = ""
-    if isinstance(receiver, (MethodCall, DotCall)):
-        fix = f" -- e.g. '{receiver.method}()??.{call.method}()'"
+    called = receiver.method if isinstance(receiver, (MethodCall, DotCall)) else None
+    if is_instance_of(receiver_type, "Maybe"):
+        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{call.method}()'"
+               if called else "")
+        diag.help("handle the Maybe first: match on it, '.realise(default)', or give it "
+                  f"an error value and propagate with '.or_err(nom e)??'{fix}").emit()
+        return True
+    fix = f" -- e.g. '{called}()??.{call.method}()'" if called else ""
     diag.help("handle the channel first: match on it, '.realise(default)', or "
               f"propagate with '??'{fix}").emit()
     return True

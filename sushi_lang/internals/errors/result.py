@@ -31,8 +31,8 @@ _add(ErrorMessage("CE2507", Severity.ERROR,
     Category.TYPE, "The ?? operator takes a Result@(T, E) and nothing else. It unwraps the Ok, or it returns the Err from the enclosing body, so the Err must hold an error value that the program made. A Maybe@(T) holds no error value: before #1168, ?? on a None returned an Err built from an undefined value, and the answer changed with --opt. Write the error value at the site with or_err: m.or_err(nom AppError.Empty)??. The ?? operator reads the TYPE of its operand and not its variant names, because type identity is nominal. So a user enum with Ok/Err or Some/None variants is not a Result: its Err payload is out of reach of the rule that an E is an error type. Answer a Result@(T, E) (a callee writes | E), or use the value without ??. The rule is ruling C8 of docs/design/error-conversion.md."))
 
 _add(ErrorMessage("CE2508", Severity.ERROR,
-    "?? operator can only be used in functions returning a result-like enum (with Ok/Err variants)",
-    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T, E))."))
+    "`??` is legal only in a body with an error channel ('| E' or a Result@(T, E) return)",
+    Category.TYPE, "The ?? operator propagates an error by an early return, so it needs an enclosing body that returns a Result@(T, E): a function, a method or a lambda that writes '| E', or a function that returns an explicit Result@(T, E). This code is the backstop for a `??` that stands outside every body. A `??` in a BARE body is CE0131, and a `??` on an operand that is not a Result@(T, E) is CE2507 (docs/design/error-conversion.md section 4)."))
 
 _add(ErrorMessage("CE2509", Severity.ERROR,
     "operator '+' cannot be used with string types (use string interpolation instead: \"text {{variable}}\")",
@@ -48,7 +48,7 @@ _add(ErrorMessage("CE2512", Severity.ERROR,
 
 _add(ErrorMessage("CE2511", Severity.ERROR,
     "error type mismatch in propagation: cannot propagate Result@({ok_type}, {inner_err}) to function returning Result@({ok_type}, {outer_err})",
-    Category.TYPE, "The ?? operator requires error types to match exactly. Inner function returns Result@(T, {inner_err}) but outer function returns Result@(T, {outer_err}). A `??` converts an error only through a declared conversion (docs/design/error-conversion.md section 3.3): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C` (ruling C4): the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion (CE2519). For one site, `r.map_err(f)??` converts with no declaration."))
+    Category.TYPE, "The ?? operator propagates the error of the inner Result@(T, {inner_err}) into the channel of the enclosing body, Result@(T, {outer_err}). When the two error types are the same type, the error propagates unchanged. A `??` converts an error only through a declared conversion (docs/design/error-conversion.md section 3.3): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C` (ruling C4): the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion (CE2519). For one site, `r.map_err(f)??` converts with no declaration."))
 
 _add(ErrorMessage("CE2513", Severity.ERROR,
     "cannot compare '{left_type}' with '{right_type}' using operator '{op}'",
@@ -60,7 +60,7 @@ _add(ErrorMessage("CE2514", Severity.ERROR,
 
 _add(ErrorMessage("CE2515", Severity.ERROR,
     "'{method}' is not a method of '{wrapper}' -- the call before it returns a channel that is still unhandled",
-    Category.TYPE, "A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled (ruling 5 of the UFCS epic). This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns the wrapper to propagate its Err/None, or handle it in place with match or .realise(default)."))
+    Category.TYPE, "A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled (ruling 5 of the UFCS epic). This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns a Result to propagate its Err. A Maybe holds no error value and `??` takes a Result only (CE2507), so the help for a Maybe writes one first: '.or_err(nom e)??'. Or handle the wrapper in place with match or .realise(default). The receiver is a Result or a Maybe by type identity, never by the names of its variants."))
 
 _add(ErrorMessage("CE2517", Severity.ERROR,
     "the '??' binder needs an item that is a Result, and this loop's item is '{ty}'",
