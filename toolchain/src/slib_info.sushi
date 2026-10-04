@@ -1247,6 +1247,43 @@ fn print_extensions(MsgValue templates, Opts o) ~:
     println("")
 
 ##:
+Prints the section of the conversions that the library declares.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
+fn print_conversions(MsgValue meta, Opts o) ~:
+    match meta:
+        MsgValue.Map(pairs) ->
+            match map_index(meta, "conversions"):
+                Maybe.Some(at) -> print_conversion_list(pairs[at].1, o)
+                Maybe.None() -> return ~
+        _ ->
+            return ~
+
+##:
+Prints each conversion record as it is declared, with its doc record.
+
+- Parameter convs: The array of conversion records.
+- Parameter o: The options of the run.
+:##
+fn print_conversion_list(MsgValue convs, Opts o) ~:
+    if (not section("Conversions", len(convs), o)):
+        return ~
+    match convs:
+        MsgValue.Arr(items) ->
+            let bool p = false
+            foreach(c in items.iter()):
+                p := open_record(p)
+                let string source = to_surface(get_str(c, "source"))
+                let string target = to_surface(get_str(c, "target"))
+                println("  extend {source} as {target}")
+                p := print_doc(c, "    ", o)
+        _ ->
+            return ~
+    println("")
+
+##:
 Prints the section of the types that the library extends and does not declare.
 
 - Parameter meta: The metadata map.
@@ -1444,6 +1481,7 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_perks(templates, o)
     print_perk_impls(templates, o)
     print_extensions(templates, o)
+    print_conversions(meta, o)
     print_foreign_extensions(meta, o)
 
 ##:

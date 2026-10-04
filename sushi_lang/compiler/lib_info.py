@@ -394,6 +394,11 @@ def _extension_line(ext: dict, p: Palette) -> str:
     return f"  extend {_surface(ext['type'])} {static}{_render_signature(ext, p)}"
 
 
+def _conversion_line(conv: dict, _p: Palette) -> str:
+    """A conversion as it is declared, with no body: `extend Source as Target`."""
+    return f"  extend {_surface(conv['source'])} as {_surface(conv['target'])}"
+
+
 def _foreign_line(claim: dict, p: Palette) -> str:
     return f"  extend {_surface(claim['type'])} {claim['method']}"
 
@@ -479,6 +484,9 @@ _SECTIONS: tuple[_Section, ...] = (
     # templates, in ONE section, as the perk implementations above.
     _Section("Extension Methods", ("extensions", "generic_extensions"), _extension_line,
              in_templates=True),
+    # A conversion is found by its pair of types and not by a method name, so it has a
+    # section of its own (docs/design/error-conversion.md 8.2).
+    _Section("Conversions", ("conversions",), _conversion_line),
     _Section("Foreign Extensions", ("foreign_extensions",), _foreign_line, doc=None),
     _Section("Dependencies", ("dependencies",), _dependency_line, doc=None),
 )

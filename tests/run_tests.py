@@ -890,6 +890,27 @@ public error ReportFault:
     ##: One payload. :##
     Bad(i32)
 
+##: A fault that holds a fault. :##
+public error ReportWrap:
+    ##: The fault it holds. :##
+    Held(ReportFault)
+
+##: Wraps a fault. :##
+extend ReportFault as ReportWrap:
+    return ReportWrap.Held(self)
+
+##:
+Checks that a number is even.
+
+- Parameter n: The number.
+- Returns: `n`.
+- Errors: `ReportFault.Bad` for an odd number.
+:##
+public fn even(i32 n) i32 | ReportFault:
+    if (n % 2 == 1):
+        return Result.Err(ReportFault.Bad(n))
+    return Result.Ok(n)
+
 ##: A fault that carries a value. :##
 public error ReportDecode@(T):
     ##: The value. :##
@@ -968,6 +989,10 @@ public fn lead@(T, ...Ts: Display)(T first, ...Ts rest) i32:
 _REPORT_CONSUMER = """\
 use <lib/{name}>
 
+fn wrapped(i32 n) i32 | ReportWrap:
+    let i32 v = even(n)??
+    return Result.Ok(v)
+
 fn main() i32:
     match paint(42):
         Colour.Blue(s, n) -> println("{{s}} {{n}}")
@@ -977,13 +1002,17 @@ fn main() i32:
         Colour.Red -> println("red")
     println(half(8).realise(-1))
     println(half(7).realise(-1))
+    match wrapped(3):
+        Result.Ok(v) -> println("ok {{v}}")
+        Result.Err(e) -> println("{{e}}")
     return 0
 """
 
 # Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966);
 # the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, the
-# sixth and the seventh keep the `...` of a type pack (#1164), and the last two print the
-# keyword `error` for a concrete and for a generic error type.
+# sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
+# print the keyword `error` for a concrete and for a generic error type, and the last is
+# a conversion, which the consumer calls through `??`.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -994,9 +1023,10 @@ REPORT_LINES = (
     "  fn lead@(T, ...Ts: Display)(T first, ...Ts rest) i32",
     "  error ReportFault:",
     "  error ReportDecode@(T):",
+    "  extend ReportFault as ReportWrap",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
-REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\n"
+REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\nReportWrap.Held(ReportFault.Bad(3))\n"
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
@@ -1005,7 +1035,8 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
 
     A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY` in each kind,
     asks both halves for its report and looks for each of `REPORT_LINES`, then compiles
-    and runs a consumer of each kind that binds both payloads of a variant.
+    and runs a consumer of each kind that binds both payloads of a variant and calls the
+    conversion of the library through `??`.
     """
     result = ReaderGateResult(title="Library-report gate")
     if _gate_skip(result, filter_pattern, leaks_only) is not None:
