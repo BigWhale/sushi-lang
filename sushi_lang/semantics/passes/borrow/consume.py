@@ -11,6 +11,7 @@ from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, cla
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import (
+    CopyUse,
     emit_consume_of_borrow,
     emit_consume_of_read,
     no_clone_reason,
@@ -166,11 +167,11 @@ def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
 
 
 def consume(checker: 'BorrowChecker', expr: Expr,
-            converted_to: Optional[str] = None) -> None:
+            use_of_copy: Optional[CopyUse] = None) -> None:
     """Classify a consuming use, stamp the decision, and act on it.
 
-    `converted_to` is the target of an `as` conversion, the one position whose escape
-    reads `x.clone() as T`.
+    `use_of_copy` is what the position does with the copy that the CE2411 escape takes:
+    `x.clone() as T`, `r.clone().map_err(f)`.
     """
     # A bloom `arr...` MOVES its source into the callee. CE0120 restricts the source
     # to a bare array variable, so unwrapping here makes a use-after-bloom a CE2405
@@ -185,7 +186,7 @@ def consume(checker: 'BorrowChecker', expr: Expr,
 
     if isinstance(expr, Name):
         checker.err.meet(expr)
-        consume_named(checker, expr.id, provenance, expr.loc, converted_to)
+        consume_named(checker, expr.id, provenance, expr.loc, use_of_copy)
         return
 
     if reject_move_of_namespaced(checker, expr, provenance):
@@ -203,7 +204,7 @@ def consume(checker: 'BorrowChecker', expr: Expr,
         return
     if classify(provenance,
                 checker.types.type_class(read_type(checker, expr))) is Ownership.REJECT:
-        emit_consume_of_read(checker, expr, converted_to)
+        emit_consume_of_read(checker, expr, use_of_copy)
 
 
 def consume_each(checker: 'BorrowChecker', args) -> None:
@@ -254,7 +255,7 @@ def reject_move_of_storage(checker: 'BorrowChecker', sig, name: str,
 
 
 def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
-                  use_span: Optional[Span], converted_to: Optional[str] = None) -> None:
+                  use_span: Optional[Span], use_of_copy: Optional[CopyUse] = None) -> None:
     """Apply the ownership decision to a source that is a bare name."""
     state = checker.borrow_state.get(name)
     if state is None:
@@ -305,7 +306,7 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
         if checker.branch_depth > state.declared_branch_depth:
             checker.conditional_moves.add(state.name)
     elif decision is Ownership.REJECT:
-        emit_consume_of_borrow(checker, name, use_span, state, converted_to)
+        emit_consume_of_borrow(checker, name, use_span, state, use_of_copy)
 
 
 def bind(checker: 'BorrowChecker', stmt: Let) -> None:

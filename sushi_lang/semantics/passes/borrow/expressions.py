@@ -52,7 +52,7 @@ from .calls import (
     unchanged_borrowed_roots,
 )
 from .consume import consume, consume_each, consume_named, name_provenance, unwrap_place
-from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
+from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .writes import maybe_reject_mutation
 
 if TYPE_CHECKING:
@@ -85,8 +85,8 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
             # `as` with a conversion consumes its operand by POSITION, unmarked, as a
             # constructor argument does (docs/design/error-conversion.md section 3.2).
             if expr.inferred_conversion is not None:
-                consume(checker, expr.expr,
-                        converted_to=display_type(expr.inferred_conversion.target))
+                target = display_type(expr.inferred_conversion.target)
+                consume(checker, expr.expr, CopyUse("convert the copy", f" as {target}"))
         case UnaryOp():
             check_expr(checker, expr.expr)
         case TryExpr():

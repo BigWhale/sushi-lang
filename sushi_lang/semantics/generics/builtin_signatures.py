@@ -61,10 +61,24 @@ class BuiltinInstance:
 
 def builtin_signature_of(receiver_type: Any, method_name: str) -> Optional[BuiltinSignature]:
     """The signature of the built-in method `method_name` on this receiver, or None."""
-    from sushi_lang.semantics.type_predicates import is_instance_of
-    if isinstance(receiver_type, EnumType) and is_instance_of(receiver_type, "Maybe"):
+    from sushi_lang.semantics.type_predicates import generic_base_of
+    if not isinstance(receiver_type, EnumType):
+        return None
+    return builtin_signature_for_base(generic_base_of(receiver_type), method_name)
+
+
+def builtin_signature_for_base(base: Optional[str],
+                               method_name: str) -> Optional[BuiltinSignature]:
+    """The signature of the built-in method `method_name` of the generic `base`, or None.
+
+    `or_err` on `Maybe@(T)` and `map_err` on `Result@(T, E)` (design 8.3).
+    """
+    if base == "Maybe":
         from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
         return MAYBE_METHOD_SIGNATURES.get(method_name)
+    if base == "Result":
+        from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
+        return RESULT_METHOD_SIGNATURES.get(method_name)
     return None
 
 

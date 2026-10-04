@@ -41,6 +41,12 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
     if may_be_result:
         receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Result", EnumType)
         if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Result"):
+            from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
+            if method in RESULT_METHOD_SIGNATURES:
+                from sushi_lang.backend.generics.results import emit_result_signature_method
+                receiver_value, args = settle_signature_call(codegen, expr, receiver_value)
+                return emit_result_signature_method(codegen, expr, receiver_value,
+                                                    receiver_semantic_type, args)
             from sushi_lang.backend.generics.results import emit_builtin_result_method
             emitted = emit_builtin_result_method(codegen, expr, receiver_value, receiver_semantic_type, to_i1)
             if method in TAG_ONLY_METHODS:

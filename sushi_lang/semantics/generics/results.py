@@ -8,13 +8,30 @@ from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
+from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.passes.derive import derive_for_enum
+from sushi_lang.semantics.typesys import FunctionType
 
 
 #: Every built-in `Result@(T, E)` method and the number of arguments it takes. The count
 #: is checked in the typecheck pass (CE2009) before the check below runs.
 RESULT_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
-    "is_ok": 0, "is_err": 0, "err": 0, "realise": 1, "expect": 1,
+    "is_ok": 0, "is_err": 0, "err": 0, "realise": 1, "expect": 1, "map_err": 1,
+})
+
+#: The `Result@(T, E)` methods whose return type comes from an argument
+#: (docs/design/error-conversion.md section 5). Each is solved per call. The error moves
+#: into `f`, so a borrowed receiver is not read through.
+RESULT_METHOD_SIGNATURES: Mapping[str, BuiltinSignature] = MappingProxyType({
+    "map_err": BuiltinSignature(
+        receiver_params=("T", "E"), type_params=("F",),
+        params=(BuiltinParam("f", FunctionType(
+            param_types=(TypeParameter("E"),), ok_type=TypeParameter("F"), err_type=None,
+            param_modes=(ParamMode.NOM,))),),
+        ret_type=GenericTypeRef("Result", (TypeParameter("T"), TypeParameter("F"))),
+        self_mode="nom"),
 })
 
 

@@ -73,6 +73,21 @@ def declared_return_ll(codegen: 'LLVMCodegen', fn) -> ir.Type:
     return codegen.types.ll_type(value_type) if value_type else ir.VoidType()
 
 
+def stamped_result_return(call) -> EnumType:
+    """The interned Result that a built-in method with a signature answers (design 8.3).
+
+    A method-level type parameter makes the return type depend on an argument, so the
+    backend reads the typecheck pass's stamp and never derives it. A missing stamp is an
+    internal error.
+    """
+    from sushi_lang.semantics.generics.results import is_result_enum
+    stamped = getattr(call, "inferred_return_type", None)
+    if not (isinstance(stamped, EnumType) and is_result_enum(stamped)):
+        raise_internal_error(
+            "CE0015", message=f"'{call.method}' has no stamped Result return type")
+    return stamped
+
+
 def build_ok_variant(
     codegen: 'LLVMCodegen',
     result_type: EnumType,

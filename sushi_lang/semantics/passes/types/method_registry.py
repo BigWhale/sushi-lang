@@ -290,25 +290,32 @@ class ContractMethodInferrer:
 class ResultMethodInferrer:
     """Type inferrer for Result<T, E> methods."""
     receiver_type: EnumType
-    method_name: str
+    call: 'MethodCall'
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.results import is_builtin_result_method
+        from sushi_lang.semantics.generics.results import (
+            RESULT_METHOD_SIGNATURES, is_builtin_result_method)
         from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        if is_builtin_result_method(self.method_name):
+        signature = RESULT_METHOD_SIGNATURES.get(self.call.method)
+        if signature is not None:
+            from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+                builtin_call_return_type)
+            return builtin_call_return_type(self.validator, signature,
+                                            self.receiver_type, self.call)
+        if is_builtin_result_method(self.call.method):
             ok_variant = self.receiver_type.get_variant("Ok")
             err_variant = self.receiver_type.get_variant("Err")
 
-            if self.method_name in ("is_ok", "is_err"):
+            if self.call.method in ("is_ok", "is_err"):
                 return BuiltinType.BOOL
-            elif self.method_name == "realise":
+            elif self.call.method == "realise":
                 if ok_variant and ok_variant.associated_types:
                     return ok_variant.associated_types[0]
-            elif self.method_name == "expect":
+            elif self.call.method == "expect":
                 if ok_variant and ok_variant.associated_types:
                     return ok_variant.associated_types[0]
-            elif self.method_name == "err":
+            elif self.call.method == "err":
                 if err_variant and err_variant.associated_types:
                     err_type = err_variant.associated_types[0]
                     return ensure_maybe_type_in_table(self.validator.enum_table, err_type, struct_table=self.validator.struct_table.by_name)
@@ -613,7 +620,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
-    infer=lambda rt, call, v: ResultMethodInferrer(rt, call.method, v)))
+    infer=lambda rt, call, v: ResultMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="maybe", beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
     infer=lambda rt, call, v: MaybeMethodInferrer(rt, call, v)))

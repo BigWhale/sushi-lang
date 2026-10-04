@@ -17,7 +17,7 @@ from sushi_lang.semantics.param_modes import (
 
 from .borrows import register_implicit_borrow
 from .consume import consume, consume_each, read_through_receiver, source_provenance
-from .diagnostics import emit_use_of_invalidated_borrow, expr_to_string
+from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
 from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
 from .reads import OWNER_STEPS, called_on, read_type
 from .state import BorrowState
@@ -288,11 +288,18 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
         receiver.ownership_provenance = Provenance.BORROWED
         reject_read_through_outside_try(checker, expr)
         return
-    consume(checker, receiver)
+    consume(checker, receiver, CopyUse(f"call '{expr.method}' on the copy",
+                                       f".{expr.method}({_arguments_text(expr.args)})"))
     if isinstance(receiver, Name):
         state = checker.borrow_state.get(receiver.id)
         if state is not None and state.is_moved:
             state.consumed_by_method = state.consumed_by_method or expr.method
+
+
+def _arguments_text(args) -> str:
+    """The arguments of a call as source text, or `...` when one has no short spelling."""
+    texts = [expr_to_string(arg) for arg in args or ()]
+    return "..." if "<expression>" in texts else ", ".join(texts)
 
 
 def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) -> None:

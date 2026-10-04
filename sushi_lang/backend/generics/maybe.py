@@ -69,16 +69,12 @@ def _emit_maybe_or_err(
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.generics.result_builder import (
-        build_err_from_return_type, build_ok_variant)
+        build_err_from_return_type, build_ok_variant, stamped_result_return)
     from sushi_lang.backend.memory.allocas import entry_alloca
-    from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
+    from sushi_lang.semantics.generics.results import result_ok_err
     from sushi_lang.semantics.typesys import BuiltinType
 
-    stamped = getattr(call, "inferred_return_type", None)
-    if not (isinstance(stamped, EnumType) and is_result_enum(stamped)):
-        raise_internal_error(
-            "CE0015", message=f"'{call.method}' has no stamped Result return type")
-    result_type = cast(EnumType, stamped)
+    result_type = stamped_result_return(call)
     some_index = maybe_type.get_variant_index("Some")
     if some_index is None:
         raise_internal_error("CE0092", enum=maybe_type.name)

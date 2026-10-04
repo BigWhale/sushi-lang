@@ -808,7 +808,12 @@ def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("result")
 def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
-    from sushi_lang.semantics.generics.results import validate_result_method_with_validator
+    from sushi_lang.semantics.generics.results import (
+        RESULT_METHOD_SIGNATURES, validate_result_method_with_validator)
+    signature = RESULT_METHOD_SIGNATURES.get(call.method)
+    if signature is not None:
+        _validate_builtin_signature(validator, call, receiver_type, signature)
+        return
     validate_result_method_with_validator(
         call, receiver_type, validator.reporter, validator)
 

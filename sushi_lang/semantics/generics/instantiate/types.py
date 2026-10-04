@@ -64,16 +64,16 @@ class TypeInferrer:
 
         This used to be a third, independent return-type table (#269): it knew some
         string methods and Maybe, and nothing about to_str, hash or to_bits. A method
-        with a method-level type parameter (`or_err`) answers from the arguments of the
-        `call`, through the one solver (`solve_builtin_signature`).
+        with a method-level type parameter (`or_err`, `map_err`) answers from the
+        arguments of the `call`, through the one solver (`solve_builtin_signature`).
         """
         from sushi_lang.sushi_stdlib.src.collections.strings import (
             get_builtin_string_method_return_type,
             is_builtin_string_method,
         )
         from sushi_lang.semantics.generics.primitives import primitive_method_return_type
+        from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_for_base
         from sushi_lang.semantics.generics.maybe import (
-            MAYBE_METHOD_SIGNATURES,
             is_builtin_maybe_method,
             maybe_method_return_type,
         )
@@ -85,11 +85,11 @@ class TypeInferrer:
         if primitive_ret is not None:
             return primitive_ret
 
-        # A written `Maybe@(T)` and an interned one both reach a method with a signature:
-        # the solver reads the type arguments of either.
+        # A written `Maybe@(T)` / `Result@(T, E)` and an interned one both reach a method
+        # with a signature: the solver reads the type arguments of either.
         base = (receiver_type.base_name if isinstance(receiver_type, GenericTypeRef)
                 else getattr(receiver_type, "generic_base", None))
-        signature = MAYBE_METHOD_SIGNATURES.get(method_name) if base == "Maybe" else None
+        signature = builtin_signature_for_base(base, method_name)
         if signature is not None:
             return self._signature_return_type(signature, receiver_type, call)
 
