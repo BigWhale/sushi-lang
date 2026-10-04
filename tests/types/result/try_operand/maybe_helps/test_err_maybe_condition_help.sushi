@@ -1,0 +1,9 @@
+# Design 4 (C8): a Maybe in a condition is CE2516, and the help names `.or_err(nom e)??`
+# and never a bare `??`.
+# EXPECT_ERROR_CODES_EXACT: CE2516
+# EXPECT_STDERR_CONTAINS: "use '.is_some()' to test it, or take the value with '.realise(default)', match, or '.or_err(nom e)??'"
+fn main() i32:
+    let bool[] flags = from([true])
+    if (flags.get(0)):
+        println("Mostly Harmless")
+    return 0
