@@ -1,0 +1,58 @@
+# Design 5: a borrowed `Result` whose payload owns nothing is copied into `map_err`, and
+# its owner keeps the value. A borrowed `Result` whose payload owns a string takes an
+# owned copy first, `r.clone().map_err(f)`, and its owner keeps the value too. A lambda
+# that captures a value is freed one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 4\nerr AppError.Low(LowError.Bad(-1))\nerr AppError.Tagged(LowError.Bad(-1), 7)\ntrue\n0\nok word\nerr AppError.Token(TokenError.Bad("fault"))\nkept TokenError.Bad("fault")\n"
+error LowError:
+    Bad(i32)
+
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Low(LowError)
+    Tagged(LowError, i32)
+    Token(TokenError)
+
+fn wrap_token(nom TokenError e) AppError:
+    return AppError.Token(e)
+
+fn plain(Result@(i32, LowError) r) i32 | AppError:
+    let i32 v = r.map_err(|nom LowError e| AppError.Low(e))??
+    return Result.Ok(v)
+
+fn tagged(Result@(i32, LowError) r, i32 tag) i32 | AppError:
+    let i32 v = r.map_err(|nom LowError e| AppError.Tagged(e, tag))??
+    return Result.Ok(v)
+
+fn owning(Result@(string, TokenError) r) string | AppError:
+    let string s = r.clone().map_err(wrap_token)??
+    return Result.Ok(s)
+
+fn show_number(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn show_word(Result@(string, AppError) r) ~:
+    match r:
+        Result.Ok(s) -> println("ok {s}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    let Result@(i32, LowError) good = Result.Ok(4)
+    let Result@(i32, LowError) bad = Result.Err(LowError.Bad(-1))
+    show_number(plain(good))
+    show_number(plain(bad))
+    show_number(tagged(bad, 7))
+    println(good.is_ok())
+    println(bad.realise(0))
+    let Result@(string, TokenError) word = Result.Ok("word")
+    let Result@(string, TokenError) fault = Result.Err(TokenError.Bad("fault"))
+    show_word(owning(word))
+    show_word(owning(fault))
+    match fault:
+        Result.Ok(s) -> println(s)
+        Result.Err(e) -> println("kept {e}")
+    return 0
