@@ -120,7 +120,7 @@ def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr
 
 
 def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
-    """`r??` over a bare name spends `r` when `r` owns what it wraps (#548).
+    """`r??` spends an owned `r`, and refuses a borrowed `r` whose error owns (#548, #1171).
 
     The unwrap moves the payload out of the wrapper, so a wrapper the writer OWNS has
     nothing left to free: the `??` is a consuming position of its own, and `r` after it
@@ -128,16 +128,40 @@ def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
     payload's, because the Err arm travels too -- a `Result@(i32, Fail)` whose Fail
     holds a string is spent on the propagation path, or the scope cleanup frees the
     error the caller is about to read. A wrapper that owns nothing is copied out of
-    and stays usable. A BORROWED wrapper is left to its owner: the payload is a read
-    through it, and `source_provenance` says so at the position that takes it.
+    and stays usable.
+
+    A BORROWED wrapper keeps its owner. Its Ok payload is a read through it, and
+    `source_provenance` says so at the position that takes it. Its error leaves the
+    function in the returned Err, so an error type that owns is the consuming use of a
+    borrow (CE2411, docs/design/borrow-model.md S10d); the help names `r.clone()??`.
     """
     source = expr.expr
-    if not isinstance(source, Name):
-        return
-    provenance = name_provenance(checker, source.id)
-    source.ownership_provenance = provenance
-    if provenance is Provenance.OWNED:
-        consume_named(checker, source.id, provenance, expr.loc)
+    if isinstance(source, Name):
+        provenance = name_provenance(checker, source.id)
+        source.ownership_provenance = provenance
+        if provenance is Provenance.OWNED:
+            consume_named(checker, source.id, provenance, expr.loc)
+            return
+    if propagates_a_borrowed_error(checker, expr):
+        consume(checker, source, PROPAGATE_THE_COPY)
+
+
+# What the CE2411 escape does with the copy of a borrowed wrapper under `??`.
+PROPAGATE_THE_COPY = CopyUse("propagate the copy", "??")
+
+
+def propagates_a_borrowed_error(checker: 'BorrowChecker', expr: TryExpr) -> bool:
+    """Does `r??` put an owning error that another owner keeps in the returned Err?
+
+    A read-through `m.or_err(nom e)` is not one: its error is the argument `e`, which
+    the call owns, and not a part of the borrowed `m`.
+    """
+    source = expr.expr
+    if read_through_receiver(checker, source) is not None:
+        return False
+    if source_provenance(checker, source) is not Provenance.BORROWED:
+        return False
+    return checker.types.type_class(expr.inferred_error_type) is TypeClass.MOVE
 
 
 def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:

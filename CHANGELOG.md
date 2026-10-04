@@ -85,6 +85,9 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
 - An identity cast `x as T` on a value of type `T` that owns heap memory (a string, a
   struct, an error type) gave the value two owners, and both freed it. `as` now consumes
   its operand by position, so a later use of `x` is the use-after-move error.
+- `??` on a borrowed `Result` (a parameter, a binding, a field read) whose error type owns
+  heap memory freed the error two times on the `Err` path. It is now CE2411, the consuming
+  use of a borrow, with the help `r.clone()??`; a plain error type stays legal (#1171).
 
 ## [0.14.0] - 2026-10-03
 

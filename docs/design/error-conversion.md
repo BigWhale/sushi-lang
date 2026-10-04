@@ -470,6 +470,7 @@ fn notify(string host, string msg) ~ | AppError:
 | `??` with two error types and no declaration | CE2511. The help names `extend <E_in> as <E_out>`. "Not supported yet" is removed from its doc text |
 | `e as T` between two error types with no declaration | The invalid-cast error. The help names the declaration |
 | `e as T` on a borrowed error that owns a resource | The consuming-use-of-a-borrow error. The help names `e.clone() as T` |
+| `r??` on a borrowed `Result` whose error type owns a resource, with or without a conversion (#1171) | The consuming-use-of-a-borrow error. The help names `r.clone()??` |
 | A conversion outside the unit of its target type | CE2519, with a note at the target's declaration |
 | A generic or non-error source or target | CE2520 |
 | An identity conversion | CE2521 |

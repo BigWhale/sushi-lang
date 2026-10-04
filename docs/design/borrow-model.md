@@ -381,6 +381,16 @@ parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and con
 read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0).or_err(nom e)??` is. The escape is the
 usual one, `.clone()`.
 
+**The error of a borrowed wrapper is refused when it owns (#1171).** On the propagation path
+the error leaves the function in the returned `Err`, and `r`'s owner still frees it. So
+`r??` over a borrowed `Result` whose ERROR type owns heap is the consuming use of a borrow,
+CE2411, with the help `r.clone()??`. The compiler inserts no deep copy. The same rule holds
+for a declared conversion (`??` into another error type takes the error `nom self`), for a
+read through an owner (`h.r??`), and it is the rule of `r.map_err(f)` and `e as T` on a
+borrowed owning value. A borrowed `Result` whose error type is plain (every stdlib error
+type) stays legal: the error is copied. A read-through `m.or_err(nom e)??` is not affected,
+because its error is the argument `e`, which the call owns.
+
 **The `foreach` binder is this rule and nothing else.** `foreach(line?? in it)` is
 `let T line = <item>??`, and the item of a `next()` protocol iterator is a value the
 iteration OWNS -- the payload of a fresh `Maybe@(T)` nobody else frees. So the generated

@@ -642,8 +642,11 @@ fn main() i32:
 A `Result` that owns nothing (`Result@(i32, StdError)`) is copied out of, and the local
 stays usable. A BORROWED `Result` -- a parameter, a `match` or `foreach` binding -- is read
 through, not spent: `let string s = r??` binds a borrow that frees nothing, and consuming
-the read (`return Result.Ok(r??)`) is **CE2411**, with `.clone()` as the escape. The design
-record is `docs/design/borrow-model.md` §10d.
+the read (`return Result.Ok(r??)`) is **CE2411**, with `.clone()` as the escape. When the
+ERROR type of a borrowed `Result` owns heap (an error that holds a `string`), `r??` itself
+is **CE2411**: the `Err` path would give the caller a value that `r`'s owner still frees.
+Write `r.clone()??`. A borrowed `Result` with a plain error type (every stdlib error type)
+stays legal. The design record is `docs/design/borrow-model.md` §10d.
 
 ### `??` on a `foreach` binder
 
