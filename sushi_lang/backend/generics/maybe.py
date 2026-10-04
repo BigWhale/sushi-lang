@@ -1,6 +1,6 @@
 """Built-in extension methods for Maybe<T> generic enum type."""
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -33,6 +33,83 @@ def emit_builtin_maybe_method(
         return _emit_maybe_expect(codegen, call, maybe_value, maybe_type)
     else:
         raise_internal_error("CE0094", method=call.method)
+
+
+def emit_maybe_signature_method(
+    codegen: Any,
+    call: MethodCall | DotCall,
+    maybe_value: ir.Value,
+    maybe_type: EnumType,
+    args: list[ir.Value],
+) -> ir.Value:
+    """Emit a `Maybe@(T)` method that has a signature (design 8.3).
+
+    The caller settled the receiver and the arguments by their stamped modes. The return
+    type is the stamp of the typecheck pass, because a method-level type parameter makes
+    it depend on an argument.
+    """
+    if call.method == "or_err":
+        return _emit_maybe_or_err(codegen, call, maybe_value, maybe_type, args[0])
+    raise_internal_error("CE0094", method=call.method)
+
+
+def _emit_maybe_or_err(
+    codegen: Any,
+    call: MethodCall | DotCall,
+    maybe_value: ir.Value,
+    maybe_type: EnumType,
+    error_value: ir.Value,
+) -> ir.Value:
+    """Emit `m.or_err(nom e)`: `Some(v)` gives `Ok(v)`, and `None` gives `Err(e)`.
+
+    The method owns the receiver and the error value. The payload moves into the `Ok`
+    and the error value moves into the `Err`. On the `Some` path nothing holds the error
+    value, so it is destroyed there.
+    """
+    from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
+    from sushi_lang.backend.generics.result_builder import (
+        build_err_from_return_type, build_ok_variant)
+    from sushi_lang.backend.memory.allocas import entry_alloca
+    from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    stamped = getattr(call, "inferred_return_type", None)
+    if not (isinstance(stamped, EnumType) and is_result_enum(stamped)):
+        raise_internal_error(
+            "CE0015", message=f"'{call.method}' has no stamped Result return type")
+    result_type = cast(EnumType, stamped)
+    some_index = maybe_type.get_variant_index("Some")
+    if some_index is None:
+        raise_internal_error("CE0092", enum=maybe_type.name)
+    ok_type, err_type = result_ok_err(result_type)
+    builder = codegen.builder
+
+    error_ll = codegen.types.ll_type(err_type)
+    if isinstance(error_value.type, ir.PointerType) and error_value.type.pointee == error_ll:
+        error_value = builder.load(error_value, name="or_err_error_arg")
+    error_slot = entry_alloca(builder, error_ll, name="or_err_error")
+    builder.store(error_value, error_slot)
+    result_slot = entry_alloca(builder, codegen.types.ll_type(result_type),
+                               name="or_err_result")
+    is_some = emit_enum_tag_check(codegen, maybe_value, cast(int, some_index),
+                                  "or_err_is_some")
+
+    with builder.if_else(is_some) as (then_block, else_block):
+        with then_block:
+            payload = None
+            if ok_type != BuiltinType.BLANK:
+                _is_some, payload = codegen.functions.extract_value_from_result_enum(
+                    maybe_value, codegen.types.ll_type(ok_type), ok_type)
+            builder.store(build_ok_variant(codegen, result_type, payload), result_slot)
+            if needs_cleanup(codegen, err_type):
+                emit_value_destructor(codegen, error_slot, err_type)
+        with else_block:
+            error = builder.load(error_slot, name="or_err_error_value")
+            builder.store(build_err_from_return_type(codegen, result_type, error),
+                          result_slot)
+
+    return builder.load(result_slot, name="or_err_value")
 
 
 def _emit_maybe_expect(

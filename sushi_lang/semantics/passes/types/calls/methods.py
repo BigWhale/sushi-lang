@@ -799,9 +799,53 @@ def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("maybe")
 def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
-    from sushi_lang.semantics.generics.maybe import validate_maybe_method_with_validator
+    from sushi_lang.semantics.generics.maybe import (
+        MAYBE_METHOD_SIGNATURES, validate_maybe_method_with_validator)
+    signature = MAYBE_METHOD_SIGNATURES.get(call.method)
+    if signature is not None:
+        _validate_builtin_signature(validator, call, receiver_type, signature)
+        return
     validate_maybe_method_with_validator(
         call, receiver_type, validator.reporter, validator)
+
+
+def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
+                                receiver_type, signature) -> None:
+    """A built-in method with a method-level type parameter (design 8.3).
+
+    It takes the check of a user method: the receiver mode and the parameter modes are
+    stamped for the borrow pass and the backend, and the arguments go through the one
+    argument check. Before that, the arguments solve the method-level type parameters,
+    and E3 judges each one in an `E` position at this call, which is the instance.
+    """
+    from sushi_lang.semantics.error_types import reject_non_error_type
+    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+        instance_return_type, solve_builtin_call)
+
+    _check_receiver_mode(validator, call, signature)
+    instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
+    if instance is None:
+        if unsolved:
+            names = ", ".join(f"'{n}'" for n in unsolved)
+            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
+                         plural="s" if len(unsolved) > 1 else "",
+                         names=names, method=call.method) \
+                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
+        return
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    refused = [name for name in signature.error_parameters
+               if reject_non_error_type(validator.reporter, instance.substitution[name],
+                                        call.loc, structs, enums)]
+    if refused:
+        return
+
+    _stamp_param_modes(call, instance)
+    check_arguments(validator, f"{display_type(receiver_type)}.{call.method}",
+                    [p.ty for p in instance.params], call.args, call.loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
+    call.inferred_return_type = instance_return_type(validator, instance)
 
 
 @METHOD_TYPE_REGISTRY.validator("own")

@@ -70,8 +70,9 @@ class MethodTypeInferrer(Protocol):
 
 #: Does the compiler define this method name on this receiver? No perk question.
 AnswerHook = Callable[['Type', str, 'DerivedMethodTable'], bool]
-#: The inferrer the typecheck pass reads for a claimed call.
-InferHook = Callable[['Type', str, 'TypeValidator'], MethodTypeInferrer]
+#: The inferrer the typecheck pass reads for a claimed call. It receives the CALL, so a
+#: return type can depend on an argument (`or_err`, docs/design/error-conversion.md 8.3).
+InferHook = Callable[['Type', 'MethodCall', 'TypeValidator'], MethodTypeInferrer]
 #: The check the typecheck pass runs for a claimed call.
 ValidateHook = Callable[['TypeValidator', 'MethodCall', 'Type'], None]
 
@@ -161,13 +162,13 @@ class MethodTypeRegistry:
         return any(family.answers(receiver_type, method_name, derived_methods)
                    for family in self._families)
 
-    def infer_method_type(self, receiver_type: 'Type', method_name: str,
+    def infer_method_type(self, receiver_type: 'Type', call: 'MethodCall',
                           validator: 'TypeValidator') -> Optional['Type']:
         """Infer the return type of a method call."""
-        family = self.claim(receiver_type, method_name, validator)
+        family = self.claim(receiver_type, call.method, validator)
         if family is None or family.infer is None:
             return None
-        return family.infer(receiver_type, method_name, validator).infer_return_type()
+        return family.infer(receiver_type, call, validator).infer_return_type()
 
     def validate_method(self, validator: 'TypeValidator', call: 'MethodCall',
                         receiver_type: 'Type', *, beats_perk: bool) -> bool:
@@ -318,16 +319,23 @@ class ResultMethodInferrer:
 class MaybeMethodInferrer:
     """Type inferrer for Maybe<T> methods."""
     receiver_type: EnumType
-    method_name: str
+    call: 'MethodCall'
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.generics.maybe import is_builtin_maybe_method, maybe_method_return_type
-        if is_builtin_maybe_method(self.method_name):
+        from sushi_lang.semantics.generics.maybe import (
+            MAYBE_METHOD_SIGNATURES, is_builtin_maybe_method, maybe_method_return_type)
+        signature = MAYBE_METHOD_SIGNATURES.get(self.call.method)
+        if signature is not None:
+            from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+                builtin_call_return_type)
+            return builtin_call_return_type(self.validator, signature,
+                                            self.receiver_type, self.call)
+        if is_builtin_maybe_method(self.call.method):
             some_variant = self.receiver_type.get_variant("Some")
             if some_variant and some_variant.associated_types:
                 return maybe_method_return_type(
-                    some_variant.associated_types[0], self.method_name)
+                    some_variant.associated_types[0], self.call.method)
         return None
 
 
@@ -599,45 +607,45 @@ def _answers_primitive(receiver_type, method_name, derived_methods):
 
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="array", beats_perk=True, answers=_answers_array,
-    infer=lambda rt, name, v: ArrayMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="string", beats_perk=True, answers=_answers_string,
-    infer=lambda rt, name, v: StringMethodInferrer(name, v)))
+    infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
-    infer=lambda rt, name, v: ResultMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: ResultMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="maybe", beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
-    infer=lambda rt, name, v: MaybeMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: MaybeMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="own", beats_perk=True, answers=_answers_own, arity=OWN_METHOD_ARITY,
-    infer=lambda rt, name, v: OwnMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: OwnMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="hashmap", beats_perk=True, answers=_answers_hashmap, arity=HASHMAP_METHOD_ARITY,
-    infer=lambda rt, name, v: HashMapMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: HashMapMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, answers=_answers_list, arity=LIST_METHOD_ARITY,
-    infer=lambda rt, name, v: ListMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: ListMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
     arity=FOREIGN_PTR_METHOD_ARITY,
-    infer=lambda rt, name, v: ForeignPtrMethodInferrer(name, v)))
+    infer=lambda _receiver, call, v: ForeignPtrMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="array_hash", beats_perk=False, answers=_answers_array_hash,
-    infer=lambda rt, name, v: ArrayMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_hash", beats_perk=False, answers=_answers_derived_hash, arity=DERIVED_HASH_ARITY,
-    infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
+    infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="derived_clone", beats_perk=False, answers=_answers_derived_clone, arity=DERIVED_CLONE_ARITY,
-    infer=lambda rt, name, v: StructEnumBuiltinInferrer(rt, name, v)))
+    infer=lambda rt, call, v: StructEnumBuiltinInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="contract", beats_perk=False, answers=_answers_contract,
     arity=CONTRACT_METHOD_ARITY,
-    infer=lambda _receiver, name, _validator: ContractMethodInferrer(name)))
+    infer=lambda _receiver, call, _validator: ContractMethodInferrer(call.method)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="function", beats_perk=False, answers=_answers_function,
-    infer=lambda rt, name, v: FunctionMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: FunctionMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="primitive", beats_perk=False, answers=_answers_primitive,
-    infer=lambda rt, name, v: PrimitiveMethodInferrer(rt, name, v)))
+    infer=lambda rt, call, v: PrimitiveMethodInferrer(rt, call.method, v)))

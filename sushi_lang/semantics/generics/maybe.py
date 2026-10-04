@@ -7,12 +7,24 @@ from sushi_lang.semantics.typesys import EnumType, Type, BuiltinType
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
+from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
 
 
 #: Every built-in `Maybe@(T)` method and the number of arguments it takes. The count is
 #: checked in the typecheck pass (CE2009) before the check below runs.
 MAYBE_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
-    "is_some": 0, "is_none": 0, "realise": 1, "expect": 1,
+    "is_some": 0, "is_none": 0, "realise": 1, "expect": 1, "or_err": 1,
+})
+
+#: The `Maybe@(T)` methods whose return type comes from an argument
+#: (docs/design/error-conversion.md section 4). Each is solved per call.
+MAYBE_METHOD_SIGNATURES: Mapping[str, BuiltinSignature] = MappingProxyType({
+    "or_err": BuiltinSignature(
+        receiver_params=("T",), type_params=("E",),
+        params=(BuiltinParam("e", TypeParameter("E"), is_nom=True),),
+        ret_type=GenericTypeRef("Result", (TypeParameter("T"), TypeParameter("E"))),
+        self_mode="nom"),
 })
 
 

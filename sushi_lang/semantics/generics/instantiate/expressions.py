@@ -252,7 +252,8 @@ class ExpressionScanner:
         receiver_type = self.type_inferrer.infer_simple_receiver_type(call.receiver)
 
         if receiver_type is not None:
-            return_type = self.type_inferrer.get_builtin_method_return_type(receiver_type, call.method)
+            return_type = self.type_inferrer.get_builtin_method_return_type(
+                receiver_type, call.method, call=call)
 
             if return_type is not None and isinstance(return_type, GenericTypeRef):
                 self._collect_from_type(return_type)

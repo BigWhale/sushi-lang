@@ -50,6 +50,12 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
     if may_be_maybe:
         receiver_semantic_type = infer_semantic_type(codegen, expr, receiver_value, "Maybe", EnumType)
         if isinstance(receiver_semantic_type, EnumType) and is_instance_of(receiver_semantic_type, "Maybe"):
+            from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
+            if method in MAYBE_METHOD_SIGNATURES:
+                from sushi_lang.backend.generics.maybe import emit_maybe_signature_method
+                receiver_value, args = settle_signature_call(codegen, expr, receiver_value)
+                return emit_maybe_signature_method(codegen, expr, receiver_value,
+                                                   receiver_semantic_type, args)
             from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
             emitted = emit_builtin_maybe_method(codegen, expr, receiver_value, receiver_semantic_type, to_i1)
             if method in TAG_ONLY_METHODS:
@@ -57,6 +63,24 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
             return emitted
 
     return None
+
+
+def settle_signature_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                          receiver_value: ir.Value) -> tuple[ir.Value, list[ir.Value]]:
+    """A built-in method with a signature (design 8.3) crosses the call as a user method.
+
+    The typecheck pass stamped its receiver mode and its parameter modes. A `nom self`
+    receiver goes to the method through the ownership seam, and each argument is settled
+    by its mode, as for an extension method. Answers the receiver and the arguments.
+    """
+    from sushi_lang.semantics.param_modes import receiver_mode
+    from sushi_lang.backend.expressions.calls.dispatcher import (
+        consume_receiver, settle_method_call_arguments)
+    if receiver_mode(getattr(expr, "callee_self_mode", None)).consumes:
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
+    args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    settle_method_call_arguments(codegen, expr, args)
+    return receiver_value, args
 
 
 def try_emit_own_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall], to_i1: bool) -> Optional[ir.Value]:

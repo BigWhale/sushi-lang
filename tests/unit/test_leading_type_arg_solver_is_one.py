@@ -38,6 +38,8 @@ SITES = (
     # parameters of an extension. Each keeps its own contract (the stamp fill, CE2063).
     ("statics.py", "solve_target_type_args"),
     ("passes/types/calls/methods.py", "resolve_method_generic_extension"),
+    # The method-level type parameter of a built-in method (`or_err`, design 8.3).
+    ("generics/builtin_signatures.py", "solve_builtin_signature"),
 )
 
 #: The modules that may call the unifier: the solver, and the unifier's own recursion.

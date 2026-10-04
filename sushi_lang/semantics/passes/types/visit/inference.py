@@ -470,7 +470,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         # extension may name.
         from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
         inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
-            actual_type, node.method, self.type_validator)
+            actual_type, node, self.type_validator)
 
         if isinstance(actual_type, CONCRETE_EXTENSION_TARGETS):
             # An extension or perk method's return type is a DECLARED spelling, so it

@@ -1,0 +1,115 @@
+"""The signature of a built-in method that has a method-level type parameter.
+
+docs/design/error-conversion.md section 8.3. A built-in method answers its return type
+from its receiver alone, read off its family's table. `or_err@(E)` on `Maybe@(T)` is the
+first that has a type parameter of its own, so its return type comes from its ARGUMENT.
+Such a method states its signature here, as an extension would write it: the type
+parameters of the receiver, the method-level ones, each parameter with its mode, the
+return, and the receiver mode.
+
+`solve_builtin_signature` is the one solver. It solves the method-level type parameters
+from the argument types through `solve_leading_type_args`, as for a method-generic
+extension, and answers the substituted signature. The typecheck pass reads the instance
+for the return type, the parameter types and the modes that it stamps for the `borrow`
+pass and the backend. The instantiate pass reads the return type.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional, Sequence
+
+from sushi_lang.semantics.generics.types import GenericTypeRef, substitute_type_params
+from sushi_lang.semantics.typesys import EnumType, StructType, Type
+
+
+@dataclass(frozen=True)
+class BuiltinParam:
+    """One parameter of a built-in signature. The mode is read by `param_modes.param_mode`."""
+    name: str
+    ty: Type
+    is_nom: bool = False
+
+
+@dataclass(frozen=True)
+class BuiltinSignature:
+    """A built-in method, written as a generic extension of its receiver would be."""
+    receiver_params: tuple[str, ...]
+    type_params: tuple[str, ...]
+    params: tuple[BuiltinParam, ...]
+    ret_type: Type
+    self_mode: Optional[str] = None
+
+    @property
+    def error_parameters(self) -> tuple[str, ...]:
+        """The method-level type parameters in an `E` position, judged by E3 at each call."""
+        from sushi_lang.semantics.error_types import error_parameters
+        written = [(self.ret_type, None)] + [(p.ty, None) for p in self.params]
+        return tuple(error_parameters(written, self.type_params))
+
+
+@dataclass(frozen=True)
+class BuiltinInstance:
+    """A built-in signature with every type parameter substituted. Nothing is interned."""
+    signature: BuiltinSignature
+    substitution: Mapping[str, Type]
+    params: tuple[BuiltinParam, ...]
+    ret_type: Type
+
+
+def receiver_type_arguments(receiver_type: Any) -> Optional[tuple[Type, ...]]:
+    """The type arguments of an interned instance or of a written generic reference."""
+    if isinstance(receiver_type, (EnumType, StructType)):
+        return tuple(receiver_type.generic_args) if receiver_type.generic_args else None
+    if isinstance(receiver_type, GenericTypeRef):
+        return tuple(receiver_type.type_args)
+    return None
+
+
+def solve_builtin_signature(
+    signature: BuiltinSignature,
+    receiver_type: Any,
+    arg_types: Sequence[Optional[Type]],
+    structs: Any,
+    enums: Any,
+) -> tuple[Optional[BuiltinInstance], tuple[str, ...]]:
+    """Solve the method-level type parameters of one call: `(instance, unsolved names)`.
+
+    The receiver binds its own type parameters, and the arguments bind the method-level
+    ones through the one solver. An argument type that is None solves nothing. The
+    instance is None when a name stays unsolved or the receiver has no type arguments.
+    """
+    from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
+    from sushi_lang.semantics.type_resolution import (
+        resolve_type_recursively, resolve_unknown_type)
+
+    receiver_args = receiver_type_arguments(receiver_type)
+    if receiver_args is None or len(receiver_args) != len(signature.receiver_params):
+        return None, signature.type_params
+    tables = (structs or {}, enums or {})
+    receiver_subst = {name: resolve_type_recursively(arg, *tables)
+                      for name, arg in zip(signature.receiver_params, receiver_args,
+                                           strict=True)}
+    expected = [substitute_type_params(p.ty, receiver_subst) for p in signature.params]
+    solved, unsolved = solve_leading_type_args(
+        signature, arg_types, structs, enums, partial=True, param_types=expected,
+        type_param_names=signature.type_params)
+    if unsolved:
+        return None, unsolved
+
+    type_args = tuple(resolve_unknown_type(solved[name], structs, enums)
+                      for name in signature.type_params)
+    substitution = dict(receiver_subst)
+    substitution.update(zip(signature.type_params, type_args, strict=True))
+    params = tuple(BuiltinParam(p.name, substitute_type_params(p.ty, substitution), p.is_nom)
+                   for p in signature.params)
+    return BuiltinInstance(signature=signature, substitution=substitution, params=params,
+                           ret_type=substitute_type_params(signature.ret_type,
+                                                           substitution)), ()
+
+
+def refuses_an_error_argument(instance: BuiltinInstance, structs: Any, enums: Any) -> bool:
+    """Whether a type argument in an `E` position of the instance is not an error type (E3)."""
+    from sushi_lang.semantics.error_types import non_error_type
+    return any(non_error_type(instance.substitution[name], structs or {}, enums or {})
+               is not None
+               for name in instance.signature.error_parameters)
