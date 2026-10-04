@@ -1,0 +1,11 @@
+# Design 4 (E3): `E` of `or_err` is judged at each instance. A struct is not an error
+# type, so the call that solves `E` to one is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: 'Point' is a struct, not an error type
+struct Point:
+    i32 x
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(m.or_err(nom Point(3)).is_ok())
+    return 0

@@ -1,0 +1,38 @@
+# Design 4 (C8, C9): `or_err` moves the `Some` payload into the `Ok` and the error value
+# into the `Err`. A payload and an error type that own a string are each freed one time,
+# on the `Some` path and on the `None` path, for a temporary and for a named receiver.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok word 1\nerr AppError.Missing("no word -1")\nok word 2\nerr AppError.Missing("no word -2")\nok word 3\nerr AppError.Missing("named error -3")\n"
+error AppError:
+    Missing(string)
+
+fn word(i32 n) Maybe@(string):
+    if (n < 0):
+        return Maybe.None
+    return Maybe.Some("word {n}")
+
+fn from_temporary(i32 n) string | AppError:
+    let string w = word(n).or_err(nom AppError.Missing("no word {n}"))??
+    return Result.Ok(w)
+
+fn from_named(i32 n) string | AppError:
+    let Maybe@(string) m = word(n)
+    let string w = m.or_err(nom AppError.Missing("no word {n}"))??
+    return Result.Ok(w)
+
+fn show(Result@(string, AppError) r) ~:
+    match r:
+        Result.Ok(w) -> println("ok {w}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(from_temporary(1))
+    show(from_temporary(-1))
+    show(from_named(2))
+    show(from_named(-2))
+    let AppError first = AppError.Missing("named error 3")
+    show(word(3).or_err(nom first))
+    let AppError second = AppError.Missing("named error -3")
+    let Result@(string, AppError) r = word(-3).or_err(nom second)
+    show(r)
+    return 0

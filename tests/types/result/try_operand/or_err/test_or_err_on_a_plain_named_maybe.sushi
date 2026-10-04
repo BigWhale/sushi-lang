@@ -1,0 +1,16 @@
+# Design 4 (C9): the receiver of `or_err` is `nom self`. A `Maybe` that owns nothing is
+# copied, as for every `nom self` method, so a named one stays usable after the call.
+# EXPECT_STDOUT_EXACT: "4\ntrue\n0\nfalse\n"
+error AppError:
+    Empty
+
+fn main() i32:
+    let Maybe@(i32) some = Maybe.Some(4)
+    let Result@(i32, AppError) a = some.or_err(nom AppError.Empty)
+    println(a.realise(0))
+    println(some.is_some())
+    let Maybe@(i32) none = Maybe.None
+    let Result@(i32, AppError) b = none.or_err(nom AppError.Empty)
+    println(b.realise(0))
+    println(none.is_some())
+    return 0

@@ -1,0 +1,8 @@
+# Design 4 (C9): `or_err` is a built-in method that takes one argument, the error value.
+# A call with no argument is the built-in arity error.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: expects 1, got 0
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(m.or_err().is_ok())
+    return 0

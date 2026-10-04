@@ -1,0 +1,15 @@
+# Design 4 (C9): the receiver of `or_err` is `nom self`. A parameter borrows the value of
+# the caller, so a call that takes it is refused, as for every `nom self` method.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'm'
+error AppError:
+    Empty
+
+fn word_or_err(Maybe@(string) m) string | AppError:
+    let string w = m.or_err(nom AppError.Empty)??
+    return Result.Ok(w)
+
+fn main() i32:
+    let Maybe@(string) m = Maybe.Some("word")
+    println(word_or_err(m).realise("none"))
+    return 0
