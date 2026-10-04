@@ -721,7 +721,24 @@ def _check_user_method(validator: 'TypeValidator', call: MethodCall, receiver_ty
     wrong count and says no more, an extension call reads the remaining arguments as a
     plain function call does.
     """
+    return _run_method_steps(validator, call, receiver_type, method,
+                             stop_on_arity=stop_on_arity)
+
+
+def _run_method_steps(validator: 'TypeValidator', call: MethodCall, receiver_type,
+                      method, *, stop_on_arity: bool, solve=None) -> bool:
+    """The steps of a method check, in their order. Answers whether the COUNT fit.
+
+    The receiver mode comes from `method`. `solve`, when given, runs after it and
+    answers the declaration that holds the parameters, or None when it reported a
+    fault: a built-in method with a method-level type parameter (design 8.3) has its
+    parameters only after its arguments solve them.
+    """
     _check_receiver_mode(validator, call, method)
+    if solve is not None:
+        method = solve()
+        if method is None:
+            return False
     _stamp_param_modes(call, method)
     return check_arguments(
         validator, f"{display_type(receiver_type)}.{call.method}",
@@ -813,18 +830,42 @@ def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
                                 receiver_type, signature) -> None:
     """A built-in method with a method-level type parameter (design 8.3).
 
-    It takes the check of a user method: the receiver mode and the parameter modes are
+    It takes the steps of a user method: the receiver mode and the parameter modes are
     stamped for the borrow pass and the backend, and the arguments go through the one
-    argument check. Before that, the arguments solve the method-level type parameters,
-    and E3 judges each one in an `E` position at this call, which is the instance.
+    argument check. Between the two, the arguments solve the method-level type
+    parameters, and E3 judges each one in an `E` position at this call, which is the
+    instance.
     """
-    from sushi_lang.semantics.error_types import reject_non_error_type
     from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-        instance_return_type, solve_builtin_call)
+        instance_return_type)
 
     # The borrow pass and the backend read the receiver type from this stamp.
     call.resolved_enum_type = receiver_type
-    _check_receiver_mode(validator, call, signature)
+    solved: list = []
+
+    def solve():
+        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
+        if instance is not None:
+            solved.append(instance)
+        return instance
+
+    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
+                      solve=solve)
+    if solved:
+        call.inferred_return_type = instance_return_type(validator, solved[0])
+
+
+def _solve_builtin_instance(validator: 'TypeValidator', call: MethodCall, receiver_type,
+                            signature):
+    """The instance this call names, or None after the fault is reported.
+
+    A type parameter the arguments leave unsolved is CE2063; a solved one in an `E`
+    position that is not an error type is refused by E3.
+    """
+    from sushi_lang.semantics.error_types import reject_non_error_type
+    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+        solve_builtin_call)
+
     instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
     if instance is None:
         if unsolved:
@@ -833,7 +874,7 @@ def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
                          plural="s" if len(unsolved) > 1 else "",
                          names=names, method=call.method) \
                 .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
-        return
+        return None
 
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
@@ -841,13 +882,8 @@ def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
                if reject_non_error_type(validator.reporter, instance.substitution[name],
                                         call.loc, structs, enums)]
     if refused:
-        return
-
-    _stamp_param_modes(call, instance)
-    check_arguments(validator, f"{display_type(receiver_type)}.{call.method}",
-                    [p.ty for p in instance.params], call.args, call.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
-    call.inferred_return_type = instance_return_type(validator, instance)
+        return None
+    return instance
 
 
 @METHOD_TYPE_REGISTRY.validator("own")
