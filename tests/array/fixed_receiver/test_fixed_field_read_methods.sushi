@@ -10,7 +10,7 @@ struct Buf:
 fn run_test() i32 | StdError:
     let Buf b = Buf(slots: [10, 20, 30])
     println(b.slots.len())
-    println(b.slots.get(0)??)
+    println(b.slots.get(0).or_err(nom StdError.Error)??)
     println(b.slots[2])
 
     let i32 total = 0

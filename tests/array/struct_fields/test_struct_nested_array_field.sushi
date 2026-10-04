@@ -22,9 +22,9 @@ fn run_test() i32 | StdError:
     o.data.values.push(200)
     o.data.values.push(300)
 
-    println("First value: {o.data.values.get(0)??}")
-    println("Second value: {o.data.values.get(1)??}")
-    println("Third value: {o.data.values.get(2)??}")
+    println("First value: {o.data.values.get(0).or_err(nom StdError.Error)??}")
+    println("Second value: {o.data.values.get(1).or_err(nom StdError.Error)??}")
+    println("Third value: {o.data.values.get(2).or_err(nom StdError.Error)??}")
     println("Values length: {o.data.values.len()}")
 
     # Automatic cleanup via RAII - o.data.values is freed at scope exit

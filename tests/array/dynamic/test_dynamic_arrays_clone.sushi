@@ -11,8 +11,8 @@ fn run_test() i32 | StdError:
     # Both arrays should have same data
     println(arr1.len())  # Should print 3
     println(arr2.len())  # Should print 3
-    println(arr1.get(0)??) # Should print 1
-    println(arr2.get(0)??) # Should print 1
+    println(arr1.get(0).or_err(nom StdError.Error)??) # Should print 1
+    println(arr2.get(0).or_err(nom StdError.Error)??) # Should print 1
 
     # Modify arr1 - arr2 should be unaffected
     arr1.push(4)
@@ -36,7 +36,7 @@ fn run_test() i32 | StdError:
     empty2.push(42)
     println(empty1.len())  # Should print 0 (unchanged)
     println(empty2.len())  # Should print 1
-    println(empty2.get(0)??) # Should print 42
+    println(empty2.get(0).or_err(nom StdError.Error)??) # Should print 42
 
     # Test 3: Clone and rebind
     let i32[] arr3 = from([10, 20, 30])
@@ -51,8 +51,8 @@ fn run_test() i32 | StdError:
 
     println(arr3.len())  # Should print 4
     println(arr4.len())  # Should print 4
-    println(arr3.get(3)??) # Should print 40
-    println(arr4.get(3)??) # Should print 50
+    println(arr3.get(3).or_err(nom StdError.Error)??) # Should print 40
+    println(arr4.get(3).or_err(nom StdError.Error)??) # Should print 50
 
     # Test 4: Clone string arrays
     let string[] strs1 = from(["hello", "world"])

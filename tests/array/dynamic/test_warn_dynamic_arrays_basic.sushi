@@ -21,9 +21,9 @@ fn run_test() i32 | StdError:
   print(states.len())       # Should print 3
 
   # Test get() method
-  print(scores.get(0)??)      # Should print 100
-  print(colors.get(1)??)      # Should print "green"
-  print(states.get(2)??)      # Should print true
+  print(scores.get(0).or_err(nom StdError.Error)??)      # Should print 100
+  print(colors.get(1).clone().or_err(nom StdError.Error)??)      # Should print "green"
+  print(states.get(2).or_err(nom StdError.Error)??)      # Should print true
 
   return Result.Ok(0)
 

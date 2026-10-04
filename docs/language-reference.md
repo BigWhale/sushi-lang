@@ -1068,7 +1068,7 @@ Stack-allocated, compile-time size:
 
 ```sushi
 let i32[5] arr = [1, 2, 3, 4, 5]
-let i32 first = arr.get(0)??  # .get returns Maybe@(i32); ?? unwraps it
+let i32 first = arr.get(0).or_err(nom StdError.Error)??  # .get returns Maybe@(i32); ?? unwraps it
 ```
 
 #### The size

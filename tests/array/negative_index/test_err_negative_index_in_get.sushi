@@ -3,7 +3,7 @@
 
 fn run() i32 | StdError:
     let i32[3] numbers = [10, 20, 30]
-    let i32 before = numbers.get(-1)??
+    let i32 before = numbers.get(-1).or_err(nom StdError.Error)??
     println("{before}")
     return Result.Ok(0)
 

@@ -24,24 +24,24 @@ fn run_test() i32 | StdError:
     c.numbers.push(20)
     c.numbers.push(30)
 
-    println("First number: {c.numbers.get(0)??}")
-    println("Second number: {c.numbers.get(1)??}")
-    println("Third number: {c.numbers.get(2)??}")
+    println("First number: {c.numbers.get(0).or_err(nom StdError.Error)??}")
+    println("Second number: {c.numbers.get(1).or_err(nom StdError.Error)??}")
+    println("Third number: {c.numbers.get(2).or_err(nom StdError.Error)??}")
     println("Array length: {c.numbers.len()}")
 
     # Test struct with initialized dynamic array field
     let Person p = Person("Arthur", 30, from(["reading", "coding", "hiking"]))
     println("Person name: {p.name}")
     println("Person age: {p.age}")
-    println("First hobby: {p.hobbies.get(0)??}")
-    println("Second hobby: {p.hobbies.get(1)??}")
-    println("Third hobby: {p.hobbies.get(2)??}")
+    println("First hobby: {p.hobbies.get(0).clone().or_err(nom StdError.Error)??}")
+    println("Second hobby: {p.hobbies.get(1).clone().or_err(nom StdError.Error)??}")
+    println("Third hobby: {p.hobbies.get(2).clone().or_err(nom StdError.Error)??}")
     println("Hobbies count: {p.hobbies.len()}")
 
     # Add more hobbies
     p.hobbies.push("swimming")
     println("After push - Hobbies count: {p.hobbies.len()}")
-    println("Fourth hobby: {p.hobbies.get(3)??}")
+    println("Fourth hobby: {p.hobbies.get(3).clone().or_err(nom StdError.Error)??}")
 
     # Automatic cleanup via RAII - no manual .destroy() needed!
     # c.numbers and p.hobbies are automatically freed at scope exit

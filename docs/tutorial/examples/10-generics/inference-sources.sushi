@@ -3,7 +3,7 @@ struct Pair@(A, B):
     B second
 
 fn head@(T)(T[] xs) T | StdError:
-    let T v = xs.get(0)??
+    let T v = xs.get(0).or_err(nom StdError.Error)??
     return Result.Ok(v)
 
 fn last_of_three@(T)(T[3] xs) T:

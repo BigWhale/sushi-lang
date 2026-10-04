@@ -3,7 +3,7 @@
 # Test ?? operator with Maybe@(T) stored in variable
 
 fn process_maybe(Maybe@(i32) value) i32 | StdError:
-    let i32 unwrapped = value??  # Unwrap Some or propagate None
+    let i32 unwrapped = value.or_err(nom StdError.Error)??  # Unwrap Some or propagate None
     return Result.Ok(unwrapped * 2)
 
 fn main() i32:

@@ -12,7 +12,7 @@ fn run() i32 | StdError:
     println("{l.len()} {first.len()} {first[1][1]}")
     let List@(i32[2][3]) fixed = List.new()
     fixed.push([[1, 2], [3, 4], [5, 6]])
-    let i32[2][3] m = fixed.get(0)??
+    let i32[2][3] m = fixed.get(0).or_err(nom StdError.Error)??
     println("{m.len()} {m[2][1]}")
     let HashMap@(string, i32[2][]) h = HashMap.new()
     h.insert("a", from([[1, 2], [3, 4]]))

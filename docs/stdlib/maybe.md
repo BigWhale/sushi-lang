@@ -61,7 +61,7 @@ with an `Err`:
 
 ```sushi
 fn double_first(i32[] arr) i32 | StdError:
-    let i32 first = arr.get(0)??
+    let i32 first = arr.get(0).or_err(nom StdError.Error)??
     return Result.Ok(first * 2)
 ```
 

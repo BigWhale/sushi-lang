@@ -8,8 +8,8 @@ fn inc(i32 x) i32:
 fn run() i32 | StdError:
     let List@(fn(i32) -> i32) fns = List.new()
     fns.push(inc)
-    let i32 a = fns.get(0)??(10)
-    let i32 b = (fns.get(0)??)(20)
+    let i32 a = fns.get(0).clone().or_err(nom StdError.Error)??(10)
+    let i32 b = (fns.get(0).clone().or_err(nom StdError.Error)??)(20)
     return Result.Ok(a + b)
 
 fn main() i32:

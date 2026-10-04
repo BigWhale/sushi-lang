@@ -5,7 +5,7 @@
 fn run_test(peek string[] args) i32 | StdError:
     let i32 i = 0
     while (i < args.len()):
-        println(args.get(i)??)
+        println(args.get(i).clone().or_err(nom StdError.Error)??)
         i := i + 1
     return Result.Ok(0)
 

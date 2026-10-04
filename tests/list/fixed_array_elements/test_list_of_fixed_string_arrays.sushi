@@ -16,7 +16,7 @@ fn run_test() i32 | StdError:
     foreach(row in pairs.iter()):
         println("row={row[0]} {row[1]}")
 
-    let string[2] p = pairs.pop()??
+    let string[2] p = pairs.pop().or_err(nom StdError.Error)??
     println("pop={p[0]} {p[1]} len={pairs.len()}")
 
     let List@(string[2]) copy = pairs.clone()

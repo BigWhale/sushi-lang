@@ -12,8 +12,8 @@ fn run_test() i32 | StdError:
   let bool flag1 = flags[2]      # Error: index 2 >= size 2
 
   # Test method calls with out-of-bounds constants
-  let i32 value4 = numbers.get(3)??  # Error: index 3 >= size 3
-  let bool flag2 = flags.get(5)??    # Error: index 5 >= size 2
+  let i32 value4 = numbers.get(3).or_err(nom StdError.Error)??  # Error: index 3 >= size 3
+  let bool flag2 = flags.get(5).or_err(nom StdError.Error)??    # Error: index 5 >= size 2
 
   return Result.Ok(0)
 

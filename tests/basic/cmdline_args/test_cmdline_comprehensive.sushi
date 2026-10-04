@@ -8,12 +8,12 @@ fn run_test(peek string[] args) i32 | StdError:
 
     let i32 i = 0
     while (i < args.len()):
-        println("Argument {i}: {args.get(i)??}")
+        println("Argument {i}: {args.get(i).clone().or_err(nom StdError.Error)??}")
         i := i + 1
 
     # Test that we can use array methods normally
     if (args.len() > 0):
-        println("First argument: {args.get(0)??}")
+        println("First argument: {args.get(0).clone().or_err(nom StdError.Error)??}")
 
     return Result.Ok(0)
 

@@ -15,7 +15,7 @@ use <collections/hashmap>
 fn get_num() i32 | StdError:
     let HashMap@(i32, i32) nums = HashMap.new()
     nums.insert(1, 5)
-    let i32 n = nums.get(1)??
+    let i32 n = nums.get(1).or_err(nom StdError.Error)??
     nums.free()
     return Result.Ok(n)
 

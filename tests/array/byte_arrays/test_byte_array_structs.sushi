@@ -22,7 +22,7 @@ fn process_buffer(DataBuffer buf) i32 | StdError:
     println("  Data length: {buf.data.len()}")
 
     # First element
-    let u8 first = buf.data.get(0)??
+    let u8 first = buf.data.get(0).or_err(nom StdError.Error)??
     println("  First byte: {first}")
 
     return Result.Ok(buf.data.len())
@@ -35,7 +35,7 @@ fn run_test() i32 | StdError:
     buf1.data.push(66 as u8)  # 'B'
     buf1.data.push(67 as u8)  # 'C'
     println("Buffer1 length: {buf1.data.len()}")
-    println("Buffer1 first: {buf1.data.get(0)??}")
+    println("Buffer1 first: {buf1.data.get(0).or_err(nom StdError.Error)??}")
 
     # Test 2: Struct with initialized byte array
     println("Test 2: Struct with initialized byte array")
@@ -56,7 +56,7 @@ fn run_test() i32 | StdError:
     println("Buffer array length: {buffers.len()}")
 
     # Access nested byte array
-    let DataBuffer first_buf = buffers.get(0)??
+    let DataBuffer first_buf = buffers.get(0).clone().or_err(nom StdError.Error)??
     println("First buffer data length: {first_buf.data.len()}")
 
     # Test 5: Nested structs with byte arrays
@@ -79,7 +79,7 @@ fn run_test() i32 | StdError:
     let DataBuffer iter_buf = DataBuffer(from([65 as u8, 66 as u8, 67 as u8]), "iter", 3)
     let i32 idx = 0
     while (idx < iter_buf.data.len()):
-        let u8 byte = iter_buf.data.get(idx)??
+        let u8 byte = iter_buf.data.get(idx).or_err(nom StdError.Error)??
         println("  Byte: {byte}")
         idx := idx + 1
 

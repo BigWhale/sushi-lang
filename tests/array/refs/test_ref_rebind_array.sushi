@@ -10,7 +10,7 @@ fn run_test() i32 | StdError:
     let i32[] original = from([99, 88])
     replace_array(poke original)
     println(original.len())
-    println(original.get(0)??)
+    println(original.get(0).or_err(nom StdError.Error)??)
     return Result.Ok(0)
 
 fn main() i32:

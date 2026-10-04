@@ -109,7 +109,7 @@ match arr.get(2):
         println("Index out of bounds")
 
 # Or use error propagation
-let i32 value = arr.get(2)??
+let i32 value = arr.get(2).or_err(nom StdError.Error)??
 ```
 
 **Note:** Direct indexing `arr[index]` is also available but throws RE2020 runtime error on out-of-bounds.
@@ -557,7 +557,7 @@ let i32[] arr = from([1, 2, 3])
 
 # Safe: Returns Maybe@(T)
 let Maybe@(i32) safe = arr.get(0)
-let i32 value = arr.get(0)??  # Error propagation
+let i32 value = arr.get(0).or_err(nom StdError.Error)??  # Error propagation
 
 # Unsafe: Direct indexing (throws RE2020 if out of bounds)
 let i32 direct = arr[0]

@@ -18,8 +18,8 @@ fn test_nested_raii() i32 | StdError:
     o.data.values.push(42)
     o.data.values.push(43)
 
-    println("First value: {o.data.values.get(0)??}")
-    println("Second value: {o.data.values.get(1)??}")
+    println("First value: {o.data.values.get(0).or_err(nom StdError.Error)??}")
+    println("Second value: {o.data.values.get(1).or_err(nom StdError.Error)??}")
     println("Inner label: {o.data.label}")
     println("Outer name: {o.name}")
 

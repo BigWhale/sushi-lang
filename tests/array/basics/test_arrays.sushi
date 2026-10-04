@@ -22,10 +22,10 @@ fn run_test() i32 | StdError:
     println("Capacity: {numbers.capacity()}")
 
     # Test get
-    let i32 first = numbers.get(0)??
+    let i32 first = numbers.get(0).or_err(nom StdError.Error)??
     println("First element: {first}")
 
-    let i32 second = numbers.get(1)??
+    let i32 second = numbers.get(1).or_err(nom StdError.Error)??
     println("Second element: {second}")
 
     # Test pop
@@ -36,7 +36,7 @@ fn run_test() i32 | StdError:
     # Test clone
     let i32[] copy = numbers.clone()
     println("Clone length: {copy.len()}")
-    println("Clone first: {copy.get(0)??}")
+    println("Clone first: {copy.get(0).or_err(nom StdError.Error)??}")
 
     # Test iter (foreach)
     println("Iterating:")

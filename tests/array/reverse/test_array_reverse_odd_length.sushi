@@ -4,19 +4,19 @@ fn run_test() i32 | StdError:
     tea_attempts.reverse()
 
     # Verify order is reversed
-    if (tea_attempts.get(0)?? != 7):
+    if (tea_attempts.get(0).or_err(nom StdError.Error)?? != 7):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(1)?? != 6):
+    if (tea_attempts.get(1).or_err(nom StdError.Error)?? != 6):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(2)?? != 5):
+    if (tea_attempts.get(2).or_err(nom StdError.Error)?? != 5):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(3)?? != 4):
+    if (tea_attempts.get(3).or_err(nom StdError.Error)?? != 4):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(4)?? != 3):
+    if (tea_attempts.get(4).or_err(nom StdError.Error)?? != 3):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(5)?? != 2):
+    if (tea_attempts.get(5).or_err(nom StdError.Error)?? != 2):
         return Result.Err(StdError.Error)
-    if (tea_attempts.get(6)?? != 1):
+    if (tea_attempts.get(6).or_err(nom StdError.Error)?? != 1):
         return Result.Err(StdError.Error)
 
     return Result.Ok(0)

@@ -6,7 +6,7 @@
 
 fn report(peek i32[3] arr) ~ | StdError:
     println(arr.len())
-    println(arr.get(0)??)
+    println(arr.get(0).or_err(nom StdError.Error)??)
     println(arr[2])
 
     let i32 total = 0

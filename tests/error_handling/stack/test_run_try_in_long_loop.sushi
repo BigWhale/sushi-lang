@@ -72,7 +72,7 @@ fn listed(i32 n) i32 | StdError:
     let i32 seen = 0
     let i32 j = 0
     while (j < n):
-        seen := seen + xs.get(j)?? - i + 1
+        seen := seen + xs.get(j).or_err(nom StdError.Error)?? - i + 1
         j := j + 1
     let i32 popped = 0
     while (xs.len() > 0):

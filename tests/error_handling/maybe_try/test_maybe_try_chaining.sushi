@@ -8,11 +8,11 @@ use <collections/strings>
 fn find_both(string text) i32 | StdError:
     # Find first 'x', propagate if not found
     println("Trying first")
-    let i32 first = text.find("x")??
+    let i32 first = text.find("x").or_err(nom StdError.Error)??
 
     # Find first 'y', propagate if not found
     println("Trying second")
-    let i32 second = text.find("y")??
+    let i32 second = text.find("y").or_err(nom StdError.Error)??
     return Result.Ok(first + second)
 
 fn main() i32:

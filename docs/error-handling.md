@@ -641,7 +641,7 @@ use <collections/strings>
 
 fn find_and_parse(string text) i32 | StdError:
     # If find() returns None, ?? propagates as Err
-    let i32 pos = text.find("x")??
+    let i32 pos = text.find("x").or_err(nom StdError.Error)??
     return Result.Ok(pos * 2)
 
 fn main() i32:

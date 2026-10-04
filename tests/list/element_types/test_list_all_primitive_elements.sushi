@@ -21,7 +21,7 @@ fn run_test() i32 | StdError:
     let List@(i64) a64 = List.new()
     a64.push(1000000000 as i64)
     a64.push(3000000000 as i64)
-    println("ints {a8.get(1)??} {a16.get(1)??} {a32.get(1)??} {a64.get(1)??}")
+    println("ints {a8.get(1).or_err(nom StdError.Error)??} {a16.get(1).or_err(nom StdError.Error)??} {a32.get(1).or_err(nom StdError.Error)??} {a64.get(1).or_err(nom StdError.Error)??}")
 
     let List@(u8) b8 = List.new()
     b8.push(10 as u8)
@@ -35,7 +35,7 @@ fn run_test() i32 | StdError:
     let List@(u64) b64 = List.new()
     b64.push(1000000000 as u64)
     b64.push(3000000000 as u64)
-    println("uints {b8.get(1)??} {b16.get(1)??} {b32.get(1)??} {b64.get(1)??}")
+    println("uints {b8.get(1).or_err(nom StdError.Error)??} {b16.get(1).or_err(nom StdError.Error)??} {b32.get(1).or_err(nom StdError.Error)??} {b64.get(1).or_err(nom StdError.Error)??}")
 
     let List@(f32) c32 = List.new()
     c32.push(3.5)
@@ -43,14 +43,14 @@ fn run_test() i32 | StdError:
     c64.push(3.5)
     let List@(bool) flags = List.new()
     flags.push(true)
-    println("reals {c32.get(0)??} {c64.get(0)??} flag {flags.get(0)??}")
+    println("reals {c32.get(0).or_err(nom StdError.Error)??} {c64.get(0).or_err(nom StdError.Error)??} flag {flags.get(0).or_err(nom StdError.Error)??}")
 
     # insert/remove shift by element size; a wrong stride moves the wrong bytes.
     let List@(i64) shifted = List.new()
     shifted.push(1 as i64)
     shifted.push(3 as i64)
     shifted.insert(0, 7 as i64)
-    println("shifted {shifted.get(0)??} {shifted.get(2)??}")
+    println("shifted {shifted.get(0).or_err(nom StdError.Error)??} {shifted.get(2).or_err(nom StdError.Error)??}")
 
     return Result.Ok(0)
 

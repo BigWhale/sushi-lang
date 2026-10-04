@@ -3,7 +3,7 @@ fn run_test() i32 | StdError:
     let i32[3] arr = [1, 2, 3]
 
     # This should fail with CE2006: get() expects i32 argument
-    let i32 value = arr.get(true)??
+    let i32 value = arr.get(true).or_err(nom StdError.Error)??
 
     return Result.Ok(value)
 

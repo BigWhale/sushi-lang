@@ -11,15 +11,15 @@ fn replace_with_new(poke i32[] arr) ~:
 fn run_test() i32 | StdError:
     let i32[] numbers = from([1, 2, 3])
     println(numbers.len())
-    println(numbers.get(0)??)
+    println(numbers.get(0).or_err(nom StdError.Error)??)
 
     add_element(poke numbers, 4)
     println(numbers.len())
-    println(numbers.get(3)??)
+    println(numbers.get(3).or_err(nom StdError.Error)??)
 
     replace_with_new(poke numbers)
     println(numbers.len())
-    println(numbers.get(0)??)
+    println(numbers.get(0).or_err(nom StdError.Error)??)
 
     return Result.Ok(0)
 

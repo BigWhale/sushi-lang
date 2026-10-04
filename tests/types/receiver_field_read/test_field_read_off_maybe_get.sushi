@@ -10,7 +10,7 @@ struct Point:
     i32 y
 
 fn first_x(Point[] pts) i32 | StdError:
-    return Result.Ok(pts.get(0)??.x)
+    return Result.Ok(pts.get(0).or_err(nom StdError.Error)??.x)
 
 fn main() i32:
     let Point[] pts = from([Point(4, 5)])

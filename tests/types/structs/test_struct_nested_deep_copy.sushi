@@ -39,11 +39,11 @@ fn run_test() i32 | StdError:
     println("Nested data2 values: {nested.data2.values.len()}")
 
     # Test access to the nested arrays
-    println("Nested data1[0]: {nested.data1.values.get(0)??}")
-    println("Nested data1[1]: {nested.data1.values.get(1)??}")
-    println("Nested data1[2]: {nested.data1.values.get(2)??}")
-    println("Nested data2[0]: {nested.data2.values.get(0)??}")
-    println("Nested data2[1]: {nested.data2.values.get(1)??}")
+    println("Nested data1[0]: {nested.data1.values.get(0).or_err(nom StdError.Error)??}")
+    println("Nested data1[1]: {nested.data1.values.get(1).or_err(nom StdError.Error)??}")
+    println("Nested data1[2]: {nested.data1.values.get(2).or_err(nom StdError.Error)??}")
+    println("Nested data2[0]: {nested.data2.values.get(0).or_err(nom StdError.Error)??}")
+    println("Nested data2[1]: {nested.data2.values.get(1).or_err(nom StdError.Error)??}")
 
     # Modify nested arrays to verify independence
     nested.data1.values.push(40)

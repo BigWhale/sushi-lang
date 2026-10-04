@@ -6,7 +6,7 @@
 fn run() string | StdError:
     let string word = "Harmless"
     let Maybe@(string) m = Maybe.Some("Mostly {word}")
-    let string got = m??
+    let string got = m.or_err(nom StdError.Error)??
     return Result.Ok(got)
 
 fn main() i32:

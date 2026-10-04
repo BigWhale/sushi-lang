@@ -55,7 +55,7 @@ fn build_list(i32[] values) List@(Node) | StdError:
             prev_idx := Maybe.Some(i - 1)
 
         # Create node with computed links
-        let i32 val = values.get(i)??
+        let i32 val = values.get(i).or_err(nom StdError.Error)??
         let Node node = Node(val, next_idx, prev_idx)
         nodes.push(node)
 

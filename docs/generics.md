@@ -290,7 +290,7 @@ fn singleton@(T)(nom T x) List@(T):
     return l
 
 fn first_of@(T)(List@(T) l) T | StdError:
-    return Result.Ok(l.get(0)??)
+    return Result.Ok(l.get(0).or_err(nom StdError.Error)??)
 
 fn round_trip@(T)(nom T x) T | StdError:
     return Result.Ok(first_of(singleton(nom x))??)

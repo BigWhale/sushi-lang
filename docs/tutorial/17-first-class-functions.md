@@ -126,8 +126,8 @@ fragment is the body of a function with a channel, because `??` unwraps the `May
 ```sushi
 let List@(fn(i32) -> i32) table = List.new()
 table.push(add_one)
-let i32 a = table.get(0)??(41)      # call the retrieved function value
-let i32 b = (table.get(0)??)(41)    # same, parenthesized
+let i32 a = table.get(0).or_err(nom StdError.Error)??(41)      # call the retrieved function value
+let i32 b = (table.get(0).or_err(nom StdError.Error)??)(41)    # same, parenthesized
 ```
 
 ## Referencing a generic function

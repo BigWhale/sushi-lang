@@ -4,7 +4,7 @@
 # two pushes) -- unlike a by-value array param, whose header copy would lose them.
 
 fn safe_get(i32[] arr, i32 index) i32 | StdError:
-    return Result.Ok(arr.get(index)??)
+    return Result.Ok(arr.get(index).or_err(nom StdError.Error)??)
 
 fn check_capacity(string[] arr) i32 | StdError:
     return Result.Ok(arr.capacity())
@@ -12,7 +12,7 @@ fn check_capacity(string[] arr) i32 | StdError:
 # Mutating helpers borrow poke so the caller keeps ownership and sees the mutation
 # (a by-value array param would be moved and freed by the callee).
 fn pop_last(poke bool[] arr) bool | StdError:
-    return Result.Ok(arr.pop()??)
+    return Result.Ok(arr.pop().or_err(nom StdError.Error)??)
 
 fn chain_methods(poke i32[] arr) i32 | StdError:
     print(arr.push(42))

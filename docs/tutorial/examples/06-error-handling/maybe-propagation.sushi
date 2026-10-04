@@ -1,5 +1,5 @@
 fn second_reading(i32[] readings) i32 | StdError:
-    let i32 value = readings.get(1)??
+    let i32 value = readings.get(1).or_err(nom StdError.Error)??
     return Result.Ok(value * 2)
 
 fn main() i32:

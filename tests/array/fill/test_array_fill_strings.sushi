@@ -4,11 +4,11 @@ fn run_test() i32 | StdError:
     towels.fill("clean")
 
     # Verify all towels are clean
-    if (towels.get(0)?? != "clean"):
+    if (towels.get(0).clone().or_err(nom StdError.Error)?? != "clean"):
         return Result.Err(StdError.Error)
-    if (towels.get(1)?? != "clean"):
+    if (towels.get(1).clone().or_err(nom StdError.Error)?? != "clean"):
         return Result.Err(StdError.Error)
-    if (towels.get(2)?? != "clean"):
+    if (towels.get(2).clone().or_err(nom StdError.Error)?? != "clean"):
         return Result.Err(StdError.Error)
 
     return Result.Ok(0)

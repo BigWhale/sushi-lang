@@ -12,23 +12,23 @@ fn run_test() i32 | StdError:
     rows.push(last)
     println("len={rows.len()}")
 
-    let i32[3] g = rows.get(1)??
+    let i32[3] g = rows.get(1).or_err(nom StdError.Error)??
     println("get={g[0]} {g[1]} {g[2]}")
 
     foreach(row in rows.iter()):
         let i32 total = row[0] + row[1] + row[2]
         println("sum={total}")
 
-    let i32[3] p = rows.pop()??
+    let i32[3] p = rows.pop().or_err(nom StdError.Error)??
     println("pop={p[0]} {p[1]} {p[2]} len={rows.len()}")
 
     let List@(i32[3]) copy = rows.clone()
-    let i32[3] c0 = copy.get(0)??
-    let i32[3] c1 = copy.get(1)??
+    let i32[3] c0 = copy.get(0).or_err(nom StdError.Error)??
+    let i32[3] c1 = copy.get(1).or_err(nom StdError.Error)??
     println("clone={copy.len()} first={c0[0]} last={c1[2]}")
 
     rows.reserve(16)
-    let i32[3] r = rows.get(1)??
+    let i32[3] r = rows.get(1).or_err(nom StdError.Error)??
     println("reserve={rows.len()} row={r[0]}")
     return Result.Ok(0)
 

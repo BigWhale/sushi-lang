@@ -14,9 +14,9 @@ fn run_test() i32 | StdError:
     println("After 3 pushes: {bytes.len()}")  # Should be 3
 
     # Access elements
-    let u8 first = bytes.get(0)??
-    let u8 second = bytes.get(1)??
-    let u8 third = bytes.get(2)??
+    let u8 first = bytes.get(0).or_err(nom StdError.Error)??
+    let u8 second = bytes.get(1).or_err(nom StdError.Error)??
+    let u8 third = bytes.get(2).or_err(nom StdError.Error)??
     println("First byte: {first}")   # Should be 65
     println("Second byte: {second}")  # Should be 66
     println("Third byte: {third}")    # Should be 67

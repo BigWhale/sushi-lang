@@ -4,25 +4,25 @@ fn run_test() i32 | StdError:
   # Test from() with integers
   let i32[] nums = from([10, 20, 30, 40, 50])
   print(nums.len())         # Should print 5
-  print(nums.get(0)??)        # Should print 10
-  print(nums.get(4)??)        # Should print 50
+  print(nums.get(0).or_err(nom StdError.Error)??)        # Should print 10
+  print(nums.get(4).or_err(nom StdError.Error)??)        # Should print 50
 
   # Test from() with strings
   let string[] words = from(["apple", "banana", "cherry"])
   print(words.len())        # Should print 3
-  print(words.get(0)??)       # Should print "apple"
-  print(words.get(2)??)       # Should print "cherry"
+  print(words.get(0).clone().or_err(nom StdError.Error)??)       # Should print "apple"
+  print(words.get(2).clone().or_err(nom StdError.Error)??)       # Should print "cherry"
 
   # Test from() with booleans
   let bool[] flags = from([true, false, true, true, false])
   print(flags.len())        # Should print 5
-  print(flags.get(1)??)       # Should print false
-  print(flags.get(3)??)       # Should print true
+  print(flags.get(1).or_err(nom StdError.Error)??)       # Should print false
+  print(flags.get(3).or_err(nom StdError.Error)??)       # Should print true
 
   # Test from() with single element
   let i32[] single = from([42])
   print(single.len())       # Should print 1
-  print(single.get(0)??)      # Should print 42
+  print(single.get(0).or_err(nom StdError.Error)??)      # Should print 42
 
   # Test empty from() - should create empty array
   let string[] empty = from([])
