@@ -1,7 +1,6 @@
 # Error types and error conversion
 
-Status: ACCEPTED. The rulings are David's (2026-10-04). Nothing is built yet; section 10
-gives the order of the work.
+Status: ACCEPTED. The rulings are David's (2026-10-04). Nothing is built yet.
 
 ## Summary
 
@@ -31,7 +30,7 @@ gives the order of the work.
 | **C7** | The body is bare, and it consumes `self` | 3.7 |
 | **C8** | `??` takes a `Result@(T, E)` only. A `Maybe` and an enum shaped like a `Result` or a `Maybe` are refused. `or_err(nom e)` is the form for a `Maybe` (#1168) | 4 |
 | **C9** | `map_err` is in the library from the first version | 5 |
-| **C10** | A `from` marker on a variant is deferred | 12.1 |
+| **C10** | A `from` marker on a variant is deferred | 9.1 |
 | **C11** | A conversion has no leak check | 3.8 |
 
 ---
@@ -508,91 +507,9 @@ type and needs nothing from the IR.
 
 ---
 
-## 9. Hazards
+## 9. Alternatives considered
 
-1. **The keyword in an import path.** A fixture imports `<io/error>` and `<net/error>`
-   before the keyword is added.
-2. **Binary libraries from an older compiler.** Their manifest has no `is_error` field.
-   The compiler-version check refuses such a library. Under `--ignore-compiler-version`,
-   a missing field reads as `false`, and the diagnostic says to rebuild the library.
-3. **The incremental cache.** A conversion or a flag in unit U changes the code of a `??`
-   in a unit that depends on U. Both are part of U's interface, or the dependent unit
-   keeps a stale `.o`. A REBUILD fixture covers it.
-4. **A double free in the propagate block.** The error moves into the conversion. A leak
-   fixture with an owning error type exists before the emitter changes.
-5. **A hidden call.** No call is written at a `??`. Every analysis that walks calls (the
-   destroy summary of `effects`, any later reachability check) sees the edge from the
-   `??` to the conversion.
-6. **`as` binds after `??`.** `r?? as AppError` casts the VALUE. No help text suggests
-   that spelling.
-7. **Constants.** `const_eval` refuses `X as AppError` with the not-a-constant error, not
-   an internal error.
-8. **The spelling gate.** The internal identity of a conversion has angle brackets.
-   Every diagnostic renders it through `display_type()`.
-9. **One home.** `to_io()` and `as IoError` never exist together. The migration deletes
-   `to_io()`.
-
----
-
-## 10. Order of the work and migration
-
-1. **The `error` declaration and E3.** The four written error enums in `src_sushi/`
-   become `error`: `UrlError` (`net/url.sushi`), `ZError` (`compression/zlib.sushi`),
-   `MpError` (`encoding/msgpack.sushi`) and `SlibError` (`toolchain/slib.sushi`). The
-   seven predefined error types get the flag. Every test and doc enum used as an `E`
-   becomes `error`. The CE2086 fixtures move to CE2084, and the CE2084 fixtures keep
-   their code.
-2. **What `??` takes (C8) and `or_err`.** This fixes #1168. Every `??` on a `Maybe` in a
-   body with a channel becomes `.or_err(nom e)??`; #1168 has the count. No fixture uses
-   `??` on a user enum shaped like a `Result`.
-3. **The conversion.** `FileError.to_io()` and `NetError.to_io()` become
-   `extend FileError as IoError` and `extend NetError as IoError` in their home modules,
-   and the `to_io()` methods are deleted. The 14 matches in `io/fs.sushi` and
-   `net/tcp.sushi` become one `??` each. The ten `.to_io()` calls under `tests/` and
-   `docs/` become `as IoError` or a `??`.
-4. **`map_err`.**
-
-Each step is a breaking change, and no compatibility form is kept. The docs that change
-are `docs/error-handling.md`, `docs/tutorial/06-error-handling.md`,
-`docs/stdlib/result.md`, `docs/stdlib/maybe.md`, `docs/language-reference.md`, and the
-doc text of CE2084, CE2507, CE2508 and CE2511.
-
----
-
-## 11. Tests
-
-Test-first, under `tests/types/result/error_types/` and
-`tests/types/result/error_conversion/`. Each batch is shown red before the code changes.
-
-| Fixture | Asserts |
-|---|---|
-| an `error` type as an `E`, matched and printed | `EXPECT_STDOUT_EXACT` |
-| an `error` type as a field, a payload and a `List@(E)` element | `EXPECT_STDOUT_EXACT` |
-| a plain enum, a struct, `Maybe` and `Result` as an `E`, in both spellings | `test_err_`, `EXPECT_ERROR_CODES_EXACT` |
-| a non-error `E` in a `let`, a field, a payload and a generic argument | `test_err_` |
-| a generic function instantiated with a non-error `E` | `test_err_`, with the note at the template |
-| `use <io/error>` and `use <net/error>` | the program builds |
-| an `error` type and a conversion from a binary and a hybrid library | `BUILD_LIB_BINARY`, `BUILD_LIB_HYBRID`, a consumer |
-| `--lib-info` prints `error` and the conversion | the library-report gate |
-| `??` and `as` through a conversion | `EXPECT_STDOUT_EXACT` |
-| an owning error type through `??` | `EXPECT_NO_LEAKS` at `--opt none` and `--opt O2` |
-| `r??` on a named wrapper with a conversion | `EXPECT_NO_LEAKS` |
-| a conversion in a lambda, in `foreach(x?? in ...)` and in a generic instance | `EXPECT_STDOUT_EXACT` |
-| a conversion behind an alias | `EXPECT_STDOUT_EXACT` |
-| a chain is not followed | `test_err_`, CE2511 |
-| `??` on a `Maybe` in a body with a channel, and `or_err` | `test_err_` CE2507; a run fixture at `--opt none` and `--opt O2` with one `EXPECT_STDOUT_EXACT` |
-| `??` on a user enum with `Ok`/`Err` variants, and one with `Some`/`None` | `test_err_` CE2507 |
-| `or_err` on a named `Maybe`, used again after the call | `test_err_`, the use-after-move error |
-| `as` on a borrowed owning error, and `e.clone() as T` | `test_err_` for the first; `EXPECT_NO_LEAKS` for the second |
-| `map_err` with a `nom` lambda and with a named function | `EXPECT_STDOUT_EXACT` |
-| each refusal in section 7 | `test_err_`, one fixture per code |
-| a new conversion or flag rebuilds the dependent unit | REBUILD form, `EXPECT_REBUILT` |
-
----
-
-## 12. Alternatives considered
-
-### 12.1 Deferred: a `from` marker on a variant
+### 9.1 Deferred: a `from` marker on a variant
 
 `Unreadable(FileError) from` would declare `extend FileError as ConfigError` on the
 variant, as Rust's `thiserror` does with `#[from]`. The one-line body of 3.1 does the
@@ -600,7 +517,7 @@ same job, so the marker waits for a real need. When it comes, it is legal only o
 variant of an `error` declaration with one payload of a non-generic error type, and it
 follows every rule of section 3.
 
-### 12.2 Other ways to mark an error type
+### 9.2 Other ways to mark an error type
 
 | Form | Prior art | Why not |
 |---|---|---|
@@ -608,14 +525,14 @@ follows every rule of section 3.
 | A separate type kind | Zig `error{...}`, OCaml `exception` | Every enum seam would need a second handler. The flag gives the same language |
 | No mark | Rust | It keeps the problem of 1.1 |
 
-### 12.3 Other ways to apply E3
+### 9.3 Other ways to apply E3
 
 - **Channels only.** `let Result@(i32, Color) r` would stay legal: a `Result` that no
   channel can propagate.
 - **At the interning seam.** No location, compiler-made `Result` types, and the order of
   `collect` (2.5).
 
-### 12.4 Other ways to convert
+### 9.4 Other ways to convert
 
 | Form | Prior art | Why not |
 |---|---|---|
@@ -628,13 +545,13 @@ follows every rule of section 3.
 | Conversion at an assignment, an argument or a `return` | C++ implicit conversions | No written mark shows it. Only `??` and `as` mark the site |
 | The unit of either type may declare | Rust's orphan rule | Two units can declare one pair, and the clash must be found across units and libraries |
 
-### 12.5 `??` on a `Maybe` for `StdError` only
+### 9.5 `??` on a `Maybe` for `StdError` only
 
 `??` would stay legal on a `Maybe` where `E` is `StdError`, and build `StdError.Error`.
 Fewer sites change, but the compiler still supplies a value that the source does not
 spell.
 
-### 12.6 Other choices on the details
+### 9.6 Other choices on the details
 
 | Choice | Why not |
 |---|---|
