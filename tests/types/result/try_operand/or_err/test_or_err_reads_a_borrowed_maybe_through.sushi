@@ -1,7 +1,7 @@
 # Design 4: a parameter and a pattern binding are borrows. `or_err` reads a borrowed
 # `Maybe` through, so the caller keeps its value and frees it one time.
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "word 1\nword 1\nword 2\nword 2\n"
+# EXPECT_STDOUT_EXACT: "word 1\n0\nword 1\nword 2\n0\nword 2\n"
 error AppError:
     Empty
 
