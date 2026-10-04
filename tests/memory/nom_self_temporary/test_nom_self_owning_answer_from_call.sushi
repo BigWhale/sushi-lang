@@ -1,0 +1,24 @@
+# A `nom self` method on a struct temporary that a function call answers, where the
+# method answers an owning value. The answer goes to an interpolation hole, to a call
+# argument and to a `let`; each value is freed one time (#1169).
+# EXPECT_STDOUT_EXACT: "got note 1\nnote 2!\nnote 3\n"
+# EXPECT_NO_LEAKS: true
+
+struct Note:
+    string text
+
+fn make(i32 n) Note:
+    return Note("note {n}")
+
+extend Note into_text(nom self) string:
+    return nom self.text
+
+fn shout(string s) ~:
+    println("{s}!")
+
+fn main() i32:
+    println("got {make(1).into_text()}")
+    shout(make(2).into_text())
+    let string t = make(3).into_text()
+    println(t)
+    return 0

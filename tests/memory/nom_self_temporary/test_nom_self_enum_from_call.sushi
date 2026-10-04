@@ -1,0 +1,22 @@
+# A `nom self` method on a user-enum temporary that a function call answers. The variant
+# holds a string, and the method takes it with `match nom self:` (#1169).
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS: true
+
+enum Token:
+    Good(i32)
+    Bad(string)
+
+fn make(i32 n) Token:
+    if (n < 0):
+        return Token.Bad("bad {n}")
+    return Token.Good(n)
+
+extend Token spend(nom self) i32:
+    match nom self:
+        Token.Good(_) -> return 1
+        Token.Bad(_) -> return 2
+
+fn main() i32:
+    println(make(-1).spend())
+    return 0

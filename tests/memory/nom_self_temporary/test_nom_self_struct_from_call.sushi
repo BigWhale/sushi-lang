@@ -1,0 +1,17 @@
+# A `nom self` method takes its receiver. A struct temporary that a function call answers
+# is the receiver here: the method frees it, and the caller frees nothing of it (#1169).
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS: true
+
+struct Note:
+    string text
+
+fn make(i32 n) Note:
+    return Note("note {n}")
+
+extend Note spend(nom self) i32:
+    return 7
+
+fn main() i32:
+    println(make(1).spend())
+    return 0

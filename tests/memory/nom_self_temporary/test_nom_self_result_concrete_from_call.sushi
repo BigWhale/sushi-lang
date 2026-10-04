@@ -1,0 +1,19 @@
+# A `nom self` method on a concrete Result target. The receiver is a Result temporary that
+# a function call answers, and its error arm holds a string (#1169).
+# EXPECT_STDOUT_EXACT: "7\n"
+# EXPECT_NO_LEAKS: true
+
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+extend Result@(i32, TokenError) spend(nom self) i32:
+    return 7
+
+fn main() i32:
+    println(tokenize(-1).spend())
+    return 0
