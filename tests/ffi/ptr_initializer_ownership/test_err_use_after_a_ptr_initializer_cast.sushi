@@ -1,0 +1,13 @@
+# #1175: `s as string` in the initializer of a `let ptr` consumes `s` by position, so a
+# later use of `s` is the use-after-move error.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+unsafe external "C" as libc because "strdup and free from libc":
+    fn strdup(string s) ptr = "strdup"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let string s = "Mostly {42}"
+    let ptr p = libc.strdup(s as string)
+    libc.free(p)
+    println(s)
+    return 0

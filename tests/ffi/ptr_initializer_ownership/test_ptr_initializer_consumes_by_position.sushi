@@ -1,0 +1,16 @@
+# #1175: the borrow pass walks the initializer of a `let ptr` like every other
+# initializer. `s as string` moves `s` into the cast, and the FFI argument is a borrow
+# of the cast result, so the string is freed once.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "Mostly 42\n"
+unsafe external "C" as libc because "strdup, puts and free from libc":
+    fn strdup(string s) ptr = "strdup"
+    fn puts(ptr p) i32 = "puts"
+    fn free(ptr p) ~ = "free"
+
+fn main() i32:
+    let string s = "Mostly {42}"
+    let ptr p = libc.strdup(s as string)
+    libc.puts(p)
+    libc.free(p)
+    return 0
