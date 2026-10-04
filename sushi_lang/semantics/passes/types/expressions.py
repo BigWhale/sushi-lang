@@ -9,7 +9,8 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
 from sushi_lang.semantics.type_predicates import (
-    BUILTIN_INTEGER_TYPES, is_integer_type, is_numeric_type)
+    BUILTIN_INTEGER_TYPES, is_instance_of, is_integer_type, is_numeric_type)
+from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .arrays import (
     ARRAY_INDEX, RANGE_BOUND, REPEAT_COUNT, STRING_INDEX, reject_non_i32)
@@ -154,7 +155,7 @@ class _Arms(NamedTuple):
     """What a `??` reads off the wrapper it is applied to."""
     value_type: Optional['Type']       # the payload the success arm carries
     success_tag: Optional[int]         # that arm's variant index
-    error_type: Optional['Type']       # the failure arm's payload, if it has one
+    error_type: Optional['Type']       # the failure arm's payload
 
 
 _NO_ARMS = _Arms(None, None, None)
@@ -163,22 +164,24 @@ _NO_ARMS = _Arms(None, None, None)
 def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
     """Validate ?? operator usage and annotate AST with inferred types.
 
-    Four questions, in this order, and each one reports its own fault: what the wrapper
-    under the `??` carries (CE2507), what channel encloses it (CE2508), whether the two
-    failure arms name one type (CE2511), and what the back end reads off the node.
+    Four questions, in this order, and each one reports its own fault: what channel
+    encloses the `??` (CE0131, CE2508), what the operand under it is (CE2507), whether
+    the two failure arms name one type (CE2511), and what the back end reads off the
+    node. The channel comes first, so a `??` in a bare body gets CE0131 alone
+    (docs/design/error-conversion.md section 4).
     """
     validator.validate_expression(expr.expr)
 
     inner_type = validator.infer_expression_type(expr.expr)
-    arms = _unwrapped_arms(validator, expr, inner_type)
-    if arms is None:
-        return
-
     channel = _enclosing_channel(validator, expr)
     if channel is None:
         return
 
-    if not _error_arms_agree(validator, expr, inner_type, channel):
+    arms = _unwrapped_arms(validator, expr, inner_type)
+    if arms is None:
+        return
+
+    if not _error_arms_agree(validator, expr, arms, channel):
         return
 
     _annotate_try_expr(expr, inner_type, arms, channel)
@@ -186,41 +189,32 @@ def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None
 
 def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
                     inner_type: Optional['Type']) -> Optional[_Arms]:
-    """What the wrapper under a `??` carries, or None once CE2507 is reported.
+    """What the `Result@(T, E)` under a `??` carries, or None once CE2507 is reported.
 
-    An uninferrable operand carries nothing and reports nothing: the fault that made it
-    uninferrable has a diagnostic of its own already.
+    `??` takes a `Result@(T, E)` and nothing else (#1168). It reads the TYPE and not its
+    variant names: a `Maybe@(T)` holds no error value, and a user enum shaped like a
+    `Result` or a `Maybe` is not one. An uninferrable operand carries nothing and reports
+    nothing: the fault that made it uninferrable has a diagnostic of its own already.
     """
     if inner_type is None:
         return _NO_ARMS
 
-    if not isinstance(inner_type, EnumType):
-        er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
+    if not (isinstance(inner_type, EnumType) and is_instance_of(inner_type, "Result")):
+        diag = er.emit_with(validator.reporter, er.ERR.CE2507, expr.loc,
+                            got=display_type(inner_type))
+        if is_instance_of(inner_type, "Maybe"):
+            diag.help("a `Maybe` holds no error value, so write one with `or_err`: "
+                      "`m.or_err(nom <error value>)??`")
+        else:
+            diag.help("answer a `Result@(T, E)` here (the callee writes `| E`), "
+                      "or use the value without `??`")
+        diag.emit()
         return None
 
-    ok_variant = inner_type.get_variant("Ok")
-    err_variant = inner_type.get_variant("Err")
-    if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
-        return _Arms(
-            value_type=ok_variant.associated_types[0],
-            success_tag=inner_type.get_variant_index("Ok"),
-            error_type=(err_variant.associated_types[0]
-                        if err_variant.associated_types else None),
-        )
-
-    # A Maybe-like wrapper has no failure payload: `??` still propagates, as an Err.
-    some_variant = inner_type.get_variant("Some")
-    none_variant = inner_type.get_variant("None")
-    if (some_variant and none_variant and len(some_variant.associated_types) == 1
-            and len(none_variant.associated_types) == 0):
-        return _Arms(
-            value_type=some_variant.associated_types[0],
-            success_tag=inner_type.get_variant_index("Some"),
-            error_type=None,
-        )
-
-    er.emit(validator.reporter, er.ERR.CE2507, expr.loc, got=display_type(inner_type))
-    return None
+    ok_type, err_type = result_ok_err(inner_type)
+    return _Arms(value_type=ok_type,
+                 success_tag=inner_type.get_variant_index("Ok"),
+                 error_type=err_type)
 
 
 def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
@@ -246,24 +240,17 @@ def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional[
 
 
 def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr',
-                      inner_type: Optional['Type'], channel: 'Type') -> bool:
-    """Whether the wrapper's failure arm names the channel's, or CE2511.
+                      arms: _Arms, channel: 'Type') -> bool:
+    """Whether the operand's failure arm names the channel's, or CE2511.
 
     Strict matching with no conversion. The two sides used to be compared as STRINGS,
     because one Result had many instances; both are interned now, so they compare as
     types.
     """
-    from sushi_lang.semantics.generics.results import result_ok_err
-
     outer_ok_type, outer_err_type = result_ok_err(channel)
+    inner_err_type = arms.error_type
 
-    inner_err_type = None
-    if isinstance(inner_type, EnumType):
-        err_variant = inner_type.get_variant("Err")
-        if err_variant and err_variant.associated_types:
-            inner_err_type = err_variant.associated_types[0]
-
-    if inner_err_type is None or outer_err_type is None:
+    if inner_err_type is None:
         return True
 
     structs = validator.struct_table.by_name

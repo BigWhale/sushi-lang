@@ -113,7 +113,7 @@ _add(ErrorMessage("CE0127", Severity.ERROR,
 
 _add(ErrorMessage("CE0124", Severity.ERROR,
     "'??' expression reached codegen without a type annotation from semantic analysis",
-    Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
+    Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
 
 _add(ErrorMessage("CE0125", Severity.ERROR,
     "internal error: borrow checker has no arm for expression node '{node}'",

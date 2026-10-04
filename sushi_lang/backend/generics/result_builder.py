@@ -85,13 +85,23 @@ def build_ok_variant(
 def build_err_from_return_type(
     codegen: 'LLVMCodegen',
     return_type: Type,
-    error_value: Optional[ir.Value] = None
+    error_value: Optional[ir.Value],
 ) -> ir.Value:
-    """Construct the Err variant of a function's Result return type."""
+    """Construct the Err variant of a function's Result return type.
+
+    An `Err` always holds an error value. The compiler never makes one up, so a call
+    without a value is an internal error (#1168, docs/design/error-conversion.md
+    section 4).
+    """
     from sushi_lang.semantics.generics.results import (
         ensure_result_type_in_table, is_result_enum,
     )
+    from sushi_lang.semantics.generics.type_display import display_type
     from sushi_lang.semantics.generics.types import GenericTypeRef
+
+    if error_value is None:
+        raise_internal_error("CE0040", variant="Err",
+            type=f"{display_type(return_type)}, with no error value")
 
     if is_result_enum(return_type):
         return _build_err_variant(codegen, return_type, error_value)
@@ -115,7 +125,7 @@ def build_err_from_return_type(
 def _build_err_variant(
     codegen: 'LLVMCodegen',
     result_type: EnumType,
-    error_value: Optional[ir.Value] = None
+    error_value: Optional[ir.Value],
 ) -> ir.Value:
     """Construct a Result.Err(error) LLVM value for a concrete Result enum."""
     return _build_payload_variant(codegen, result_type, "Err", error_value)

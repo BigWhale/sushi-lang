@@ -27,12 +27,12 @@ _add(ErrorMessage("CE2506", Severity.ERROR,
 
 # Try operator (??) errors (CE25xx continued)
 _add(ErrorMessage("CE2507", Severity.ERROR,
-    "?? operator requires Result@(T, E), Maybe@(T), or result-like enum (with Ok/Err or Some/None variants), got '{got}'",
-    Category.TYPE, "The ?? operator requires an enum with Ok/Err variants (e.g., Result@(T, E)) or Some/None variants (e.g., Maybe@(T))."))
+    "`??` takes a `Result@(T, E)`, got '{got}'",
+    Category.TYPE, "The ?? operator takes a Result@(T, E) and nothing else. It unwraps the Ok, or it returns the Err from the enclosing body, so the Err must hold an error value that the program made. A Maybe@(T) holds no error value: before #1168, ?? on a None returned an Err built from an undefined value, and the answer changed with --opt. Write the error value at the site with or_err: m.or_err(nom AppError.Empty)??. The ?? operator reads the TYPE of its operand and not its variant names, because type identity is nominal. So a user enum with Ok/Err or Some/None variants is not a Result: its Err payload is out of reach of the rule that an E is an error type. Answer a Result@(T, E) (a callee writes | E), or use the value without ??. The rule is ruling C8 of docs/design/error-conversion.md."))
 
 _add(ErrorMessage("CE2508", Severity.ERROR,
     "?? operator can only be used in functions returning a result-like enum (with Ok/Err variants)",
-    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T, E)). Note: Maybe@(T) can be used with ??, but it propagates as Result.Err()."))
+    Category.TYPE, "The ?? operator propagates errors by early return, so it requires the enclosing function to return a result-like enum (e.g., Result@(T, E))."))
 
 _add(ErrorMessage("CE2509", Severity.ERROR,
     "operator '+' cannot be used with string types (use string interpolation instead: \"text {{variable}}\")",

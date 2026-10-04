@@ -563,23 +563,16 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return instance
 
     def visit_tryexpr(self, node: TryExpr) -> Optional[Type]:
-        """Try expression (?? operator) - unwrap result-like enum to Ok type."""
+        """Try expression (?? operator): the Ok payload of a `Result@(T, E)`, else None.
+
+        `??` takes a `Result@(T, E)` only (#1168), so any other operand yields nothing,
+        and CE2507 reports it.
+        """
+        from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
         inner_type = self.type_validator.infer_expression_type(node.expr)
-
-        if inner_type is None:
+        if not is_result_enum(inner_type):
             return None
-
-        # A first-class function value call yields a Result enum (not a concrete Result
-        # EnumType); `??` unwraps it to its ok_type -- e.g. a captured closure called in
-        # a lambda body, `f(x)??`.
-        from sushi_lang.semantics.typesys import EnumType
-        if isinstance(inner_type, EnumType):
-            for variant_name in ("Ok", "Some"):
-                variant = inner_type.get_variant(variant_name)
-                if variant and variant.associated_types:
-                    return variant.associated_types[0]
-
-        return None
+        return result_ok_err(inner_type)[0]
 
     def visit_rangeexpr(self, node: RangeExpr) -> Optional[Type]:
         """Infer type of range expression - Iterator<i32>, or None once refused (CE2122)."""
