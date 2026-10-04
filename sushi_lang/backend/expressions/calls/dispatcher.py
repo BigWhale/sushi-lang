@@ -484,14 +484,15 @@ def _emit_extension_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
-    elif self_mode.consumes:
+
+    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    if self_mode.consumes:
         # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
         # its owner, so the source is relinquished through the ownership seam exactly as
-        # a `nom` argument is. No exit path in the caller frees it afterwards.
+        # a `nom` argument is. It is relinquished after the arguments: a `??` in an
+        # argument can leave before the call, and that exit frees the receiver.
         receiver_value = consume_receiver(codegen, expr, receiver_value)
-
     emitted_args = [receiver_value]
-    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     # A method's arguments follow the declared modes exactly like a plain call's: a
     # `nom` one transfers, and every other one stays the caller's -- which is what
     # registers an unbound owning temporary, so `b.eat(make_list())` is freed once.

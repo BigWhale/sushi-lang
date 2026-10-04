@@ -44,7 +44,8 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
             from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
             if method in RESULT_METHOD_SIGNATURES:
                 from sushi_lang.backend.generics.results import emit_result_signature_method
-                receiver_value, args = settle_signature_call(codegen, expr, receiver_value)
+                receiver_value, args = settle_signature_call(
+                    codegen, expr, receiver_value, receiver_semantic_type)
                 return emit_result_signature_method(codegen, expr, receiver_value,
                                                     receiver_semantic_type, args)
             from sushi_lang.backend.generics.results import emit_builtin_result_method
@@ -59,7 +60,8 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
             from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
             if method in MAYBE_METHOD_SIGNATURES:
                 from sushi_lang.backend.generics.maybe import emit_maybe_signature_method
-                receiver_value, args = settle_signature_call(codegen, expr, receiver_value)
+                receiver_value, args = settle_signature_call(
+                    codegen, expr, receiver_value, receiver_semantic_type)
                 return emit_maybe_signature_method(codegen, expr, receiver_value,
                                                    receiver_semantic_type, args)
             from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
@@ -72,22 +74,28 @@ def try_emit_result_or_maybe_method(codegen: 'LLVMCodegen', expr: Union[MethodCa
 
 
 def settle_signature_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
-                          receiver_value: ir.Value) -> tuple[ir.Value, list[ir.Value]]:
+                          receiver_value: ir.Value,
+                          receiver_type: EnumType) -> tuple[ir.Value, list[ir.Value]]:
     """A built-in method with a signature (design 8.3) crosses the call as a user method.
 
     The typecheck pass stamped its receiver mode and its parameter modes. A `nom self`
-    receiver goes to the method through the ownership seam, and each argument is settled
-    by its mode, as for an extension method. A borrowed receiver that the method reads
+    receiver goes to the method through the ownership seam after the arguments, and each
+    argument is settled by its mode, as for an extension method. A `??` in an argument can
+    leave before the call, so a temporary receiver has a scope owner until the hand-over,
+    as the receiver of an extension method has. A borrowed receiver that the method reads
     through stays with its owner. Answers the receiver and the arguments.
     """
     from sushi_lang.semantics.param_modes import receiver_mode
     from sushi_lang.backend.expressions.calls.dispatcher import (
         consume_receiver, settle_method_call_arguments)
-    from sushi_lang.backend.expressions.memory import reads_a_borrow_through
-    if (receiver_mode(getattr(expr, "callee_self_mode", None)).consumes
-            and not reads_a_borrow_through(codegen, expr)):
-        receiver_value = consume_receiver(codegen, expr, receiver_value)
+    from sushi_lang.backend.expressions.memory import own_temporary, reads_a_borrow_through
+    consumes = (receiver_mode(getattr(expr, "callee_self_mode", None)).consumes
+                and not reads_a_borrow_through(codegen, expr))
+    if consumes:
+        own_temporary(codegen, expr.receiver, receiver_value, receiver_type)
     args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    if consumes:
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
     settle_method_call_arguments(codegen, expr, args)
     return receiver_value, args
 

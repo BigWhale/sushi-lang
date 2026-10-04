@@ -425,12 +425,11 @@ def try_emit_perk_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
     if self_mode.by_pointer:
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
-    elif self_mode.consumes:
-        from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
-        receiver_value = consume_receiver(codegen, expr, receiver_value)
 
     from sushi_lang.backend.expressions.calls.dispatcher import (
-        emit_checked_call, settle_method_call_arguments)
+        consume_receiver, emit_checked_call, settle_method_call_arguments)
     arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    if self_mode.consumes:
+        receiver_value = consume_receiver(codegen, expr, receiver_value)
     settle_method_call_arguments(codegen, expr, arg_values)
     return emit_checked_call(codegen, llvm_fn, [receiver_value, *arg_values], to_i1)
