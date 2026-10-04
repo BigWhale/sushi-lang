@@ -25,6 +25,7 @@ FILLED_LATER = {
     "library_not_exported": "the libraries step",
     "pending_extension_instantiations": "the typecheck pass",
     "queued_extension_keys": "the typecheck pass",
+    "refused_extension_keys": "the typecheck pass",
     "intern_generic_ref": "the analyzer's late interner",
     "request_function_instance": "the analyzer's late function request",
 }
