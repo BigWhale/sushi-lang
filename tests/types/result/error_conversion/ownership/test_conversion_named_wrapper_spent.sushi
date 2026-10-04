@@ -1,0 +1,33 @@
+# Design 8.2 (backend) and C3: `r??` on a named wrapper spends it (#548). With a
+# conversion, the error goes to the conversion and is freed once.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 6\nerr AppError.Token(TokenError.Bad("bad 0"))\n"
+use <collections/strings>
+
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn word(i32 n) string | TokenError:
+    if (n == 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok("word {n}")
+
+fn run(i32 n) i32 | AppError:
+    let Result@(string, TokenError) r = word(n)
+    let string w = r??
+    return Result.Ok(w.len())
+
+fn main() i32:
+    match run(3):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match run(0):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

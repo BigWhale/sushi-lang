@@ -1,0 +1,10 @@
+use "low"
+
+public error AppError:
+    Low(i32)
+    Empty
+
+public fn load(i32 n) i32 | AppError:
+    match low(n):
+        Result.Ok(v) -> return Result.Ok(v)
+        Result.Err(LowError.Bad(code)) -> return Result.Err(AppError.Low(code))

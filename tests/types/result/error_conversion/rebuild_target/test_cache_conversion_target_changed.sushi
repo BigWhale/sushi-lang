@@ -1,0 +1,13 @@
+# Design 8.2 (the cache signature): the signature of a conversion renders its target.
+# `v2/` changes only the target of the one conversion in `errs_target`, so the unit
+# `work_target` is rebuilt, and its source does not change.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "load 3\nload -1\n"
+# EXPECT_STDOUT_EXACT: "load 3\nload -1\n"
+# EXPECT_REBUILT: errs_target, work_target, test_cache_conversion_target_changed
+# EXPECT_CACHED: low_target
+use "work_target"
+
+fn main() i32:
+    report(3)
+    report(-2)
+    return 0

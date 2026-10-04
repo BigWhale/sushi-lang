@@ -1,0 +1,14 @@
+public error LowError:
+    Bad(i32)
+
+public error LibError:
+    Low(LowError)
+    Closed
+
+extend LowError as LibError:
+    return LibError.Low(self)
+
+public fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n * 3)

@@ -1,0 +1,12 @@
+# Design 3.4: an identity conversion is refused. `??` already propagates an error of
+# the same type unchanged.
+# EXPECT_ERROR_CODE: CE2521
+# EXPECT_ERROR_CODES_EXACT: CE2521
+error AppError:
+    Broken
+
+extend AppError as AppError:
+    return self
+
+fn main() i32:
+    return 0

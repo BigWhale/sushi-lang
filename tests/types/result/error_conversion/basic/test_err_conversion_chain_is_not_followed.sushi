@@ -1,0 +1,30 @@
+# Design 3.4 (C4): a conversion is one step. `AError as BError` and `BError as CError`
+# do not give `AError` to `CError`, so the `??` is CE2511, and the help names the
+# declaration to write.
+# EXPECT_ERROR_CODES_EXACT: CE2511
+# EXPECT_STDERR_CONTAINS: extend AError as CError
+error AError:
+    X
+
+error BError:
+    FromA(AError)
+
+error CError:
+    FromB(BError)
+
+extend AError as BError:
+    return BError.FromA(self)
+
+extend BError as CError:
+    return CError.FromB(self)
+
+fn a() i32 | AError:
+    return Result.Err(AError.X)
+
+fn c() i32 | CError:
+    let i32 v = a()??
+    return Result.Ok(v)
+
+fn main() i32:
+    println(c().realise(0))
+    return 0

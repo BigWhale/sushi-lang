@@ -1,0 +1,30 @@
+# Design 4 (C8, #1168): `or_err(nom e)` gives the error value of a `None`. The `Err`
+# holds the written value, never an invented one, at every optimization level. The
+# twin fixture has the same source at the other level.
+# COMPILER_FLAGS: --opt none
+# EXPECT_STDOUT_EXACT: "ok 7\nerr AppError.Empty\nok 9\nerr AppError.Missing(5)\n"
+error AppError:
+    Empty
+    Missing(i32)
+
+fn first(i32[] xs) i32 | AppError:
+    let i32 v = xs.get(0).or_err(nom AppError.Empty)??
+    return Result.Ok(v)
+
+fn at(i32[] xs, i32 i) i32 | AppError:
+    let i32 v = xs.get(i).or_err(nom AppError.Missing(i))??
+    return Result.Ok(v)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    let i32[] full = from([7, 8, 9])
+    let i32[] empty = from([])
+    show(first(full))
+    show(first(empty))
+    show(at(full, 2))
+    show(at(full, 5))
+    return 0

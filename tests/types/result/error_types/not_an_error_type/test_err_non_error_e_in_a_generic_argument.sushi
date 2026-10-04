@@ -1,0 +1,9 @@
+# Design 2.4 and 2.5 (E3, E4): the rule covers a written type in a generic argument.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+enum Color:
+    Red
+
+fn main() i32:
+    let List@(Result@(i32, Color)) xs = List.new()
+    println(xs.len())
+    return 0

@@ -1,0 +1,22 @@
+# Design 1.4 and 4 (C8): `??` reads the type, not the variant names. A user enum with
+# `Ok` and `Err` variants is not a `Result@(T, E)`.
+# EXPECT_ERROR_CODES_EXACT: CE2507
+error AppError:
+    Empty
+
+enum Outcome:
+    Ok(i32)
+    Err(AppError)
+
+fn make(i32 n) Outcome:
+    if (n == 0):
+        return Outcome.Err(AppError.Empty)
+    return Outcome.Ok(n)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = make(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    println(run(3).realise(0))
+    return 0

@@ -1,0 +1,31 @@
+# Design 3.8: behind an alias, the declaration spells the qualified name of the source.
+# A `??` and an `as` both find the conversion by the pair of types.
+# EXPECT_STDOUT_EXACT: "ok 5\nerr AppError.File(FileError.NotFound)\nAppError.File(FileError.PermissionDenied)\n"
+use <io/error> as ie
+
+error AppError:
+    File(ie.FileError)
+    Empty
+
+extend ie.FileError as AppError:
+    return AppError.File(self)
+
+fn open_it(i32 n) i32 | ie.FileError:
+    if (n == 0):
+        return Result.Err(ie.FileError.NotFound)
+    return Result.Ok(n)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = open_it(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    match run(5):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match run(0):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    let AppError a = ie.FileError.PermissionDenied as AppError
+    println(a)
+    return 0

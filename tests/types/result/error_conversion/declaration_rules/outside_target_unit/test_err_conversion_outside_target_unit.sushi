@@ -1,0 +1,16 @@
+# Design 3.5 (C5): only the unit that declares the target type may declare a conversion
+# into it. A note points at the declaration of the target.
+# EXPECT_ERROR_CODE: CE2519
+# EXPECT_ERROR_CODES_EXACT: CE2519
+# EXPECT_STDERR_CONTAINS: = note:
+# EXPECT_STDERR_CONTAINS: app_errors.sushi:1:
+use "app_errors"
+
+error LocalError:
+    Broken
+
+extend LocalError as AppError:
+    return AppError.Local
+
+fn main() i32:
+    return 0

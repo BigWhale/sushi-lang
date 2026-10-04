@@ -1,0 +1,15 @@
+# Design 2.4 (E3): the `E` of every `Result` is an error type. A plain enum is not one,
+# in the `| E` spelling and in the `Result@(T, E)` spelling. One CE2084 for each.
+# EXPECT_ERROR_CODES_EXACT: CE2084, CE2084
+enum Color:
+    Red
+    Green
+
+fn short_form() i32 | Color:
+    return Result.Ok(1)
+
+fn long_form() Result@(i32, Color):
+    return Result.Ok(2)
+
+fn main() i32:
+    return 0

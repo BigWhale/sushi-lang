@@ -1,0 +1,20 @@
+# Design 3.5 and 8.2 (libraries): a binary library declares a conversion into its own
+# error type. A consumer's `??` and `as` find it by the pair of types.
+# BUILD_LIB_BINARY: conv_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "ok 6\nerr LibError.Low(LowError.Bad(-2))\nLibError.Low(LowError.Bad(9))\n"
+use <lib/conv_bin_lib>
+
+fn run(i32 n) i32 | LibError:
+    let i32 v = low(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    match run(2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match run(-2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    let LibError a = LowError.Bad(9) as LibError
+    println(a)
+    return 0

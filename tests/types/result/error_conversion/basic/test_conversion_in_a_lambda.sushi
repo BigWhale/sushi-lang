@@ -1,0 +1,28 @@
+# Design 3.3 (C3): the rule applies to every `??`, and a `??` in a lambda with a channel
+# calls the conversion too.
+# EXPECT_STDOUT_EXACT: "ok 4\nerr AppError.Low(LowError.Bad(-2))\n"
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    let fn(i32) -> i32 | AppError f = |i32 n| -> i32 | AppError:
+        let i32 v = low(n)??
+        return Result.Ok(v)
+    match f(2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match f(-2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

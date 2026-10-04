@@ -1,0 +1,34 @@
+# Design 2.2 (E1): a generic error type is an error type. Each instance carries the flag,
+# so `DecodeError@(i32)` is the `E` of a channel, in both spellings.
+# EXPECT_STDOUT_EXACT: "ok 12\nbad byte 300\ntruncated\nDecodeError.BadByte(300)\n"
+error DecodeError@(T):
+    BadByte(T)
+    Truncated
+
+fn decode(i32 b) i32 | DecodeError@(i32):
+    if (b > 255):
+        return Result.Err(DecodeError.BadByte(b))
+    if (b < 0):
+        return Result.Err(DecodeError.Truncated)
+    return Result.Ok(b)
+
+fn decode_pair(i32 a, i32 b) Result@(i32, DecodeError@(i32)):
+    let i32 x = decode(a)??
+    let i32 y = decode(b)??
+    return Result.Ok(x + y)
+
+fn main() i32:
+    match decode_pair(5, 7):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("unexpected")
+    match decode_pair(5, 300):
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(DecodeError.BadByte(b)) -> println("bad byte {b}")
+        Result.Err(DecodeError.Truncated) -> println("truncated")
+    match decode_pair(-1, 7):
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(DecodeError.BadByte(b)) -> println("bad byte {b}")
+        Result.Err(DecodeError.Truncated) -> println("truncated")
+    let DecodeError@(i32) e = DecodeError.BadByte(300)
+    println(e)
+    return 0

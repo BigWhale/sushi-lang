@@ -1,0 +1,25 @@
+# Design 2.2 and 8.1: an error type from a binary library keeps its flag. The consumer
+# writes it as the `E` of its own channel and of a `let`, and matches it.
+# BUILD_LIB_BINARY: errtype_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "ok 14\nbad digit 12\nmissing\nParseFault.Missing\n"
+use <lib/errtype_bin_lib>
+
+fn twice(i32 c) i32 | ParseFault:
+    let i32 d = digit(c)??
+    return Result.Ok(d * 2)
+
+fn show(i32 c) ~:
+    match twice(c):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(ParseFault.BadDigit(b)) -> println("bad digit {b}")
+        Result.Err(ParseFault.Missing) -> println("missing")
+
+fn main() i32:
+    show(7)
+    show(12)
+    show(-1)
+    let Result@(i32, ParseFault) r = digit(-5)
+    match r:
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(e) -> println(e)
+    return 0

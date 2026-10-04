@@ -1,0 +1,10 @@
+public error ParseFault:
+    Missing
+    BadDigit(i32)
+
+public fn digit(i32 c) i32 | ParseFault:
+    if (c < 0):
+        return Result.Err(ParseFault.Missing)
+    if (c > 9):
+        return Result.Err(ParseFault.BadDigit(c))
+    return Result.Ok(c)

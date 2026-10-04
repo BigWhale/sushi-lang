@@ -1,0 +1,13 @@
+use "low"
+
+public error AppError:
+    Low(i32)
+    Empty
+
+extend LowError as AppError:
+    match self:
+        LowError.Bad(code) -> return AppError.Low(code + 100)
+
+public fn load(i32 n) i32 | AppError:
+    let i32 v = low(n)??
+    return Result.Ok(v)

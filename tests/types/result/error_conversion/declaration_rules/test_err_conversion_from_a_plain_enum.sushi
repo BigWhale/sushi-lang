@@ -1,0 +1,14 @@
+# Design 3.6 (C6): the source of a conversion is an error type. A plain enum is not one.
+# EXPECT_ERROR_CODE: CE2520
+# EXPECT_ERROR_CODES_EXACT: CE2520
+enum Color:
+    Red
+
+error AppError:
+    Painted
+
+extend Color as AppError:
+    return AppError.Painted
+
+fn main() i32:
+    return 0

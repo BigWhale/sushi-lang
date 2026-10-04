@@ -1,0 +1,26 @@
+# Design 3.2 (C2): on a borrowed error that owns a string, `e.clone() as AppError` is the
+# form. The clone moves into the conversion, and nothing leaks.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "AppError.Token(TokenError.Bad("token -1"))\nTokenError.Bad("token -1")\n"
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token {n}"))
+    return Result.Ok(n)
+
+fn main() i32:
+    match tokenize(-1):
+        Result.Ok(_) -> println("ok")
+        Result.Err(e) ->
+            let AppError a = e.clone() as AppError
+            println(a)
+            println(e)
+    return 0

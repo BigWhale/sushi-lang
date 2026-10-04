@@ -1,0 +1,4 @@
+use "errs_target"
+
+public fn report(i32 n) ~:
+    println("load {load(n)}")

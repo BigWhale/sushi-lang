@@ -1,0 +1,31 @@
+# Design 5 (C9): a lambda parameter cannot have an owning type, so for an error type
+# that owns a string the argument of `map_err` is a named function. The error moves
+# into the function and is freed once.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 3\nerr AppError.Token(TokenError.Bad("token -1"))\n"
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token {n}"))
+    return Result.Ok(n)
+
+fn wrap(nom TokenError e) AppError:
+    return AppError.Token(e)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = tokenize(n).map_err(wrap)??
+    return Result.Ok(v)
+
+fn main() i32:
+    match run(3):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match run(-1):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

@@ -1,0 +1,41 @@
+# Design 5 (C9): `map_err` converts the error at one site, with no declaration. It is a
+# built-in method and needs no import. The function takes the error `nom`: a lambda
+# writes `|nom LowError e|`, and a named function writes `nom LowError e`.
+# EXPECT_STDOUT_EXACT: "ok 4\nerr AppError.Low(LowError.Bad(-1))\nok 6\nerr AppError.Named(-5)\nfalse\n"
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+    Named(i32)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n * 2)
+
+fn wrap(nom LowError e) AppError:
+    match e:
+        LowError.Bad(n) -> return AppError.Named(n)
+
+fn by_lambda(i32 n) i32 | AppError:
+    let i32 v = low(n).map_err(|nom LowError e| AppError.Low(e))??
+    return Result.Ok(v)
+
+fn by_name(i32 n) i32 | AppError:
+    let i32 v = low(n).map_err(wrap)??
+    return Result.Ok(v)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(by_lambda(2))
+    show(by_lambda(-1))
+    show(by_name(3))
+    show(by_name(-5))
+    let Result@(i32, AppError) r = low(-4).map_err(wrap)
+    println(r.is_ok())
+    return 0

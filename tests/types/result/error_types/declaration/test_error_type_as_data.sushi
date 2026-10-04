@@ -1,0 +1,38 @@
+# Design 2.3 (E2): an error type is ordinary data. It is a field, a payload, a parameter,
+# a `let` and a `List@(E)` element here.
+# EXPECT_STDOUT_EXACT: "last NetFault.Timeout(5)\nfailed NetFault.Refused\n2 of 3\ntimeout 30\n"
+error NetFault:
+    Refused
+    Timeout(i32)
+
+struct Tracker:
+    NetFault last
+    i32 count
+
+enum Event:
+    Failed(NetFault)
+    Done
+
+fn describe(NetFault f) string:
+    match f:
+        NetFault.Refused -> return "refused"
+        NetFault.Timeout(s) -> return "timeout {s}"
+
+fn main() i32:
+    let List@(NetFault) seen = List.new()
+    seen.push(NetFault.Refused)
+    seen.push(NetFault.Timeout(30))
+    seen.push(NetFault.Refused)
+    let Tracker t = Tracker(NetFault.Timeout(5), seen.len())
+    println("last {t.last}")
+    let Event ev = Event.Failed(NetFault.Refused)
+    match ev:
+        Event.Failed(f) -> println("failed {f}")
+        Event.Done -> println("done")
+    let i32 refused = 0
+    foreach(f in seen.iter()):
+        if (f == NetFault.Refused):
+            refused := refused + 1
+    println("{refused} of {t.count}")
+    println(describe(seen.get(1).realise(NetFault.Refused)))
+    return 0
