@@ -1,0 +1,22 @@
+# Design 3.5: a library cannot convert its own error into `IoError`, so it converts
+# `IoError` into its own error type. The library build gives no warning, because a
+# conversion puts no method name on `IoError`. A consumer's `??` and `as` find it.
+# BUILD_LIB_BINARY: conv_io_bin_lib.sushi
+# EXPECT_STDOUT_EXACT: "ok 3\nerr StoreError.Io(IoError.NotFound)\nStoreError.Io(IoError.NotFound)\n"
+use <lib/conv_io_bin_lib>
+use <io/error>
+
+fn run(i32 n) i32 | StoreError:
+    let i32 v = fetch(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    match run(2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match run(-2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    let StoreError s = IoError.NotFound as StoreError
+    println(s)
+    return 0

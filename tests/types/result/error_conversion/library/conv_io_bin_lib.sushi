@@ -1,0 +1,13 @@
+use <io/error>
+
+public error StoreError:
+    Io(IoError)
+    Full
+
+extend IoError as StoreError:
+    return StoreError.Io(self)
+
+public fn fetch(i32 n) i32 | IoError:
+    if (n < 0):
+        return Result.Err(IoError.NotFound)
+    return Result.Ok(n + 1)
