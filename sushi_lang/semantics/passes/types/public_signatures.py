@@ -216,7 +216,11 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
         # (#702). The `ptr` rule keeps reading both, because the template's own signature
         # says `T`: the instance is the one position where a quarantined pointer crossing
         # a public boundary can be seen.
+        #
+        # A conversion has no leak check (docs/design/error-conversion.md section 3.8): a
+        # private target makes it usable in its own unit only.
         if (public is True and is_written(site.decl)
+                and not getattr(site.decl, "is_conversion", False)
                 and site.kind in _LEAK_RULE_KINDS
                 and site.position in _LEAK_RULE_POSITIONS):
             origin = _leaked_type(validator, site.ty)
