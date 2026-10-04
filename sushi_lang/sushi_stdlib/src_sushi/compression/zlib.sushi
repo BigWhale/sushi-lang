@@ -84,7 +84,7 @@ Why a compress or a decompress failed.
 Each payload holds the detail that a caller can report. `text()` gives one stable line
 for each variant.
 :##
-public enum ZError:
+public error ZError:
     ##: The input ended. The payload is the byte offset where it ended. :##
     Truncated(i32)
     ##: The block type is 3, which is reserved. The payload is the block type. :##

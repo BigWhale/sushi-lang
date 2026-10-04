@@ -61,7 +61,7 @@ Why a `.slib` file could not be read.
 permission and a missing file each keep their own cause. `Truncated` is a file that
 ends too early, and never a read that failed.
 :##
-public enum SlibError:
+public error SlibError:
     ##: The open or a read failed. The `IoError` names the cause. :##
     Io(IoError)
     ##: The 16 magic bytes at the start of the file do not match. :##

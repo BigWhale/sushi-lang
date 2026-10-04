@@ -44,7 +44,7 @@ public struct Url:
 ##:
 Why one text is not an absolute URL.
 :##
-public enum UrlError:
+public error UrlError:
     ##: The text is empty. :##
     Empty
     ##: There is no `:`, and so no scheme. :##
