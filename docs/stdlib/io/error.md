@@ -25,7 +25,7 @@ the home reachable through the module whose calls answer the enum
 (`docs/design/unit-namespaces.md`, section 8.1).
 
 ```sushi
-public enum IoError:
+public error IoError:
     NotFound            # ENOENT
     PermissionDenied    # EACCES, EPERM
     AlreadyExists       # EEXIST
@@ -49,7 +49,7 @@ on a `File` and `NetError` on a `TcpStream`; the domain enums stay on constructi
 addressing and options.
 
 ```sushi
-public enum FileError:
+public error FileError:
     NotFound            # ENOENT
     PermissionDenied    # EACCES, EPERM
     AlreadyExists       # EEXIST

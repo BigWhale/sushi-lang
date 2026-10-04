@@ -32,7 +32,7 @@ The error type `E` must be an enum. Any other type is CE2084.
 ### Error Channel
 
 ```sushi
-enum ParseError:
+error ParseError:
     Empty
     NotANumber
 
@@ -309,10 +309,10 @@ fn compute() i32 | MathError:
 The `??` operator requires error types to match exactly:
 
 ```sushi
-enum ErrorA:
+error ErrorA:
     Error
 
-enum ErrorB:
+error ErrorB:
     Error
 
 fn inner() i32 | ErrorA:
@@ -408,7 +408,7 @@ else:
 ```sushi
 use <collections/strings>
 
-enum ValidationError:
+error ValidationError:
     TooShort
     TooLong
     InvalidCharacters

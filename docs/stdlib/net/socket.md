@@ -26,7 +26,7 @@ which re-export it. A unit that writes `use <net/socket>` can also name `NetErro
 Every function here answers it:
 
 ```sushi
-public enum NetError:
+public error NetError:
     ConnectionRefused    ConnectionReset      TimedOut
     Closed               AddressInUse         AddressNotAvailable
     NetworkUnreachable   HostUnreachable      ResolveFailed

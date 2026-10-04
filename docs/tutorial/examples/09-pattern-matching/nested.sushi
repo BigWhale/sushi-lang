@@ -1,4 +1,4 @@
-enum DriveError:
+error DriveError:
     NotConfigured()
     ImprobabilityTooLow()
 

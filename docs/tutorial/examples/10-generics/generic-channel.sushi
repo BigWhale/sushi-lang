@@ -1,4 +1,4 @@
-enum ParseError@(T):
+error ParseError@(T):
     Empty
     TooLarge(T)
 

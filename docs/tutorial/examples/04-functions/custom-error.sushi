@@ -1,4 +1,4 @@
-enum NavError:
+error NavError:
     NoFuel
     UnknownDestination
 

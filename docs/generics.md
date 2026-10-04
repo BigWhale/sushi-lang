@@ -709,7 +709,7 @@ A generic function can declare an error channel with `| E`, and `??` in a caller
 channel propagates the error. A generic enum can be the error type:
 
 ```sushi
-enum ParseError@(T):
+error ParseError@(T):
     Bad(T)
 
 fn check@(T)(nom T x, bool ok) T | ParseError@(i32):

@@ -22,7 +22,7 @@ needs no second import: `use <net/tcp>` alone brings `NetError`. `<net/url>` ans
 own `UrlError` and does not re-export this module.
 
 ```sushi
-public enum NetError:
+public error NetError:
     ConnectionRefused    ConnectionReset      TimedOut
     Closed               AddressInUse         AddressNotAvailable
     NetworkUnreachable   HostUnreachable      ResolveFailed

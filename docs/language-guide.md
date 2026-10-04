@@ -1274,7 +1274,7 @@ a body that returns spells both constructors, as a free function does:
 is CE2030.
 
 ```sushi
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:
@@ -1300,7 +1300,7 @@ A **perk method** takes the channel the same way, and the perk states it in the
 CONTRACT so every implementation answers the same error type:
 
 ```sushi
-enum SourceError:
+error SourceError:
     Closed
 
 perk Source:

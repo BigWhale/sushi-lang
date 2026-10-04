@@ -33,7 +33,7 @@ carries.
 ## Types
 
 ```
-public enum SlibError:
+public error SlibError:
     Io(IoError)                         # the open or a read failed; the IoError names the cause
     BadMagic()                          # the 16 magic bytes do not match
     BadVersion(u32)                     # header version is not 5

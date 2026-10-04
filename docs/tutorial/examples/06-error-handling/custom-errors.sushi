@@ -1,5 +1,5 @@
 # Define your own error type as an enum.
-enum JumpError:
+error JumpError:
     DivisionByZero
     NegativeInput
 

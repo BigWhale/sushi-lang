@@ -73,7 +73,7 @@ accepts it in a function with a different error enum, but then the value inside 
 that you want:
 
 ```sushi
-enum LookupError:
+error LookupError:
     Missing
 
 fn first_or_missing(i32[] arr) i32 | LookupError:

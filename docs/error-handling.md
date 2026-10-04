@@ -162,7 +162,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
 extension or perk method that declares an error channel `| E`:
 
 ```sushi
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:
@@ -668,10 +668,10 @@ extend i32 squared() i32:
     return self * self
 
 # ERROR CE2511: Error type mismatch in propagation
-enum ErrorA:
+error ErrorA:
     Error
 
-enum ErrorB:
+error ErrorB:
     Error
 
 fn inner() i32 | ErrorA:
@@ -711,7 +711,7 @@ uses the value directly: no `??` and no `.realise` (a `??` on it is **CE2507**).
 helper composes with a caller of any channel:
 
 ```sushi
-enum LexError:
+error LexError:
     BadByte(i32)
 
 fn at(peek u8[] src, i32 i) u8:
@@ -753,7 +753,7 @@ A method that can fail declares an error channel `| E`, as a function does. Then
 - `??` is legal in the body, and the error types must match exactly (**CE2511**)
 
 ```sushi
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:

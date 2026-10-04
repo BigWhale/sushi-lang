@@ -1,4 +1,4 @@
-enum HalfError:
+error HalfError:
     Odd(i32)
 
 extend i32 half() i32 | HalfError:

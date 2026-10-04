@@ -341,7 +341,7 @@ compiler and never in Sushi source. A wrapper maps the number to an error varian
 unsafe external "C" as libc because "removing a file":
     fn unlink(string path) i32 = "unlink"
 
-enum RemoveError:
+error RemoveError:
     Missing
     Other(i32)
 

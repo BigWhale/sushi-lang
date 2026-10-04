@@ -175,7 +175,7 @@ fn main() i32:
 The error type is part of the function type, so it threads through an indirect call correctly:
 
 ```sushi
-enum DivError:
+error DivError:
     DivByZero
 
 fn safe_div(i32 a, i32 b) i32 | DivError:
