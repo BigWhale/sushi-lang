@@ -1,0 +1,23 @@
+# Design 8.2 (lints): under `--warn-missing-docs`, an `error` declaration and a
+# conversion take a doc block, as an `enum` and an extension method do. The
+# undocumented error type and the undocumented conversion each get CW7002. The twin
+# fixture documents both and gets no warning.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_ERROR_CODES_EXACT: CW7002, CW7002
+
+##: The unit block. :##
+
+##: A low-level failure. :##
+error LowError:
+    ##: A bad input. :##
+    Bad
+
+error AppError:
+    ##: A low-level failure, wrapped. :##
+    Low(LowError)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn main() i32:
+    return 0

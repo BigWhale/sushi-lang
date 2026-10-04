@@ -1,0 +1,20 @@
+# Design 8.2 (lints): a conversion is an `extend` block, so `--warn-unused` treats it as
+# a root and reports nothing for it, and the two error types it names are reached. A
+# private `error` type that nothing reaches gets CW1004, as a private `enum` does.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW1004
+# EXPECT_STDERR_CONTAINS: 'Unreached' is never used in this unit
+error LowError:
+    Bad
+
+error AppError:
+    Low
+
+error Unreached:
+    Gone
+
+extend LowError as AppError:
+    return AppError.Low
+
+fn main() i32:
+    return 0

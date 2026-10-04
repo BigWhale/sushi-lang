@@ -1,0 +1,29 @@
+# Design 8.2 (lints): the twin of the CW7002 fixture. Under `--warn-missing-docs`, a
+# documented `error` declaration and a documented conversion get no warning.
+# COMPILER_FLAGS: --warn-missing-docs
+# EXPECT_STDOUT_EXACT: "AppError.Low(LowError.Bad)\n"
+
+##: The unit block. :##
+
+##: A low-level failure. :##
+error LowError:
+    ##: A bad input. :##
+    Bad
+
+##: The failure of the application. :##
+error AppError:
+    ##: A low-level failure, wrapped. :##
+    Low(LowError)
+
+##:
+Wraps a low-level failure.
+
+- Returns: The failure of the application.
+:##
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn main() i32:
+    let AppError a = LowError.Bad as AppError
+    println(a)
+    return 0

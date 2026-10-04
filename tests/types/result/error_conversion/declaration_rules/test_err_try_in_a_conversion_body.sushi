@@ -1,0 +1,18 @@
+# Design 3.7 (C7): the body of a conversion is bare, so a `??` in it is CE0131, as in
+# every bare body. It is reported once.
+# EXPECT_ERROR_CODES_EXACT: CE0131
+error LowError:
+    Bad
+
+error AppError:
+    Code(i32)
+
+fn check(i32 n) i32 | AppError:
+    return Result.Ok(n)
+
+extend LowError as AppError:
+    let i32 v = check(1)??
+    return AppError.Code(v)
+
+fn main() i32:
+    return 0
