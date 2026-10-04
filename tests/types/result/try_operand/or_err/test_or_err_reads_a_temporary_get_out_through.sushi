@@ -8,7 +8,7 @@ fn give() string[]:
     return from([a, b])
 
 fn run_test() i32 | StdError:
-    println(give().get(0)??)
+    println(give().get(0).or_err(nom StdError.Error)??)
     println(give().get(0).or_err(nom StdError.Error)??)
     return Result.Ok(0)
 
