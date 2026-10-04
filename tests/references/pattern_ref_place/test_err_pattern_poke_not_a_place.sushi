@@ -7,7 +7,7 @@ enum Shade:
     Lit(i32)
 
 fn bump(poke List@(Shade) l) ~ | StdError:
-    match l.get(0)??:
+    match l.get(0).or_err(nom StdError.Error)??:
         Shade.Dim(poke r) -> r := 7
         Shade.Lit(_) -> println("lit")
     return Result.Ok(~)

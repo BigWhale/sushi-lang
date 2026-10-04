@@ -5,7 +5,7 @@
 fn run() i32 | StdError:
     let List@(i32[]) h = List.new()
     h.push(from([1, 2, 3]))
-    foreach(x in h.get(0)??.iter()):
+    foreach(x in h.get(0).or_err(nom StdError.Error)??.iter()):
         if (x == 1):
             h.push(from([4]))
     println(h.len())
