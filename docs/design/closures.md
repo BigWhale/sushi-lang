@@ -277,7 +277,7 @@ for the captured variable's provenance and type class, not a closures-specific r
   conservative frees are always sound.
 - **Closure aliasing is sound.** A plain rebind `let fn(i32) -> i32 g = f` **moves** the env
   (source consumed, CE2405 on later use); a container get-out
-  (`let fn(i32) -> i32 g = fns.get(0)??`) and a struct-field read
+  (`let fn(i32) -> i32 g = fns.get(0).or_err(nom e)??`) and a struct-field read
   (`let fn(i32) -> i32 g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
   mirroring `Own@(T).get()`); a closure stored in a struct field is freed by the struct's cleanup.
   No leak, no double-free (validated with `leaks --atExit`).
@@ -497,7 +497,7 @@ evaluates to a function value works, and it reuses the fat-pointer indirect-call
   ```
 
 - **A `List` get-out or a parenthesized expression**, called immediately: `arr[0]()`, `(e)()`,
-  `fns.get(0)??(x)`, `(fns.get(0)??)(x)`.
+  `fns.get(0).or_err(nom e)??(x)`, `(fns.get(0).or_err(nom e)??)(x)`.
 - **A lambda literal**, called where it is written: `(|i32 q| k + q)(2)`. The lambda is the same
   value in the callee position as in a `let`, an argument or a return. The `scope` pass walks
   every callee that is not a plain `Name`, so the lambda records its captures and each name in a
@@ -508,7 +508,7 @@ evaluates to a function value works, and it reuses the fat-pointer indirect-call
 Mechanically: the AST builder emits a general `Call` for a non-`Name`, non-`MemberAccess` call
 base; the type checker infers the non-`Name` callee and, when it resolves to a `FunctionType`,
 dispatches to the same indirect-call validator used for a named local, annotating the node for the
-backend. `??` unwraps a `Result` **and** a `Maybe` `Some` payload, so a
+backend. `??` unwraps a `Result`, and `.or_err(nom e)` turns a `Maybe` into one first, so a
 function-value call inside a lambda body can infer its return type through a `Maybe`-returning
 chain, not just a `Result`-returning one.
 

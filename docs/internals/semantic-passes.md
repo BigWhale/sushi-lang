@@ -61,7 +61,10 @@ Collect global definitions before analyzing function bodies.
 1. **Constants**: Parse and register constant definitions, and unit variables (`var`) in
    the same table with `is_var` set (`docs/design/unit-storage.md`)
 2. **Function Signatures**: Collect return types and parameters
-3. **Generic Types**: Register struct and enum definitions
+3. **Generic Types**: Register struct and enum definitions. An `error` declaration is an
+   enum with `is_error` set, on the `EnumType` and on a generic template, so each instance
+   carries it; the seven predefined error types carry it too, and `FileMode` and
+   `SeekFrom` do not (`docs/design/error-conversion.md` section 2)
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
 6. **Extension methods**, instance and STATIC alike, with `is_static` carried on the
@@ -78,6 +81,15 @@ Collect global definitions before analyzing function bodies.
    spellings at once (`Result@(T, E1) | E2`) is `CE2085`, here too. A lambda takes its
    channel from its TYPE, which only the `typecheck` pass knows, so the `typecheck` pass
    emits `CE0131` for a `??` in a bare lambda (`passes/types/expressions.py`).
+8. **Conversions.** `extend <Source> as <Target>:` is an `ExtendDef` named `as`, and
+   `collect_conversion` (`passes/collect/conversions.py`) judges it in this order: a `??`
+   in the body is `CE0131` (the body is bare); a side that is generic or not an error type
+   is `CE2520`; an identity is `CE2521`; a declaration outside the unit of the target
+   type (the home module, for a predefined target) is `CE2519`; a second declaration of
+   one pair is `CE0101`. An accepted conversion is filed in `SymbolTables.conversions`,
+   keyed by the pair of names; a refused one leaves the AST. A conversion is not filed in
+   the extension table, and a side that only a binary library declares is judged again
+   in the `libraries` step.
 
 ### One predicate for the channel
 
@@ -1014,6 +1026,44 @@ table (`resolve_namespaced`) for the name behind the dot. When the binding is an
 it stamps `external_ref = (provider origin, name)` on the node for the backend and gives
 back the `ExternalSig`. The call yields the raw C type, with no Result around it, so `??`
 on a foreign value is `CE2507`.
+
+### Error types, `??` and conversions
+
+**E3.** The `E` of every `Result@(T, E)` is an error type (`is_error_type`,
+`semantics/type_predicates.py`). `semantics/error_types.py` is the seam, and
+`reject_non_error_type` is the one emitter of `CE2084`. Three callers reach it: the
+written-type walk (`validate_type_name` → `reject_non_error_channels`,
+`passes/types/utils.py`), the spelled `| E` of a signature (`validate_error_channel`,
+`passes/types/signatures.py`), and each generic instance whose template writes a type
+parameter in an `E` position (the monomorphizer, and `resolve_method_generic_extension`
+for a method-level type parameter), with a note at the template. A type with no span
+came from inference and is not judged.
+
+**What `??` takes.** `validate_try_expression` (`passes/types/expressions.py`) asks for the
+enclosing channel first (`CE0131` in a bare lambda, `CE2508` outside every body; a bare
+written body was refused by the `collect` pass), and then for the operand:
+`_unwrapped_arms` accepts a `Result` instance by type identity (`is_instance_of`) and
+nothing else, so a `Maybe` and a user enum with `Ok`/`Err` variants are `CE2507`.
+
+**Conversions.** `_error_arms_agree` compares the operand's error type with the
+channel's. The same type propagates unchanged; otherwise `find_conversion`
+(`semantics/conversions.py`, the one reader of the table, gate
+`tests/unit/test_conversion_lookup_is_one.py`) answers the declared conversion, or the
+`??` is `CE2511` with a help that names the declaration. The answer is stamped on the node
+(`TryExpr.inferred_conversion`), and the backend calls the conversion before the scope
+cleanup of the propagation path. `validate_cast_expression` asks the same question for
+`e as T` (`CastExpr.inferred_conversion`, else `CE2014`). A generic function asks it per
+instance, because each instance has its own copy of the node.
+
+**`or_err` and `map_err`.** Both are built-in methods with a method-level type parameter
+(`docs/design/error-conversion.md` section 8.3). A family's row in
+`MAYBE_METHOD_SIGNATURES` / `RESULT_METHOD_SIGNATURES` is a `BuiltinSignature`
+(`semantics/generics/builtin_signatures.py`): the inference hook receives the call,
+`solve_builtin_signature` solves `E` or `F` from the argument through
+`solve_leading_type_args`, E3 judges the solved type at the call, and the parameter modes
+and the `nom self` receiver are stamped for the `borrow` pass. A read-through `or_err` (a
+borrowed `Maybe` whose payload owns a resource) outside the operand of a `??` is `CE2522`,
+from the `borrow` pass.
 
 ### Return paths
 

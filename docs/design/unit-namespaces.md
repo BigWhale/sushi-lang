@@ -862,6 +862,11 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
    statement to write, so it declares its re-exports in a `REEXPORTS` tuple beside its
    functions (`StdlibModule.reexports`); `<io/files>` hands on `<io/error>` that way. A
    `public use` that hands on nothing public warns (CW3005), as an empty alias does (CW3004).
+   A plain `use` re-exports nothing: `<io/error>` imports `<net/error>` for the one name
+   that the conversion `NetError as IoError` needs (a conversion lives in the unit of its
+   target, `error-conversion.md` section 3.5), so a program that uses `<io/fs>` loads the
+   `<net/error>` unit, and `NetError` still reaches its unit only through `<net/error>`
+   or a module that re-exports it.
 
 **Shadows and duplicates.** A re-exported name is a candidate exactly as a flat import's
 is. U's own declaration wins over its re-exports, as a unit's own wins over its imports

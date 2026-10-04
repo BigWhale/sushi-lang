@@ -1,6 +1,9 @@
 # Error types and error conversion
 
-Status: ACCEPTED. The rulings are David's (2026-10-04). Nothing is built yet.
+Status: ACCEPTED and BUILT. The rulings are David's (2026-10-04). Everything in sections 2
+to 8 is built, the stdlib uses it, and section 9.1 (the `from` marker) stays deferred.
+Section 1 and the "Before" examples of section 6 describe the language before this work
+(at `82d6bf94`).
 
 ## Summary
 
@@ -80,7 +83,6 @@ reaches it, and a user enum with `Some`/`None` has the fault of 1.3.
 
 ### 2.1 The declaration
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 error ConfigError:
     Unreadable(FileError)
@@ -165,7 +167,6 @@ may carry an internal-error backstop once (1) and (2) cover every written positi
 
 ### 3.1 The declaration
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 extend FileError as IoError:
     match self:
@@ -290,7 +291,6 @@ other operand:
 
 For a `Maybe`, the program writes the error value:
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 fn first(i32[] xs) i32 | AppError:
     let i32 v = xs.get(0).or_err(nom AppError.Empty)??
@@ -334,7 +334,6 @@ is an internal error.
 
 A conversion that one site needs does not need a declaration:
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 let File f = open(path, FileMode.Read()).map_err(|nom IoError e| AppError.Config(e))??
 ```
@@ -366,7 +365,7 @@ combinators of `ufcs-combinators.md`.
 
 Before:
 
-<!-- docs-sweep: skip (fragment of a stdlib unit) -->
+<!-- docs-sweep: skip (the form before this work: a fragment of a stdlib unit that calls the removed to_io) -->
 ```sushi
 fn open(string path, FileMode mode) File | IoError:
     match fd_open(path, mode.intent(), 420):
@@ -376,7 +375,6 @@ fn open(string path, FileMode mode) File | IoError:
 
 After:
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 fn open(string path, FileMode mode) File | IoError:
     let i32 fd = fd_open(path, mode.intent(), 420)??
@@ -385,7 +383,6 @@ fn open(string path, FileMode mode) File | IoError:
 
 ### 6.2 A program with its own error type
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 use <io/files>
 
@@ -415,7 +412,7 @@ fn main() i32:
 
 Before:
 
-<!-- docs-sweep: skip (fragment with no main) -->
+<!-- docs-sweep: skip (the form before this work: a fragment with no main) -->
 ```sushi
 fn notify(string host, string msg) ~ | AppError:
     match connect(host, 80):
@@ -431,7 +428,6 @@ fn notify(string host, string msg) ~ | AppError:
 
 After:
 
-<!-- docs-sweep: skip (accepted syntax, not built yet) -->
 ```sushi
 error AppError:
     Io(IoError)
@@ -461,17 +457,17 @@ fn notify(string host, string msg) ~ | AppError:
 | `??` with two error types and no declaration | CE2511. The help names `extend <E_in> as <E_out>`. "Not supported yet" is removed from its doc text |
 | `e as T` between two error types with no declaration | The invalid-cast error. The help names the declaration |
 | `e as T` on a borrowed error that owns a resource | The consuming-use-of-a-borrow error. The help names `e.clone() as T` |
-| A conversion outside the unit of its target type | New code, with a note at the target's declaration |
-| A generic or non-error source or target | New code |
-| An identity conversion | New code |
+| A conversion outside the unit of its target type | CE2519, with a note at the target's declaration |
+| A generic or non-error source or target | CE2520 |
+| An identity conversion | CE2521 |
 | Two declarations of one pair | The duplicate-function error, with a note at the first declaration |
 | A `\| E` on a conversion | A parse error. The grammar of 8.2 has no place for it, and no code is added |
 | `??` on a `Maybe` | CE2507, with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |
 | `??` on a user enum shaped like a `Result` or a `Maybe` | CE2507. The help says to answer a `Result@(T, E)` |
-| `as` with a conversion in a `const` initializer | The not-a-constant-expression error |
+| `as` with a conversion in a `const` initializer | The not-a-constant-expression error (CE0108) |
+| A read-through `or_err` (a borrowed `Maybe` whose payload owns a resource) outside `??` (section 4) | CE2522 |
 
-The numbers are chosen when the work is built, each in the module that owns its range
-(`internals/errors/types.py`, `internals/errors/result.py`).
+The new codes are in `internals/errors/result.py`, the module that owns their range.
 
 ---
 
@@ -490,7 +486,7 @@ The numbers are chosen when the work is built, each in the module that owns its 
   instance carries it. The table of predefined enums (`semantics/predefined_types.py`)
   sets it on the seven predefined error types.
 - **E3.** One predicate, "is an error type". It is called from `validate_error_channel`
-  (`passes/types/signatures.py`), where CE2084 and CE2086 are emitted today, from the
+  (`passes/types/signatures.py`), where CE2084 and CE2086 were emitted before this work, from the
   written-type walk (`validate_type_name`, `passes/types/utils.py`), and from the
   monomorphizer where it validates type arguments. Every call emits CE2084. CE2086 is
   removed from `internals/errors/types.py`. `signature_result_arms` also serves the
@@ -544,7 +540,7 @@ The numbers are chosen when the work is built, each in the module that owns its 
 
 ### 8.3 `or_err` and `map_err`
 
-A built-in method has no method-level type parameter today. These two are the first, and
+A built-in method had no method-level type parameter before this work. These two are the first, and
 the built-in path gets four parts: the inference hook of a method family receives the
 call, so a return type can depend on an argument; a solver answers the method-level type
 parameter of a built-in from its arguments; a built-in carries the parameter modes and the

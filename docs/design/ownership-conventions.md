@@ -168,7 +168,7 @@ Three, not four:
 | provenance | meaning | expression shapes |
 |---|---|---|
 | **OWNED** | a registered owner in this scope | a bare `Name` bound by `let`, a `nom` parameter, **and a marked field TAKE** — `nom s.field`, the one field read that is not a borrow (P7 ruling R28, `docs/design/borrow-model.md` S10c) |
-| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, an unmarked parameter (a borrow by default), a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)??` |
+| **BORROWED** | names storage owned elsewhere, for a shorter lifetime | a `match` payload binding, a `foreach` binding, an unmarked parameter (a borrow by default), a `peek`/`poke` parameter, a `let` bound from any of these, **and every read THROUGH a still-live owner** — `s.field`, `own.get()`, `arr[i]`, `list.get(i)` (also under `.or_err(nom e)??`) |
 | **FRESH** | nothing owns it yet | a constructor, a call result, `.clone()`, a literal, `arr.pop()` / `List.pop()` (which REMOVE the element, so the container stops owning it) |
 
 **A read through a live owner is `BORROWED`.** The compiler inserts no automatic copy at a read

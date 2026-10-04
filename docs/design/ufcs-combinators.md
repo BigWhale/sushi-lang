@@ -88,9 +88,11 @@ CE2515 is a RESOLUTION FALLBACK, not a receiver-kind ban. Resolution runs first:
 method found on the Result/Maybe enum itself is legal. CE2515 fires only when the
 method is missing there but present on the payload type — which is what tells an
 unhandled channel from a typo. The diagnostic is relational (it names the missing
-method and the call that returned the wrapper) and its help spells the `??` fix. It
-covers result-like AND maybe-like receivers: a `Maybe@(T)` is also more than the bare
-`T`, so `xs.find(p).len()` is the same CE2515.
+method and the call that returned the wrapper) and its help spells the fix. It covers a
+`Result` AND a `Maybe` receiver, each found by type identity and never by the names of its
+variants: a `Maybe@(T)` is also more than the bare `T`, so `xs.find(p).len()` is the same
+CE2515. For a `Result` the help spells `??`; for a `Maybe` it spells `.or_err(nom e)??`,
+because `??` takes a `Result` only (section 7).
 
 ### 6. Return form in a channel body: both constructors are spelled
 
@@ -108,12 +110,15 @@ A BARE body (no `| E`) returns the value itself and refuses both constructors (C
 The reason: a silent wrap is a value the source did not write. A channel method and a
 free function that answer the same Result would then spell it two ways.
 
-### 7. `??` on Maybe converts absence into an Err
+### 7. `??` takes a Result only; a Maybe writes its error with `or_err`
 
-A `None` under `??` propagates as a payload-free `Result.Err` (CE2508's doc states it;
-the emission is `backend/expressions/try_expr.py`). Stated plainly: Maybe is data,
-Result is the channel, and `??` converts absence into an empty error. This is design,
-not accident.
+This section first said that `??` on a `Maybe` converts absence into a payload-free
+`Result.Err`. That rule is retired (ruling C8 of `error-conversion.md`, #1168): the `Err`
+was built from no value, so the caller read an error that the program never made, and the
+answer changed with `--opt`. Maybe is data and Result is the channel, as before, but the
+conversion from one to the other is now written at the site: `m.or_err(nom e)??`. `??` on
+a `Maybe` is CE2507, and its help names `or_err`. `or_err` and `map_err` are built-in
+methods with a method-level type parameter (`error-conversion.md` sections 4, 5 and 8.3).
 
 ## Identity and the symbol
 

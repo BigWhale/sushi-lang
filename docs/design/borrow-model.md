@@ -303,7 +303,7 @@ The rules are the reference `let`'s, at the binding: the owner is the ROOT of th
 (CE2403) and no `peek` beside a `poke` (CE2407), where the bindings of ONE pattern are
 exempt because they point into disjoint payload slots; a `poke` through a `peek` root is
 CE2408. CE2404 stays for a borrowed scrutinee that is not a place: a get-out behind a
-`??` (`match l.get(0)??:`), for example.
+`??` (`match l.get(0).or_err(nom e)??:`), for example.
 
 A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
 into read-only memory, so the pointer has nothing to point at and a write through the
@@ -378,7 +378,7 @@ BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership
 
 **A borrowed wrapper is read through, not refused.** `let string s = r??` over a
 parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
-read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0)??` is. The escape is the
+read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0).or_err(nom e)??` is. The escape is the
 usual one, `.clone()`.
 
 **The `foreach` binder is this rule and nothing else.** `foreach(line?? in it)` is
