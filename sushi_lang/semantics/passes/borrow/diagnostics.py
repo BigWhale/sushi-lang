@@ -308,7 +308,7 @@ def expr_to_string(expr: Expr) -> str:
         case MethodCall() | DotCall():
             # Both spellings reach here, arguments included, so the text matches what the
             # user wrote.
-            args = ", ".join(expr_to_string(a) for a in (expr.args or []))
+            args = ", ".join(_argument_text(a) for a in (expr.args or []))
             return f"{expr_to_string(expr.receiver)}.{expr.method}({args})"
         case MemberAccess():
             return f"{expr_to_string(expr.receiver)}.{expr.member}"
@@ -318,3 +318,9 @@ def expr_to_string(expr: Expr) -> str:
             return f"{expr_to_string(expr.expr)}??"
         case _:
             return "<expression>"
+
+
+def _argument_text(arg: Expr) -> str:
+    """An argument as written: the `nom` marker is part of the call (`f(nom x)`)."""
+    text = expr_to_string(arg)
+    return f"nom {text}" if arg.nom_marked else text
