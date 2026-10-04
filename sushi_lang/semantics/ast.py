@@ -7,6 +7,7 @@ from sushi_lang.semantics.typesys import FunctionType, Type
 from lark import Token
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.namespaces import NamespaceRef
     from sushi_lang.semantics.param_modes import ParamMode
@@ -327,6 +328,11 @@ class EnumDef(Node):
     # Written `error`, not `enum`: the type may be the `E` of a `Result`.
     is_error: bool = False
 
+# The method name of a conversion, `extend Source as Target:` (docs/design/error-conversion.md
+# section 8.2). `as` is a reserved word, so no written method has this name.
+CONVERSION_METHOD = "as"
+
+
 @dataclass(slots=True)
 class ExtendDef(Node):
     target_type: Optional[Type]  # Type being extended (int, bool, string)
@@ -364,6 +370,11 @@ class ExtendDef(Node):
     library_origin: Optional[Origin] = None
     # The scope the names of the body resolve in; see `FuncDef`.
     scope_unit: Optional[str] = None
+
+    @property
+    def is_conversion(self) -> bool:
+        """A conversion: the target is the return type and the one method-level type argument."""
+        return self.name == CONVERSION_METHOD
 
 @dataclass(slots=True)
 class PerkMethodSignature:
@@ -1020,6 +1031,9 @@ class CastExpr(Node):
     expr: "Expr"
     target_type: Type
     source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
+    # The declared conversion `as` calls between two error types (`semantics/conversions.py`),
+    # stamped by the typecheck pass. None for a numeric cast and an identity cast.
+    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class Borrow(Node):
@@ -1037,6 +1051,9 @@ class TryExpr(Node):
     inferred_success_tag: "Optional[int]" = None
     inferred_error_type: "Optional[Type]" = None
     inferred_func_return_type: "Optional[Type]" = None
+    # The declared conversion the propagate path calls when the two error types differ
+    # (`semantics/conversions.py`). None when the error propagates unchanged.
+    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class RangeExpr(Node):

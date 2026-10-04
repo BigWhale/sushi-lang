@@ -218,7 +218,8 @@ def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
     return True
 
 
-def reject_try_in_body(reporter, body: Any, context: str) -> None:
+def reject_try_in_body(reporter, body: Any, context: str,
+                       help_text: Optional[str] = None) -> None:
     """Reject every `??` in a BARE function or method body (CE0131, #398).
 
     A bare body returns the value (CE2091), so a `??` has nothing to propagate into
@@ -237,7 +238,7 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          node.loc, context=context) \
-                .help("handle the Result or the Maybe in the body (match, "
+                .help(help_text or "handle the Result or the Maybe in the body (match, "
                       ".realise(default)), or write '| E' in the signature").emit()
         return True
 

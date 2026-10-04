@@ -77,7 +77,7 @@ def non_error_type(ty: Type, structs: dict, enums: dict) -> Optional[Type]:
     return named
 
 
-def _kind_of(ty: Type) -> str:
+def kind_of(ty: Type) -> str:
     """What the refused type is, in the words of the message."""
     if isinstance(ty, EnumType):
         if is_instance_of(ty, "Maybe", "Result"):
@@ -114,7 +114,7 @@ def reject_non_error_type(reporter: Reporter, ty: Type, span: Optional[Span],
     if named is None:
         return False
     diagnostic = er.emit_with(reporter, er.ERR.CE2084, span, filename=filename,
-                              type_name=display_type(named), kind=_kind_of(named))
+                              type_name=display_type(named), kind=kind_of(named))
     if (isinstance(named, EnumType) and not is_instance_of(named, "Maybe", "Result")
             and named.home_module is None):
         declared = named.generic_base or named.name

@@ -782,7 +782,9 @@ class LibraryRegistration:
             is_declared_type=DeclaredTypeNamer(
                 structs=tables.structs, enums=tables.enums,
                 generic_structs=tables.generic_structs,
-                generic_enums=tables.generic_enums, perks=tables.perks))
+                generic_enums=tables.generic_enums, perks=tables.perks),
+            conversions=tables.conversions)
+        collector.visibility = tables.visibility
         collector.current_unit_name = unit_name
         collector.current_unit_file = unit_file
         return collector
@@ -807,14 +809,18 @@ class LibraryRegistration:
             if unit.ast is None:
                 continue
             late = [ext for ext in unit.ast.extensions
-                    if isinstance(ext.target_type, UnknownType)
-                    and ext.target_type.name in library_types]
+                    if (isinstance(ext.target_type, UnknownType)
+                        and ext.target_type.name in library_types)
+                    or (ext.is_conversion and isinstance(ext.ret, UnknownType)
+                        and ext.ret.name in library_types)]
             if not late:
                 continue
             collector = self._function_collector(
                 self.reporter, unit.name, str(unit.file_path))
-            for ext in late:
-                collector.refile_extension(ext)
+            refused = {id(ext) for ext in late if not collector.refile_extension(ext)}
+            if refused:
+                unit.ast.extensions[:] = [ext for ext in unit.ast.extensions
+                                          if id(ext) not in refused]
 
     def _register_extensions(self, build_units: set[str]) -> None:
         """Register the CONCRETE extension methods the libraries ship.

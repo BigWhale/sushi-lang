@@ -72,8 +72,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "tests/unit/test_hashability_dispatch_is_total.py"),
     ("sushi_lang/semantics/name_ladder.py", "RUNGS", "tests/unit/test_bare_name_ladder_is_one.py"),
     ("sushi_lang/semantics/param_modes.py", "FFI_EXTERN", "tests/unit/test_callee_mode_matrix.py"),
-    ("sushi_lang/semantics/passes/collect/enums.py", "PREDEFINED_ENUM_HOMES",
-     "tests/unit/test_predefined_enum_homes.py"),
     ("sushi_lang/semantics/passes/types/method_registry.py", "families",
      "tests/unit/test_method_family_dispatch_is_one.py"),
     ("sushi_lang/semantics/places.py", "NOT_A_STEP", "tests/unit/test_place_walk_is_total.py"),
