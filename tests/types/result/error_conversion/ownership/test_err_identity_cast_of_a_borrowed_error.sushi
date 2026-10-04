@@ -1,0 +1,18 @@
+# Design 3.2 (C2): `as` consumes its operand by position, an identity cast too. A `match`
+# binding is a borrow, so `e as AppError` on an error that owns a string is the consuming
+# use of a borrow. The help names `e.clone() as AppError`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: `e.clone() as AppError`
+error AppError:
+    Note(string)
+
+fn find(i32 n) i32 | AppError:
+    return Result.Err(AppError.Note("note {n}"))
+
+fn main() i32:
+    match find(1):
+        Result.Ok(v) -> println(v)
+        Result.Err(e) ->
+            let AppError b = e as AppError
+            println(b)
+    return 0

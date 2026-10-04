@@ -1,0 +1,16 @@
+# An identity cast consumes its operand by position, as every `as` does. On a string and
+# on a struct that owns a string, the cast moves the value to the new owner, so each
+# string is freed one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "text 1\nnote 2\n"
+struct Note:
+    string text
+
+fn main() i32:
+    let string a = "text {1}"
+    let string b = a as string
+    let Note n = Note("note {2}")
+    let Note m = n as Note
+    println(b)
+    println(m.text)
+    return 0
