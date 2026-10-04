@@ -36,6 +36,8 @@ Section 1 and the "Before" examples of section 6 describe the language before th
 | **C10** | A `from` marker on a variant is deferred | 9.1 |
 | **C11** | A conversion has no leak check | 3.8 |
 | **C12** | No unit may declare a conversion into `StdError`, because `StdError` has no home module | 3.5 |
+| **C13** | An identity cast `x as T` on a value of type `T` stays legal and does nothing to the value. It consumes its operand by position, as every `as` does (C2): a value that owns a resource is spent | 3.2 |
+| **C14** | A conversion body that casts a value of its own source into its own target calls itself, and is refused (CE2523). A cast of another pair in the body is legal | 3.4 |
 
 ---
 
@@ -194,6 +196,10 @@ error type that owns a resource, `e` is spent. When `e` is a borrow (a `match` b
 such as `Result.Err(e) ->`), the cast is the consuming use of a borrow and is refused.
 The form is then `e.clone() as AppError`.
 
+An identity cast `x as T` on a value of type `T` stays legal (C13; ruled 2026-10-04). It
+consumes its operand by position like every `as`, so `let string t = s as string`
+spends `s` when the type owns a resource. Before, the value had two owners.
+
 ### 3.3 The implicit use: `??`
 
 At a `??` on a `Result@(T, E_in)`, in a body whose channel is `E_out`:
@@ -217,6 +223,13 @@ each conversion in one place. A program that wants `FileError` to `AppError` dec
 
 An identity conversion is refused. Two declarations of one pair are the
 duplicate-function error.
+
+A conversion that casts a value of its own source into its own target calls itself
+(C14; ruled 2026-10-04). `self` is always a value of the source, so `self as B` in the
+body of `extend A as B:` never ends, and a cast of another `A` value only moves work to a
+call that the body can write directly. The cast is CE2523, with a note at the
+declaration. A cast of another pair in the body is legal. A recursion through another
+function is not detected, as for every function.
 
 ### 3.5 Who may declare a conversion
 
@@ -460,6 +473,7 @@ fn notify(string host, string msg) ~ | AppError:
 | A conversion outside the unit of its target type | CE2519, with a note at the target's declaration |
 | A generic or non-error source or target | CE2520 |
 | An identity conversion | CE2521 |
+| A cast of the conversion's own pair in its own body (C14) | CE2523, with a note at the declaration |
 | Two declarations of one pair | The duplicate-function error, with a note at the first declaration |
 | A `\| E` on a conversion | A parse error. The grammar of 8.2 has no place for it, and no code is added |
 | `??` on a `Maybe` | CE2507, with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |

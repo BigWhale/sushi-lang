@@ -28,7 +28,9 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
   Only the unit that declares the target type may declare it (`CE2519`): for a predefined
   type that unit is its home module, and no unit may declare a conversion into `StdError`.
   The source and the target are two non-generic error types (`CE2520`), and a conversion
-  into the same type is `CE2521`. A conversion needs no import, and it has no leak check.
+  into the same type is `CE2521`. A conversion body that casts a value of its own source
+  into its own target calls itself and is `CE2523`. A conversion needs no import, and it
+  has no leak check.
   An `as` into an error type in a `const` is `CE0108`.
 - **`m.or_err(nom e)`** on a `Maybe@(T)` answers `Result@(T, E)`: `Some(v)` is `Ok(v)` and
   `None` is `Err(e)`. It is a built-in method and needs no import. The receiver is
