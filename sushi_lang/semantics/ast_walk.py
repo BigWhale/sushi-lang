@@ -495,13 +495,17 @@ def field_kind(value: object) -> str:
     return "leaf"
 
 
-def node_fields(node: Node) -> Iterator[Tuple[str, object]]:
+def node_fields(node: Node, *, aliases: bool = True) -> Iterator[Tuple[str, object]]:
     """Every declared field of one node, as (name, value), in DECLARATION order.
 
     The one reader of `dataclasses.fields` over a node. A node is slotted, so its
     declared fields are all it has; there is no `__dict__` to walk beside them.
+    `aliases=False` leaves out a field marked `ast.ALIAS`: it names a node that another
+    field holds, so a walk that read it would visit that node two times (#1174).
     """
     for f in fields(node):
+        if not aliases and f.metadata.get("alias"):
+            continue
         yield f.name, getattr(node, f.name)
 
 
@@ -522,7 +526,7 @@ def children(node: Node) -> Iterator[Node]:
     the order it meets the literals in, so a rearrangement here renames every lifted
     function and every closure environment struct.
     """
-    for _name, value in node_fields(node):
+    for _name, value in node_fields(node, aliases=False):
         yield from nodes_in(value)
 
 

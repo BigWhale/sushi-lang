@@ -93,6 +93,9 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
 - A `nom` marker on an argument of a built-in method (`m.realise(nom 3)`, `xs.get(nom i)`)
   was not checked. Every built-in method family now has a table of parameter modes, and a
   `nom` on a parameter that borrows is CE2427, as for a user method (#1173).
+- A `??` binder of a `foreach` (`foreach(n?? in it)`) in a bare body gave CE0131 two
+  times for one `??`. The node walk visited the hidden `let` through the loop body and
+  through the loop's alias of it (#1174).
 
 ## [0.14.0] - 2026-10-03
 

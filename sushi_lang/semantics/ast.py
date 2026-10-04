@@ -6,6 +6,10 @@ from sushi_lang.semantics.typesys import FunctionType, Type
 
 from lark import Token
 
+#: The metadata of a field that names a node another field of the same node holds. The
+#: node walk (`ast_walk.children`) does not descend it, so each node is visited once.
+ALIAS = {"alias": True}
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
@@ -575,8 +579,9 @@ class Foreach(Stmt):
     # binding to a hidden name and prepended `let <T> <name> = <hidden>??` to the body;
     # this points at that Let so the typecheck pass can fill in its type once the item
     # type is known. Nothing downstream needs a rule of its own: the unwrap is the
-    # ordinary TryExpr and the binding the ordinary Let.
-    item_try_let: "Optional[Let]" = None
+    # ordinary TryExpr and the binding the ordinary Let. The body holds the Let, so this
+    # field is an ALIAS and the node walk does not descend it (#1174).
+    item_try_let: "Optional[Let]" = field(default=None, metadata=ALIAS)
     item_try_span: Optional[Span] = None
     # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
     # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
