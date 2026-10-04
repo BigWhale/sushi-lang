@@ -1,0 +1,30 @@
+# #1171: `r??` over a BORROWED Result whose error owns a string, into another error type
+# through a declared conversion. The conversion takes the error `nom self`, so the `??` is
+# the consuming use of a borrow, as without the conversion.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'r'
+# EXPECT_STDERR_CONTAINS: `r.clone()??`
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n <= 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn lift(Result@(i32, TokenError) r) i32 | AppError:
+    let i32 v = r??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    let Result@(i32, TokenError) r = tokenize(0)
+    match lift(r):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

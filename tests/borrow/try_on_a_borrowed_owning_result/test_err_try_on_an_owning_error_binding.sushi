@@ -1,0 +1,24 @@
+# #1171: a bare `match` payload binding borrows the scrutinee's payload. `r??` over it,
+# with an error that owns a string, is the consuming use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'r'
+# EXPECT_STDERR_CONTAINS: `r.clone()??`
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n <= 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn first(Maybe@(Result@(i32, TokenError)) m) i32 | TokenError:
+    match m:
+        Maybe.Some(r) ->
+            let i32 v = r??
+            return Result.Ok(v)
+        Maybe.None -> return Result.Ok(0)
+
+fn main() i32:
+    let Maybe@(Result@(i32, TokenError)) m = Maybe.Some(tokenize(0))
+    println(first(m).is_ok())
+    return 0

@@ -1,0 +1,47 @@
+# #1171 guard: `r??` over a BORROWED Result whose error type is plain stays legal. The
+# Err path copies the error, and the Ok payload is a read through the borrow.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 4\nerr Short\nok tok 3\nerr StdError.Error\n"
+use <collections/strings>
+
+error Fault:
+    Short
+    Long(i32)
+
+fn count(i32 n) i32 | Fault:
+    if (n <= 0):
+        return Result.Err(Fault.Short)
+    return Result.Ok(n)
+
+fn word(i32 n) string | StdError:
+    if (n <= 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok("tok {n}")
+
+fn next(Result@(i32, Fault) r) i32 | Fault:
+    let i32 v = r??
+    return Result.Ok(v + 1)
+
+fn label(Result@(string, StdError) r) string | StdError:
+    let string w = r??
+    return Result.Ok(w.clone())
+
+fn main() i32:
+    let Result@(i32, Fault) a = count(3)
+    let Result@(i32, Fault) b = count(0)
+    match next(a):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match next(b):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(Fault.Short) -> println("err Short")
+        Result.Err(Fault.Long(n)) -> println("err Long {n}")
+    let Result@(string, StdError) c = word(3)
+    let Result@(string, StdError) d = word(0)
+    match label(c):
+        Result.Ok(w) -> println("ok {w}")
+        Result.Err(e) -> println("err {e}")
+    match label(d):
+        Result.Ok(w) -> println("ok {w}")
+        Result.Err(e) -> println("err {e}")
+    return 0
