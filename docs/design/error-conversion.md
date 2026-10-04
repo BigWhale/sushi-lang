@@ -142,9 +142,11 @@ value of an error channel, and only an error fits into an error channel.
 
 1. **Every written `Result@(T, E)` and every `T | E`** is judged where it is written,
    through the written-type walk (`validate_type_name`). The HashMap key rule
-   (`reject_unusable_key`) is the model. The diagnostic points at the `E`.
-2. **A type parameter in the `E` position** (`fn f@(E)() T | E`) is judged at each
-   instance, because generics are templates. The diagnostic names the type argument and
+   (`reject_unusable_key`) is the model. The diagnostic points at the `E` of a `| E`,
+   and at the written type that holds the `E` in every other position.
+2. **A type parameter in the `E` position** (`fn f@(E)() T | E`, a generic type, a
+   generic extension target, a method-level type parameter) is judged at each instance,
+   because generics are templates. The diagnostic names the type argument and
    carries a note at the template.
 3. **A `Result` that the compiler infers is not judged.** A call result comes from a
    signature that was judged. A `Result.Err(x)` construction takes its type from its
