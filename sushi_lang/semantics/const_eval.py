@@ -25,8 +25,8 @@ from sushi_lang.semantics.ast import (
 )
 from sushi_lang.semantics.integer_width import (
     fits_integer_type, integer_bit_width, wrap_to_integer_type)
-from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType
-from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
+from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, UnknownType
+from sushi_lang.semantics.type_predicates import is_error_type, is_float_type, is_integer_type
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.namespaces import NamespaceRef, NamespaceTable, UnitScope
 from sushi_lang.semantics.passes.collect import ConstantTable
@@ -742,6 +742,11 @@ class ConstantEvaluator:
     def _evaluate_cast(self, expr: CastExpr, expected_type: Type,
                        span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate type cast."""
+        # `as` into an error type is a conversion: it calls a body, so it never folds
+        # (docs/design/error-conversion.md section 7).
+        if self._names_an_error_type(expr.target_type):
+            er.emit(self.reporter, er.ERR.CE0108, span, what="an `as` conversion")
+            return None
         value = self.evaluate(expr.expr, expr.target_type, span)
         if value is None:
             return None
@@ -774,6 +779,11 @@ class ConstantEvaluator:
         else:
             er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
             return None
+
+    def _names_an_error_type(self, ty: Type) -> bool:
+        if isinstance(ty, UnknownType):
+            ty = getattr(self.enum_table, "by_name", {}).get(ty.name, ty)
+        return is_error_type(ty)
 
     def _evaluate_index(self, expr: IndexAccess, expected_type: Type,
                         span: Optional[Span]) -> Optional[ConstantValue]:

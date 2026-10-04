@@ -232,12 +232,15 @@ def _declaration_name(kind: str, node) -> str:
     if kind == "perk implementation":
         target = node.target_type
         return f"{display_type(target) if target is not None else '?'} with {node.perk_name}"
+    if getattr(node, "is_conversion", False):
+        return f"{display_type(node.target_type)} as {display_type(node.ret)}"
     return getattr(node, "name", "")
 
 
 def _check_completeness(reporter: 'Reporter', doc: 'DocBlock', kind: str, node) -> None:
     """The three lints that a block has to exist for (R33)."""
-    name = getattr(node, "name", "")
+    name = (_declaration_name(kind, node) if getattr(node, "is_conversion", False)
+            else getattr(node, "name", ""))
     where = _declaration_span(kind, node)
     tagged = {tag.kind for tag in doc.tags}
     documented_params = {tag.name for tag in doc.tags if tag.kind == "parameter"}

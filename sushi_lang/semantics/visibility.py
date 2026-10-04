@@ -91,6 +91,8 @@ def kind_word(kind: str, decl: Any) -> str:
     """
     if kind == "enum" and getattr(decl, "is_error", False):
         return "error type"
+    if kind == "extension" and getattr(decl, "is_conversion", False):
+        return "conversion"
     return kind
 
 
