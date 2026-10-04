@@ -394,9 +394,9 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
             continue
         report = er.emit_with(validator.reporter, er.ERR.CE2518, operand.loc,
                               op=op, type_name=display_type(operand_type))
-        if _wrapper_of(operand_type) is not None:
-            report = report.help("take the value with '??', '.realise(default)' "
-                                 "or match")
+        wrapper = _wrapper_of(operand_type)
+        if wrapper is not None:
+            report = report.help(f"take the value with {take_the_value(wrapper[0])}")
         report.emit()
         return
 
@@ -611,6 +611,17 @@ def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
 _WRAPPER_PREDICATES = {"Result": "is_ok", "Maybe": "is_some"}
 
 
+def take_the_value(wrapper: str) -> str:
+    """The ways to take the value out of a wrapper, in the words of a help.
+
+    `??` takes a Result only (docs/design/error-conversion.md section 4), so a Maybe is
+    given an error value first.
+    """
+    if wrapper == "Maybe":
+        return "'.realise(default)', match, or '.or_err(nom e)??'"
+    return "'??', '.realise(default)' or match"
+
+
 def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
     """(wrapper name, predicate) when this type is a Result or a Maybe, else None.
 
@@ -647,7 +658,7 @@ def reject_non_bool_condition(validator: 'TypeValidator', expr: Expr,
         er.emit_with(validator.reporter, er.ERR.CE2516, expr.loc,
                      ty=display_type(expr_type), wrapper=name) \
             .help(f"use '.{predicate}()' to test it, or take the value with "
-                  f"'??', '.realise(default)' or match").emit()
+                  f"{take_the_value(name)}").emit()
         return True
 
     report = er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc)
@@ -747,7 +758,8 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
     elif isinstance(receiver_type, EnumType):
         builder.note(f"'{shown}' is an enum: it carries variants, not fields")
         if is_builtin_wrapper_enum(receiver_type):
-            builder.help("take the value first: '??', '.realise(default)' or 'match'")
+            builder.help(
+                f"take the value first with {take_the_value(receiver_type.generic_base)}")
         else:
             builder.help("read a payload with 'match'")
     else:

@@ -1108,8 +1108,9 @@ belong elsewhere, and a false `CE2106` there would be worse than the `CE0029` ba
 An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
 `CE2106`. An enum carries variants, and
 a variant is reached by a pattern and not by a dot, so the note says that and the help says
-how to get at the value: `??`, `.realise(default)` or `match` for a built-in wrapper
-(`is_builtin_wrapper_enum`), `match` for a user enum. A `Maybe@(T)` gets no implicit
+how to get at the value: `??`, `.realise(default)` or `match` for a `Result`,
+`.realise(default)`, `match` or `.or_err(nom e)??` for a `Maybe` (`is_builtin_wrapper_enum`,
+`take_the_value`), `match` for a user enum. A `Maybe@(T)` gets no implicit
 unwrap: nothing else in the language has one, it reads against the rule that a condition
 is a bool and nothing else, and the `None` arm has no answer.
 
