@@ -50,8 +50,9 @@ opens the file exactly as its plain twin does.
 
 The variants and the errno values each one covers are listed on [I/O errors](error.md).
 `FileError` is what the path utilities (`stat`, `walk`, `mkdir_all`, `remove_all`) and the `fd_*`
-primitives answer. A handle method answers `IoError` instead; `to_io()` converts inside
-the stdlib.
+primitives answer. A handle method answers `IoError` instead, through the conversion
+`FileError as IoError`; a `??` in a body that answers `IoError` calls it (see
+[I/O errors](error.md#conversions)).
 
 ### `File`
 

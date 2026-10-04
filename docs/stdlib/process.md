@@ -10,7 +10,7 @@ System process control and information functions.
 use <sys/process>
 ```
 
-The import brings `ProcessError`, the module's error enum: the bare name needs it, and
+The import brings `ProcessError`, the module's error type: the bare name needs it, and
 `use <sys/process> as proc` puts it behind the dot (`proc.ProcessError.SpawnFailed`).
 
 ## Overview

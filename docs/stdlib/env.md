@@ -10,7 +10,7 @@ System environment variable access and manipulation.
 use <sys/env>
 ```
 
-The import brings `EnvError`, the module's error enum: the bare name needs it, and
+The import brings `EnvError`, the module's error type: the bare name needs it, and
 `use <sys/env> as env` puts it behind the dot (`env.EnvError.NotFound`).
 
 ## Overview
