@@ -1,5 +1,5 @@
 # One rule over every declaration kind, the wrapper refusal included (#663, #668).
-# EXPECT_ERROR_CODE: CE2086
+# EXPECT_ERROR_CODE: CE2084
 struct Holder:
     i32 n
 

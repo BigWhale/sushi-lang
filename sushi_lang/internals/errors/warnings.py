@@ -73,7 +73,9 @@ _add(ErrorMessage("CW3003", Severity.WARNING,
     "consumer who can edit neither. A builtin target is not exempt: `i32` is the most "
     "collidable target of all, because every unit of every program can reach it. A perk "
     "implementation does not warn, because the consumer's own implementation is the "
-    "sanctioned override, so that claim has an escape. An extension inside an ordinary "
+    "sanctioned override, so that claim has an escape. A conversion (`extend IoError as "
+    "LibError:`) does not warn either: it puts no method name on its source, and only the "
+    "unit that declares the target may declare it. An extension inside an ordinary "
     "program stays silent, `extend i32 squared()` is idiomatic Sushi there. To ship the "
     "method without the claim, declare your own wrapper type and extend that; to accept "
     "the claim, publish it -- `--lib-info` lists it under 'Foreign Extensions'."))

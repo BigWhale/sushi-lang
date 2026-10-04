@@ -1,0 +1,12 @@
+# Design 4 (C8): a field read on a Maybe is CE2106, and the help names `.or_err(nom e)??`
+# and never a bare `??`.
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "take the value first with '.realise(default)', match, or '.or_err(nom e)??'"
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] pts = from([Point(1, 2)])
+    println(pts.get(0).x)
+    return 0

@@ -1,0 +1,31 @@
+# #1171: `h.r??` reads a Result through its owner `h`, a borrow. The error owns a string,
+# so the Err path is the consuming use of a borrow, for a borrowed `h` and for an `h` that
+# the function owns alike: `h` still frees its field.
+# EXPECT_ERROR_CODES_EXACT: CE2411, CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'h.r'
+# EXPECT_STDERR_CONTAINS: `h.r.clone()??`
+error TokenError:
+    Bad(string)
+
+struct Holder:
+    Result@(i32, TokenError) r
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n <= 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn borrowed(Holder h) i32 | TokenError:
+    let i32 v = h.r??
+    return Result.Ok(v + 1)
+
+fn owned() i32 | TokenError:
+    let Holder h = Holder(tokenize(0))
+    let i32 v = h.r??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    let Holder h = Holder(tokenize(0))
+    println(borrowed(h).is_ok())
+    println(owned().is_ok())
+    return 0

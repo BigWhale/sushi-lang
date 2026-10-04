@@ -8,7 +8,7 @@ from sushi_lang.semantics.ast import (
     Borrow, Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
     MethodLike, Name, Spread,
 )
-from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
 from sushi_lang.semantics.param_modes import (
@@ -16,8 +16,8 @@ from sushi_lang.semantics.param_modes import (
 )
 
 from .borrows import register_implicit_borrow
-from .consume import consume, consume_each
-from .diagnostics import emit_use_of_invalidated_borrow, expr_to_string
+from .consume import consume, consume_each, read_through_receiver, source_provenance
+from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
 from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
 from .reads import OWNER_STEPS, called_on, read_type
 from .state import BorrowState
@@ -282,11 +282,40 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
     if not receiver_mode(expr.callee_self_mode).consumes:
         return
     receiver = expr.receiver
-    consume(checker, receiver)
+    # A built-in that reads a borrowed receiver through (`or_err`) leaves it to its owner.
+    if (read_through_receiver(checker, expr) is not None
+            and source_provenance(checker, receiver) is Provenance.BORROWED):
+        receiver.ownership_provenance = Provenance.BORROWED
+        reject_read_through_outside_try(checker, expr)
+        return
+    consume(checker, receiver, CopyUse(f"call '{expr.method}' on the copy",
+                                       f".{expr.method}({_arguments_text(expr.args)})"))
     if isinstance(receiver, Name):
         state = checker.borrow_state.get(receiver.id)
         if state is not None and state.is_moved:
             state.consumed_by_method = state.consumed_by_method or expr.method
+
+
+def _arguments_text(args) -> str:
+    """The arguments of a call as source text, or `...` when one has no short spelling."""
+    texts = [expr_to_string(arg) for arg in args or ()]
+    return "..." if "<expression>" in texts else ", ".join(texts)
+
+
+def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) -> None:
+    """CE2522: a read-through `or_err` stands under `??` and nowhere else.
+
+    Its Result holds a borrowed Ok and an owned Err. Only `??` takes the two apart: the
+    Err moves out, and the Ok binds a borrow (docs/design/error-conversion.md section 4).
+    """
+    if id(expr) in checker.try_operands:
+        return
+    from sushi_lang.semantics.generics.type_display import display_type
+    receiver = expr_to_string(expr.receiver)
+    checker.err.emit_with(er.ERR.CE2522, expr.loc,
+                          maybe=display_type(expr.resolved_enum_type)) \
+        .help(f"put the call under '??': `{receiver}.{expr.method}(...)??`, or take an "
+              f"owned copy first: `{receiver}.clone().{expr.method}(...)`").emit()
 
 
 def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:

@@ -1,8 +1,10 @@
 """Parameter modes: the declared convention for one value crossing a call boundary."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Iterable, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import Iterable, Mapping, Optional, Sequence, Tuple
 
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type
 
@@ -122,6 +124,38 @@ def effective_modes(modes: Sequence[ParamMode], kind: CalleeKind) -> Tuple[Param
 def modes_for(params: Optional[Iterable], kind: CalleeKind) -> Tuple[ParamMode, ...]:
     """The effective modes of a callee's parameter list. The common entry point."""
     return effective_modes(declared_modes(params), kind)
+
+
+@dataclass(frozen=True)
+class BuiltinModes:
+    """The parameter modes of one built-in method family: its table (#1173).
+
+    A built-in parameter borrows unless its row says otherwise, which is the rule for
+    every parameter of every callable. So a row is written only for a method whose
+    parameter declares a mode; a method with no row borrows each argument. A container
+    SLOT (`push`, `insert`, `Own.alloc`) is not a declared parameter: it takes ownership
+    by position, as a struct field does, so it has no mode to read. A method with a
+    signature row (`or_err`, `map_err`) reads its modes from that row.
+    """
+    rows: Mapping[str, Tuple[ParamMode, ...]] = field(
+        default_factory=lambda: MappingProxyType({}))
+    slots: frozenset[str] = frozenset()
+
+    @classmethod
+    def from_signatures(cls, signatures: Mapping[str, object]) -> 'BuiltinModes':
+        """The table of a family whose rows are its signature rows (`or_err`, `map_err`)."""
+        return cls(rows=MappingProxyType(
+            {name: declared_modes(getattr(sig, "params", ()))
+             for name, sig in signatures.items()}))
+
+    def of(self, method: str, count: int) -> Optional[Tuple[ParamMode, ...]]:
+        """The modes of a call with `count` arguments, or None for a container slot."""
+        if method in self.slots:
+            return None
+        row = self.rows.get(method)
+        if row is not None:
+            return row
+        return (ParamMode.BORROW,) * count
 
 
 def variadic_index(sig) -> Optional[int]:

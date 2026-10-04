@@ -1,6 +1,6 @@
 # The contract unit. A .slib stores a perk's SOURCE TEXT and re-parses it at the
 # consumer, so the '| E' channel has to survive that round trip (probe P8).
-public enum GadgetError:
+public error GadgetError:
     OutOfRange
 
 public perk Fallible:

@@ -1,0 +1,40 @@
+# #1171 guard: the escape that the CE2411 help names. `r.clone()??` propagates an
+# independent copy of the error, and the caller frees its own `r` once.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 4\nerr TokenError.Bad("bad 0")\nerr AppError.Token(TokenError.Bad("bad -1"))\n"
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n <= 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn same(Result@(i32, TokenError) r) i32 | TokenError:
+    let i32 v = r.clone()??
+    return Result.Ok(v + 1)
+
+fn lift(Result@(i32, TokenError) r) i32 | AppError:
+    let i32 v = r.clone()??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    let Result@(i32, TokenError) a = tokenize(3)
+    let Result@(i32, TokenError) b = tokenize(0)
+    let Result@(i32, TokenError) c = tokenize(-1)
+    match same(a):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match same(b):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    match lift(c):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

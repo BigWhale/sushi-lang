@@ -6,7 +6,7 @@
 
 use <collections/strings>
 
-enum SizeError:
+error SizeError:
     TooSmall
 
 fn sized@(T)(T value, i32 base) i32 | SizeError:

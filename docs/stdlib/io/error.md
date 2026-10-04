@@ -18,14 +18,14 @@ use <io/fs>              # IoError and FileError ride along
 
 ## Overview
 
-Both are predefined enums -- the compiler synthesizes them, and no unit declares them --
-and this module is their HOME. The import gates the bare name exactly as `<net/error>`
+Both are predefined error types -- the compiler synthesizes them, and no unit declares
+them -- and this module is their HOME. The import gates the bare name exactly as `<net/error>`
 gates `NetError` and `<collections/hashmap>` gates `HashMap`; the re-export is what makes
 the home reachable through the module whose calls answer the enum
 (`docs/design/unit-namespaces.md`, section 8.1).
 
 ```sushi
-public enum IoError:
+public error IoError:
     NotFound            # ENOENT
     PermissionDenied    # EACCES, EPERM
     AlreadyExists       # EEXIST
@@ -49,7 +49,7 @@ on a `File` and `NetError` on a `TcpStream`; the domain enums stay on constructi
 addressing and options.
 
 ```sushi
-public enum FileError:
+public error FileError:
     NotFound            # ENOENT
     PermissionDenied    # EACCES, EPERM
     AlreadyExists       # EEXIST
@@ -65,29 +65,72 @@ public enum FileError:
 `remove`, `read_dir`, `file_size`) and the `fd_*` primitives answer. `exists`, `is_file`
 and `is_dir` answer a bare `bool` and have no error arm.
 
-A `File` method answers an error through `FileError` and `to_io()`, so on a `File` it is
+A `File` method answers an error through `FileError` and the conversion
+`FileError as IoError`, so on a `File` it is
 one of `NotFound`, `PermissionDenied`, `AlreadyExists`, `IsDirectory`, `DiskFull`,
 `TooManyOpen`, `InvalidInput` or `Other`. An errno that `FileError` does not name (EBADF,
 for example) becomes `IoError.Other`, and not `IoError.Closed`. The socket variants come
-from the net modules, through `NetError.to_io()`. No stdlib call answers `WouldBlock` or
+from the net modules, through the conversion `NetError as IoError`. No stdlib call answers `WouldBlock` or
 `Os(i32)` today; a `match` that names them is legal.
 
 The variant ORDER of each is the ABI: the index is the tag the descriptor layer stores
 into a Result payload, so a variant is only ever appended.
 
-## Functions
+## Conversions
 
-### `to_io() IoError`
+This module declares two conversions (see
+[Error Conversion](../../error-handling.md#error-conversion)). A conversion lives in the unit
+that declares its TARGET type, and this module is the home of `IoError`, so both live
+here. For `NetError` the module imports `<net/error>` (a plain `use`, not a re-export), so a
+program that uses `<io/fs>` also loads the `<net/error>` unit.
+
+### `FileError as IoError`
 
 ```sushi
-extend FileError to_io() IoError
+extend FileError as IoError
 ```
 
 Turns a file-system error into the one channel the io contracts answer. Every `FileError`
 variant with no twin in `IoError` belongs to an open rather than to a read or a write, so
-nothing a contract method can answer is lost; `IOError` has already thrown its `errno`
-away and collapses to `Other`. The conversion runs INSIDE the stdlib -- `open()` is
-`fd_open` with its error passed through `to_io()` -- and a program never needs to call it.
+nothing a contract method can answer is lost; `InvalidPath` becomes `InvalidInput`, and
+`IOError` has already thrown its `errno` away and collapses to `Other`.
+
+### `NetError as IoError`
+
+```sushi
+extend NetError as IoError
+```
+
+Turns a socket error into the one channel the io contracts answer. Every `NetError`
+variant with no twin in `IoError` belongs to a connect, a bind or a resolve, so nothing a
+contract method can answer is lost; those variants become `IoError.Other`.
+`InvalidAddress` becomes `InvalidInput`.
+
+### Where they run
+
+The stdlib calls them with `??`: `open()` is `fd_open(...)??` in a body that answers
+`IoError`, and `TcpStream.read_bytes` is `sock_recv(...)??`. A program calls them the same
+way. A body that answers `IoError` can `??` a call that answers `FileError` or `NetError`,
+and `e as IoError` converts one value:
+
+```sushi
+use <io/files>
+use <net/error>
+
+fn entries(string dir) i32 | IoError:
+    let string[] names = read_dir(dir)??        # FileError as IoError
+    return Result.Ok(names.len())
+
+fn main() i32:
+    match entries("/no/such/dir"):
+        Result.Ok(n) -> println(n)
+        Result.Err(e) -> println(e)             # IoError.NotFound
+    println(NetError.TimedOut as IoError)       # IoError.TimedOut
+    return 0
+```
+
+No unit but this one may declare a conversion into `IoError` (CE2519). A library that
+wants its own vocabulary declares its own error type and converts `IoError` into it.
 
 ## Example
 

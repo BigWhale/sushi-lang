@@ -4,7 +4,7 @@
 
 # Tests pattern matching on Ok variant with binding
 
-enum MyError:
+error MyError:
     Error
 
 fn get_value() i32 | MyError:

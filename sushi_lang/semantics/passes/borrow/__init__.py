@@ -88,6 +88,9 @@ class BorrowChecker:
         self.enum_names: Set[str] = enum_names or set()
         self.borrow_state: Dict[str, BorrowState] = {}
         self.active_borrows: Set[str] = set()
+        # The nodes that are the operand of a `??`: a read-through `or_err` stands only
+        # there (CE2522).
+        self.try_operands: Set[int] = set()
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
         self._scope_binding_borrows: list[list[tuple[str, str]]] = []

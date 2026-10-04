@@ -1,3 +1,3 @@
-public enum SpelledErr:
+public error SpelledErr:
     Bad
     Worse

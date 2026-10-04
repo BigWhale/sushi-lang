@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CE2430
 
 fn refill(poke string[] a) ~ | StdError:
-    a.fill(a.get(0)??)
+    a.fill(a.get(0).or_err(nom StdError.Error)??)
     return Result.Ok(~)
 
 fn main() i32:

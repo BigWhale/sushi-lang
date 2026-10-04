@@ -33,7 +33,7 @@ fn run_test() i32 | StdError:
   print(flags.push(false))  # Push returns void (0)
   print(flags.push(true))   # Push returns void (0)
   print(flags.len())        # Should print 4
-  print(flags.get(3)??)       # Should print true
+  print(flags.get(3).or_err(nom StdError.Error)??)       # Should print true
 
   # Test multiple arrays in same scope
   let i32[] evens = new()
@@ -49,8 +49,8 @@ fn run_test() i32 | StdError:
 
   print(evens.len())        # Should print 3
   print(odds.len())         # Should print 3
-  print(evens.get(1)??)       # Should print 4
-  print(odds.get(2)??)        # Should print 5
+  print(evens.get(1).or_err(nom StdError.Error)??)       # Should print 4
+  print(odds.get(2).or_err(nom StdError.Error)??)        # Should print 5
 
   return Result.Ok(0)
 

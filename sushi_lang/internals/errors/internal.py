@@ -337,7 +337,7 @@ _add(ErrorMessage("CE0087", Severity.ERROR,
 # Result@(T) Operations (CE0089-CE0091)
 _add(ErrorMessage("CE0089", Severity.ERROR,
     "Result enum missing Ok variant: {enum}",
-    Category.INTERNAL, "Result-like enum does not have Ok variant."))
+    Category.INTERNAL, "A Result@(T, E) enum does not have an Ok variant."))
 
 _add(ErrorMessage("CE0090", Severity.ERROR,
     "Result.Ok variant should have 1 associated type, got {got}",

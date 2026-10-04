@@ -1,0 +1,30 @@
+# Design 2.1 and 2.2 (E1): `error` declares an error type. It is an enum with a flag, so
+# a match reads its variants and a hole prints it.
+# EXPECT_STDOUT_EXACT: "ok 4\nunreadable 7\nempty\nConfigError.Unreadable(7) ConfigError.Empty\n"
+error ConfigError:
+    Unreadable(i32)
+    Empty
+
+fn read_config(i32 n) i32 | ConfigError:
+    if (n < 0):
+        return Result.Err(ConfigError.Unreadable(0 - n))
+    if (n == 0):
+        return Result.Err(ConfigError.Empty)
+    return Result.Ok(n * 2)
+
+fn main() i32:
+    match read_config(2):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(_) -> println("unexpected")
+    match read_config(-7):
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(ConfigError.Unreadable(code)) -> println("unreadable {code}")
+        Result.Err(ConfigError.Empty) -> println("empty")
+    match read_config(0):
+        Result.Ok(_) -> println("unexpected")
+        Result.Err(ConfigError.Unreadable(_)) -> println("unreadable")
+        Result.Err(ConfigError.Empty) -> println("empty")
+    let ConfigError a = ConfigError.Unreadable(7)
+    let ConfigError b = ConfigError.Empty
+    println("{a} {b}")
+    return 0

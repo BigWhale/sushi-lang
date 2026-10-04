@@ -25,8 +25,8 @@ fn run() i32 | StdError:
 
     let HashMap@(i32, string) b = a.clone()
 
-    let string av = a.get(1)??.clone()
-    let string bv = b.get(1)??.clone()
+    let string av = a.get(1).or_err(nom StdError.Error)??.clone()
+    let string bv = b.get(1).or_err(nom StdError.Error)??.clone()
     let i32 n = b.len()
     println("a={av} b={bv} n={n}")
 

@@ -12,7 +12,7 @@ use <net/error>
 
 ## Overview
 
-`NetError` is a predefined enum -- the compiler synthesizes it, and no unit declares it --
+`NetError` is a predefined error type -- the compiler synthesizes it, and no unit declares it --
 and this module is its HOME. The import is what brings the bare name into a unit, exactly
 as `<io/fs>` brings `FileMode` and `<collections/hashmap>` brings `HashMap`; `use
 <net/error> as ne` puts it behind the dot instead (`ne.NetError.TimedOut`). `<net/tcp>`,
@@ -22,7 +22,7 @@ needs no second import: `use <net/tcp>` alone brings `NetError`. `<net/url>` ans
 own `UrlError` and does not re-export this module.
 
 ```sushi
-public enum NetError:
+public error NetError:
     ConnectionRefused    ConnectionReset      TimedOut
     Closed               AddressInUse         AddressNotAvailable
     NetworkUnreachable   HostUnreachable      ResolveFailed
@@ -34,19 +34,14 @@ The variant ORDER is the ABI: the index is the tag the socket layer stores into 
 payload, so a variant is only ever appended. The mapping from `errno` is on the
 [socket primitives](socket.md) page.
 
-## Functions
+## Conversion into `IoError`
 
-### `to_io() IoError`
-
-```sushi
-extend NetError to_io() IoError
-```
-
-Turns a socket error into the one channel the io contracts answer. Every `NetError`
-variant with no twin in `IoError` belongs to a connect, a bind or a resolve, so nothing a
-contract method can answer is lost; the rest map to `IoError.Other`. The conversion runs
-INSIDE the stdlib -- `TcpStream.read` is `sock_recv` with its error passed through
-`to_io()` -- and a program never needs to call it.
+The io contracts answer `IoError`, so a `TcpStream` read or write turns its `NetError` into
+an `IoError` through the conversion `NetError as IoError`. A conversion lives in the unit
+that declares its TARGET, so this conversion is in `<io/error>`, not in this module; that
+module imports `<net/error>` for the name. See
+[I/O errors](../io/error.md#neterror-as-ioerror). This module declares nothing but the
+error type itself.
 
 ## Example
 
@@ -64,5 +59,5 @@ fn main() i32:
 ## See also
 
 - [Socket primitives](socket.md) -- the `errno` mapping behind each variant
-- [I/O errors](../io/error.md) -- `IoError`, the channel a contract method answers
+- [I/O errors](../io/error.md) -- `IoError`, the channel a contract method answers, and the conversion `NetError as IoError`
 - [Unit namespaces](../../design/unit-namespaces.md) -- why a predefined enum has a home

@@ -17,7 +17,7 @@ fn run_test() i32 | StdError:
     numbers.push(3)
     replace_list(poke numbers)
     println(numbers.len())
-    println(numbers.get(0)??)
+    println(numbers.get(0).or_err(nom StdError.Error)??)
     return Result.Ok(0)
 
 fn main() i32:

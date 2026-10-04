@@ -16,8 +16,12 @@ if TYPE_CHECKING:
 
 
 def parse_enumdef(t: Tree, ast_builder: 'ASTBuilder') -> EnumDef:
-    """Parse enum_def: ENUM NAME [type_params] ":" _NEWLINE _INDENT enum_variant+ _DEDENT"""
-    t = expect(t, "enum_def")
+    """Parse enum_def or error_def: (ENUM | ERROR) NAME [type_params] ":" ... enum_variant+
+
+    One body, two keywords. `error` sets the flag and nothing else
+    (docs/design/error-conversion.md section 2.2).
+    """
+    t = expect(t, "enum_def", "error_def")
 
     name_tok = first_name(t.children)
     if name_tok is None:
@@ -46,6 +50,7 @@ def parse_enumdef(t: Tree, ast_builder: 'ASTBuilder') -> EnumDef:
         name_span=span_of(name_tok),
         is_public=declared_public("enum", marked),
         public_span=public_span,
+        is_error=t.data == "error_def",
     )
 
 

@@ -1,5 +1,5 @@
-# Define your own error type as an enum.
-enum JumpError:
+# Declare your own error type with `error`. It is an enum with a flag.
+error JumpError:
     DivisionByZero
     NegativeInput
 

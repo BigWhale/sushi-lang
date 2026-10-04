@@ -2,7 +2,7 @@
 # the first round, so the second round uses a moved value.
 # EXPECT_ERROR_CODES_EXACT: CE2405
 
-enum Bad:
+error Bad:
     Oops
 
 struct Feed:

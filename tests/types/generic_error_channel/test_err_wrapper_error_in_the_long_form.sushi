@@ -1,5 +1,5 @@
 # The wrapper refusal reads the same in both spellings (#668).
-# EXPECT_ERROR_CODE: CE2086
+# EXPECT_ERROR_CODE: CE2084
 fn f() Result@(i32, Maybe@(string)):
     return Result.Ok(1)
 

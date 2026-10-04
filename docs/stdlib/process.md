@@ -10,7 +10,7 @@ System process control and information functions.
 use <sys/process>
 ```
 
-The import brings `ProcessError`, the module's error enum: the bare name needs it, and
+The import brings `ProcessError`, the module's error type: the bare name needs it, and
 `use <sys/process> as proc` puts it behind the dot (`proc.ProcessError.SpawnFailed`).
 
 ## Overview
@@ -492,9 +492,9 @@ fn graceful_exit(i32 code) ~:
     return ~  # Never reached
 
 fn main() i32:
-    let bool error = false
+    let bool failed = false
 
-    if (error):
+    if (failed):
         graceful_exit(1)
 
     println("Normal execution")

@@ -23,16 +23,36 @@ _KEPT_TYPE_KINDS = frozenset({"struct", "enum"})
 
 
 def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> bool:
-    """Validate a WRITTEN type: every name in it, then every HashMap key it holds.
+    """Validate a WRITTEN type: every name in it, every HashMap key and every `E` it holds.
 
-    The key rules are asked once per written type, over the whole of it, so a
+    The key rules and E3 are asked once per written type, over the whole of it, so a
     `HashMap@(K, V)` nested in a `Maybe@(...)` is read exactly once (#773).
 
     Answers whether the type is REFUSED: it holds a name that is not a type (#991).
     """
     _check_type_names(validator, type_obj, span)
     reject_unusable_hashmap_keys(validator, type_obj, span)
+    reject_non_error_channels(validator, type_obj, span)
     return names_no_type(validator, type_obj)
+
+
+def reject_non_error_channels(validator: 'TypeValidator', type_obj: Optional[Type],
+                              span: Optional[Span]) -> None:
+    """CE2084 for every `E` position of a written type that holds no error type (E3).
+
+    docs/design/error-conversion.md section 2.5, item 1: the `E` of a `Result@(T, E)` and
+    the `| E` of a function type, at any depth. A type with no span was not written: the
+    compiler filled the position (a lambda's inferred type, the `let` of a `??` binder),
+    and the type it filled it from was judged where it was written (item 3).
+    """
+    if type_obj is None or span is None:
+        return
+    from sushi_lang.semantics.error_types import error_positions, reject_non_error_type
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    for err_type in error_positions(type_obj):
+        reject_non_error_type(validator.reporter, err_type, span, structs, enums)
 
 
 def names_no_type(validator: 'TypeValidator', type_obj: Optional[Type]) -> bool:

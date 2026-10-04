@@ -480,8 +480,10 @@ fn main() i32:
 The path utilities and the descriptor primitives keep their own enum. It is listed on
 [I/O errors](error.md#overview), with the errno values each variant covers.
 
-`<io/fs>` converts one into the other at its own boundary, with
-`extend FileError to_io() IoError`, so a caller never writes the conversion.
+The conversion `FileError as IoError` (declared in `<io/error>`) turns one into the
+other. `<io/fs>` calls it at its own boundary, and a program calls it the same way: a
+`??` on a `FileError` call in a body that answers `IoError`, or `e as IoError` on one
+value. See [I/O errors](error.md#conversions).
 
 ### Error Patterns
 

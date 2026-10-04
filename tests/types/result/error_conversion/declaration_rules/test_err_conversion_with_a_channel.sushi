@@ -1,0 +1,15 @@
+# Design 3.7 and 7 (C7): the body of a conversion is bare. The grammar has no place for
+# a `| E` after the target, so it is a parse error, and no code is added.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+# EXPECT_STDERR_CONTAINS: test_err_conversion_with_a_channel.sushi:11:29: error [CE6001]: unexpected token '|'
+error LowError:
+    Bad
+
+error AppError:
+    Low
+
+extend LowError as AppError | StdError:
+    return AppError.Low
+
+fn main() i32:
+    return 0

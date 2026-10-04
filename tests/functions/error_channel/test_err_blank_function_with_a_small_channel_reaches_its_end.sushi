@@ -2,7 +2,7 @@
 # payload it used to compile and answer Err(Why.First), a value the program never
 # wrote.
 # EXPECT_ERROR_CODE: CE0107
-enum Why:
+error Why:
     First
     Second
 

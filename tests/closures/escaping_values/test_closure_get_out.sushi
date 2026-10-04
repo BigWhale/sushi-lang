@@ -7,7 +7,7 @@ fn run() i32 | StdError:
     let i32 base = 100
     let List@(fn(i32) -> i32) fns = List.new()
     fns.push(|i32 x| x + base)
-    let fn(i32) -> i32 g = fns.get(0)??
+    let fn(i32) -> i32 g = fns.get(0).or_err(nom StdError.Error)??
     let i32 r = g(10)
     fns.free()
     return Result.Ok(r)

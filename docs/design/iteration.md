@@ -127,9 +127,10 @@ foreach(line?? in it):        →     foreach(#fe_itemN in it):
                                           BODY
 ```
 
-That is the entire implementation. The unwrap, the exact-error-type check (**CE2511**), the
-refusal in a bare body (**CE0131**, `main` included) and the scope cleanup on the propagation
-path are the ones `??` already has in every other position — there is no second implementation to keep in
+That is the entire implementation. The unwrap, the error-type check (the same type, or a
+declared conversion that the `??` calls, else **CE2511**), the refusal in a bare body
+(**CE0131**, `main` included) and the scope cleanup on the propagation path are the ones
+`??` already has in every other position — there is no second implementation to keep in
 step. The one thing the parser cannot know is that `let`'s type, and the `foreach` validator
 fills it in from the item type.
 

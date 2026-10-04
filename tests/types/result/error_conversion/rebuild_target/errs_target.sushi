@@ -1,0 +1,13 @@
+use "low_target"
+
+public error AError:
+    Low
+
+public error BError:
+    Low
+
+extend LowError as AError:
+    return AError.Low
+
+public fn load(i32 n) i32:
+    return low(n).realise(-1)

@@ -8,7 +8,7 @@ against the declaration beside it. A block in an illegal position is an error, a
 text that disappears without a signal.
 
 ```sushi
-enum JumpError:
+error JumpError:
     NotReady
 
 ##:
@@ -451,7 +451,7 @@ CW7003, CW7004 and CW7005 fire only on a declaration that ALREADY carries a bloc
 declaration with none is CW7002 and nothing else, so one omission stays one diagnostic.
 
 ```sushi
-enum DriveError:
+error DriveError:
     DivisionByZero
 
 ##:

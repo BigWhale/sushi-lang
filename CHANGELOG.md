@@ -4,6 +4,103 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+Sushi has error types. An `error` declaration is an enum that may be the `E` of a
+`Result@(T, E)`, and only an error type may be. A conversion `extend FileError as AppError:`
+joins two error types, and `??` and `as` call it, so a function that calls two modules
+needs no `match` to change one error into another. `??` takes a `Result` only: a `Maybe`
+writes its error value with `or_err`. These are breaking changes: every enum that a
+program uses as an error type is declared with `error`, every `??` on a `Maybe` becomes
+`.or_err(nom e)??`, and a binary or hybrid `.slib` built before is rebuilt.
+
+### Added
+
+- **The `error` declaration.** `error ParseError:` takes the body of an `enum`: variants,
+  payloads, type parameters, doc blocks and `public`. An error type is an enum with a flag,
+  so every enum rule applies to it, and it is ordinary data in every position. The seven
+  predefined error types are `StdError`, `IoError`, `FileError`, `NetError`,
+  `ProcessError`, `EnvError` and `MathError`; `FileMode` and `SeekFrom` stay plain enums.
+  `error` is a reserved word in every position except an import path (`<io/error>`,
+  `<net/error>`). `--lib-info` prints `error` for such a type, a generic one too.
+- **Conversions between error types.** `extend <Source> as <Target>:` declares one, with a
+  bare body that consumes `self` and returns the target. `??` calls it when the error type
+  of its operand differs from the channel of the body, and `e as Target` calls it on one
+  value; `as` consumes its operand by position. A conversion is one step, never a chain.
+  Only the unit that declares the target type may declare it (`CE2519`): for a predefined
+  type that unit is its home module, and no unit may declare a conversion into `StdError`.
+  The source and the target are two non-generic error types (`CE2520`), and a conversion
+  into the same type is `CE2521`. A conversion body that casts a value of its own source
+  into its own target calls itself and is `CE2523`. A conversion needs no import, and it
+  has no leak check.
+  An `as` into an error type in a `const` is `CE0108`.
+- **`m.or_err(nom e)`** on a `Maybe@(T)` answers `Result@(T, E)`: `Some(v)` is `Ok(v)` and
+  `None` is `Err(e)`. It is a built-in method and needs no import. The receiver is
+  `nom self`: a named `Maybe` that owns something is spent. A borrowed `Maybe` (a get-out,
+  a parameter, a binding) is read through, so `xs.get(0).or_err(nom e)??` binds a borrow;
+  when its payload owns a resource, the call is legal only as the operand of `??`
+  (`CE2522`).
+- **`r.map_err(f)`** on a `Result@(T, E)` answers `Result@(T, F)`, and `f` takes the error
+  `nom` (`fn(nom E) -> F`). It converts at one site with no declaration. A named `Result`
+  that owns something is spent, and a borrowed one is `CE2411` with the help
+  `r.clone().map_err(f)`. `F` must be an error type.
+- **A library carries its conversions.** A binary or hybrid manifest has a `conversions`
+  key (a `conversion` record: source, target, link symbol), and the `enum` and generic
+  enum records carry `is_error`. `--lib-info` and `slib-info` print a `Conversions`
+  section, one line per pair: `  extend LowError as LibError`.
+
+### Changed
+
+- **The `E` of every `Result@(T, E)` is an error type.** The rule covers both spellings
+  (`T | E` and `Result@(T, E)`) and every position: a signature, a perk contract, a lambda,
+  a function type, a `let`, a field, a payload, a parameter and a generic argument. A type
+  parameter in the `E` position is judged at each instance, with a note at the template.
+  Any other type is `CE2084`, and its message says what the type is; for a plain enum the
+  help says to declare it with `error`. `CE2086` (a `Maybe` or a `Result` as the `E`) is
+  retired, and `CE2084` covers both. **Breaking:** an enum used as an error type is
+  declared with `error`.
+- **`??` takes a `Result@(T, E)` and nothing else.** It reads the type, not the names of
+  its variants, so a user enum with `Ok`/`Err` variants is refused too. On a `Maybe`, `??`
+  is `CE2507`, and the help names `or_err`. **Breaking:** `m??` becomes
+  `m.or_err(nom e)??`, with an error value that the program writes.
+- **`??` with two error types** is `CE2511` only when no conversion is declared, and the
+  help names the declaration to write. `CE2014` for `e as T` between two error types has
+  the same help.
+- **The stdlib converts with declared conversions.** `FileError.to_io()` and
+  `NetError.to_io()` are removed. `<io/error>` declares `FileError as IoError` and
+  `NetError as IoError`, and the stdlib calls them with `??`. A program calls them the same
+  way: a body that answers `IoError` can `??` a call that answers `FileError` or
+  `NetError`. `<io/error>` imports `<net/error>` now, and `<net/error>` no longer imports
+  `<io/error>`, so a program that uses `<io/fs>` also loads the `<net/error>` unit.
+- **The `.slib` format.** The templates schema is version 9: the `is_error` field and the
+  `conversions` key. A binary or hybrid library built before is refused (`CE3512`) and must
+  be rebuilt. A source library carries the keyword as text.
+- The editor grammars (VS Code, JetBrains) and the Pygments lexer know the `error` keyword.
+
+### Fixed
+
+- `??` on a `Maybe` that holds `None` returned an `Err` built from an undefined value, so
+  the caller read an error that the program never made, and the answer changed with
+  `--opt` (#1168). `??` now refuses a `Maybe`, and `or_err` writes the error value.
+- A `nom self` method called on a function-call temporary that owns heap memory (a struct,
+  an enum or a `Result`, generic or not) freed the value two times (#1169).
+- An identity cast `x as T` on a value of type `T` that owns heap memory (a string, a
+  struct, an error type) gave the value two owners, and both freed it. `as` now consumes
+  its operand by position, so a later use of `x` is the use-after-move error.
+- `??` on a borrowed `Result` (a parameter, a binding, a field read) whose error type owns
+  heap memory freed the error two times on the `Err` path. It is now CE2411, the consuming
+  use of a borrow, with the help `r.clone()??`; a plain error type stays legal (#1171).
+- `.realise(default)` on a temporary `Result` (a call result) that holds an `Err` whose
+  error type owns heap memory did not free the error (#1172).
+- A `nom` marker on an argument of a built-in method (`m.realise(nom 3)`, `xs.get(nom i)`)
+  was not checked. Every built-in method family now has a table of parameter modes, and a
+  `nom` on a parameter that borrows is CE2427, as for a user method (#1173).
+- A `??` binder of a `foreach` (`foreach(n?? in it)`) in a bare body gave CE0131 two
+  times for one `??`. The node walk visited the hidden `let` through the loop body and
+  through the loop's alias of it (#1174).
+- The borrow pass did not walk the initializer of a `let ptr`, so a consuming use there
+  (`let ptr p = libc.strdup(s as string)`) had no ownership decision: a double free on
+  0.14.0, and an internal error (CE0129) after the cast fix. The initializer is now walked
+  like every other one; the `ptr` value stays outside the aliasing analysis (#1175).
+
 ## [0.14.0] - 2026-10-03
 
 Sushi has tuples now. `(i32, string)` is an anonymous product type in every type position,

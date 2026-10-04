@@ -67,7 +67,9 @@ def foreign_extension_claims(units: List['Unit']) -> List[ForeignExtensionClaim]
         if unit.ast is None:
             continue
         for ext in [*unit.ast.extensions, *unit.ast.generic_extensions]:
-            if ext.target_type is None:
+            # A conversion puts no method name on its source: it is found by its pair,
+            # and only the unit of the target may declare it (error-conversion.md 3.5).
+            if ext.target_type is None or ext.is_conversion:
                 continue
             name = _target_name(ext.target_type)
             if name is not None and name in declared:

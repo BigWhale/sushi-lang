@@ -1,6 +1,6 @@
-# A `??` over a Maybe in a bare lambda is CE0131, and the help names the Maybe too.
+# A `??` over a Maybe in a bare lambda is CE0131, and the help does not offer `??` for the Maybe.
 # EXPECT_ERROR_CODES_EXACT: CE0131
-# EXPECT_STDERR_CONTAINS: "write '| E' in the function type the lambda takes, or handle the Result or the Maybe in the body (match, .realise(default))"
+# EXPECT_STDERR_CONTAINS: "write '| E' in the function type the lambda takes, or handle the value in the body (match, .realise(default))"
 fn main() i32:
     let fn(i32) -> i32 first = |i32 x|:
         let i32[] xs = from([x])

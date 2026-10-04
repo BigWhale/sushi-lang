@@ -1,0 +1,32 @@
+# #1173 guard: a container slot takes ownership by position, so `push` and `insert` take
+# an argument with or without `nom`. A plain parameter takes an unmarked argument, and
+# `string.from_bytes` declares `nom`.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\n2\n2\nab\n7\n3\n"
+use <collections/strings>
+use <collections/hashmap>
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    let string a = "a {1}"
+    let string b = "b {2}"
+    xs.push(nom a)
+    xs.push(b)
+    println(xs.len())
+    let HashMap@(i32, string) m = HashMap.new()
+    let string c = "c {3}"
+    m.insert(1, nom c)
+    m.insert(2, "d")
+    println(m.len())
+    let string[] ws = from(["w"])
+    let string w = "v {4}"
+    ws.push(nom w)
+    println(ws.len())
+    let u8[] bytes = from([97 as u8, 98 as u8])
+    println(string.from_bytes(nom bytes))
+    let Maybe@(i32) none = Maybe.None
+    println(none.realise(7))
+    let i32[] ns = from([3])
+    println(ns.get(0).realise(0))
+    m.free()
+    return 0

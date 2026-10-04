@@ -1,7 +1,7 @@
 # A channel body spells both constructors, as a free function does (#848). A '~'
 # channel body ends with 'return Result.Ok(~)'.
 # EXPECT_STDOUT_EXACT: "ticked\n2 0 1\n"
-enum OddError:
+error OddError:
     TooOdd
 
 struct Clock:

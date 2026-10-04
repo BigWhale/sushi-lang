@@ -19,7 +19,7 @@ from sushi_lang.semantics.ast import (
     TryExpr,
 )
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
@@ -29,13 +29,6 @@ if TYPE_CHECKING:
 
 # A read through an owner crosses every step: a field, an element, a call's receiver, a `??`.
 OWNER_STEPS = Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY
-
-
-def unwrap_try(expr: Optional[Expr]) -> Optional[Expr]:
-    """Strip every `??` from an expression, leaving what it actually evaluates."""
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    return expr
 
 
 def called_on(expr: Optional[Expr], *methods: str) -> Optional[Expr]:

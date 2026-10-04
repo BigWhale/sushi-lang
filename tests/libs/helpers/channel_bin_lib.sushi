@@ -1,6 +1,6 @@
 # A BINARY library whose functions declare an error channel (#541). The manifest
 # carries `error_type` beside `return_type`; the consumer must read both.
-public enum MyErr:
+public error MyErr:
     Bad
     Worse(i32)
 

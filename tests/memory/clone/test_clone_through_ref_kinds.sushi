@@ -21,7 +21,7 @@ fn take_maybe(Maybe@(i32[]) m) ~:
 
 fn copy_out(peek Holder h, peek string s, peek List@(i32) l, peek Maybe@(i32[]) m) ~ | StdError:
     take_struct(h.clone())
-    println(h.items.get(0)??)
+    println(h.items.get(0).or_err(nom StdError.Error)??)
     take_string(s.clone())
     take_list(l.clone())
     take_maybe(m.clone())

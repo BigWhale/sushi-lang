@@ -10,7 +10,7 @@ extend List@(T) dup@(U)(fn(T) -> U f) List@(U) | StdError:
         let U mapped = f(x)
         let Maybe@(U) held = Maybe.Some(mapped)
         let Maybe@(U) copy = held.clone()
-        out.push(copy??)
+        out.push(copy.or_err(nom StdError.Error)??)
     return Result.Ok(out)
 
 fn main() i32:

@@ -19,7 +19,7 @@ extend Box@(i32) doubled() i32:
 extend Pt pick@(U)(U a) U:
     return a
 
-public enum BoxError:
+public error BoxError:
     Empty
 
 extend Box@(T) static wrap(nom T x) Box@(T):

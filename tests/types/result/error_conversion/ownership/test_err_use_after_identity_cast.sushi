@@ -1,0 +1,13 @@
+# Design 3.2 (C2): `as` consumes its operand by position, an identity cast too. After
+# `a as AppError` on an error that owns a string, `a` is spent, and a use of it is the
+# use-after-move error.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+error AppError:
+    Note(string)
+
+fn main() i32:
+    let AppError a = AppError.Note("note {1}")
+    let AppError b = a as AppError
+    println(b)
+    println(a)
+    return 0

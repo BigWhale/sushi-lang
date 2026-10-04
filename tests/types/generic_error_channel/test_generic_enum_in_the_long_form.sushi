@@ -1,6 +1,6 @@
 # The long form takes a user's generic enum, and so does the short form (#668).
 # EXPECT_STDOUT_EXACT: "ok 2\n"
-enum MyErr@(T):
+error MyErr@(T):
     Bad(T)
     Worse
 

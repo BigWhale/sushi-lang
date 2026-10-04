@@ -1,6 +1,6 @@
 # The error type is part of the function type, so a custom error propagates
 # through an indirect call exactly like it would through a direct one.
-enum DivError:
+error DivError:
     DivByZero
 
 fn safe_div(i32 a, i32 b) i32 | DivError:

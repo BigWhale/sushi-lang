@@ -8,7 +8,7 @@ struct Config:
     i32 port
     string host
 
-enum MyError:
+error MyError:
     Error
 
 fn load_config(bool fail) Config | MyError:

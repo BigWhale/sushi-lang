@@ -1,0 +1,11 @@
+# Design 2.4 and 2.5 (E3, E4): the rule covers a written type in an enum payload.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+enum Color:
+    Red
+
+enum Event:
+    Seen(Result@(i32, Color))
+    Done
+
+fn main() i32:
+    return 0

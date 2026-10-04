@@ -1,0 +1,16 @@
+# Design 4: a get-out from a temporary owner is a borrow too. `or_err` reads it through,
+# so the element is freed one time, with the temporary array.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ford1\nford1\n"
+fn give() string[]:
+    let string a = "ford{1}"
+    let string b = "arthur{2}"
+    return from([a, b])
+
+fn run_test() i32 | StdError:
+    println(give().get(0).or_err(nom StdError.Error)??)
+    println(give().get(0).or_err(nom StdError.Error)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    return run_test().realise(9)

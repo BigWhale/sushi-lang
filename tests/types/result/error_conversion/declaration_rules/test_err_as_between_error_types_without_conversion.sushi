@@ -1,0 +1,15 @@
+# Design 3.2 and 7 (C2): `as` accepts a pair of error types only when a conversion is
+# declared. With no declaration it is the invalid-cast error, and the help names the
+# declaration to write.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+# EXPECT_STDERR_CONTAINS: extend LowError as AppError
+error LowError:
+    Bad
+
+error AppError:
+    Low
+
+fn main() i32:
+    let AppError a = LowError.Bad as AppError
+    println(a)
+    return 0

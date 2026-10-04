@@ -1,0 +1,6 @@
+use "errs"
+
+public fn report(i32 n) ~:
+    match load(n):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")

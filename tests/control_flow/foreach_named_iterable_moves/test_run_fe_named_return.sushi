@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_EXACT: "4\nfound 5\n"
 # EXPECT_NO_LEAKS
 
-enum Bad:
+error Bad:
     Oops
 
 struct Feed:

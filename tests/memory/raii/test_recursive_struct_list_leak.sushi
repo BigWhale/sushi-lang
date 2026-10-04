@@ -45,10 +45,10 @@ fn run_test() i32 | StdError:
     # recursive clone path and its cleanup, not just the destructor.
     let i32 count = 0
     foreach(i in 0..root.kids.len()):
-        let Tree child = root.kids.get(i)??
+        let Tree child = root.kids.get(i).or_err(nom StdError.Error)??
         count := count + 1
         foreach(j in 0..child.kids.len()):
-            let Tree g = child.kids.get(j)??
+            let Tree g = child.kids.get(j).or_err(nom StdError.Error)??
             if (g.value > 0):
                 count := count + 1
     println("nodes={count}")

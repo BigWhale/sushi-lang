@@ -1,0 +1,13 @@
+# Design 3.2 (C2): `as` consumes its operand by position. An identity cast `a as AppError`
+# on an error that owns a string moves the value to the new owner. The operand is spent,
+# so the string is freed one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "AppError.Note("note 1")\n"
+error AppError:
+    Note(string)
+
+fn main() i32:
+    let AppError a = AppError.Note("note {1}")
+    let AppError b = a as AppError
+    println(b)
+    return 0

@@ -8,8 +8,8 @@ struct Point:
 
 fn run_test() i32 | StdError:
     let Point[] points = from([Point(10, 32), Point(11, 33), Point(12, 34)])
-    let Point single = points.get(0)??
-    let Point second = points.get(1)??
+    let Point single = points.get(0).or_err(nom StdError.Error)??
+    let Point second = points.get(1).or_err(nom StdError.Error)??
     println("P: {second.x}")
     println("S: {single.y}")
     return Result.Ok(0)

@@ -1,0 +1,15 @@
+# Design 4 (C8): `??` takes a `Result@(T, E)` only. A `Maybe` is refused in a body with
+# a channel too, and the help names `or_err`.
+# EXPECT_ERROR_CODES_EXACT: CE2507
+# EXPECT_STDERR_CONTAINS: or_err
+error AppError:
+    Empty
+
+fn first(i32[] xs) i32 | AppError:
+    let i32 v = xs.get(0)??
+    return Result.Ok(v)
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(first(xs).realise(0))
+    return 0

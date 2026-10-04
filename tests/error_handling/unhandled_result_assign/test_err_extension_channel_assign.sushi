@@ -2,7 +2,7 @@
 # says CE2505, the code that names the fix; the general CE2002 used to answer because the
 # specific arm excluded every method call (#535).
 # EXPECT_ERROR_CODE: CE2505
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:

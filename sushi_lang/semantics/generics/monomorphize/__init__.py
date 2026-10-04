@@ -100,6 +100,7 @@ class Monomorphizer:
         type_args: Tuple[Type, ...],
         key: object = None,
         template_file: str | None = None,
+        error_params: Dict[str, object] | None = None,
     ) -> bool:
         """Validate perk constraints on type arguments. False when one refused (#579).
 
@@ -112,15 +113,21 @@ class Monomorphizer:
         instantiation is reported ONCE, at the first site that named it, and every later
         reach -- a field of another instance, a copy's body -- answers False silently.
         `template_file` is where the constraint is declared, for the note.
+
+        `error_params` maps each type parameter that stands in an `E` position of the
+        template to that position's span (`error_types.error_parameters`). Its argument
+        must be an error type (E3), and a refusal is CE2084 at the instance, with a note
+        at the template.
         """
-        if self.constraint_validator is None:
-            return True
         if key is not None and key in self._refused:
             return False
 
         span, filename = self.sites.get(key, (None, None)) if key is not None else (None, None)
-        valid = True
+        valid = self._error_arguments_hold(type_params, type_args, error_params or {},
+                                           span, filename, template_file)
         for position, param in enumerate(type_params):
+            if self.constraint_validator is None:
+                break
             if not (isinstance(param, BoundedTypeParam) and param.constraints):
                 continue
             note = (getattr(param, "loc", None), template_file)
@@ -137,6 +144,40 @@ class Monomorphizer:
             if key is not None:
                 self._refused.add(key)
         return valid
+
+    def _error_arguments_hold(self, type_params, type_args, error_params, span,
+                              filename, template_file) -> bool:
+        """E3 at one instance: every argument in an `E` position is an error type."""
+        if not error_params or self.enum_table is None or self.struct_table is None:
+            return True
+        from sushi_lang.semantics.error_types import reject_non_error_type
+        valid = True
+        for position, param in enumerate(type_params):
+            name = getattr(param, "name", param)
+            if (name not in error_params or getattr(param, "is_pack", False)
+                    or position >= len(type_args)):
+                continue
+            note = (f"the template uses the type parameter '{name}' as an error type here",
+                    error_params[name], template_file)
+            if reject_non_error_type(self.reporter, type_args[position], span,
+                                     self.struct_table.by_name, self.enum_table.by_name,
+                                     filename=filename, note=note):
+                valid = False
+        return valid
+
+    def error_arguments_hold(self, type_params, type_args, error_params, site_key,
+                             template_file) -> bool:
+        """E3 at a copy that no constraint check reads: a generic-target extension's.
+
+        The type instance that cuts the copy is the instance: the diagnostic is at the
+        site that named it. A refusal stops the analysis, as a refused constraint does.
+        """
+        span, filename = self.sites.get(site_key, (None, None))
+        if self._error_arguments_hold(type_params, type_args, error_params, span,
+                                      filename, template_file):
+            return True
+        self.constraint_violations += 1
+        return False
 
     def was_refused(self, key: object) -> bool:
         """A constraint refused this instantiation, and it was reported one time."""

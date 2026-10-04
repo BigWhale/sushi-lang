@@ -1,0 +1,23 @@
+# Design 5: the receiver of `map_err` is `nom self`, and the error moves into the
+# function. A borrowed `Result` whose payload owns a string is not read through, so the
+# call is the consuming use of a borrow. The help names `r.clone().map_err(wrap)`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'r'
+# EXPECT_STDERR_CONTAINS: `r.clone().map_err(wrap)`
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+fn wrap(nom TokenError e) AppError:
+    return AppError.Token(e)
+
+fn convert(Result@(i32, TokenError) r) i32 | AppError:
+    let i32 v = r.map_err(wrap)??
+    return Result.Ok(v)
+
+fn main() i32:
+    let Result@(i32, TokenError) r = Result.Err(TokenError.Bad("token"))
+    println(convert(r).is_ok())
+    return 0

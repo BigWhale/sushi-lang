@@ -4,7 +4,7 @@
 
 # Tests pattern matching on Err variant with binding
 
-enum MyError:
+error MyError:
     BadValue
     EmptyInput
 
@@ -16,8 +16,8 @@ fn main() i32:
         Result.Ok(_) ->
             println("FAIL: Got Ok instead of Err")
             return 1
-        Result.Err(error) ->
-            match error:
+        Result.Err(err) ->
+            match err:
                 MyError.BadValue ->
                     println("PASS: Err pattern match with binding works")
                     return 0

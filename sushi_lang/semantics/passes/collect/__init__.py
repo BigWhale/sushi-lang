@@ -34,6 +34,7 @@ from .perks import (
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 from .unit_names import claim_unit_names
+from sushi_lang.semantics.conversions import ConversionTable
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.visibility import (
     VisibilityTable, reject_private_perk_constraints)
@@ -90,6 +91,7 @@ class CollectorPass:
         self.perk_impls = PerkImplementationTable()
         self.generic_perk_impls = GenericPerkImplTable()
         self.externals = ExternalTable()
+        self.conversions = ConversionTable()
         self.visibility = VisibilityTable()
 
         # Which bare names are declared, for reading a target's arguments (#653). One
@@ -145,6 +147,7 @@ class CollectorPass:
             generic_structs=self.generic_structs,
             generic_enums=self.generic_enums,
             is_declared_type=self.is_declared_type,
+            conversions=self.conversions,
         )
         # Which units came from a library, and who declared what, for all six: each
         # collector files the declarations it meets, and the ones that refuse a library
@@ -172,6 +175,7 @@ class CollectorPass:
             generic_extensions=self.generic_extensions,
             generic_funcs=self.generic_funcs,
             externals=self.externals,
+            conversions=self.conversions,
             visibility=self.visibility,
         )
 

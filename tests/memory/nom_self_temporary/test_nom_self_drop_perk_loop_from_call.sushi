@@ -1,0 +1,41 @@
+# `nom self` methods on temporaries that function calls answer, in a loop, in an `if` arm
+# and in the right operand of `and`: a perk method, and a method on a type that implements
+# Drop. Each receiver is destroyed one time, so `drop()` runs one time (#1169).
+# EXPECT_STDOUT_EXACT: "drop s1\n7 true\n"
+# EXPECT_NO_LEAKS: true
+
+struct Note:
+    string text
+
+struct Sink:
+    string name
+
+extend Sink with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.name}")
+
+perk Spender:
+    fn spend(nom self) i32
+
+extend Note with Spender:
+    fn spend(nom self) i32:
+        return 2
+
+fn make(i32 n) Note:
+    return Note("note {n}")
+
+fn sink(i32 n) Sink:
+    return Sink("s{n}")
+
+extend Sink close(nom self) i32:
+    return 1
+
+fn main() i32:
+    let i32 total = 0
+    foreach(i in 0..3):
+        total := total + make(i).spend()
+        if (i == 1):
+            total := total + sink(i).close()
+    let bool b = total > 0 and make(9).spend() > 0
+    println("{total} {b}")
+    return 0

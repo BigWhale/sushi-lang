@@ -109,7 +109,7 @@ match arr.get(2):
         println("Index out of bounds")
 
 # Or use error propagation
-let i32 value = arr.get(2)??
+let i32 value = arr.get(2).or_err(nom StdError.Error)??
 ```
 
 **Note:** Direct indexing `arr[index]` is also available but throws RE2020 runtime error on out-of-bounds.
@@ -270,7 +270,7 @@ println(towel)                 # and the source is still usable
 **The value may not be a slot of the array it fills** (**CE2430**), when the element type
 owns a resource. Each slot destroys what it held before it stores its copy, so
 `a.fill(a[0])` would destroy slot 0 and then copy freed storage into every later slot. An
-index reads as any slot, and a get-out (`a.get(0)??`) is refused the same way. Take an
+index reads as any slot, and a get-out (`a.get(0).or_err(nom e)??`) is refused the same way. Take an
 independent value first: `a.fill(a[0].clone())`. A plain element type is a copy and stays
 legal: `b.fill(b[2])` on an `i32[]` is fine.
 
@@ -557,7 +557,7 @@ let i32[] arr = from([1, 2, 3])
 
 # Safe: Returns Maybe@(T)
 let Maybe@(i32) safe = arr.get(0)
-let i32 value = arr.get(0)??  # Error propagation
+let i32 value = arr.get(0).or_err(nom StdError.Error)??  # Error propagation
 
 # Unsafe: Direct indexing (throws RE2020 if out of bounds)
 let i32 direct = arr[0]

@@ -118,6 +118,7 @@ frees. The damage appears later, and somewhere else.
 | lambda / closure | borrow | yes |
 | stdlib function | borrow | yes, in a Sushi-source module (`compose` in `<collections/iter>`) |
 | `.slib` concrete function | borrow | yes; the manifest carries the mode |
+| built-in method (`realise`, `get`, `contains`, `expect`, ...) | borrow | only in its family's table (`or_err(nom e)`) |
 | struct or enum constructor | **consume** — a field takes ownership | not written |
 | container insert (`List.push`, `HashMap.insert`, `Own.alloc`) | **consume** | not written |
 | FFI extern | not applicable — **CE2428** on `nom` | no |
@@ -129,6 +130,13 @@ each has its own rule:
   `Person(name)` moves `name`. The borrow checker sees a constructor and a function call as
   the same `Call` node, so the mode lookup applies to the function call only.
 - **A container insert is its own consuming use.** It is not a call argument.
+- **A built-in method reads its modes from its family's table (#1173).** Each method family
+  (`method_registry.py`) carries a `BuiltinModes` table: a row for a method whose parameter
+  declares a mode (the signature rows of `or_err` and `map_err`), the container slots
+  (`push`, `insert`, `Own.alloc`), and a borrow for every other parameter. The typecheck
+  pass stamps the modes on the call, and `apply_mode` checks each marker by the rule of a
+  user method: `m.realise(nom 3)` is **CE2427**. A container slot takes its argument with
+  or without `nom`, as the table row above says.
 - **FFI is outside the mode system.** A C callee never receives a Sushi value. The compiler
   marshals the string into a fresh `char*` that the caller owns and frees. `nom` on an
   extern parameter has no meaning, and is **CE2428**.
@@ -303,7 +311,7 @@ The rules are the reference `let`'s, at the binding: the owner is the ROOT of th
 (CE2403) and no `peek` beside a `poke` (CE2407), where the bindings of ONE pattern are
 exempt because they point into disjoint payload slots; a `poke` through a `peek` root is
 CE2408. CE2404 stays for a borrowed scrutinee that is not a place: a get-out behind a
-`??` (`match l.get(0)??:`), for example.
+`??` (`match l.get(0).or_err(nom e)??:`), for example.
 
 A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
 into read-only memory, so the pointer has nothing to point at and a write through the
@@ -378,8 +386,18 @@ BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership
 
 **A borrowed wrapper is read through, not refused.** `let string s = r??` over a
 parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
-read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0)??` is. The escape is the
+read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0).or_err(nom e)??` is. The escape is the
 usual one, `.clone()`.
+
+**The error of a borrowed wrapper is refused when it owns (#1171).** On the propagation path
+the error leaves the function in the returned `Err`, and `r`'s owner still frees it. So
+`r??` over a borrowed `Result` whose ERROR type owns heap is the consuming use of a borrow,
+CE2411, with the help `r.clone()??`. The compiler inserts no deep copy. The same rule holds
+for a declared conversion (`??` into another error type takes the error `nom self`), for a
+read through an owner (`h.r??`), and it is the rule of `r.map_err(f)` and `e as T` on a
+borrowed owning value. A borrowed `Result` whose error type is plain (every stdlib error
+type) stays legal: the error is copied. A read-through `m.or_err(nom e)??` is not affected,
+because its error is the argument `e`, which the call owns.
 
 **The `foreach` binder is this rule and nothing else.** `foreach(line?? in it)` is
 `let T line = <item>??`, and the item of a `next()` protocol iterator is a value the

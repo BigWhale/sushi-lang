@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "2\nerr\n"
-enum OddError:
+error OddError:
     TooOdd
 
 extend i32 half_checked() i32 | OddError:

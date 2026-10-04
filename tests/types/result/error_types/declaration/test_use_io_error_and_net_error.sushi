@@ -1,0 +1,11 @@
+# Design 8.1: `error` is a keyword, and an import path still spells the word. Both
+# `use <io/error>` and `use <net/error>` build, the flat form and the alias form.
+# EXPECT_STDOUT_EXACT: "IoError.NotFound NetError.TimedOut\n"
+use <io/error>
+use <net/error> as ne
+
+fn main() i32:
+    let IoError a = IoError.NotFound
+    let ne.NetError b = ne.NetError.TimedOut
+    println("{a} {b}")
+    return 0

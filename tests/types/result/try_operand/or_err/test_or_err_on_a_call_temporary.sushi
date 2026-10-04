@@ -1,0 +1,22 @@
+# Design 4: a `Maybe` that a function call answers is a temporary that owns its payload.
+# `or_err` takes it, so its scope registration goes, and the payload is freed one time,
+# on the `Some` path and on the `None` path.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "x 1\nerr StdError.Error\n"
+fn find(i32 n) Maybe@(string):
+    if (n < 0):
+        return Maybe.None
+    return Maybe.Some("x {n}")
+
+fn word(i32 n) string | StdError:
+    let string s = find(n).or_err(nom StdError.Error)??
+    return Result.Ok(s)
+
+fn main() i32:
+    match word(1):
+        Result.Ok(s) -> println(s)
+        Result.Err(e) -> println("err {e}")
+    match word(-1):
+        Result.Ok(s) -> println(s)
+        Result.Err(e) -> println("err {e}")
+    return 0

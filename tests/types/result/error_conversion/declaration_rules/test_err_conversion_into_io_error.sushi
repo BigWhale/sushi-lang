@@ -1,0 +1,14 @@
+# Design 3.5 (C5): the home module of a predefined type is its declaring unit. A user
+# unit cannot declare a conversion into `IoError`, because `<io/error>` owns it.
+# EXPECT_ERROR_CODE: CE2519
+# EXPECT_ERROR_CODES_EXACT: CE2519
+use <io/error>
+
+error AppError:
+    Broken
+
+extend AppError as IoError:
+    return IoError.Other
+
+fn main() i32:
+    return 0

@@ -13,7 +13,7 @@
 # EXPECT_STDOUT_EXACT: "hi-there and 7\nok\npropagated\n"
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS
-enum MyErr:
+error MyErr:
     Nope
 
 fn go() string:

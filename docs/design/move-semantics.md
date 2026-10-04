@@ -69,7 +69,7 @@ is CE2411 (`ownership-conventions.md` §4.2, §8).
 | closure capture | **move** | |
 | **`s.field` / `MemberAccess` source** in a sink | **borrow**; a consuming use is CE2411 | `nom s.out` in a `let` or a `return` TAKES the field (`borrow-model.md` §10c) |
 | **`own.get()` deref source** in a sink | **borrow**; a consuming use is CE2411 | `get()` reaches through a live owner |
-| container get-out (`list.get(i)??`, `arr[i]`) | **borrow**; a consuming use is CE2411 | |
+| container get-out (`list.get(i)`, also under `.or_err(nom e)??`, and `arr[i]`) | **borrow**; a consuming use is CE2411 | |
 | struct-field read (`let x = s.field`) | **borrow**; the owner is frozen while it lives (CE2412) | |
 | `match` / `foreach` bindings | **borrow**: a write or a rebind through it is CE2414, a consuming use CE2411 | `poke` and `nom` binding modes are the escapes |
 | `peek` / `poke` arguments | **borrow** | |

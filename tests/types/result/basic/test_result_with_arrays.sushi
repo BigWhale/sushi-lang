@@ -4,7 +4,7 @@
 
 # Tests Result@(T, E) with array types
 
-enum MyError:
+error MyError:
     Error
 
 fn get_numbers() i32[3] | MyError:

@@ -61,7 +61,7 @@ One surface vocabulary, seven mechanisms (and 3b, a variant of 3). Each has its 
 |---|---|---|---|---|---|
 | 1 | call-site borrow | `f(peek x)`, `f(poke y)` | one statement | the callee's mode decides | the argument is not consumed |
 | 2 | reference parameter | `fn f(poke T x)` | the function body | `peek`: **CE2408**; `poke`: in place | **CE2411** |
-| 3 | `let` binding of a read | `let T v = c.get(0)??` | the enclosing block | not gated (§8) | **CE2411** |
+| 3 | `let` binding of a read | `let T v = c.get(0).or_err(nom e)??` | the enclosing block | not gated (§8) | **CE2411** |
 | 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **CE2414** | **CE2411** |
 | 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **CE2408** | **CE2411** |
 | 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **CE2421** (receiver), **CE2422** (by value) | **CE2411** |
@@ -85,7 +85,7 @@ full `ReferenceType` in the borrow state, which is what makes the write gate ans
 `f(peek v)`, never as bare `f(v)`.
 
 **3 — the `let` binding of a read** inherits BORROWED provenance: a field read
-(`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)??`, `own.get()`) all
+(`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)`, under `.or_err(nom e)??` too, and `own.get()`) all
 borrow. The owner is frozen until the end of the block that declares the binding
 (**CE2412**).
 
@@ -121,7 +121,7 @@ no address is **CE2423** (a range, `HashMap.entries()`); a reference binding in 
 match pattern is **CE2424** (extraction walks through temporary copies there); under a match
 that only borrows its scrutinee, the scrutinee must be a PLACE -- a name, or a member or index
 chain off one (`match b.s:`, `match xs[1]:`) -- and a borrowed scrutinee that is not a place
-(`match l.get(0)??:`) is **CE2404**; and a `poke` binding out of a `peek` owner is CE2408,
+(`match l.get(0).or_err(nom e)??:`) is **CE2404**; and a `poke` binding out of a `peek` owner is CE2408,
 out of a constant CE2400. A place binding follows the reference `let`'s rules (mechanism 3b):
 the root of the place is frozen for the arm (CE2412), one `poke` binding of an owner at a
 time (CE2403), no `peek` beside a `poke` (CE2407). A scrutinee the match OWNS (a temporary)

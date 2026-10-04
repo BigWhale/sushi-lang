@@ -1,0 +1,17 @@
+# Design 7: a conversion is a call of a body, so `as` with a conversion is not a
+# constant expression.
+# EXPECT_ERROR_CODES_EXACT: CE0108
+error LowError:
+    Gone
+
+error AppError:
+    Low(LowError)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+const AppError FIRST = LowError.Gone as AppError
+
+fn main() i32:
+    println(FIRST)
+    return 0

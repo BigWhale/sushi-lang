@@ -335,8 +335,8 @@ use <io/fs>
 use <collections/strings>
 
 fn complain() ~ | IoError:
-    let string error = "ERROR: Something went wrong\n"
-    let u8[] error_bytes = error.to_bytes()
+    let string message = "ERROR: Something went wrong\n"
+    let u8[] error_bytes = message.to_bytes()
     stderr.write_bytes(error_bytes)??
     return Result.Ok(~)
 

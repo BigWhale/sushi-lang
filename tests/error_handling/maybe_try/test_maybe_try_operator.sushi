@@ -7,7 +7,7 @@
 use <collections/strings>
 
 fn try_parse(string input) i32 | StdError:
-    let i32 pos = input.find("x")??  # Unwrap Some or propagate None as Err
+    let i32 pos = input.find("x").or_err(nom StdError.Error)??  # Unwrap Some or propagate None as Err
     return Result.Ok(pos)
 
 fn main() i32:

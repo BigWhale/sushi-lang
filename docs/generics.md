@@ -290,7 +290,7 @@ fn singleton@(T)(nom T x) List@(T):
     return l
 
 fn first_of@(T)(List@(T) l) T | StdError:
-    return Result.Ok(l.get(0)??)
+    return Result.Ok(l.get(0).or_err(nom StdError.Error)??)
 
 fn round_trip@(T)(nom T x) T | StdError:
     return Result.Ok(first_of(singleton(nom x))??)
@@ -709,7 +709,7 @@ A generic function can declare an error channel with `| E`, and `??` in a caller
 channel propagates the error. A generic enum can be the error type:
 
 ```sushi
-enum ParseError@(T):
+error ParseError@(T):
     Bad(T)
 
 fn check@(T)(nom T x, bool ok) T | ParseError@(i32):

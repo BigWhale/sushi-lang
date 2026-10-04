@@ -148,6 +148,20 @@ def test_node_fields_reads_every_declared_field():
             == {f.name for f in dataclasses.fields(node)})
 
 
+def test_an_alias_field_is_read_but_not_walked():
+    """`Foreach.item_try_let` names the first statement of the body (#1174).
+
+    The walk reaches the `let` through the body alone, so a walk that refuses a `??`
+    reports it once. `node_fields` still reads the alias for a caller that wants it.
+    """
+    let = a.Let(None, "x", None, a.TryExpr(None, _marker()))
+    loop = a.Foreach(None, "x", None, a.Name(None, "it"), a.Block(None, [let]),
+                     item_try_let=let)
+    assert _found(loop) == [MARKER]
+    assert "item_try_let" in {name for name, _ in node_fields(loop)}
+    assert "item_try_let" not in {name for name, _ in node_fields(loop, aliases=False)}
+
+
 # --- no leaf holds a node ----------------------------------------------------------
 
 

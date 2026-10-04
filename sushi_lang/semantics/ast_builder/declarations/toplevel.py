@@ -31,6 +31,7 @@ DECLARATION_TABLE: dict[str, Tuple[Callable, str]] = {
     "use_stmt": (imports.parse_usestatement, "uses"),
     "struct_def": (structs.parse_structdef, "structs"),
     "enum_def": (enums.parse_enumdef, "enums"),
+    "error_def": (enums.parse_enumdef, "enums"),
     "perk_def": (perks.parse_perkdef, "perks"),
     "external_block": (externals.parse_external_block, "externals"),
     "function_def": (functions.parse_funcdef, "functions"),
@@ -119,6 +120,11 @@ class TopLevelDeclarations:
                 continue
             if child.data == "extend_with_def":
                 self.perk_impls.append(perks.parse_handle_extend_stmt_with(node, builder))
+                return
+            if child.data == "extend_as_def":
+                # A conversion is never a template: a generic source is refused in the
+                # collect pass (CE2520), so it goes with the concrete extensions.
+                self.extensions.append(extensions.parse_handle_extend_stmt_as(node, builder))
                 return
             if child.data == "extend_def":
                 ext = extensions.parse_handle_extend_stmt_def(node, builder)

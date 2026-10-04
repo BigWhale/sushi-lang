@@ -11,7 +11,7 @@ fn run_test() i32 | StdError:
     let string[] arr = from(["x", "y"])
     arr.fill(src.s(2, 5))
 
-    println("{arr.get(0)??} {arr.get(1)??}")
+    println("{arr.get(0).or_err(nom StdError.Error)??} {arr.get(1).or_err(nom StdError.Error)??}")
     return Result.Ok(0)
 
 fn main() i32:

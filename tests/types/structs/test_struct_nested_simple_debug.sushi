@@ -15,18 +15,18 @@ fn run_test() i32 | StdError:
     inner.values.push(42)
 
     println("Inner array length before: {inner.values.len()}")
-    println("Inner array value before: {inner.values.get(0)??}")
+    println("Inner array value before: {inner.values.get(0).or_err(nom StdError.Error)??}")
 
     # Pass a clone of inner to the outer constructor so inner stays usable below.
     let Outer outer = Outer(inner.clone())
 
     println("Outer.data array length after: {outer.data.values.len()}")
-    println("Outer.data array value after: {outer.data.values.get(0)??}")
+    println("Outer.data array value after: {outer.data.values.get(0).or_err(nom StdError.Error)??}")
 
     # Check if inner was affected
     println("Inner array length after nesting: {inner.values.len()}")
     if (inner.values.len() > 0):
-        println("Inner array value after nesting: {inner.values.get(0)??}")
+        println("Inner array value after nesting: {inner.values.get(0).or_err(nom StdError.Error)??}")
 
     return Result.Ok(0)
 

@@ -216,7 +216,7 @@ These tests are written BEFORE implementation to guide the development process:
 ### Error Propagation with Type Safety
 
 ```sushi
-enum DbError:
+error DbError:
     ConnectionFailed
 
 fn connect() Result@(i32, DbError):

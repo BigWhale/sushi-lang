@@ -25,7 +25,7 @@ fn run_test() i32 | StdError:
 
     let i32[] c = from([42, 99])
     println(c.pop().realise(-1))
-    println(c.pop()??)
+    println(c.pop().or_err(nom StdError.Error)??)
 
     let u8[] bytes = from([255 as u8])
     println(bytes.pop().realise(0 as u8))

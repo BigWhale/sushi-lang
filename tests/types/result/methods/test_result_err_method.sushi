@@ -4,7 +4,7 @@
 
 # Tests err method that returns Maybe@(E)
 
-enum MyError:
+error MyError:
     BadInput
     Timeout
 

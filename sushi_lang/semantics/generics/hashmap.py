@@ -4,6 +4,8 @@ from types import MappingProxyType
 from typing import Any, Literal, Mapping, Optional, TYPE_CHECKING, overload
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.ast import MethodCall, Call
+from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS
+from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -23,6 +25,13 @@ HASHMAP_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "free": 0, "destroy": 0, "debug": 0,
     "keys": 0, "values": 0, "entries": 0, "pairs": 0, "clone": 0,
 })
+
+
+#: The parameter modes of the `HashMap@(K, V)` methods (#1173). `insert` stores its key
+#: and its value into a slot, which takes ownership by position; every other parameter
+#: borrows.
+HASHMAP_METHOD_MODES = BuiltinModes(
+    slots=CONTAINER_INSERT_METHODS & HASHMAP_METHOD_ARITY.keys())
 
 
 def is_builtin_hashmap_method(method_name: str) -> bool:

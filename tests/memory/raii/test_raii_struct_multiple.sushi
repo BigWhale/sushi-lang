@@ -21,8 +21,8 @@ fn test_multiple_arrays() i32 | StdError:
     m.flags.push(true)
     m.flags.push(false)
 
-    println("Number: {m.numbers.get(0)??}")
-    println("Name: {m.names.get(0)??}")
+    println("Number: {m.numbers.get(0).or_err(nom StdError.Error)??}")
+    println("Name: {m.names.get(0).or_err(nom StdError.Error)??}")
     println("Flag count: {m.flags.len()}")
 
     # NO manual cleanup for any of the three arrays!

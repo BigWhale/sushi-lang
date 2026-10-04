@@ -1,7 +1,7 @@
 # A perk contract and its implementation both write the channel, and CE0133 makes the
 # two agree. A generic enum is legal in both (#668).
 # EXPECT_STDOUT_EXACT: "read 4\n"
-enum MyErr@(T):
+error MyErr@(T):
     Bad(T)
     Worse
 

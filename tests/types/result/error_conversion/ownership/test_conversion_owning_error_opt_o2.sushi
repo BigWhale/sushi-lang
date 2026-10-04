@@ -1,0 +1,52 @@
+# Design 3.7 (C7): an error type that owns a string moves into the conversion. The
+# conversion puts it in the target whole, or destroys what it does not keep. The `??`
+# frees each value once, at every optimization level. The twin fixture has the same
+# source at the other level.
+# COMPILER_FLAGS: --opt O2
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok 8\nerr AppError.Token(TokenError.Bad("token -1"))\nerr AppError.Short(14)\n"
+use <collections/strings>
+
+error TokenError:
+    Bad(string)
+
+error NoteError:
+    Note(string)
+
+error AppError:
+    Token(TokenError)
+    Short(i32)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+extend NoteError as AppError:
+    match self:
+        NoteError.Note(s) -> return AppError.Short(s.len())
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token {n}"))
+    return Result.Ok(n)
+
+fn note(i32 n) i32 | NoteError:
+    if (n == 0):
+        return Result.Err(NoteError.Note("note {n} is long"))
+    return Result.Ok(n)
+
+fn run(i32 a, i32 b) i32 | AppError:
+    let string label = "run {a}"
+    let i32 x = tokenize(a)??
+    let i32 y = note(b)??
+    return Result.Ok(x + y + label.len())
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(run(1, 2))
+    show(run(-1, 2))
+    show(run(1, 0))
+    return 0

@@ -21,7 +21,7 @@ fn append_byte(nom u8[] arr, u8 value) u8[]:
 
 fn get_first_byte(u8[] arr) u8 | StdError:
     if (arr.len() > 0):
-        return Result.Ok(arr.get(0)??)
+        return Result.Ok(arr.get(0).or_err(nom StdError.Error)??)
     return Result.Ok(0 as u8)
 
 fn reverse_bytes_manual(u8[] input) u8[] | StdError:
@@ -29,7 +29,7 @@ fn reverse_bytes_manual(u8[] input) u8[] | StdError:
     let u8[] output = new()
     let i32 i = input.len() - 1
     while (i >= 0):
-        let u8 byte = input.get(i)??
+        let u8 byte = input.get(i).or_err(nom StdError.Error)??
         output.push(byte)
         i := i - 1
     return Result.Ok(output)
@@ -40,12 +40,12 @@ fn concat_arrays_manual(u8[] first, u8[] second) u8[] | StdError:
     # Copy first array
     let i32 i = 0
     while (i < first.len()):
-        result.push(first.get(i)??)
+        result.push(first.get(i).or_err(nom StdError.Error)??)
         i := i + 1
     # Copy second array
     let i32 j = 0
     while (j < second.len()):
-        result.push(second.get(j)??)
+        result.push(second.get(j).or_err(nom StdError.Error)??)
         j := j + 1
     return Result.Ok(result)
 
@@ -54,7 +54,7 @@ fn filter_even_bytes_manual(u8[] input) u8[] | StdError:
     let u8[] output = new()
     let i32 i = 0
     while (i < input.len()):
-        let u8 byte = input.get(i)??
+        let u8 byte = input.get(i).or_err(nom StdError.Error)??
         if (((byte as i32) % 2) == 0):
             output.push(byte)
         i := i + 1
@@ -65,7 +65,7 @@ fn multiply_bytes_manual(u8[] input, i32 factor) u8[] | StdError:
     let u8[] output = new()
     let i32 i = 0
     while (i < input.len()):
-        let u8 byte = input.get(i)??
+        let u8 byte = input.get(i).or_err(nom StdError.Error)??
         let i32 multiplied = (byte as i32) * factor
         output.push((multiplied % 256) as u8)
         i := i + 1
@@ -86,7 +86,7 @@ fn test_with_parameters() ~ | StdError:
         result.push(((10 + i) % 256) as u8)
         i := i + 1
     println("Sequence length: {result.len()}")
-    println("First: {result.get(0)??}, Last: {result.get(4)??}")
+    println("First: {result.get(0).or_err(nom StdError.Error)??}, Last: {result.get(4).or_err(nom StdError.Error)??}")
     return Result.Ok(~)
 
 fn test_modify_array() ~:
@@ -108,10 +108,10 @@ fn test_reverse() ~ | StdError:
     let u8[] reversed = new()
     let i32 i = original.len() - 1
     while (i >= 0):
-        reversed.push(original.get(i)??)
+        reversed.push(original.get(i).or_err(nom StdError.Error)??)
         i := i - 1
-    println("Original first: {original.get(0)??}, Reversed first: {reversed.get(0)??}")
-    println("Original last: {original.get(4)??}, Reversed last: {reversed.get(4)??}")
+    println("Original first: {original.get(0).or_err(nom StdError.Error)??}, Reversed first: {reversed.get(0).or_err(nom StdError.Error)??}")
+    println("Original last: {original.get(4).or_err(nom StdError.Error)??}, Reversed last: {reversed.get(4).or_err(nom StdError.Error)??}")
     return Result.Ok(~)
 
 fn test_concatenate() ~ | StdError:
@@ -122,14 +122,14 @@ fn test_concatenate() ~ | StdError:
     let u8[] combined = new()
     let i32 i = 0
     while (i < part1.len()):
-        combined.push(part1.get(i)??)
+        combined.push(part1.get(i).or_err(nom StdError.Error)??)
         i := i + 1
     let i32 j = 0
     while (j < part2.len()):
-        combined.push(part2.get(j)??)
+        combined.push(part2.get(j).or_err(nom StdError.Error)??)
         j := j + 1
     println("Combined length: {combined.len()}")
-    println("Combined first: {combined.get(0)??}, last: {combined.get(5)??}")
+    println("Combined first: {combined.get(0).or_err(nom StdError.Error)??}, last: {combined.get(5).or_err(nom StdError.Error)??}")
     return Result.Ok(~)
 
 fn test_filter() ~ | StdError:
@@ -139,7 +139,7 @@ fn test_filter() ~ | StdError:
     let u8[] evens = new()
     let i32 i = 0
     while (i < mixed.len()):
-        let u8 byte = mixed.get(i)??
+        let u8 byte = mixed.get(i).or_err(nom StdError.Error)??
         if (((byte as i32) % 2) == 0):
             evens.push(byte)
         i := i + 1
@@ -153,11 +153,11 @@ fn test_transform() ~ | StdError:
     let u8[] doubled = new()
     let i32 i = 0
     while (i < nums.len()):
-        let u8 byte = nums.get(i)??
+        let u8 byte = nums.get(i).or_err(nom StdError.Error)??
         let i32 multiplied = (byte as i32) * 2
         doubled.push((multiplied % 256) as u8)
         i := i + 1
-    println("Original first: {nums.get(0)??}, Doubled first: {doubled.get(0)??}")
+    println("Original first: {nums.get(0).or_err(nom StdError.Error)??}, Doubled first: {doubled.get(0).or_err(nom StdError.Error)??}")
     return Result.Ok(~)
 
 fn test_chain() ~ | StdError:
@@ -174,7 +174,7 @@ fn test_chain() ~ | StdError:
     let u8[] chain_reversed = new()
     let i32 j = chain.len() - 1
     while (j >= 0):
-        chain_reversed.push(chain.get(j)??)
+        chain_reversed.push(chain.get(j).or_err(nom StdError.Error)??)
         j := j - 1
     println("Chained length: {chain_reversed.len()}")
     return Result.Ok(~)

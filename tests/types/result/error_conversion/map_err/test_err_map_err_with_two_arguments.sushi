@@ -1,0 +1,17 @@
+# Design 5 (C9): `map_err` is a built-in method that takes one argument, the function.
+# A call with two arguments is the built-in arity error.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: expects 1, got 2
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+
+fn wrap(nom LowError e) AppError:
+    return AppError.Low(e)
+
+fn main() i32:
+    let Result@(i32, LowError) r = Result.Ok(1)
+    println(r.map_err(wrap, wrap).is_ok())
+    return 0

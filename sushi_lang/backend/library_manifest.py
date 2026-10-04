@@ -284,6 +284,12 @@ class LibraryManifestGenerator:
         if foreign:
             manifest["foreign_extensions"] = foreign
 
+        # Each conversion a consumer can use (docs/design/error-conversion.md 8.2).
+        # Absent when there is none; a reader takes a missing key as an empty list.
+        conversions = self._extract_conversions(units, templates_section)
+        if conversions:
+            manifest["conversions"] = conversions
+
         # What each unit hands on (#585). Absent when no unit says `public use`, so
         # an ordinary library grows by nothing. A source library carries the statement
         # in its text as well; the index answers without a parser either way.
@@ -465,6 +471,36 @@ class LibraryManifestGenerator:
                 }, decl))
         return records
 
+    def _extract_conversions(self, units: list['Unit'], shipped: dict) -> list[dict]:
+        """Every conversion of the library whose TARGET is public, as a pair of names.
+
+        A conversion is as visible as its target type (design 3.8), and C5 puts it in the
+        unit that declares the target, so the target is an enum of the same unit. A
+        source that no record ships is left out: no consumer can hold a value of it. The
+        body is in the bitcode, under the symbol the record names.
+        """
+        from sushi_lang.semantics.conversions import conversion_symbol
+
+        kept = self._kept_type_names(own_units(units), shipped)
+        records = []
+        for unit in own_units(units):
+            if unit.ast is None:
+                continue
+            public = {e.name for e in unit.ast.enums if e.is_public}
+            for ext in unit.ast.extensions:
+                if not ext.is_conversion:
+                    continue
+                source, target = type_string(ext.target_type), type_string(ext.ret)
+                if target not in public or source in kept:
+                    continue
+                records.append(with_doc({
+                    "source": source,
+                    "target": target,
+                    "link_symbol": conversion_symbol(ext.target_type, ext.ret),
+                    "unit": unit.name,
+                }, ext))
+        return records
+
     def _struct_members(self, struct_def) -> dict:
         return {"fields": [
             with_doc({"name": f.name, "type": type_string(f.ty)}, f)
@@ -479,7 +515,7 @@ class LibraryManifestGenerator:
                 record["data_types"] = [type_string(t)
                                         for t in variant.associated_types]
             variants.append(with_doc(record, variant))
-        return {"variants": variants}
+        return {"variants": variants, "is_error": enum_def.is_error}
 
     def _extract_unit_docs(self, units: list['Unit']) -> dict[str, dict]:
         """Each own unit's own doc block, keyed by unit name.
@@ -791,7 +827,9 @@ class LibraryManifestGenerator:
             if unit.ast is None:
                 continue
             for ext in unit.ast.extensions:
-                if _extension_target_name(ext.target_type) in kept:
+                # A conversion is no method of its source (ruling P6); it ships in
+                # the manifest's `conversions` list.
+                if ext.is_conversion or _extension_target_name(ext.target_type) in kept:
                     continue
                 record = serialize_extension(ext)
                 record["unit"] = unit.name

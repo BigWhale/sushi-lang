@@ -1,0 +1,57 @@
+# Design 3.1 to 3.3 (C1, C2, C3): a conversion is a declaration. `??` calls it when the
+# two error types differ, and `e as T` calls it explicitly. One function takes two
+# error types with `??` (design 6.3).
+# EXPECT_STDOUT_EXACT: "ok 8\nerr AppError.Low(LowError.Bad(-3))\nerr AppError.Empty\nerr AppError.Low(LowError.Bad(4))\nAppError.Low(LowError.Gone)\nAppError.Empty\n"
+error LowError:
+    Bad(i32)
+    Gone
+
+error CodeError:
+    Zero
+    Odd(i32)
+
+error AppError:
+    Low(LowError)
+    Empty
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+extend CodeError as AppError:
+    match self:
+        CodeError.Zero -> return AppError.Empty
+        CodeError.Odd(n) -> return AppError.Low(LowError.Bad(n + 1))
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n * 2)
+
+fn code(i32 n) i32 | CodeError:
+    if (n == 0):
+        return Result.Err(CodeError.Zero)
+    if (n % 2 == 1):
+        return Result.Err(CodeError.Odd(n))
+    return Result.Ok(n)
+
+fn run(i32 a, i32 b) i32 | AppError:
+    let i32 x = low(a)??
+    let i32 y = code(b)??
+    return Result.Ok(x + y)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(run(3, 2))
+    show(run(-3, 2))
+    show(run(3, 0))
+    show(run(3, 3))
+    let AppError a = LowError.Gone as AppError
+    println(a)
+    let CodeError c = CodeError.Zero
+    let AppError b = c as AppError
+    println(b)
+    return 0

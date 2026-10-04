@@ -25,12 +25,27 @@ class TypeNameTable(Protocol):
 class TakenName:
     """One table a name may already be taken in, and the diagnostic that says so.
 
-    `other` is the holder's kind as the header names it, for the CE0006 rows.
+    `holder` is the kind of the table's entries. `same` is True for a table of the new
+    declaration's own kind. The words come from the entry that holds the name, because
+    an enum entry may be an error type.
     """
     table: 'TypeNameTable'
     code: Any
-    what: str = "first defined here"
-    other: str = ""
+    holder: str
+    generic: bool = False
+    same: bool = True
+
+    def words(self, name: str) -> tuple[str, str]:
+        """The note at the first declaration, and the holder's word for the header."""
+        from sushi_lang.semantics.visibility import kind_word
+
+        word = type_kind_word(kind_word(self.holder, self.table.by_name.get(name)),
+                              self.generic)
+        if not self.same:
+            return type_clash_note(word), word
+        if self.generic:
+            return f"first defined here, as {article(word)} {word}", ""
+        return "first defined here", ""
 
 
 def article(word: str) -> str:
@@ -63,13 +78,11 @@ def type_name_rules(kind: str, *, structs: 'TypeNameTable',
                         else (enums, generic_enums))
     theirs, theirs_generic = ((enums, generic_enums) if kind == "struct"
                               else (structs, generic_structs))
-    generic_other = type_kind_word(other, True)
     return (
-        TakenName(own, duplicate),
-        TakenName(own_generic, duplicate, f"first defined here, as a generic {same}"),
-        TakenName(theirs, ERR.CE0006, type_clash_note(other), other),
-        TakenName(theirs_generic, ERR.CE0006, type_clash_note(generic_other),
-                  generic_other),
+        TakenName(own, duplicate, same),
+        TakenName(own_generic, duplicate, same, generic=True),
+        TakenName(theirs, ERR.CE0006, other, same=False),
+        TakenName(theirs_generic, ERR.CE0006, other, generic=True, same=False),
     )
 
 
@@ -180,11 +193,12 @@ def reject_duplicate_type_name(
 
     for rule in rules:
         if name in rule.table.by_name:
+            what, other = rule.words(name)
             note_first_declaration(
                 er.emit_with(reporter, rule.code, name_span, name=name,
-                             kind=type_kind_word(kind, generic),
-                             other=rule.other),
-                rule.table.spans, name, what=rule.what, files=rule.table.files,
+                             kind=type_kind_word(kind, generic), word=kind,
+                             other=other),
+                rule.table.spans, name, what=what, files=rule.table.files,
                 library=shipped_type_origin(visibility, name),
             ).emit()
             return True
@@ -204,7 +218,8 @@ def reject_reference_in(reporter, ty: Optional[Type], span: Optional[Span],
     return True
 
 
-def reject_try_in_body(reporter, body: Any, context: str) -> None:
+def reject_try_in_body(reporter, body: Any, context: str,
+                       help_text: Optional[str] = None) -> None:
     """Reject every `??` in a BARE function or method body (CE0131, #398).
 
     A bare body returns the value (CE2091), so a `??` has nothing to propagate into
@@ -223,7 +238,7 @@ def reject_try_in_body(reporter, body: Any, context: str) -> None:
         if isinstance(node, TryExpr):
             er.emit_with(reporter, er.ERR.CE0131,
                          node.loc, context=context) \
-                .help("handle the Result or the Maybe in the body (match, "
+                .help(help_text or "handle the value in the body (match, "
                       ".realise(default)), or write '| E' in the signature").emit()
         return True
 

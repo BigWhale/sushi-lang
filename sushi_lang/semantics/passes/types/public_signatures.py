@@ -23,6 +23,7 @@ from sushi_lang.semantics.ast import ExtendWithDef
 from sushi_lang.semantics.ast_walk import (
     ConstraintSite, TypeSite, is_written, signature_constraints, signature_types)
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
+from sushi_lang.semantics.visibility import kind_word
 from .visibility import name_is_contested
 
 if TYPE_CHECKING:
@@ -72,10 +73,14 @@ _POSITION_WORD = {
 }
 
 
+def _kind_word(site: TypeSite | ConstraintSite) -> str:
+    """The word a diagnostic uses for the declaration that owns this site."""
+    return _KIND_WORD.get(site.kind, kind_word(site.kind, site.decl))
+
+
 def _leak_word(site: TypeSite) -> str:
     """The word the leak diagnostic uses for this position."""
-    return _POSITION_WORD.get(site.position,
-                              _KIND_WORD.get(site.kind, site.kind))
+    return _POSITION_WORD.get(site.position, _kind_word(site))
 
 
 def _declared_name(site: TypeSite) -> str:
@@ -195,7 +200,7 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
                 and site.position in _PTR_RULE_POSITIONS
                 and contains_foreign_ptr(site.ty, structs, enums)):
             er.emit(validator.reporter, er.ERR.CE5008, site.span,
-                    kind=_KIND_WORD.get(site.kind, site.kind),
+                    kind=_kind_word(site),
                     name=_declared_name(site))
         # The leak rule does not. It measures a PROMISE, and an extension on a builtin
         # inherits no marker to promise with, so a single-unit file never notices the flip
@@ -211,7 +216,11 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
         # (#702). The `ptr` rule keeps reading both, because the template's own signature
         # says `T`: the instance is the one position where a quarantined pointer crossing
         # a public boundary can be seen.
+        #
+        # A conversion has no leak check (docs/design/error-conversion.md section 3.8): a
+        # private target makes it usable in its own unit only.
         if (public is True and is_written(site.decl)
+                and not getattr(site.decl, "is_conversion", False)
                 and site.kind in _LEAK_RULE_KINDS
                 and site.position in _LEAK_RULE_POSITIONS):
             origin = _leaked_type(validator, site.ty)
@@ -233,6 +242,6 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
         if origin is not None:
             _note_declaration(er.emit_with(
                 validator.reporter, er.ERR.CE3010, constraint.span,
-                kind=_KIND_WORD.get(constraint.kind, constraint.kind),
+                kind=_kind_word(constraint),
                 name=getattr(constraint.decl, "name", "<anonymous>"),
                 perk=constraint.perk_name), origin)

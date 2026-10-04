@@ -1,0 +1,26 @@
+# Design 3.8 (C11): a conversion has no leak check. A public source and a private target
+# make a conversion that is usable in its own unit only, and that gives nothing away.
+# EXPECT_STDOUT_EXACT: "Inner.Held(Shown.Bad(3))\nInner.Held(Shown.Bad(4))\n"
+public error Shown:
+    Bad(i32)
+
+error Inner:
+    Held(Shown)
+
+extend Shown as Inner:
+    return Inner.Held(self)
+
+fn low(i32 n) i32 | Shown:
+    return Result.Err(Shown.Bad(n))
+
+fn run(i32 n) i32 | Inner:
+    let i32 v = low(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    match run(3):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("{e}")
+    let Inner i = Shown.Bad(4) as Inner
+    println(i)
+    return 0

@@ -92,9 +92,10 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
     static = PRIMITIVE_STATICS.get(_primitive_static_key(node))
     if static is not None:
         node.inferred_return_type = static.returns
-        if static.consumes:
-            node.callee_param_modes = (ParamMode.NOM,)
-            node.callee_param_names = [static.param_name]
+        # The one parameter has its mode in the row, and the `borrow` pass checks the
+        # marker by the rule of every callee (#1173).
+        node.callee_param_modes = (ParamMode.NOM if static.consumes else ParamMode.BORROW,)
+        node.callee_param_names = [static.param_name]
         if report:
             _validate_primitive_static_args(validator, node, static)
         return DotCallTarget(DotCallKind.PRIMITIVE_STATIC, type=static.returns)

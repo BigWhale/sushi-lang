@@ -1,0 +1,35 @@
+# Design 3.3 (C3): the `foreach(x?? in ...)` binder is an ordinary `??`, so it calls the
+# conversion when the item's error type differs from the channel.
+# EXPECT_STDOUT_EXACT: "item 10\nitem 20\nerr AppError.Low(LowError.Bad(3))\n"
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+struct Feed:
+    i32 at
+
+extend Feed next(poke self) Maybe@(Result@(i32, LowError)):
+    if (self.at >= 3):
+        return Maybe.None()
+    self.at := self.at + 1
+    if (self.at == 3):
+        return Maybe.Some(Result.Err(LowError.Bad(self.at)))
+    return Maybe.Some(Result.Ok(self.at * 10))
+
+fn walk() i32 | AppError:
+    let i32 sum = 0
+    foreach(x?? in Feed(0)):
+        println("item {x}")
+        sum := sum + x
+    return Result.Ok(sum)
+
+fn main() i32:
+    match walk():
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

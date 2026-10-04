@@ -28,8 +28,8 @@ fn run_test() i32 | StdError:
 
     let Tree root = Tree(1, kids)
 
-    let Tree mid = root.kids.get(0)??
-    let Tree leaf = mid.kids.get(0)??
+    let Tree mid = root.kids.get(0).or_err(nom StdError.Error)??
+    let Tree leaf = mid.kids.get(0).or_err(nom StdError.Error)??
     println("root: {root.value}")
     println("l1: {mid.value}")
     println("l2: {leaf.value}")

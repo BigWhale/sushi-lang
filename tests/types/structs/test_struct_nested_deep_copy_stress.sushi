@@ -38,8 +38,8 @@ fn run_test() i32 | StdError:
             println("ERROR: Expected len 3, got {nested.data.values.len()}")
             return Result.Err(StdError.Error)
 
-        if (nested.data.values.get(0)?? != 42):
-            println("ERROR: Expected 42, got {nested.data.values.get(0)??}")
+        if (nested.data.values.get(0).or_err(nom StdError.Error)?? != 42):
+            println("ERROR: Expected 42, got {nested.data.values.get(0).or_err(nom StdError.Error)??}")
             return Result.Err(StdError.Error)
 
         if (i % 100 == 0):

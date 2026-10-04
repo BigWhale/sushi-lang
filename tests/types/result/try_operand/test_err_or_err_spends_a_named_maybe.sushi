@@ -1,0 +1,18 @@
+# Design 4 (C8): the receiver of `or_err` is `nom self`. A named `Maybe` that owns its
+# payload is spent by the call, so a later use of it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2435
+# EXPECT_STDERR_CONTAINS: 'or_err' consumed it
+use <collections/strings>
+
+error AppError:
+    Empty
+
+fn word_len(i32 n) i32 | AppError:
+    let Maybe@(string) m = Maybe.Some("word {n}")
+    let string w = m.or_err(nom AppError.Empty)??
+    println(m.is_some())
+    return Result.Ok(w.len())
+
+fn main() i32:
+    println(word_len(3).realise(0))
+    return 0

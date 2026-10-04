@@ -12,31 +12,31 @@ fn run_test() i32 | StdError:
     let u32[] d32 = from([4294967295 as u32])
     let u64[] d64 = from([18446744073709551615 as u64])
 
-    println(d8.get(0)??)
-    println(d16.get(0)??)
-    println("{d16b.get(0)??}")
-    println(d32.get(0)??)
-    println("{d64.get(0)??}")
+    println(d8.get(0).or_err(nom StdError.Error)??)
+    println(d16.get(0).or_err(nom StdError.Error)??)
+    println("{d16b.get(0).or_err(nom StdError.Error)??}")
+    println(d32.get(0).or_err(nom StdError.Error)??)
+    println("{d64.get(0).or_err(nom StdError.Error)??}")
 
     let List@(u8) l8 = List.new()
     l8.push(255 as u8)
-    println(l8.get(0)??)
+    println(l8.get(0).or_err(nom StdError.Error)??)
 
     let List@(u32) l32 = List.new()
     l32.push(4294967295 as u32)
-    println(l32.get(0)??)
+    println(l32.get(0).or_err(nom StdError.Error)??)
 
     let List@(u64) l64 = List.new()
     l64.push(18446744073709551615 as u64)
-    println("{l64.get(0)??}")
+    println("{l64.get(0).or_err(nom StdError.Error)??}")
 
     let HashMap@(i32, u16) m16 = HashMap.new()
     m16.insert(1, 65535 as u16)
-    println(m16.get(1)??)
+    println(m16.get(1).or_err(nom StdError.Error)??)
 
     let HashMap@(i32, u32) m32 = HashMap.new()
     m32.insert(1, 4294967295 as u32)
-    println("{m32.get(1)??}")
+    println("{m32.get(1).or_err(nom StdError.Error)??}")
 
     l8.destroy()
     l32.destroy()

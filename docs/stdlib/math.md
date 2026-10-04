@@ -10,7 +10,7 @@ Mathematical functions for numeric types.
 use <math>
 ```
 
-The import brings `MathError`, the module's error enum: the bare name needs it, and
+The import brings `MathError`, the module's error type: the bare name needs it, and
 `use <math> as m` puts it behind the dot (`m.MathError.DivisionByZero`).
 
 ## Overview

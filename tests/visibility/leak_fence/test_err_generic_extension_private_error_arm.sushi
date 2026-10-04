@@ -2,7 +2,7 @@
 # hands the enum out exactly as a return type does (#656).
 # EXPECT_ERROR_CODE: CE3009
 
-enum Fault:
+error Fault:
     Bad
 
 public struct Box@(T):

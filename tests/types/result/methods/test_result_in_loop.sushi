@@ -4,7 +4,7 @@
 
 # Tests Result methods used in loops
 
-enum MyError:
+error MyError:
     Error
 
 fn check_value(i32 n) i32 | MyError:

@@ -1,0 +1,9 @@
+# Design 4 (C8): `??` takes a Result only, so the help for a Maybe operand of an
+# arithmetic operator names `.or_err(nom e)??` and never a bare `??`.
+# EXPECT_ERROR_CODES_EXACT: CE2518
+# EXPECT_STDERR_CONTAINS: "take the value with '.realise(default)', match, or '.or_err(nom e)??'"
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let i32 n = xs.get(0) + 1
+    println(n)
+    return 0

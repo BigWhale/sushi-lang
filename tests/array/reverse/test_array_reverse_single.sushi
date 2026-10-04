@@ -4,7 +4,7 @@ fn run_test() i32 | StdError:
     answer.reverse()
 
     # Verify element is unchanged
-    if (answer.get(0)?? != 42):
+    if (answer.get(0).or_err(nom StdError.Error)?? != 42):
         return Result.Err(StdError.Error)
     if (answer.len() != 1):
         return Result.Err(StdError.Error)

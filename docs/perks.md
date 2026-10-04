@@ -125,7 +125,7 @@ function body does: `return Result.Ok(value)` and `return Result.Err(e)`. A bare
 `Result@(T, E)`:
 
 ```sushi
-enum ReadError:
+error ReadError:
     Empty
 
 perk Source:

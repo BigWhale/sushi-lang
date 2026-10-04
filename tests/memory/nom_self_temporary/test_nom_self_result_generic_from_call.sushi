@@ -1,0 +1,21 @@
+# A `nom self` method on a generic Result target. The receiver is a Result temporary that
+# a function call answers, and the method takes it with `match nom self:` (#1169).
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS: true
+
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+extend Result@(T, E) spend(nom self) i32:
+    match nom self:
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 2
+
+fn main() i32:
+    println(tokenize(-1).spend())
+    return 0

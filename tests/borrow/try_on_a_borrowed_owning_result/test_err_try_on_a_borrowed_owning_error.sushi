@@ -1,0 +1,24 @@
+# #1171: `r??` over a BORROWED Result whose error owns a string. The Err path puts the
+# error in the returned Err, and the caller still owns `r`, so the `??` is the consuming
+# use of a borrow. The compiler makes no deep copy; the help names `r.clone()??`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: cannot consume 'r'
+# EXPECT_STDERR_CONTAINS: `r.clone()??`
+error TokenError:
+    Bad(string)
+
+fn tokenize(i32 n) i32 | TokenError:
+    if (n <= 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok(n)
+
+fn same(Result@(i32, TokenError) r) i32 | TokenError:
+    let i32 v = r??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    let Result@(i32, TokenError) r = tokenize(0)
+    match same(r):
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+    return 0

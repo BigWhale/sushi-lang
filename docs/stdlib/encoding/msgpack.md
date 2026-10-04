@@ -47,7 +47,7 @@ public enum MsgValue:
     Arr(MsgValue[])
     Map((MsgValue, MsgValue)[])    # (key, value) pairs, wire order kept
 
-public enum MpError:
+public error MpError:
     Truncated(i32)      # offset of the read that could not complete
     Unsupported(u8)     # ext, fixext, timestamp, or the never-used 0xc1 tag
     BadUtf8(i32)        # offset just past the offending str payload

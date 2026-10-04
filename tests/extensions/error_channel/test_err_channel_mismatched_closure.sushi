@@ -2,7 +2,7 @@
 # exactly as in a function body: the closure's channel is StdError, the extension
 # declared '| MyError'.
 # EXPECT_ERROR_CODE: CE2511
-enum MyError:
+error MyError:
     Nope
 
 extend i32 apply_checked(fn(i32) -> i32 | StdError f) i32 | MyError:

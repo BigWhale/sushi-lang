@@ -1,0 +1,12 @@
+# Design 4: a read-through `or_err` holds a borrowed `Ok` and an owned `Err`, and only
+# `??` takes the two apart. A `let` that holds the `Result` is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2522
+# EXPECT_STDERR_CONTAINS: .clone().or_err
+error AppError:
+    Empty
+
+fn main() i32:
+    let string[] xs = from(["word {1}"])
+    let Result@(string, AppError) r = xs.get(0).or_err(nom AppError.Empty)
+    println(r.is_ok())
+    return 0

@@ -337,6 +337,9 @@ class EnumType:
     # what the `namespaces` pass reads to gate the bare name behind `use <io/fs>` and to
     # hold it behind the alias. None on every enum a unit declares, and on `StdError`.
     home_module: Optional[str] = None
+    # An error type: written `error`, or one of the seven predefined error enums. It is
+    # part of the type and NOT of its identity, so `__eq__` and `__hash__` do not read it.
+    is_error: bool = False
 
     def __str__(self) -> str:
         return self.name

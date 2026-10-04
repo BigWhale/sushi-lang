@@ -3,6 +3,7 @@ import types as _pytypes
 
 import pytest
 
+from sushi_lang.semantics.ast import Block
 from sushi_lang.semantics.generics.types import TypeParameter, TypePack
 from sushi_lang.semantics.generics.monomorphize.functions import FunctionMonomorphizer
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
@@ -15,7 +16,8 @@ class _FakeMono:
     def __init__(self):
         self.constraint_calls = []
 
-    def _validate_type_constraints(self, params, args, key=None, template_file=None):
+    def _validate_type_constraints(self, params, args, key=None, template_file=None,
+                                   error_params=None):
         # The seam answers whether every constraint held (#579); the fake refuses nothing.
         self.constraint_calls.append((tuple(params), tuple(args)))
         return True
@@ -25,6 +27,15 @@ def _generic(name, type_params):
     g = _pytypes.SimpleNamespace()
     g.name = name
     g.type_params = list(type_params)
+    # The signature and the body of a `GenericFuncDef`, with its defaults: the
+    # constraint check reads them for the E positions (E3).
+    g.params = []
+    g.ret = None
+    g.body = Block(statements=[], loc=None)
+    g.err_type = None
+    g.name_span = None
+    g.ret_span = None
+    g.err_span = None
     return g
 
 

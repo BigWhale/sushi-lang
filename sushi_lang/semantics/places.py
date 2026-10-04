@@ -92,8 +92,30 @@ def walk_place(expr: Optional[Expr], steps: Step, *,
                 node = node.receiver
             case TryExpr() if Step.TRY in steps:
                 path.append(node)
-                node = node.expr
+                node = try_operand(node)
             case _:
                 # The backstop: a kind no arm crosses ends the walk, so a new expression
                 # kind is never walked through by accident.
                 return Walked(node, tuple(path))
+
+
+def try_operand(expr: TryExpr) -> Expr:
+    """What a `??` reads: its operand, with a read-through `or_err` call seen through.
+
+    `X.or_err(nom e)??` is `X??` for every rule that reads the shape of a `??` operand:
+    `or_err` changes nothing about what the place is or who owns it
+    (docs/design/error-conversion.md section 4). So a get-out behind it is a get-out.
+    """
+    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
+    receiver = read_through_receiver_of(expr.expr)
+    return receiver if receiver is not None else expr.expr
+
+
+def unwrap_try(expr: Optional[Expr]) -> Optional[Expr]:
+    """Strip every `??` from an expression, leaving what it actually evaluates.
+
+    Each step reads through `try_operand`, so a read-through `or_err` is stripped too.
+    """
+    while isinstance(expr, TryExpr):
+        expr = try_operand(expr)
+    return expr

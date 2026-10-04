@@ -6,6 +6,7 @@ from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
     from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
@@ -88,6 +89,8 @@ class TypeValidator:
         # (None for a bare body).
         self.body_name: Optional[str] = None
         self.body_return_type: Optional[Type] = None
+        # The conversion whose body this is (`ExtendDef.declared_conversion`), or None.
+        self.body_conversion: Optional["Conversion"] = None
         self.channel_result: Optional[Type] = None
         # Whose code is being validated. A source library's unit is compiled at the
         # consumer, and its bodies mention whatever the consumer's call substituted into

@@ -37,7 +37,7 @@ public enum MsgValue:
     Map((MsgValue, MsgValue)[])
 
 ##: Why a buffer did not decode. :##
-public enum MpError:
+public error MpError:
     ##: The input ended. The payload is the offset of the read that could not complete. :##
     Truncated(i32)
     ##: The tag is ext, fixext, timestamp or `0xc1`. The payload is the tag byte. :##

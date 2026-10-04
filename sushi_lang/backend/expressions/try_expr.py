@@ -14,14 +14,15 @@ if TYPE_CHECKING:
 
 
 def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
-    """Emit try operator (??) for error propagation with Result<T> or Maybe<T>."""
+    """Emit the `??` operator: unwrap the Ok of a `Result@(T, E)`, or return its Err."""
     inner_type = expr.inferred_inner_type
     unwrapped_type = expr.inferred_unwrapped_type
     success_tag = expr.inferred_success_tag
     error_type = expr.inferred_error_type
     func_return_type = expr.inferred_func_return_type
 
-    if inner_type is None or unwrapped_type is None or success_tag is None:
+    if (inner_type is None or unwrapped_type is None or success_tag is None
+            or error_type is None):
         raise_internal_error("CE0124")
 
     result_value = codegen.expressions.emit_expr(expr.expr)
@@ -38,9 +39,7 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
 
     unwrapped_value = _extract_variant_from_result(codegen, result_value, unwrapped_type)
 
-    error_value = None
-    if error_type is not None:
-        error_value = _extract_variant_from_result(codegen, result_value, error_type)
+    error_value = _extract_variant_from_result(codegen, result_value, error_type)
 
     propagate_block = codegen.func.append_basic_block(name="try_propagate_err")
     continue_block = codegen.func.append_basic_block(name="try_continue")
@@ -48,6 +47,14 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
     codegen.builder.cbranch(is_success, continue_block, propagate_block)
 
     codegen.builder.position_at_end(propagate_block)
+
+    # Two error types: the declared conversion takes the error BEFORE the scope cleanup
+    # runs (docs/design/error-conversion.md section 8.2). The extracted error has no
+    # cleanup registration, so the conversion is its one owner and it is freed once.
+    conversion = expr.inferred_conversion
+    if conversion is not None:
+        from sushi_lang.backend.expressions.casts import emit_conversion_call
+        error_value = emit_conversion_call(codegen, conversion, error_value)
 
     from sushi_lang.backend.statements import utils
     utils.emit_scope_cleanup(codegen)
@@ -60,7 +67,7 @@ def emit_try_expr(codegen: 'LLVMCodegen', expr: 'TryExpr') -> ir.Value:
 
 
 def _extract_variant_from_result(codegen: 'LLVMCodegen', result_value: ir.Value, variant_type: 'Type') -> ir.Value:
-    """Extract variant data from Result/Maybe enum value."""
+    """Extract the payload of one variant of a Result value."""
     variant_llvm_type = codegen.types.ll_type(variant_type)
     _, extracted_value = codegen.functions.extract_value_from_result_enum(
         result_value,

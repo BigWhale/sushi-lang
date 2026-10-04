@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODE: CE2511
 # EXPECT_STDERR_CONTAINS: "test_err_try_binder_span_whole_binder.sushi:20:13: error [CE2511]"
 # EXPECT_STDERR_CONTAINS: "  |     foreach(x?? in Items(0)):\n  `             -+-\n"
-enum E1:
+error E1:
     A
 
 struct Items:

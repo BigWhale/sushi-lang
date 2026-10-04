@@ -9,7 +9,7 @@
 fn run_test() i32 | StdError:
     let string[] arr = from(["hello", "world"])
     let i32 idx = 0
-    let string v = arr.get(idx)??
+    let string v = arr.get(idx).or_err(nom StdError.Error)??
     print("{v}")
     return Result.Ok(0)
 

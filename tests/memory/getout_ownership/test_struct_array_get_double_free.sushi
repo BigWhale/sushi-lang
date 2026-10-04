@@ -14,7 +14,7 @@ struct DataBuffer:
 
 fn run() i32 | StdError:
     let DataBuffer[] buffers = from([DataBuffer(from([1 as u8, 2 as u8]), "f", 2), DataBuffer(from([3 as u8]), "s", 1)])
-    let DataBuffer first_buf = buffers.get(0)??
+    let DataBuffer first_buf = buffers.get(0).or_err(nom StdError.Error)??
     return Result.Ok(first_buf.data.len())
 
 fn main() i32:

@@ -2,7 +2,7 @@
 # a channel does the same. The caller hears Ok.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "in say 5\nok\nput 3\nok\n"
-enum Why:
+error Why:
     Bad
 
 extend i32 say() ~ | Why:

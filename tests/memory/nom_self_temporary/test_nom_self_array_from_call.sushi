@@ -1,0 +1,14 @@
+# A `nom self` method on a dynamic-array temporary that a function call answers. The
+# method takes the array, and the caller frees nothing of it (#1169).
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS: true
+
+fn make(i32 n) i32[]:
+    return from([n, n + 1, n + 2])
+
+extend T[] total(nom self) i32:
+    return self.len()
+
+fn main() i32:
+    println(make(1).total())
+    return 0

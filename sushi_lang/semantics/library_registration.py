@@ -214,6 +214,7 @@ class LibraryRegistration:
         self._register_generic_perk_impls()
         self._reject_foreign_drops(compilation_order)
         self._register_extensions(build_units)
+        self._register_conversions()
         self._register_generic_extensions(build_units)
         self._register_generic_functions(build_units, consumer_units)
 
@@ -354,7 +355,8 @@ class LibraryRegistration:
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=name,
                     unit_name=library_unit(library.name, record.get("unit")),
-                    filename=manifest.get("library_path")))
+                    filename=manifest.get("library_path"),
+                    is_error=bool(record.get("is_error", False))))
 
     def _reject_type_clash(self, kind: str, name: str,
                            build_units: set[str]) -> bool:
@@ -377,7 +379,7 @@ class LibraryRegistration:
         reject_library_clash(
             self.reporter,
             DeclOrigin(kind=kind, name=name, unit_name=self._owning_library(kind, name)),
-            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+            origin.name_span, kind=origin.word, name=name, filename=origin.filename)
         self.refused_types.append(name)
         return True
 
@@ -607,11 +609,13 @@ class LibraryRegistration:
             snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name,
                                             lib_name, f"private type '{name}'")
             kind = None
+            is_error = False
             for table_name, declared_kind, concrete in _PRIVATE_TYPE_TABLES:
                 entry = snippet.declared(table_name, name)
                 if entry is None:
                     continue
                 kind = declared_kind
+                is_error = getattr(entry, "is_error", False)
                 if concrete:
                     table = getattr(self.tables, table_name)
                     table.by_name[name] = entry
@@ -621,7 +625,8 @@ class LibraryRegistration:
                 continue
 
             self.tables.visibility.record(DeclOrigin(
-                kind=kind, name=name, unit_name=lib_name, is_public=False))
+                kind=kind, name=name, unit_name=lib_name, is_public=False,
+                is_error=is_error))
 
     def _reject_private_type_clash(self, lib_name: str, name: str,
                                    build_units: set[str]) -> None:
@@ -637,7 +642,7 @@ class LibraryRegistration:
         reject_library_clash(
             self.reporter,
             DeclOrigin(kind=origin.kind, name=name, unit_name=lib_name),
-            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+            origin.name_span, kind=origin.word, name=name, filename=origin.filename)
         self.refused_types.append(name)
 
     def _register_perk_impls(self) -> None:
@@ -778,7 +783,9 @@ class LibraryRegistration:
             is_declared_type=DeclaredTypeNamer(
                 structs=tables.structs, enums=tables.enums,
                 generic_structs=tables.generic_structs,
-                generic_enums=tables.generic_enums, perks=tables.perks))
+                generic_enums=tables.generic_enums, perks=tables.perks),
+            conversions=tables.conversions)
+        collector.visibility = tables.visibility
         collector.current_unit_name = unit_name
         collector.current_unit_file = unit_file
         return collector
@@ -803,14 +810,18 @@ class LibraryRegistration:
             if unit.ast is None:
                 continue
             late = [ext for ext in unit.ast.extensions
-                    if isinstance(ext.target_type, UnknownType)
-                    and ext.target_type.name in library_types]
+                    if (isinstance(ext.target_type, UnknownType)
+                        and ext.target_type.name in library_types)
+                    or (ext.is_conversion and isinstance(ext.ret, UnknownType)
+                        and ext.ret.name in library_types)]
             if not late:
                 continue
             collector = self._function_collector(
                 self.reporter, unit.name, str(unit.file_path))
-            for ext in late:
-                collector.refile_extension(ext)
+            refused = {id(ext) for ext in late if not collector.refile_extension(ext)}
+            if refused:
+                unit.ast.extensions[:] = [ext for ext in unit.ast.extensions
+                                          if id(ext) not in refused]
 
     def _register_extensions(self, build_units: set[str]) -> None:
         """Register the CONCRETE extension methods the libraries ship.
@@ -858,6 +869,54 @@ class LibraryRegistration:
                 ret=sig.ret_type, body=Block(loc=None, statements=[]),
                 self_mode=self_mode,
                 err_type=sig.err_type, is_static=is_static))
+
+    def _register_conversions(self) -> None:
+        """Register the conversions the libraries ship (docs/design/error-conversion.md 8.2).
+
+        A record is a pair of type names and the symbol of the body, which is in the
+        library's bitcode. The pair goes to the conversion table, and a declaration of
+        the body goes to the backend, as for an extension method; the conversion is not
+        filed in the extension table (ruling P6). The types are read against a copy of
+        the tables taken after the private types, as for an extension method.
+
+        Only the unit that declares the target may declare a conversion (C5), so a pair
+        that the table holds already means that two libraries declare one target type:
+        that clash has its own diagnostic, and the second record adds nothing.
+        """
+        from sushi_lang.semantics.ast import CONVERSION_METHOD, Block, ExtendDef
+        from sushi_lang.semantics.conversions import Conversion, conversion_symbol
+        from sushi_lang.semantics.library_registry import manifest_conversions
+        from sushi_lang.semantics.type_resolution import parse_type_string
+        from sushi_lang.semantics.typesys import EnumType
+
+        struct_table, enum_table = self._type_tables()
+        for lib_name, manifest in self._manifests():
+            lib_file = self._library_file(lib_name)
+            for record in manifest_conversions(manifest):
+                source = parse_type_string(record["source"], struct_table, enum_table)
+                target = parse_type_string(record["target"], struct_table, enum_table)
+                symbol = record["link_symbol"]
+                if not (isinstance(source, EnumType) and source.is_error
+                        and isinstance(target, EnumType) and target.is_error):
+                    raise SushiError(
+                        "CE3512", path=lib_file,
+                        reason=f"conversion '{record['source']} as {record['target']}' "
+                               "does not name two error types")
+                if symbol != conversion_symbol(source, target):
+                    raise SushiError(
+                        "CE3512", path=lib_file,
+                        reason=f"conversion '{source.name} as {target.name}' names the "
+                               f"symbol '{symbol}'")
+                first = self.tables.conversions.file(Conversion(
+                    source=source, target=target, symbol=symbol,
+                    unit_name=library_unit(lib_name, record.get("unit")),
+                    filename=lib_file))
+                if first is not None:
+                    continue
+                self.shipped_extensions.append(ExtendDef(
+                    loc=None, target_type=source, name=CONVERSION_METHOD, params=[],
+                    ret=target, body=Block(loc=None, statements=[]), self_mode="nom",
+                    method_type_args=(target,)))
 
     def _register_generic_extensions(self, build_units: set[str]) -> None:
         """Register the extension TEMPLATES the libraries ship.
@@ -1055,12 +1114,13 @@ class LibraryRegistration:
                 else snippet.program.enums
             node = next((d for d in declarations or [] if d.name == type_name), None)
             shipped_in = manifest.get("library_path")
+            is_error = getattr(node, "is_error", False)
             if getattr(node, "is_public", False):
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=type_name,
                     unit_name=library_unit(lib_name, record.get("unit")),
-                    filename=shipped_in))
+                    filename=shipped_in, is_error=is_error))
             else:
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=type_name, unit_name=lib_name, filename=shipped_in,
-                    is_public=False))
+                    is_public=False, is_error=is_error))

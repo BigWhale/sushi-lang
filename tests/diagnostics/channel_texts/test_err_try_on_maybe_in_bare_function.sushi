@@ -1,6 +1,6 @@
-# A `??` over a Maybe in a bare function is CE0131, and the help names the Maybe too.
+# A `??` over a Maybe in a bare function is CE0131, and the help does not offer `??` for the Maybe.
 # EXPECT_ERROR_CODES_EXACT: CE0131
-# EXPECT_STDERR_CONTAINS: "handle the Result or the Maybe in the body (match, .realise(default)), or write '| E' in the signature"
+# EXPECT_STDERR_CONTAINS: "handle the value in the body (match, .realise(default)), or write '| E' in the signature"
 fn first(i32[] xs) i32:
     return xs.get(0)??
 

@@ -1,7 +1,7 @@
 ?start: program
 
 program: (_NEWLINE | DOC_BLOCK | toplevel)+
-toplevel: use_stmt | const_def | var_def | struct_def | enum_def | perk_def | function_def | extend_stmt | external_block
+toplevel: use_stmt | const_def | var_def | struct_def | enum_def | error_def | perk_def | function_def | extend_stmt | external_block
 
 const_def: PUBLIC? CONST type NAME "=" expr _NEWLINE
 # Unit-level storage (docs/design/unit-storage.md): the same shape as a constant, and
@@ -14,11 +14,17 @@ use_stmt: PUBLIC? USE (stdlib_import | lib_import | user_import) [AS NAME] _NEWL
 stdlib_import: LT use_path GT
 lib_import: LT "lib" "/" use_path GT
 user_import: STRING
-use_path: NAME ("/" NAME)*
+# `error` is a reserved word, and an import path spells it (`use <io/error>`).
+use_path: use_segment ("/" use_segment)*
+?use_segment: NAME | ERROR
 struct_def: PUBLIC? STRUCT NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | struct_field)+ _DEDENT
 struct_field: type NAME _NEWLINE
 
-enum_def: PUBLIC? ENUM NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | enum_variant)+ _DEDENT
+# An error type is an enum with a flag (docs/design/error-conversion.md section 2), so the
+# two declarations share one body.
+error_def: PUBLIC? ERROR _enum_body
+enum_def: PUBLIC? ENUM _enum_body
+_enum_body: NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | enum_variant)+ _DEDENT
 # Generic type parameters, e.g. `struct Pair@(T, U):` / `fn id@(T)(T x) T:`.
 type_params: AT "(" type_param_list ")"
 type_param_list: type_param ("," type_param)*
@@ -53,6 +59,9 @@ extend_stmt: EXTEND type extend_suffix
 // `extend Box static new(...)` is writable (ruling R3).
 extend_suffix: WITH implemented_perk ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | STATIC? function_def)+ _DEDENT  -> extend_with_def
              | STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] ":" block  -> extend_def
+// A conversion (docs/design/error-conversion.md section 3.1): the target type and a body.
+// It has no place for a `| E`, because the body is bare.
+             | AS type ":" block  -> extend_as_def
 
 // The perk of an implementation, bare or behind an alias (`extend Dog with p.Named`).
 implemented_perk: NAME ("." NAME)?
@@ -292,6 +301,7 @@ CONST: "const"
 VAR.2: /var\b/
 STRUCT: "struct"
 ENUM: "enum"
+ERROR: "error"
 PERK.2: /perk\b/
 UNSAFE.2: /unsafe\b/
 EXTERNAL.2: /external\b/

@@ -25,14 +25,17 @@ when you are not sure: a channel that you add later changes the signature and br
 caller and every binary `.slib`. See [The error channel](../design/error-channel.md) and
 [Error handling](../error-handling.md).
 
-The error type `E` must be an enum. Any other type is CE2084.
+The error type `E` must be an ERROR TYPE: an enum declared with `error`, or one of the
+predefined error types below. Any other type is CE2084, in both spellings and in every
+position (a signature, a `let`, a field, a generic argument). A plain `enum` gets the help
+to declare it with `error`.
 
 ## Type Syntax
 
 ### Error Channel
 
 ```sushi
-enum ParseError:
+error ParseError:
     Empty
     NotANumber
 
@@ -56,12 +59,12 @@ fn add(i32 a, i32 b) i32:
 A bare body returns the value. `return Result.Ok(...)` in it is CE2091, and `??` in it is
 CE0131. On the call of a bare function, `??` is CE2507 and `.realise(...)` is CE2008.
 
-### StdError and the Predefined Error Enums
+### StdError and the Predefined Error Types
 
-`StdError` is a built-in error enum with one variant, `StdError.Error`. A signature names
+`StdError` is a built-in error type with one variant, `StdError.Error`. A signature names
 it like any other error type: `fn f() i32 | StdError:`. It is not a default.
 
-A predefined error enum is used in the same way. `MathError` comes with `use <math>`:
+A predefined error type is used in the same way. `MathError` comes with `use <math>`:
 
 ```sushi
 use <math>
@@ -73,7 +76,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
 # Returns Result@(i32, MathError)
 ```
 
-Do not declare an enum with the name of a predefined enum (for example `enum MathError`).
+Do not declare a type with the name of a predefined enum (for example `error MathError`).
 The compiler always knows the predefined enums, also in a unit that does not import their
 home module, so a second declaration is CE2046.
 
@@ -87,9 +90,11 @@ fn foo() Result@(i32, ParseError):
 A declaration uses one of the two forms. `fn foo() Result@(i32, ParseError) | ParseError`
 mixes them and is CE2085.
 
-## Standard Error Enums
+## Standard Error Types
 
-Sushi provides built-in enums. Each one but `StdError` has a HOME module, and the import
+Sushi provides built-in enums. Seven of them are error types: `StdError`, `MathError`,
+`FileError`, `IoError`, `NetError`, `ProcessError` and `EnvError`. `FileMode` and
+`SeekFrom` are plain enums, so they cannot be the `E` of a `Result`. Each one but `StdError` has a HOME module, and the import
 of that module brings the bare name into a unit (see
 [Unit namespaces](../design/unit-namespaces.md)). A module whose calls answer an enum
 re-exports its home (`public use`), so the import that a program already writes is the
@@ -255,9 +260,9 @@ Extract the error value if present, otherwise return `Maybe.None()`.
 
 ```sushi
 let Result@(i32, MathError) result = divide(10, 0)
-let Maybe@(MathError) error = result.err()
+let Maybe@(MathError) err = result.err()
 
-match error:
+match err:
     Maybe.Some(MathError.DivisionByZero) ->
         println("Error occurred: division by zero")
     Maybe.Some(_) ->
@@ -293,6 +298,51 @@ let Result@(i32, MathError) result = divide(10, 0)
 let i32 value = result.realise(0)  # Returns 0 on error
 ```
 
+### `.map_err(f) -> Result@(T, F)`
+
+Convert the error with the function `f`, and keep the Ok value. `Ok(v)` stays `Ok(v)`, and
+`Err(e)` becomes `Err(f(e))`. The signature, written as an extension, is
+`extend Result@(T, E) map_err@(F)(nom self, fn(nom E) -> F f) Result@(T, F)`. It is a
+built-in method and needs no import.
+
+```sushi
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n)
+
+fn app(i32 n) i32 | AppError:
+    let i32 v = low(n).map_err(|nom LowError e| AppError.Low(e))??
+    return Result.Ok(v + 1)
+
+fn main() i32:
+    println(app(1).realise(-1))     # 2
+    match app(-5):
+        Result.Ok(v) -> println(v)
+        Result.Err(e) -> println(e) # AppError.Low(LowError.Bad(-5))
+    return 0
+```
+
+- `f` takes the error `nom`, because the error moves into the new value. A mode is part of
+  a function type, so a lambda writes `|nom LowError e|`; a lambda without `nom` is CE2006.
+- `F` is solved from `f`, and it must be an error type (CE2084).
+- A lambda parameter cannot have an owning type. For an error type that holds a `string`,
+  pass a named function: `fn wrap(nom ParseError e) AppError`.
+- The receiver is `nom self`. A named `Result` that owns something is spent by the call
+  (CE2435). A BORROWED `Result` that owns something (a parameter, a binding, a get-out) is
+  CE2411, because the error moves into `f`; write `r.clone().map_err(f)`.
+- Exactly one argument (CE2009).
+
+`map_err` converts at one site. When many sites need one conversion, declare it once with
+`extend LowError as AppError:`, and `??` calls it (see
+[Error Conversion](../error-handling.md#error-conversion)).
+
 ## Error Propagation with `??`
 
 The `??` operator unwraps a Result or propagates the error to the caller.
@@ -304,15 +354,19 @@ fn compute() i32 | MathError:
     return Result.Ok(x + y)
 ```
 
+`??` takes a `Result@(T, E)` and nothing else. On a `Maybe@(T)` it is CE2507: write the
+error value with [`or_err`](maybe.md#or_errnom-e) first.
+
 ### Error Type Matching
 
-The `??` operator requires error types to match exactly:
+The `??` operator propagates an error of the same type unchanged. Two different error
+types need a declared conversion:
 
 ```sushi
-enum ErrorA:
+error ErrorA:
     Error
 
-enum ErrorB:
+error ErrorB:
     Error
 
 fn inner() i32 | ErrorA:
@@ -323,7 +377,19 @@ fn outer() i32 | ErrorB:
     return Result.Ok(x)
 ```
 
-To use `??`, the inner function's error type must match the outer function's error type:
+The unit that declares `ErrorB` can declare the conversion, and then `??` calls it:
+
+```sushi
+extend ErrorA as ErrorB:
+    return ErrorB.Error
+
+fn outer() i32 | ErrorB:
+    let i32 x = inner()??  # ErrorA as ErrorB
+    return Result.Ok(x)
+```
+
+`e as ErrorB` calls the same conversion explicitly. Or use the same error type in both
+functions:
 
 ```sushi
 fn outer() i32 | ErrorA:
@@ -393,13 +459,14 @@ else:
 
 - **Always handle errors explicitly** - Don't ignore Result values
 - **Write a channel on a function that can fail** - The bare form is for a total function only
-- **Use `??` for error propagation** - In function chains with matching error types
+- **Use `??` for error propagation** - In function chains with one error type, or with a
+  declared conversion between two
 - **Use `.realise(default)` for fallback values** - When a default makes sense
 - **Use pattern matching for detailed error handling** - When you need different behavior per error variant
 - **Avoid `expect()` in production code** - It terminates the program on error
 - **No `??` in main()** - `main` is bare (CE0131); use explicit error handling
 - **Keep error types consistent** - Makes error propagation easier
-- **Define custom error enums** - For domain-specific error conditions
+- **Declare custom error types with `error`** - For domain-specific error conditions
 
 ## Examples
 
@@ -408,7 +475,7 @@ else:
 ```sushi
 use <collections/strings>
 
-enum ValidationError:
+error ValidationError:
     TooShort
     TooLong
     InvalidCharacters
@@ -447,10 +514,10 @@ fn safe_divide(i32 a, i32 b) i32 | MathError:
 
 fn process() i32 | MathError:
     let Result@(i32, MathError) result = safe_divide(10, 2)
-    let Maybe@(MathError) error = result.err()
+    let Maybe@(MathError) err = result.err()
 
-    if (error.is_some()):
-        return Result.Err(error.realise(MathError.DivisionByZero))
+    if (err.is_some()):
+        return Result.Err(err.realise(MathError.DivisionByZero))
 
     let i32 value = result.realise(0)
     return Result.Ok(value)

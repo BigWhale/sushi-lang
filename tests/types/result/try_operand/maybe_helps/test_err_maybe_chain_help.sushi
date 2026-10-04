@@ -1,0 +1,17 @@
+# Design 4 (C8): a method of the payload called on a Maybe is CE2515, and the help
+# writes an error value first: `.or_err(nom e)??`.
+# EXPECT_ERROR_CODES_EXACT: CE2515
+# EXPECT_STDERR_CONTAINS: "first_big().or_err(nom <error value>)??.doubled()"
+extend i32 doubled() i32:
+    return self * 2
+
+extend i32[] first_big() Maybe@(i32):
+    foreach(x in self.iter()):
+        if (x > 10):
+            return Maybe.Some(x)
+    return Maybe.None
+
+fn main() i32:
+    let i32[] xs = from([4, 40])
+    println(xs.first_big().doubled())
+    return 0

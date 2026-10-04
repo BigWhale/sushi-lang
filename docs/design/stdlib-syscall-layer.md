@@ -65,7 +65,7 @@ line, use `BufReader@(R)` and its `lines()` in `<io/buf>` (`docs/stdlib/io/buf.m
 ## errno to an error tag
 
 A failed libc call answers -1 (or a null pointer) and puts the cause in `errno`. The
-generators turn that cause into the tag of a unit-variant error enum -- `FileError` for
+generators turn that cause into the tag of a unit-variant error type -- `FileError` for
 `<io/files>`, `NetError` for `<net/socket>` -- and build a `Result.Err` with it.
 
 - **One emitter.** `emit_errno_tag(builder, module, table, default)` in

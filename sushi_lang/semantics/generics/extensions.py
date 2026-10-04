@@ -100,6 +100,23 @@ def monomorphize_extension_method(
     return concrete
 
 
+def _error_arguments_hold(generic_method: GenericExtensionMethod, type_args,
+                          site_key: str, substitutor: "TypeSubstitutor") -> bool:
+    """E3 for one generic-target copy: no copy is cut for a refused type argument."""
+    from sushi_lang.semantics.generics.monomorphize.functions import (
+        callable_error_parameters)
+    monomorphizer = getattr(substitutor, "monomorphizer", None)
+    if not type_args or monomorphizer is None:
+        return True
+    error_params = callable_error_parameters(
+        generic_method.ret_type, generic_method.err_type,
+        generic_method.err_span or generic_method.ret_span, generic_method.params,
+        generic_method.body, generic_method.name_span, generic_method.type_params)
+    return monomorphizer.error_arguments_hold(
+        generic_method.type_params, type_args, error_params, site_key,
+        generic_method.filename)
+
+
 def monomorphize_all_extension_methods(
     generic_extensions: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]],
     struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
@@ -134,6 +151,9 @@ def monomorphize_all_extension_methods(
             # A concrete target has no type parameters, so it substitutes nothing -- its
             # signature and body are already written in terms of the type it names.
             substitution_args = () if target_key else type_args
+            if not _error_arguments_hold(generic_method, substitution_args,
+                                         concrete_type_name, substitutor):
+                continue
 
             result[(concrete_type_name, method_name, type_args)] = monomorphize_extension_method(
                 generic_method, concrete_target, substitution_args, substitutor=substitutor)

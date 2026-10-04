@@ -6,7 +6,12 @@ from sushi_lang.semantics.typesys import FunctionType, Type
 
 from lark import Token
 
+#: The metadata of a field that names a node another field of the same node holds. The
+#: node walk (`ast_walk.children`) does not descend it, so each node is visited once.
+ALIAS = {"alias": True}
+
 if TYPE_CHECKING:
+    from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.namespaces import NamespaceRef
     from sushi_lang.semantics.param_modes import ParamMode
@@ -324,6 +329,13 @@ class EnumDef(Node):
     doc: Optional[DocBlock] = None
     is_public: bool = True
     public_span: Optional[Span] = None
+    # Written `error`, not `enum`: the type may be the `E` of a `Result`.
+    is_error: bool = False
+
+# The method name of a conversion, `extend Source as Target:` (docs/design/error-conversion.md
+# section 8.2). `as` is a reserved word, so no written method has this name.
+CONVERSION_METHOD = "as"
+
 
 @dataclass(slots=True)
 class ExtendDef(Node):
@@ -362,6 +374,14 @@ class ExtendDef(Node):
     library_origin: Optional[Origin] = None
     # The scope the names of the body resolve in; see `FuncDef`.
     scope_unit: Optional[str] = None
+    # A conversion: the pair the collect pass filed, with its types resolved. None on
+    # every other extension, and on a refused conversion.
+    declared_conversion: Optional["Conversion"] = None
+
+    @property
+    def is_conversion(self) -> bool:
+        """A conversion: the target is the return type and the one method-level type argument."""
+        return self.name == CONVERSION_METHOD
 
 @dataclass(slots=True)
 class PerkMethodSignature:
@@ -559,8 +579,9 @@ class Foreach(Stmt):
     # binding to a hidden name and prepended `let <T> <name> = <hidden>??` to the body;
     # this points at that Let so the typecheck pass can fill in its type once the item
     # type is known. Nothing downstream needs a rule of its own: the unwrap is the
-    # ordinary TryExpr and the binding the ordinary Let.
-    item_try_let: "Optional[Let]" = None
+    # ordinary TryExpr and the binding the ordinary Let. The body holds the Let, so this
+    # field is an ALIAS and the node walk does not descend it (#1174).
+    item_try_let: "Optional[Let]" = field(default=None, metadata=ALIAS)
     item_try_span: Optional[Span] = None
     # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
     # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
@@ -1018,6 +1039,9 @@ class CastExpr(Node):
     expr: "Expr"
     target_type: Type
     source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
+    # The declared conversion `as` calls between two error types (`semantics/conversions.py`),
+    # stamped by the typecheck pass. None for a numeric cast and an identity cast.
+    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class Borrow(Node):
@@ -1035,6 +1059,9 @@ class TryExpr(Node):
     inferred_success_tag: "Optional[int]" = None
     inferred_error_type: "Optional[Type]" = None
     inferred_func_return_type: "Optional[Type]" = None
+    # The declared conversion the propagate path calls when the two error types differ
+    # (`semantics/conversions.py`). None when the error propagates unchanged.
+    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class RangeExpr(Node):

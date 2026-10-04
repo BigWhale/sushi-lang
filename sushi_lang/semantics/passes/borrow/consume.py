@@ -7,10 +7,11 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
-from sushi_lang.semantics.ownership import Ownership, Provenance, classify
+from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import (
+    CopyUse,
     emit_consume_of_borrow,
     emit_consume_of_read,
     no_clone_reason,
@@ -74,6 +75,14 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     if field_take(checker, expr) is not None:
         return Provenance.OWNED
 
+    # `m.or_err(nom e)` answers what `m` holds, by the same rule as `m??` below: a
+    # borrowed `m` is read through, and an owned `m` was spent by the call (design 4).
+    receiver = read_through_receiver(checker, expr)
+    if receiver is not None:
+        if source_provenance(checker, receiver) is Provenance.BORROWED:
+            return Provenance.BORROWED
+        return Provenance.FRESH
+
     # `r??` yields what `r` holds, and the payload has `r`'s provenance (#548). A
     # borrowed `r` keeps its owner, so the payload is a read through it. An owned `r`
     # was SPENT by the `??` itself (`unwrap_place`), so nothing owns the payload now
@@ -91,8 +100,27 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     return Provenance.FRESH
 
 
+def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr]:
+    """The receiver of a built-in call that reads a borrowed receiver through, or None.
+
+    `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` whose payload owns a resource
+    is read through, as `??` reads through a borrowed wrapper
+    (docs/design/error-conversion.md section 4). The answer then carries the borrow. A
+    receiver that owns nothing is copied, so it is not read through. Under a `??` the call
+    is transparent (`places.try_operand`), so this asks about the call itself.
+    """
+    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
+    receiver = read_through_receiver_of(expr)
+    if receiver is None:
+        return None
+    if checker.types.type_class(getattr(expr, "resolved_enum_type", None)) \
+            is not TypeClass.MOVE:
+        return None
+    return receiver
+
+
 def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
-    """`r??` over a bare name spends `r` when `r` owns what it wraps (#548).
+    """`r??` spends an owned `r`, and refuses a borrowed `r` whose error owns (#548, #1171).
 
     The unwrap moves the payload out of the wrapper, so a wrapper the writer OWNS has
     nothing left to free: the `??` is a consuming position of its own, and `r` after it
@@ -100,16 +128,40 @@ def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
     payload's, because the Err arm travels too -- a `Result@(i32, Fail)` whose Fail
     holds a string is spent on the propagation path, or the scope cleanup frees the
     error the caller is about to read. A wrapper that owns nothing is copied out of
-    and stays usable. A BORROWED wrapper is left to its owner: the payload is a read
-    through it, and `source_provenance` says so at the position that takes it.
+    and stays usable.
+
+    A BORROWED wrapper keeps its owner. Its Ok payload is a read through it, and
+    `source_provenance` says so at the position that takes it. Its error leaves the
+    function in the returned Err, so an error type that owns is the consuming use of a
+    borrow (CE2411, docs/design/borrow-model.md S10d); the help names `r.clone()??`.
     """
     source = expr.expr
-    if not isinstance(source, Name):
-        return
-    provenance = name_provenance(checker, source.id)
-    source.ownership_provenance = provenance
-    if provenance is Provenance.OWNED:
-        consume_named(checker, source.id, provenance, expr.loc)
+    if isinstance(source, Name):
+        provenance = name_provenance(checker, source.id)
+        source.ownership_provenance = provenance
+        if provenance is Provenance.OWNED:
+            consume_named(checker, source.id, provenance, expr.loc)
+            return
+    if propagates_a_borrowed_error(checker, expr):
+        consume(checker, source, PROPAGATE_THE_COPY)
+
+
+# What the CE2411 escape does with the copy of a borrowed wrapper under `??`.
+PROPAGATE_THE_COPY = CopyUse("propagate the copy", "??")
+
+
+def propagates_a_borrowed_error(checker: 'BorrowChecker', expr: TryExpr) -> bool:
+    """Does `r??` put an owning error that another owner keeps in the returned Err?
+
+    A read-through `m.or_err(nom e)` is not one: its error is the argument `e`, which
+    the call owns, and not a part of the borrowed `m`.
+    """
+    source = expr.expr
+    if read_through_receiver(checker, source) is not None:
+        return False
+    if source_provenance(checker, source) is not Provenance.BORROWED:
+        return False
+    return checker.types.type_class(expr.inferred_error_type) is TypeClass.MOVE
 
 
 def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
@@ -138,8 +190,13 @@ def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
     return Provenance.OWNED
 
 
-def consume(checker: 'BorrowChecker', expr: Expr) -> None:
-    """Classify a consuming use, stamp the decision, and act on it."""
+def consume(checker: 'BorrowChecker', expr: Expr,
+            use_of_copy: Optional[CopyUse] = None) -> None:
+    """Classify a consuming use, stamp the decision, and act on it.
+
+    `use_of_copy` is what the position does with the copy that the CE2411 escape takes:
+    `x.clone() as T`, `r.clone().map_err(f)`.
+    """
     # A bloom `arr...` MOVES its source into the callee. CE0120 restricts the source
     # to a bare array variable, so unwrapping here makes a use-after-bloom a CE2405
     # instead of a use-after-free (#174).
@@ -153,7 +210,7 @@ def consume(checker: 'BorrowChecker', expr: Expr) -> None:
 
     if isinstance(expr, Name):
         checker.err.meet(expr)
-        consume_named(checker, expr.id, provenance, expr.loc)
+        consume_named(checker, expr.id, provenance, expr.loc, use_of_copy)
         return
 
     if reject_move_of_namespaced(checker, expr, provenance):
@@ -171,7 +228,7 @@ def consume(checker: 'BorrowChecker', expr: Expr) -> None:
         return
     if classify(provenance,
                 checker.types.type_class(read_type(checker, expr))) is Ownership.REJECT:
-        emit_consume_of_read(checker, expr)
+        emit_consume_of_read(checker, expr, use_of_copy)
 
 
 def consume_each(checker: 'BorrowChecker', args) -> None:
@@ -222,7 +279,7 @@ def reject_move_of_storage(checker: 'BorrowChecker', sig, name: str,
 
 
 def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
-                  use_span: Optional[Span]) -> None:
+                  use_span: Optional[Span], use_of_copy: Optional[CopyUse] = None) -> None:
     """Apply the ownership decision to a source that is a bare name."""
     state = checker.borrow_state.get(name)
     if state is None:
@@ -273,7 +330,7 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
         if checker.branch_depth > state.declared_branch_depth:
             checker.conditional_moves.add(state.name)
     elif decision is Ownership.REJECT:
-        emit_consume_of_borrow(checker, name, use_span, state)
+        emit_consume_of_borrow(checker, name, use_span, state, use_of_copy)
 
 
 def bind(checker: 'BorrowChecker', stmt: Let) -> None:

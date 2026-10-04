@@ -7,6 +7,8 @@ from sushi_lang.semantics.typesys import StructType, Type
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS
+from sushi_lang.semantics.param_modes import BuiltinModes
 
 
 #: Every built-in `List@(T)` method and the number of arguments it takes. The family
@@ -19,6 +21,11 @@ LIST_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "clear": 0, "reserve": 1, "shrink_to_fit": 0,
     "destroy": 0, "free": 0, "debug": 0, "iter": 0, "clone": 0,
 })
+
+
+#: The parameter modes of the `List@(T)` methods (#1173). `push` and `insert` store into
+#: a slot, which takes ownership by position; every other parameter borrows.
+LIST_METHOD_MODES = BuiltinModes(slots=CONTAINER_INSERT_METHODS & LIST_METHOD_ARITY.keys())
 
 
 def is_builtin_list_method(method_name: str) -> bool:

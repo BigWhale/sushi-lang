@@ -25,7 +25,7 @@ fn run_test() i32 | StdError:
     println(bytes4.len())  # Expected: 0
 
     # Test 5: Access individual bytes (verify first byte of "Hello" = 72 = 'H')
-    let u8 first_byte = bytes1.get(0)??
+    let u8 first_byte = bytes1.get(0).or_err(nom StdError.Error)??
     println(first_byte)  # Expected: 72
 
     return Result.Ok(0)

@@ -15,7 +15,7 @@ use <collections/hashmap>
 fn get_num() i32 | StdError:
     let HashMap@(i32, i32) nums = HashMap.new()
     nums.insert(1, 5)
-    let i32 n = nums.get(1)??
+    let i32 n = nums.get(1).or_err(nom StdError.Error)??
     nums.free()
     return Result.Ok(n)
 
@@ -25,7 +25,7 @@ fn get_word() string | StdError:
     words.insert(2, "hi-{base}")
     # The get-out borrows what the map still owns, so `got` must be an independent value
     # before the map is freed and before it is returned.
-    let string got = words.get(2)??.clone()
+    let string got = words.get(2).or_err(nom StdError.Error)??.clone()
     words.free()
     return Result.Ok(got)
 

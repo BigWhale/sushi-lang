@@ -265,7 +265,7 @@ fn main() i32:
 
 ### Reading Through a Borrow, Without Consuming
 
-A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)??` -- do not
+A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)` -- do not
 copy. They hand back a **borrow**: a read-only view of storage the owner keeps and still frees.
 Reading it is free. **Consuming** it -- storing it in a constructor, handing it to a `nom`
 parameter through a borrowed owner, returning it -- is `CE2411`, because that would require
@@ -711,7 +711,7 @@ fn main() i32:
 
 ### Borrowed `let` Bindings
 
-A `let` that reads through an owner -- `s.field`, `arr[i]`, `own.get()`, `list.get(i)??` -- **binds
+A `let` that reads through an owner -- `s.field`, `arr[i]`, `own.get()`, `list.get(i).or_err(nom e)??` -- **binds
 a borrow**, not a copy: no allocation happens, and the binding does not own what it points to.
 
 ```sushi
@@ -864,8 +864,10 @@ fn main() i32:
 
 ### `??` Spends a Named Wrapper
 
-`let string got = r??` takes the value out of `r`. When the `Result` or `Maybe` owns something
-in one of its arms, `r` is spent: a later use of `r` is `CE2405`. A wrapper that owns nothing
+`let string got = r??` takes the value out of `r`. When the `Result` owns something
+in one of its arms, `r` is spent: a later use of `r` is `CE2405`. A named `Maybe` is not an
+operand of `??`; `m.or_err(nom e)` takes it `nom self`, so a `Maybe` that owns something is
+spent by that call (`CE2435`). A wrapper that owns nothing
 copies, and `r` stays usable. A borrowed wrapper (a parameter or a binding) is read through: the
 `let` binds a borrow, and a consuming use of it is `CE2411`.
 

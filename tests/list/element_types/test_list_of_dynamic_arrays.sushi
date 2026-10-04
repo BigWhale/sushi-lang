@@ -17,8 +17,8 @@ fn read_rows() i32 | StdError:
     rows.push(w)
     println("len={rows.len()}")
 
-    let i32[] a = rows.get(0)??
-    let i32[] b = rows.get(1)??
+    let i32[] a = rows.get(0).or_err(nom StdError.Error)??
+    let i32[] b = rows.get(1).or_err(nom StdError.Error)??
     println("row0={a.len()} row1={b.len()}")
     println("first={a[0]} last={b[2]}")
     rows.destroy()

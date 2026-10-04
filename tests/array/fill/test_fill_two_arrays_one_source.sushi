@@ -15,9 +15,9 @@ fn run_test() i32 | StdError:
     a.fill(towel)
     b.fill(towel)
 
-    if (a.get(1)?? != "MOSTLY HARMLESS"):
+    if (a.get(1).or_err(nom StdError.Error)?? != "MOSTLY HARMLESS"):
         return Result.Err(StdError.Error)
-    if (b.get(2)?? != "MOSTLY HARMLESS"):
+    if (b.get(2).or_err(nom StdError.Error)?? != "MOSTLY HARMLESS"):
         return Result.Err(StdError.Error)
 
     println("a={a.len()} b={b.len()} towel={towel}")

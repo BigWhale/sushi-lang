@@ -1,0 +1,18 @@
+# Design 5 (E3): `F` of `map_err` is judged at each instance. A function that answers a
+# plain enum solves `F` to a type that is not an error type, so the call is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: 'Colour' is a plain enum, not an error type
+error LowError:
+    Bad(i32)
+
+enum Colour:
+    Red
+
+fn paint(nom LowError e) Colour:
+    match e:
+        LowError.Bad(_) -> return Colour.Red
+
+fn main() i32:
+    let Result@(i32, LowError) r = Result.Ok(1)
+    println(r.map_err(paint).is_ok())
+    return 0

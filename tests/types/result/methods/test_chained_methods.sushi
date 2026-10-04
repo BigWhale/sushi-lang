@@ -4,7 +4,7 @@
 
 # Tests chaining Result methods
 
-enum MyError:
+error MyError:
     Error
 
 fn get_result(bool success) i32 | MyError:

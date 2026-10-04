@@ -28,7 +28,7 @@ public struct Url:
     string query
     string fragment
 
-public enum UrlError:
+public error UrlError:
     Empty    NoScheme    BadScheme
     NoHost   BadPort     UnclosedHost
 ```

@@ -1,0 +1,41 @@
+# A `nom self` perk method whose argument holds a `??`. The receiver is a struct temporary
+# that a function call answers, or a named local. When the `??` propagates, the method
+# does not run, so the caller frees the receiver. When the `??` continues, the method
+# takes the receiver. Each value is freed one time.
+# EXPECT_STDOUT_EXACT: "0\n5\n0\n6\n"
+# EXPECT_NO_LEAKS: true
+
+error ParseError:
+    Bad(i32)
+
+struct Note:
+    string text
+
+perk Spender:
+    fn spend(nom self, i32 k) i32
+
+extend Note with Spender:
+    fn spend(nom self, i32 k) i32:
+        return k
+
+fn make(i32 n) Note:
+    return Note("note {n}")
+
+fn parse(i32 n) i32 | ParseError:
+    if (n < 0):
+        return Result.Err(ParseError.Bad(n))
+    return Result.Ok(n)
+
+fn from_temporary(i32 n) i32 | ParseError:
+    return Result.Ok(make(1).spend(parse(n)??))
+
+fn from_local(i32 n) i32 | ParseError:
+    let Note t = make(2)
+    return Result.Ok(t.spend(parse(n)??))
+
+fn main() i32:
+    println(from_temporary(-1).realise(0))
+    println(from_temporary(5).realise(0))
+    println(from_local(-1).realise(0))
+    println(from_local(6).realise(0))
+    return 0

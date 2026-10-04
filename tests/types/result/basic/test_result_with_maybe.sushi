@@ -4,7 +4,7 @@
 
 # Tests Result@(Maybe@(T), E) combination
 
-enum MyError:
+error MyError:
     Error
 
 fn find_value(string key) Result@(Maybe@(i32), MyError):

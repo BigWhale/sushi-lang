@@ -47,6 +47,8 @@ from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
     reject_mixed_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.conversions import ConversionTable
+from .conversions import Filed, collect_conversion
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type
 
@@ -512,6 +514,7 @@ class FunctionCollector:
         generic_structs: 'GenericStructTable',
         generic_enums: 'GenericEnumTable',
         is_declared_type: Callable[[str], bool],
+        conversions: Optional['ConversionTable'] = None,
     ) -> None:
         """Initialize function collector."""
         self.r = reporter
@@ -538,6 +541,8 @@ class FunctionCollector:
         self.generic_structs = generic_structs
         self.generic_enums = generic_enums
         self.is_declared_type = is_declared_type
+        # The conversions (`extend A as B:`), which the extension table does not hold.
+        self.conversions = conversions if conversions is not None else ConversionTable()
 
     def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
@@ -557,9 +562,18 @@ class FunctionCollector:
 
         extensions = root.extensions
         if isinstance(extensions, list):
+            refused = []
             for ext in extensions:
-                if isinstance(ext, ExtendDef):
+                if isinstance(ext, ExtendDef) and ext.is_conversion:
+                    if collect_conversion(self, ext) is Filed.REFUSED:
+                        refused.append(ext)
+                elif isinstance(ext, ExtendDef):
                     self._collect_extension_def(ext)
+            # A refused conversion has its diagnostic, and no later pass checks or
+            # emits its body: one of its two types may be no type it can have.
+            if refused:
+                refused_ids = {id(e) for e in refused}
+                root.extensions[:] = [e for e in extensions if id(e) not in refused_ids]
 
             # Re-file what classification found to be no concrete extension after all.
             # The AST builder cannot tell `extend T[]` from `extend Crate[]` -- the
@@ -895,17 +909,22 @@ class FunctionCollector:
 
         self._collect_for_target(header)
 
-    def refile_extension(self, ext: ExtendDef) -> None:
+    def refile_extension(self, ext: ExtendDef) -> bool:
         """File one concrete `extend` declaration again, once its target type exists.
 
         A binary library's concrete types enter the tables in the `libraries` step,
         after this pass, so an extension a consumer writes on one finds no target here
         and files nothing. The step calls this for it. The refusals ran already, so only
-        the filing runs again.
+        the filing runs again. A conversion is judged whole here, because the collect
+        pass could not resolve it. The answer is False when the declaration is refused
+        and leaves the AST.
         """
+        if ext.is_conversion:
+            return collect_conversion(self, ext, refile=True) is not Filed.REFUSED
         header = _read_extension_header(ext)
         if header is not None:
             self._collect_for_target(header)
+        return True
 
     def _reject_signature_faults(self, h: '_ExtensionHeader') -> None:
         """Every refusal the signature carries, whatever the target kind is."""

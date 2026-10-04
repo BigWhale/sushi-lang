@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast_walk import (
 from sushi_lang.semantics.type_walk import spelled_names
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
+from sushi_lang.semantics.visibility import kind_word
 
 # A kind that holds no name of its own and is reached through a receiver, so it is a root.
 _ROOT_KINDS = frozenset({"extension", "perk implementation", "external block"})
@@ -62,7 +63,7 @@ def _report_dead(reporter: Reporter, written: List[Tuple[str, Any]],
         if id(decl) not in live:
             er.emit(reporter, er.ERR.CW1004,
                     getattr(decl, "name_span", None) or getattr(decl, "loc", None),
-                    kind=kind, name=decl.name)
+                    kind=kind_word(kind, decl), name=decl.name)
 
 
 def _is_written(decl: object) -> bool:

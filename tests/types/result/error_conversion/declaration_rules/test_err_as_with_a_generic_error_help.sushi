@@ -1,0 +1,20 @@
+# Design 3.6 (C6): a conversion never takes a generic error type, as the source or as the
+# target. So the help of an `as` between a generic error and another error names no
+# declaration. It names a function that takes the error `nom`.
+# EXPECT_ERROR_CODES_EXACT: CE2014, CE2014
+# EXPECT_STDERR_CONTAINS: a conversion cannot take the generic error type 'DecodeError@(i32)'; call a function that takes the error `nom` and answers 'AppError'
+# EXPECT_STDERR_CONTAINS: a conversion cannot take the generic error type 'DecodeError@(i32)'; call a function that takes the error `nom` and answers 'DecodeError@(i32)'
+error DecodeError@(T):
+    Bad(T)
+
+error AppError:
+    Other
+
+fn from_generic(nom DecodeError@(i32) e) AppError:
+    return e as AppError
+
+fn into_generic(nom AppError e) DecodeError@(i32):
+    return e as DecodeError@(i32)
+
+fn main() i32:
+    return 0

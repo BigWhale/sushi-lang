@@ -12,9 +12,9 @@ fn run_test() i32 | StdError:
     let string[] arr = from(["x", "y"])
     arr.fill(towel)
 
-    if (arr.get(0)?? != "MOSTLY HARMLESS"):
+    if (arr.get(0).or_err(nom StdError.Error)?? != "MOSTLY HARMLESS"):
         return Result.Err(StdError.Error)
-    if (arr.get(1)?? != "MOSTLY HARMLESS"):
+    if (arr.get(1).or_err(nom StdError.Error)?? != "MOSTLY HARMLESS"):
         return Result.Err(StdError.Error)
 
     # The source is a borrow, so it stays usable after the fill.

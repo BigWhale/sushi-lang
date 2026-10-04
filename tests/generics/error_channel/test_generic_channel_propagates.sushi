@@ -6,7 +6,7 @@
 
 use <collections/strings>
 
-enum StepError:
+error StepError:
     TooSmall
 
 fn doubled@(T)(T value, i32 base) i32 | StepError:

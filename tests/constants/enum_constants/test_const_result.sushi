@@ -4,7 +4,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "err\ntrue false 43\n"
 
-enum MyError:
+error MyError:
     Boom
 
 const Result@(i32, MyError) VALUE = Result.Ok(42)

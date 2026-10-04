@@ -1,7 +1,7 @@
 # A perk channel body spells its success as 'return Result.Ok(x)' (#848), the same
 # rule an extension channel body obeys. This spelling was CE2091 before.
 # EXPECT_STDOUT_EXACT: "1\n"
-enum SourceError:
+error SourceError:
     Closed
 
 perk Source:

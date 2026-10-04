@@ -5,12 +5,12 @@
 
 fn first@(T)(T[] arr) T | StdError:
     # A get-out borrows what the array still owns, so returning it needs a clone.
-    let T elem = arr.get(0)??
+    let T elem = arr.get(0).or_err(nom StdError.Error)??
     return Result.Ok(elem.clone())
 
 fn last@(T)(T[] arr) T | StdError:
     let i32 len = arr.len()
-    let T elem = arr.get(len - 1)??
+    let T elem = arr.get(len - 1).or_err(nom StdError.Error)??
     return Result.Ok(elem.clone())
 
 fn run_test() i32:

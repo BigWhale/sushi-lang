@@ -17,7 +17,7 @@ advanced features and compiler internals.
 - [Language Reference](language-reference.md) - Complete syntax and semantics reference
 - [Documentation Blocks](documentation-blocks.md) - `##: ... :##`, the three positions, the tag vocabulary, and the checks
 - [Standard Library](standard-library.md) - Built-in types (`Result@(T, E)`, `Maybe@(T)`, `List@(T)`, `HashMap@(K, V)`)
-- [Error Handling](error-handling.md) - `Result@(T, E)`, `Maybe@(T)`, and the `??` operator
+- [Error Handling](error-handling.md) - `Result@(T, E)`, `Maybe@(T)`, error types, the `??` operator and error conversion
 - [Memory Management](memory-management.md) - RAII, references, borrowing, and `Own@(T)`
 - [Generics](generics.md) - Generic types, functions, and monomorphization
 - [Perks](perks.md) - Traits/interfaces for polymorphic behavior with static dispatch

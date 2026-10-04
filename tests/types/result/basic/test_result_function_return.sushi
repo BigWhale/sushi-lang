@@ -4,7 +4,7 @@
 
 # Tests Result as function return type with implicit annotation
 
-enum MyError:
+error MyError:
     Error
 
 fn explicit_return_ok() i32 | MyError:

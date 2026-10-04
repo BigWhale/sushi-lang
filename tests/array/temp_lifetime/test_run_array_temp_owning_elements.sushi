@@ -11,7 +11,7 @@ fn give() string[]:
 
 fn run_test() i32 | StdError:
     println(give()[0])
-    println(give().get(0)??)
+    println(give().get(0).or_err(nom StdError.Error)??)
     println(give().len())
     return Result.Ok(0)
 

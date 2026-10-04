@@ -16,7 +16,7 @@ fn test_basic_raii() i32 | StdError:
     c.numbers.push(20)
     c.numbers.push(30)
 
-    println("First: {c.numbers.get(0)??}")
+    println("First: {c.numbers.get(0).or_err(nom StdError.Error)??}")
     println("Length: {c.numbers.len()}")
 
     # NO manual c.numbers.destroy() call!
@@ -29,7 +29,7 @@ fn test_nested_scopes() i32 | StdError:
     if (true):
         let Container c1 = Container(new(), "inner")
         c1.numbers.push(100)
-        println("Inner: {c1.numbers.get(0)??}")
+        println("Inner: {c1.numbers.get(0).or_err(nom StdError.Error)??}")
         # c1 and c1.numbers should be cleaned up here
 
     println("Outer scope end")

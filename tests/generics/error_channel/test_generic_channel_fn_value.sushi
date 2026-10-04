@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "11\n"
 
-enum StepError:
+error StepError:
     Stuck
 
 fn bump@(T)(T value, i32 by) i32 | StepError:

@@ -1,0 +1,15 @@
+# Design 5: the function of `map_err` takes the error `nom`, and a mode is part of a
+# function type. A lambda that does not write `nom` on its parameter has another type,
+# so the argument is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: expected fn(nom LowError) -> AppError, got fn(LowError) -> AppError
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+
+fn main() i32:
+    let Result@(i32, LowError) r = Result.Ok(1)
+    println(r.map_err(|LowError e| AppError.Low(e)).is_ok())
+    return 0

@@ -6,7 +6,7 @@ struct Point:
     i32 y
 
 fn second(Point[] pts) i32 | StdError:
-    let Point p = pts.get(1)??
+    let Point p = pts.get(1).or_err(nom StdError.Error)??
     return Result.Ok(p.x)
 
 fn main() i32:

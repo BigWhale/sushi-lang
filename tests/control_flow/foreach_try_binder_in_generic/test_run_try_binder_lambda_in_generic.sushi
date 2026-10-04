@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "run 1\nok 6\n"
 
-enum Bad:
+error Bad:
     Broken()
 
 struct Steps:

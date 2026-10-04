@@ -13,8 +13,8 @@ fn run_test() i32 | StdError:
   let i32 huge_index = single[100]  # Error: index 100 >= size 1
 
   # Test method calls on single element array
-  let i32 valid_get = single.get(0)??   # Valid: 0 < 1
-  let i32 invalid_get = single.get(1)?? # Error: index 1 >= size 1
+  let i32 valid_get = single.get(0).or_err(nom StdError.Error)??   # Valid: 0 < 1
+  let i32 invalid_get = single.get(1).or_err(nom StdError.Error)?? # Error: index 1 >= size 1
 
   return Result.Ok(0)
 

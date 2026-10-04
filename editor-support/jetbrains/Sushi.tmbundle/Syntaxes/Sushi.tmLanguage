@@ -115,7 +115,7 @@
                 </dict>
                 <dict>
                     <key>match</key>
-                    <string>\b(fn|extend|let|const|struct|enum|use|public)\b</string>
+                    <string>\b(fn|extend|let|const|struct|enum|use|public)\b|(?&lt;![/&lt;])\berror\b</string>
                     <key>name</key>
                     <string>keyword.other.sushi</string>
                 </dict>
@@ -496,7 +496,7 @@
             <array>
                 <dict>
                     <key>match</key>
-                    <string>\b(enum)\s+([A-Z][a-zA-Z0-9_]*)\s*:</string>
+                    <string>\b(enum|error)\s+([A-Z][a-zA-Z0-9_]*)\s*:</string>
                     <key>captures</key>
                     <dict>
                         <key>1</key>

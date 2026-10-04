@@ -13,7 +13,7 @@ fn get_length(peek i32[] arr) i32:
 fn get_string_length(peek string[] arr) string | StdError:
     # A get-out is a borrow and the caller keeps the array, so returning an owned string
     # means cloning it.
-    return Result.Ok(arr.get(0)??.clone())
+    return Result.Ok(arr.get(0).or_err(nom StdError.Error)??.clone())
 
 fn get_bool_count(bool[] arr) i32:
     return arr.len()

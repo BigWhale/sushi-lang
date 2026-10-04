@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ownership import is_own_type
+from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type, PointerType
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -14,6 +15,12 @@ from sushi_lang.internals.errors import raise_internal_error
 OWN_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "alloc": 1, "get": 0, "destroy": 0, "clone": 0,
 })
+
+
+#: The parameter modes of the `Own@(T)` methods (#1173). `Own.alloc(x)` stores its
+#: argument into the new allocation, a slot that takes ownership by position (the
+#: OWN_ALLOC consuming use).
+OWN_METHOD_MODES = BuiltinModes(slots=frozenset({"alloc"}))
 
 
 def is_builtin_own_method(method_name: str) -> bool:

@@ -9,7 +9,7 @@ fn run_test() i32 | StdError:
     print(numbers.push(4))   # Push and print result (0)
     print(numbers.push(5))   # Push and print result (0)
     print(numbers.len())    # Should print 5
-    result := numbers.get(0)?? # Should be 1
+    result := numbers.get(0).or_err(nom StdError.Error)?? # Should be 1
   # Array should be automatically cleaned up here
 
   # Test scope cleanup in while loops

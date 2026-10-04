@@ -1,0 +1,14 @@
+# Design 8.2 (the cache signature): a conversion is part of the interface of the unit
+# that declares it. When `v2/` adds a conversion to `errs`, the unit `work` imports
+# `errs`, and its source does not change, but it is rebuilt. `low` does not import
+# `errs`, so it stays cached.
+# EXPECT_STDOUT_EXACT_BEFORE_REBUILD: "ok 3\nerr AppError.Low(-2)\n"
+# EXPECT_STDOUT_EXACT: "ok 3\nerr AppError.Low(98)\n"
+# EXPECT_REBUILT: errs, work, test_cache_conversion_added
+# EXPECT_CACHED: low
+use "work"
+
+fn main() i32:
+    report(3)
+    report(-2)
+    return 0

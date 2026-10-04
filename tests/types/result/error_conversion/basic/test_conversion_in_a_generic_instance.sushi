@@ -1,0 +1,36 @@
+# Design 3.6 (C6): a generic function may use a conversion. The pair is known for each
+# instance only, so each instance looks it up: `E = LowError` converts, and
+# `E = AppError` propagates the error unchanged.
+# EXPECT_STDOUT_EXACT: "ok 5\nerr AppError.Low(LowError.Bad(-1))\nerr AppError.Plain(8)\n"
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+    Plain(i32)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n)
+
+fn app(i32 n) i32 | AppError:
+    return Result.Err(AppError.Plain(n))
+
+fn lift@(E)(nom Result@(i32, E) r) i32 | AppError:
+    let i32 v = r??
+    return Result.Ok(v + 1)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(lift(nom low(4)))
+    show(lift(nom low(-1)))
+    show(lift(nom app(8)))
+    return 0

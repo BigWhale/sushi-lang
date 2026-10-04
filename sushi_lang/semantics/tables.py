@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sushi_lang.semantics.conversions import ConversionTable
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.namespaces import NamespaceTable
 from sushi_lang.semantics.visibility import VisibilityTable
@@ -42,6 +43,10 @@ class SymbolTables:
     generic_extensions: GenericExtensionTable = field(default_factory=GenericExtensionTable)
     generic_funcs: GenericFunctionTable = field(default_factory=GenericFunctionTable)
     externals: ExternalTable = field(default_factory=ExternalTable)
+    # Every `extend <Source> as <Target>:` of the program, keyed by the pair. Not in
+    # `extensions`, which keys on the receiver and the method name: one source converts
+    # to many targets. `conversions.find_conversion` is the one reader.
+    conversions: ConversionTable = field(default_factory=ConversionTable)
     # Who declared what, and whether it says `public`. The kinds whose own table carries
     # no unit and no marker -- a struct, an enum, a perk -- are answered from here.
     visibility: VisibilityTable = field(default_factory=VisibilityTable)
@@ -61,6 +66,9 @@ class SymbolTables:
     # (receiver, method, margs), which is also what keeps the copy's symbol unique.
     pending_extension_instantiations: list = field(default_factory=list)
     queued_extension_keys: set = field(default_factory=set)
+    # The (receiver, method, margs) keys that E3 refused at a call: one CE2084 for each,
+    # at the first call, as for a generic function's instance.
+    refused_extension_keys: set = field(default_factory=set)
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None

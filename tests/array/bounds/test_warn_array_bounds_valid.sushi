@@ -13,14 +13,14 @@ fn run_test() i32 | StdError:
   let string name = names[0]      # Valid: 0 < 2
 
   # Test valid method calls
-  let i32 value1 = numbers.get(2)??   # Valid: 2 < 5
-  let bool flag2 = flags.get(0)??     # Valid: 0 < 3
-  let string name2 = names.get(1)??   # Valid: 1 < 2
+  let i32 value1 = numbers.get(2).or_err(nom StdError.Error)??   # Valid: 2 < 5
+  let bool flag2 = flags.get(0).or_err(nom StdError.Error)??     # Valid: 0 < 3
+  let string name2 = names.get(1).or_err(nom StdError.Error)??   # Valid: 1 < 2
 
   # Test that runtime variables still work (no compile-time check)
   let i32 runtime_index = 2
   let i32 value3 = numbers[runtime_index]      # Should work - runtime check
-  let i32 value4 = numbers.get(runtime_index)??  # Should work - runtime check
+  let i32 value4 = numbers.get(runtime_index).or_err(nom StdError.Error)??  # Should work - runtime check
 
   return Result.Ok(0)
 

@@ -189,13 +189,24 @@ def answers_share(checker: 'BorrowChecker', ty) -> bool:
             and types.resolve_named(method.ret_type) == ty)
 
 
+@dataclass(frozen=True)
+class CopyUse:
+    """What a consuming position does with the copy that its clone escape takes.
+
+    The help reads "clone it, and <clause>: `<text>.clone()<tail>`". An `as` conversion
+    converts the copy, and a `nom self` call calls its method on the copy.
+    """
+    clause: str
+    tail: str
+
+
 def no_clone_reason(text: str) -> str:
     """The clause a help gives in place of a clone escape that CE2431 refuses."""
     return f"'{text}' owns a resource and cannot be cloned"
 
 
 def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
-                handover: bool = True) -> str:
+                handover: bool = True, use_of_copy: Optional[CopyUse] = None) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
@@ -204,9 +215,13 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     owner is `.share()` when the type of `text` has one (#1023); otherwise the help names
     only the escapes that compile. `value_type` is the type of `text` when `ty` is the
     type of its owner. `handover` is False where a `nom` parameter is no escape (a write
-    through a pattern binding).
+    through a pattern binding). `use_of_copy` is what the position does with the copy:
+    an `as` conversion (docs/design/error-conversion.md section 3.2) or a `nom self` call.
     """
     if not refuses_clone(checker, ty):
+        if use_of_copy is not None:
+            return (f"clone it, and {use_of_copy.clause}: "
+                    f"`{text}.clone(){use_of_copy.tail}`")
         return f"clone it to take an independent value: `{text}.clone()`"
     no_clone = f"a descriptor cannot be deep-copied, so there is no `{text}.clone()`"
     if answers_share(checker, ty if value_type is None else value_type):
@@ -243,7 +258,8 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
     return " -- otherwise " + escape_help(checker, text, ty, handover=False)
 
 
-def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
+def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
+                         use_of_copy: Optional[CopyUse] = None) -> None:
     """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
     text = expr_to_string(expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
@@ -258,12 +274,14 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr) -> None:
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr)))
+    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr),
+                          use_of_copy=use_of_copy))
     diag.emit()
 
 
 def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
-                           use_span: Optional[Span], state: BorrowState) -> None:
+                           use_span: Optional[Span], state: BorrowState,
+                           use_of_copy: Optional[CopyUse] = None) -> None:
     """Report CE2411, pointing at the binding or declaration as well as the use."""
     diag = checker.err.emit_with(er.ERR.CE2411, use_span, name=name)
     for kind in BORROW_KINDS:
@@ -273,7 +291,7 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             if note_span is not None:
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
-    diag.help(escape_help(checker, name, state.var_type))
+    diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy))
     diag.emit()
 
 
@@ -290,7 +308,7 @@ def expr_to_string(expr: Expr) -> str:
         case MethodCall() | DotCall():
             # Both spellings reach here, arguments included, so the text matches what the
             # user wrote.
-            args = ", ".join(expr_to_string(a) for a in (expr.args or []))
+            args = ", ".join(_argument_text(a) for a in (expr.args or []))
             return f"{expr_to_string(expr.receiver)}.{expr.method}({args})"
         case MemberAccess():
             return f"{expr_to_string(expr.receiver)}.{expr.member}"
@@ -300,3 +318,9 @@ def expr_to_string(expr: Expr) -> str:
             return f"{expr_to_string(expr.expr)}??"
         case _:
             return "<expression>"
+
+
+def _argument_text(arg: Expr) -> str:
+    """An argument as written: the `nom` marker is part of the call (`f(nom x)`)."""
+    text = expr_to_string(arg)
+    return f"nom {text}" if arg.nom_marked else text

@@ -1,0 +1,12 @@
+# Design 3.5 (C5, C12): `StdError` has no home module, so no unit may declare a
+# conversion into it. The C5 code refuses it.
+# EXPECT_ERROR_CODE: CE2519
+# EXPECT_ERROR_CODES_EXACT: CE2519
+error AppError:
+    Broken
+
+extend AppError as StdError:
+    return StdError.Error
+
+fn main() i32:
+    return 0

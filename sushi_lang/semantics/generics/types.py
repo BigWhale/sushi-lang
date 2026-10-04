@@ -46,6 +46,7 @@ class GenericEnumType:
     name: str                                    # Generic enum name (e.g., "Result")
     type_params: tuple[TypeParam, ...]           # Type parameters (TypeParameter or BoundedTypeParam)
     variants: tuple[EnumVariantInfo, ...]        # Variants (may contain TypeParameters in associated types)
+    is_error: bool = False                       # Every instance is an error type
 
     def __str__(self) -> str:
         return interned_name(self.name, self.type_params)

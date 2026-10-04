@@ -4,7 +4,7 @@
 
 # Tests that error propagation performs early return
 
-enum MyError:
+error MyError:
     Error
 
 fn fails() i32 | MyError:

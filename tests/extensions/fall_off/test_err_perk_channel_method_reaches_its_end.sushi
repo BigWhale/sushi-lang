@@ -1,7 +1,7 @@
 # A perk-implementation method with a `| E` channel returns a Result, so a body that
 # reaches its end is CE0107, as it is for an extension with a channel.
 # EXPECT_ERROR_CODE: CE0107
-enum SinkError:
+error SinkError:
     Closed
 
 perk Sink:

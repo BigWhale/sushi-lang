@@ -1,0 +1,22 @@
+# Design 1.4 and 4 (C8): `??` reads the type, not the variant names. A user enum with
+# `Some` and `None` variants is not a `Result@(T, E)`.
+# EXPECT_ERROR_CODES_EXACT: CE2507
+error AppError:
+    Empty
+
+enum Slot:
+    Some(i32)
+    None
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.None
+    return Slot.Some(n)
+
+fn run(i32 n) i32 | AppError:
+    let i32 v = make(n)??
+    return Result.Ok(v)
+
+fn main() i32:
+    println(run(3).realise(0))
+    return 0

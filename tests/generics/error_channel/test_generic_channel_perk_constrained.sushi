@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "24\n"
 
-enum ScaleError:
+error ScaleError:
     Zero
 
 perk Sized:

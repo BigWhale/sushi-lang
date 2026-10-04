@@ -1,0 +1,10 @@
+# Design 2.4 and 2.5 (E3, E4): the rule covers a written type in a `let`, not only a
+# signature.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+enum Color:
+    Red
+
+fn main() i32:
+    let Result@(i32, Color) r = Result.Ok(1)
+    println(r.is_ok())
+    return 0

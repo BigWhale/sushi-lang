@@ -2,8 +2,8 @@
 fn run_test() i32 | StdError:
   let i32[] numbers = from([1, 2, 3])
   print(numbers.len())      # Should print 3
-  print(numbers.get(0)??)     # Should print 1
-  print(numbers.get(2)??)     # Should print 3
+  print(numbers.get(0).or_err(nom StdError.Error)??)     # Should print 1
+  print(numbers.get(2).or_err(nom StdError.Error)??)     # Should print 3
   return Result.Ok(0)
 
 fn main() i32:

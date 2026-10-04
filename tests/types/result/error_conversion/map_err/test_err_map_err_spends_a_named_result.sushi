@@ -1,0 +1,22 @@
+# Design 5: the receiver of `map_err` is `nom self`. A named `Result` that owns its
+# payload is spent by the call, so a later use of it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2435
+# EXPECT_STDERR_CONTAINS: 'map_err' consumed it
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+fn wrap(nom TokenError e) AppError:
+    return AppError.Token(e)
+
+fn run(i32 n) i32 | AppError:
+    let Result@(i32, TokenError) r = Result.Err(TokenError.Bad("token {n}"))
+    let i32 v = r.map_err(wrap)??
+    println(r.is_ok())
+    return Result.Ok(v)
+
+fn main() i32:
+    println(run(3).realise(0))
+    return 0

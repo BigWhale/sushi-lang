@@ -1,0 +1,16 @@
+# Design 2.5 item 2 (E4): a type parameter in the `E` position is judged at each
+# instance. The diagnostic is at the instance, and a note points at the template.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: = note:
+# EXPECT_STDERR_CONTAINS: test_err_generic_instance_with_non_error_e.sushi:10:
+# EXPECT_STDERR_CONTAINS: test_err_generic_instance_with_non_error_e.sushi:14:
+enum Color:
+    Red
+
+fn fail@(E)(nom E e) i32 | E:
+    return Result.Err(e)
+
+fn main() i32:
+    let i32 v = fail(nom Color.Red).realise(0)
+    println(v)
+    return 0

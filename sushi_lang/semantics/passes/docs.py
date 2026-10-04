@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast_builder.declarations.docs import suggest_tag
 from sushi_lang.semantics.ast_walk import bodied, declarations
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.visibility import kind_word
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Reporter
@@ -194,7 +195,7 @@ def check_missing_docs(reporter: 'Reporter', program: 'Program') -> None:
         if doc is None:
             if _wants_a_block(kind, node):
                 er.emit_with(reporter, er.ERR.CW7002, _declaration_span(kind, node),
-                             kind=kind, name=_declaration_name(kind, node))
+                             kind=kind_word(kind, node), name=_declaration_name(kind, node))
             continue
         _check_completeness(reporter, doc, kind, node)
 
@@ -231,12 +232,15 @@ def _declaration_name(kind: str, node) -> str:
     if kind == "perk implementation":
         target = node.target_type
         return f"{display_type(target) if target is not None else '?'} with {node.perk_name}"
+    if getattr(node, "is_conversion", False):
+        return f"{display_type(node.target_type)} as {display_type(node.ret)}"
     return getattr(node, "name", "")
 
 
 def _check_completeness(reporter: 'Reporter', doc: 'DocBlock', kind: str, node) -> None:
     """The three lints that a block has to exist for (R33)."""
-    name = getattr(node, "name", "")
+    name = (_declaration_name(kind, node) if getattr(node, "is_conversion", False)
+            else getattr(node, "name", ""))
     where = _declaration_span(kind, node)
     tagged = {tag.kind for tag in doc.tags}
     documented_params = {tag.name for tag in doc.tags if tag.kind == "parameter"}

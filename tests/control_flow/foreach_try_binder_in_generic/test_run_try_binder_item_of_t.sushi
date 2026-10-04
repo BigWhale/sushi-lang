@@ -6,7 +6,7 @@
 # EXPECT_STDOUT_EXACT: "got 4\ngot 5\nok 2\ngot a\ngot b\nok 2\ngot a\nerr\n"
 # EXPECT_NO_LEAKS
 
-enum Bad:
+error Bad:
     Broken()
 
 struct Feed@(T):

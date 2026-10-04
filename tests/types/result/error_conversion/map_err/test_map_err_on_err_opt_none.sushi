@@ -1,0 +1,45 @@
+# Design 5: on the `Err` path `map_err` moves the error into the function and wraps its
+# answer in an `Err`. On the `Ok` path the payload moves into the answer. An `Ok`
+# payload and an error that own a string are each freed one time, at every optimization
+# level. The twin fixture has the same source at the other level.
+# COMPILER_FLAGS: --opt none
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ok word 1\nerr AppError.Token(TokenError.Bad("token -1"))\nok word 2\nerr AppError.Token(TokenError.Bad("token -2"))\nok word 3\nerr AppError.Token(TokenError.Bad("token -3"))\ntrue\n"
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+
+fn tokenize(i32 n) string | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("token {n}"))
+    return Result.Ok("word {n}")
+
+fn wrap(nom TokenError e) AppError:
+    return AppError.Token(e)
+
+fn from_temporary(i32 n) string | AppError:
+    let string w = tokenize(n).map_err(wrap)??
+    return Result.Ok(w)
+
+fn from_named(i32 n) string | AppError:
+    let Result@(string, TokenError) r = tokenize(n)
+    let string w = r.map_err(wrap)??
+    return Result.Ok(w)
+
+fn show(Result@(string, AppError) r) ~:
+    match r:
+        Result.Ok(w) -> println("ok {w}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(from_temporary(1))
+    show(from_temporary(-1))
+    show(from_named(2))
+    show(from_named(-2))
+    show(tokenize(3).map_err(wrap))
+    let Result@(string, AppError) kept = tokenize(-3).map_err(wrap)
+    show(kept)
+    println(tokenize(-4).map_err(wrap).is_err())
+    return 0

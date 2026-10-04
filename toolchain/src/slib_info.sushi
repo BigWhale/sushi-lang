@@ -95,6 +95,19 @@ fn get_bool(MsgValue m, string key) bool:
     return map_get_bool(m, key).realise(false)
 
 ##:
+Gives the keyword that the source wrote for a type record. An enum record with
+`is_error` was written `error`.
+
+- Parameter r: The struct or enum record.
+- Parameter keyword: The keyword of the kind, `struct` or `enum`.
+- Returns: `error` for an error type, else the keyword.
+:##
+fn declared_keyword(MsgValue r, string keyword) string:
+    if (keyword == "enum" and get_bool(r, "is_error")):
+        return "error"
+    return keyword.clone()
+
+##:
 Gives the number of elements of an `Arr` value.
 
 - Parameter v: The value to read.
@@ -906,7 +919,8 @@ fn print_enum_list(MsgValue enums, Opts o) ~:
                 pending := open_record(pending)
                 let string name = get_str(e, "name")
                 let string generic = render_named_type_params(e)
-                println("  enum {name}{generic}:")
+                let string word = declared_keyword(e, "enum")
+                println("  {word} {name}{generic}:")
                 pending := print_doc(e, "    ", o)
                 pending := print_variants_at(e, pending, o)
         _ ->
@@ -1015,7 +1029,8 @@ fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o)
                 pending := open_record(pending)
                 let string name = get_str(r, "name")
                 let string generic = render_type_params(r)
-                println("  {keyword} {name}{generic}:")
+                let string word = declared_keyword(r, keyword)
+                println("  {word} {name}{generic}:")
                 pending := print_doc(r, "    ", o)
         _ ->
             return ~
@@ -1232,6 +1247,43 @@ fn print_extensions(MsgValue templates, Opts o) ~:
     println("")
 
 ##:
+Prints the section of the conversions that the library declares.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
+fn print_conversions(MsgValue meta, Opts o) ~:
+    match meta:
+        MsgValue.Map(pairs) ->
+            match map_index(meta, "conversions"):
+                Maybe.Some(at) -> print_conversion_list(pairs[at].1, o)
+                Maybe.None() -> return ~
+        _ ->
+            return ~
+
+##:
+Prints each conversion record as it is declared, with its doc record.
+
+- Parameter convs: The array of conversion records.
+- Parameter o: The options of the run.
+:##
+fn print_conversion_list(MsgValue convs, Opts o) ~:
+    if (not section("Conversions", len(convs), o)):
+        return ~
+    match convs:
+        MsgValue.Arr(items) ->
+            let bool p = false
+            foreach(c in items.iter()):
+                p := open_record(p)
+                let string source = to_surface(get_str(c, "source"))
+                let string target = to_surface(get_str(c, "target"))
+                println("  extend {source} as {target}")
+                p := print_doc(c, "    ", o)
+        _ ->
+            return ~
+    println("")
+
+##:
 Prints the section of the types that the library extends and does not declare.
 
 - Parameter meta: The metadata map.
@@ -1429,6 +1481,7 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_perks(templates, o)
     print_perk_impls(templates, o)
     print_extensions(templates, o)
+    print_conversions(meta, o)
     print_foreign_extensions(meta, o)
 
 ##:

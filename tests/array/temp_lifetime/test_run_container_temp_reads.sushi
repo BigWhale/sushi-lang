@@ -21,7 +21,7 @@ fn make_map() HashMap@(i32, i32):
 
 fn run_test() i32 | StdError:
     println(make_list().len())
-    println(make_list().get(0)??)
+    println(make_list().get(0).or_err(nom StdError.Error)??)
 
     println(make_own().get())
 

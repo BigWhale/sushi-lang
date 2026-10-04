@@ -4,7 +4,7 @@
 
 # Tests basic Ok variant construction with implicit Result syntax
 
-enum MyError:
+error MyError:
     Error
 
 fn returns_ok() i32 | MyError:

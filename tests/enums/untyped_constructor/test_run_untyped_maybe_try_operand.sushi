@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_EXACT: "5\n"
 
 fn five() i32 | StdError:
-    let i32 a = Maybe.Some(5)??
+    let i32 a = Maybe.Some(5).or_err(nom StdError.Error)??
     return Result.Ok(a)
 
 fn main() i32:

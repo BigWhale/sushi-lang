@@ -1,0 +1,25 @@
+# #1174: a `??` binder of a `foreach` in a bare extension method gives one CE0131, and a
+# second written `??` in the same body gives a second one.
+# EXPECT_ERROR_CODES_EXACT: CE0131, CE0131
+struct Counter:
+    i32 n
+
+extend Counter next(poke self) Maybe@(Result@(i32, StdError)):
+    if (self.n >= 2):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
+
+fn one() i32 | StdError:
+    return Result.Ok(1)
+
+extend Counter total() i32:
+    let Counter c = Counter(self.n)
+    let i32 sum = one()??
+    foreach(n?? in c):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    println(Counter(0).total())
+    return 0

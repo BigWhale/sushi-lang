@@ -1,0 +1,14 @@
+# Design 2.4 (E3): a struct is not an error type, in the `| E` spelling and in the
+# `Result@(T, E)` spelling. One CE2084 for each.
+# EXPECT_ERROR_CODES_EXACT: CE2084, CE2084
+struct Code:
+    i32 n
+
+fn short_form() i32 | Code:
+    return Result.Ok(1)
+
+fn long_form() Result@(i32, Code):
+    return Result.Ok(2)
+
+fn main() i32:
+    return 0

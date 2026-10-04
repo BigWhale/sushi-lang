@@ -1,0 +1,21 @@
+# A conversion body may call ANOTHER conversion (a different pair): only a cast of its
+# own pair is refused.
+# EXPECT_STDOUT_EXACT: "AppError.Mid(MidError.Low)\n"
+error LowError:
+    Bad
+
+error MidError:
+    Low
+
+error AppError:
+    Mid(MidError)
+
+extend LowError as MidError:
+    return MidError.Low
+
+extend LowError as AppError:
+    return AppError.Mid(self as MidError)
+
+fn main() i32:
+    println(LowError.Bad as AppError)
+    return 0

@@ -12,7 +12,7 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
-from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family
+from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
 from ..utils import reject_spread_args
 
 # A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
@@ -313,6 +313,11 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     full_subst = dict(receiver_subst)
     full_subst.update(dict(zip(margs_names, margs, strict=True)))
 
+    # E3 at the call, which is the instance: no copy is cut for a refused argument.
+    if _refuses_non_error_arguments(validator, template, receiver_type, full_subst, call,
+                                    report):
+        return RESOLUTION_REPORTED if report else None
+
     ret = (substitute_type_params(template.ret_type, full_subst)
            if template.ret_type is not None else None)
     err = (substitute_type_params(template.err_type, full_subst)
@@ -343,6 +348,44 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     _queue_extension_instantiation(validator, template, receiver_type,
                                    receiver_args, margs)
     return concrete
+
+
+def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_type,
+                                 substitution, call, report: bool) -> bool:
+    """CE2084 for a type argument of this call in an `E` position of the template (E3).
+
+    docs/design/error-conversion.md section 2.5, item 2: the call that solves the
+    arguments is the instance, and the note is at the template. One instance is
+    reported one time, at its first call. `report=False` asks the same question and
+    emits nothing.
+    """
+    from sushi_lang.semantics.error_types import non_error_type, reject_non_error_type
+    from sushi_lang.semantics.generics.monomorphize.functions import (
+        callable_error_parameters)
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    positions = callable_error_parameters(
+        template.ret_type, template.err_type, template.err_span or template.ret_span,
+        template.params, template.body, template.name_span, substitution)
+    key = (_resolved(validator, receiver_type), template.name,
+           tuple(_resolved(validator, substitution[name]) for name in sorted(positions)))
+    refused_keys = getattr(validator.tables, "refused_extension_keys", None)
+    if refused_keys is not None and key in refused_keys:
+        return True
+    if not report:
+        return any(non_error_type(substitution[name], structs, enums) is not None
+                   for name in positions)
+    refused = False
+    for name, note_span in positions.items():
+        note = (f"the template uses the type parameter '{name}' as an error type here",
+                note_span, template.filename)
+        if reject_non_error_type(validator.reporter, substitution[name], call.loc,
+                                 structs, enums, note=note):
+            refused = True
+    if refused and refused_keys is not None:
+        refused_keys.add(key)
+    return refused
 
 
 def _perk_answers(validator: 'TypeValidator', call: MethodCall, receiver_type) -> bool:
@@ -407,18 +450,20 @@ def extension_call_result_type(validator: 'TypeValidator', method):
 
 
 def _unhandled_channel_payload(receiver_type):
-    """The Ok/Some payload when the receiver is result-like or maybe-like, else None."""
-    if not isinstance(receiver_type, EnumType):
-        return None
-    ok_variant = receiver_type.get_variant("Ok")
-    err_variant = receiver_type.get_variant("Err")
-    if ok_variant and err_variant and len(ok_variant.associated_types) == 1:
-        return ok_variant.associated_types[0]
-    some_variant = receiver_type.get_variant("Some")
-    none_variant = receiver_type.get_variant("None")
-    if (some_variant and none_variant and len(some_variant.associated_types) == 1
-            and len(none_variant.associated_types) == 0):
-        return some_variant.associated_types[0]
+    """The payload when the receiver is a `Result` or a `Maybe` instance, else None.
+
+    It reads the type identity, never the variant names: a user enum with `Ok`/`Err`
+    variants is not a `Result` (docs/design/error-conversion.md section 4).
+    """
+    from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
+    from sushi_lang.semantics.type_predicates import is_instance_of
+
+    if is_result_enum(receiver_type):
+        return result_ok_err(receiver_type)[0]
+    if isinstance(receiver_type, EnumType) and is_instance_of(receiver_type, "Maybe"):
+        some_variant = receiver_type.get_variant("Some")
+        if some_variant is not None and len(some_variant.associated_types) == 1:
+            return some_variant.associated_types[0]
     return None
 
 
@@ -429,9 +474,11 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     Fires only when resolution missed on a Result/Maybe receiver AND the method exists
     on the payload type -- which is what tells an unhandled channel from a typo. The
     diagnostic is relational: the primary names the missing method, the note points at
-    the call that returned the wrapper, and the help spells the `??` fix.
+    the call that returned the wrapper, and the help spells the fix: `??` for a Result,
+    `.or_err(nom e)??` for a Maybe, because `??` takes a Result only.
     """
     from sushi_lang.semantics.ast import DotCall
+    from sushi_lang.semantics.type_predicates import is_instance_of
 
     payload = _unhandled_channel_payload(receiver_type)
     if payload is None or not _method_exists_on(validator, payload, call.method):
@@ -443,9 +490,14 @@ def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall
     receiver_loc = getattr(receiver, "loc", None)
     if receiver_loc is not None:
         diag.note_at("the unhandled channel comes from this call", receiver_loc)
-    fix = ""
-    if isinstance(receiver, (MethodCall, DotCall)):
-        fix = f" -- e.g. '{receiver.method}()??.{call.method}()'"
+    called = receiver.method if isinstance(receiver, (MethodCall, DotCall)) else None
+    if is_instance_of(receiver_type, "Maybe"):
+        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{call.method}()'"
+               if called else "")
+        diag.help("handle the Maybe first: match on it, '.realise(default)', or give it "
+                  f"an error value and propagate with '.or_err(nom e)??'{fix}").emit()
+        return True
+    fix = f" -- e.g. '{called}()??.{call.method}()'" if called else ""
     diag.help("handle the channel first: match on it, '.realise(default)', or "
               f"propagate with '??'{fix}").emit()
     return True
@@ -572,6 +624,7 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
             reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
         elif call.method == "alloc":
             _validate_own_alloc_payload(validator, call)
+        stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family(family).modes)
 
 
 #: The statics a built-in container answers on its type NAME, and the family whose count
@@ -678,7 +731,24 @@ def _check_user_method(validator: 'TypeValidator', call: MethodCall, receiver_ty
     wrong count and says no more, an extension call reads the remaining arguments as a
     plain function call does.
     """
+    return _run_method_steps(validator, call, receiver_type, method,
+                             stop_on_arity=stop_on_arity)
+
+
+def _run_method_steps(validator: 'TypeValidator', call: MethodCall, receiver_type,
+                      method, *, stop_on_arity: bool, solve=None) -> bool:
+    """The steps of a method check, in their order. Answers whether the COUNT fit.
+
+    The receiver mode comes from `method`. `solve`, when given, runs after it and
+    answers the declaration that holds the parameters, or None when it reported a
+    fault: a built-in method with a method-level type parameter (design 8.3) has its
+    parameters only after its arguments solve them.
+    """
     _check_receiver_mode(validator, call, method)
+    if solve is not None:
+        method = solve()
+        if method is None:
+            return False
     _stamp_param_modes(call, method)
     return check_arguments(
         validator, f"{display_type(receiver_type)}.{call.method}",
@@ -748,7 +818,12 @@ def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("result")
 def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
-    from sushi_lang.semantics.generics.results import validate_result_method_with_validator
+    from sushi_lang.semantics.generics.results import (
+        RESULT_METHOD_SIGNATURES, validate_result_method_with_validator)
+    signature = RESULT_METHOD_SIGNATURES.get(call.method)
+    if signature is not None:
+        _validate_builtin_signature(validator, call, receiver_type, signature)
+        return
     validate_result_method_with_validator(
         call, receiver_type, validator.reporter, validator)
 
@@ -756,9 +831,74 @@ def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("maybe")
 def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
-    from sushi_lang.semantics.generics.maybe import validate_maybe_method_with_validator
+    from sushi_lang.semantics.generics.maybe import (
+        MAYBE_METHOD_SIGNATURES, validate_maybe_method_with_validator)
+    signature = MAYBE_METHOD_SIGNATURES.get(call.method)
+    if signature is not None:
+        _validate_builtin_signature(validator, call, receiver_type, signature)
+        return
     validate_maybe_method_with_validator(
         call, receiver_type, validator.reporter, validator)
+
+
+def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
+                                receiver_type, signature) -> None:
+    """A built-in method with a method-level type parameter (design 8.3).
+
+    It takes the steps of a user method: the receiver mode and the parameter modes are
+    stamped for the borrow pass and the backend, and the arguments go through the one
+    argument check. Between the two, the arguments solve the method-level type
+    parameters, and E3 judges each one in an `E` position at this call, which is the
+    instance.
+    """
+    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+        instance_return_type)
+
+    # The borrow pass and the backend read the receiver type from this stamp.
+    call.resolved_enum_type = receiver_type
+    solved: list = []
+
+    def solve():
+        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
+        if instance is not None:
+            solved.append(instance)
+        return instance
+
+    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
+                      solve=solve)
+    if solved:
+        call.inferred_return_type = instance_return_type(validator, solved[0])
+
+
+def _solve_builtin_instance(validator: 'TypeValidator', call: MethodCall, receiver_type,
+                            signature):
+    """The instance this call names, or None after the fault is reported.
+
+    A type parameter the arguments leave unsolved is CE2063; a solved one in an `E`
+    position that is not an error type is refused by E3.
+    """
+    from sushi_lang.semantics.error_types import reject_non_error_type
+    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+        solve_builtin_call)
+
+    instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
+    if instance is None:
+        if unsolved:
+            names = ", ".join(f"'{n}'" for n in unsolved)
+            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
+                         plural="s" if len(unsolved) > 1 else "",
+                         names=names, method=call.method) \
+                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
+        return None
+
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    refused = [name for name in signature.error_parameters
+               if reject_non_error_type(validator.reporter, instance.substitution[name],
+                                        call.loc, structs, enums)]
+    if refused:
+        return None
+    return instance
 
 
 @METHOD_TYPE_REGISTRY.validator("own")

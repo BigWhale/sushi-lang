@@ -61,7 +61,7 @@ Why a `.slib` file could not be read.
 permission and a missing file each keep their own cause. `Truncated` is a file that
 ends too early, and never a read that failed.
 :##
-public enum SlibError:
+public error SlibError:
     ##: The open or a read failed. The `IoError` names the cause. :##
     Io(IoError)
     ##: The 16 magic bytes at the start of the file do not match. :##
@@ -337,7 +337,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[144] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -357,6 +357,7 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'templates', '@templates', Presence.Optional()),
     SchemaRow('manifest', 'not_exported', '[]not_exported', Presence.Optional()),
     SchemaRow('manifest', 'foreign_extensions', '[]foreign_extension', Presence.Optional()),
+    SchemaRow('manifest', 'conversions', '[]conversion', Presence.Optional()),
     SchemaRow('manifest', 'dependencies', '[]dependency', Presence.Optional()),
     SchemaRow('templates', 'generic_functions', '[]function', Presence.Optional()),
     SchemaRow('templates', 'generic_structs', '[]generic_type', Presence.Optional()),
@@ -414,6 +415,7 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('enum', 'variants', '[]variant', Presence.Required()),
     SchemaRow('enum', 'is_generic', 'bool', Presence.Optional()),
     SchemaRow('enum', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('enum', 'is_error', 'bool', Presence.Optional()),
     SchemaRow('enum', 'doc', '@doc', Presence.Optional()),
     SchemaRow('variant', 'name', 'str', Presence.Required()),
     SchemaRow('variant', 'has_data', 'bool', Presence.Optional()),
@@ -422,6 +424,7 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('generic_type', 'name', 'str', Presence.Required()),
     SchemaRow('generic_type', 'source', 'str', Presence.Optional()),
     SchemaRow('generic_type', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('generic_type', 'is_error', 'bool', Presence.Optional()),
     SchemaRow('generic_type', 'doc', '@doc', Presence.Optional()),
     SchemaRow('perk', 'name', 'str', Presence.Required()),
     SchemaRow('perk', 'source', 'str', Presence.Optional()),
@@ -453,6 +456,11 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('extension', 'link_symbol', 'str', Presence.Optional()),
     SchemaRow('extension', 'source', 'str', Presence.Optional()),
     SchemaRow('extension', 'doc', '@doc', Presence.Optional()),
+    SchemaRow('conversion', 'source', 'str', Presence.Required()),
+    SchemaRow('conversion', 'target', 'str', Presence.Required()),
+    SchemaRow('conversion', 'link_symbol', 'str', Presence.Required()),
+    SchemaRow('conversion', 'unit', 'str', Presence.Optional()),
+    SchemaRow('conversion', 'doc', '@doc', Presence.Optional()),
     SchemaRow('doc', 'summary', 'str', Presence.Optional()),
     SchemaRow('doc', 'body', 'str', Presence.Optional()),
     SchemaRow('doc', 'params', 'map', Presence.Optional()),
