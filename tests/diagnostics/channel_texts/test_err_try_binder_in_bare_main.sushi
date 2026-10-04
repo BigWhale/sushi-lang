@@ -1,0 +1,18 @@
+# #1174: a `??` binder of a `foreach` in a bare `main` is one written `??`, so it gives
+# one CE0131.
+# EXPECT_ERROR_CODES_EXACT: CE0131
+# EXPECT_STDERR_CONTAINS: '??' operator not allowed in function 'main'
+struct Counter:
+    i32 n
+
+extend Counter next(poke self) Maybe@(Result@(i32, StdError)):
+    if (self.n >= 2):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
+
+fn main() i32:
+    let Counter c = Counter(0)
+    foreach(n?? in c):
+        println(n)
+    return 0
