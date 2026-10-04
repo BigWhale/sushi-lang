@@ -45,9 +45,16 @@ def test_a_version_6_binary_library_is_refused():
     assert exc.value.code == "CE3512"
 
 
+def test_a_version_8_binary_library_is_refused():
+    """Version 9 gives an enum row and a generic enum record `is_error`."""
+    with pytest.raises(LibraryError) as exc:
+        _check_library_templates_version(_metadata("binary", 8), "old.slib")
+    assert exc.value.code == "CE3512"
+
+
 def test_the_current_schema_passes():
     _check_library_templates_version(_metadata("binary", TEMPLATES_SCHEMA_VERSION), "new.slib")
-    assert TEMPLATES_SCHEMA_VERSION == 8
+    assert TEMPLATES_SCHEMA_VERSION == 9
 
 
 def test_a_source_library_is_never_gated():

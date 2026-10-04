@@ -479,7 +479,7 @@ class LibraryManifestGenerator:
                 record["data_types"] = [type_string(t)
                                         for t in variant.associated_types]
             variants.append(with_doc(record, variant))
-        return {"variants": variants}
+        return {"variants": variants, "is_error": enum_def.is_error}
 
     def _extract_unit_docs(self, units: list['Unit']) -> dict[str, dict]:
         """Each own unit's own doc block, keyed by unit name.

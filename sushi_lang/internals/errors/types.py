@@ -182,8 +182,8 @@ _add(ErrorMessage("CE2045", Severity.ERROR,
     Category.TYPE, "The specified variant does not exist in the enum type. Since #542 an enum's dot holds TWO kinds of member -- a variant, and a static method -- so the help names both escapes: add the variant, or declare the name as a static. It is still one namespace: a variant and a static of one name on one enum is CE2103, because the variant would always win."))
 
 _add(ErrorMessage("CE2046", Severity.ERROR,
-    "duplicate enum '{name}'",
-    Category.TYPE, "Two enums share the same name in a compilation unit."))
+    "duplicate {word} '{name}'",
+    Category.TYPE, "Two enums share the same name in a compilation unit. An `error` declaration is an enum with a flag, and the header calls it an error type."))
 
 _add(ErrorMessage("CE2047", Severity.ERROR,
     "duplicate variant '{name}' in enum '{enum_name}'",

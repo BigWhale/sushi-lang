@@ -883,6 +883,20 @@ public enum Colour:
     ##: Two payloads. :##
     Blue(string, i32)
 
+##: A fault. :##
+public error ReportFault:
+    ##: No payload. :##
+    Missing
+    ##: One payload. :##
+    Bad(i32)
+
+##: A fault that carries a value. :##
+public error ReportDecode@(T):
+    ##: The value. :##
+    Bad(T)
+    ##: No payload. :##
+    Truncated
+
 ##: A thing with a name. :##
 public perk Named:
     ##:
@@ -967,8 +981,9 @@ fn main() i32:
 """
 
 # Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966);
-# the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, and
-# the last two keep the `...` of a type pack (#1164).
+# the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, the
+# sixth and the seventh keep the `...` of a type pack (#1164), and the last two print the
+# keyword `error` for a concrete and for a generic error type.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -977,6 +992,8 @@ REPORT_LINES = (
     "  fn split(i32 n) ((i32, i32), string)",
     "  fn lcount@(...Ts: Display)(...Ts args) i32",
     "  fn lead@(T, ...Ts: Display)(T first, ...Ts rest) i32",
+    "  error ReportFault:",
+    "  error ReportDecode@(T):",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
 REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\n"

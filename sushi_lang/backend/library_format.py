@@ -167,8 +167,9 @@ def _skip_source_section(f: BinaryIO, path: str) -> int:
 # ships as a template (#543). 7: every perk method record carries its signature and
 # receiver mode (#537). 8: every function, helper and method record states `has_channel`,
 # because a signature without `| E` is bare and no longer means `| StdError`
-# (docs/design/error-channel.md).
-TEMPLATES_SCHEMA_VERSION = 8
+# (docs/design/error-channel.md). 9: an `enum` row and a `generic_type` record of a
+# generic enum state `is_error` (docs/design/error-conversion.md section 8.1).
+TEMPLATES_SCHEMA_VERSION = 9
 
 
 # The shape of a manifest: one row per field a reader relies on, as (record kind, key,
@@ -255,6 +256,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("enum", "variants", "[]variant", "yes"),
     ("enum", "is_generic", "bool", "no"),
     ("enum", "type_params", "strs", "no"),
+    ("enum", "is_error", "bool", "no"),
     ("enum", "doc", "@doc", "no"),
     ("variant", "name", "str", "yes"),
     ("variant", "has_data", "bool", "no"),
@@ -263,6 +265,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("generic_type", "name", "str", "yes"),
     ("generic_type", "source", "str", "no"),
     ("generic_type", "type_params", "[]type_param", "no"),
+    ("generic_type", "is_error", "bool", "no"),
     ("generic_type", "doc", "@doc", "no"),
     ("perk", "name", "str", "yes"),
     ("perk", "source", "str", "no"),

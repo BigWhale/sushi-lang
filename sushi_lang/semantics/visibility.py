@@ -81,6 +81,19 @@ _DEFAULT_VERB = "use"
 VALUE_VERB = "take the value of"
 
 
+def kind_word(kind: str, decl: Any) -> str:
+    """The word a diagnostic calls a declaration of this kind by.
+
+    An `error` declaration is an enum with a flag (docs/design/error-conversion.md
+    section 2.2). Its kind KEY stays "enum" for every rule; only the word a reader sees
+    changes. `decl` is anything that carries the flag: an `EnumDef`, an `EnumType`, a
+    generic template or a `DeclOrigin`.
+    """
+    if kind == "enum" and getattr(decl, "is_error", False):
+        return "error type"
+    return kind
+
+
 @dataclass(frozen=True)
 class DeclOrigin:
     """Where a declaration came from, and whether it says `public`.
@@ -96,10 +109,15 @@ class DeclOrigin:
     filename: Optional[str] = None
     name_span: Optional[Span] = None
     is_public: bool = True
+    is_error: bool = False
 
     @property
     def verb(self) -> str:
         return _VERB.get(self.kind, _DEFAULT_VERB)
+
+    @property
+    def word(self) -> str:
+        return kind_word(self.kind, self)
 
 
 def origin_of(kind: str, record: Any) -> DeclOrigin:
@@ -288,7 +306,7 @@ def reject_private_cross_unit_use(
 
     diagnostic = er.emit_with(
         reporter, er.ERR.CE3005, loc,
-        verb=verb or origin.verb, kind=origin.kind, name=origin.name,
+        verb=verb or origin.verb, kind=origin.word, name=origin.name,
         current_unit=current_unit, owner=origin.unit_name,
     )
     # BOTH, not either: the collect pass walks every unit through one reporter, so a span
@@ -530,4 +548,5 @@ def record_declaration(
         filename=filename,
         name_span=getattr(node, "name_span", None) or getattr(node, "loc", None),
         is_public=getattr(node, "is_public", True),
+        is_error=getattr(node, "is_error", False),
     ))

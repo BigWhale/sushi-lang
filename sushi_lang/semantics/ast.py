@@ -324,6 +324,8 @@ class EnumDef(Node):
     doc: Optional[DocBlock] = None
     is_public: bool = True
     public_span: Optional[Span] = None
+    # Written `error`, not `enum`: the type may be the `E` of a `Result`.
+    is_error: bool = False
 
 @dataclass(slots=True)
 class ExtendDef(Node):

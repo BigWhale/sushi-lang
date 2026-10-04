@@ -18,6 +18,7 @@ from sushi_lang.semantics.ast import (
     ConstDef, EnumDef, FuncDef, PerkDef, Program, StructDef, VarDef)
 from sushi_lang.semantics.ast_walk import is_written
 from sushi_lang.semantics.passes.collect.utils import article, type_clash_note, type_kind_word
+from sushi_lang.semantics.visibility import kind_word
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class _Declared:
 
 
 def _word(kind: str, node: StructDef | EnumDef | PerkDef | FuncDef) -> str:
-    return type_kind_word(kind, bool(node.type_params))
+    return type_kind_word(kind_word(kind, node), bool(node.type_params))
 
 
 def _declared(program: Program) -> Iterator[_Declared]:

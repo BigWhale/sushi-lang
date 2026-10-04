@@ -218,6 +218,7 @@ def serialize_generic_enum(enum: "EnumDef", source_text: str) -> dict:
     """Produce the manifest record for a single public generic enum."""
     return with_doc({
         "name": enum.name,
+        "is_error": enum.is_error,
         "type_params": _type_param_records(enum),
         "source": slice_decl_source(enum, source_text),
         "free_perks": _free_perks_of(enum),

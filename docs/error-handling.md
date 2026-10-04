@@ -291,9 +291,9 @@ Extract the error value as a Maybe:
 
 ```sushi
 let Result@(i32, MathError) result = divide(10, 0)
-let Maybe@(MathError) error = result.err()
+let Maybe@(MathError) err = result.err()
 
-match error:
+match err:
     Maybe.Some(MathError.DivisionByZero) ->
         println("Division by zero!")
     Maybe.None() ->

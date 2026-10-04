@@ -337,7 +337,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[138] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -414,6 +414,7 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('enum', 'variants', '[]variant', Presence.Required()),
     SchemaRow('enum', 'is_generic', 'bool', Presence.Optional()),
     SchemaRow('enum', 'type_params', 'strs', Presence.Optional()),
+    SchemaRow('enum', 'is_error', 'bool', Presence.Optional()),
     SchemaRow('enum', 'doc', '@doc', Presence.Optional()),
     SchemaRow('variant', 'name', 'str', Presence.Required()),
     SchemaRow('variant', 'has_data', 'bool', Presence.Optional()),
@@ -422,6 +423,7 @@ const SchemaRow[136] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('generic_type', 'name', 'str', Presence.Required()),
     SchemaRow('generic_type', 'source', 'str', Presence.Optional()),
     SchemaRow('generic_type', 'type_params', '[]type_param', Presence.Optional()),
+    SchemaRow('generic_type', 'is_error', 'bool', Presence.Optional()),
     SchemaRow('generic_type', 'doc', '@doc', Presence.Optional()),
     SchemaRow('perk', 'name', 'str', Presence.Required()),
     SchemaRow('perk', 'source', 'str', Presence.Optional()),

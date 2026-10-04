@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast_builder.declarations.docs import suggest_tag
 from sushi_lang.semantics.ast_walk import bodied, declarations
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.visibility import kind_word
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Reporter
@@ -194,7 +195,7 @@ def check_missing_docs(reporter: 'Reporter', program: 'Program') -> None:
         if doc is None:
             if _wants_a_block(kind, node):
                 er.emit_with(reporter, er.ERR.CW7002, _declaration_span(kind, node),
-                             kind=kind, name=_declaration_name(kind, node))
+                             kind=kind_word(kind, node), name=_declaration_name(kind, node))
             continue
         _check_completeness(reporter, doc, kind, node)
 

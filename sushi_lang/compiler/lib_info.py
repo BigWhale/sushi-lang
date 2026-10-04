@@ -361,8 +361,13 @@ def _field_line(field: dict, p: Palette) -> str:
     return f"    {_surface(field['type'])} {field['name']}"
 
 
+def _keyword(keyword: str, record: dict) -> str:
+    """The keyword the source wrote: an enum record with `is_error` was written `error`."""
+    return "error" if keyword == "enum" and record.get('is_error') else keyword
+
+
 def _enum_line(enum: dict, p: Palette) -> str:
-    return f"  enum {enum['name']}{_named_suffix(enum)}:"
+    return f"  {_keyword('enum', enum)} {enum['name']}{_named_suffix(enum)}:"
 
 
 def _variant_line(variant: dict, p: Palette) -> str:
@@ -423,7 +428,8 @@ def _generic_named(keyword: str) -> Callable[[dict, Palette], str]:
     R3), so neither record has members to print.
     """
     return lambda record, p: (
-        f"  {keyword} {record['name']}{_render_type_params(record.get('type_params'))}:")
+        f"  {_keyword(keyword, record)} {record['name']}"
+        f"{_render_type_params(record.get('type_params'))}:")
 
 
 @dataclass(frozen=True)

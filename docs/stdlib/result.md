@@ -255,9 +255,9 @@ Extract the error value if present, otherwise return `Maybe.None()`.
 
 ```sushi
 let Result@(i32, MathError) result = divide(10, 0)
-let Maybe@(MathError) error = result.err()
+let Maybe@(MathError) err = result.err()
 
-match error:
+match err:
     Maybe.Some(MathError.DivisionByZero) ->
         println("Error occurred: division by zero")
     Maybe.Some(_) ->
@@ -447,10 +447,10 @@ fn safe_divide(i32 a, i32 b) i32 | MathError:
 
 fn process() i32 | MathError:
     let Result@(i32, MathError) result = safe_divide(10, 2)
-    let Maybe@(MathError) error = result.err()
+    let Maybe@(MathError) err = result.err()
 
-    if (error.is_some()):
-        return Result.Err(error.realise(MathError.DivisionByZero))
+    if (err.is_some()):
+        return Result.Err(err.realise(MathError.DivisionByZero))
 
     let i32 value = result.realise(0)
     return Result.Ok(value)

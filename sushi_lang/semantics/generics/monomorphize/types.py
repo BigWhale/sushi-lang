@@ -103,7 +103,8 @@ class TypeMonomorphizer:
             name=concrete_name,
             variants=(),
             generic_base=generic.name,
-            generic_args=type_args
+            generic_args=type_args,
+            is_error=generic.is_error,
         )
         self.monomorphizer.cache[cache_key] = concrete
         self._publish(self.monomorphizer.enum_table, concrete, "enum")

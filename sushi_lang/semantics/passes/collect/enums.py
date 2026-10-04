@@ -22,6 +22,7 @@ from sushi_lang.semantics.generics.types import GenericEnumType
 
 from sushi_lang.semantics.visibility import (
     VisibilityTable,
+    kind_word,
     library_clash_for_type_name,
     record_declaration,
     reject_library_clash,
@@ -108,14 +109,15 @@ class EnumCollector:
             self.enums.by_name[enum.name] = enum
             self.enums.order.append(enum.name)
 
-    def _reject_library_clash(self, name: str, name_span: Optional[Span]) -> bool:
+    def _reject_library_clash(self, name: str, name_span: Optional[Span],
+                              word: str) -> bool:
         """CE3011 when a library already took this name. True when it was refused."""
         clash = library_clash_for_type_name(
             self.visibility, name,
             current_unit=self.current_unit_name, library_units=self.library_units)
         if clash is None or clash.is_public:
             return False  # A public library type stays the plain duplicate (CE0004).
-        reject_library_clash(self.r, clash, name_span, kind="enum", name=name,
+        reject_library_clash(self.r, clash, name_span, kind=word, name=name,
                              filename=self.current_unit_file)
         self.refused_library_types.append(name)
         return True
@@ -134,11 +136,12 @@ class EnumCollector:
         type_params_raw = enum.type_params
         type_params: Optional[List[str]] = extract_type_param_names(type_params_raw)
 
-        if reject_duplicate_type_name(self.r, "enum", name, name_span, type_name_rules(
+        word = kind_word("enum", enum)
+        if reject_duplicate_type_name(self.r, word, name, name_span, type_name_rules(
             "enum", structs=self.structs, generic_structs=self.generic_structs,
             enums=self.enums, generic_enums=self.generic_enums,
-        ), library_clash=self._reject_library_clash, visibility=self.visibility,
-                generic=bool(type_params)):
+        ), library_clash=lambda n, at: self._reject_library_clash(n, at, word),
+                visibility=self.visibility, generic=bool(type_params)):
             return
 
         variants_list: List[EnumVariantInfo] = []
@@ -179,7 +182,8 @@ class EnumCollector:
             generic_enum = GenericEnumType(
                 name=name,
                 type_params=type_param_instances,
-                variants=tuple(variants_list)
+                variants=tuple(variants_list),
+                is_error=enum.is_error,
             )
 
             self.generic_enums.order.append(name)
@@ -189,7 +193,8 @@ class EnumCollector:
         else:
             enum_type = EnumType(
                 name=name,
-                variants=tuple(variants_list)
+                variants=tuple(variants_list),
+                is_error=enum.is_error,
             )
 
             self.enums.order.append(name)

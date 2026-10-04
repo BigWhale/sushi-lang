@@ -31,6 +31,7 @@ DECLARATION_TABLE: dict[str, Tuple[Callable, str]] = {
     "use_stmt": (imports.parse_usestatement, "uses"),
     "struct_def": (structs.parse_structdef, "structs"),
     "enum_def": (enums.parse_enumdef, "enums"),
+    "error_def": (enums.parse_enumdef, "enums"),
     "perk_def": (perks.parse_perkdef, "perks"),
     "external_block": (externals.parse_external_block, "externals"),
     "function_def": (functions.parse_funcdef, "functions"),

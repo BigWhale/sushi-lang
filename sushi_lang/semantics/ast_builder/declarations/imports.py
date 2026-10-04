@@ -4,17 +4,17 @@ from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import UseStatement
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
-    first_token, first_tree, ice, expect, name_tokens)
+    first_token, first_tree, ice, expect)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
-# The two bracketed forms spell one path, `NAME ("/" NAME)*`, and differ in what that
-# path means: the prefix it carries, and the flag it sets. The rule name is what tells
-# them apart, so it is what the table is keyed on (#638). A bracketed form the grammar
-# adds gets a row here and no reader of its own.
+# The two bracketed forms spell one path, `use_segment ("/" use_segment)*`, and differ
+# in what that path means: the prefix it carries, and the flag it sets. The rule name
+# is what tells them apart, so it is what the table is keyed on (#638). A bracketed form
+# the grammar adds gets a row here and no reader of its own.
 BRACKETED_IMPORTS = {
     # rule name: (path prefix, is_stdlib, is_library)
     "stdlib_import": ("", True, False),
@@ -26,12 +26,17 @@ BRACKETED_IMPORTS = {
 IMPORT_RULES = tuple(BRACKETED_IMPORTS) + ("user_import",)
 
 
+# The tokens a path segment can be. `error` is a keyword, and `<io/error>` spells it.
+PATH_SEGMENT_TOKENS = frozenset({"NAME", "ERROR"})
+
+
 def _joined_path(import_node: Tree) -> str:
     """The segments of a bracketed import's `use_path`, joined with slashes."""
     use_path = first_tree(import_node.children, "use_path")
     if use_path is None:
         ice(import_node, "missing use_path")
-    return "/".join(str(tok.value) for tok in name_tokens(use_path.children))
+    return "/".join(str(tok.value) for tok in use_path.children
+                    if isinstance(tok, Token) and tok.type in PATH_SEGMENT_TOKENS)
 
 
 def _quoted_path(import_node: Tree) -> str:

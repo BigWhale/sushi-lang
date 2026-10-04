@@ -34,12 +34,14 @@ class PredefinedEnum:
     """One synthesized enum: its name, its HOME module, and its variants in ABI order.
 
     `payloads` names the variants that carry associated data; every variant left out of
-    it is a unit variant.
+    it is a unit variant. `is_error` marks the seven that are error types; `FileMode` and
+    `SeekFrom` are not (docs/design/error-conversion.md section 2.2).
     """
     name: str
     home_module: Optional[str]
     variants: tuple[str, ...]
     payloads: Mapping[str, tuple[Type, ...]] = field(default_factory=dict)
+    is_error: bool = False
 
 
 # The HOME of every predefined enum (#574, Ruling 3). `docs/design/unit-namespaces.md`
@@ -76,7 +78,7 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
         "InvalidPath",       # ENAMETOOLONG - Invalid path or filename
         "IOError",           # EIO - Generic I/O error
         "Other",             # Any other error
-    )),
+    ), is_error=True),
     # NetError - the socket errors. ResolveFailed is the one variant no errno reaches:
     # getaddrinfo answers with an EAI_* code, whose sign even flips between platforms.
     PredefinedEnum("NetError", "net/error", (
@@ -95,10 +97,10 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
         "Interrupted",          # EINTR
         "MessageTooLarge",      # EMSGSIZE
         "Other",                # Any other error
-    )),
+    ), is_error=True),
     PredefinedEnum("StdError", None, (
         "Error",        # Generic error
-    )),
+    ), is_error=True),
     # IoError - the ONE channel every io contract method answers (HANDLES.md, rulings R4
     # and R20). A perk contract carries one signature and there is no Self type, so
     # `Reader.read` cannot answer FileError on a File and NetError on a TcpStream. The
@@ -124,23 +126,23 @@ PREDEFINED_ENUMS: tuple[PredefinedEnum, ...] = (
         "InvalidInput",      # EINVAL, ENAMETOOLONG
         "Os",                # the raw errno
         "Other",             # anything else
-    ), payloads={"Os": (BuiltinType.I32,)}),
+    ), payloads={"Os": (BuiltinType.I32,)}, is_error=True),
     PredefinedEnum("ProcessError", "sys/process", (
         "SpawnFailed",     # Failed to spawn process
         "ExitFailure",     # Process exited with error
         "SignalReceived",  # Process received signal
-    )),
+    ), is_error=True),
     PredefinedEnum("EnvError", "sys/env", (
         "NotFound",          # Environment variable not found
         "InvalidValue",      # Invalid value
         "PermissionDenied",  # Insufficient permissions
-    )),
+    ), is_error=True),
     PredefinedEnum("MathError", "math", (
         "DivisionByZero",  # Division by zero
         "Overflow",        # Arithmetic overflow
         "Underflow",       # Arithmetic underflow
         "InvalidInput",    # Invalid input to math function
-    )),
+    ), is_error=True),
 )
 
 
@@ -156,6 +158,7 @@ def predefined_enums() -> tuple[EnumType, ...]:
         EnumType(
             name=predefined.name,
             home_module=predefined.home_module,
+            is_error=predefined.is_error,
             variants=tuple(
                 EnumVariantInfo(name=variant,
                                 associated_types=predefined.payloads.get(variant, ()))

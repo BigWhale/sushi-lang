@@ -492,9 +492,9 @@ fn graceful_exit(i32 code) ~:
     return ~  # Never reached
 
 fn main() i32:
-    let bool error = false
+    let bool failed = false
 
-    if (error):
+    if (failed):
         graceful_exit(1)
 
     println("Normal execution")

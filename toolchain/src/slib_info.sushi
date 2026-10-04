@@ -95,6 +95,19 @@ fn get_bool(MsgValue m, string key) bool:
     return map_get_bool(m, key).realise(false)
 
 ##:
+Gives the keyword that the source wrote for a type record. An enum record with
+`is_error` was written `error`.
+
+- Parameter r: The struct or enum record.
+- Parameter keyword: The keyword of the kind, `struct` or `enum`.
+- Returns: `error` for an error type, else the keyword.
+:##
+fn declared_keyword(MsgValue r, string keyword) string:
+    if (keyword == "enum" and get_bool(r, "is_error")):
+        return "error"
+    return keyword.clone()
+
+##:
 Gives the number of elements of an `Arr` value.
 
 - Parameter v: The value to read.
@@ -906,7 +919,8 @@ fn print_enum_list(MsgValue enums, Opts o) ~:
                 pending := open_record(pending)
                 let string name = get_str(e, "name")
                 let string generic = render_named_type_params(e)
-                println("  enum {name}{generic}:")
+                let string word = declared_keyword(e, "enum")
+                println("  {word} {name}{generic}:")
                 pending := print_doc(e, "    ", o)
                 pending := print_variants_at(e, pending, o)
         _ ->
@@ -1015,7 +1029,8 @@ fn print_generic_named_list(MsgValue list, string title, string keyword, Opts o)
                 pending := open_record(pending)
                 let string name = get_str(r, "name")
                 let string generic = render_type_params(r)
-                println("  {keyword} {name}{generic}:")
+                let string word = declared_keyword(r, keyword)
+                println("  {word} {name}{generic}:")
                 pending := print_doc(r, "    ", o)
         _ ->
             return ~

@@ -258,7 +258,8 @@ class LibraryRegistry:
 
                 variants.append(EnumVariantInfo(name=v["name"], associated_types=assoc_types))
 
-            result[enum_name] = EnumType(name=enum_name, variants=tuple(variants))
+            result[enum_name] = EnumType(name=enum_name, variants=tuple(variants),
+                                         is_error=bool(enum_info.get("is_error", False)))
         return result
 
     def _parse_functions(self, func_list: list[dict], owner: str | None = None,

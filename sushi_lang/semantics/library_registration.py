@@ -354,7 +354,8 @@ class LibraryRegistration:
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=name,
                     unit_name=library_unit(library.name, record.get("unit")),
-                    filename=manifest.get("library_path")))
+                    filename=manifest.get("library_path"),
+                    is_error=bool(record.get("is_error", False))))
 
     def _reject_type_clash(self, kind: str, name: str,
                            build_units: set[str]) -> bool:
@@ -377,7 +378,7 @@ class LibraryRegistration:
         reject_library_clash(
             self.reporter,
             DeclOrigin(kind=kind, name=name, unit_name=self._owning_library(kind, name)),
-            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+            origin.name_span, kind=origin.word, name=name, filename=origin.filename)
         self.refused_types.append(name)
         return True
 
@@ -607,11 +608,13 @@ class LibraryRegistration:
             snippet = self._collect_snippet(source, f"<type:{lib_name}:{name}>", lib_name,
                                             lib_name, f"private type '{name}'")
             kind = None
+            is_error = False
             for table_name, declared_kind, concrete in _PRIVATE_TYPE_TABLES:
                 entry = snippet.declared(table_name, name)
                 if entry is None:
                     continue
                 kind = declared_kind
+                is_error = getattr(entry, "is_error", False)
                 if concrete:
                     table = getattr(self.tables, table_name)
                     table.by_name[name] = entry
@@ -621,7 +624,8 @@ class LibraryRegistration:
                 continue
 
             self.tables.visibility.record(DeclOrigin(
-                kind=kind, name=name, unit_name=lib_name, is_public=False))
+                kind=kind, name=name, unit_name=lib_name, is_public=False,
+                is_error=is_error))
 
     def _reject_private_type_clash(self, lib_name: str, name: str,
                                    build_units: set[str]) -> None:
@@ -637,7 +641,7 @@ class LibraryRegistration:
         reject_library_clash(
             self.reporter,
             DeclOrigin(kind=origin.kind, name=name, unit_name=lib_name),
-            origin.name_span, kind=origin.kind, name=name, filename=origin.filename)
+            origin.name_span, kind=origin.word, name=name, filename=origin.filename)
         self.refused_types.append(name)
 
     def _register_perk_impls(self) -> None:
@@ -1055,12 +1059,13 @@ class LibraryRegistration:
                 else snippet.program.enums
             node = next((d for d in declarations or [] if d.name == type_name), None)
             shipped_in = manifest.get("library_path")
+            is_error = getattr(node, "is_error", False)
             if getattr(node, "is_public", False):
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=type_name,
                     unit_name=library_unit(lib_name, record.get("unit")),
-                    filename=shipped_in))
+                    filename=shipped_in, is_error=is_error))
             else:
                 self.tables.visibility.record(DeclOrigin(
                     kind=kind, name=type_name, unit_name=lib_name, filename=shipped_in,
-                    is_public=False))
+                    is_public=False, is_error=is_error))
