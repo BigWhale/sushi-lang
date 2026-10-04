@@ -1,0 +1,16 @@
+# A diagnostic writes an expression back as the user wrote it, so a `nom` marker on an
+# argument stays in the text: `or_err(nom StdError.Error)`, never `or_err(StdError.Error)`.
+# EXPECT_ERROR_CODES_EXACT: CE2404
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'l.get(0).or_err(nom StdError.Error)??'"
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn first(List@(i32) l) i32 | StdError:
+    bump(poke l.get(0).or_err(nom StdError.Error)??)
+    return Result.Ok(0)
+
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    println(first(l).realise(-1))
+    return 0
