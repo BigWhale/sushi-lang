@@ -100,15 +100,22 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
 
     source_value = codegen.expressions.emit_expr(expr.expr)
 
-    # Between two error types, `as` calls the declared conversion, and the conversion
-    # consumes its operand by position (design 3.2): the operand is its `nom self`.
+    # `as` consumes its operand by position (design 3.2). Between two error types it
+    # calls the declared conversion, and the operand is its `nom self`. An identity cast
+    # moves an owning operand to the new owner. A plain operand, every numeric one
+    # included, is a copy and does not go through the seam.
+    from sushi_lang.backend import ownership
     conversion = expr.inferred_conversion
     if conversion is not None:
-        from sushi_lang.backend import ownership
         source_value = ownership.consume(codegen, expr.expr, source_value,
                                          conversion.source,
                                          ownership.ConsumingUse.RECEIVER)
         return emit_conversion_call(codegen, conversion, source_value)
+    from sushi_lang.backend.destructors import needs_cleanup
+    if expr.source_type is not None and needs_cleanup(codegen, expr.source_type):
+        source_value = ownership.consume(codegen, expr.expr, source_value,
+                                         expr.source_type,
+                                         ownership.ConsumingUse.RECEIVER)
 
     source_llvm_type = source_value.type
     target_llvm_type = codegen.types.ll_type(expr.target_type)

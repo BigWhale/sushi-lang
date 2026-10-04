@@ -82,11 +82,11 @@ def check_expr(checker: 'BorrowChecker', expr: Expr) -> None:
             check_expr(checker, expr.right)
         case CastExpr():
             check_expr(checker, expr.expr)
-            # `as` with a conversion consumes its operand by POSITION, unmarked, as a
-            # constructor argument does (docs/design/error-conversion.md section 3.2).
-            if expr.inferred_conversion is not None:
-                target = display_type(expr.inferred_conversion.target)
-                consume(checker, expr.expr, CopyUse("convert the copy", f" as {target}"))
+            # `as` consumes its operand by POSITION, unmarked, as a constructor argument
+            # does (docs/design/error-conversion.md section 3.2). A conversion takes it as
+            # its `nom self`; an identity cast moves it to the new owner. A plain operand,
+            # every numeric one included, is a copy.
+            consume(checker, expr.expr, _cast_copy_use(expr))
         case UnaryOp():
             check_expr(checker, expr.expr)
         case TryExpr():
@@ -158,6 +158,12 @@ def reject_a_use_after_the_change(checker: 'BorrowChecker', name: str,
         return False
     emit_use_of_invalidated_borrow(checker, name, span, state)
     return True
+
+
+def _cast_copy_use(expr: CastExpr) -> CopyUse:
+    """What the CE2411 escape does with the copy of a cast operand: `e.clone() as T`."""
+    clause = "convert the copy" if expr.inferred_conversion is not None else "cast the copy"
+    return CopyUse(clause, f" as {display_type(expr.target_type)}")
 
 
 def _check_call(checker: 'BorrowChecker', expr: Call) -> None:

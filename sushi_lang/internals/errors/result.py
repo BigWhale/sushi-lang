@@ -84,7 +84,7 @@ _add(ErrorMessage("CE2520", Severity.ERROR,
 
 _add(ErrorMessage("CE2521", Severity.ERROR,
     "a conversion from '{type_name}' into itself is refused",
-    Category.TYPE, "An identity conversion does nothing that the language does not already do: `??` propagates an error of the same type unchanged, and `e as T` on a value of type `T` is a no-op (docs/design/error-conversion.md section 3.4). A declaration of one would be a second, silent path for the same propagation, so it is refused. Delete the declaration."))
+    Category.TYPE, "An identity conversion does nothing that the language does not already do: `??` propagates an error of the same type unchanged, and `e as T` on a value of type `T` gives the value unchanged to its new owner (docs/design/error-conversion.md section 3.4). A declaration of one would be a second, silent path for the same propagation, so it is refused. Delete the declaration."))
 
 _add(ErrorMessage("CE2522", Severity.ERROR,
     "'or_err' reads a borrowed '{maybe}' through, so its Result must be the operand of '??'",

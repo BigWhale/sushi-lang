@@ -2456,8 +2456,9 @@ memory and copies. Every other type copies. These operations change ownership:
   `Maybe` or `Result` that owns something is spent by the call (`CE2435`). A borrowed
   `Maybe` is read through by `or_err` under `??`; a borrowed `Result` that owns something
   is `CE2411` for `map_err`.
-- **`e as T`** with a declared conversion consumes `e` by position, with no marker. A
-  borrowed error that owns something is `CE2411`, and the form is `e.clone() as T`.
+- **`e as T`** consumes `e` by position, with no marker: a declared conversion takes it,
+  and an identity cast (`e` is a `T`) moves it to the new owner. A borrowed value that
+  owns something is `CE2411`, and the form is `e.clone() as T`. A plain value is a copy.
 
 The guides are [Memory Management](memory-management.md) and
 [the borrow model](design/borrow-model.md).
