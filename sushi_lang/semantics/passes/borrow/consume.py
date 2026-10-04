@@ -6,7 +6,8 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
+from sushi_lang.semantics.ast import (
+    DotCall, Expr, Lambda, Let, MethodCall, Name, Spread, StringLit, TryExpr)
 from sushi_lang.semantics.ownership import Ownership, Provenance, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
@@ -74,6 +75,14 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     if field_take(checker, expr) is not None:
         return Provenance.OWNED
 
+    # `m.or_err(nom e)` answers what `m` holds, by the same rule as `m??` below: a
+    # borrowed `m` is read through, and an owned `m` was spent by the call (design 4).
+    receiver = read_through_receiver(expr)
+    if receiver is not None:
+        if source_provenance(checker, receiver) is Provenance.BORROWED:
+            return Provenance.BORROWED
+        return Provenance.FRESH
+
     # `r??` yields what `r` holds, and the payload has `r`'s provenance (#548). A
     # borrowed `r` keeps its owner, so the payload is a read through it. An owned `r`
     # was SPENT by the `??` itself (`unwrap_place`), so nothing owns the payload now
@@ -89,6 +98,23 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
         return Provenance.BORROWED
 
     return Provenance.FRESH
+
+
+def read_through_receiver(expr: Expr) -> Optional[Expr]:
+    """The receiver of a built-in call that reads a borrowed receiver through, or None.
+
+    `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` is read through, as `??` reads
+    through a borrowed wrapper (docs/design/error-conversion.md section 4). The answer
+    then carries the borrow. A `??` around the call is stripped first.
+    """
+    from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
+    call = unwrap_try(expr)
+    if not isinstance(call, (MethodCall, DotCall)):
+        return None
+    signature = builtin_signature_of(call.resolved_enum_type, call.method)
+    if signature is None or not signature.reads_borrow_through:
+        return None
+    return call.receiver
 
 
 def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:

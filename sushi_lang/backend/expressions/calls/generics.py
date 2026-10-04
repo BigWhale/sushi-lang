@@ -71,12 +71,15 @@ def settle_signature_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 
     The typecheck pass stamped its receiver mode and its parameter modes. A `nom self`
     receiver goes to the method through the ownership seam, and each argument is settled
-    by its mode, as for an extension method. Answers the receiver and the arguments.
+    by its mode, as for an extension method. A borrowed receiver that the method reads
+    through stays with its owner. Answers the receiver and the arguments.
     """
     from sushi_lang.semantics.param_modes import receiver_mode
     from sushi_lang.backend.expressions.calls.dispatcher import (
         consume_receiver, settle_method_call_arguments)
-    if receiver_mode(getattr(expr, "callee_self_mode", None)).consumes:
+    from sushi_lang.backend.expressions.memory import reads_a_borrow_through
+    if (receiver_mode(getattr(expr, "callee_self_mode", None)).consumes
+            and not reads_a_borrow_through(codegen, expr)):
         receiver_value = consume_receiver(codegen, expr, receiver_value)
     args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
     settle_method_call_arguments(codegen, expr, args)

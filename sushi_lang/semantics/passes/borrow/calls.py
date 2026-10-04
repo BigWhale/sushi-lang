@@ -8,7 +8,7 @@ from sushi_lang.semantics.ast import (
     Borrow, Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
     MethodLike, Name, Spread,
 )
-from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
 from sushi_lang.semantics.param_modes import (
@@ -16,7 +16,7 @@ from sushi_lang.semantics.param_modes import (
 )
 
 from .borrows import register_implicit_borrow
-from .consume import consume, consume_each
+from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import emit_use_of_invalidated_borrow, expr_to_string
 from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
 from .reads import OWNER_STEPS, called_on, read_type
@@ -282,6 +282,11 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
     if not receiver_mode(expr.callee_self_mode).consumes:
         return
     receiver = expr.receiver
+    # A built-in that reads a borrowed receiver through (`or_err`) leaves it to its owner.
+    if (read_through_receiver(expr) is not None
+            and source_provenance(checker, receiver) is Provenance.BORROWED):
+        receiver.ownership_provenance = Provenance.BORROWED
+        return
     consume(checker, receiver)
     if isinstance(receiver, Name):
         state = checker.borrow_state.get(receiver.id)

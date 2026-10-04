@@ -24,7 +24,7 @@ MAYBE_METHOD_SIGNATURES: Mapping[str, BuiltinSignature] = MappingProxyType({
         receiver_params=("T",), type_params=("E",),
         params=(BuiltinParam("e", TypeParameter("E"), is_nom=True),),
         ret_type=GenericTypeRef("Result", (TypeParameter("T"), TypeParameter("E"))),
-        self_mode="nom"),
+        self_mode="nom", reads_borrow_through=True),
 })
 
 

@@ -38,6 +38,9 @@ class BuiltinSignature:
     params: tuple[BuiltinParam, ...]
     ret_type: Type
     self_mode: Optional[str] = None
+    # A `nom self` receiver that is a borrow is read through, and the answer carries the
+    # borrow, as `??` reads through a borrowed wrapper (design 4, borrow-model.md S10d).
+    reads_borrow_through: bool = False
 
     @property
     def error_parameters(self) -> tuple[str, ...]:
@@ -54,6 +57,15 @@ class BuiltinInstance:
     substitution: Mapping[str, Type]
     params: tuple[BuiltinParam, ...]
     ret_type: Type
+
+
+def builtin_signature_of(receiver_type: Any, method_name: str) -> Optional[BuiltinSignature]:
+    """The signature of the built-in method `method_name` on this receiver, or None."""
+    from sushi_lang.semantics.type_predicates import is_instance_of
+    if isinstance(receiver_type, EnumType) and is_instance_of(receiver_type, "Maybe"):
+        from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
+        return MAYBE_METHOD_SIGNATURES.get(method_name)
+    return None
 
 
 def receiver_type_arguments(receiver_type: Any) -> Optional[tuple[Type, ...]]:

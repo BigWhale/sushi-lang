@@ -822,6 +822,8 @@ def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.passes.types.calls.builtin_signature import (
         instance_return_type, solve_builtin_call)
 
+    # The borrow pass and the backend read the receiver type from this stamp.
+    call.resolved_enum_type = receiver_type
     _check_receiver_mode(validator, call, signature)
     instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
     if instance is None:

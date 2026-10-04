@@ -223,10 +223,35 @@ def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
     return is_get_out_container(receiver_type)
 
 
+def reads_a_borrow_through(codegen: 'LLVMCodegen', expr) -> bool:
+    """Is `expr` (a `??` around it included) a call that reads a borrowed receiver through?
+
+    `m.or_err(nom e)` over a borrowed `Maybe` answers a view of what the owner keeps
+    (docs/design/error-conversion.md section 4): the receiver is a get-out, or the borrow
+    pass stamped it BORROWED (a parameter, a pattern binding, a field). The owner frees
+    the payload, so the answer has no owner of its own.
+    """
+    from sushi_lang.semantics.ast import DotCall, MethodCall, TryExpr
+    from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
+    from sushi_lang.semantics.ownership import Provenance
+    while isinstance(expr, TryExpr):
+        expr = expr.expr
+    if not isinstance(expr, (MethodCall, DotCall)):
+        return False
+    signature = builtin_signature_of(getattr(expr, "resolved_enum_type", None), expr.method)
+    if signature is None or not signature.reads_borrow_through:
+        return False
+    receiver = expr.receiver
+    return (getattr(receiver, "ownership_provenance", None) is Provenance.BORROWED
+            or is_container_get_call(codegen, receiver))
+
+
 def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     """Does `expr` produce a value that NO other owner will free?"""
     from sushi_lang.semantics.ast import Name, MemberAccess, IndexAccess
     if isinstance(expr, (Name, MemberAccess, IndexAccess)):
+        return False
+    if reads_a_borrow_through(codegen, expr):
         return False
     return not is_container_get_call(codegen, expr)
 
