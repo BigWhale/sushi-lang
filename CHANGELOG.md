@@ -80,6 +80,9 @@ program uses as an error type is declared with `error`, every `??` on a `Maybe` 
   `--opt` (#1168). `??` now refuses a `Maybe`, and `or_err` writes the error value.
 - A `nom self` method called on a function-call temporary that owns heap memory (a struct,
   an enum or a `Result`, generic or not) freed the value two times (#1169).
+- An identity cast `x as T` on a value of type `T` that owns heap memory (a string, a
+  struct, an error type) gave the value two owners, and both freed it. `as` now consumes
+  its operand by position, so a later use of `x` is the use-after-move error.
 
 ## [0.14.0] - 2026-10-03
 
