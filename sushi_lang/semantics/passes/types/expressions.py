@@ -297,12 +297,18 @@ def conversion_help(source: 'Type', target: 'Type', *, at_try: bool) -> str:
     """The help that names the conversion to declare, for `??` (CE2511) and `as` (CE2014).
 
     It names only a declaration that the collect pass accepts. When no declaration of
-    the pair is legal, it names the form at the site: `.map_err(f)??` for a `??`, and a
-    function that takes the error `nom` for an `as`. It never offers `r?? as T`: `as`
-    binds after `??`, so that spelling casts the VALUE.
+    the pair is legal (a generic side, C6; a target with no home module, C12), it names
+    the form at the site: `.map_err(f)??` for a `??`, and a function that takes the error
+    `nom` for an `as`. It never offers `r?? as T`: `as` binds after `??`, so that
+    spelling casts the VALUE.
     """
     from sushi_lang.semantics.passes.collect.enums import PREDEFINED_ENUM_HOMES
     source_text, target_text = display_type(source), display_type(target)
+    generic = next((side for side in (source, target) if getattr(side, "generic_args", None)),
+                   None)
+    if generic is not None:
+        return (f"a conversion cannot take the generic error type "
+                f"'{display_type(generic)}'; {_site_form(source_text, target_text, at_try)}")
     declaration = f"`extend {source_text} as {target_text}:`"
     name = getattr(target, "name", None)
     if name in PREDEFINED_ENUM_HOMES:
