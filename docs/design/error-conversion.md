@@ -32,6 +32,7 @@ Status: ACCEPTED. The rulings are David's (2026-10-04). Nothing is built yet.
 | **C9** | `or_err` and `map_err` are built-in methods, beside `.realise()` and `.err()`, and need no import. `map_err` ships in the first version | 4, 5 |
 | **C10** | A `from` marker on a variant is deferred | 9.1 |
 | **C11** | A conversion has no leak check | 3.8 |
+| **C12** | No unit may declare a conversion into `StdError`, because `StdError` has no home module | 3.5 |
 
 ---
 
@@ -89,8 +90,10 @@ error ConfigError:
 The body is the body of an `enum`: variants, payloads, type parameters, doc blocks, and
 `public`. Only the keyword is different.
 
-The keyword is `error`. No code in the stdlib, the toolchain, the tests or the docs uses
-`error` as an identifier. `err` is not used, for three reasons: `Result` has an `.err()`
+The keyword is `error`. The parser uses the basic lexer, so `error` is a reserved word in
+every position, and it is not an identifier. One test and four documentation pages use
+`error` as a local name (`Result.Err(error) ->`); the migration renames them. `err` is not
+used, for three reasons: `Result` has an `.err()`
 method, and a reserved word cannot be a method name; `err` is the usual variable name for
 an error; and `err` differs from the variant `Err` by case only.
 
@@ -224,6 +227,10 @@ predefined type, the declaring unit is its home module (`EnumType.home_module`).
   lives there.
 - A library cannot convert its own error into `IoError`, because the stdlib owns
   `IoError`. The library declares its own error type and converts `IoError` into it.
+- `StdError` has no home module, so no unit may declare a conversion into it. A program
+  that wants a target for its conversions declares its own error type.
+- `NetError as IoError` lives in `<io/error>`, the home of `IoError`. That unit then
+  imports `<net/error>`, so `<net/error>` no longer imports `<io/error>`.
 
 ### 3.6 Which types
 
@@ -269,7 +276,8 @@ source is a leak, and the leak check already refuses that function.
 other operand:
 
 - **A `Maybe`.** A `??` in a bare body is CE0131 as before, so `??` never applies to a
-  `Maybe`. The CE2507 help names `or_err`.
+  `Maybe`. The CE2507 help names `or_err`. The `??` check asks for the channel before it
+  asks for the operand, so a bare body gets CE0131 alone.
 - **A user enum shaped like a `Result` or a `Maybe`** (1.4). Its `Err` payload is out of
   reach of E3, and its `None` has the fault of #1168. The type identity of Sushi is
   nominal, so `??` reads the type and not its variant names.
@@ -437,7 +445,7 @@ fn notify(string host, string msg) ~ | AppError:
 | A generic or non-error source or target | New code |
 | An identity conversion | New code |
 | Two declarations of one pair | The duplicate-function error, with a note at the first declaration |
-| A `\| E` on a conversion | New code |
+| A `\| E` on a conversion | A parse error. The grammar of 8.2 has no place for it, and no code is added |
 | `??` on a `Maybe` | CE2507, with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |
 | `??` on a user enum shaped like a `Result` or a `Maybe` | CE2507. The help says to answer a `Result@(T, E)` |
 | `as` with a conversion in a `const` initializer | The not-a-constant-expression error |
@@ -452,21 +460,27 @@ The numbers are chosen when the work is built, each in the module that owns its 
 ### 8.1 The `error` declaration
 
 - **Grammar.** A keyword terminal `ERROR` and a top-level `error_def` with the body of
-  `enum_def`. `use_path` still accepts the word `error`, because `use <io/error>` and
-  `use <net/error>` spell it.
+  `enum_def`. The parser uses the basic lexer, so `ERROR` is a token in every position.
+  Each segment of `use_path` takes `NAME` or `ERROR`, because `use <io/error>` and
+  `use <net/error>` spell it, and the AST builder reads both tokens when it joins the
+  path.
 - **AST.** The enum declaration node gets an `is_error` field, set by the AST builder from
   the keyword. There is no second node class.
 - **`collect`.** The flag goes on the `EnumType`, and on a generic template so that each
-  instance carries it. `passes/collect/enums.py` sets it on the seven predefined error
-  types.
-- **E3.** One predicate, "is an error type". It is called from `signature_result_arms`
-  (`semantics/generics/results.py`), where CE2084 and CE2086 are emitted today, from the
+  instance carries it. The table of predefined enums (`semantics/predefined_types.py`)
+  sets it on the seven predefined error types.
+- **E3.** One predicate, "is an error type". It is called from `validate_error_channel`
+  (`passes/types/signatures.py`), where CE2084 and CE2086 are emitted today, from the
   written-type walk (`validate_type_name`, `passes/types/utils.py`), and from the
   monomorphizer where it validates type arguments. Every call emits CE2084. CE2086 is
-  removed from `internals/errors/types.py`.
-- **Libraries.** The `enum` row of a binary or hybrid manifest gets an `is_error` field
-  (`backend/library_format.py`, read by `semantics/library_registration.py`). A source
-  `.slib` carries the keyword as text. `--lib-info` and `slib-info` print `error`.
+  removed from `internals/errors/types.py`. `signature_result_arms` also serves the
+  backend and emits nothing.
+- **Libraries.** The `enum` row of a binary or hybrid manifest gets an `is_error` field,
+  and so does the `generic_type` record of a generic enum (`backend/library_format.py`,
+  read by `semantics/library_registration.py`). The schema version changes, so a binary
+  or hybrid library built before this work is refused and is rebuilt. A source `.slib`
+  carries the keyword as text. `--lib-info` and `slib-info` print `error`, for a generic
+  error type too.
 - **Display.** A message that names the declaration kind says "error type" for a flagged
   enum.
 
@@ -477,7 +491,9 @@ The numbers are chosen when the work is built, each in the module that owns its 
 - **AST.** The node is an `ExtendDef` with the method name `as`, which no user method can
   have because `as` is reserved. The target is in the method-level type-argument slot,
   so `extension_symbol(source, "as", (target,))` names it, and one source can convert to
-  many targets. The body goes through `scope`, `typecheck`, `lift` and `borrow` as any
+  many targets. A conversion is not filed in the extension table, which keys on the
+  source type and the method name. The cache signature of the unit renders the target.
+  The body goes through `scope`, `typecheck`, `lift` and `borrow` as any
   extension body, and the backend emits it as any extension.
 - **The seam.** One table, `SymbolTables.conversions`, keyed `(source, target)` and
   filled by `collect`. One function answers "which conversion turns `E_in` into `E_out`".
@@ -500,11 +516,22 @@ The numbers are chosen when the work is built, each in the module that owns its 
   hands the error over in the same way.
 - **Libraries.** A binary or hybrid manifest gets a `conversions` row (source, target,
   link symbol). `--lib-info` and `slib-info` print it.
+- **`effects`.** The destroy summary reads the `poke` parameters of free functions. A
+  conversion has none, so the hidden call at a `??` adds no edge.
 - **Lints.** A conversion is an `extend` block, so `--warn-unused` treats it as a root.
   Under `--warn-missing-docs`, an `error` declaration and a conversion take a doc block,
   as an `enum` and an extension method do.
 
-### 8.3 The IR
+### 8.3 `or_err` and `map_err`
+
+A built-in method has no method-level type parameter today. These two are the first, and
+the built-in path gets four parts: the inference hook of a method family receives the
+call, so a return type can depend on an argument; a solver answers the method-level type
+parameter of a built-in from its arguments; a built-in carries the parameter modes and the
+receiver mode for the `borrow` pass, so a `nom` marker is checked and a `nom self`
+receiver is spent; and the backend emitter reads the stamped return type.
+
+### 8.4 The IR
 
 `ir.md` S5 moves every `typecheck` stamp into `TypeckResults`. The conversion is one more
 stamp, and in SHIR one more `Callee` (`ir.md` 7.6). The `error` flag is a property of the
