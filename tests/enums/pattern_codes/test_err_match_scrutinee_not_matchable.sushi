@@ -1,9 +1,10 @@
-# A match dispatches on an enum's variants or on an integer's value. A string has
-# neither, so the scrutinee itself is refused.
+# A match dispatches on an enum's variants, an integer's value, a string's value or a
+# tuple's elements. A float has none of these, so the scrutinee itself is refused. Until
+# string arms, this fixture used a string scrutinee.
 # EXPECT_ERROR_CODE: CE2048
 
 fn main() i32:
-    let string s = "Mostly Harmless"
-    match s:
+    let f64 x = 4.2
+    match x:
         _ -> println("a")
     return 0
