@@ -105,6 +105,7 @@ nav:
       - Documentation Blocks: documentation-blocks.md
       - Standard Library: standard-library.md
       - Compiler Reference: compiler-reference.md
+      - Error Catalog: error-catalog.md
       - Libraries: libraries.md
       - Library Format: library-format.md
       - Package Manager (Nori): package-manager.md
