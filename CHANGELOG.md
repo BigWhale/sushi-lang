@@ -2,7 +2,7 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
-## [Unreleased]
+## [0.15.0] - 2026-10-05
 
 Sushi has error types. An `error` declaration is an enum that may be the `E` of a
 `Result@(T, E)`, and only an error type may be. A conversion `extend FileError as AppError:`
@@ -10,7 +10,12 @@ joins two error types, and `??` and `as` call it, so a function that calls two m
 needs no `match` to change one error into another. `??` takes a `Result` only: a `Maybe`
 writes its error value with `or_err`. These are breaking changes: every enum that a
 program uses as an error type is declared with `error`, every `??` on a `Maybe` becomes
-`.or_err(nom e)??`, and a binary or hybrid `.slib` built before is rebuilt.
+`.or_err(nom e)??`, and every `.slib` built by 0.14 needs a rebuild.
+
+`map_err(f)` converts an error at one site with no declaration. Several ownership
+faults are fixed: a `nom self` method on a call temporary, an identity cast of an owning
+value, `??` on a borrowed `Result`, and `.realise` on a temporary each freed or leaked a
+value.
 
 ### Added
 

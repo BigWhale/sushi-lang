@@ -656,7 +656,7 @@ Example output, with `--docs` (without it, no doc block prints):
 Library: mylib
 Version: 1.0.0
 Kind: source
-Compiler: 0.14.0
+Compiler: 0.15.0
 Requires compiler: ~0.14
 Compiled: 2026-09-28T19:18:00+00:00
 Protocol: 2.4
