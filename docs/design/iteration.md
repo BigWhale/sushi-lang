@@ -25,9 +25,9 @@ Two things are walkable, and they are walked by different machinery.
 An **iterator** is `{i32 index, i32 length, T* data}` — a cursor over contiguous storage.
 `.iter()` answers one on an array or a `List@(T)`, `.keys()` / `.values()` / `.entries()`
 answer one on a `HashMap`, and a range is one. It has no `next` to call: the loop reads the
-length and indexes. `Iterator@(T)` is deliberately not a nameable type (**CE2001**), so an
+length and indexes. `Iterator@(T)` is deliberately not a nameable type (**[CE2001](../error-catalog.md#ce2001)**), so an
 iterator only ever appears as the iterable of the loop that consumes it. It has no method
-either: `a.iter().len()`, `(0..3).len()` and `a.iter().next()` are each **CE2008** at the
+either: `a.iter().len()`, `(0..3).len()` and `a.iter().next()` are each **[CE2008](../error-catalog.md#ce2008)** at the
 call.
 
 A **protocol iterator** is any type carrying a nullary `next()` that answers `Maybe@(T)`.
@@ -58,7 +58,7 @@ extend Countdown next(poke self) Maybe@(i32):
 are dropped.
 
 A **perk** — `perk Iterator@(Item): fn next() Maybe@(Item)` — is not expressible: a perk
-cannot carry a type parameter (**CE4010**), so the contract cannot name what it yields.
+cannot carry a type parameter (**[CE4010](../error-catalog.md#ce4010)**), so the contract cannot name what it yields.
 Widening perks to carry type parameters is a language change with no other consumer, and
 buying it for one loop is the wrong trade.
 
@@ -128,8 +128,8 @@ foreach(line?? in it):        →     foreach(#fe_itemN in it):
 ```
 
 That is the entire implementation. The unwrap, the error-type check (the same type, or a
-declared conversion that the `??` calls, else **CE2511**), the refusal in a bare body
-(**CE0131**, `main` included) and the scope cleanup on the propagation path are the ones
+declared conversion that the `??` calls, else **[CE2511](../error-catalog.md#ce2511)**), the refusal in a bare body
+(**[CE0131](../error-catalog.md#ce0131)**, `main` included) and the scope cleanup on the propagation path are the ones
 `??` already has in every other position — there is no second implementation to keep in
 step. The one thing the parser cannot know is that `let`'s type, and the `foreach` validator
 fills it in from the item type.
@@ -143,15 +143,15 @@ an `expand` body works as it does in a plain body (#1140).
 A declared type on a `??` binder names what the USER binds, which is the unwrapped value,
 so `foreach(string line?? in r.lines())` puts `string` on the `let`.
 
-A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**. It is
-not CE2515, which is a resolution fallback for a chained call whose channel is unhandled,
-and not CE2516, which is a wrapper standing where a bool belongs. Here the item is the
+A `??` binder over an item that is not a `Result` has nothing to unwrap: **[CE2517](../error-catalog.md#ce2517)**. It is
+not [CE2515](../error-catalog.md#ce2515), which is a resolution fallback for a chained call whose channel is unhandled,
+and not [CE2516](../error-catalog.md#ce2516), which is a wrapper standing where a bool belongs. Here the item is the
 right shape for the loop and the wrong shape for the marker.
 
 ### 4. A stop must be reachable, so four `next()` shapes are refused
 
 Each refusal has the same reason: the loop must be able to call the method repeatedly and
-read a stop out of its answer. All four answer **CE2033**.
+read a stop out of its answer. All four answer **[CE2033](../error-catalog.md#ce2033)**.
 
 | the shape | why it cannot work |
 |---|---|
@@ -191,9 +191,9 @@ through the ownership seam (`consume`), and the borrow pass consumes the iterabl
 way. So the loop destroys the iterator and nothing else does (#1145):
 
 - a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
-  later mention of it is **CE2405**;
+  later mention of it is **[CE2405](../error-catalog.md#ce2405)**;
 - a borrow that owns a resource (a parameter, a `peek` or `poke` parameter, a field read)
-  is **CE2411**, because another owner still frees it; `.clone()` gives the loop a value
+  is **[CE2411](../error-catalog.md#ce2411)**, because another owner still frees it; `.clone()` gives the loop a value
   of its own;
 - a value that owns nothing is copied, and the loop walks the copy, so the source does
   not change;
@@ -212,16 +212,16 @@ special case in the backend.
 
 `foreach(poke r in it)` binds a POINTER into the container's element storage. A protocol
 iterator has none: the item is the value `next()` answered, held in the loop's own slot.
-So a reference binding over one is **CE2423**, whatever the iterable's spelling — the check
+So a reference binding over one is **[CE2423](../error-catalog.md#ce2423)**, whatever the iterable's spelling — the check
 asks the protocol and not the method name, because a user `iter()` answering a protocol
 iterator would otherwise pass the name test and bind a pointer into a temporary.
 
 ### 8. `_` discards the item
 
 A loop that only repeats its body (fill `n` slots, skip `n` bytes) has no use for its
-item. A named binder that the body never reads is CW1001, and that is correct: it hides
+item. A named binder that the body never reads is [CW1001](../error-catalog.md#cw1001), and that is correct: it hides
 nothing that a reader must know. So `_` is the binder that binds nothing, the spelling a
-`match` pattern has. It is never CW1001, and the body cannot name it,
+`match` pattern has. It is never [CW1001](../error-catalog.md#cw1001), and the body cannot name it,
 because `_` is not a name in an expression.
 
 The AST builder gives the loop a hidden name with no span, and the scope pass never

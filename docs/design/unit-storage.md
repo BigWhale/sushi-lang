@@ -19,14 +19,14 @@ shape -- a marker, a type, a name, an initializer -- and a different kind:
 | address | none: a read copies the value out | yes: a rebind, a `poke`, a field write and a mutating method reach it |
 | initializer | a constant expression | a constant expression, plus an EMPTY container |
 | lifetime | none | initialized before `main`, never destroyed at exit |
-| moved out of | never (CE2436); a plain value copies out | the same |
+| moved out of | never ([CE2436](../error-catalog.md#ce2436)); a plain value copies out | the same |
 | visibility | `public` explicit, private by default | the same |
 
 ## What it is for
 
 The console handles are the main case. `stdout`, `stderr` and `stdin` are `public var
 File`, because the `Writer` contract takes `poke self` (so that a `BufWriter@(W)` can
-implement it), and nothing writes a constant (CE2400). A `var` gives the console handle
+implement it), and nothing writes a constant ([CE2400](../error-catalog.md#ce2400)). A `var` gives the console handle
 storage the contract can write.
 
 A private `var` is the common case in Go and Zig code, and it is what keeps `public var`
@@ -48,11 +48,11 @@ There is no run-before-`main` initializer (Go's), because that brings initializa
 with it. Two consequences:
 
 - **A `var` cannot name another `var`** in its initializer, and a `const` cannot name a
-  `var` at all: the value is read at run time (CE0108 either way).
+  `var` at all: the value is read at run time ([CE0108](../error-catalog.md#ce0108) either way).
 - **An empty container qualifies**: `List.new()`, `from([])` and `new()` are the literal
   descriptor `{0, 0, null}` and allocate nothing, so the backend emits them as the zero
   value of the type. `HashMap.new()` does not qualify: it mallocs its buckets on the
-  spot. `from([1, 2])` does not either: the elements need a buffer. Both are CE0108. One
+  spot. `from([1, 2])` does not either: the elements need a buffer. Both are [CE0108](../error-catalog.md#ce0108). One
   predicate, `allocates_nothing` in `semantics/const_eval.py`, is read by the typecheck pass
   and the backend alike, so the two cannot disagree about what qualifies.
 - **An enum variant qualifies**: a payload-free variant is a tag over a zero
@@ -68,18 +68,18 @@ A `var` gets a `BorrowState` at every function's entry (`is_unit_var`), so the r
 already exist apply to it with one addition:
 
 - **Borrowable like a local.** `peek v` and `poke v` take its address; one `poke` at a
-  time (CE2403); a `poke` beside a `peek` is CE2407. `foreach(poke r in v.iter())` points
+  time ([CE2403](../error-catalog.md#ce2403)); a `poke` beside a `peek` is [CE2407](../error-catalog.md#ce2407). `foreach(poke r in v.iter())` points
   into its element storage.
-- **Never moved out of** (CE2436). `f(nom v)`, `let T x = v`, `return v` and a `nom self`
+- **Never moved out of** ([CE2436](../error-catalog.md#ce2436)). `f(nom v)`, `let T x = v`, `return v` and a `nom self`
   method such as `close()` would hand storage nothing re-initializes to a callee or a
-  binding that frees it. The rule is CE2410's, the one that fences `main`'s argv view,
+  binding that frees it. The rule is [CE2410](../error-catalog.md#ce2410)'s, the one that fences `main`'s argv view,
   and it applies to an OWNING type only: a plain `var i32` copies out freely. It reads
   the same for a `const`, which has no owner either: a take of a `const string`
-  is CE2436 and `.clone()` is the escape, while a `const i32` copies out.
+  is [CE2436](../error-catalog.md#ce2436) and `.clone()` is the escape, while a `const i32` copies out.
 - **A rebind is the one way to change what it holds.** `stdout := f` consumes `f`, drops
   the old value the way a local's rebind does, and stores the new one. A `let`-borrow out
   of a `var` (`let string first = names[0]`) freezes it exactly as it freezes a local:
-  a mutation of the `var` while the binding is live is CE2412 at the binding's next use.
+  a mutation of the `var` while the binding is live is [CE2412](../error-catalog.md#ce2412) at the binding's next use.
 - **Never frozen across a call**, because no function owns it. A callee may rebind a
   `var` the caller is reading; that is what storage means, and it is the caller's to
   order.
@@ -88,8 +88,8 @@ The scope pass owns "what kind of name is this". It and the typecheck pass ask o
 for every borrow position: `reject_borrow_of_constant` in `semantics/constant_borrow.py`. A `var` passes every
 position a constant fails there -- a `poke`/`peek` of it, a `poke` foreach over it, a
 `let poke`/`let peek` bound from it, a `poke self` call on it, a `poke` pattern binding
-into it, and the same through an alias -- and it passes the CE1002 gate on a rebind
-target. The typecheck pass's CE2096 gate (a write into a constant) asks the record's
+into it, and the same through an alias -- and it passes the [CE1002](../error-catalog.md#ce1002) gate on a rebind
+target. The typecheck pass's [CE2096](../error-catalog.md#ce2096) gate (a write into a constant) asks the record's
 `is_var` and lets a `var` through -- behind an alias too, so `geo.count := 3` writes and
 `geo.SIZE := 3` is refused.
 
@@ -127,7 +127,7 @@ reaches storage -- a rebind, a `poke`, a field write and a mutating method all a
 `public_variables` mirrors `public_constants` -- `name`, `unit`, `type`, the declaration as
 `source`, an optional `doc` -- plus `link_symbol`. A source library needs none of it: its
 units are recompiled and the per-unit rule above applies. A private `var` is named in
-`not_exported` with kind `variable`, so a consumer naming it hears CE3005 and not CE1001.
+`not_exported` with kind `variable`, so a consumer naming it hears [CE3005](../error-catalog.md#ce3005) and not [CE1001](../error-catalog.md#ce1001).
 A private `var` an exported generic's body names ships in the export closure's `constants`
 with its `link_symbol`, and the consumer declares it.
 
@@ -149,6 +149,6 @@ with its `link_symbol`, and the consumer declares it.
   where the visibility rule bends, and a unit's own counter, cache or flag has every
   reason to stay private.
 - **Two contracts** (a `BufRead`-style perk for the buffered types) and **relaxing
-  CE2400** so a constant could satisfy a `poke self` contract: both were the routes the
+  [CE2400](../error-catalog.md#ce2400)** so a constant could satisfy a `poke self` contract: both were the routes the
   ruling did not take. A buffered-direction contract for `lines()`, `read_line()`
   and `fill()` is a separate, later question.

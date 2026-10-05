@@ -23,7 +23,7 @@ actually instantiates a combinator.
 The combinators are **bare**, in both forms: they have no error channel, a call gives the
 value itself, and they take bare function types (`fn(T) -> U`). So the calls chain
 directly, with no `??` after `map`, `filter` or `fold`. A function with a channel,
-`fn(T) -> U | E`, is a different type, and the call is refused (CE2006). A bare function
+`fn(T) -> U | E`, is a different type, and the call is refused ([CE2006](../../error-catalog.md#ce2006)). A bare function
 is the exception in Sushi; the combinators are bare because each one is total over its
 inputs. [The error channel](../../design/error-channel.md) gives the rule.
 
@@ -44,7 +44,7 @@ the accumulator can also be an owning type (`string`).
 
 **Function arguments**: pass a **typed-param lambda** (`|i32 x| ...`) or a plain
 **function reference**. A bare-param lambda (`|x| ...`) cannot be inferred against a
-generic parameter (CE2063) — annotate the parameter or use a function reference instead.
+generic parameter ([CE2063](../../error-catalog.md#ce2063)) — annotate the parameter or use a function reference instead.
 
 ## Methods
 
@@ -85,7 +85,7 @@ On `List@(T)` and on `T[]`. Reduces left to right, threading the accumulator thr
 ### Chaining
 
 A method call gives the value, so the next link calls on it directly:
-`xs.map(f).filter(p).fold(0, g)`. A `??` after a link is CE2507, because the value is not
+`xs.map(f).filter(p).fold(0, g)`. A `??` after a link is [CE2507](../../error-catalog.md#ce2507), because the value is not
 a `Result`.
 
 ## Free functions

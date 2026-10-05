@@ -12,7 +12,7 @@ use <net/socket>
 
 ## Overview
 
-`net/socket` is the low-level half of the network stack. It exists because the byte-level work cannot be written in Sushi: an array or a struct may not cross the C ABI (`CE5003`), a `u8[]` has no way to yield a pointer, and a `ptr` is opaque, so `sockaddr` could neither be built nor read.
+`net/socket` is the low-level half of the network stack. It exists because the byte-level work cannot be written in Sushi: an array or a struct may not cross the C ABI ([`CE5003`](../../error-catalog.md#ce5003)), a `u8[]` has no way to yield a pointer, and a `ptr` is opaque, so `sockaddr` could neither be built nor read.
 
 **Most programs want `<net/tcp>`, `<net/udp>`, `<net/dns>` or `<net/url>` instead.** Those wrap these primitives in types and are what the examples below build on. Reach for `<net/socket>` when you want a descriptor without a wrapper.
 

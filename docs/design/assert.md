@@ -25,7 +25,7 @@ Runtime Error RE2026: assertion failed at src/stats.sushi:4:5
 The exit code is 1, the same as every other runtime error.
 
 `assert` is a reserved word. A variable, a function, a type, a field or a method cannot
-take it as its name (CE6001, as for every keyword).
+take it as its name ([CE6001](../error-catalog.md#ce6001), as for every keyword).
 
 ## The four rulings
 
@@ -43,8 +43,8 @@ take it as its name (CE6001, as for every keyword).
    must do the same thing in every build. A flag can come later; it is not part of this
    design.
 4. **A condition that the compiler can read gets no special treatment.** `assert(false)`
-   is an ordinary run-time trap. It does NOT end the path: the missing-return rule (CE0107)
-   and the dead-statement rule (CE0140) read it as a statement that falls through. A
+   is an ordinary run-time trap. It does NOT end the path: the missing-return rule ([CE0107](../error-catalog.md#ce0107))
+   and the dead-statement rule ([CE0140](../error-catalog.md#ce0140)) read it as a statement that falls through. A
    condition that folds to `true` or to `false` gets no warning and no error.
 
 ## Why a statement, and not a function
@@ -67,8 +67,8 @@ in `docs/error-handling.md`.
 
 - **The condition is a `bool` and nothing else.** It is the tenth condition position,
   beside `if`, `while` and the operands of `and`/`or`/`xor`/`not`. It goes through
-  `reject_non_bool_condition`, so a `Result` or a `Maybe` gets CE2516 and every other
-  type gets CE2005.
+  `reject_non_bool_condition`, so a `Result` or a `Maybe` gets [CE2516](../error-catalog.md#ce2516) and every other
+  type gets [CE2005](../error-catalog.md#ce2005).
 - **The message is a `string`.** Any other type is a type error. An interpolation is a
   `string`, and its holes follow the hole rule (`Display`).
 - **Both expressions are READS.** They borrow, as the argument of `print` does. A
@@ -92,8 +92,8 @@ The trap path does not free the message or the other values in scope: the proces
 
 ## The implementation
 
-- **One code, RE2026.** The text in the registry is `assertion failed at {where}`.
-  `{where}` is `file:line:col`, and the backend formats it at COMPILE time, as RE2023
+- **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is `assertion failed at {where}`.
+  `{where}` is `file:line:col`, and the backend formats it at COMPILE time, as [RE2023](../error-catalog.md#re2023)
   formats `{pattern}`.
 - **The message is a run-time value.** A Sushi string is `{i8* data, i32 size, i8 owned}`
   and has no NUL terminator, so the backend prints it with `%.*s` from its size and its

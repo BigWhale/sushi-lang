@@ -146,7 +146,7 @@ and has its type. Every function, helper and method record must state `has_chann
 `bool` that says whether the callable has an error channel. The Python reader checks the
 same rows (`MANIFEST_SCHEMA` in
 `sushi_lang/backend/library_format.py`) and gives the same reason, as
-`SlibError.Invalid(reason)` here and CE3512 there. `read_metadata` does not call it, so a
+`SlibError.Invalid(reason)` here and [CE3512](../../error-catalog.md#ce3512) there. `read_metadata` does not call it, so a
 partial map still reads.
 
 ## Error handling

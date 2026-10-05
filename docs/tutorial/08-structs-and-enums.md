@@ -67,7 +67,7 @@ other arguments.
 !!! note "Names build a struct, and nothing else"
     A name in an argument list names a **field**, so a struct construction is the only
     place that takes one. A function, a method and an enum variant take their arguments
-    in declaration order, and a name written there is `CE6104`. Write
+    in declaration order, and a name written there is [`CE6104`](../error-catalog.md#ce6104). Write
     `move_by(p, 5, 0)`, not `move_by(p, dx: 5, dy: 0)`.
 
 ## Enums: one of several shapes

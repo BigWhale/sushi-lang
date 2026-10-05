@@ -29,7 +29,7 @@ let i32[6] mixed = [9, 0; 3, 1..3]   # [9, 0, 0, 0, 1, 2]
 
 A repeat count and a range bound are `i32` positions. Where the count must be readable
 depends on the position: a fixed array and a `const` need a count that the compiler can
-read (CE2017 / CE2019), but `from()` takes any `i32` expression, because a `T[]` carries
+read ([CE2017](../../error-catalog.md#ce2017) / [CE2019](../../error-catalog.md#ce2019)), but `from()` takes any `i32` expression, because a `T[]` carries
 its length:
 
 ```sushi
@@ -78,10 +78,10 @@ println(b.slots.len())
 ```
 
 A method that WRITES -- `.fill()`, `.reverse()` -- needs a receiver it can reach. A constant
-is rejected with **CE2096**, and the read-only receivers each have their own code: a `peek`
-parameter is CE2408, a `match` or `foreach` binding is CE2414, a receiver without `poke self`
-is CE2421, an unmarked parameter is CE2422, a borrowing `let` is CE2426, and an unbound
-chained receiver is CE2429.
+is rejected with **[CE2096](../../error-catalog.md#ce2096)**, and the read-only receivers each have their own code: a `peek`
+parameter is [CE2408](../../error-catalog.md#ce2408), a `match` or `foreach` binding is [CE2414](../../error-catalog.md#ce2414), a receiver without `poke self`
+is [CE2421](../../error-catalog.md#ce2421), an unmarked parameter is [CE2422](../../error-catalog.md#ce2422), a borrowing `let` is [CE2426](../../error-catalog.md#ce2426), and an unbound
+chained receiver is [CE2429](../../error-catalog.md#ce2429).
 
 A method that only READS -- `.len()`, `.get()`, `.iter()`, `.hash()`, `.clone()` -- accepts
 any receiver, a constant included.
@@ -112,7 +112,7 @@ match arr.get(2):
 let i32 value = arr.get(2).or_err(nom StdError.Error)??
 ```
 
-**Note:** Direct indexing `arr[index]` is also available but throws RE2020 runtime error on out-of-bounds.
+**Note:** Direct indexing `arr[index]` is also available but throws [RE2020](../../error-catalog.md#re2020) runtime error on out-of-bounds.
 
 ### `.first() -> Maybe@(T)` and `.last() -> Maybe@(T)`
 
@@ -132,7 +132,7 @@ empty.first().is_none()                  # true
 
 A linear search with the `==` the language defines, so the element type must have
 equality: the numeric types, `bool`, `string`, or a struct or an enum with a derived or
-implemented `Eq`. A closure element, or a struct that holds one, is CE2100. An `Eq`
+implemented `Eq`. A closure element, or a struct that holds one, is [CE2100](../../error-catalog.md#ce2100). An `Eq`
 implementation on the element is the override, and the search reads it.
 `.index_of()` answers the FIRST match, left to right. The needle is a borrow.
 
@@ -165,7 +165,7 @@ elements hash alike, at each level, so `[[1, 2], [3, 4]]` as an `i32[2][2]` and 
 `i32[][]` give one hash.
 
 **Limitation:** The element type must have a hash. An array whose element has no hash
-(today, `ptr[]`) is CE0052.
+(today, `ptr[]`) is [CE0052](../../error-catalog.md#ce0052).
 
 ### Printing
 
@@ -184,9 +184,9 @@ fn main() i32:
     return 0
 ```
 
-An element with no string form, such as a function value, is CE2035 in a hole and CE2115
+An element with no string form, such as a function value, is [CE2035](../../error-catalog.md#ce2035) in a hole and [CE2115](../../error-catalog.md#ce2115)
 in `println`, and a note names the element type. An array prints, but it does not compare
-at the top level: `==` and `<` on two arrays are still CE2514.
+at the top level: `==` and `<` on two arrays are still [CE2514](../../error-catalog.md#ce2514).
 
 ### `arr[index] := value`
 
@@ -202,9 +202,9 @@ scores[i] := 99            # the index may be any i32 expression
 ```
 
 The index is bounds-checked exactly like a read: an index past the end aborts with
-**RE2020** at run time, and an index the compiler can read (a literal, a named constant, or
-an expression of them) is rejected at compile time -- **CE2012** past
-the end of a fixed array, **CE2056** if it is negative.
+**[RE2020](../../error-catalog.md#re2020)** at run time, and an index the compiler can read (a literal, a named constant, or
+an expression of them) is rejected at compile time -- **[CE2012](../../error-catalog.md#ce2012)** past
+the end of a fixed array, **[CE2056](../../error-catalog.md#ce2056)** if it is negative.
 
 If the element type owns heap -- a `string`, a struct with a dynamic-array field -- the
 element that the write replaces is freed first, so a write in a loop does not leak:
@@ -215,8 +215,8 @@ words[0] := "babel fish"   # the old "towel" is freed; the array owns the new va
 ```
 
 An indexed assignment takes ownership of the value, so the ordinary ownership rules apply.
-An owned source is MOVED into the array, and using it afterwards is **CE2405**. A value read
-out of a container is a BORROW, so storing it in another element is **CE2411** -- take an
+An owned source is MOVED into the array, and using it afterwards is **[CE2405](../../error-catalog.md#ce2405)**. A value read
+out of a container is a BORROW, so storing it in another element is **[CE2411](../../error-catalog.md#ce2411)** -- take an
 independent value with `.clone()`:
 
 ```sushi
@@ -228,13 +228,13 @@ You may write only where the write can reach the owner. The compiler rejects the
 
 | receiver | code |
 |---|---|
-| a `peek` parameter | CE2408 |
-| a `match` / `foreach` binding | CE2414 |
-| the receiver of a method without `poke self` | CE2421 |
-| an unmarked parameter | CE2422 |
-| a `let` binding that borrows from an owner | CE2426 |
-| an unbound chained receiver (`o.get().items`) | CE2429 |
-| a constant | CE2096 |
+| a `peek` parameter | [CE2408](../../error-catalog.md#ce2408) |
+| a `match` / `foreach` binding | [CE2414](../../error-catalog.md#ce2414) |
+| the receiver of a method without `poke self` | [CE2421](../../error-catalog.md#ce2421) |
+| an unmarked parameter | [CE2422](../../error-catalog.md#ce2422) |
+| a `let` binding that borrows from an owner | [CE2426](../../error-catalog.md#ce2426) |
+| an unbound chained receiver (`o.get().items`) | [CE2429](../../error-catalog.md#ce2429) |
+| a constant | [CE2096](../../error-catalog.md#ce2096) |
 
 A `poke` parameter, a `nom` parameter and a `poke self` receiver are all writable:
 
@@ -267,7 +267,7 @@ b.fill(towel)                  # three more
 println(towel)                 # and the source is still usable
 ```
 
-**The value may not be a slot of the array it fills** (**CE2430**), when the element type
+**The value may not be a slot of the array it fills** (**[CE2430](../../error-catalog.md#ce2430)**), when the element type
 owns a resource. Each slot destroys what it held before it stores its copy, so
 `a.fill(a[0])` would destroy slot 0 and then copy freed storage into every later slot. An
 index reads as any slot, and a get-out (`a.get(0).or_err(nom e)??`) is refused the same way. Take an
@@ -275,7 +275,7 @@ independent value first: `a.fill(a[0].clone())`. A plain element type is a copy 
 legal: `b.fill(b[2])` on an `i32[]` is fine.
 
 A `let` binding or a `match` payload binding of a slot is also a borrow of the array.
-`let string first = a[0]` then `a.fill(first)` is **CE2412**, because `fill` changes `a`
+`let string first = a[0]` then `a.fill(first)` is **[CE2412](../../error-catalog.md#ce2412)**, because `fill` changes `a`
 while `first` borrows from it. Clone the value first here too.
 
 An owning element type costs one allocation per slot. Use `.fill()` on a large array of
@@ -341,7 +341,7 @@ contract.
 
 The element is CONSUMED, as `.push()` consumes it. The insert takes it BEFORE it checks the
 index, so a refused insert destroys the element; nothing leaks. A full buffer grows by
-doubling first. A fixed array cannot grow, so a `T[N]` receiver is **CE2023**, the same
+doubling first. A fixed array cannot grow, so a `T[N]` receiver is **[CE2023](../../error-catalog.md#ce2023)**, the same
 refusal as `.push()`.
 
 ```sushi
@@ -364,7 +364,7 @@ fn main() i32:
 Take the element at `index` out, and move the elements after it one slot to the left.
 `Maybe.Some(element)` hands the element's ownership to the caller. An index out of range
 answers `Maybe.None()`, and nothing moves. This is the `List@(T).remove()` contract, and
-the same `Maybe` shape as `.pop()`. A `T[N]` receiver is **CE2023**.
+the same `Maybe` shape as `.pop()`. A `T[N]` receiver is **[CE2023](../../error-catalog.md#ce2023)**.
 
 ```sushi
 fn main() i32:
@@ -410,7 +410,7 @@ println(body.len())            # 3: the source is a BORROW and stays yours
 
 The source may be a fixed array or a dynamic one. The **destination** must be dynamic: a
 fixed array's length is part of its type, so it cannot grow, and `.extend()` on one is
-**CE2023** for the reason `.push()` is.
+**[CE2023](../../error-catalog.md#ce2023)** for the reason `.push()` is.
 
 ### `.extend_range(T[] other, i32 start, i32 count) -> ~`
 
@@ -475,10 +475,10 @@ println("{out[1]} {more[0]}")  # babel babel -- two owners, two buffers
 **A bad range is clamped, never trapped.** `.extend_range()` narrows the same way the
 slices do -- one rule, one place -- so a count past the end appends what is there and a
 negative one appends nothing. A `count` of zero copies nothing. This is deliberately
-unlike `arr[i]`, which traps **RE2020**: an index names ONE element and either has it or
+unlike `arr[i]`, which traps **[RE2020](../../error-catalog.md#re2020)**: an index names ONE element and either has it or
 does not, while a range asks for what overlaps and can always answer.
 
-**The source may not be the destination.** `out.extend(out)` is **CE2430**. Growing the
+**The source may not be the destination.** `out.extend(out)` is **[CE2430](../../error-catalog.md#ce2430)**. Growing the
 destination may reallocate its buffer, which would leave the source pointer dangling in
 the middle of the copy. Use `.clone()` or `.ss()` to take an independent source. A copy
 that must read what it is writing -- a run expanded from its own tail -- is a different

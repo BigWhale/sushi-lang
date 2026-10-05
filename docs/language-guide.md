@@ -38,7 +38,7 @@ Key points:
 - `println` outputs text with a newline to standard output
 - `return 0` ends the program with exit code 0 (success)
 
-The main function must return a bare integer type, usually `i32` (the operating system uses it as the exit code). Another return type is CE0106, and so is an error channel `| E` on `main`. A `??` in `main` is CE0131: handle each failure in the body with `match` or `.realise(default)`, and return a code.
+The main function must return a bare integer type, usually `i32` (the operating system uses it as the exit code). Another return type is [CE0106](error-catalog.md#ce0106), and so is an error channel `| E` on `main`. A `??` in `main` is [CE0131](error-catalog.md#ce0131): handle each failure in the body with `match` or `.realise(default)`, and return a code.
 
 To read the command line, `main` takes exactly one parameter, `string[] args`. The first element is the program name. No other parameter list is accepted: the type must be `string[]` and the name must be `args`.
 
@@ -92,7 +92,7 @@ fn main() i32:
 ```
 
 A bare literal takes its type from the context: the annotation, the parameter, the field or
-the other operand. A value out of range for that type is `CE2073`. With no context, an
+the other operand. A value out of range for that type is [`CE2073`](error-catalog.md#ce2073). With no context, an
 integer literal is an `i32` and a float literal is an `f64`.
 
 ### Constants, Unit Variables and Visibility
@@ -118,8 +118,8 @@ fn main() i32:
     return 0
 ```
 
-A constant cannot be written (`CE2096`). A `var` is never moved out of: `f(nom v)` or
-`let T x = v` on a `var` whose type owns a resource is `CE2436`. `public` works on `fn`,
+A constant cannot be written ([`CE2096`](error-catalog.md#ce2096)). A `var` is never moved out of: `f(nom v)` or
+`let T x = v` on a `var` whose type owns a resource is [`CE2436`](error-catalog.md#ce2436). `public` works on `fn`,
 `const`, `var`, `struct`, `enum` and `perk`. See [Visibility](design/visibility.md) and
 [Unit Storage](design/unit-storage.md).
 
@@ -128,7 +128,7 @@ A constant cannot be written (`CE2096`). A `var` is never moved out of: `f(nom v
 A value has the width its type gives it, and the compiler tells you when a value you
 wrote cannot fit that width. It reads what it can read: a `const`, and an expression
 built from literals and constants. An operation whose result the type cannot hold is a
-compile error (**CE2077**), so a wrong answer never reaches the program:
+compile error (**[CE2077](error-catalog.md#ce2077)**), so a wrong answer never reaches the program:
 
 <!-- docs-sweep: error CE2077 -->
 ```sushi
@@ -172,7 +172,7 @@ fn main() i32:
 
 `as` also converts between two error types when the program declares the conversion
 (see [Error Types and Conversion](#error-types-and-conversion)). Every other cast is
-`CE2014`.
+[`CE2014`](error-catalog.md#ce2014).
 
 ### Strings
 
@@ -203,7 +203,7 @@ fn main() i32:
 - `.lower() -> string` - Convert to lowercase (ASCII only)
 
 Every built-in string method needs `use <collections/strings>` in the unit that calls it.
-Without the import, the call is CE3015. Interpolation and your own extensions on `string`
+Without the import, the call is [CE3015](error-catalog.md#ce3015). Interpolation and your own extensions on `string`
 need no import.
 
 See [Standard Library: String Methods](standard-library.md) for detailed documentation.
@@ -258,12 +258,12 @@ fn main() i32:
 - Return type: comes after the parameter list
 - `~` ("blank" or "unit" type): used for functions that don't return a meaningful value
 - Body: indented block following the colon
-- Returns with a channel: `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` there is CE2030
-- Returns in a bare function: `return value`; `Result.Ok(...)` there is CE2091, and `??` there is CE0131
-- Every path must end with a `return`: a body that can reach its end is CE0107, also for a
+- Returns with a channel: `Result.Ok(value)` or `Result.Err(error)`; a bare `return value` there is [CE2030](error-catalog.md#ce2030)
+- Returns in a bare function: `return value`; `Result.Ok(...)` there is [CE2091](error-catalog.md#ce2091), and `??` there is [CE0131](error-catalog.md#ce0131)
+- Every path must end with a `return`: a body that can reach its end is [CE0107](error-catalog.md#ce0107), also for a
   `~` function with a channel (end it with `return Result.Ok(~)`). A bare `~` function can
   reach its end
-- A statement after a statement that always ends the path is dead code, and it is CE0140
+- A statement after a statement that always ends the path is dead code, and it is [CE0140](error-catalog.md#ce0140)
 
 **The blank type (`~`)**: When a function performs an action but doesn't produce a value (like printing or modifying a reference), it returns `~`. A bare `~` function needs no `return`. A `~` function with a channel (`~ | E`) ends with `return Result.Ok(~)`.
 
@@ -287,7 +287,7 @@ neither.
 - **unmarked** — `fn f(string x)`, called `f(s)`. A *borrow*: the caller keeps the value and frees
   it, so `s` stays usable after the call. This is the default for every type.
 - **`nom`** — `fn f(nom string x)`, called `f(nom s)`. A *consume*: the callee becomes the owner and
-  frees the value, so using `s` afterwards is `CE2405` (use-after-move).
+  frees the value, so using `s` afterwards is [`CE2405`](error-catalog.md#ce2405) (use-after-move).
 - **`peek`** — `fn f(peek string x)`, called `f(peek s)`. A read-only borrow *by pointer*; many at
   once.
 - **`poke`** — `fn f(poke string x)`, called `f(poke s)`. A read-write borrow by pointer, so the
@@ -295,11 +295,11 @@ neither.
 
 Every struct and enum gets an auto-derived `.clone()`, which is how a caller hands over a value it
 wants to keep: `f(nom s.clone())`. The one refusal is a type that declares a resource or holds one
-(a `File`, a type that implements `Drop`): `.clone()` on it is `CE2431`, and `.share()` is the
+(a `File`, a type that implements `Drop`): `.clone()` on it is [`CE2431`](error-catalog.md#ce2431), and `.share()` is the
 escape where the type has it.
 
 (One special case: `main`'s `string[] args` is a borrowed view of the process argv. Passing it to an
-ordinary borrow parameter is fine; handing it to a `nom` one is `CE2410`.)
+ordinary borrow parameter is fine; handing it to a `nom` one is [`CE2410`](error-catalog.md#ce2410).)
 
 ## Documenting Code
 
@@ -440,7 +440,7 @@ fn main() i32:
 
 ### Assertions
 
-`assert(cond)` stops the program with the runtime error RE2026 when `cond` is false. An
+`assert(cond)` stops the program with the runtime error [RE2026](error-catalog.md#re2026) when `cond` is false. An
 optional second argument is a `string` message, which the program builds only on failure.
 The output names the file, the line and the column of the `assert`:
 
@@ -484,11 +484,11 @@ fn main() i32:
 
 **Key Concepts**:
 - A function declared `i32 | StdError` returns `Result@(i32, StdError)`; a function declared `i32` returns `i32`
-- The `E` of a `Result` is an error type: `StdError`, another predefined error type, or an enum that your program declares with `error` (any other type is CE2084)
+- The `E` of a `Result` is an error type: `StdError`, another predefined error type, or an enum that your program declares with `error` (any other type is [CE2084](error-catalog.md#ce2084))
 - In a function with a channel, success values must be wrapped: `return Result.Ok(value)`
 - Failures are signaled with: `return Result.Err(StdError.Error)`
 - A condition is a bool and nothing else, so a `Result` is tested with `.is_ok()` or
-  `.is_err()`; `if (result)` on its own is CE2516
+  `.is_err()`; `if (result)` on its own is [CE2516](error-catalog.md#ce2516)
 - The `.realise(default)` method extracts the value, using the default if the result is an error
 
 This approach eliminates null pointer exceptions and ensures that error cases are always visible in the code. The compiler enforces that you handle or propagate errors - you cannot accidentally ignore them.
@@ -545,9 +545,9 @@ fn main() i32:
 2. If the `Result` is `Err(e)`, `??` immediately returns `Result.Err(e)` from the current function
 3. The error propagates up the call stack until someone handles it
 
-`??` takes a `Result@(T, E)` and nothing else (CE2507). The error type of the operand must be
+`??` takes a `Result@(T, E)` and nothing else ([CE2507](error-catalog.md#ce2507)). The error type of the operand must be
 the error type of the current function, or the program declares a conversion between the two
-(CE2511 otherwise).
+([CE2511](error-catalog.md#ce2511) otherwise).
 
 **RAII Safety**: The `??` operator is fully integrated with Sushi's RAII (Resource Acquisition Is Initialization) system. When an error is propagated, all resources in the current scope are properly cleaned up before the function returns. This means you never leak memory or file handles when errors occur.
 
@@ -618,7 +618,7 @@ fn main() i32:
 - `.expect(message)` - extracts the value or terminates with an error message
 - `.or_err(nom e)` - turns the Maybe into a `Result`: `Some(v)` becomes `Ok(v)` and `None` becomes `Err(e)`
 
-A `Maybe` holds no error value, so `??` on a `Maybe` is CE2507. Write the error value with
+A `Maybe` holds no error value, so `??` on a `Maybe` is [CE2507](error-catalog.md#ce2507). Write the error value with
 `or_err`, and then propagate: `let i32 v = xs.get(0).or_err(nom AppError.Empty)??`.
 
 **Common Use Cases**:
@@ -706,12 +706,12 @@ fn main() i32:
 `.s(start, end)` and `.ss(start, count)`. See [Arrays](stdlib/collections/arrays.md).
 
 **Indices are `i32`**: an index, a count and a range bound are `i32` positions. A bare literal
-is an `i32`; a typed value of another integer type is `CE2121` (`CE2006` as a method argument,
+is an `i32`; a typed value of another integer type is [`CE2121`](error-catalog.md#ce2121) ([`CE2006`](error-catalog.md#ce2006) as a method argument,
 for example to `.get()`), and the fix is `as i32`.
 
 **Writing one element**: `arr[i] := value` works on both array kinds and on every element type. The
-index is bounds-checked exactly like a read, so an index past the end aborts with `RE2020` (and an
-index the compiler can read -- a literal or a named constant -- is rejected at compile time: `CE2012` past the end of a fixed array, `CE2056`
+index is bounds-checked exactly like a read, so an index past the end aborts with [`RE2020`](error-catalog.md#re2020) (and an
+index the compiler can read -- a literal or a named constant -- is rejected at compile time: [`CE2012`](error-catalog.md#ce2012) past the end of a fixed array, [`CE2056`](error-catalog.md#ce2056)
 if it is negative):
 
 ```sushi
@@ -727,8 +727,8 @@ fn main() i32:
 ```
 
 An indexed assignment takes ownership of the value, so the rules are the ones every other owning
-position uses: an owned source is moved (using it afterwards is `CE2405`), and a value read out of
-a container needs `.clone()` (`words[0] := words[1]` is `CE2411`). You may only write where the
+position uses: an owned source is moved (using it afterwards is [`CE2405`](error-catalog.md#ce2405)), and a value read out of
+a container needs `.clone()` (`words[0] := words[1]` is [`CE2411`](error-catalog.md#ce2411)). You may only write where the
 write can reach the owner — not through a `peek` parameter, a match binding, or a constant.
 
 **Elements that fill more than one slot**: a table does not have to be spelled out.
@@ -781,7 +781,7 @@ fn main() i32:
 
 See [Array Types](language-reference.md#array-types) for the full order table.
 
-**Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or strings are properly freed. A dynamic array owns heap, so it MOVES: `let i32[] b = a` hands the buffer to `b`. Passing it to an unmarked parameter is a borrow, and the caller keeps it; only a `nom` parameter takes it (`f(nom a)`, and a later use of `a` is `CE2405`).
+**Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or strings are properly freed. A dynamic array owns heap, so it MOVES: `let i32[] b = a` hands the buffer to `b`. Passing it to an unmarked parameter is a borrow, and the caller keeps it; only a `nom` parameter takes it (`f(nom a)`, and a later use of `a` is [`CE2405`](error-catalog.md#ce2405)).
 
 ### List@(T)
 
@@ -819,7 +819,7 @@ fn main() i32:
 - Iteration: `.iter()`, `.debug()`
 
 Every index and count argument (`get`, `insert`, `remove`, `reserve`, `truncate`,
-`List.with_capacity`) is an `i32`. A typed value of another integer type is `CE2006`; write
+`List.with_capacity`) is an `i32`. A typed value of another integer type is [`CE2006`](error-catalog.md#ce2006); write
 `as i32`.
 
 **When to use List vs raw arrays**: Use `List@(T)` when you need frequent insertions/removals at arbitrary positions, capacity management, or want the additional safety of `Maybe@(T)` returns. Use raw dynamic arrays (`T[]`) for simpler use cases where you just need push/pop at the end.
@@ -853,7 +853,7 @@ fn main() i32:
 - **Auto-derived hashing**: a key needs a hash AND an equality test. A primitive, a `string`,
   and a struct or enum built from them are keys, and so is a `List@(T)` of a key type. The
   equality is the predefined `Eq`; a type with no equality (a function value, a `ptr`) is not a
-  key unless it implements `Eq` (`CE2055`)
+  key unless it implements `Eq` ([`CE2055`](error-catalog.md#ce2055))
 
 **HashMap methods**: `.new()`, `.insert(key, value)`, `.get(key)`, `.remove(key)`, `.contains_key(key)`, `.len()`, `.keys()`, `.values()`, `.entries()`, `.debug()`, `.free()`
 
@@ -1103,9 +1103,9 @@ fn main() i32:
     return 0
 ```
 
-**Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is `CE2107`, because `open()` answers `IoError`.
+**Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is [`CE2107`](error-catalog.md#ce2107), because `open()` answers `IoError`.
 
-**Integer patterns**: a `match` on an integer takes literal arms, and a trailing `_` arm is required (`CE2074`):
+**Integer patterns**: a `match` on an integer takes literal arms, and a trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)):
 
 ```sushi
 fn describe(i32 n) string:
@@ -1123,7 +1123,7 @@ fn main() i32:
 
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
 
-**Every value and every arm**: one checker reads every match, nested patterns included. A value that no arm matches is `CE2040`, and the message names the missing pattern, for example `Maybe.Some(Color.Green)`. An arm that the arms above it already cover can never run, and that is the error `CE2118`:
+**Every value and every arm**: one checker reads every match, nested patterns included. A value that no arm matches is [`CE2040`](error-catalog.md#ce2040), and the message names the missing pattern, for example `Maybe.Some(Color.Green)`. An arm that the arms above it already cover can never run, and that is the error [`CE2118`](error-catalog.md#ce2118):
 
 <!-- docs-sweep: error CE2118 -->
 ```sushi
@@ -1291,7 +1291,7 @@ fn main() i32:
 
 `Vec.at(3, 4)` reads like `List.new()` and `HashMap.new()`, and it is the same rule: a
 name behind a type's dot is a member of that type. A static has no `self` -- naming one
-in the signature or in the body is CE0134 -- and everything else about it is an ordinary
+in the signature or in the body is [CE0134](error-catalog.md#ce0134) -- and everything else about it is an ordinary
 method: the parameter modes, the owning return, the `| E` channel, and no visibility
 marker of its own.
 
@@ -1300,8 +1300,8 @@ free function cannot be called.
 
 **No `??` in a BARE extension body**: an extension method with no `| E` is bare, as a
 function with no `| E` is. It returns a bare value, not a `Result@(T, E)` (a `Result.Ok(...)`
-return is CE2091). A bare body has no error channel, so `??` has nothing to propagate into
-and is rejected with CE0131.
+return is [CE2091](error-catalog.md#ce2091)). A bare body has no error channel, so `??` has nothing to propagate into
+and is rejected with [CE0131](error-catalog.md#ce0131).
 Handle the Result in the body instead -- match on it, or use `.realise(default)`:
 
 ```sushi
@@ -1324,7 +1324,7 @@ HAS a channel — the call yields `Result@(T, E)`, `??` is legal in the body, an
 a body that returns spells both constructors, as a free function does:
 `return Result.Ok(x)` and `return Result.Err(e)` (a `~` success is
 `return Result.Ok(~)`). The compiler wraps nothing: a bare `return x` in a channel body
-is CE2030.
+is [CE2030](error-catalog.md#ce2030).
 
 ```sushi
 error OddError:
@@ -1345,7 +1345,7 @@ fn main() i32:
     return 0
 ```
 
-A channel method stops a chain until it is handled: `b.checked().other()` is CE2515,
+A channel method stops a chain until it is handled: `b.checked().other()` is [CE2515](error-catalog.md#ce2515),
 and `b.checked()??.other()` is the fix. Methods on the wrapper itself (`.realise`)
 stay legal.
 
@@ -1377,13 +1377,13 @@ fn main() i32:
 
 The contract and the implementation must agree. A contract that declares a channel and
 an implementation that omits it, an implementation that declares one the contract has
-not got, and two channels over different error types are all CE0133, which points at
+not got, and two channels over different error types are all [CE0133](error-catalog.md#ce0133), which points at
 both ends.
 
 **Array extension targets**: a concrete element extends one array type
 (`extend i32[] sum()`); a bare undeclared name binds a type parameter, so
 `extend T[]` applies to every element type. Anything else in the element position is
-CE2101.
+[CE2101](error-catalog.md#ce2101).
 
 **Method-level type parameters**: a method may declare its own `@(U)` after its name,
 solved from the arguments at each call:
@@ -1401,8 +1401,8 @@ fn main() i32:
 ```
 
 There is no call-site `@(...)` on a method, so every method-level parameter must be
-solvable from the arguments — a bare-param lambda cannot be (CE2063; annotate it:
-`|i32 x| ...`). A method-level name that repeats a receiver parameter is CE2064.
+solvable from the arguments — a bare-param lambda cannot be ([CE2063](error-catalog.md#ce2063); annotate it:
+`|i32 x| ...`). A method-level name that repeats a receiver parameter is [CE2064](error-catalog.md#ce2064).
 
 **Generic Extension Methods**:
 ```sushi
@@ -1657,8 +1657,8 @@ fn read_only(peek LargeData data) i32:
 
 **Reference bindings**: `let poke T x = <place>` and `let peek T x = <place>` bind a pointer into
 a place (a local, a field or index chain off one, or `Own@(T).get()`). The binding lives until the
-end of its block. While it lives, the owner is frozen (`CE2412`), and only one `poke` binding can
-exist at a time (`CE2403`). A write through a `peek` binding is `CE2408`:
+end of its block. While it lives, the owner is frozen ([`CE2412`](error-catalog.md#ce2412)), and only one `poke` binding can
+exist at a time ([`CE2403`](error-catalog.md#ce2403)). A write through a `peek` binding is [`CE2408`](error-catalog.md#ce2408):
 
 ```sushi
 struct Ship:
@@ -1712,9 +1712,9 @@ fn main() i32:
 
 **The `Drop` perk**: a type that owns something no field walk can see (a file descriptor, a
 socket) implements the predefined perk `Drop` with `fn drop(poke self) ~`. Such a type owns a
-resource: it moves, `.clone()` on it is `CE2431`, and only the unit that declares the type may
-implement `Drop` for it (`CE4012`). No unit declares a built-in type such as `i32[]`, so
-`Drop` on one is `CE4016`:
+resource: it moves, `.clone()` on it is [`CE2431`](error-catalog.md#ce2431), and only the unit that declares the type may
+implement `Drop` for it ([`CE4012`](error-catalog.md#ce4012)). No unit declares a built-in type such as `i32[]`, so
+`Drop` on one is [`CE4016`](error-catalog.md#ce4016):
 
 ```sushi
 struct Guard:
@@ -1815,14 +1815,14 @@ fn main() i32:
 Three rules follow from the ownership, and each one is a compile error rather than a
 run-time surprise:
 
-- **A handle cannot be copied.** `.clone()` on a `File` is `CE2431`: a field-by-field
+- **A handle cannot be copied.** `.clone()` on a `File` is [`CE2431`](error-catalog.md#ce2431): a field-by-field
   copy would duplicate the descriptor number and leave two owners that both close it.
   `.share()` is the operation that means "a second handle", and it says so: it is
   `dup(2)`, so both handles sit over one open file description and one offset. For
   concurrent reads of one file, `read_at()` and `write_at()` take the offset as an
   argument and share nothing.
 - **`close()` CONSUMES the handle.** Use it only where the failure has to be SEEN -- a
-  destructor cannot answer a `Result`. A read after a close is `CE2435` while compiling.
+  destructor cannot answer a `Result`. A read after a close is [`CE2435`](error-catalog.md#ce2435) while compiling.
 - **The channel is `IoError` from the open to the last read**, so one `??` chain covers
   the whole function with no conversion in the middle.
 

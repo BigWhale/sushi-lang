@@ -22,7 +22,7 @@ block, you can read and write the memory behind it at a byte offset
 ([Reading foreign memory](#reading-foreign-memory) below).
 
 A `ptr` is never null. A plain `ptr` return asserts that C cannot answer NULL, and a NULL
-there stops the program at the call with `RE2025`. When C can answer NULL (`fopen` of a
+there stops the program at the call with [`RE2025`](../error-catalog.md#re2025). When C can answer NULL (`fopen` of a
 missing file, `getenv` of a missing key), declare the return `Maybe@(ptr)` or
 `Maybe@(string)`. The NULL then arrives as `Maybe.None`, and there is nothing left to test.
 There is no `is_null`, and there will be none.
@@ -95,9 +95,9 @@ The boundary has four more tools, and the [FFI guide](../ffi.md) shows each one:
 - **A byte buffer.** A `u8[]` parameter crosses as the pointer to its first byte. Declare it
   `poke u8[]`, and C can fill the array in place (`read`, `recv`).
 - **`errno()`.** It answers the `errno` of the last failed C call. Read it directly after the
-  call. Only a unit with an `unsafe external` block can call it (`CE5014`).
+  call. Only a unit with an `unsafe external` block can call it ([`CE5014`](../error-catalog.md#ce5014)).
 - **A C global.** `var i32 optind = "optind"` in the block declares a C global variable.
-  `libc.optind` reads it, and a write is `CE5016`.
+  `libc.optind` reads it, and a write is [`CE5016`](../error-catalog.md#ce5016).
 - **A link name that is a constant.** `fn stat(string p, ptr buf) i32 = STAT_SYMBOL` takes
   the symbol from `<sys/platform>`, because a platform can give `stat` another name.
 
@@ -108,11 +108,11 @@ operation that would treat it as a value with behavior:
 
 | You write | The compiler says |
 |---|---|
-| `a == b` (or `<`, arithmetic, `not`, `~`) | `CE5010` — no comparable identity, no arithmetic |
-| `p.hash()` (any method outside the foreign-memory set) | `CE5011` — a `ptr` has those methods and no others |
-| `HashMap@(i32, ptr)`, `List@(ptr)`, `MyBox@(ptr)` | `CE5012` — only `Result@(ptr, E)` and `Maybe@(ptr)` carry a `ptr` |
-| `println("{p}")` | `CE2035` — no string form |
-| `0 as ptr`, `p as i64` | `CE2014` — no forging, no laundering into an integer |
+| `a == b` (or `<`, arithmetic, `not`, `~`) | [`CE5010`](../error-catalog.md#ce5010) — no comparable identity, no arithmetic |
+| `p.hash()` (any method outside the foreign-memory set) | [`CE5011`](../error-catalog.md#ce5011) — a `ptr` has those methods and no others |
+| `HashMap@(i32, ptr)`, `List@(ptr)`, `MyBox@(ptr)` | [`CE5012`](../error-catalog.md#ce5012) — only `Result@(ptr, E)` and `Maybe@(ptr)` carry a `ptr` |
+| `println("{p}")` | [`CE2035`](../error-catalog.md#ce2035) — no string form |
+| `0 as ptr`, `p as i64` | [`CE2014`](../error-catalog.md#ce2014) — no forging, no laundering into an integer |
 
 That can feel strict until you ask what the alternative would mean. Two handles comparing
 "equal" tells you nothing C didn't already know; a hash of an address is garbage the moment
@@ -162,7 +162,7 @@ The `Towel` is a temporary that the `match` owns, so it is destroyed at the end 
 
 Two compile-time rules keep `ptr` boxed into the unsafe realm:
 
-**A `public fn` may not expose `ptr`** (`CE5008`): not as a parameter, not as a return
+**A `public fn` may not expose `ptr`** ([`CE5008`](../error-catalog.md#ce5008)): not as a parameter, not as a return
 type, not inside `Result@(ptr, E)`, and not inside a struct. A struct with a `ptr` field
 (`Towel`) also counts, so `public fn issue(i64 n) Towel` is refused. What a unit exports
 must be Sushi-shaped: digested values such as an `i64` or a `string`. Keep the wrapper
@@ -170,7 +170,7 @@ struct and the functions that take it in the unit that declares the externals, a
 functions that do the work.
 
 **No danger zone, no `ptr`** — the type name itself may only be spelled in a unit that
-declares an `unsafe external` block (`CE5009`). A unit without externals could never
+declares an `unsafe external` block ([`CE5009`](../error-catalog.md#ce5009)). A unit without externals could never
 produce a handle anyway, so a `ptr` type written there is dead plumbing, and the compiler
 says so. The pleasant side effect: `grep` your codebase for `unsafe external` and you have
 found every file that can possibly touch a raw foreign pointer.
@@ -186,7 +186,7 @@ found every file that can possibly touch a raw foreign pointer.
 - `ptr` is an **opaque token** for C handles: exempt from borrow checking and RAII, with no
   arithmetic and no `null` literal anywhere in the language.
 - A NULL from C is a `Maybe@(ptr)` or `Maybe@(string)` at the boundary. A plain `ptr`
-  return asserts non-null (`RE2025`), and there is no `is_null`.
+  return asserts non-null ([`RE2025`](../error-catalog.md#re2025)), and there is no `is_null`.
 - In the unit with the `unsafe external` block, a `ptr` reads and writes foreign memory at
   a byte offset: `load_<width>`, `store_<width>`, `load_ptr`, `store_ptr`, `offset` and
   `to_string`.
@@ -195,14 +195,14 @@ found every file that can possibly touch a raw foreign pointer.
 - **Holding is safe**: variables, private params/returns, `Result@(ptr, E)`, `Maybe@(ptr)`,
   struct fields, and `ptr[]` arrays all work. Wrapping in `Result` restores the error
   channel but **not** RAII.
-- **Everything else is forbidden**: no comparisons or arithmetic (`CE5010`), no other
-  methods (`CE5011`),
-  no generic containers beyond `Result`/`Maybe` (`CE5012`), no interpolation, no casts.
+- **Everything else is forbidden**: no comparisons or arithmetic ([`CE5010`](../error-catalog.md#ce5010)), no other
+  methods ([`CE5011`](../error-catalog.md#ce5011)),
+  no generic containers beyond `Result`/`Maybe` ([`CE5012`](../error-catalog.md#ce5012)), no interpolation, no casts.
 - The **wrapper struct** is the idiom: put the handle in a field, attach extension methods
   to the struct, and implement `Drop` to free the handle automatically.
 - Two fences keep FFI legible: `public fn` signatures may not expose `ptr`, also not
-  inside a struct (`CE5008`), and
-  `ptr` may only be named in a unit with an `unsafe external` block (`CE5009`).
+  inside a struct ([`CE5008`](../error-catalog.md#ce5008)), and
+  `ptr` may only be named in a unit with an `unsafe external` block ([`CE5009`](../error-catalog.md#ce5009)).
 
 The complete reference — marshalling rules, byte buffers, `errno()`, C globals, variadic
 externs, every diagnostic — is the [FFI guide](../ffi.md).

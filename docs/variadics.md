@@ -63,12 +63,12 @@ Key properties:
 - A variadic may follow fixed parameters: `fn log(string prefix, ...i32 values) ~:`.
 - The synthesized `T[]` is **moved into the callee**, which owns it and RAII-destroys it at scope
   exit. The lowered LLVM function stays non-variadic.
-- Reference element types (`...peek T`) are rejected (**CE0114**). A dynamic-array element
+- Reference element types (`...peek T`) are rejected (**[CE0114](error-catalog.md#ce0114)**). A dynamic-array element
   (`...T[]`) is allowed — each trailing array argument is moved into the callee's array-of-arrays,
   not copied.
 
 Native variadics are allowed only in **plain function definitions** — not perk or extension
-methods (**CE0115**) — and are **not** exportable through a `.slib` public API (**CE0116**), because
+methods (**[CE0115](error-catalog.md#ce0115)**) — and are **not** exportable through a `.slib` public API (**[CE0116](error-catalog.md#ce0116)**), because
 a single concrete runtime function carrying an array ABI has no template to monomorphize at a
 consumer.
 
@@ -102,9 +102,9 @@ Key properties:
   expression (a call result, a field access, an inline array literal).
 - **Sole, last trailing argument.** A bloom must be the only trailing argument at the call site —
   it cannot be mixed with individual trailing arguments, and blooming into a non-variadic
-  parameter or anywhere but the variadic slot is **CE0120**.
+  parameter or anywhere but the variadic slot is **[CE0120](error-catalog.md#ce0120)**.
 - **Type-checked.** The bloomed array's element type must match the variadic's declared element
-  type; a mismatch, or blooming a non-array value, is **CE2006**.
+  type; a mismatch, or blooming a non-array value, is **[CE2006](error-catalog.md#ce2006)**.
 
 `sys/process`'s `run()` uses this to forward a computed argument list:
 
@@ -170,7 +170,7 @@ to type-check, the compiler needs a guarantee that `.describe()` is valid on *ev
 whatever they turn out to be. The perk bound *is* that guarantee, checked once at the definition —
 the same upfront-checking model Sushi already uses for ordinary generics.
 
-If a call supplies an element type that does not implement the perk, the call fails with **CE2090**
+If a call supplies an element type that does not implement the perk, the call fails with **[CE2090](error-catalog.md#ce2090)**
 naming the offending element and constraint.
 
 An **unconstrained** pack (`...Ts` with no bound) may be declared, but its `expand` body cannot call
@@ -252,12 +252,12 @@ fn main() i32:
 ```
 
 The library ships the `public perk Render` **definition** so the consumer need not redeclare it.
-The perk must be `public`: a private perk in the constraint of a public function is **CE3010**. The
+The perk must be `public`: a private perk in the constraint of a public function is **[CE3010](error-catalog.md#ce3010)**. The
 consumer still supplies its own `extend <type> with Render` implementation for each type it
 instantiates the pack with. See the [Libraries guide](libraries.md) for the full template mechanism.
 
 > Native `...T` cannot cross a library boundary (it is a single concrete runtime function with an
-> array ABI, not a template) — that is the `...T` vs `...Ts` distinction, enforced by **CE0116**.
+> array ABI, not a template) — that is the `...T` vs `...Ts` distinction, enforced by **[CE0116](error-catalog.md#ce0116)**.
 
 ## Extern variadics
 
@@ -283,26 +283,26 @@ unsafe external "C" as libc because "formatted output":
 
 | Code | Meaning |
 | --- | --- |
-| **CE0114** | `...T` must be last, at most one per function; element type must not be a reference (a dynamic-array element `...T[]` is allowed); also rejected in generic functions |
-| **CE0115** | a variadic parameter (`...T` or `...Ts`) is not allowed in a perk or extension method |
-| **CE0116** | a public *native* `...T` function cannot be exported through a `.slib` public API (does not apply to `...Ts` packs) |
-| **CE0117** | a type-pack `...Ts` must be the last type parameter; at most one pack per function |
-| **CE0118** | cannot mix a type-pack `...Ts` with a native `...T` in the same function |
-| **CE0119** | malformed `expand` statement |
-| **CE0120** | a bloom argument `arr...` used somewhere illegal (into a non-variadic parameter, or not the sole, last trailing argument) |
-| **CE2090** | a pack element type does not satisfy the pack's perk constraint |
-| **CE2006** | (reused) blooming a non-array value, or an array of the wrong element type, into a `...T` slot |
+| **[CE0114](error-catalog.md#ce0114)** | `...T` must be last, at most one per function; element type must not be a reference (a dynamic-array element `...T[]` is allowed); also rejected in generic functions |
+| **[CE0115](error-catalog.md#ce0115)** | a variadic parameter (`...T` or `...Ts`) is not allowed in a perk or extension method |
+| **[CE0116](error-catalog.md#ce0116)** | a public *native* `...T` function cannot be exported through a `.slib` public API (does not apply to `...Ts` packs) |
+| **[CE0117](error-catalog.md#ce0117)** | a type-pack `...Ts` must be the last type parameter; at most one pack per function |
+| **[CE0118](error-catalog.md#ce0118)** | cannot mix a type-pack `...Ts` with a native `...T` in the same function |
+| **[CE0119](error-catalog.md#ce0119)** | malformed `expand` statement |
+| **[CE0120](error-catalog.md#ce0120)** | a bloom argument `arr...` used somewhere illegal (into a non-variadic parameter, or not the sole, last trailing argument) |
+| **[CE2090](error-catalog.md#ce2090)** | a pack element type does not satisfy the pack's perk constraint |
+| **[CE2006](error-catalog.md#ce2006)** | (reused) blooming a non-array value, or an array of the wrong element type, into a `...T` slot |
 
 ## Limitations and deferred features
 
 - **Perk-constrained packs only** — an unconstrained `...Ts` can be declared but its `expand` body
   cannot operate on elements yet.
 - **Plain functions only** — packs (and `...T`) are not allowed in perk or extension methods
-  (CE0115).
+  ([CE0115](error-catalog.md#ce0115)).
 - **Bloom source must be a bare variable** — `arr...` requires `arr` to be a `Name`. You cannot
   bloom any other expression (a call result, a field access, an inline literal).
 - **No pack forwarding** (`g(pack...)`) and **no pack indexing** (`args.0`). A bloom spreads one
   `...T` array, not a `...Ts` pack.
-- **Native `...T` is not exportable** via `.slib` (CE0116); `...Ts` packs are.
+- **Native `...T` is not exportable** via `.slib` ([CE0116](error-catalog.md#ce0116)); `...Ts` packs are.
 
 The deeper design rationale lives in the [Variadics design note](design/variadics.md).

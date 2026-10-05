@@ -227,7 +227,7 @@ fn main() i32:
 - Explicit error handling: a function that can fail writes `| E` in its signature. It
   returns `Result.Ok(value)` for success, or `Result.Err(error)` for failure, for example
   `Result.Err(StdError.Error)`
-- A Result that you do not use gives a warning (CW2001)
+- A Result that you do not use gives a warning ([CW2001](error-catalog.md#cw2001))
 
 ## Compilation Options
 

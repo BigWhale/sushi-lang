@@ -102,7 +102,7 @@ free?** A value moves iff it does -- a **dynamic array (`T[]`), `List@(T)`, `Own
 those**. Putting such a value in a constructor field or array literal, inserting it into a
 container, binding it to a new name, capturing it in a closure, walking it in a `foreach` as a
 `next()` iterator, or handing it to a **`nom`** parameter transfers ownership; the source is consumed and using it afterward is a use-after-move
-error (`CE2405`).
+error ([`CE2405`](error-catalog.md#ce2405)).
 
 **A plain call argument does NOT transfer.** A parameter is a borrow unless it says otherwise, so
 `f(x)` leaves `x` yours. See [Function Arguments](#function-arguments) for the four modes.
@@ -222,11 +222,11 @@ fn main() i32:
   closes itself down.
 - **Scope exit destroys in reverse declaration order.** The last binding opened is the
   first closed.
-- **Only the unit that declares a type may implement `Drop` for it** (CE4012). Otherwise
+- **Only the unit that declares a type may implement `Drop` for it** ([CE4012](error-catalog.md#ce4012)). Otherwise
   another unit could quietly replace the implementation and stop a resource being
   released.
 - **There is no `.clone()`** on a type that owns a resource, or on anything holding one
-  (CE2431). A deep copy would copy the descriptor number and leave two values that both
+  ([CE2431](error-catalog.md#ce2431)). A deep copy would copy the descriptor number and leave two values that both
   drop -- a double release the copy verb would hide. The operation that means "a second
   owner" gets its own name, `.share()`, and it is `dup(2)`: a second descriptor over a
   SHARED open file description, so the offset is shared too.
@@ -268,7 +268,7 @@ fn main() i32:
 A field read, an index, and a container get-out -- `s.field`, `arr[i]`, `list.get(i)` -- do not
 copy. They hand back a **borrow**: a read-only view of storage the owner keeps and still frees.
 Reading it is free. **Consuming** it -- storing it in a constructor, handing it to a `nom`
-parameter through a borrowed owner, returning it -- is `CE2411`, because that would require
+parameter through a borrowed owner, returning it -- is [`CE2411`](error-catalog.md#ce2411), because that would require
 ownership the borrow does not have. `.clone()` is the escape:
 
 ```sushi
@@ -326,12 +326,12 @@ fn main() i32:
 The marker is legal in three positions: a `let` initializer, a `return`, and a `nom` call argument
 (`take(nom s.label)`). It must be one step off a bare name, and that name must be a local the
 function **owns**. Through a parameter, a `peek`/`poke` parameter or a `let`-borrow it is
-`CE2411`, and so is a chain such as `nom a.b.c`. A field that owns nothing is copied; the marker
+[`CE2411`](error-catalog.md#ce2411), and so is a chain such as `nom a.b.c`. A field that owns nothing is copied; the marker
 changes nothing there.
 
 **A take spends the whole receiver.** There are no partial moves: what suppresses `s`'s own free is
 the whole value and not one field, so the fields left behind are destroyed at the take and `s` is
-finished. A later mention of it is `CE2405`. If the type declares `Drop`, that `drop()` does **not**
+finished. A later mention of it is [`CE2405`](error-catalog.md#ce2405). If the type declares `Drop`, that `drop()` does **not**
 run -- a destructor is written for a value that goes away whole, so the method doing the take does
 the finishing work itself:
 
@@ -347,7 +347,7 @@ write is an **ownership sink**. Two things follow, and both are automatic:
 
 - the element the write replaces is **freed first**, so a write in a loop does not leak;
 - the new value is **consumed**, so an owned source is moved and a source that reads through
-  an owner is `CE2411`.
+  an owner is [`CE2411`](error-catalog.md#ce2411).
 
 ```sushi
 fn main() i32:
@@ -366,7 +366,7 @@ fn main() i32:
 A chained index on a nested array is the same sink, one level down: `grid[i][j] := v` frees
 the old element of row `i` and moves `v` into that row, in place.
 
-An element can never be moved *out* of an array -- that is what the `CE2411` above is saying,
+An element can never be moved *out* of an array -- that is what the [`CE2411`](error-catalog.md#ce2411) above is saying,
 at every sink -- so an array owns every one of its elements for its whole life. That invariant
 is what makes both the write above and the scope-exit destructor safe: each frees an element
 that nothing else can have taken. (An element leaves only when the container *shrinks* past it,
@@ -374,17 +374,17 @@ as `arr.pop()`, `arr.remove(i)`, `List@(T).pop()` and `List@(T).remove()` do -- 
 answers `Maybe@(T)`, because a container that has shrunk to empty has nothing to hand over.)
 
 The write must also be able to reach the owner, which is the [borrow](#references-and-borrowing)
-question rather than the ownership one: it is rejected through a `peek` parameter (`CE2408`),
-a `match`/`foreach` binding (`CE2414`), a method receiver without `poke self` (`CE2421`), an
-unmarked parameter (`CE2422`), a `let` binding that borrows from an owner (`CE2426`), an
-unbound chained receiver such as `o.get().items` (`CE2429`), and a constant (`CE2096`).
+question rather than the ownership one: it is rejected through a `peek` parameter ([`CE2408`](error-catalog.md#ce2408)),
+a `match`/`foreach` binding ([`CE2414`](error-catalog.md#ce2414)), a method receiver without `poke self` ([`CE2421`](error-catalog.md#ce2421)), an
+unmarked parameter ([`CE2422`](error-catalog.md#ce2422)), a `let` binding that borrows from an owner ([`CE2426`](error-catalog.md#ce2426)), an
+unbound chained receiver such as `o.get().items` ([`CE2429`](error-catalog.md#ce2429)), and a constant ([`CE2096`](error-catalog.md#ce2096)).
 
 Rebinding the NAME (`x := v`) asks a narrower version of the same question, and the answer
 splits those kinds. A name with storage of its own may be rebound -- a local, a unit
 variable, and a parameter, a borrow parameter included, whose slot is the callee's own. A
 name that is a view of another value's storage may not, because the store would free a
-value the owner still holds: a `match`/`foreach` binding (`CE2414`), a `let` that borrows
-from an owner (`CE2426`), a `peek` reference (`CE2408`).
+value the owner still holds: a `match`/`foreach` binding ([`CE2414`](error-catalog.md#ce2414)), a `let` that borrows
+from an owner ([`CE2426`](error-catalog.md#ce2426)), a `peek` reference ([`CE2408`](error-catalog.md#ce2408)).
 
 ### Function Arguments
 
@@ -422,14 +422,14 @@ fn main() i32:
 
 The marker is written at **both** ends, or at neither. That is what keeps a consume visible where
 the value is handed over: reading `f(s)` you know `s` survives, and reading `f(nom s)` you know it
-does not. A marker on one end only is `CE2427`.
+does not. A marker on one end only is [`CE2427`](error-catalog.md#ce2427).
 
 `.clone()` is how a caller hands over a value it wants to keep: `eat(nom data.clone())` gives the
 callee an independent copy.
 
 > **`main`'s `args`.** The `string[] args` parameter of `main` is a borrowed view of the process
 > argument vector (its strings alias C `argv` memory), not a heap-owned array. It passes to an
-> ordinary borrow parameter like anything else; handing it to a `nom` one is `CE2410`, because the
+> ordinary borrow parameter like anything else; handing it to a `nom` one is [`CE2410`](error-catalog.md#ce2410), because the
 > callee would try to free `argv` and crash.
 
 ### The Four Modes
@@ -446,9 +446,9 @@ fn f(poke string name) ~:     # borrow by pointer -- read/write; caller frees
 | what crosses | the value | the value | a pointer | a pointer |
 | who frees | caller | **callee** | caller | caller |
 | callee may read | yes | yes | yes | yes |
-| callee may write through it | no — `CE2422` | yes (its own copy) | no — `CE2408` | **yes, caller sees it** |
-| callee may keep it | no — `CE2411` | **yes** | no — `CE2411` | no — `CE2411` |
-| caller may use it after | yes | no — `CE2405` | yes | yes |
+| callee may write through it | no — [`CE2422`](error-catalog.md#ce2422) | yes (its own copy) | no — [`CE2408`](error-catalog.md#ce2408) | **yes, caller sees it** |
+| callee may keep it | no — [`CE2411`](error-catalog.md#ce2411) | **yes** | no — [`CE2411`](error-catalog.md#ce2411) | no — [`CE2411`](error-catalog.md#ce2411) |
+| caller may use it after | yes | no — [`CE2405`](error-catalog.md#ce2405) | yes | yes |
 | how many at once | many | one | many | one, exclusive |
 
 The default mode has no name of its own. It is *a borrow*: it does not pass the value.
@@ -728,7 +728,7 @@ fn main() i32:
 
 The borrow lasts to the end of the block that declared it. Two things are checked while it is live:
 
-1. **Mutating, freeing, or rebinding the owner is `CE2412`**, reported at the *use* of the borrowed
+1. **Mutating, freeing, or rebinding the owner is [`CE2412`](error-catalog.md#ce2412)**, reported at the *use* of the borrowed
    binding that follows the change (not at the change itself -- the borrow is non-lexical):
 
 ```sushi
@@ -747,24 +747,24 @@ fn main() i32:
     return 0
 ```
 
-2. **Consuming the binding itself is `CE2411`**, exactly like consuming a `match`/`foreach` binding
+2. **Consuming the binding itself is [`CE2411`](error-catalog.md#ce2411)**, exactly like consuming a `match`/`foreach` binding
    or a direct field read -- `.clone()` is the escape (see
    [Reading Through a Borrow, Without Consuming](#reading-through-a-borrow-without-consuming)).
 
-3. **Rebinding the binding itself is `CE2426`**. The binding names storage the owner keeps,
+3. **Rebinding the binding itself is [`CE2426`](error-catalog.md#ce2426)**. The binding names storage the owner keeps,
    so `x := "bye"` would free a value `w` still holds. Write to the owner (`w.inner := "bye"`),
    or take a value of your own with `.clone()` and rebind that. A `match`/`foreach` binding
-   reads `CE2414` for the same reason, and a `peek` reference `CE2408`.
+   reads [`CE2414`](error-catalog.md#ce2414) for the same reason, and a `peek` reference [`CE2408`](error-catalog.md#ce2408).
 
 **A `let` may also declare a reference *type***: `let poke T x = <place>` binds a
 pointer INTO the owner's storage, so a write through it reaches the owner -- the zero-copy
 mutation path into the payload of a bare `Own@(T)` local -- and `let peek T x = <place>` is the
 read-only twin. The binding is block-scoped and freezes its owner exactly as the implicit
-borrow above does (`CE2412`); one `poke` binding of an owner at a time (`CE2403`), a `peek`
-beside a live `poke` is `CE2407`, a write through a `peek` binding is `CE2408`, and
-consuming the binding is `CE2411` as before. The place must have an address: a call
-result is `CE2404`. A constant is read-only storage, so `let peek` reads it and
-`let poke` is `CE2400`.
+borrow above does ([`CE2412`](error-catalog.md#ce2412)); one `poke` binding of an owner at a time ([`CE2403`](error-catalog.md#ce2403)), a `peek`
+beside a live `poke` is [`CE2407`](error-catalog.md#ce2407), a write through a `peek` binding is [`CE2408`](error-catalog.md#ce2408), and
+consuming the binding is [`CE2411`](error-catalog.md#ce2411) as before. The place must have an address: a call
+result is [`CE2404`](error-catalog.md#ce2404). A constant is read-only storage, so `let peek` reads it and
+`let poke` is [`CE2400`](error-catalog.md#ce2400).
 
 ```sushi
 struct Wrapper:
@@ -782,18 +782,18 @@ fn main() i32:
     return 0
 ```
 
-### Other Freezes (`CE2412`)
+### Other Freezes ([`CE2412`](error-catalog.md#ce2412))
 
 A `let`-borrow is not the only thing that freezes its owner. The compiler also refuses a change
-that can move or free storage that something still reads, with `CE2412`:
+that can move or free storage that something still reads, with [`CE2412`](error-catalog.md#ce2412):
 
 - **A `foreach` over a container.** While a loop walks `c.iter()`, `.keys()`, `.values()` or
-  `.entries()`, a change to `c` that can move or free its storage is `CE2412`: `push`, `insert`,
+  `.entries()`, a change to `c` that can move or free its storage is [`CE2412`](error-catalog.md#ce2412): `push`, `insert`,
   `pop`, `remove`, `clear`, a rebind, or a `poke`/`nom` of `c`. A note shows the loop header.
 - **A bare `foreach` item of an owning element** freezes its container for the body.
 - **A bare pattern binding of an owning payload** freezes its owner for the arm.
 - **A borrowed argument to a call that changes its owner.** `a.fill(first)` and
-  `put(first, poke a)`, where `first` borrows from `a`, are `CE2412`. Pass `first.clone()`.
+  `put(first, poke a)`, where `first` borrows from `a`, are [`CE2412`](error-catalog.md#ce2412). Pass `first.clone()`.
 - **A store through a `poke` reference** after its owner changed.
 
 ```sushi
@@ -816,22 +816,22 @@ parameter:
 
 | binding | what it is | write through it | rebind it | consume it |
 |---|---|---|---|---|
-| `Msg.Text(s)` | a read-only view of the payload | no, `CE2414` | no, `CE2414` | no, `CE2411` |
-| `Msg.Count(poke n)` | a pointer into the payload | **yes**, the owner sees it | -- | no, `CE2411` |
+| `Msg.Text(s)` | a read-only view of the payload | no, [`CE2414`](error-catalog.md#ce2414) | no, [`CE2414`](error-catalog.md#ce2414) | no, [`CE2411`](error-catalog.md#ce2411) |
+| `Msg.Count(poke n)` | a pointer into the payload | **yes**, the owner sees it | -- | no, [`CE2411`](error-catalog.md#ce2411) |
 | `Msg.Text(nom s)` | the payload itself, taken | yes | yes | **yes** |
 
 - A **bare** binding borrows. The copy is shallow, so a write or a rebind would free a payload
-  that the scrutinee still owns: both are `CE2414`.
+  that the scrutinee still owns: both are [`CE2414`](error-catalog.md#ce2414).
 - A **`poke`** binding points into the payload. The scrutinee can be a local, a field or an
   element of a local (`match b.m:`), or a temporary. It follows the `let poke` rules: the owner is
-  frozen while it lives (`CE2412`), one `poke` at a time (`CE2403`), a `peek`/`poke` mix is
-  `CE2407`, and a `poke` of a constant is `CE2400`. `foreach(poke x in xs.iter())` writes each
+  frozen while it lives ([`CE2412`](error-catalog.md#ce2412)), one `poke` at a time ([`CE2403`](error-catalog.md#ce2403)), a `peek`/`poke` mix is
+  [`CE2407`](error-catalog.md#ce2407), and a `poke` of a constant is [`CE2400`](error-catalog.md#ce2400). `foreach(poke x in xs.iter())` writes each
   element in place.
 - A **`nom`** binding takes the payload. It needs a scrutinee that the match OWNS: a temporary
   (`match make()??:`), or a local that you hand over with `match nom m:`. After `match nom m:`, a
-  use of `m` is `CE2405`. A `nom` binding under a plain `match m:` is `CE2432`. An arm takes the
-  variant whole: a `nom` binding beside a bare binding of the same variant is `CE2433`.
-  `Own(nom x)` is `CE2434`.
+  use of `m` is [`CE2405`](error-catalog.md#ce2405). A `nom` binding under a plain `match m:` is [`CE2432`](error-catalog.md#ce2432). An arm takes the
+  variant whole: a `nom` binding beside a bare binding of the same variant is [`CE2433`](error-catalog.md#ce2433).
+  `Own(nom x)` is [`CE2434`](error-catalog.md#ce2434).
 
 ```sushi
 enum Msg:
@@ -865,17 +865,17 @@ fn main() i32:
 ### `??` Spends a Named Wrapper
 
 `let string got = r??` takes the value out of `r`. When the `Result` owns something
-in one of its arms, `r` is spent: a later use of `r` is `CE2405`. A named `Maybe` is not an
+in one of its arms, `r` is spent: a later use of `r` is [`CE2405`](error-catalog.md#ce2405). A named `Maybe` is not an
 operand of `??`; `m.or_err(nom e)` takes it `nom self`, so a `Maybe` that owns something is
-spent by that call (`CE2435`). A wrapper that owns nothing
+spent by that call ([`CE2435`](error-catalog.md#ce2435)). A wrapper that owns nothing
 copies, and `r` stays usable. A borrowed wrapper (a parameter or a binding) is read through: the
-`let` binds a borrow, and a consuming use of it is `CE2411`.
+`let` binds a borrow, and a consuming use of it is [`CE2411`](error-catalog.md#ce2411).
 
 ## Unit Variables Are Never Moved Out Of
 
 A `var` at the top of a unit is storage that the program keeps for its whole run. You can borrow
 it (`peek`/`poke`), write a field of it, call a mutating method on it and rebind it. You can never
-move out of it: `f(nom v)`, `let T x = v` and `return v` are `CE2436` when the type owns a
+move out of it: `f(nom v)`, `let T x = v` and `return v` are [`CE2436`](error-catalog.md#ce2436) when the type owns a
 resource. A plain value copies out. To hand one away, take an independent value with
 `.clone()`.
 
@@ -897,7 +897,7 @@ A type may refer to itself through any **indirection** — `Own@(T)`, `Maybe@(Ow
 `List@(T)`, or a dynamic `T[]`. All of them can be declared, constructed, read, nested and
 dropped, and RAII frees every level exactly once.
 
-A by-value self-reference has no finite size and is rejected with **CE2095**; a *fixed* `T[N]`
+A by-value self-reference has no finite size and is rejected with **[CE2095](error-catalog.md#ce2095)**; a *fixed* `T[N]`
 counts as by-value, a *dynamic* `T[]` does not.
 
 ### Recursion through a container
@@ -991,14 +991,14 @@ fn main() i32:
 
 - **`alloc(value)` takes ownership.** When `value` is itself an owning value (an `Own@(T)`,
   a `List@(T)`, a dynamic array, a `string`, or a struct with owned fields), the source variable is
-  *moved* into the new `Own` and may not be used afterwards (use-after-move is `CE2405`).
+  *moved* into the new `Own` and may not be used afterwards (use-after-move is [`CE2405`](error-catalog.md#ce2405)).
   Primitives are copied, so passing an `i32` variable leaves it usable.
 - **`get()` reads through the pointer and hands back a borrow.** `get()` is a dereference: it
   returns a *view* of the payload, which the `Own` keeps owning and still frees. Reading it is
   free -- a `let x = own.get()` binds `x` as a borrow of `own`, exactly like a struct-field read
   (see [Borrowed `let` Bindings](#borrowed-let-bindings)). *Consuming* that view at a real
   ownership sink -- a `nom` argument, a constructor field, an enum payload, an indexed
-  assignment `arr[i] := ...`, a `return` -- is **`CE2411`**, with `.clone()` as the escape.
+  assignment `arr[i] := ...`, a `return` -- is **[`CE2411`](error-catalog.md#ce2411)**, with `.clone()` as the escape.
 
 ```sushi
 fn main() i32:
@@ -1011,8 +1011,8 @@ fn main() i32:
 ```
 
   `copied` above does not own an independent copy of `inner` -- it is a live borrow of `outer`, so
-  mutating or freeing `outer` while `copied` is in scope would be `CE2412`, and handing `copied`
-  itself to a `nom` parameter would be `CE2411`:
+  mutating or freeing `outer` while `copied` is in scope would be [`CE2412`](error-catalog.md#ce2412), and handing `copied`
+  itself to a `nom` parameter would be [`CE2411`](error-catalog.md#ce2411):
 
 ```sushi
 fn sink(nom Own@(i32) x) ~:
@@ -1167,7 +1167,7 @@ Sushi prevents common memory errors at compile time:
 
 - No use-after-free (move checking)
 - No double-free (move checking)
-- No use-after-destroy (CE2406)
+- No use-after-destroy ([CE2406](error-catalog.md#ce2406))
 - No data races (single borrow rule)
 - No dangling references (borrow checking)
 

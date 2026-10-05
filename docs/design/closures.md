@@ -91,8 +91,8 @@ array of an owning element: each slot is destroyed with the array.
 a bare `fn` lowers to `T(params)`. Calling through a function value therefore yields what a direct
 call would: the value for a bare type, and `Result@(T, E)` for a type with a channel, where `??`,
 `.realise(default)`, `.is_ok()` and pattern matching all work unchanged. A `Result` is not a
-condition: `if (f(x))` is CE2516, as for a direct call. The channel is part of the function type,
-so a bare type and a type with a channel do not convert (CE2002).
+condition: `if (f(x))` is [CE2516](../error-catalog.md#ce2516), as for a direct call. The channel is part of the function type,
+so a bare type and a type with a channel do not convert ([CE2002](../error-catalog.md#ce2002)).
 
 A function with a channel that returns a function type writes the explicit form,
 `fn make() Result@(fn(i32) -> i32, StdError):`. A `| E` written after a function type belongs to
@@ -109,15 +109,15 @@ rule.
 **Only plain top-level `fn`s are referenceable.** Extension methods, perk methods, and FFI
 externals have incompatible ABIs (bare-value, `self`-bound, raw-C) and live in separate tables, so
 a bare reference to one is never recognized as a function value — it fails as an undeclared
-identifier (**CE1001**), not CE2093. A *generic* function reference is recognized-but-deferred
-territory; see §8 for the T2.3 exception that is allowed, and Part II §4 for what still stays CE2093.
+identifier (**[CE1001](../error-catalog.md#ce1001)**), not [CE2093](../error-catalog.md#ce2093). A *generic* function reference is recognized-but-deferred
+territory; see §8 for the T2.3 exception that is allowed, and Part II §4 for what still stays [CE2093](../error-catalog.md#ce2093).
 
 A plain `fn` of another unit is referenceable wherever the unit may name it: through a
 flat `use`, a `public use` re-export, or behind an alias (`l.plain`). The scope pass and the
 typecheck pass read one unit-scoped lookup for this rung, the unit's own concrete `fn` wins over
-an imported one, and the fences of the call apply to the value: CE3005 for a private
-`fn`, CE3012 for a name two imports bring. A generic behind an alias (`l.gen`) follows the bare
-name: legal where an expected function type solves it, CE2093 where nothing does.
+an imported one, and the fences of the call apply to the value: [CE3005](../error-catalog.md#ce3005) for a private
+`fn`, [CE3012](../error-catalog.md#ce3012) for a name two imports bring. A generic behind an alias (`l.gen`) follows the bare
+name: legal where an expected function type solves it, [CE2093](../error-catalog.md#ce2093) where nothing does.
 
 ## 2. Lambda syntax
 
@@ -148,17 +148,17 @@ let fn() -> i32 inc = |~| n + 1
   **only** where an expected `FunctionType` supplies the types (a call argument to a parameter of a
   concrete function type, or a binding with a `fn(...)` annotation); otherwise it is a "lambda
   parameter needs a type" diagnostic. A parameter of a GENERIC function type supplies nothing:
-  `map(xs, |x| x * 2)` is CE2060, and `map(xs, |i32 x| x * 2)` compiles. The return type comes
+  `map(xs, |x| x * 2)` is [CE2060](../error-catalog.md#ce2060), and `map(xs, |i32 x| x * 2)` compiles. The return type comes
   from the body or the expected type, or it is annotated with `-> T [| E]` after the closing pipe.
 - **The channel comes from the TYPE, never from the body.** A lambda has an error channel only
   when its type writes `| E`: the annotation after the closing pipe, or the expected type (a
   parameter, a `let`, a field). The compiler never infers a channel from the body. A bare lambda
   is a bare fn: its expression body `|x| e` desugars to `return e`, a block body returns the value,
-  a `Result.Ok` or `Result.Err` there is CE2091, and a `??` there is CE0131 (the typecheck pass
+  a `Result.Ok` or `Result.Err` there is [CE2091](../error-catalog.md#ce2091), and a `??` there is [CE0131](../error-catalog.md#ce0131) (the typecheck pass
   emits it, because the channel is known only when the type is). A lambda with a channel is a fn
   with a channel: `|x| e` desugars to `return Result.Ok(e)`, a block body spells both
   constructors, and a `??` is legal in any body (#399). Calling through a closure yields what any
-  call yields (and `if (f(x))` is CE2516, as for any call).
+  call yields (and `if (f(x))` is [CE2516](../error-catalog.md#ce2516), as for any call).
   - *Corollary for a channel lambda:* the expression body is wrapped in `Ok`, so a fallible call in
     the body must be unwrapped with `??` **at its point of use** — a `Result` left in body position
     is wrapped again (`Result@(Result@(T, E), E)`) and fails to typecheck. `compose` is bare, so its body
@@ -185,7 +185,7 @@ both a plain fn and any closure of that arity/ok/err.
 
 The parameter MODES are part of the type (`docs/design/borrow-model.md` §7):
 `fn(nom string) -> i32` and `fn(string) -> i32` are two types, and assigning a value of one to
-the other is CE2002. A lambda parameter carries a mode too (`|nom string s| ...`; the grammar
+the other is [CE2002](../error-catalog.md#ce2002). A lambda parameter carries a mode too (`|nom string s| ...`; the grammar
 rule is `lambda_param: NOM? type NAME`), and a value built from a function declared with
 `nom string s` has the type `fn(nom string) -> i32`. `FunctionType.modes` holds the modes, and
 `types_compatible` compares them in one place.
@@ -237,19 +237,19 @@ for the captured variable's provenance and type class, not a closures-specific r
 - **Types that own heap** (dynamic array, `List@(T)`, `Own@(T)`, `HashMap@(K, V)`, and
   **any `string` not bound from a literal**, e.g. one built by interpolation, returned from a
   call, or arriving as a parameter) are captured by **move** into the environment — the outer
-  binding is consumed (borrow-checker enforced; later use is CE2405), and the env's recursive
+  binding is consumed (borrow-checker enforced; later use is [CE2405](../error-catalog.md#ce2405)), and the env's recursive
   destructor frees them. A struct or fixed array composed only of non-owning fields is captured by
   copy, exactly like a bare primitive; one with an owning field (including a plain `string`
   field) is captured by move, exactly like a bare owning value.
 - **A captured closure *value*** (a `fn(...)` local that is itself a capturing closure) is also
   move-captured, same as any other owning type — this is what makes `compose` and capture-and-call
   bodies work (§7).
-- **Borrow capture (`poke`/`peek`) is rejected** with CE2094 — deferred (Part II §3).
+- **Borrow capture (`poke`/`peek`) is rejected** with [CE2094](../error-catalog.md#ce2094) — deferred (Part II §3).
 - **Reading a captured field back out of the environment is a BORROW**, exactly like reading a
   struct field (`docs/design/ownership-conventions.md` §4.2): a lambda body that reads a captured
   owning value (e.g. `|~| greeting` returning a captured `string`) sees a borrow of the environment's
   copy, so *returning* or otherwise consuming it from inside the body needs its own `.clone()` —
-  CE2411 otherwise. Reading it without consuming it (e.g. `println(greeting)` inside the body) is
+  [CE2411](../error-catalog.md#ce2411) otherwise. Reading it without consuming it (e.g. `println(greeting)` inside the body) is
   free.
 - **A nested lambda captures through the lambda around it.** The scope pass records a free name
   for every lambda it is free in, so when an inner lambda captures a local of the function, the
@@ -257,7 +257,7 @@ for the captured variable's provenance and type class, not a closures-specific r
   environment, so the inner environment is filled from `#closure_env.<name>` (the `lift` pass
   sets `Param.capture_source`, and `emit_lambda` reads it). This applies at every depth. The rules
   above do not change, because the source is a read of a captured field: a plain value is copied
-  into the inner environment, and an owning value is the consuming use of a borrow (CE2411). To
+  into the inner environment, and an owning value is the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)). To
   move an owning capture one level deeper, clone it in the outer body
   (`let string t = s.clone()`) and capture the clone (#1127).
 
@@ -276,14 +276,14 @@ for the captured variable's provenance and type class, not a closures-specific r
   container) is conservatively treated as owning-with-runtime-drop; the drop is runtime-guarded, so
   conservative frees are always sound.
 - **Closure aliasing is sound.** A plain rebind `let fn(i32) -> i32 g = f` **moves** the env
-  (source consumed, CE2405 on later use); a container get-out
+  (source consumed, [CE2405](../error-catalog.md#ce2405) on later use); a container get-out
   (`let fn(i32) -> i32 g = fns.get(0).or_err(nom e)??`) and a struct-field read
   (`let fn(i32) -> i32 g = s.handler`) are non-owning **borrows** (the container/struct stays the sole owner,
   mirroring `Own@(T).get()`); a closure stored in a struct field is freed by the struct's cleanup.
   No leak, no double-free (validated with `leaks --atExit`).
 - **Compatibility stays invariant and capture-agnostic.** `fn(i32)->i32` matches a plain fn and a
   closure alike (the capture descriptor is metadata, excluded from type identity). Mismatch is
-  **CE2002** on assignment and **CE2092** on call-through (§9).
+  **[CE2002](../error-catalog.md#ce2002)** on assignment and **[CE2092](../error-catalog.md#ce2092)** on call-through (§9).
 
 ### Lambda lowering (desugaring)
 
@@ -301,7 +301,7 @@ for the captured variable's provenance and type class, not a closures-specific r
    owns it and frees it through `drop_ptr` — so the lifted function writing to it is not a write
    to a caller's value.
 
-   A `peek` env parameter would make two legal shapes a **CE2408** — a mutating method on a
+   A `peek` env parameter would make two legal shapes a **[CE2408](../error-catalog.md#ce2408)** — a mutating method on a
    capture (`tests/closures/capture/test_closure_list_mutate.sushi`) and a `poke` borrow of a
    capture (`tests/closures/capture/test_closure_env_poke_borrow.sushi`). The declaration is
    `poke`; the rule has no carve-out.
@@ -331,10 +331,10 @@ The capture machinery, in dependency order:
 - **T1.0** — fat-pointer ABI + sizing (`FunctionType.captures`, 32-byte lowering).
 - **T1.1** — lambda grammar/AST (`lambda_expr`, `lambda_block`, `Lambda` node).
 - **T1.2** — capture analysis (free-name recording in the scope pass).
-- **T1.3** — type-checking + capture legality, including CE2094 for borrow capture.
+- **T1.3** — type-checking + capture legality, including [CE2094](../error-catalog.md#ce2094) for borrow capture.
 - **T1.4** — lambda-lifting pass (env struct + lifted function synthesis).
 - **T1.6** — backend materialization (`emit_lambda`, env heap-alloc, fat-value construction).
-- **T1.7** — indirect-call env threading; CE2094 additionally rejects owning/variadic fn-value
+- **T1.7** — indirect-call env threading; [CE2094](../error-catalog.md#ce2094) additionally rejects owning/variadic fn-value
   *parameter* types (the indirect path has no deep copy, so this restriction prevents a
   double free; T2.5, Part II §3, is the fix).
 - **T1.5** — environment RAII + move-capture (§3), plus closure-aliasing soundness: a rebind is a
@@ -367,7 +367,7 @@ and run. These pieces make it possible:
     inferable — its param types come from expected-type propagation, which is not available at
     instantiation collection, and is circular anyway (the lambda's type depends on the type params being
     inferred *from* it). Use a **typed-param** lambda (`|i32 x| ...`) or a function reference. This
-    is a graceful CE2060, not a crash.
+    is a graceful [CE2060](../error-catalog.md#ce2060), not a crash.
 - **Gap A — substitute `FunctionType` during monomorphization.** The three recursive
   type-substitution routines (rewriting type params to concrete types) have a `FunctionType`
   branch that rebuilds `param_types`/`ok_type`/`err_type` recursively, carrying `captures` through
@@ -454,7 +454,7 @@ fn compose@(T, U, V)(nom fn(T) -> U g, nom fn(U) -> V f) fn(T) -> V:
 `compose`'s returned lambda **captures** `f` and `g` (both function values, one of them possibly a
 closure) and **calls** them in its body — the capture-and-call case of
 §7. Both parameters are `nom`: a capture CONSUMES what it captures, and a borrow parameter
-cannot be consumed (CE2411 for each of `f` and `g`). The caller hands the values over, so the call
+cannot be consumed ([CE2411](../error-catalog.md#ce2411) for each of `f` and `g`). The caller hands the values over, so the call
 is `compose(nom inc, nom dbl)`. The lambda parameter is a bare `|x|`, and the expected return type
 `fn(T) -> V` supplies its type; `|T x|` works too (Part II §5).
 
@@ -523,7 +523,7 @@ fn run() i32:
     return h(5)          # g(5) = 15, h(5) = 16
 ```
 
-A type mismatch on this path is a front-end **CE2002** diagnostic.
+A type mismatch on this path is a front-end **[CE2002](../error-catalog.md#ce2002)** diagnostic.
 
 Test coverage: `tests/closures/capture/test_closure_capture_closure.sushi`,
 `tests/functions/function_values/test_call_index_result.sushi`, `tests/functions/function_values/test_fn_value_field_call.sushi`,
@@ -543,7 +543,7 @@ fn run() i32:
     return g(41) + 1     # 42
 ```
 
-This is an **expected-type-driven** rule, not a general lift of CE2093: the instantiate pass collects
+This is an **expected-type-driven** rule, not a general lift of [CE2093](../error-catalog.md#ce2093): the instantiate pass collects
 the instantiation wherever an expected `FunctionType` meets a generic-fn name -- a `let`, an
 argument, a rebind, a `return`, a struct field, an enum payload, a `.realise()` default -- by unifying the signature against the expected type; the type pass then solves the
 type args, rewrites the `Name` to the mangled concrete name, and infers the concrete `FunctionType`.
@@ -574,7 +574,7 @@ fn run() i32:
     return ys.get(1).realise(-1)   # 7
 ```
 
-What still stays CE2093 is covered once, in Part II §4.
+What still stays [CE2093](../error-catalog.md#ce2093) is covered once, in Part II §4.
 
 Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
 `tests/generics/generic_fn_reference/test_generic_fn_ref_higher_order.sushi`,
@@ -583,15 +583,15 @@ Test coverage: `tests/generics/generic_fn_reference/test_generic_fn_ref.sushi`,
 
 ## 9. Diagnostics (live)
 
-- **CE2002** — a function value assigned to a variable or parameter of an incompatible function
+- **[CE2002](../error-catalog.md#ce2002)** — a function value assigned to a variable or parameter of an incompatible function
   type (a plain assignment mismatch, *not* a call-through).
-- **CE2092** — function-value type mismatch (arity / parameter / return / error type) when
+- **[CE2092](../error-catalog.md#ce2092)** — function-value type mismatch (arity / parameter / return / error type) when
   **calling through** a function value. Function types are invariant.
-- **CE2093** — illegal function reference: a bare reference to a **generic** function with **no**
+- **[CE2093](../error-catalog.md#ce2093)** — illegal function reference: a bare reference to a **generic** function with **no**
   expected function type in context (Part II §4 has the exact remaining boundary). Extension
   methods, perk methods, and FFI externals are not bare-referenceable at all — they surface as an
-  undeclared identifier (**CE1001**), not CE2093.
-- **CE2094** — illegal closure capture: a `peek`/`poke` borrow (Part II §3); or an owning
+  undeclared identifier (**[CE1001](../error-catalog.md#ce1001)**), not [CE2093](../error-catalog.md#ce2093).
+- **[CE2094](../error-catalog.md#ce2094)** — illegal closure capture: a `peek`/`poke` borrow (Part II §3); or an owning
   /variadic fn-value *parameter* type (T2.5, Part II §3, is the fix). **Dynamic-array**,
   **`List@(T)`**, **`Own@(T)`** and **closure-value** captures are all allowed (move-capture), and a
   captured closure may be called in the body (§7).
@@ -609,7 +609,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | `Lambda` node / `FuncDef` shape | `semantics/ast.py` |
 | `Call.callee` over any `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
 | Capture analysis | `semantics/passes/scope.py` |
-| Lambda type-check, CE2094, bare-param inference | `semantics/passes/types/visitor.py` |
+| Lambda type-check, [CE2094](../error-catalog.md#ce2094), bare-param inference | `semantics/passes/types/visitor.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
@@ -625,7 +625,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |
-| Diagnostics | `internals/errors/types.py` (CE2002, CE2092, CE2093, CE2094) |
+| Diagnostics | `internals/errors/types.py` ([CE2002](../error-catalog.md#ce2002), [CE2092](../error-catalog.md#ce2092), [CE2093](../error-catalog.md#ce2093), [CE2094](../error-catalog.md#ce2094)) |
 | Fat-pointer precedent (strings) | `backend/runtime/strings.py` |
 
 Where the passes actually run (worth knowing before touching any of the above): the live semantic
@@ -648,7 +648,7 @@ monomorphized per (receiver, method, margs). The decision record is
 - **Builtin names cannot be shadowed.** The backend dispatcher checks List provider methods
   (`push`/`get`/`iter`/…) *before* the user-extension fallback, so a user `extend List@(T) push()` is
   unreachable. Only non-builtin names route to the extension path. This is not specific to `List` --
-  it is the general precedence rule, and **CE2097** enforces it across every built-in family. See
+  it is the general precedence rule, and **[CE2097](../error-catalog.md#ce2097)** enforces it across every built-in family. See
   [method-resolution.md](method-resolution.md) for the full chain and the perk override route.
 - **Receiver ABI reconciliation.** A List-backed receiver shares the dynamic-array `{i32, i32, T*}`
   layout and is passed by pointer, but `self` is declared by value; the dispatch site loads the
@@ -665,7 +665,7 @@ an owning accumulator, still need move-aware handling the bodies do not do. See
 
 ## 3. Remaining deferred items (T2.x)
 
-- **T2.1 — `peek`/`poke` borrow capture.** Lift CE2094 for borrows; track the borrow's lifetime
+- **T2.1 — `peek`/`poke` borrow capture.** Lift [CE2094](../error-catalog.md#ce2094) for borrows; track the borrow's lifetime
   *through* the closure value under the exclusivity rules. **Why deferred:** this is the genuinely
   hard problem the whole closures feature was scoped around — a borrow captured into an escaping,
   heap-allocated environment can outlive the stack frame that issued it, which the current
@@ -686,9 +686,9 @@ an owning accumulator, still need move-aware handling the bodies do not do. See
   serving the C `void* userdata` convention; reuses the adapter-thunk ABI directly. **Why
   deferred:** no FFI callback consumer yet; independent of the other deferred items.
 
-## 4. What still stays CE2093
+## 4. What still stays [CE2093](../error-catalog.md#ce2093)
 
-A generic-function reference is CE2093 where **no** expected function type solves its type
+A generic-function reference is [CE2093](../error-catalog.md#ce2093) where **no** expected function type solves its type
 arguments: a position with no expected type at all (`println(identity)`, an expression statement),
 or an expected type whose shape does not fit the generic's signature (a two-parameter function type
 for a one-parameter generic). Every position that has an expected function type -- a `let`, an
@@ -710,14 +710,14 @@ fn main() i32:
 
 A generic callee is solved from its other arguments first, and the value then from the
 substituted parameter type: `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
-solves. A value that the substituted type does not solve is CE2093; a callee whose type argument
-comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is CE2060 + CE2093.
+solves. A value that the substituted type does not solve is [CE2093](../error-catalog.md#ce2093); a callee whose type argument
+comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is [CE2060](../error-catalog.md#ce2060) + [CE2093](../error-catalog.md#ce2093).
 Bind the value to a typed local first. Inside a generic body the copy is walked for each instance,
 so a position solves a generic-fn value as it does in a concrete body. A value behind an alias
 (`l.gen`) in the copy of a generic-target extension or perk implementation is not solved: it is
-CE2093. Use the bare name there, or bind the value to a typed local in a concrete function.
+[CE2093](../error-catalog.md#ce2093). Use the bare name there, or bind the value to a typed local in a concrete function.
 Extension methods, perk methods, and FFI externals remain outside
-CE2093 entirely -- they are not in the function table at all, so a bare reference to one is CE1001
+[CE2093](../error-catalog.md#ce2093) entirely -- they are not in the function table at all, so a bare reference to one is [CE1001](../error-catalog.md#ce1001)
 (undeclared identifier), a distinct diagnostic for a distinct reason (incompatible ABI, not
 deferred capability).
 

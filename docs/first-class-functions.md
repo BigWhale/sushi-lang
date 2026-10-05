@@ -62,7 +62,7 @@ like any other type — they work as parameter types, struct fields, and generic
 (`List@(fn(i32) -> i32)`).
 
 A function type has an error channel only when it writes `| E`. The channel is part of the type,
-so `fn(i32) -> i32` and `fn(i32) -> i32 | MathError` do not convert (CE2002). A `| E` written
+so `fn(i32) -> i32` and `fn(i32) -> i32 | MathError` do not convert ([CE2002](error-catalog.md#ce2002)). A `| E` written
 after a function type belongs to that function type. Thus a function with a channel that returns
 a function type writes the explicit form, `fn make() Result@(fn(i32) -> i32, StdError):`. The
 form `fn make() fn(i32) -> i32 | StdError:` is a BARE function that returns a function type with
@@ -87,12 +87,12 @@ These functions can be values:
 - A top-level function of the same unit.
 - A function of another unit, as a bare name (`plain`) or behind an alias (`l.plain`). The unit
   can be a source unit, a `public use` re-export or a library. A private function of another unit
-  is CE3005, and a bare name with two candidates is CE3012. A bare name finds the unit's own
+  is [CE3005](error-catalog.md#ce3005), and a bare name with two candidates is [CE3012](error-catalog.md#ce3012). A bare name finds the unit's own
   function before an imported function of the same name.
 - A **generic** function, in every position where the type is solved: an annotated `let`, an
   argument, a rebind, a `return`, a field, a payload, a `.realise()` default, and a generic
-  callee. A value that no position type solves is CE2093. `identity@(i32)` in a value position is
-  a parse error (CE6001): let the position give the type.
+  callee. A value that no position type solves is [CE2093](error-catalog.md#ce2093). `identity@(i32)` in a value position is
+  a parse error ([CE6001](error-catalog.md#ce6001)): let the position give the type.
 
 Extension methods, perk methods and FFI externals have different calling conventions. They
 cannot be values.
@@ -116,7 +116,7 @@ fn main() i32:
 Call a function value the same as a named function: `f(args)`. An indirect call gives the same
 answer as a direct call. A bare function type (`fn(i32) -> i32`) gives the value. A function type
 with a channel (`fn(i32) -> i32 | E`) gives a `Result@(i32, E)`: use `??`, `.realise()`,
-`.is_ok()` or a `match` on it. A bare call takes no `??` (CE2507):
+`.is_ok()` or a `match` on it. A bare call takes no `??` ([CE2507](error-catalog.md#ce2507)):
 
 ```sushi
 fn run_twice(fn(i32) -> i32 f, i32 v) i32:
@@ -223,14 +223,14 @@ function types (no variance, no coercion). A mismatch is a clean diagnostic — 
 
 | Code | Meaning |
 | --- | --- |
-| **CE2092** | function value type mismatch at a call-through: wrong arity, parameter type, return type or error type |
-| **CE2093** | a **generic** function value that no position type solves |
-| **CE2002** | a function value assigned to a variable or parameter of an incompatible function type (the general assignment-mismatch error) |
-| **CE3005** | a function value of a private function of another unit |
-| **CE3012** | a bare function name with two candidates from two imports |
+| **[CE2092](error-catalog.md#ce2092)** | function value type mismatch at a call-through: wrong arity, parameter type, return type or error type |
+| **[CE2093](error-catalog.md#ce2093)** | a **generic** function value that no position type solves |
+| **[CE2002](error-catalog.md#ce2002)** | a function value assigned to a variable or parameter of an incompatible function type (the general assignment-mismatch error) |
+| **[CE3005](error-catalog.md#ce3005)** | a function value of a private function of another unit |
+| **[CE3012](error-catalog.md#ce3012)** | a bare function name with two candidates from two imports |
 
 Extension methods, perk methods and FFI externals cannot be values. A bare name that is not a
-constant, a variable or a top-level function is an undeclared identifier (**CE1001**). You reach
+constant, a variable or a top-level function is an undeclared identifier (**[CE1001](error-catalog.md#ce1001)**). You reach
 an external only through its namespace.
 
 ## Limitations and deferred features

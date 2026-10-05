@@ -40,7 +40,7 @@ fn main() i32:
 ## Semantics
 
 - **Element type** is a single concrete `T` (homogeneous). Reference element types (`peek`/`poke`)
-  are rejected with `CE0114`. A dynamic-array element `...T[]` is allowed: each trailing array
+  are rejected with [`CE0114`](../error-catalog.md#ce0114). A dynamic-array element `...T[]` is allowed: each trailing array
   argument is *moved* (not copied) into the synthesized array-of-arrays, so there is no double-free.
   The callee sees an `i32[][]` for `...i32[]`. Both call forms work: the individual arguments
   (`total(a, b)`) and a bloom of an `i32[][]` variable (`total(rows...)`) — see "Spread /
@@ -62,21 +62,21 @@ fn main() i32:
 
 ## Diagnostics
 
-- `CE5004` — variadic external requires at least one fixed parameter.
-- `CE5005` — non-C-ABI type passed as a variadic argument to an external call.
-- `CE0114` — variadic parameter must be the last parameter; a function may declare at most one;
+- [`CE5004`](../error-catalog.md#ce5004) — variadic external requires at least one fixed parameter.
+- [`CE5005`](../error-catalog.md#ce5005) — non-C-ABI type passed as a variadic argument to an external call.
+- [`CE0114`](../error-catalog.md#ce0114) — variadic parameter must be the last parameter; a function may declare at most one;
   its element type must not be a reference. A dynamic-array element (`...T[]`) is allowed. Also
   rejected in generic functions (use a type pack `...Ts` for a generic variadic, below).
-- `CE0115` — variadic parameter not allowed in a perk method or extension method.
-- `CE0116` — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
+- [`CE0115`](../error-catalog.md#ce0115) — variadic parameter not allowed in a perk method or extension method.
+- [`CE0116`](../error-catalog.md#ce0116) — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
   native variadic collects its trailing args into a runtime `T[]` inside one concrete function, so
-  there is no template to monomorphize at the consumer; analogous to the CE5002 FFI boundary block.
+  there is no template to monomorphize at the consumer; analogous to the [CE5002](../error-catalog.md#ce5002) FFI boundary block.
   This blocks only native `...T` (`is_variadic`); type packs (`...Ts`) ship as templates and are
   exportable (see "Cross-library packs" under the type-pack section below).
-- `CE0120` — a bloom argument `arr...` used somewhere illegal: into a non-variadic parameter, or
+- [`CE0120`](../error-catalog.md#ce0120) — a bloom argument `arr...` used somewhere illegal: into a non-variadic parameter, or
   not as the sole, last trailing argument at the call site.
 - Type mismatch when blooming (a non-array source, or an array of the wrong element type) reuses
-  `CE2006`. Native call arity/type errors otherwise reuse existing `CE2009` / `CE2006`.
+  [`CE2006`](../error-catalog.md#ce2006). Native call arity/type errors otherwise reuse existing [`CE2009`](../error-catalog.md#ce2009) / [`CE2006`](../error-catalog.md#ce2006).
 
 ## Spread / forwarding (bloom)
 
@@ -109,10 +109,10 @@ Semantics:
   literal array) is not supported.
 - **Sole, last trailing argument.** A bloom must be the only trailing argument — it cannot be
   mixed with individual trailing arguments (`sum(1, xs...)` is not a bloom call shape), and it
-  cannot appear anywhere but the variadic slot. Any other placement is `CE0120`.
+  cannot appear anywhere but the variadic slot. Any other placement is [`CE0120`](../error-catalog.md#ce0120).
 - **Type-checked like any other argument.** The element type of the bloomed array must match the
-  variadic's declared element type; a mismatch (or blooming a non-array value) is `CE2006`.
-- **Only into `...T`.** Blooming into a non-variadic parameter is `CE0120` — there is no fixed-arity
+  variadic's declared element type; a mismatch (or blooming a non-array value) is [`CE2006`](../error-catalog.md#ce2006).
+- **Only into `...T`.** Blooming into a non-variadic parameter is [`CE0120`](../error-catalog.md#ce0120) — there is no fixed-arity
   spread.
 
 `...T[]` combined with bloom is an ordinary case: an `i32[][]` variable `rows` blooms into a
@@ -123,9 +123,9 @@ Semantics above).
 ## Deferred (additive)
 
 - **Generic variadics** (`...T` in a generic function).
-- **Variadics in perk / extension methods** (rejected with `CE0115`).
-- **Public `.slib` export** of a native variadic function — blocked with `CE0116` (the
-  `is_variadic` flag is not serialized into the library format yet), analogous to the CE5002 FFI
+- **Variadics in perk / extension methods** (rejected with [`CE0115`](../error-catalog.md#ce0115)).
+- **Public `.slib` export** of a native variadic function — blocked with [`CE0116`](../error-catalog.md#ce0116) (the
+  `is_variadic` flag is not serialized into the library format yet), analogous to the [CE5002](../error-catalog.md#ce5002) FFI
   boundary block.
 - **Pack forwarding** (`f(pack...)`, forwarding a parameter pack into another variadic) and **pack
   indexing** — bloom covers only a single `...T` array source, not `...Ts` packs.
@@ -189,11 +189,11 @@ fn main() i32:
 
 ### Diagnostics
 
-- **CE0117** — type-pack `...Ts` must be the last type parameter; at most one pack per function.
-- **CE0118** — cannot mix a type-pack `...Ts` with a native homogeneous `...T` in the same function.
-- **CE0119** — malformed `expand` statement (wrong syntax, iterator variable, or target).
-- **CE2090** — a pack element type at the call site does not satisfy the pack's perk constraint.
-- **CE0147** — the pack name is a type only in its own `...Ts args` parameter. A parameter
+- **[CE0117](../error-catalog.md#ce0117)** — type-pack `...Ts` must be the last type parameter; at most one pack per function.
+- **[CE0118](../error-catalog.md#ce0118)** — cannot mix a type-pack `...Ts` with a native homogeneous `...T` in the same function.
+- **[CE0119](../error-catalog.md#ce0119)** — malformed `expand` statement (wrong syntax, iterator variable, or target).
+- **[CE2090](../error-catalog.md#ce2090)** — a pack element type at the call site does not satisfy the pack's perk constraint.
+- **[CE0147](../error-catalog.md#ce0147)** — the pack name is a type only in its own `...Ts args` parameter. A parameter
   `Ts x`, a return type, a `let` type, `Ts[]` and `List@(Ts)` are refused where the
   template is written, and the analysis stops before the generic passes.
 
@@ -204,10 +204,10 @@ fn main() i32:
   methods are available). Unconstrained forwarding and pack indexing are deferred.
 - **Cross-library packs**: a public `...Ts` pack ships in a `.slib` as an
   instantiable template (`templates.generic_functions`) and is monomorphized at the consumer's call
-  sites, exactly like a regular cross-library generic. CE0116 still blocks native `...T` export
+  sites, exactly like a regular cross-library generic. [CE0116](../error-catalog.md#ce0116) still blocks native `...T` export
   (a runtime array, not a template).
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
-  pack (CE0115 applies to both native `...T` and type packs `...Ts`).
+  pack ([CE0115](../error-catalog.md#ce0115) applies to both native `...T` and type packs `...Ts`).
 - **No pack forwarding**: a value pack cannot be forwarded into another variadic (`g(pack...)`) —
   bloom (see "Spread / forwarding (bloom)" above) only spreads a single `...T` array, not a
   `...Ts` pack.

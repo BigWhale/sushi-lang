@@ -58,7 +58,7 @@ That mix gives these faults:
 
 - `CE2002: cannot assign Own@(Holder) to Own@(Holder)` — one `Own<Holder>`
   interned as a `Maybe` type argument, one from a bare annotation
-- **CE0126** — the same shape for `Result`: a duplicate monomorphization rather
+- **[CE0126](../error-catalog.md#ce0126)** — the same shape for `Result`: a duplicate monomorphization rather
   than a reused one
 - an internal compiler error, because resolution must deep-walk struct fields *to
   make structural equality agree*, and that walk cycles
@@ -90,21 +90,21 @@ this document's to move (phase 2 qualifies the interned name), and a function's
 per-unit identity is a step toward it, not a substitute for it.
 
 A struct and an enum share one type name, so a struct and an enum of one name are
-`CE0006` in every order. The SOURCE order decides which one is the fault: in one
+[`CE0006`](../error-catalog.md#ce0006) in every order. The SOURCE order decides which one is the fault: in one
 unit the declaration written first holds the name and the later one is refused, with a
 note at the first; across units the order is the unit order, and a dependency comes
 first. The holder keeps its table entry, so its uses give no more errors. This rule is for
 TYPE names across units. In ONE unit every kind shares one set of names, and a type beside
-a function, a constant or a perk of the same name is `CE1005`
+a function, a constant or a perk of the same name is [`CE1005`](../error-catalog.md#ce1005)
 (`unit-namespaces.md` section 8).
 
 ## What this does *not* decide
 
 Whether a recursive type is well-*formed* is a separate question, answered by a
 separate pass. A type that contains itself **by value** has no finite size and is
-rejected with **CE2095** (`semantics/passes/finite_types.py`), the way Rust
+rejected with **[CE2095](../error-catalog.md#ce2095)** (`semantics/passes/finite_types.py`), the way Rust
 reports E0072 and Go reports "invalid recursive type". Unbounded *generic*
-instantiation is a third mechanism again, **CE0122**.
+instantiation is a third mechanism again, **[CE0122](../error-catalog.md#ce0122)**.
 
 Identity, finiteness, and instantiation depth are three different questions. Do
 not merge them.

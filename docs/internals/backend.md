@@ -34,7 +34,7 @@ constants and unit variables, the function declarations, and then the function b
 `main_wrapper.py`, whose `emit_main` emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
 `string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
-code. The Sushi `main` is bare (`CE0106` refuses a channel), so its value IS the exit code.
+code. The Sushi `main` is bare ([`CE0106`](../error-catalog.md#ce0106) refuses a channel), so its value IS the exit code.
 
 ## Type system
 
@@ -127,7 +127,7 @@ value; `check_enum_variant` compares the tag.
 A `Result@(T, E)` and a `Maybe@(T)` are ordinary interned enums. The semantic type of a
 Result or Maybe receiver comes from `infer_generic_enum_type`
 (`backend/expressions/calls/utils.py`), never from a match on the LLVM layout; an
-unknown type is CE0019.
+unknown type is [CE0019](../error-catalog.md#ce0019).
 
 **Function values:** a 4-word fat pointer `{fn_ptr, env_ptr, drop_ptr, clone_ptr}`, all
 `i8*` (`backend/runtime/closures.py`). A value with no captures has a null `env_ptr`,
@@ -169,7 +169,7 @@ builder.sdiv(left, right)   # signed; builder.udiv for unsigned, builder.fdiv fo
 builder.srem(left, right)   # signed; builder.urem for unsigned
 ```
 
-Mixed widths are refused before the backend (CE2510). The backend folds nothing: every
+Mixed widths are refused before the backend ([CE2510](../error-catalog.md#ce2510)). The backend folds nothing: every
 compile-time integer operation is `semantics/const_eval.py`.
 
 **Comparison:**
@@ -206,7 +206,7 @@ builder.ashr(value, count)  # >> on a signed type: fills with the sign bit
 builder.lshr(value, count)  # >> on an unsigned type: fills with zeros
 ```
 
-A shift count the compiler can read must be in the range 0 to width-1 (CE2512). A
+A shift count the compiler can read must be in the range 0 to width-1 ([CE2512](../error-catalog.md#ce2512)). A
 computed count at or past the width has a defined result: 0, or the sign fill for a
 signed `>>`. The emitter tests the count and selects that result; it does not mask the
 count.
@@ -393,7 +393,7 @@ builder.branch(merge_block)
 ```
 
 `emit_match` reads the scrutinee type from the stamp of the `typecheck` pass alone
-(CE0121 when the stamp is missing). An integer match switches on the value itself.
+([CE0121](../error-catalog.md#ce0121) when the stamp is missing). An integer match switches on the value itself.
 
 ## Memory management
 
@@ -401,7 +401,7 @@ builder.branch(merge_block)
 
 `backend/ownership.py` is the one way to give a value to a new owner: `consume`, `bind`
 and `relinquish`. `copy_out` is the one deep-clone entry. A consuming use with no
-decision is a fatal CE0129; there is no fallback. `drops_of(codegen)` gives the set of
+decision is a fatal [CE0129](../error-catalog.md#ce0129); there is no fallback. `drops_of(codegen)` gives the set of
 types that implement `Drop`.
 
 ### Destruction
@@ -512,7 +512,7 @@ registry text of each RExxxx code (`internals/errors/runtime.py`) is the format 
   each pointer exactly once.
 
 `RESERVED_EXTERNS` (`semantics/externs_manifest.py`) holds `malloc`, `free` and `exit`,
-read from the libc table. Each one is the first declaration of its name for `CE5001` (#1099).
+read from the libc table. Each one is the first declaration of its name for [`CE5001`](../error-catalog.md#ce5001) (#1099).
 The compiler's declarations of a libc symbol and a user's declarations of it are
 independent (#1099). Every libc signature that the compiler declares is in one table,
 `LIBC_SIGNATURES` (`sushi_stdlib/src/libc_declarations.py`), and the generators and the

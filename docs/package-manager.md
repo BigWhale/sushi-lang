@@ -107,7 +107,7 @@ The `[dependencies]` section tracks project-local package versions. Nori populat
 
 All paths are relative to the directory containing `nori.toml`, and each one stays at
 or below that directory. `nori build` refuses an absolute path or a path with a `..` step
-(**NE2008**), so an archive never packs a file from outside the package.
+(**[NE2008](error-catalog.md#ne2008)**), so an archive never packs a file from outside the package.
 
 ### Naming Rules
 
@@ -202,7 +202,7 @@ Re-installing a package replaces the existing installation.
 ### Remote Sources
 
 Nori cannot install a package from a remote repository yet. `nori install <name>` with no
-`from <path>` stops with **NE3009** (`remote install from <repository> is not implemented
+`from <path>` stops with **[NE3009](error-catalog.md#ne3009)** (`remote install from <repository> is not implemented
 yet`). Install from a local archive or directory instead.
 
 ## Project Environments
@@ -239,9 +239,9 @@ The same rule applies to every tool:
 - `sushic --lib` reads `[package] version` from the `nori.toml` in the current directory,
   not from one beside the sources. Thus `sushic --lib src/mathlib.sushi -o
   build/mathlib.slib`, run in the package root, reads the root's `nori.toml`. A
-  `nori.toml` that exists must be valid: a file that cannot be read is **CE3518**, and any
-  fault that nori refuses (for example a bad package name, NE1005) is **CE3517**. With no
-  `nori.toml` in the current directory, the build needs `--lib-version` (**CE3505**).
+  `nori.toml` that exists must be valid: a file that cannot be read is **[CE3518](error-catalog.md#ce3518)**, and any
+  fault that nori refuses (for example a bad package name, [NE1005](error-catalog.md#ne1005)) is **[CE3517](error-catalog.md#ce3517)**. With no
+  `nori.toml` in the current directory, the build needs `--lib-version` (**[CE3505](error-catalog.md#ce3505)**).
 
 ### Installing Packages in a Project
 
@@ -391,7 +391,7 @@ nori login
 
 Nori reads the API key from the terminal (or from standard input), never from the command
 line, so the key does not go into the shell history. A key starts with `nori_`; another
-key is **NE5005**. Nori verifies the key with the repository and keeps it in
+key is **[NE5005](error-catalog.md#ne5005)**. Nori verifies the key with the repository and keeps it in
 `~/.sushi/credentials.toml` (mode `0600`), one key for each repository.
 
 ### Checking the Login
@@ -411,8 +411,8 @@ nori publish
 ```
 
 `nori publish` reads `./nori.toml` and uploads `dist/<name>-<version>.nori` with its
-manifest. The archive must exist (run `nori build` first, else **NE2007**), and you must be
-logged in (else **NE5003**).
+manifest. The archive must exist (run `nori build` first, else **[NE2007](error-catalog.md#ne2007)**), and you must be
+logged in (else **[NE5003](error-catalog.md#ne5003)**).
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -420,10 +420,10 @@ logged in (else **NE5003**).
 | `--namespace {stable,testing}` | `stable` | The namespace of the package |
 | `--platform {darwin,linux,windows,any}` | the current operating system (`darwin`, `linux`, else `any`) | The platform of the package |
 
-The repository can refuse a publish: a key that the repository refuses (invalid, expired or revoked) is **NE5004**, a package that another
-user owns is **NE5006**, a version that is already published is **NE5007**, an archive that
-is too large is **NE5008**, and a package that the repository does not accept is
-**NE5009**.
+The repository can refuse a publish: a key that the repository refuses (invalid, expired or revoked) is **[NE5004](error-catalog.md#ne5004)**, a package that another
+user owns is **[NE5006](error-catalog.md#ne5006)**, a version that is already published is **[NE5007](error-catalog.md#ne5007)**, an archive that
+is too large is **[NE5008](error-catalog.md#ne5008)**, and a package that the repository does not accept is
+**[NE5009](error-catalog.md#ne5009)**.
 
 ## Compiler Integration
 
@@ -600,15 +600,15 @@ These global options come before the command:
 A nori error has a code in the **NExxxx** family and names the file that it is about. The
 ranges are: NE00xx internal, NE10xx the manifest, NE20xx the archive, NE30xx the installed
 packages, NE40xx the operating system, NE50xx the package repository. The text of each code
-is in `sushi_lang/internals/errors/nori.py`.
+is in the [Error Catalog](error-catalog.md#nexxxx).
 
 nori exits 0 on success, 1 for a user fault (an NExxxx error), and 2 for an internal error
-(**NE0000**).
+(**[NE0000](error-catalog.md#ne0000)**).
 
 ## Limitations
 
 1. **No build step**: Nori does not compile Sushi source. Use `sushic` to compile first.
-2. **Local sources only**: `nori install` cannot install from a remote repository (NE3009). Use `nori search` to find packages, then install from local archives.
+2. **Local sources only**: `nori install` cannot install from a remote repository ([NE3009](error-catalog.md#ne3009)). Use `nori search` to find packages, then install from local archives.
 3. **No version constraint syntax**: `[dependencies]` records exact versions only; range specifiers (`^1.0`, `>=0.2`) are not supported.
 4. **Platform-specific binary libraries**: a `binary` or `hybrid` `.slib` is bound to the platform that built it. The default `source` kind is portable.
 5. **No transitive dependency resolution**: If package A depends on package B, you must install both explicitly.

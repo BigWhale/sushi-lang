@@ -93,7 +93,7 @@ model; the short version:
 A `string` **moves** by value like every other type that owns heap (`T[]`, `List@(T)`,
 `Own@(T)`, `HashMap@(K, V)`, a capturing closure). Passing a `string` local to a `nom` parameter,
 rebinding it, or putting it in a constructor field moves it — reusing the source afterward is
-**CE2405**. The one exception: a `string` bound directly from a string literal (`let string s =
+**[CE2405](../error-catalog.md#ce2405)**. The one exception: a `string` bound directly from a string literal (`let string s =
 "hi"`) owns nothing (it points into `.rodata` with `owned = 0`), so *that binding* classifies as
 owning no heap and behaves like a copy — both the original and any number of downstream bindings of
 it stay usable, because nothing was ever transferred. This exception is tracked per-**binding**, not
@@ -153,7 +153,7 @@ array's capacity is dropped: a string frees `data` and nothing reads past `size`
 A string made this way has no NUL after its last byte, and that is correct for the
 representation: every string operation reads `size`, and a C boundary copies through
 `emit_to_cstr`, which writes its own NUL. `u8[].to_string()` still copies and still
-writes a NUL, which nothing needs. `s[i] := v` is refused (`CE2113`): a literal's `data`
+writes a NUL, which nothing needs. `s[i] := v` is refused ([`CE2113`](../error-catalog.md#ce2113)): a literal's `data`
 is in `.rodata`, and a string is immutable in every other position too.
 
 ## Update (2026-10-02): `s := s.concat(x)` appends in place

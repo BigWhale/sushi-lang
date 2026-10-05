@@ -121,7 +121,7 @@ supported — build on the target OS.
 `dist/*.bc` files are prebuilt artifacts, not regenerated per compile. The compiler
 does not blindly trust them. Before it links a stdlib unit, `sushi_lang/compiler/pipeline.py`
 calls its one entry point, `build_stdlib()`, which calls `ensure_stdlib_built()`
-(`backend/stdlib_builder.py`). A failure of a generator is **CE0007**.
+(`backend/stdlib_builder.py`). A failure of a generator is **[CE0007](../error-catalog.md#ce0007)**.
 `ensure_stdlib_built()`:
 
 1. Detects the current platform.
@@ -170,7 +170,7 @@ drop out of the digest.
 `cli.py` handles this before any source file is required: it calls
 `pipeline.build_stdlib(rebuild=True)`, which calls `build_all(detect_platform())` (the
 *loud*, non-quiet path — full per-unit progress output), unconditionally, and bypasses
-the fingerprint check. A `StdlibBuildError` (`CE0007`) wraps any exception from the
+the fingerprint check. A `StdlibBuildError` ([`CE0007`](../error-catalog.md#ce0007)) wraps any exception from the
 build. If no source file is given, the compiler exits 0 after the
 build; if one is given, compilation proceeds normally afterward (using the bitcode
 just rebuilt).
@@ -201,7 +201,7 @@ module name to a file for each host key (`darwin_arm64`, `linux_x86_64`), and `p
 `SOURCE_STDLIB_MODULES` holds the host's file under the module name, so every other
 reader (the injector, the namespaces pass, the doc-block gate and the dead-code gate)
 sees an ordinary source module. On a host with no file the name stays known, and the
-injector refuses the import with `CE3021`.
+injector refuses the import with [`CE3021`](../error-catalog.md#ce3021).
 
 This is the whole of the platform selection for Sushi source. There is no conditional
 compilation: a platform file holds `public const` declarations only, and a module that

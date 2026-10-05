@@ -77,7 +77,7 @@ if (list.is_empty()):
 Get element at index (bounds-checked). The list keeps the element — `.get()` does not remove
 it. The value in the `Some` is a BORROW of the element, not a copy. If `T` is an owning
 type (e.g. `string`, a struct/enum holding heap data), you can read the value, but you
-cannot consume it (CE2411), and `match nom` on it is refused (CE2432). Take an independent
+cannot consume it ([CE2411](../../error-catalog.md#ce2411)), and `match nom` on it is refused ([CE2432](../../error-catalog.md#ce2432)). Take an independent
 value with `.clone()`:
 
 ```sushi
@@ -263,7 +263,7 @@ list.destroy()
 
 A `List@(T)` goes into an interpolation hole and into `print` / `println` when its element
 has a string form, in the form an array prints: `[1, 2, 3]`, a string element in quotes,
-and `[]` when it is empty. An element with no string form is CE2035 in a hole and CE2115 in
+and `[]` when it is empty. An element with no string form is [CE2035](../../error-catalog.md#ce2035) in a hole and [CE2115](../../error-catalog.md#ce2115) in
 `println`.
 
 ```sushi

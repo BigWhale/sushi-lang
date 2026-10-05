@@ -53,9 +53,9 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--lib-info FILE`   | Print the metadata report of a `.slib` file        |
 | `--docs`            | With `--lib-info`: print each symbol's documentation block |
 | `--color WHEN`      | `always`, `never` or `auto` (the default)          |
-| `--ignore-compiler-version` | Load libraries this compiler does not satisfy (CE3503) |
-| `--warn-missing-docs` | Warn about anything with no documentation block (CW7002-CW7006) |
-| `--warn-unused`     | Warn about a dead private declaration (CW1004) and an unused import (CW3006) |
+| `--ignore-compiler-version` | Load libraries this compiler does not satisfy ([CE3503](error-catalog.md#ce3503)) |
+| `--warn-missing-docs` | Warn about anything with no documentation block ([CW7002](error-catalog.md#cw7002)-[CW7006](error-catalog.md#cw7006)) |
+| `--warn-unused`     | Warn about a dead private declaration ([CW1004](error-catalog.md#cw1004)) and an unused import ([CW3006](error-catalog.md#cw3006)) |
 | `--traceback`       | Show full Python traceback on errors               |
 | `--dump-parse`      | Print the raw Lark parse tree                      |
 | `--dump-ast`        | Print abstract syntax tree                         |
@@ -102,14 +102,14 @@ main.sushi:3:1: warning [CW3006]: '<time>' brings nothing this unit names.
 main.sushi:7:4: warning [CW1004]: private function 'helper' is never used in this unit.
 ```
 
-**CW1004** is a private top-level declaration that nothing in its unit reaches. A private
+**[CW1004](error-catalog.md#cw1004)** is a private top-level declaration that nothing in its unit reaches. A private
 name is visible only in its own unit, so the lint checks each unit alone. The roots are
 every `public` declaration, every `extend` block (an extension method and a perk
 implementation), the `unsafe external` blocks, and `fn main()`. A private declaration that
 only another dead declaration names is also dead, so the lint reports both. A public
 declaration is API, and the lint never reports it.
 
-**CW3006** is a `use` line whose unit names nothing that the import brings. The import
+**[CW3006](error-catalog.md#cw3006)** is a `use` line whose unit names nothing that the import brings. The import
 brings the names it declares or re-exports, the member names behind its alias, the
 extension and perk methods of the imported unit, and for `<collections/strings>` the
 string methods that the module enables. A `public use` re-exports to the importers of the
@@ -138,11 +138,11 @@ instead, which binds the library to the platform that built it, and `--lib-kind 
 ships both.
 
 Every library states its own version. `--lib-version` supplies it, unless the `nori.toml`
-in the current directory does; neither is **CE3505**, and a `nori.toml` there that cannot be
-read (**CE3518**) or is not valid (**CE3517**) stops the build. A build also stamps `requires_compiler` --
+in the current directory does; neither is **[CE3505](error-catalog.md#ce3505)**, and a `nori.toml` there that cannot be
+read (**[CE3518](error-catalog.md#ce3518)**) or is not valid (**[CE3517](error-catalog.md#ce3517)**) stops the build. A build also stamps `requires_compiler` --
 `~<major>.<minor>` of the building compiler -- because a source library is compiled by the
 consumer's compiler and a later one may reject it. A consumer outside that range is
-**CE3503**, and `--ignore-compiler-version` overrides the check for the whole build.
+**[CE3503](error-catalog.md#ce3503)**, and `--ignore-compiler-version` overrides the check for the whole build.
 
 The plain report is the API surface: one line per symbol, plus a parameter's `nom` mode
 beside its type, which is the one mode a type cannot spell for itself. A perk prints with
@@ -275,7 +275,7 @@ Success! Wrote native binary: main
 - Single-file programs skip incremental compilation entirely
 - `--dump-ll` forces the monolithic (non-incremental) path
 - `--write-ll` and `--keep-object` have no effect in incremental mode: the compiler
-  gives the warning CW0003 and the build goes on. Add `--no-incremental` to get the
+  gives the warning [CW0003](error-catalog.md#cw0003) and the build goes on. Add `--no-incremental` to get the
   `.ll` file or the object file
 - The cache directory (`__sushi_cache__/`) is already in `.gitignore`
 
@@ -550,30 +550,29 @@ Sushi uses structured error codes for diagnosing issues.
 - **CWxxxx**: Warnings
 - **RExxxx**: Runtime errors
 
-The text, the reason and the escape of each code are in `sushi_lang/internals/errors/`, one
-module for each family.
+The text, the reason and the escape of each code are in the [Error Catalog](error-catalog.md).
 
 ### Driver Diagnostics
 
 The driver reads the command line and the source files before the analysis starts.
-It checks the output path (CE3019, CE3020, CE3500) in one place, after the analysis and
+It checks the output path ([CE3019](error-catalog.md#ce3019), [CE3020](error-catalog.md#ce3020), [CE3500](error-catalog.md#ce3500)) in one place, after the analysis and
 before code generation. It gives these diagnostics:
 
 | Code | Text | Cause |
 |------|------|-------|
-| CE3017 | `cannot read '<path>': <reason>` | The main source or an imported unit cannot be read: the path is a directory, the file cannot be opened, or the text is not valid UTF-8 (the reason names the first bad byte and its line) |
-| CE3018 | `no source file to compile` | The command line names no `.sushi` file, and the run is not `--build-stdlib` or `--clean-cache` alone |
-| CE3019 | `cannot write '<path>': '<directory>' is not a directory` | The `-o` path is in a directory that does not exist. The compiler does not create it |
-| CE3020 | `cannot write '<path>': <reason>` | The compiler cannot write a file that the command line asks for: the `-o` path is a directory or is in a directory that you cannot write, or a write of the object file, the `.slib` or the `--cache-dir` cache fails. The reason is the operating system's |
-| CE3500 | `library output path must have .slib extension: '<path>'` | A `--lib` build names an `-o` path with no `.slib` extension |
-| CW0002 | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
-| CW0003 | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, or `--write-ll` / `--keep-object` on the incremental build |
+| [CE3017](error-catalog.md#ce3017) | `cannot read '<path>': <reason>` | The main source or an imported unit cannot be read: the path is a directory, the file cannot be opened, or the text is not valid UTF-8 (the reason names the first bad byte and its line) |
+| [CE3018](error-catalog.md#ce3018) | `no source file to compile` | The command line names no `.sushi` file, and the run is not `--build-stdlib` or `--clean-cache` alone |
+| [CE3019](error-catalog.md#ce3019) | `cannot write '<path>': '<directory>' is not a directory` | The `-o` path is in a directory that does not exist. The compiler does not create it |
+| [CE3020](error-catalog.md#ce3020) | `cannot write '<path>': <reason>` | The compiler cannot write a file that the command line asks for: the `-o` path is a directory or is in a directory that you cannot write, or a write of the object file, the `.slib` or the `--cache-dir` cache fails. The reason is the operating system's |
+| [CE3500](error-catalog.md#ce3500) | `library output path must have .slib extension: '<path>'` | A `--lib` build names an `-o` path with no `.slib` extension |
+| [CW0002](error-catalog.md#cw0002) | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
+| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, or `--write-ll` / `--keep-object` on the incremental build |
 
 A warning makes the compiler exit 1; an error makes it exit 2.
 
 ### Common Errors
 
-#### CE1001: Undeclared Identifier
+#### [CE1001](error-catalog.md#ce1001): Undeclared Identifier
 
 <!-- docs-sweep: error CE1001 -->
 ```sushi
@@ -585,7 +584,7 @@ fn main() i32:
 
 **Fix:** Declare variable with `let` before use.
 
-#### CE1002: Rebind to Undeclared Variable
+#### [CE1002](error-catalog.md#ce1002): Rebind to Undeclared Variable
 
 <!-- docs-sweep: error CE1002 -->
 ```sushi
@@ -598,7 +597,7 @@ fn main() i32:
 
 **Fix:** Declare with `let` first (`let i32 count = 0`) before rebinding with `:=`.
 
-#### CE2406: Use of Destroyed Variable
+#### [CE2406](error-catalog.md#ce2406): Use of Destroyed Variable
 
 <!-- docs-sweep: error CE2406 -->
 ```sushi
@@ -619,9 +618,9 @@ retired.)
 **Fix:** Don't use a variable after `.destroy()`, or use `.free()` instead. After
 `.free()` the array is empty (its length is 0) and you can use it again.
 
-#### CE2009: Wrong Argument Count
+#### [CE2009](error-catalog.md#ce2009): Wrong Argument Count
 
-A built-in method takes a fixed number of arguments, and a miscount is CE2009, as on
+A built-in method takes a fixed number of arguments, and a miscount is [CE2009](error-catalog.md#ce2009), as on
 every other callee. `.realise()` is one example.
 
 <!-- docs-sweep: error CE2009 -->
@@ -640,7 +639,7 @@ fn main() i32:
 
 **Fix:** Provide default value: `r.realise(0)`.
 
-#### CE2503: .realise() Type Mismatch
+#### [CE2503](error-catalog.md#ce2503): .realise() Type Mismatch
 
 <!-- docs-sweep: error CE2503 -->
 ```sushi
@@ -658,7 +657,7 @@ fn main() i32:
 
 **Fix:** Use correct type: `r.realise(0)`.
 
-#### CE2505: Assigning Result Without Handling
+#### [CE2505](error-catalog.md#ce2505): Assigning Result Without Handling
 
 Assigning a `Result`-returning call directly to a non-`Result` variable is refused, and
 the code names the fix:
@@ -677,7 +676,7 @@ fn main() i32:
 
 **Fix:** Use `.realise()`: `let i32 x = get_value().realise(0)`.
 
-#### CE2507: Using ?? on an Operand That Is Not a Result
+#### [CE2507](error-catalog.md#ce2507): Using ?? on an Operand That Is Not a Result
 
 <!-- docs-sweep: error CE2507 -->
 ```sushi
@@ -699,12 +698,12 @@ fn main() i32:
 no error value: write one with `m.or_err(nom e)??`. A user enum with `Ok`/`Err` variants is
 not a `Result`, because `??` reads the type and not the names of its variants.
 
-#### CE0131: Using ?? in a Bare Body
+#### [CE0131](error-catalog.md#ce0131): Using ?? in a Bare Body
 
 A callable has an error channel only when its signature writes `| E`, or returns an
 explicit `Result@(T, E)`. A BARE body (a function, an extension or perk method, or a lambda
 with no `| E`) returns its value directly. It has no error channel, so `??` cannot
-propagate an error out of it. `main` is bare, so a `??` in `main` is CE0131 too:
+propagate an error out of it. `main` is bare, so a `??` in `main` is [CE0131](error-catalog.md#ce0131) too:
 
 <!-- docs-sweep: error CE0131 -->
 ```sushi
@@ -724,8 +723,8 @@ fn main() i32:
 **Fix:** Handle the Result in the body with `match` or `.realise(default)`, or give the
 callable an error channel with `| E`. Then `??` is legal in the body, the call yields
 `Result@(T, E)`, and the body spells its success with `return Result.Ok(...)` (a bare
-`return value` in a channel body is CE2030). In `main`, handle the Result and return an
-exit code, because `main` cannot have a channel (CE0106):
+`return value` in a channel body is [CE2030](error-catalog.md#ce2030)). In `main`, handle the Result and return an
+exit code, because `main` cannot have a channel ([CE0106](error-catalog.md#ce0106)):
 
 ```sushi
 fn might_fail() i32 | StdError:
@@ -740,7 +739,7 @@ fn main() i32:
     return 0
 ```
 
-#### CE2091: Result Constructor in a Bare Body
+#### [CE2091](error-catalog.md#ce2091): Result Constructor in a Bare Body
 
 A bare body (a function, a lambda, or an extension or perk method with no `| E`) returns
 the value itself. `return Result.Ok(...)` and `return Result.Err(...)` are refused there:
@@ -758,7 +757,7 @@ fn main() i32:
 **Fix:** Write `return x * 2`. If the function can fail, write `| E` in its signature, and
 then both constructors are legal.
 
-#### CE0106: main() Must Return a Bare Integer
+#### [CE0106](error-catalog.md#ce0106): main() Must Return a Bare Integer
 
 `main` returns the exit code of the program. It returns a bare integer type and has no
 error channel. A `| E` on `main`, or a `Result@(T, E)` return, is refused:
@@ -773,7 +772,7 @@ fn main() i32 | StdError:
 **Fix:** Write `fn main() i32:` and `return 0`. Handle each failure in the body with
 `match` or `.realise(default)`, and return a code for it.
 
-#### CE3007: No main() Function
+#### [CE3007](error-catalog.md#ce3007): No main() Function
 
 ```sushi
 # ERROR CE3007: no main() function: an executable needs an entry point
@@ -782,9 +781,9 @@ fn helper(i32 a) i32:
 ```
 
 **Fix:** Add `fn main() i32:`, or compile the unit as a library with `--lib`. A library must
-not carry a `main()` -- that is the mirror error, `CE3501`.
+not carry a `main()` -- that is the mirror error, [`CE3501`](error-catalog.md#ce3501).
 
-#### CE3008: Linking Failed
+#### [CE3008](error-catalog.md#ce3008): Linking Failed
 
 Reported when the C compiler used as the linker exits non-zero -- most often an
 `unsafe external` declaration naming a symbol that no linked library provides. The linker's
@@ -795,7 +794,7 @@ library it lives in was not linked.
 
 ### Constant Expression Errors
 
-#### CE0108: Expression Not Compile-Time Constant
+#### [CE0108](error-catalog.md#ce0108): Expression Not Compile-Time Constant
 
 ```sushi
 fn get_value() i32:
@@ -807,7 +806,7 @@ const i32 X = get_value()
 
 **Fix:** Only use compile-time evaluable expressions (literals, arithmetic, bitwise, etc.).
 
-#### CE0109: Circular Constant Dependency
+#### [CE0109](error-catalog.md#ce0109): Circular Constant Dependency
 
 ```sushi
 # ERROR CE0109: circular constant dependency detected: B -> A -> B
@@ -817,7 +816,7 @@ const i32 B = A + 1
 
 **Fix:** Remove circular dependencies between constants.
 
-#### CE0110: Unsupported Operation in Constant
+#### [CE0110](error-catalog.md#ce0110): Unsupported Operation in Constant
 
 ```sushi
 # ERROR CE0110: unsupported operation 'bitwise & on non-integer type' in constant expression
@@ -826,7 +825,7 @@ const f64 INVALID = 3.14 & 2.0  # Bitwise AND on float
 
 **Fix:** Use only supported operations for the type (bitwise only on integers).
 
-#### CE0111: Invalid Type Cast in Constant
+#### [CE0111](error-catalog.md#ce0111): Invalid Type Cast in Constant
 
 ```sushi
 # ERROR CE0111: invalid type cast in constant expression from string to i32
@@ -835,7 +834,7 @@ const i32 INVALID = "hello" as i32
 
 **Fix:** Only cast between compatible numeric types.
 
-#### CE0112: Division by Zero
+#### [CE0112](error-catalog.md#ce0112): Division by Zero
 
 The compiler reads the divisor and it is zero. One compile-time arithmetic answers a
 constant and a body alike, so both spellings below are refused. A divisor the compiler
@@ -855,7 +854,7 @@ let i32 x = 100 / 0
 
 ### Warnings
 
-#### CW2001: Unused Result Value
+#### [CW2001](error-catalog.md#cw2001): Unused Result Value
 
 ```sushi
 fn get_value() i32 | StdError:
@@ -876,7 +875,7 @@ let i32 x = get_value().realise(0)  # Use immediately
 
 ### Runtime Errors
 
-#### RE2020: Array Bounds Check Failed
+#### [RE2020](error-catalog.md#re2020): Array Bounds Check Failed
 
 ```sushi
 fn main() i32:
@@ -897,7 +896,7 @@ access. (Use `arr.get(i)`, which returns `Maybe@(i32)`, for safe access instead.
 Runtime Error RE2020: array index 10 out of bounds for array of size 3
 ```
 
-#### RE2021: Memory Allocation Failed
+#### [RE2021](error-catalog.md#re2021): Memory Allocation Failed
 
 ```
 Runtime Error RE2021: memory allocation failed

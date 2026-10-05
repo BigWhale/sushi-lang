@@ -63,7 +63,7 @@ of values is a **range**. Ranges come in two flavours:
 
 If `start` is greater than `end`, the range counts **down** automatically. The two bounds
 of a range are `i32` values. A bound of a different type, such as a `u8` variable, is an
-error (`CE2121`); convert it with `as i32`. You can also
+error ([`CE2121`](../error-catalog.md#ce2121)); convert it with `as i32`. You can also
 `foreach` over an array by calling `.iter()` on it:
 
 ```sushi
@@ -172,10 +172,10 @@ Numbers 1..10, skipping 5, stopping at 8:
 ```
 
 `5` is missing because `continue` skipped its `println`, and the loop halts before `8`
-because `break` fired. Using one of these outside a loop is a compile error (`CE1003`).
+because `break` fired. Using one of these outside a loop is a compile error ([`CE1003`](../error-catalog.md#ce1003)).
 
 A statement after a `break` or a `continue` in the same block can never run, so the
-compiler refuses it with `CE0140` ("unreachable statement"). The same rule applies after a
+compiler refuses it with [`CE0140`](../error-catalog.md#ce0140) ("unreachable statement"). The same rule applies after a
 `return`.
 
 ## What you learned
@@ -191,7 +191,7 @@ compiler refuses it with `CE0140` ("unreachable statement"). The same rule appli
 - A fallible iterator puts the failure in its item (`Maybe@(Result@(T, E))`), and `??` on
   the binder is the short form for leaving on the first one.
 - `break` leaves a loop early; `continue` jumps to the next iteration. A statement after
-  either one in the same block is an error (`CE0140`).
+  either one in the same block is an error ([`CE0140`](../error-catalog.md#ce0140)).
 
 We've been calling `println` and `from` without thinking about it. Time to write our own
 functions. On to [Functions](04-functions.md).

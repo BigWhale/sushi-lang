@@ -79,14 +79,14 @@ It takes one flag, and that flag is the whole of the read/write split:
 | local `Name` | its alloca | the same |
 | `peek` / `poke` parameter | the pointer it arrived as | the same |
 | field or element chain | a GEP | the same |
-| constant `Name` | **none. CE0132** | its global |
-| temporary | **none. CE0132** | a `park_value` spill |
+| constant `Name` | **none. [CE0132](../error-catalog.md#ce0132)** | its global |
+| temporary | **none. [CE0132](../error-catalog.md#ce0132)** | a `park_value` spill |
 
 **A read may spill a value that names no storage. A write may not, and there is no fallback.**
 That is what keeps a store out of `.rodata` -- a constant resolves for a read and to nothing
-for a write, so no such binary can be built even if CE2096 were bypassed. The other unwritable
-receivers have their own diagnostics (CE2408, CE2414, CE2421, CE2422, CE2426, CE2429), so
-reaching CE0132 means one of them did not fire. Same treatment `backend/ownership.py` gives a
+for a write, so no such binary can be built even if [CE2096](../error-catalog.md#ce2096) were bypassed. The other unwritable
+receivers have their own diagnostics ([CE2408](../error-catalog.md#ce2408), [CE2414](../error-catalog.md#ce2414), [CE2421](../error-catalog.md#ce2421), [CE2422](../error-catalog.md#ce2422), [CE2426](../error-catalog.md#ce2426), [CE2429](../error-catalog.md#ce2429)), so
+reaching [CE0132](../error-catalog.md#ce0132) means one of them did not fire. Same treatment `backend/ownership.py` gives a
 consuming use with no decision.
 
 ## A run-time length, and the cursor
@@ -127,15 +127,15 @@ trip count, and an unreadable one walks with `first`, `step` and `count` compute
 
 An empty array is `{0, 0, null}`. `emit_empty_dynamic_array` (`backend/types/arrays/utils.py`)
 is the one builder of it, and `new()` and `from([])` are the same array. A literal cannot
-count zero elements with a count that the compiler can read: `from([0; 0])` is CE2017.
+count zero elements with a count that the compiler can read: `from([0; 0])` is [CE2017](../error-catalog.md#ce2017).
 
 `new()` names no element type. It takes one from the position it stands in: the typecheck pass
 stamps `DynamicArrayNew.resolved_type` in `propagate_types_to_value`, beside the arm that gives
 an array literal's elements their declared type. Every value position funnels there -- a call
 argument, an enum payload, a struct field, a rebind, and a `.realise()` default -- so the
 emitter always has a type to build from. An empty `from([])` or `new()` in a position that
-gives no type (a receiver, an index base, a `println` argument) is the user error CE2111. A
-missing stamp in a position that gives a type is a compiler fault, CE0042, and never a guess.
+gives no type (a receiver, an index base, a `println` argument) is the user error [CE2111](../error-catalog.md#ce2111). A
+missing stamp in a position that gives a type is a compiler fault, [CE0042](../error-catalog.md#ce0042), and never a guess.
 
 The `let` route is separate and stays so: `declare_dynamic_array` writes `{0, 0, null}` into
 the slot it allocates, so `let i32[] e = new()` has nothing left to do and stores nothing.
@@ -215,10 +215,10 @@ way, and the arguments reach it RAW -- the start is clamped FIRST, which is what
 unsigned predicate, so a negative count would read as four billion, and the clamp removes
 that rather than leaving a guard to fire.
 
-Clamping is deliberately unlike `arr[i]`, which traps RE2020. An index names ONE element and
+Clamping is deliberately unlike `arr[i]`, which traps [RE2020](../error-catalog.md#re2020). An index names ONE element and
 either has it or does not; a range asks for what overlaps, and can always answer.
 
-**The source may not alias the destination** (CE2430). Growing the destination may
+**The source may not alias the destination** ([CE2430](../error-catalog.md#ce2430)). Growing the destination may
 reallocate its buffer, which leaves the source pointer dangling mid-copy. A copy that must
 read what it is writing is a different operation: a DEFLATE back-reference expands a run by
 reading bytes the same loop just wrote, and it stays a per-element loop.
@@ -241,5 +241,5 @@ library manifest carries.
 
 One reader, not one per container: a hand-rolled reader that parses the interned name
 misses a case (an array element, `List@(T[])` or `HashMap@(K, V[])`), the element resolves to
-`None`, the typecheck pass stamps nothing on the `??`, and the backend reports **CE0124**.
+`None`, the typecheck pass stamps nothing on the `??`, and the backend reports **[CE0124](../error-catalog.md#ce0124)**.
 A hole in one reader is then a hole in one place.

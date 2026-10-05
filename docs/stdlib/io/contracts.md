@@ -51,7 +51,7 @@ public perk Seek:
 A buffered read MOVES its cursor, and a buffered write fills a buffer, so a
 `BufReader@(R)` or a `BufWriter@(W)` can only implement the contract if the contract's
 receiver is writable. A perk implementation must match its contract's receiver exactly
-(**CE4004**), so the mode is on the contract and on every implementation alike: `File`
+(**[CE4004](../../error-catalog.md#ce4004)**), so the mode is on the contract and on every implementation alike: `File`
 and `TcpStream` take `poke self` too, though a descriptor's position lives in the kernel
 and the mode costs them nothing.
 
@@ -59,7 +59,7 @@ Two things follow for a caller:
 
 - **A generic over a contract takes its handle `poke`**: `fn emit@(W: Writer)(poke W dst,
   ...)`, called as `emit(poke stdout, ...)`, `emit(poke f, ...)`. A generic written
-  `(W dst)` is a borrow, and a write through it is **CE2422**.
+  `(W dst)` is a borrow, and a write through it is **[CE2422](../../error-catalog.md#ce2422)**.
 - **A handle you write through must be writable storage**: a `let` local, a `poke`
   parameter, a `nom` or `poke` match binding (`Result.Ok(nom f) -> f.write(...)`), or a
   unit variable. The console handles are `public var File` declarations in `<io/fs>`,
@@ -196,6 +196,6 @@ fn main() i32:
 - A perk has no default implementations, so a convenience above these methods is a free
   generic function rather than a provided method -- `read_all` is the one this module
   ships.
-- A perk cannot carry a type parameter (CE4010), so there is no `Reader@(T)`.
-- A perk method beside a concrete method of the same name on one type is CE4007. Each name
+- A perk cannot carry a type parameter ([CE4010](../../error-catalog.md#ce4010)), so there is no `Reader@(T)`.
+- A perk method beside a concrete method of the same name on one type is [CE4007](../../error-catalog.md#ce4007). Each name
   has exactly one home.

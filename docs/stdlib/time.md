@@ -26,7 +26,7 @@ The sleep functions have the `StdError` error channel. They return `Result@(i32,
 
 A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
 examples use `match` or `.realise(...)` in `main`. `main` is bare, so `??` in `main` is
-CE0131.
+[CE0131](../error-catalog.md#ce0131).
 
 ## Functions
 

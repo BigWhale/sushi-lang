@@ -76,27 +76,27 @@ fn main() i32:
 ```
 
 - The argument is `nom`, because the value moves into the `Err`. Write the marker at the
-  call: `or_err(nom LookupError.Missing)`. A call without it is CE2427.
-- `E` is solved from the argument, and it must be an error type (CE2084).
+  call: `or_err(nom LookupError.Missing)`. A call without it is [CE2427](../error-catalog.md#ce2427).
+- `E` is solved from the argument, and it must be an error type ([CE2084](../error-catalog.md#ce2084)).
 - The receiver is `nom self`, because the `Some` payload moves into the `Ok`. A named
   `Maybe` that owns something (a `Maybe@(string)`) is spent by the call, and a later use is
-  CE2435. A `Maybe` that owns nothing (a `Maybe@(i32)`) is copied and stays usable.
+  [CE2435](../error-catalog.md#ce2435). A `Maybe` that owns nothing (a `Maybe@(i32)`) is copied and stays usable.
 - A BORROWED `Maybe` is read through, as `??` reads a borrowed `Result`: a get-out
   (`xs.get(0)`, also from a temporary owner), a parameter or a pattern binding. Under
   `??` the value then binds a borrow, as the get-out does, and a consuming use of it is
-  CE2411. No clone is needed.
-- **The read-through rule (CE2522).** When the borrowed `Maybe` owns its payload (a
+  [CE2411](../error-catalog.md#ce2411). No clone is needed.
+- **The read-through rule ([CE2522](../error-catalog.md#ce2522)).** When the borrowed `Maybe` owns its payload (a
   `string`, an array, a handle), its `Result` holds a borrowed `Ok` and an owned `Err`.
   Only `??` takes the two apart, so the call is legal only as the operand of `??`. In a
   `let`, a method call such as `.is_ok()`, a `match`, an argument or a `return`, it is
-  CE2522. The help names both forms: put the call under `??`, or take an owned copy first
+  [CE2522](../error-catalog.md#ce2522). The help names both forms: put the call under `??`, or take an owned copy first
   with `xs.get(0).clone().or_err(nom e)`.
-- Exactly one argument (CE2009).
+- Exactly one argument ([CE2009](../error-catalog.md#ce2009)).
 
 ## Error Propagation
 
 `??` takes a `Result@(T, E)` and nothing else. A `Maybe` holds no error value: a `None`
-says that a value is absent, and not why. So `??` on a `Maybe` is CE2507, and the program
+says that a value is absent, and not why. So `??` on a `Maybe` is [CE2507](../error-catalog.md#ce2507), and the program
 writes the error value with `or_err`:
 
 ```sushi

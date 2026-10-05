@@ -81,7 +81,7 @@ Tree.Empty() needs its declared type
 
 `Maybe.Some(42)` is a `Maybe@(i32)`, because its payload is an `i32`. `Tree.Empty()` has no
 payload, so a `let`, a parameter, a field or a `return` must give its type. When no
-position gives it, for example in `match Tree.Empty():`, the compiler stops with CE2112
+position gives it, for example in `match Tree.Empty():`, the compiler stops with [CE2112](../error-catalog.md#ce2112)
 ("nothing gives 'T'").
 
 A generic struct works the same way: `Pair(1, "one")` is a `Pair@(i32, string)`, because
@@ -203,15 +203,15 @@ empty_list@(string) now holds 1 name
 
 `identity@(i32)(nom 5)` writes the type argument that inference would find. `empty_list`
 has no parameters, so only the explicit form can tell `T`. The `let List@(string)`
-declaration does not tell it: a call without type arguments is CE2060 ("cannot infer type
+declaration does not tell it: a call without type arguments is [CE2060](../error-catalog.md#ce2060) ("cannot infer type
 arguments").
 
 Two rules apply to explicit type arguments:
 
 - **All or nothing.** Write each type argument, or none. `pair@(i32)(1, 2)` for a
-  `pair@(T, U)` is CE2062 ("expects 2 type argument(s), got 1").
+  `pair@(T, U)` is [CE2062](../error-catalog.md#ce2062) ("expects 2 type argument(s), got 1").
 - **Only on a direct call of a named function.** A method call has no `@(...)` slot:
-  `b.get@(i32)()` is CE6102. A method gets its types from inference only.
+  `b.get@(i32)()` is [CE6102](../error-catalog.md#ce6102). A method gets its types from inference only.
 
 ## Constraints
 
@@ -240,7 +240,7 @@ key towel: always know where it is
 
 The compiler checks the constraint where you write the concrete type. For a function, this
 is the call site. For a struct or an enum, it is the written type: `let Holder@(i32) h`
-for a `struct Holder@(T: Show)` is CE4006 ("type i32 does not implement perk Show required
+for a `struct Holder@(T: Show)` is [CE4006](../error-catalog.md#ce4006) ("type i32 does not implement perk Show required
 by constraint") when `i32` does not implement `Show`.
 
 ## Methods on generic types
@@ -271,9 +271,9 @@ a box of the text 'Mostly Harmless'
 Two rules keep this clear:
 
 - A method name on one type is a template (`extend Box@(T)`) or a set of concrete versions
-  (`extend Box@(i32)`), never both. The two together are CE0101.
+  (`extend Box@(i32)`), never both. The two together are [CE0101](../error-catalog.md#ce0101).
 - A target is fully generic or fully concrete. `extend Pair@(i32, B)` mixes the two, and it
-  is CE2098.
+  is [CE2098](../error-catalog.md#ce2098).
 
 An extension can also target a built-in generic type, for example `extend List@(T)`.
 
@@ -302,7 +302,7 @@ first 3, 0 more
   declaration `Pair@(i32, string)` gives `B = string`.
 
 When no argument and no position gives a type parameter, for example
-`println(Cage.empty_of().item)`, the compiler stops with CE2060 ("no argument names 'T',
+`println(Cage.empty_of().item)`, the compiler stops with [CE2060](../error-catalog.md#ce2060) ("no argument names 'T',
 and this position declares no type").
 
 ## A generic stack
@@ -337,7 +337,7 @@ receiver, and `U` comes from the function argument. The call
 
 A method call has no `@(...)` slot, so the compiler must infer `U`. The lambda must write
 the types of its parameters: `|string s| ...`. A lambda with a bare parameter, `|s| ...`,
-gives nothing to infer from, and the call is CE2063 ("cannot infer method type parameter
+gives nothing to infer from, and the call is [CE2063](../error-catalog.md#ce2063) ("cannot infer method type parameter
 'U'"). The method writes the `| StdError` channel, so the call gives a
 `Result@(Stack@(U), StdError)`, and `main` unwraps it with `.realise(...)`. The parameter
 `fn(T) -> U` is a bare function type, so `f(x)` in the body gives a `U` directly.
@@ -366,7 +366,7 @@ sum: 42
 The element position of an array target accepts two forms only: a new name, which is a
 type parameter (`extend T[]`), or the name of a declared type (`extend i32[]`,
 `extend string[]`). A generic type in that position, for example `extend Maybe@(T)[]`, is
-CE2101. An array target cannot have a static method (CE2104), because an array type has no
+[CE2101](../error-catalog.md#ce2101). An array target cannot have a static method ([CE2104](../error-catalog.md#ce2104)), because an array type has no
 name that you can write before a dot.
 
 ## Perk implementations on generic types
@@ -388,10 +388,10 @@ rendered label number 7
 
 `extend Box@(T) with Show` makes `Box@(i32)` and `Box@(string)` both satisfy `Show`, so
 `render@(S: Show)` accepts both. `extend Label@(i32) with Show` applies to `Label@(i32)`
-only. A `Label@(string)` does not implement `Show`, and `render` refuses it with CE4006.
+only. A `Label@(string)` does not implement `Show`, and `render` refuses it with [CE4006](../error-catalog.md#ce4006).
 
 The compiler checks the header of a template implementation one time, as it is written.
-If the perk declares `fn size(i32 x) i32`, the implementation `fn size(T x) i32` is CE4004,
+If the perk declares `fn size(i32 x) i32`, the implementation `fn size(T x) i32` is [CE4004](../error-catalog.md#ce4004),
 also when each instance uses `T = i32`. To implement the perk for one instance, write that
 instance as the target: `extend Box@(i32) with Sized`.
 
@@ -414,7 +414,7 @@ releasing the towel guard
 
 When `main` ends, the compiler destroys its values in **reverse declaration order**:
 `answer` first, then `towel`. `drop()` runs first, then the compiler frees the fields that
-own memory. Only the unit that declares a type can implement `Drop` for it (CE4012).
+own memory. Only the unit that declares a type can implement `Drop` for it ([CE4012](../error-catalog.md#ce4012)).
 
 ## Errors through generics
 
@@ -510,7 +510,7 @@ a generic callee gives T = f64: <2.5>
 - `run(describe, 2.5)` first gets `T = f64` from `2.5`, and then makes `describe@(f64)`.
 
 When no position gives the type, the compiler cannot make an instance, and the reference
-is CE2093 ("cannot take a function value"). [Chapter 17](17-first-class-functions.md)
+is [CE2093](../error-catalog.md#ce2093) ("cannot take a function value"). [Chapter 17](17-first-class-functions.md)
 tells you more about function values.
 
 ## Packs in short
@@ -560,7 +560,7 @@ a string has len(): 4
 
 `size@(T)` has no constraint, but its body calls `x.len()`. The instance `size@(string)` is
 correct, because a `string` has `len()`. A call `size(4)` makes the instance `size@(i32)`,
-and the compiler reports the error in that instance: CE2008 ("undefined function
+and the compiler reports the error in that instance: [CE2008](../error-catalog.md#ce2008) ("undefined function
 'i32.len'"). To tell the caller which types are correct, write a constraint.
 
 ## Generics across units
@@ -577,20 +577,20 @@ These limits are true today. Each one has a diagnostic.
 
 | You write | Diagnostic | Do this |
 |---|---|---|
-| A perk with type parameters, `perk Conv@(T):` | CE4010 | Constrain the function: `@(T: Conv)` |
-| A method-level type parameter in a perk method, `fn make@(U)(...)` | CE6001 (parse error) | Use a generic free function |
-| A static method in a perk | CE4014 | Put the static on the type with `extend` |
-| A lambda with a bare parameter as a generic argument, `apply(\|x\| x + 1, 3)` | CE2060 (function), CE2063 (method) | Write the parameter type: `\|i32 x\|` |
-| `@(...)` on a method call, `b.get@(i32)()` | CE6102 | Let inference find the type |
-| A `T` that only the return type contains, with no type arguments | CE2060 | Write them: `empty_list@(i32)()` |
-| A generic static where no position declares the type | CE2060 | Declare the type with a `let`, or pass the value to a typed parameter |
-| Some of the type arguments, `pair@(i32)(1, 2)` | CE2062 | Write all of them |
-| A partly concrete target, `extend Pair@(i32, B)` | CE2098 | Make it fully generic or fully concrete |
-| A template and a concrete target for one method name | CE0101 | Use one form |
-| A static on an array target | CE2104 | Use a free function |
-| A variadic `...T` parameter in an extension or perk method | CE0115 | Use a free function |
-| Pack forwarding `inner(xs...)`, pack indexing, tuples | CE2060 and others | Use `expand` in the function that holds the pack |
-| A nested array as an array target, `extend T[][]` | CE2101 | Write `extend T[]`: `T` is then the inner array type |
+| A perk with type parameters, `perk Conv@(T):` | [CE4010](../error-catalog.md#ce4010) | Constrain the function: `@(T: Conv)` |
+| A method-level type parameter in a perk method, `fn make@(U)(...)` | [CE6001](../error-catalog.md#ce6001) (parse error) | Use a generic free function |
+| A static method in a perk | [CE4014](../error-catalog.md#ce4014) | Put the static on the type with `extend` |
+| A lambda with a bare parameter as a generic argument, `apply(\|x\| x + 1, 3)` | [CE2060](../error-catalog.md#ce2060) (function), [CE2063](../error-catalog.md#ce2063) (method) | Write the parameter type: `\|i32 x\|` |
+| `@(...)` on a method call, `b.get@(i32)()` | [CE6102](../error-catalog.md#ce6102) | Let inference find the type |
+| A `T` that only the return type contains, with no type arguments | [CE2060](../error-catalog.md#ce2060) | Write them: `empty_list@(i32)()` |
+| A generic static where no position declares the type | [CE2060](../error-catalog.md#ce2060) | Declare the type with a `let`, or pass the value to a typed parameter |
+| Some of the type arguments, `pair@(i32)(1, 2)` | [CE2062](../error-catalog.md#ce2062) | Write all of them |
+| A partly concrete target, `extend Pair@(i32, B)` | [CE2098](../error-catalog.md#ce2098) | Make it fully generic or fully concrete |
+| A template and a concrete target for one method name | [CE0101](../error-catalog.md#ce0101) | Use one form |
+| A static on an array target | [CE2104](../error-catalog.md#ce2104) | Use a free function |
+| A variadic `...T` parameter in an extension or perk method | [CE0115](../error-catalog.md#ce0115) | Use a free function |
+| Pack forwarding `inner(xs...)`, pack indexing, tuples | [CE2060](../error-catalog.md#ce2060) and others | Use `expand` in the function that holds the pack |
+| A nested array as an array target, `extend T[][]` | [CE2101](../error-catalog.md#ce2101) | Write `extend T[]`: `T` is then the inner array type |
 
 A perk also has no inheritance, no default method bodies and no `Self` type
 ([Chapter 11](11-perks-and-extensions.md)).
@@ -600,7 +600,7 @@ A perk also has no inheritance, no default method bodies and no `Self` type
 - Generic **structs** and **enums** write their type parameters in `@(...)` and use them in
   the place of concrete types. Named construction still works.
 - A variant of a generic enum writes a **bare** payload type (`Leaf(T)`). A constructor
-  gets its type from its payload or from its position; CE2112 when nothing gives it.
+  gets its type from its payload or from its position; [CE2112](../error-catalog.md#ce2112) when nothing gives it.
 - A generic type can hold containers, and a generic enum can refer to itself through
   `Own@(...)`.
 - A generic **function** infers its type parameters from each argument whose type contains

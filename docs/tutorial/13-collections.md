@@ -85,7 +85,7 @@ use <collections/hashmap>
 
 If you import it with a name, `use <collections/hashmap> as hm`, the type is behind that
 name: write `hm.HashMap@(string, i32)` and `hm.HashMap.new()`. The bare `HashMap` is then
-unknown (`CE2001`).
+unknown ([`CE2001`](../error-catalog.md#ce2001)).
 
 ```sushi
 --8<-- "docs/tutorial/examples/13-collections/hashmap-basics.sushi"
@@ -113,7 +113,7 @@ The essentials:
 The same safety theme runs through it: `.get()` hands back a `Maybe@(V)`, so "key not found"
 is a value you handle, not an exception that explodes or a sentinel you might forget to check.
 
-A key must support equality. A `List` or a `HashMap` cannot be a key (`CE2055`). The
+A key must support equality. A `List` or a `HashMap` cannot be a key ([`CE2055`](../error-catalog.md#ce2055)). The
 primitives, `string`, and a struct or enum of those can.
 
 ### Iterating over a map

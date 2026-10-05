@@ -49,7 +49,7 @@ again afterward. It also has to be a bare variable — you can't bloom a call re
 field, or an inline array literal (`sum(from([1, 2])...)` doesn't work; bind it to a `let` first).
 And a bloom must be the *only* trailing argument: you can't mix it with individual trailing
 arguments in the same call. Anything else (blooming into a non-variadic parameter, blooming
-alongside other trailing args) is a compile error (**CE0120**).
+alongside other trailing args) is a compile error (**[CE0120](../error-catalog.md#ce0120)**).
 
 ## Parameter packs: arguments of different types
 
@@ -136,7 +136,7 @@ You might wonder why `...Ts: Describe` needs the `: Describe` at all. Because th
 *different* types, the only operations the body can perform are ones **guaranteed for every
 possible element**. The perk bound is that guarantee, checked once where the function is
 defined. Try to call the pack with a type that doesn't implement the perk and you get a clear
-**CE2090** at the call site, naming the type and the missing perk — not a wall of errors buried
+**[CE2090](../error-catalog.md#ce2090)** at the call site, naming the type and the missing perk — not a wall of errors buried
 inside the expanded body.
 
 ## Packs travel across libraries
@@ -158,7 +158,7 @@ and a program that `use`s the library monomorphizes it at *its own* call sites, 
 `Render` implementations for whatever types it passes.
 
 A variadic parameter, native or pack, is not permitted in a perk method or an extension
-method (`CE0115`). Use a free function. The [Libraries guide](../libraries.md)
+method ([`CE0115`](../error-catalog.md#ce0115)). Use a free function. The [Libraries guide](../libraries.md)
 covers how templates cross the boundary; the [Variadics guide](../variadics.md) has the full
 reference.
 
@@ -167,12 +167,12 @@ reference.
 - **`...T`** gathers *same-typed* trailing arguments into an owned `T[]` (Chapter 14).
 - **Bloom** (`arr...`) forwards an existing array into a `...T` slot by moving it, instead of
   passing elements one at a time — the array must be a bare variable, and the sole trailing
-  argument (CE0120 otherwise).
+  argument ([CE0120](../error-catalog.md#ce0120) otherwise).
 - **Parameter packs** `...Ts` accept *different-typed* arguments; the type pack `...Ts` and the
   value pack `...Ts args` share a name.
 - **`expand(x in pack):`** is compile-time-unrolled — once per element, each typed concretely —
   not a runtime loop. Zero arguments runs it zero times.
-- A **perk constraint** (`...Ts: Perk`) makes the body callable and is checked upfront (CE2090
+- A **perk constraint** (`...Ts: Perk`) makes the body callable and is checked upfront ([CE2090](../error-catalog.md#ce2090)
   on a bad element type).
 - `expand` bodies are ordinary code: they can accumulate, early-`return`, and use `??`.
 - Packs are **monomorphized** like generics, so they cost nothing at runtime, and they **cross

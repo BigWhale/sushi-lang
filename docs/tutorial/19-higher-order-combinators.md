@@ -18,7 +18,7 @@ actually call one, so an unused `use` costs nothing.
 The combinators are **bare**: a call gives the value itself, not a `Result`, so there is no
 `??` after `map`, `filter` or `fold`. They take bare function types (`fn(T) -> U`), so the
 function that you give them is bare too. A function with a channel, `fn(T) -> U | E`, is a
-different type, and the call is refused (**CE2006**). A bare function is the exception in
+different type, and the call is refused (**[CE2006](../error-catalog.md#ce2006)**). A bare function is the exception in
 Sushi, and the combinators are a correct use of it: they are total over their inputs.
 [The error channel](../design/error-channel.md) gives the rule.
 
@@ -139,7 +139,7 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
     every element type. `filter`, in both forms, clones each kept element, so an owning
     element type works there too (not a type that refuses `.clone()`, such as a `Drop`
     type). For a container element (`T[]`, `List@(T)`, `Own@(T)`), give it a function
-    reference, because a lambda parameter cannot be an owning container (`CE2094`,
+    reference, because a lambda parameter cannot be an owning container ([`CE2094`](../error-catalog.md#ce2094),
     chapter 18). A `string` lambda parameter is legal.
 
 !!! warning "Annotate bare-parameter lambdas passed to a combinator"
@@ -150,7 +150,7 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
     A **generic** function can go to a combinator directly when the other arguments solve
     every type parameter: with `fn keep@(T)(T x) bool`, both `filter(xs, keep)` and
     `xs.filter(keep)` compile, because `xs` gives `T`. For `map`, nothing but the function
-    gives `U`, so `map(xs, identity)` is refused (`CE2060`, `CE2093`). Bind the generic
+    gives `U`, so `map(xs, identity)` is refused ([`CE2060`](../error-catalog.md#ce2060), [`CE2093`](../error-catalog.md#ce2093)). Bind the generic
     function to a typed local first:
 
     ```sushi
@@ -167,7 +167,7 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 - `collections/iter` is a Sushi-source standard-library module; the combinators
   monomorphize like any generic and cost nothing when unused.
 - Each combinator takes a bare `fn(...)` value: a lambda (capturing or not) or a plain
-  function reference. A function with a channel does not fit (**CE2006**).
+  function reference. A function with a channel does not fit (**[CE2006](../error-catalog.md#ce2006)**).
 - `compose` returns a closure that captures and calls the two functions you give it.
 - `map` and `fold` borrow each element, `filter` clones the kept elements, and `fold`
   clones `init` once. So an owning element or accumulator type (`string`) works in both

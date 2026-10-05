@@ -26,7 +26,7 @@ caller and every binary `.slib`. See [The error channel](../design/error-channel
 [Error handling](../error-handling.md).
 
 The error type `E` must be an ERROR TYPE: an enum declared with `error`, or one of the
-predefined error types below. Any other type is CE2084, in both spellings and in every
+predefined error types below. Any other type is [CE2084](../error-catalog.md#ce2084), in both spellings and in every
 position (a signature, a `let`, a field, a generic argument). A plain `enum` gets the help
 to declare it with `error`.
 
@@ -46,7 +46,7 @@ fn parse_digit(string s) i32 | ParseError:
 # Returns Result@(i32, ParseError)
 ```
 
-The body with a channel spells both constructors. A bare `return 7` there is CE2030.
+The body with a channel spells both constructors. A bare `return 7` there is [CE2030](../error-catalog.md#ce2030).
 
 ### No Channel: the Bare Form
 
@@ -56,8 +56,8 @@ fn add(i32 a, i32 b) i32:
 # Returns i32, not a Result
 ```
 
-A bare body returns the value. `return Result.Ok(...)` in it is CE2091, and `??` in it is
-CE0131. On the call of a bare function, `??` is CE2507 and `.realise(...)` is CE2008.
+A bare body returns the value. `return Result.Ok(...)` in it is [CE2091](../error-catalog.md#ce2091), and `??` in it is
+[CE0131](../error-catalog.md#ce0131). On the call of a bare function, `??` is [CE2507](../error-catalog.md#ce2507) and `.realise(...)` is [CE2008](../error-catalog.md#ce2008).
 
 ### StdError and the Predefined Error Types
 
@@ -78,7 +78,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
 
 Do not declare a type with the name of a predefined enum (for example `error MathError`).
 The compiler always knows the predefined enums, also in a unit that does not import their
-home module, so a second declaration is CE2046.
+home module, so a second declaration is [CE2046](../error-catalog.md#ce2046).
 
 ### Explicit Syntax
 
@@ -88,7 +88,7 @@ fn foo() Result@(i32, ParseError):
 ```
 
 A declaration uses one of the two forms. `fn foo() Result@(i32, ParseError) | ParseError`
-mixes them and is CE2085.
+mixes them and is [CE2085](../error-catalog.md#ce2085).
 
 ## Standard Error Types
 
@@ -227,7 +227,7 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` requires an error value. Calling it with zero arguments is a compile error (**CE2050**, wrong argument count for the `Err` variant). As a pattern, `Result.Err()` with no binding is **CE2044**; write `Result.Err(_)` to discard the value.
+**Important:** `Result.Err()` requires an error value. Calling it with zero arguments is a compile error (**[CE2050](../error-catalog.md#ce2050)**, wrong argument count for the `Err` variant). As a pattern, `Result.Err()` with no binding is **[CE2044](../error-catalog.md#ce2044)**; write `Result.Err(_)` to discard the value.
 
 ## Methods
 
@@ -273,7 +273,7 @@ match err:
 
 An enum value goes into an interpolation hole through the predefined perk `Display`: it
 prints as `Enum.Variant`. A `Result` and a `Maybe` do not go into a hole at
-the top level (CE2035), and `println` refuses them (CE2037 for a `Result`, CE2115 for a
+the top level ([CE2035](../error-catalog.md#ce2035)), and `println` refuses them ([CE2037](../error-catalog.md#ce2037) for a `Result`, [CE2115](../error-catalog.md#ce2115) for a
 `Maybe`). Match on the value to print it, or use `.realise(default)`. A struct or an enum
 that HOLDS a `Result` or a `Maybe` prints it, for example `Result.Ok(1)` and `Maybe.None`.
 
@@ -330,14 +330,14 @@ fn main() i32:
 ```
 
 - `f` takes the error `nom`, because the error moves into the new value. A mode is part of
-  a function type, so a lambda writes `|nom LowError e|`; a lambda without `nom` is CE2006.
-- `F` is solved from `f`, and it must be an error type (CE2084).
+  a function type, so a lambda writes `|nom LowError e|`; a lambda without `nom` is [CE2006](../error-catalog.md#ce2006).
+- `F` is solved from `f`, and it must be an error type ([CE2084](../error-catalog.md#ce2084)).
 - A lambda parameter cannot have an owning type. For an error type that holds a `string`,
   pass a named function: `fn wrap(nom ParseError e) AppError`.
 - The receiver is `nom self`. A named `Result` that owns something is spent by the call
-  (CE2435). A BORROWED `Result` that owns something (a parameter, a binding, a get-out) is
-  CE2411, because the error moves into `f`; write `r.clone().map_err(f)`.
-- Exactly one argument (CE2009).
+  ([CE2435](../error-catalog.md#ce2435)). A BORROWED `Result` that owns something (a parameter, a binding, a get-out) is
+  [CE2411](../error-catalog.md#ce2411), because the error moves into `f`; write `r.clone().map_err(f)`.
+- Exactly one argument ([CE2009](../error-catalog.md#ce2009)).
 
 `map_err` converts at one site. When many sites need one conversion, declare it once with
 `extend LowError as AppError:`, and `??` calls it (see
@@ -354,7 +354,7 @@ fn compute() i32 | MathError:
     return Result.Ok(x + y)
 ```
 
-`??` takes a `Result@(T, E)` and nothing else. On a `Maybe@(T)` it is CE2507: write the
+`??` takes a `Result@(T, E)` and nothing else. On a `Maybe@(T)` it is [CE2507](../error-catalog.md#ce2507): write the
 error value with [`or_err`](maybe.md#or_errnom-e) first.
 
 ### Error Type Matching
@@ -400,7 +400,7 @@ fn outer() i32 | ErrorA:
 ### `??` Is Not Legal in main()
 
 `main` is bare: it returns the exit code and has no error channel (`| E` on `main` is
-CE0106). So `??` in `main` is CE0131. Handle the error in `main` explicitly:
+[CE0106](../error-catalog.md#ce0106)). So `??` in `main` is [CE0131](../error-catalog.md#ce0131). Handle the error in `main` explicitly:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
 ```sushi
@@ -446,7 +446,7 @@ match divide(10, 2):
 ## Usage in Conditionals
 
 A condition must be a `bool`. A `Result` in an `if` or a `while` condition, or as an
-operand of `and`/`or`/`xor`/`not`, is CE2516. Test it with `.is_ok()` or `.is_err()`:
+operand of `and`/`or`/`xor`/`not`, is [CE2516](../error-catalog.md#ce2516). Test it with `.is_ok()` or `.is_err()`:
 
 ```sushi
 if (divide(10, 2).is_ok()):
@@ -464,7 +464,7 @@ else:
 - **Use `.realise(default)` for fallback values** - When a default makes sense
 - **Use pattern matching for detailed error handling** - When you need different behavior per error variant
 - **Avoid `expect()` in production code** - It terminates the program on error
-- **No `??` in main()** - `main` is bare (CE0131); use explicit error handling
+- **No `??` in main()** - `main` is bare ([CE0131](../error-catalog.md#ce0131)); use explicit error handling
 - **Keep error types consistent** - Makes error propagation easier
 - **Declare custom error types with `error`** - For domain-specific error conditions
 

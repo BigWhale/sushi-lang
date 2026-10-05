@@ -67,7 +67,7 @@ sets it true, and the three console handles set it false, because a program does
 own the descriptors it was started with. A `string` carries the same bit for the same
 reason -- a literal frees to a no-op.
 
-`File` implements `Drop`, so it is a moving type: `.clone()` is CE2431. The one way to
+`File` implements `Drop`, so it is a moving type: `.clone()` is [CE2431](../../error-catalog.md#ce2431). The one way to
 a second owner is [`share()`](files.md#share), and it is a second DESCRIPTOR over the
 same open file description rather than a copy of the value -- the offset is shared.
 
@@ -84,7 +84,7 @@ each has an address the `poke self` contract methods reach, and a program may re
 for a run: `stdout := open("log.txt", FileMode.Write())??` puts every later
 `stdout.write(...)` into the file, and `stdout := File(fd: STDOUT_FD, owned: false)` puts
 it back. A unit variable is never moved out of, so closing one is refused while
-compiling (CE2436): `stdout.close()` would take the handle. `STDIN_FD`, `STDOUT_FD` and
+compiling ([CE2436](../../error-catalog.md#ce2436)): `stdout.close()` would take the handle. `STDIN_FD`, `STDOUT_FD` and
 `STDERR_FD` are public too, for the caller that wants the number -- or a fresh handle
 over it.
 

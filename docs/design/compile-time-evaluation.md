@@ -19,8 +19,8 @@ through one table, `ConstantEvaluator.HANDLERS`: a literal of each kind, a binar
 unary operator, an array literal, a name, a cast, an index, an interpolated string, a
 struct construction, a member access and a dot call each have a handler, and the eleven
 kinds named in `NOT_CONSTANT` -- a method call, an enum constructor, `new()`, `from()`, a
-borrow, a `??`, a range, a spread, a lambda, a blank and a tuple -- answer CE0108 through
-the one backstop. The table gives each kind the phrase that CE0108 prints, as the source
+borrow, a `??`, a range, a spread, a lambda, a blank and a tuple -- answer [CE0108](../error-catalog.md#ce0108) through
+the one backstop. The table gives each kind the phrase that [CE0108](../error-catalog.md#ce0108) prints, as the source
 writes the expression ("a `from(...)` call is not a compile-time constant").
 `tests/unit/test_const_eval_dispatch_is_total.py` holds the two sets against the `Expr`
 union, so a kind added to the language cannot fall through in silence.
@@ -33,7 +33,7 @@ so). Three callers reach it:
 
 | Caller | Purpose | Reporter |
 |---|---|---|
-| the `typecheck` pass, through `constant_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for CE2512, a divisor for CE0112 and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
+| the `typecheck` pass, through `constant_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for [CE2512](../error-catalog.md#ce2512), a divisor for [CE0112](../error-catalog.md#ce0112) and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
 | the backend, through `LLVMCodegen.constant_evaluator` (`backend/codegen_llvm.py`) | make the LLVM initializer | silent |
 | `ASTBuilder.integer_constant` (`ast_builder/builder.py`) | read a fixed array size | silent |
 
@@ -55,7 +55,7 @@ type substitutor moves types only.
 
 ## 2. Ruling 1: an overflow is a diagnostic, not a wrap
 
-**Implemented.** CE2077 is registered, the evaluator computes at the width, and the
+**Implemented.** [CE2077](../error-catalog.md#ce2077) is registered, the evaluator computes at the width, and the
 typecheck pass asks the same question of a fold in a body.
 
 ### The problem the rule solves
@@ -97,7 +97,7 @@ Only C truncates in silence, and only because it computes in `int` and converts 
 store. Every language after C reports the program. No language wraps each operation and stays
 quiet.
 
-Sushi holds this rule for a literal: `const u8 X = 300` is CE2073. Ruling 1 applies the
+Sushi holds this rule for a literal: `const u8 X = 300` is [CE2073](../error-catalog.md#ce2073). Ruling 1 applies the
 same rule to a computed value such as `200 + 100`.
 
 ### The rule
@@ -131,7 +131,7 @@ instruction traps. A compile-time report is therefore the only correct answer fo
 | `>>` | arithmetic on a signed type, logical on an unsigned type |
 
 The shift **count** has its own rule. A count the compiler can read must be 0 to
-width-1, which is CE2512. A computed count past the width is defined and unchecked. This
+width-1, which is [CE2512](../error-catalog.md#ce2512). A computed count past the width is defined and unchecked. This
 is Go's rule.
 
 ### Where the rule applies
@@ -154,7 +154,7 @@ constants as for two locals, and LLVM is the run-time home by definition. The ga
 `tests/unit/test_integer_operator_semantics_agree.py`: per operator and per width, the
 evaluator's value and the value a JIT-compiled copy of the emitted instruction computes
 are one bit pattern, and a constant fold in the backend's operator emitter is refused
-by its source. The smallest signed value `% -1` is CE2077.
+by its source. The smallest signed value `% -1` is [CE2077](../error-catalog.md#ce2077).
 
 ### What this costs
 
@@ -170,8 +170,8 @@ by its source. The smallest signed value `% -1` is CE2077.
   the count right -- the innermost operation of `(200 + 100) / 2` reports, the division
   around it does not, and a use of a constant that overflows adds nothing to the report at
   its declaration.
-- **The code is CE2077.** It is in the CE2070 to CE2079 range of
-  `internals/errors/types.py`, beside CE2070 and CE2073. It says that an operation gives a
+- **The code is [CE2077](../error-catalog.md#ce2077).** It is in the CE2070 to CE2079 range of
+  `internals/errors/types.py`, beside [CE2070](../error-catalog.md#ce2070) and [CE2073](../error-catalog.md#ce2073). It says that an operation gives a
   value the type cannot hold, and it names the operator, the value and the type.
 - **The rule is strict.** `let u8 x = 200 + 100` does not compile.
 - **A constant holds a value that its type can hold.** So the formatter that renders a
@@ -210,15 +210,15 @@ array_element: expr (";" expr)?
 
 - In a `const` initializer and a fixed local, the **count** is an integer that the compiler
   reads: a literal in any base, the name of an integer constant, or an expression of them.
-  An unreadable count there is CE2017.
+  An unreadable count there is [CE2017](../error-catalog.md#ce2017).
 - In the literal inside `from(...)`, the count is any `i32` expression, because a `T[]`
   carries its length. A run-time count of zero is data, and a negative run-time count
   clamps to zero.
 - A readable count must be **1 or more**. A readable count of zero spells nothing, and it is
-  CE2017.
+  [CE2017](../error-catalog.md#ce2017).
 - A repeated element is legal in **every array literal**: a `const` initializer, a fixed
   local, and the literal inside `from(...)`.
-- The **expanded count** must match the declared size. A mismatch is CE2011.
+- The **expanded count** must match the declared size. A mismatch is [CE2011](../error-catalog.md#ce2011).
 - The value is evaluated **once**, and the compiler makes N copies of the result.
 
 ### What the back end must do
@@ -241,7 +241,7 @@ therefore wants `from([-1; 32768])`, which puts the table on the heap.
 deep-clone seam, so an owning type is legal: `from([towel; 2])` follows the same rule as
 `a.fill(towel)`.
 
-**CE2011 lists the runs.** A run is written by length, so a literal that is one element short
+**[CE2011](../error-catalog.md#ce2011) lists the runs.** A run is written by length, so a literal that is one element short
 gives the compiler no way to know WHICH run is short -- either of them could be. The
 alternative spelling, Ada's `first .. last => value`, does not solve this either: it catches a
 gap or an overlap, because each run states its absolute bounds, but a writer who shortens one
@@ -265,7 +265,7 @@ rendering, because a list of 287 one-element runs helps nobody.
 
 **A note on where the count is read.** Unlike a fixed array size, a repeat count is read at
 the typecheck pass, not while the AST is built. So it may name a constant of ANOTHER unit --
-the same-unit limit on a fixed array size (CE2099) does not apply to a count.
+the same-unit limit on a fixed array size ([CE2099](../error-catalog.md#ce2099)) does not apply to a count.
 
 ### What this closes
 
@@ -322,7 +322,7 @@ When one of these arrives, the cost is already known. Record it here so the deci
   new machinery.
 - **A constant function is bare.** A compile-time value carries no run-time error, so a
   constant function has no `| E` channel. It follows the rule of every bare function: a bare
-  `return`, and no `??` in the body. CE2091 and CE0131 are the codes that hold that rule.
+  `return`, and no `??` in the body. [CE2091](../error-catalog.md#ce2091) and [CE0131](../error-catalog.md#ce0131) are the codes that hold that rule.
 - **A constant has a closed set of shapes.** A number, a bool, a string, a fixed array, a
   struct construction and an enum variant, each built from constant parts. So a constant
   function returns one of those. `ScalarConstant` and `AggregateConstant` (`const_eval.py`)
@@ -336,7 +336,7 @@ When one of these arrives, the cost is already known. Record it here so the deci
   size from naming a constant of another unit.
 - **It needs a budget and a cache.** The evaluator runs once per use and again in the back
   end, so a table would be computed several times. Recursion needs a limit. The precedents
-  are `MONOMORPHIZE_MAX_DEPTH = 128` with CE0122
+  are `MONOMORPHIZE_MAX_DEPTH = 128` with [CE0122](../error-catalog.md#ce0122)
   (`generics/monomorphize/__init__.py`) and `MAX_EXPANSION_ROUNDS = 8`
   (`generics/instantiate/__init__.py`).
 - **An interpreter is a second implementation of the language.** Every difference between it

@@ -69,15 +69,15 @@ fn main() i32:
 ```
 
 The unit block is the first item in the **file**, which puts it above the `use` lines. A
-block written below them attaches to nothing and warns (`CW7001`), and the unit still has
+block written below them attaches to nothing and warns ([`CW7001`](error-catalog.md#cw7001)), and the unit still has
 none.
 
 A block inside a body must be the **first item** in that body. A block between two
-statements is an error (`CE7005`), not a warning: inside a body there is no declaration
+statements is an error ([`CE7005`](error-catalog.md#ce7005)), not a warning: inside a body there is no declaration
 it could have meant, so there is nothing to guess at.
 
 A declaration can carry a block above it or a block in its body, but not both
-(`CE7006`).
+([`CE7006`](error-catalog.md#ce7006)).
 
 ### Where a block may stand
 
@@ -128,7 +128,7 @@ attachment.
 An ordinary `#` comment between the block and the declaration breaks the attachment as
 well. The compiler collapses a run of comment lines into the newline that carries them,
 so a comment line and a blank line look the same to it. The block then warns that it
-documents nothing (`CW7001`). To keep the attachment, move the comment.
+documents nothing ([`CW7001`](error-catalog.md#cw7001)). To keep the attachment, move the comment.
 
 ```sushi
 ##: This block documents the constant below it. :##
@@ -165,8 +165,8 @@ fn main() i32:
 
 The indent of the **opening line** is not free. A block is one token, so the compiler
 never looks inside it, but the `##:` itself lines up like any statement. A block in a body
-that is indented LESS than the body is an indent error (`CE6004`). A block indented MORE
-than the body is a parse error (`CE6001`, "unexpected token 'indent'").
+that is indented LESS than the body is an indent error ([`CE6004`](error-catalog.md#ce6004)). A block indented MORE
+than the body is a parse error ([`CE6001`](error-catalog.md#ce6001), "unexpected token 'indent'").
 
 ## Tags
 
@@ -191,7 +191,7 @@ to show says both.
 
 The tag names the thing the function **declares**, so it is a parameter. An argument is
 what a caller passes. The language uses this vocabulary everywhere else — the `Param`
-class, `semantics/param_modes.py`, and `CE2427` — and a doc tag is not the place to say
+class, `semantics/param_modes.py`, and [`CE2427`](error-catalog.md#ce2427) — and a doc tag is not the place to say
 something different.
 
 ### Returns describes T
@@ -206,7 +206,7 @@ A function that returns `~` needs no `- Returns:` at all.
 
 A list item shaped `- <Word>[ <name>]:` is a tag candidate. A candidate whose word is a
 keyword is a tag. A candidate whose word is within two edits of a keyword is a typo
-(`CE7004`), and the compiler names the tag it thinks you meant. Everything else is prose.
+([`CE7004`](error-catalog.md#ce7004)), and the compiler names the tag it thinks you meant. Everything else is prose.
 
 ```
 - Parameter a: ...     tag
@@ -279,11 +279,11 @@ An example is compiled from OUTSIDE the unit it documents: one generated file th
 the unit and holds the snippet. Two things are out of reach, and each is a printed SKIP
 rather than a failure:
 
-- **A private declaration.** The generated file cannot call it (`CE3005`). An example that
+- **A private declaration.** The generated file cannot call it ([`CE3005`](error-catalog.md#ce3005)). An example that
   calls what a reader cannot call is not documentation, so the answer is `public` and not a
   second mechanism.
 - **A unit that declares `main`.** It cannot be imported beside a second `main`
-  (`CE0101`), so a standalone program's blocks are read and never run.
+  ([`CE0101`](error-catalog.md#ce0101)), so a standalone program's blocks are read and never run.
 
 A skip is counted and printed with its reason, so the hole in the coverage is visible.
 
@@ -292,7 +292,7 @@ expected-output mechanism would make it a test.
 
 ## Diagnostics
 
-### CE6011 — a block is opened and never closed
+### [CE6011](error-catalog.md#ce6011) — a block is opened and never closed
 
 The caret goes on the opening `##:`, because that is where you can fix it.
 
@@ -301,13 +301,13 @@ The caret goes on the opening `##:`, because that is where you can fix it.
 const i32 x = 1
 ```
 
-### CE6012 — a `:##` with no opener
+### [CE6012](error-catalog.md#ce6012) — a `:##` with no opener
 
 ```
 :##
 ```
 
-### CE6013 — a block is opened inside a block
+### [CE6013](error-catalog.md#ce6013) — a block is opened inside a block
 
 The outer block swallowed everything between the two openers. The caret goes on the inner
 opener, and a note points at the outer one.
@@ -320,7 +320,7 @@ The outer block.
 :##
 ```
 
-### CE7001 — a `- Parameter` tag names no parameter
+### [CE7001](error-catalog.md#ce7001) — a `- Parameter` tag names no parameter
 
 ```
 ##:
@@ -332,7 +332,7 @@ fn add(i32 a, i32 b) i32:
     return a + b
 ```
 
-### CE7002 — one parameter is documented twice
+### [CE7002](error-catalog.md#ce7002) — one parameter is documented twice
 
 A `- Parameter` tag is keyed by the name it carries. Two tags for one name is almost
 always a tag that was copied and not renamed.
@@ -342,7 +342,7 @@ always a tag that was copied and not renamed.
 - Parameter a: The second addend, with the name never renamed.
 ```
 
-### CE7003 — a second `- Returns:` or `- Errors:`
+### [CE7003](error-catalog.md#ce7003) — a second `- Returns:` or `- Errors:`
 
 These two tags are singletons: a declaration has one success value and one error arm.
 
@@ -351,13 +351,13 @@ These two tags are singletons: a declaration has one success value and one error
 - Returns: The sum, said twice.
 ```
 
-### CE7004 — an unrecognised tag keyword
+### [CE7004](error-catalog.md#ce7004) — an unrecognised tag keyword
 
 ```
 - Retruns: The sum.
 ```
 
-### CE7005 — a block in a body is not the first item
+### [CE7005](error-catalog.md#ce7005) — a block in a body is not the first item
 
 ```
 fn probe() i32:
@@ -366,7 +366,7 @@ fn probe() i32:
     return n
 ```
 
-### CE7006 — a declaration is documented twice
+### [CE7006](error-catalog.md#ce7006) — a declaration is documented twice
 
 ```
 ##: Documents the function from above. :##
@@ -375,7 +375,7 @@ fn probe() i32:
     return 7
 ```
 
-### CE7007 — an `- Example:` tag introduces no fenced block
+### [CE7007](error-catalog.md#ce7007) — an `- Example:` tag introduces no fenced block
 
 The whole job of the tag is to introduce a fence, so a tag with nothing to introduce
 contradicts itself. An example that is merely ABSENT is a matter of policy, and is not this.
@@ -390,12 +390,12 @@ fn add(i32 a, i32 b) i32:
     return a + b
 ```
 
-### CE7008 — a fence inside a block is never closed
+### [CE7008](error-catalog.md#ce7008) — a fence inside a block is never closed
 
 A block ends at its own `:##`, so a fence that runs past it is truncated, and a truncated
 example is not one. Close it with a run of the same character that is at least as long.
 
-### CW7001 — a block documents nothing
+### [CW7001](error-catalog.md#cw7001) — a block documents nothing
 
 The block attaches to no declaration, and it is not the first item in its file. A blank
 line or a `#` comment between the block and the declaration is the usual cause.
@@ -416,22 +416,22 @@ succeeds and the exit code is 1.
 
 | Code | Condition |
 |---|---|
-| CW7002 | a declaration with no doc block |
-| CW7003 | a documented callable with a parameter that no `- Parameter` tag names |
-| CW7004 | a documented callable that returns a value, with no `- Returns:` |
-| CW7005 | a documented function that declares `\| E`, with no `- Errors:` |
-| CW7006 | a unit with no doc block |
+| [CW7002](error-catalog.md#cw7002) | a declaration with no doc block |
+| [CW7003](error-catalog.md#cw7003) | a documented callable with a parameter that no `- Parameter` tag names |
+| [CW7004](error-catalog.md#cw7004) | a documented callable that returns a value, with no `- Returns:` |
+| [CW7005](error-catalog.md#cw7005) | a documented function that declares `\| E`, with no `- Errors:` |
+| [CW7006](error-catalog.md#cw7006) | a unit with no doc block |
 
 ### Every declaration is asked, public and private
 
 The `public` marker is not the test. An internal API is documented surface as much as an
-exported one, so a private helper with no block is CW7002 like any other declaration. A
+exported one, so a private helper with no block is [CW7002](error-catalog.md#cw7002) like any other declaration. A
 struct field and an enum variant are each asked on their own, because each one carries its
 own `doc` key in a `.slib` and `--lib-info --docs` prints each one under its owner.
 
 ### Two exemptions
 
-`fn main()` is nobody's API, and a library cannot declare one at all (CE3501).
+`fn main()` is nobody's API, and a library cannot declare one at all ([CE3501](error-catalog.md#ce3501)).
 
 An `unsafe external` block and the declarations inside it already carry `because "..."`,
 which acknowledges the contract that matters at that seam.
@@ -447,8 +447,8 @@ Nothing else is exempt.
 
 ### A block lint presupposes a block
 
-CW7003, CW7004 and CW7005 fire only on a declaration that ALREADY carries a block. A
-declaration with none is CW7002 and nothing else, so one omission stays one diagnostic.
+[CW7003](error-catalog.md#cw7003), [CW7004](error-catalog.md#cw7004) and [CW7005](error-catalog.md#cw7005) fire only on a declaration that ALREADY carries a block. A
+declaration with none is [CW7002](error-catalog.md#cw7002) and nothing else, so one omission stays one diagnostic.
 
 ```sushi
 error DriveError:
@@ -466,16 +466,16 @@ fn divide(i32 a, i32 b) i32 | DriveError:
     return Result.Ok(a / b)
 ```
 
-This block draws two warnings: CW7003, because `b` is declared and not documented, and
-CW7005, because the declaration names its own error type and no `- Errors:` says when it
-is raised. Delete the whole block and both go away, replaced by one CW7002. (The enum and its
-variant have no block, so each of them draws its own CW7002.)
+This block draws two warnings: [CW7003](error-catalog.md#cw7003), because `b` is declared and not documented, and
+[CW7005](error-catalog.md#cw7005), because the declaration names its own error type and no `- Errors:` says when it
+is raised. Delete the whole block and both go away, replaced by one [CW7002](error-catalog.md#cw7002). (The enum and its
+variant have no block, so each of them draws its own [CW7002](error-catalog.md#cw7002).)
 
 A callable that returns `~` is never asked for `- Returns:`, and a function that writes no
 `| E` is never asked for `- Errors:`. A `self` receiver is never asked
 for either: it is not a parameter by the time the compiler reads one.
 
-### CW7006 has no caret
+### [CW7006](error-catalog.md#cw7006) has no caret
 
 The other four point at a declaration. A unit with no block is the one warning about
 something that is not there, so it is reported against the file and nothing is underlined.

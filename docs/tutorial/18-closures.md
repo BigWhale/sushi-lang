@@ -80,7 +80,7 @@ A **plain** value is captured by **copy**: a primitive, a string bound directly 
 and a struct or enum that owns nothing. An **owning** value is captured by **move**: a dynamic
 array, `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, a string that owns heap (for example, one built
 by interpolation), a type that implements `Drop`, and a struct or enum that holds one of these.
-The environment takes ownership, so the outer binding is consumed (a later use is **CE2405**),
+The environment takes ownership, so the outer binding is consumed (a later use is **[CE2405](../error-catalog.md#ce2405)**),
 and the value is freed with the closure's environment:
 
 ```sushi
@@ -99,11 +99,11 @@ The environment is **freed automatically** on every exit path — scope exit, an
 
 ## What you cannot capture
 
-Capturing a **`peek`/`poke` borrow** is refused at compile time with **CE2094**. Pass the
+Capturing a **`peek`/`poke` borrow** is refused at compile time with **[CE2094](../error-catalog.md#ce2094)**. Pass the
 borrowed data as a parameter to the closure; do not capture the borrow.
 
 A **lambda parameter** cannot be an owning container: `|i32[] a| a.len()` is also
-**CE2094**, and so is a `List@(T)` or an `Own@(T)` parameter. A `string` parameter is
+**[CE2094](../error-catalog.md#ce2094)**, and so is a `List@(T)` or an `Own@(T)` parameter. A `string` parameter is
 legal. To pass a function over containers, write a named function and use a function
 reference (chapter 17).
 
@@ -116,7 +116,7 @@ reference (chapter 17).
   returned or stored — and still work correctly, and it is **freed automatically** on every exit.
 - Plain values (primitives, literal-bound strings, structs that own nothing) are captured by
   **copy**; owning values (a heap string, a dynamic array, `List@(T)`, `Own@(T)`, and more) by
-  **move** (the outer binding is consumed). Capturing a **borrow** is **CE2094**, and so is a
+  **move** (the outer binding is consumed). Capturing a **borrow** is **[CE2094](../error-catalog.md#ce2094)**, and so is a
   lambda parameter that is an owning container (a `string` parameter is legal).
 - A closure and a plain function value share the exact same type (`fn(...) -> T [| E]`) and call
   semantics — everything from Chapter 17 about parameters, struct fields, `List@(fn(...))`, and

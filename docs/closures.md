@@ -60,7 +60,7 @@ let fn() -> i32 h = |~| n + 1
 
 The block form ends with a dedent and no token after it. Thus the grammar accepts it only where
 this is not ambiguous: the right side of a `let`. A block-body lambda as a call argument is a
-parse error (CE6001). Use the expression form, or bind the lambda to a `let` first.
+parse error ([CE6001](error-catalog.md#ce6001)). Use the expression form, or bind the lambda to a `let` first.
 
 Parameters use the Sushi `type name` form (`|i32 x, string s|`). A **bare-name** parameter
 (`|x|`, with no type) is legal only where an expected `fn(...)` type gives the type: an annotated
@@ -80,22 +80,22 @@ A lambda has an error channel only when its TYPE writes `| E`. The type comes fr
 annotation on the lambda or from the expected type (a parameter, a `let`, a field). The compiler
 never reads the channel from the body. A function type without `| E` is bare: `fn(i32) -> i32`
 answers an `i32`. A function type with it, `fn(i32) -> i32 | E`, answers a `Result@(i32, E)`.
-The two types do not convert (CE2002).
+The two types do not convert ([CE2002](error-catalog.md#ce2002)).
 
 A call through a bare closure gives the value. A call through a closure with a channel gives a
 `Result@(T, E)`, the same as a `fn` with a channel: use `??`, `.realise()` or a `match` on it. A
-`Result` is not a condition: `if (f(1))` is CE2516. Use `.is_ok()` to test it.
+`Result` is not a condition: `if (f(1))` is [CE2516](error-catalog.md#ce2516). Use `.is_ok()` to test it.
 
 - **Expression body.** `|x| e` becomes `return e` when the lambda is bare, and
   `return Result.Ok(e)` when its type has a channel.
 - **Block body.** It is a full function body, with the rule of a `fn` body. A bare block body
-  returns the value (`return y`), and a `Result.Ok` or `Result.Err` there is CE2091. A block body
+  returns the value (`return y`), and a `Result.Ok` or `Result.Err` there is [CE2091](error-catalog.md#ce2091). A block body
   with a channel spells both constructors. Every path must end with a `return`: a block body that
-  can reach its end is CE0107, except a bare `~` body. A `~` body with a channel ends with
+  can reach its end is [CE0107](error-catalog.md#ce0107), except a bare `~` body. A `~` body with a channel ends with
   `return Result.Ok(~)`. After the closing pipe, the block form can have a `-> T [| E]`
   annotation, the same as a `fn` declaration.
 - **`??` in a body.** A `??` is legal only in a lambda whose type has a channel. In a bare lambda
-  it is CE0131.
+  it is [CE0131](error-catalog.md#ce0131).
 
 A bare lambda is the usual form for a combinator argument (`xs.map(|i32 x| x * 2)`), because the
 combinators of `<collections/iter>` take bare functions. For other code, remember that a bare
@@ -119,7 +119,7 @@ fn main() i32:
 
 A value that owns a resource is captured **by move**. This includes a `string` that owns heap
 memory (for example, an interpolated string), a dynamic array, a `List@(T)`, an `Own@(T)` and
-every other owning type. The outer binding is consumed: a later use of it is CE2405. The
+every other owning type. The outer binding is consumed: a later use of it is [CE2405](error-catalog.md#ce2405). The
 environment becomes the only owner, and it frees the value when the closure is freed:
 
 ```sushi
@@ -130,7 +130,7 @@ fn main() i32:
     return 0
 ```
 
-The compiler refuses two shapes with **CE2094**:
+The compiler refuses two shapes with **[CE2094](error-catalog.md#ce2094)**:
 
 - **The capture of a `peek`/`poke` borrow.**
 - **A lambda parameter of an owning container type**: a dynamic array, a `List@(T)` or an
@@ -156,7 +156,7 @@ A function value is a **four-word fat pointer** `{fn_ptr, env_ptr, drop_ptr, clo
   it for `.clone()`.
 
 Function types are **invariant**, and the capture is not part of the type: `fn(i32) -> i32` names
-a plain `fn` and every closure of that shape. A mismatch is **CE2002** (assignment) or **CE2092**
+a plain `fn` and every closure of that shape. A mismatch is **[CE2002](error-catalog.md#ce2002)** (assignment) or **[CE2092](error-catalog.md#ce2092)**
 (call-through).
 
 A function type DOES carry the **mode** of each parameter, and it is invariant on the mode:
@@ -173,18 +173,18 @@ parameter, the callee gets the environment. `compose(nom g, nom f)` in `<collect
 
 | Code | Meaning |
 | --- | --- |
-| **CE2094** | illegal closure capture: a `peek`/`poke` borrow, or an owning container or variadic lambda-parameter type |
-| **CE2093** | a generic function value that no position type solves |
-| **CE0107** | a block-body lambda that can reach its end with no `return` |
-| **CE0131** | a `??` in a lambda whose type has no `| E` |
-| **CE2091** | a `Result.Ok` or `Result.Err` in a bare lambda body |
-| **CE2427** | a `nom` marker on a function-value argument that does not agree with the declared mode of the callee |
-| **CE2092** | function value type mismatch at call-through |
-| **CE2002** | function value assigned to an incompatible function-typed variable |
+| **[CE2094](error-catalog.md#ce2094)** | illegal closure capture: a `peek`/`poke` borrow, or an owning container or variadic lambda-parameter type |
+| **[CE2093](error-catalog.md#ce2093)** | a generic function value that no position type solves |
+| **[CE0107](error-catalog.md#ce0107)** | a block-body lambda that can reach its end with no `return` |
+| **[CE0131](error-catalog.md#ce0131)** | a `??` in a lambda whose type has no `| E` |
+| **[CE2091](error-catalog.md#ce2091)** | a `Result.Ok` or `Result.Err` in a bare lambda body |
+| **[CE2427](error-catalog.md#ce2427)** | a `nom` marker on a function-value argument that does not agree with the declared mode of the callee |
+| **[CE2092](error-catalog.md#ce2092)** | function value type mismatch at call-through |
+| **[CE2002](error-catalog.md#ce2002)** | function value assigned to an incompatible function-typed variable |
 
 ## Limitations
 
-- **A lambda parameter of type `List@(T)`, `Own@(T)` or a dynamic array** is refused (CE2094).
+- **A lambda parameter of type `List@(T)`, `Own@(T)` or a dynamic array** is refused ([CE2094](error-catalog.md#ce2094)).
   The indirect-call path has no deep copy for it. This is not the same as a *capture*, which
   moves owned values (see [Capture](#capture)).
 - **Nested lambdas** (a lambda in the body of another lambda) are lifted, but a deep chain of
@@ -196,7 +196,7 @@ These work:
 
 - A generic function as a value, in every position where the type is solved: an annotated `let`,
   an argument, a rebind, a `return`, a field, a payload, a `.realise()` default, behind an alias
-  and to a generic callee. Only a value that no position type solves is **CE2093**.
+  and to a generic callee. Only a value that no position type solves is **[CE2093](error-catalog.md#ce2093)**.
 - A call through a fn-typed struct field, a container get-out, a call result, a parenthesized
   expression and a captured closure value.
 - The method form of the combinators: `use <collections/iter>` gives `.map`, `.filter` and
