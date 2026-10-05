@@ -1,0 +1,28 @@
+# A string match compares BYTES, size first and then the content: a prefix of an arm does
+# not match it, a longer string does not match it, a case difference does not match, and
+# a NUL byte inside a literal is part of its value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "no match\nno match\nno match\nget\nnul\nno match\nno match\nno match\ngreeting\nno match\ngreeting\n"
+
+fn which(string s) string:
+    match s:
+        "get" -> return "get"
+        "a\0b" -> return "nul"
+        "Mostly Harmless" -> return "greeting"
+        _ -> return "no match"
+
+fn main() i32:
+    println(which("ge"))
+    println(which("gets"))
+    println(which("GET"))
+    println(which("get"))
+    println(which("a\0b"))
+    println(which("a"))
+    println(which("a\0c"))
+    println(which("mostly harmless"))
+    println(which("Mostly Harmless"))
+    let string mostly = "Mostly"
+    println(which("{mostly} Harmless!"))
+    println(which("{mostly} Harmless"))
+    return 0

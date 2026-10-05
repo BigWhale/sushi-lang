@@ -1,0 +1,16 @@
+# Two string arms with the same value are duplicates: "a" and 'a' are one value, whatever
+# the quotes.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(string s) string:
+    match s:
+        "a" ->
+            return "double"
+        'a' ->
+            return "single"
+        _ ->
+            return "other"
+
+fn main() i32:
+    println(f("a"))
+    return 0

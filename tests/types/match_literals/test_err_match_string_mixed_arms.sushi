@@ -1,0 +1,15 @@
+# A string literal arm and an integer literal arm do not mix in one match.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+
+fn f(string s) string:
+    match s:
+        "one" ->
+            return "one"
+        2 ->
+            return "two"
+        _ ->
+            return "other"
+
+fn main() i32:
+    println(f("one"))
+    return 0

@@ -1,0 +1,44 @@
+# Binding modes beside a string literal arm. A `poke` binding after a Maybe.Some("x") arm
+# writes through to the local. A `nom` binding after a Maybe.Some("skip") arm takes the
+# payload of a temporary scrutinee and hands it away.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "exact x\nx\nchanged\nskipped\nate lunch\nnone\n"
+
+fn make(string s) Maybe@(string):
+    if (s == ""):
+        return Maybe.None
+    return Maybe.Some("{s}")
+
+fn eat(nom string s) ~:
+    println("ate {s}")
+
+fn rewrite(poke Maybe@(string) m) ~:
+    match m:
+        Maybe.Some("x") -> println("exact x")
+        Maybe.Some(poke s) -> s := "changed"
+        Maybe.None -> println("none")
+
+fn show(Maybe@(string) m) ~:
+    match m:
+        Maybe.Some(s) -> println(s)
+        Maybe.None -> println("none")
+
+fn serve(string s) ~:
+    match make(s):
+        Maybe.Some("skip") -> println("skipped")
+        Maybe.Some(nom food) -> eat(nom food)
+        Maybe.None -> println("none")
+
+fn main() i32:
+    let string base = "x"
+    let Maybe@(string) first = Maybe.Some("{base}")
+    rewrite(poke first)
+    show(first)
+    let Maybe@(string) second = Maybe.Some("{base}y")
+    rewrite(poke second)
+    show(second)
+    serve("skip")
+    serve("lunch")
+    serve("")
+    return 0

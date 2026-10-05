@@ -1,0 +1,17 @@
+# A string pattern with an interpolation hole is refused: a pattern is a fixed value, and
+# a single-quoted literal is the spelling for literal braces.
+# EXPECT_ERROR_CODES_EXACT: CE2123
+
+fn f(string s, string x) string:
+    match s:
+        "{x}" ->
+            return "same"
+        _ ->
+            println(x)
+            return "other"
+
+fn main() i32:
+    let string x = "a"
+    println(f("a", x))
+    println(x)
+    return 0

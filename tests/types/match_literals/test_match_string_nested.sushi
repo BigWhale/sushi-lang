@@ -1,0 +1,87 @@
+# A string literal inside an enum payload: a Maybe, a Result whose error is a user error
+# type, a user enum beside an integer literal in another payload, a tuple payload and an
+# Own@(string) payload. A binding or `_` in the same position covers the other values.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "help\narg --verbose\nnone\nread-write\nother mode\nerror bad\nkeyword if\nword else\nzero\nnum 7\nend\nprint one\nprint 2\ncall exit\nlit 9\nroot leaf\nleaf branch\nempty\n"
+
+error ModeError:
+    Bad
+
+enum Token:
+    Word(string)
+    Num(i32)
+    End
+
+enum Expr:
+    Call((string, i32))
+    Lit(i32)
+
+enum Node:
+    Leaf(Own@(string))
+    Empty
+
+fn flag(Maybe@(string) m) string:
+    match m:
+        Maybe.Some("--help") -> return "help"
+        Maybe.Some(other) -> return "arg {other}"
+        Maybe.None -> return "none"
+
+fn check(string s) string | ModeError:
+    if (s == "bad"):
+        return Result.Err(ModeError.Bad)
+    return Result.Ok("{s}")
+
+fn mode(Result@(string, ModeError) r) string:
+    match r:
+        Result.Ok("rw") -> return "read-write"
+        Result.Ok(_) -> return "other mode"
+        Result.Err(e) ->
+            match e:
+                ModeError.Bad -> return "error bad"
+
+fn token(Token t) string:
+    match t:
+        Token.Word("if") -> return "keyword if"
+        Token.Word(w) -> return "word {w}"
+        Token.Num(0) -> return "zero"
+        Token.Num(n) -> return "num {n}"
+        Token.End -> return "end"
+
+fn expr(Expr e) string:
+    match e:
+        Expr.Call(("print", 1)) -> return "print one"
+        Expr.Call(("print", n)) -> return "print {n}"
+        Expr.Call((name, _)) -> return "call {name}"
+        Expr.Lit(v) -> return "lit {v}"
+
+fn node(Node n) string:
+    match n:
+        Node.Leaf(Own("root")) -> return "root leaf"
+        Node.Leaf(Own(s)) -> return "leaf {s}"
+        Node.Empty -> return "empty"
+
+fn main() i32:
+    let string dash = "--"
+    println(flag(Maybe.Some("{dash}help")))
+    println(flag(Maybe.Some("{dash}verbose")))
+    println(flag(Maybe.None))
+    println(mode(check("rw")))
+    println(mode(check("ro")))
+    println(mode(check("bad")))
+    let string i = "i"
+    println(token(Token.Word("{i}f")))
+    println(token(Token.Word("else")))
+    println(token(Token.Num(0)))
+    println(token(Token.Num(7)))
+    println(token(Token.End))
+    let string pr = "pr"
+    println(expr(Expr.Call(("{pr}int", 1))))
+    println(expr(Expr.Call(("{pr}int", 2))))
+    println(expr(Expr.Call(("exit", 0))))
+    println(expr(Expr.Lit(9)))
+    let string ro = "ro"
+    println(node(Node.Leaf(Own.alloc("{ro}ot"))))
+    println(node(Node.Leaf(Own.alloc("branch"))))
+    println(node(Node.Empty))
+    return 0

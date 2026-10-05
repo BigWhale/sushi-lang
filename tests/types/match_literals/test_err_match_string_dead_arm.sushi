@@ -1,0 +1,16 @@
+# A string literal arm under an arm that already covers every value of its position is
+# unreachable: Maybe.Some(_) covers Maybe.Some("a").
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn f(Maybe@(string) m) string:
+    match m:
+        Maybe.Some(_) ->
+            return "some"
+        Maybe.Some("a") ->
+            return "a"
+        Maybe.None ->
+            return "none"
+
+fn main() i32:
+    println(f(Maybe.Some("a")))
+    return 0
