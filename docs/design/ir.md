@@ -592,8 +592,8 @@ Arm = (pattern: Pattern, body: ShirBlock)
 ```
 
 A payload binding is required and `_` discards (it lowers to `Wildcard`). An INTEGER
-scrutinee uses `Literal` arms; the kinds never mix ([CE2076](../error-catalog.md#ce2076)), and that is checked on
-SHIR. `Own` mirrors the AST's `OwnPattern`; it is nested-only today, and the binding carries its own `by` mode.
+scrutinee and a STRING scrutinee use `Literal` arms; the kinds never mix ([CE2076](../error-catalog.md#ce2076)), and
+that is checked on SHIR. `Own` mirrors the AST's `OwnPattern`; it is nested-only today, and the binding carries its own `by` mode.
 
 ### 7.9 What each pass reads and writes
 

@@ -393,7 +393,10 @@ builder.branch(merge_block)
 ```
 
 `emit_match` reads the scrutinee type from the stamp of the `typecheck` pass alone
-([CE0121](../error-catalog.md#ce0121) when the stamp is missing). An integer match switches on the value itself.
+([CE0121](../error-catalog.md#ce0121) when the stamp is missing). An integer match switches on the value itself. A
+tuple match and a string match have no value to switch on: `_emit_sequential_match` tests
+the arms in source order, and a string literal test is one `emit_value_eq` (the size, then
+`memcmp`).
 
 ## Memory management
 

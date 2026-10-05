@@ -1886,10 +1886,11 @@ A `let` needs the block form: a local declared on the arrow has no line to read 
 A pattern may hold another pattern in a payload position. `open()` answers
 `Result@(File, IoError)`, so the inner pattern names an `IoError` variant; a pattern of
 another enum there is [`CE2107`](error-catalog.md#ce2107). A payload position takes an enum pattern, an integer
-literal (`Maybe.Some(0)`), a tuple pattern (`Maybe.Some((a, b))`), an `Own(...)`
-pattern, a binding or a `_`. A nested pattern over a payload that is not an enum is
-**[CE2108](error-catalog.md#ce2108)**, a literal over a payload that is not an integer is **[CE2119](error-catalog.md#ce2119)**, and a tuple
-pattern over a payload that is not a tuple is **[CE2117](error-catalog.md#ce2117)**. The compiler checks a nested
+literal (`Maybe.Some(0)`), a string literal (`Maybe.Some("--help")`), a tuple pattern
+(`Maybe.Some((a, b))`), an `Own(...)` pattern, a binding or a `_`. A nested pattern over a
+payload that is not an enum is **[CE2108](error-catalog.md#ce2108)**. An integer literal over a payload that is not an
+integer, and a string literal over a payload that is not a `string`, are **[CE2119](error-catalog.md#ce2119)**. A
+tuple pattern over a payload that is not a tuple is **[CE2117](error-catalog.md#ce2117)**. The compiler checks a nested
 pattern for exhaustiveness as it checks an outer one (see [Exhaustiveness](#exhaustiveness)).
 
 ```sushi
@@ -1959,8 +1960,8 @@ every depth.
 
 ### Exhaustiveness
 
-One checker reads every match: an enum match, a nested enum match, an integer match and a
-tuple match. It gives two answers.
+One checker reads every match: an enum match, a nested enum match, an integer match, a
+string match and a tuple match. It gives two answers.
 
 **Every value must match an arm.** A match that does not cover a value is **[CE2040](error-catalog.md#ce2040)**. For
 a plain enum match, the message lists the names of the missing variants. When an arm tests
@@ -1984,9 +1985,10 @@ match maybe_color:
     Maybe.None -> println("none")
 ```
 
-An integer has no end of values, so an integer position is covered only by a `_` or a
-binding. A literal position covers one value. An integer match with no `_` arm is
-**[CE2074](error-catalog.md#ce2074)**. In a tuple, the missing pattern shows `_` for such a position: `(_, _)`.
+An integer and a string have no end of values, so an integer position or a string position
+is covered only by a `_` or a binding. A literal position covers one value. An integer
+match or a string match with no `_` arm is **[CE2074](error-catalog.md#ce2074)**. In a tuple, the missing pattern
+shows `_` for such a position: `(_, _)`.
 
 **Every arm must match a value.** An arm is unreachable when the arms above it match every
 value that it matches. That is **[CE2118](error-catalog.md#ce2118)**, an error, with a note at each arm that covers
@@ -2004,23 +2006,38 @@ match pair:
 Remove the arm, or move it above the arms that cover it. Three older rules come first,
 and each is the one diagnostic for its arm: a second arm for the same enum pattern is
 **[CE2041](error-catalog.md#ce2041)**; a `_` arm that is not the last arm is **[CE2041](error-catalog.md#ce2041)**, and the arms after it get
-no second error; a second literal arm for the same integer value is **[CE2075](error-catalog.md#ce2075)**.
+no second error; a second literal arm for the same value (an integer or a string) is
+**[CE2075](error-catalog.md#ce2075)**.
 
 Because the checker reads nested patterns, a match that compiles has an arm for every
 value. The run-time check **[RE2023](error-catalog.md#re2023)** stays as a backstop, and no program reaches it.
 
-### Integer Matching
+### Literal Matching
 
-A match on an integer scrutinee dispatches on literal arms. Each literal takes
-the scrutinee's type under the usual context-typing rule (a non-decimal literal
-is a bit pattern; out of range is [CE2073](error-catalog.md#ce2073)). Two arms with the same value are one
-duplicate arm ([CE2075](error-catalog.md#ce2075)), whatever their radix. Because integer values cannot be
-enumerated, the match must end with a `_` arm ([CE2074](error-catalog.md#ce2074)). Literal arms and enum
-pattern arms never mix in one match ([CE2076](error-catalog.md#ce2076)).
+A match on an integer scrutinee or on a `string` scrutinee dispatches on literal arms. The
+same rules apply to the two kinds:
 
-An integer literal is also legal inside a pattern: in an enum payload
-(`Maybe.Some(0) ->`) and in a tuple element (`(0, n) ->`). It takes the type of its
-position by the same rule. A position that is not an integer takes no literal (**[CE2119](error-catalog.md#ce2119)**).
+- Each arm holds one literal.
+- Two arms with the same value are a duplicate arm (**[CE2075](error-catalog.md#ce2075)**).
+- The values cannot be listed, so the match must end with a `_` arm (**[CE2074](error-catalog.md#ce2074)**).
+- One match holds one arm kind. A string arm on an integer scrutinee, an integer arm on a
+  `string` scrutinee, a literal arm on an enum scrutinee, and a string arm beside an
+  integer arm are **[CE2076](error-catalog.md#ce2076)**.
+- A literal is also legal inside a pattern: in an enum payload (`Maybe.Some(0) ->`,
+  `Maybe.Some("--help") ->`), in a tuple element (`(0, n) ->`, `("go", dir) ->`) and in an
+  `Own(...)` pattern. The value at that position must be of the kind of the literal: an
+  integer for an integer literal, a `string` for a string literal (**[CE2119](error-catalog.md#ce2119)**).
+
+Two forms are not patterns. A named constant (`GET ->`) is a parse error: write the
+literal. Several literals in one arm (`"get" | "fetch" ->`) are a parse error too: write
+one arm for each literal.
+
+#### Integer Arms
+
+Each literal takes the scrutinee's type under the usual context-typing rule. A non-decimal
+literal is a bit pattern, and a literal out of range is **[CE2073](error-catalog.md#ce2073)**. The radix does not
+change the value: `0x2a` and `42` are the same arm (**[CE2075](error-catalog.md#ce2075)**). A nested integer literal
+takes the type of its position by the same rule.
 
 ```sushi
 fn tag_name(u8 t) string:
@@ -2040,12 +2057,94 @@ fn main() i32:
     return 0
 ```
 
+#### String Arms
+
+A string literal arm takes a double-quoted literal (`"get"`) or a single-quoted literal
+(`'get'`). The scrutinee can be any `string`: a local, a parameter (`peek` too), a field,
+an element, a `var`, a literal or a temporary. The match borrows a place. It owns a
+temporary (`s.lower()`, `a.concat(b)`, an interpolation) and frees it on every path out of
+the match. `match nom s:` hands the local to the match, and the match frees it at its end.
+
+```sushi
+fn run(string cmd, string key) i32:
+    match cmd:
+        "get" ->
+            println("get {key}")
+        "put" ->
+            println("put {key}")
+        'del' ->
+            println("del {key}")
+        _ ->
+            println("unknown command: {cmd}")
+            return 1
+    return 0
+
+fn main() i32:
+    run("get", "answer")                # get answer
+    run("del", "answer")                # del answer
+    run("Mostly Harmless", "answer")    # unknown command: Mostly Harmless
+    return 0
+```
+
+**The match compares BYTES**, by the rule of `==`: first the size, then the content
+(`memcmp`). There is no case folding, no collation and no Unicode normalization. A prefix
+of an arm does not match the arm, and a longer string does not match it. The compiler
+reads the value of a literal after it processes the escapes, so `"a"` and `'a'` are one
+value, and `"\t"` and a literal tab are one value. Two arms with one value are **[CE2075](error-catalog.md#ce2075)**.
+
+**The arms are tested in source order.** Each arm is one comparison, and the first arm that
+matches runs. There is no jump table for a string match.
+
+**A pattern holds no interpolation hole.** A pattern is a fixed value, and `"{x}" ->` is
+**[CE2123](error-catalog.md#ce2123)**. To match the braces as text, write `'{x}' ->` with single quotes, which do not
+interpolate. To compare with a run-time value, bind the value and test it in the arm body
+(`s -> if (s == x): ...`).
+
+<!-- docs-sweep: error CE2123 -->
+```sushi
+fn same(string s, string x) bool:
+    match s:
+        "{x}" -> return true            # CE2123: a hole is a run-time value
+        _ -> return false
+
+fn main() i32:
+    println(same("a", "a"))
+    return 0
+```
+
+A string literal in a payload or a tuple element tests that position. A binding or a `_`
+in the same position after it covers the other values:
+
+```sushi
+fn main(string[] args) i32:
+    match args.get(1):
+        Maybe.Some("--help") -> println("usage: app [--help | NAME]")
+        Maybe.Some(name) -> println("Mostly Harmless, {name}")
+        Maybe.None -> println("Mostly Harmless")
+    return 0
+```
+
+```sushi
+fn walk(string verb, string noun) string:
+    match (verb, noun):
+        ("go", "north") -> return "you walk north"
+        ("go", dir) -> return "you go {dir}"
+        ("look", _) -> return "you look around"
+        _ -> return "you cannot do that"
+
+fn main() i32:
+    println(walk("go", "north"))        # you walk north
+    println(walk("go", "south"))        # you go south
+    println(walk("jump", "up"))         # you cannot do that
+    return 0
+```
+
 ### Tuple Patterns
 
 A tuple pattern matches a tuple, one item for each element. An item is an enum pattern, an
-integer literal, a binding (bare, `poke` or `nom`), a `_`, or another tuple pattern. A
-`bool`, `string`, float or struct element takes only a binding or a `_`. A tuple pattern
-stands at the top of an arm, in an enum payload, and in another tuple pattern.
+integer literal, a string literal, a binding (bare, `poke` or `nom`), a `_`, or another
+tuple pattern. A `bool`, float or struct element takes only a binding or a `_`. A tuple
+pattern stands at the top of an arm, in an enum payload, and in another tuple pattern.
 
 ```sushi
 enum Color:
