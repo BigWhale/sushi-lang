@@ -1574,7 +1574,7 @@ The error value inside Err() must match the function's error type.
 
 **Message:** `non-exhaustive match pattern (missing variants: {variants})`
 
-A match must have an arm for every value of its scrutinee. One checker reads every match (ruling 17 of the tuple design, docs/design/tuples.md): an enum match, a nested enum match and a tuple match. It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, at most 16 of them. Add an arm for each, or a `_` arm last. An integer scrutinee with no `_` arm is [CE2074](#ce2074). Before ruling 17 the checker compared only the outer variant names, so `Maybe.Some(Color.Red) -> ...` and `Maybe.None -> ...` compiled, and the value `Maybe.Some(Color.Green)` stopped the program at run time with [RE2023](#re2023). That match is this error now.
+A match must have an arm for every value of its scrutinee. One checker reads every match (ruling 17 of the tuple design, docs/design/tuples.md): an enum match, a nested enum match and a tuple match. It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, at most 16 of them. Add an arm for each, or a `_` arm last. An integer or a string scrutinee with no `_` arm is [CE2074](#ce2074). Before ruling 17 the checker compared only the outer variant names, so `Maybe.Some(Color.Red) -> ...` and `Maybe.None -> ...` compiled, and the value `Maybe.Some(Color.Green)` stopped the program at run time with [RE2023](#re2023). That match is this error now.
 
 ### CE2041 {#ce2041}
 
@@ -1622,9 +1622,9 @@ An enum declares the same variant name more than once.
 
 **Error** · type
 
-**Message:** `match scrutinee must be an enum or integer type, got '{got}'`
+**Message:** `match scrutinee must be an enum, integer or string type, got '{got}'`
 
-A match dispatches on an enum's variants, or (since #415) on an integer's value with literal arms. Other types have no match semantics. This is the SCRUTINEE's rule and nothing else. It answered four faults over seven emit sites until #741: an arm or a nested pattern that names another enum ([CE2107](#ce2107)), a nested pattern over a payload that is not an enum ([CE2108](#ce2108)), and the three `Own(...)` pattern refusals ([CE2109](#ce2109)). Three of those sites filled the quoted type slot with a whole sentence, so a user read 'got 'Own(...) pattern requires Own@(T) type, got i32''. The slot takes a type and only a type.
+A match dispatches on an enum's variants, on an integer's value with literal arms (#415), or on a string's value with string literal arms. A tuple scrutinee is legal too. Other types have no match semantics. This is the SCRUTINEE's rule and nothing else. It answered four faults over seven emit sites until #741: an arm or a nested pattern that names another enum ([CE2107](#ce2107)), a nested pattern over a payload that is not an enum ([CE2108](#ce2108)), and the three `Own(...)` pattern refusals ([CE2109](#ce2109)). Three of those sites filled the quoted type slot with a whole sentence, so a user read 'got 'Own(...) pattern requires Own@(T) type, got i32''. The slot takes a type and only a type.
 
 ### CE2049 {#ce2049}
 
@@ -1782,9 +1782,9 @@ The literal does not fit the target type's range. Use a wider type, or an explic
 
 **Error** · type
 
-**Message:** `non-exhaustive integer match (add a trailing '_' arm)`
+**Message:** `non-exhaustive {kind} match (add a trailing '_' arm)`
 
-A match on an integer scrutinee cannot enumerate every value, so it must end with a wildcard arm. Introduced with integer literal match arms (#415).
+A match on an integer or a string scrutinee cannot list every value, so it must end with a wildcard arm. The `{kind}` slot names the scrutinee kind: integer or string. Introduced with integer literal match arms (#415); string literal arms use the same code.
 
 ### CE2075 {#ce2075}
 
@@ -1792,7 +1792,7 @@ A match on an integer scrutinee cannot enumerate every value, so it must end wit
 
 **Message:** `duplicate literal match arm: value {value} is already matched by arm '{first}'`
 
-Two literal arms match the same VALUE, whatever their radix: 0x2a and 42 are the same arm. The second arm is unreachable.
+Two literal arms match the same VALUE. For an integer, the radix does not change the value: 0x2a and 42 are the same arm. For a string, the quotes do not change the value, and the value is read after escape processing: "a" and 'a' are the same arm, and "\t" and a literal tab are the same arm. The `{value}` slot prints a string value with its quotes. The second arm is unreachable.
 
 ### CE2076 {#ce2076}
 
@@ -1800,7 +1800,7 @@ Two literal arms match the same VALUE, whatever their radix: 0x2a and 42 are the
 
 **Message:** `match arm does not fit the scrutinee: {arm_kind} arm on a '{scrutinee_type}' scrutinee`
 
-A literal arm needs an integer scrutinee; an enum pattern arm needs an enum scrutinee. One match cannot mix the two arm kinds (#415).
+An integer literal arm needs an integer scrutinee, a string literal arm needs a string scrutinee, and an enum pattern arm needs an enum scrutinee. One match cannot mix these arm kinds (#415): a string arm on an integer match, an integer arm on a string match, and a literal arm on an enum match are all this error. A literal NESTED in a pattern that reads a value of the wrong kind is [CE2119](#ce2119).
 
 ### CE2077 {#ce2077}
 
@@ -2138,15 +2138,15 @@ Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elemen
 
 **Message:** `unreachable match arm '{pattern}': the arms above it match every value it matches`
 
-Ruling 18 of the tuple design (docs/design/tuples.md). A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match (ruling 17): an enum match, a nested enum match, an integer match and a tuple match. Where an older rule names the fault, that rule is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same integer value is [CE2075](#ce2075). Before ruling 17 the checker compared only the outer variant names, so an arm that could not run was accepted in silence.
+Ruling 18 of the tuple design (docs/design/tuples.md). A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match (ruling 17): an enum match, a nested enum match, an integer match and a tuple match. Where an older rule names the fault, that rule is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075). Before ruling 17 the checker compared only the outer variant names, so an arm that could not run was accepted in silence.
 
 ### CE2119 {#ce2119}
 
 **Error** · type
 
-**Message:** `a literal pattern needs an integer value, got '{got}'`
+**Message:** `{kind} literal pattern needs {kind} value, got '{got}'`
 
-An integer literal is legal in every pattern position (decision D3 of the tuple design, docs/design/tuples.md): a literal arm of an integer match, an element of a tuple pattern (`(0, n) ->`) and a payload of an enum pattern (`Maybe.Some(0) ->`). Inside a pattern, the value at the position must then be an integer. A `bool`, a `string`, a float and a struct have no literal pattern: such a position takes a binding or `_`, and the arm body tests the value (`(s, n) -> if (s == "a"): ...`). A literal arm at the top of a match whose scrutinee is not an integer is [CE2076](#ce2076). Added with tuple patterns.
+An integer literal and a string literal are legal in every pattern position (decision D3 of the tuple design, docs/design/tuples.md): a literal arm of a match, an element of a tuple pattern (`(0, n) ->`, `("get", v) ->`) and a payload of an enum pattern (`Maybe.Some(0) ->`, `Maybe.Some("--help") ->`). Inside a pattern, the value at the position must then be of the literal's kind: an integer for an integer literal, a `string` for a string literal. The `{kind}` slot names the literal kind with its article (`an integer`, `a string`), so that the text reads correctly for both kinds. A `bool`, a float and a struct have no literal pattern: such a position takes a binding or `_`, and the arm body tests the value (`(b, n) -> if (b): ...`). A literal arm at the top of a match whose scrutinee is of another kind is [CE2076](#ce2076). Added with tuple patterns; the string kind was added with string literal arms.
 
 ### CE2120 {#ce2120}
 
@@ -2175,6 +2175,16 @@ An index, a count and a range bound are i32 positions (#870): an array index `a[
 **Help:** `` walk it with `foreach`, or spell it into an array: `from([a..b])` ``
 
 A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array. Until #1165 a range given to a generic function passed the typecheck pass and stopped the backend with the internal error [CE0000](#ce0000), and a range in a typed position was a type mismatch about an `Iterator@(i32)` that no program can write.
+
+### CE2123 {#ce2123}
+
+**Error** · type
+
+**Message:** `a string pattern cannot hold an interpolation hole`
+
+**Help:** `write '{text}' with single quotes to match the braces as text`
+
+A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`"{x}" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, use a `_` arm and test the value in the arm body (`_ -> if (s == x): ...`), or bind it in a nested position. Added with string arms in a match.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
