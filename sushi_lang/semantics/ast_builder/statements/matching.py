@@ -95,18 +95,31 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
 
 
 def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
-    """Parse literal_pattern / neg_literal_pattern: an integer literal arm (#415).
+    """Parse literal_pattern / neg_literal_pattern: an integer (#415) or a string arm.
 
     Delegates the token to `expr_from_token` so radix handling, underscore
-    stripping, and the leading-zero rejection (CE2071) stay in one place.
+    stripping, the leading-zero rejection (CE2071) and the string escapes stay in
+    one place.
     """
-    from sushi_lang.semantics.ast import IntLit
+    from sushi_lang.semantics.ast import IntLit, StringLit
     from sushi_lang.semantics.ast_builder.expressions.literals import expr_from_token
+    from sushi_lang.semantics.ast_builder.utils.string_processing import process_string_escapes
 
     tok = next((c for c in t.children if isinstance(c, Token)), None)
     if tok is None:
-        ice(t, "literal pattern without a number token")
+        ice(t, "literal pattern without a literal token")
     lit = expr_from_token(tok, ast_builder)
+    if tok.type in ("STRING", "CHAR_STRING"):
+        if isinstance(lit, StringLit):
+            return LiteralPattern(value=lit.value, display=str(tok.value), loc=span_of(t))
+        # A hole is a run-time value. The substitute is the value the help asks for:
+        # the same text in single quotes, with no hole.
+        text = str(tok.value)[1:-1]
+        return ast_builder.recover(
+            SyntaxDiagnostic("CE2123", span=span_of(tok))
+            .help(f"write '{text}' with single quotes to match the braces as text"),
+            LiteralPattern(value=process_string_escapes(text), display=str(tok.value),
+                           loc=span_of(t)))
     if not isinstance(lit, IntLit):
         ice(t, f"literal pattern is not an integer: {tok.value}")
 
@@ -122,7 +135,7 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
 def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder',
                        tuple_nested: bool = True) -> PatternItem:
     """Read one `pattern_item`: a nested pattern, a wildcard, an `Own(...)`, a tuple
-    pattern, an integer literal or a NAME.
+    pattern, a literal (an integer or a string) or a NAME.
 
     A binding MODE is not read here: `peek`/`poke` and `nom` rename the whole node
     (`ref_binding`, `nom_binding`), and `_read_list_item` reads a marked binding beside

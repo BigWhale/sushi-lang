@@ -489,3 +489,7 @@ _add(ErrorMessage("CE2122", Severity.ERROR,
 _add(ErrorMessage("CE2121", Severity.ERROR,
     "{position} is i32, got {got}",
     Category.TYPE, "An index, a count and a range bound are i32 positions (#870): an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it: the backend used to zero-extend a narrow value, so `-1 as i8` counted 255, and an i64 bound of 4294967297 was cut to 1. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is CE2006, which names the argument; an assignment of the wrong type is CE2002. Until #1137 this fault was CE2002, whose text said 'cannot assign'."))
+
+_add(ErrorMessage("CE2123", Severity.ERROR,
+    "a string pattern cannot hold an interpolation hole",
+    Category.TYPE, "A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`\"{x}\" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, bind the value or use `_`, and test it in the arm body (`s -> if (s == x): ...`). Added with string arms in a match."))

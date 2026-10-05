@@ -625,12 +625,13 @@ class WildcardPattern(Node):
 
 @dataclass(slots=True)
 class LiteralPattern(Node):
-    """An integer literal pattern in a match arm on an integer scrutinee (#415).
+    """A literal pattern: an integer (#415) or a string.
 
-    `display` keeps the source spelling for diagnostics; `value` is the Python
-    integer (sign already applied). `radix` feeds the same fit rule as a
-    context-typed literal: a non-decimal literal is a bit pattern."""
-    value: int
+    `display` keeps the source spelling for diagnostics, quotes included. `value` is
+    the Python integer (sign already applied) or the string after escape processing,
+    so `"a"` and `'a'` are one value. `radix` feeds the same fit rule as a
+    context-typed literal: a non-decimal literal is a bit pattern. A string keeps 10."""
+    value: int | str
     display: str
     radix: int = 10
 
