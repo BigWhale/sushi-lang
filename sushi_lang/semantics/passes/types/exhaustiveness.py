@@ -3,8 +3,9 @@
 The usefulness algorithm of Maranget ("Warnings for pattern matching", 2007) over a
 pattern matrix. An arm is one row. A column of an enum type splits into its variants, a
 tuple column into its elements, an `Own@(T)` column into its pointee, and an integer
-column has no end of values, so only a `_` or a binding covers it. Two answers come out:
-the values that no arm matches (the witnesses), and the arms that no value can reach.
+column and a string column have no end of values, so only a `_` or a binding covers
+them. Two answers come out: the values that no arm matches (the witnesses), and the
+arms that no value can reach.
 The design is in docs/design/tuples.md section 5b.
 """
 from __future__ import annotations
@@ -23,9 +24,15 @@ class Wild:
 WILD = Wild()
 
 # The key of the one constructor of a tuple and of an `Own@(T)`. A variant's key is its
-# name, and an integer literal's key is its value.
+# name, an integer literal's key is its value, and a string literal's key is
+# `string_key(value)`.
 TUPLE_KEY = ("tuple",)
 OWN_KEY = ("own",)
+
+
+def string_key(value: str) -> Tuple[str, str]:
+    """The key of a string literal: it never equals a variant name or an integer."""
+    return ("string", value)
 
 
 @dataclass(frozen=True)

@@ -21,12 +21,28 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.tuples import display_tuple, is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.type_display import display_type
-from .exhaustiveness import OWN_KEY, TUPLE_KEY, WILD, Ctor, Pat, Signature, Wild, analyze
+from .exhaustiveness import (
+    OWN_KEY, TUPLE_KEY, WILD, Ctor, Pat, Signature, Wild, analyze, string_key,
+)
 from .utils import resolve_declared_type
 from sushi_lang.semantics.type_predicates import BUILTIN_INTEGER_TYPES
 
 # The scrutinee types an integer literal match accepts (#415).
 _INTEGER_SCRUTINEES = BUILTIN_INTEGER_TYPES
+
+
+def _literal_kind(value: int | str) -> str:
+    """The kind of a literal pattern's value, for the `{kind}` slots: integer or string."""
+    return "string" if isinstance(value, str) else "integer"
+
+
+def _scrutinee_literal_kind(ty: Type) -> Optional[str]:
+    """The literal kind a scrutinee type takes, or None when it takes no literal arm."""
+    if ty == BuiltinType.STRING:
+        return "string"
+    if ty in _INTEGER_SCRUTINEES:
+        return "integer"
+    return None
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -79,8 +95,8 @@ def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
         return
 
     if not isinstance(scrutinee_type, EnumType) and not is_tuple_type(scrutinee_type):
-        # An integer scrutinee dispatches on literal arms (#415).
-        validate_integer_match(validator, stmt, scrutinee_type)
+        # An integer (#415) or a string scrutinee dispatches on literal arms.
+        validate_literal_match(validator, stmt, scrutinee_type)
         return
 
     # A contested enum name has no trustworthy declaration for this unit: it declared
@@ -154,7 +170,7 @@ def _poke_bindings(item: object) -> Iterator[RefBinding]:
 
 
 def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[Type]:
-    """Validate the scrutinee is matchable: an enum, an integer (#415), or a tuple."""
+    """Validate the scrutinee is matchable: an enum, an integer (#415), a string, or a tuple."""
     validator.validate_expression(stmt.scrutinee)
     scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
 
@@ -175,7 +191,7 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     if isinstance(scrutinee_type, ReferenceType) and is_tuple_type(scrutinee_type):
         scrutinee_type = _resolve(validator, scrutinee_type.referenced_type)
 
-    if isinstance(scrutinee_type, EnumType) or scrutinee_type in _INTEGER_SCRUTINEES:
+    if isinstance(scrutinee_type, EnumType) or _scrutinee_literal_kind(scrutinee_type):
         return scrutinee_type
     if isinstance(scrutinee_type, StructType) and is_tuple_type(scrutinee_type):
         return scrutinee_type
@@ -190,33 +206,44 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     return None
 
 
-def validate_integer_match(validator: 'TypeValidator', stmt: Match,
+def validate_literal_match(validator: 'TypeValidator', stmt: Match,
                            scrutinee_type: Type) -> None:
-    """Validate a match on an integer scrutinee: literal arms + a trailing `_` (#415).
+    """Validate a match on an integer (#415) or a string scrutinee: literal arms + a `_`.
 
-    A literal takes the scrutinee's type under the same fit rule as any
-    context-typed literal (a non-decimal literal is a bit pattern); duplicates
-    are duplicates by VALUE; the wildcard is required because integer values
-    cannot be enumerated, which the one checker answers with CE2074.
+    Each literal arm must be of the scrutinee's kind (CE2076 otherwise). An integer
+    literal takes the scrutinee's type under the same fit rule as any context-typed
+    literal (a non-decimal literal is a bit pattern). Duplicates are duplicates by VALUE,
+    so `0x2a` and `42` are one arm, and `"a"` and `'a'` are one arm. The wildcard is
+    required because the values cannot be listed, which the one checker answers with
+    CE2074.
     """
-    # The backend dispatches on this stamp; EnumType matches use
-    # `resolved_scrutinee_type` instead.
-    stmt.integer_match_type = scrutinee_type
+    kind = _scrutinee_literal_kind(scrutinee_type)
+    # The backend switches on the value of an integer match. A string match has no
+    # switch: it reads `resolved_scrutinee_type`, as a tuple match does.
+    if kind == "integer":
+        stmt.integer_match_type = scrutinee_type
+    else:
+        stmt.resolved_scrutinee_type = scrutinee_type
 
     arms = _ArmRows()
-    seen: dict[int, str] = {}
+    seen: dict[int | str, str] = {}
     for idx, arm in enumerate(stmt.arms):
         pattern = arm.pattern
 
         if isinstance(pattern, WildcardPattern):
             _wildcard_row(validator, arms, idx, len(stmt.arms), pattern)
+        elif isinstance(pattern, LiteralPattern) and _literal_kind(pattern.value) != kind:
+            _reject_arm_kind(validator, pattern, scrutinee_type, arms)
         elif isinstance(pattern, LiteralPattern):
             row = _check_literal(validator, pattern, scrutinee_type)
             if row is None:
                 arms.invalid = True
             elif pattern.value in seen:
+                # A string value prints as the first arm spells it, quotes included.
+                first = seen[pattern.value]
+                value = first if isinstance(pattern.value, str) else pattern.value
                 er.emit(validator.reporter, er.ERR.CE2075, pattern.loc,
-                        value=pattern.value, first=seen[pattern.value])
+                        value=value, first=first)
                 arms.reported.add(idx)
                 row = None
             else:
@@ -227,14 +254,24 @@ def validate_integer_match(validator: 'TypeValidator', stmt: Match,
             arms.invalid = True
             arms.rows.append(None)
         else:
-            er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
-                    arm_kind="enum-pattern", scrutinee_type=display_type(scrutinee_type))
-            arms.invalid = True
-            arms.rows.append(None)
+            _reject_arm_kind(validator, pattern, scrutinee_type, arms)
 
         _walk_arm_body(validator, arm)
 
     check_match_exhaustiveness(validator, stmt, scrutinee_type, arms)
+
+
+def _reject_arm_kind(validator: 'TypeValidator', pattern: Pattern | LiteralPattern,
+                     scrutinee_type: Type, arms: _ArmRows) -> None:
+    """An arm whose kind does not fit the scrutinee (CE2076): the arm gets no row."""
+    if isinstance(pattern, LiteralPattern):
+        arm_kind = f"{_literal_kind(pattern.value)} literal"
+    else:
+        arm_kind = "enum-pattern"
+    er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
+            arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
+    arms.invalid = True
+    arms.rows.append(None)
 
 
 def _wildcard_row(validator: 'TypeValidator', arms: _ArmRows, idx: int, count: int,
@@ -281,13 +318,9 @@ def collect_and_validate_patterns(validator: 'TypeValidator', stmt: Match,
 
         if isinstance(pattern, LiteralPattern) or (
                 isinstance(pattern, Pattern) and not isinstance(scrutinee_type, EnumType)):
-            # A literal arm needs an integer scrutinee (#415), and an enum pattern arm
-            # an enum scrutinee.
-            kind = "literal" if isinstance(pattern, LiteralPattern) else "enum-pattern"
-            er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
-                    arm_kind=kind, scrutinee_type=display_type(scrutinee_type))
-            arms.invalid = True
-            arms.rows.append(None)
+            # A literal arm needs an integer (#415) or a string scrutinee, and an enum
+            # pattern arm an enum scrutinee.
+            _reject_arm_kind(validator, pattern, scrutinee_type, arms)
             continue
 
         if isinstance(pattern, Pattern):
@@ -359,11 +392,22 @@ def _check_item(validator: 'TypeValidator', item: object, ty: Type,
 
 def _check_literal(validator: 'TypeValidator', pattern: LiteralPattern,
                    ty: Type) -> Optional[Pat]:
-    """An integer literal pattern: an integer value, and a literal that fits its type."""
+    """A literal pattern: a value of the literal's kind, and an integer literal that fits.
+
+    A string literal reads a `string` value. An integer literal reads an integer value
+    and must fit its type.
+    """
     from sushi_lang.semantics.passes.types.inference import int_literal_fits
 
+    if isinstance(pattern.value, str):
+        if ty != BuiltinType.STRING:
+            er.emit(validator.reporter, er.ERR.CE2119, pattern.loc,
+                    kind="a string", got=display_type(ty))
+            return None
+        return Ctor(string_key(pattern.value))
     if not isinstance(ty, BuiltinType) or ty not in _INTEGER_SCRUTINEES:
-        er.emit(validator.reporter, er.ERR.CE2119, pattern.loc, got=display_type(ty))
+        er.emit(validator.reporter, er.ERR.CE2119, pattern.loc,
+                kind="an integer", got=display_type(ty))
         return None
     if not int_literal_fits(pattern.value, pattern.radix, ty):
         er.emit(validator.reporter, er.ERR.CE2073, pattern.loc,
@@ -501,8 +545,9 @@ def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutine
 
     if result.missing:
         stmt.not_exhaustive = True
-        if scrutinee_type in _INTEGER_SCRUTINEES:
-            er.emit(validator.reporter, er.ERR.CE2074, stmt.loc)
+        kind = _scrutinee_literal_kind(scrutinee_type)
+        if kind is not None:
+            er.emit(validator.reporter, er.ERR.CE2074, stmt.loc, kind=kind)
         else:
             er.emit(validator.reporter, er.ERR.CE2040, stmt.loc,
                     variants=_render_missing(validator, result.missing, scrutinee_type,
@@ -597,7 +642,8 @@ def _item_signature(item: object) -> str:
     if isinstance(item, TuplePattern):
         return "(" + ",".join(_item_signature(e) for e in item.elements) + ")"
     if isinstance(item, LiteralPattern):
-        return str(item.value)
+        # A string keeps its quotes, so `"1"` is not the integer 1 and `"_"` is not `_`.
+        return repr(item.value) if isinstance(item.value, str) else str(item.value)
     if isinstance(item, OwnPattern):
         if isinstance(item.inner_pattern, str):
             return "Own"
