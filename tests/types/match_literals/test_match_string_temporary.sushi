@@ -1,0 +1,53 @@
+# A temporary string scrutinee is owned by the match and freed on every path: at the end
+# of the match, through a `return` in an arm, and through a `break` or a `continue` in an
+# arm inside a loop. The temporaries are a method result, a concat result and an
+# interpolated string.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "bye\nusage\nunknown\nlower quit\nconcat goodbye\ndash a-b\ncounted 2\n"
+use <collections/strings>
+
+fn command(string s) string:
+    match s.lower():
+        "quit" ->
+            return "bye"
+        "help" ->
+            return "usage"
+        _ ->
+            return "unknown"
+
+fn count_words(string[] words) i32:
+    let i32 n = 0
+    foreach(i in 0..words.len()):
+        match words[i].upper():
+            "SKIP" ->
+                continue
+            "STOP" ->
+                break
+            _ ->
+                n := n + 1
+    return n
+
+fn main() i32:
+    println(command("QUIT"))
+    println(command("Help"))
+    println(command("Mostly Harmless"))
+    let string q = "QU"
+    let string shout = "{q}IT"
+    match shout.lower():
+        "quit" -> println("lower quit")
+        _ -> println("lower other")
+    let string a = "good"
+    let string by = "by"
+    let string b = "{by}e"
+    match a.concat(b):
+        "goodbye" -> println("concat goodbye")
+        _ -> println("concat other")
+    let string x = "a"
+    let string y = "b"
+    match "{x}-{y}":
+        "a-b" -> println("dash a-b")
+        _ -> println("dash other")
+    let string[] words = from(["one", "skip", "two", "Stop", "three"])
+    println("counted {count_words(words)}")
+    return 0

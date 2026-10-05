@@ -1,0 +1,45 @@
+# String literal arms in a match: a double-quoted and a single-quoted literal, the empty
+# string, the escapes \t and \n, a multi-byte UTF-8 literal, and the required trailing
+# wildcard arm. A local scrutinee stays usable after the match, and a string literal
+# can itself be the scrutinee.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "double\nsingle\nempty\ntab\nnewline\nutf-8\nother\nother\nsingle\nlocal put\nput\nfixed\n"
+
+fn classify(string s) string:
+    match s:
+        "get" ->
+            return "double"
+        'put' ->
+            return "single"
+        "" ->
+            return "empty"
+        "\t" ->
+            return "tab"
+        "a\nb" ->
+            return "newline"
+        "žąsis π" ->
+            return "utf-8"
+        _ ->
+            return "other"
+
+fn main() i32:
+    println(classify("get"))
+    println(classify('put'))
+    println(classify(""))
+    println(classify("\t"))
+    println(classify("a\nb"))
+    println(classify("žąsis π"))
+    println(classify("zasis p"))
+    println(classify(" "))
+    println(classify("put"))
+    let string word = "put"
+    match word:
+        "get" -> println("local get")
+        "put" -> println("local put")
+        _ -> println("local other")
+    println(word)
+    match "fixed":
+        "loose" -> println("loose")
+        "fixed" -> println("fixed")
+        _ -> println("neither")
+    return 0

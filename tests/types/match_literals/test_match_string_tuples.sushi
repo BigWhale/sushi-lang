@@ -1,0 +1,42 @@
+# A string literal inside a tuple pattern: over the Maybe of a tuple that split_once
+# answers, over a tuple parameter beside an integer literal, and over a tuple literal
+# scrutinee of two strings with a trailing `_` arm.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "port is 8080\nunknown key host\nno equals sign\nget first\nget 3\nother request\nnorth\ngo south\nlook\nunknown\n"
+use <collections/strings>
+
+fn setting(string line) string:
+    match line.split_once("="):
+        Maybe.Some(("port", v)) -> return "port is {v}"
+        Maybe.Some((k, _)) -> return "unknown key {k}"
+        Maybe.None -> return "no equals sign"
+
+fn request((string, i32) r) string:
+    match r:
+        ("get", 0) -> return "get first"
+        ("get", n) -> return "get {n}"
+        (_, _) -> return "other request"
+
+fn walk(string verb, string noun) string:
+    match (verb, noun):
+        ("go", "north") -> return "north"
+        ("go", dir) -> return "go {dir}"
+        ("look", _) -> return "look"
+        _ -> return "unknown"
+
+fn main() i32:
+    let string po = "po"
+    println(setting("{po}rt=8080"))
+    println(setting("host=example"))
+    println(setting("Mostly Harmless"))
+    let string g = "g"
+    println(request(("{g}et", 0)))
+    println(request(("{g}et", 3)))
+    println(request(("put", 0)))
+    let string n = "n"
+    println(walk("go", "{n}orth"))
+    println(walk("go", "south"))
+    println(walk("look", "{n}orth"))
+    println(walk("jump", "up"))
+    return 0

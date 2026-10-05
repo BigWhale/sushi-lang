@@ -1119,7 +1119,25 @@ fn main() i32:
     return 0
 ```
 
-**Literals inside a pattern**: an integer literal is also legal in a payload (`Maybe.Some(0)`) and in a tuple element (`(0, n)`).
+**String patterns**: a `match` on a `string` takes string literal arms, in double quotes or in single quotes. A trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)). The match compares bytes: the case counts, and a prefix does not match. The arms are tested in source order, and the first arm that matches runs:
+
+```sushi
+fn command(string cmd) string:
+    match cmd:
+        "start" -> return "starting"
+        "stop" -> return "stopping"
+        'status' -> return "all systems go"
+        _ -> return "unknown command: {cmd}"
+
+fn main() i32:
+    println(command("status"))
+    println(command("Stop"))
+    return 0
+```
+
+A string pattern cannot hold an interpolation hole: `"{x}" ->` is [`CE2123`](error-catalog.md#ce2123). A named constant is not a pattern, and one arm holds one literal.
+
+**Literals inside a pattern**: an integer literal and a string literal are also legal in a payload (`Maybe.Some(0)`, `Maybe.Some("--help")`) and in a tuple element (`(0, n)`, `("go", dir)`).
 
 **Wildcard patterns**: The `_` pattern matches anything, acting as a catch-all for remaining cases. It's useful for handling "all other errors" or "default" cases.
 
@@ -1141,7 +1159,7 @@ fn main() i32:
     return name(Maybe.None)
 ```
 
-**Zero-cost compilation**: Pattern matching compiles to efficient jump tables or switch statements. There's no runtime overhead compared to hand-written if-else chains or switch statements in C.
+**Zero-cost compilation**: Pattern matching compiles to efficient jump tables or switch statements. There's no runtime overhead compared to hand-written if-else chains or switch statements in C. A string match is the exception: it compares the value with each arm in turn, as an if-else chain does.
 
 ### Binding Modes
 
@@ -1187,8 +1205,8 @@ the whole scrutinee, not one slot of it.
 ### Tuple Patterns
 
 A tuple pattern matches each element of a tuple. Its items are the items of a payload: an
-enum pattern, an integer literal, a binding in one of the three modes, a `_`, or another
-tuple pattern. With a tuple literal as the scrutinee, a `match` reads two values at once:
+enum pattern, an integer literal, a string literal, a binding in one of the three modes, a
+`_`, or another tuple pattern. With a tuple literal as the scrutinee, a `match` reads two values at once:
 
 ```sushi
 enum Light:

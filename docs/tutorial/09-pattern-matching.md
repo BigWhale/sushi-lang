@@ -130,6 +130,37 @@ Two arms with the same value are an error ([`CE2075`](../error-catalog.md#ce2075
 as `42` and `0x2A` do. Every arm must fit the type of the matched value: an enum arm in a
 `match` on an integer is the error [`CE2076`](../error-catalog.md#ce2076).
 
+## Matching strings
+
+A `match` also works on a `string`. Each arm is a string literal, in double quotes or in
+single quotes. A string also has too many values to list, so a trailing `_` arm is
+required ([`CE2074`](../error-catalog.md#ce2074)).
+
+```sushi
+fn reply(string word) string:
+    match word:
+        "hello" -> return "Mostly Harmless"
+        "bye" -> return "So long, and thanks for all the fish"
+        _ -> return "Don't Panic"
+
+fn main() i32:
+    println(reply("hello"))
+    println(reply("Hello"))
+    return 0
+```
+
+Output:
+
+```
+Mostly Harmless
+Don't Panic
+```
+
+The match compares bytes, so `"Hello"` does not match `"hello"`. The arms are tested in
+order, from the top. A string literal is also legal inside a pattern, for example
+`Maybe.Some("--help")` or `("go", direction)`. Two arms with the same value are the error
+[`CE2075`](../error-catalog.md#ce2075), also when one uses double quotes and the other single quotes.
+
 ## Binding modes
 
 A name in a pattern, such as `count` in `Cargo.Crates(count)`, has a **mode**, like a
@@ -172,7 +203,7 @@ is for data that owns memory, such as the `string[]` here.
   variants together.
 - Matching on an enum is **exhaustive** — the compiler insists every variant is handled
   ([`CE2040`](../error-catalog.md#ce2040)), turning forgotten cases into compile errors instead of runtime bugs.
-- A `match` on an integer uses literal arms and needs a trailing `_`.
+- A `match` on an integer or on a `string` uses literal arms and needs a trailing `_`.
 - A pattern binding borrows by default; `poke` writes into the data, and `nom` takes it
   from a value that the `match` owns.
 - `match` is a statement; it does not give a value.

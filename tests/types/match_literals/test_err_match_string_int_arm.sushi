@@ -1,0 +1,13 @@
+# An integer literal arm does not fit a string scrutinee.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+
+fn f(string s) string:
+    match s:
+        1 ->
+            return "one"
+        _ ->
+            return "other"
+
+fn main() i32:
+    println(f("1"))
+    return 0

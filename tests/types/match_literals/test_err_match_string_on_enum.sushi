@@ -1,0 +1,18 @@
+# A string literal arm does not fit an enum scrutinee.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+
+enum Color:
+    Red()
+    Green()
+
+fn f(Color c) string:
+    match c:
+        "red" ->
+            return "red"
+        _ ->
+            return "other"
+
+fn main() i32:
+    let Color c = Color.Red()
+    println(f(c))
+    return 0

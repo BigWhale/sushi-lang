@@ -1,0 +1,13 @@
+# String values cannot be listed, so a string match needs a trailing wildcard arm.
+# EXPECT_ERROR_CODES_EXACT: CE2074
+
+fn f(string s) string:
+    match s:
+        "get" ->
+            return "get"
+        "put" ->
+            return "put"
+
+fn main() i32:
+    println(f("get"))
+    return 0

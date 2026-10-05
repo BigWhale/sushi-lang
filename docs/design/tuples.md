@@ -246,14 +246,16 @@ b := #rb1
 
 **The pattern.** A `TuplePattern` holds one item for each element. An item is a
 `PatternItem`: a binding (a name, `_`, `poke x`, `nom x`), an enum pattern, an integer
-literal, a tuple pattern, or an `Own(...)` pattern. A tuple pattern stands at the top of an
-arm, in an enum payload, and in another tuple pattern. A `bool`, `string`, float or struct
-position takes only a binding or `_`, because only an enum, an integer, a tuple and an
-`Own@(T)` have a pattern.
+literal, a string literal, a tuple pattern, or an `Own(...)` pattern. A tuple pattern
+stands at the top of an arm, in an enum payload, and in another tuple pattern. A `bool`,
+float or struct position takes only a binding or `_`, because only an enum, an integer, a
+`string`, a tuple and an `Own@(T)` have a pattern.
 
 **Decision D3.** An integer literal is legal in every pattern position: a literal arm, a
 tuple element and an enum payload (`Maybe.Some(0) ->`). Over a position that is not an
-integer it is **[CE2119](../error-catalog.md#ce2119)**; out of range for the position's type it is **[CE2073](../error-catalog.md#ce2073)**.
+integer it is **[CE2119](../error-catalog.md#ce2119)**; out of range for the position's type it is **[CE2073](../error-catalog.md#ce2073)**. String
+arms in a match took the same rule later: a string literal is legal in every position where
+an integer literal is, and over a position that is not a `string` it is **[CE2119](../error-catalog.md#ce2119)** too.
 
 **The modes (ruling 4).** A pattern binding takes the S10b modes of borrow-model.md, in a
 tuple pattern as in a payload: bare borrows, `poke` points into the element, `nom` takes
@@ -277,7 +279,8 @@ leave `b`; the match then destroys `b` at its end.
 
 **The backend.** `emit_match` keeps the switch on the tag for an enum scrutinee. A tuple
 scrutinee has no tag, so each arm tests its whole pattern, and the first arm that matches
-runs. One walk serves both (`_extract_pattern_bindings`, `backend/statements/matching.py`):
+runs. A `string` scrutinee has no tag either, and it takes the same path
+(`_emit_sequential_match`): a string literal test is one `emit_value_eq`. One walk serves both (`_extract_pattern_bindings`, `backend/statements/matching.py`):
 it emits every test of an arm first (a tag compare, a literal compare, through tuple
 elements, payloads and `Own(...)` cells), and a failed test goes to the next candidate arm
 (the next arm of the same tag after a switch, the next arm after a tuple match). Only
@@ -293,13 +296,18 @@ row. A position is `WILD` (a binding, `_`, `Own(x)`) or a constructor with sub-p
 An enum column splits into its variants, a tuple column into its elements (one
 constructor), an `Own@(T)` column into its pointee (one constructor), and an integer
 column has no end of values: a literal is a constructor, and only a `WILD` covers the
-rest. The same checker reads an enum match, a nested enum match, an integer match and a
-tuple match. It gives two answers:
+rest. A string column is the second column whose values cannot be listed, and it takes the
+rule of the integer column. Each string literal is a constructor, and only a `WILD` covers
+the rest. The key of a string literal is `("string", value)` (`string_key`), so it never
+equals a variant name or an integer. The value in the key is the value after escape
+processing, so `"a"` and `'a'` are one constructor. The same checker reads an enum match, a
+nested enum match, an integer match, a string match and a tuple match. It gives two
+answers:
 
 - **The missing patterns.** A value vector that no row matches is a witness. [CE2040](../error-catalog.md#ce2040) lists
   the witnesses in source syntax (`(Color.Red, _)`, `Maybe.Some(Color.Green)`), at most 16.
   A plain enum match, where no arm tests inside a payload, keeps the list of variant names.
-  An integer scrutinee keeps its own code, **[CE2074](../error-catalog.md#ce2074)**.
+  An integer or a string scrutinee keeps its own code, **[CE2074](../error-catalog.md#ce2074)**.
 - **The dead arms (ruling 18).** An arm that is not useful against the arms above it is
   **[CE2118](../error-catalog.md#ce2118)**, an error. Its notes name the arms above it that share a value with it; those
   arms cover it together, because an arm that shares no value with it covers none of its
@@ -342,8 +350,8 @@ types are a mixed comparison (**[CE2513](../error-catalog.md#ce2513)**), as two 
 | A mode on a tuple element: a destructure element (D1) or a tuple type element | [CE6107](../error-catalog.md#ce6107) |
 | A tuple pattern names a count that is not the tuple's count | [CE2120](../error-catalog.md#ce2120) |
 | A tuple pattern over a value that is not a tuple | [CE2117](../error-catalog.md#ce2117) |
-| An integer literal pattern over a value that is not an integer | [CE2119](../error-catalog.md#ce2119) |
-| A match that does not cover a value | [CE2040](../error-catalog.md#ce2040) ([CE2074](../error-catalog.md#ce2074) for an integer scrutinee) |
+| An integer literal pattern over a value that is not an integer, or a string literal pattern over a value that is not a `string` | [CE2119](../error-catalog.md#ce2119) |
+| A match that does not cover a value | [CE2040](../error-catalog.md#ce2040) ([CE2074](../error-catalog.md#ce2074) for an integer or a string scrutinee) |
 | A match arm that the arms above it cover | [CE2118](../error-catalog.md#ce2118) |
 | `t.N` past the last element | [CE2106](../error-catalog.md#ce2106), with the type rendered as `(i32, string)` |
 | A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | [CE2120](../error-catalog.md#ce2120) |

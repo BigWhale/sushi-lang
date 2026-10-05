@@ -2,6 +2,27 @@
 
 All notable changes to Sushi Lang will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **String arms in a `match`.** A string literal (`"get"` or `'get'`) is a pattern in
+  every position where an integer literal is one: the top of an arm, an enum payload
+  (`Maybe.Some("--help") ->`), a tuple element (`("go", dir) ->`) and an `Own(...)`
+  pattern. The scrutinee can be any `string`: a local, a parameter (`peek` too), a field,
+  an element, a `var`, a literal or a temporary, which the match owns and frees on every
+  path; `match nom s:` hands a local to the match. The match compares bytes, by the rule of
+  `==`: the size, then the content. There is no case folding, no collation and no Unicode
+  normalization, and a prefix does not match. The value is read after escape processing,
+  so `"a"` and `'a'` are one value. The arms are tested in source order. A string match
+  must end with `_` (`CE2074`), and two arms with one value are `CE2075`. A string arm on
+  a scrutinee that is not a `string`, an integer or an enum arm on a `string` scrutinee,
+  and a string arm beside an integer arm are `CE2076`. A nested string literal over a
+  value that is not a `string` is `CE2119`. A double-quoted pattern with an interpolation
+  hole (`"{x}" ->`) is the new `CE2123`; `'{x}'` matches the braces as text. A named
+  constant as a pattern (`GET ->`) and several literals in one arm (`"a" | "b" ->`) are
+  not part of this change.
+
 ## [0.15.0] - 2026-10-05
 
 Sushi has error types. An `error` declaration is an enum that may be the `E` of a

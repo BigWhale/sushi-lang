@@ -1,0 +1,16 @@
+# A string literal nested in a pattern needs a string value: the payload of a
+# Maybe@(i32) is an integer.
+# EXPECT_ERROR_CODES_EXACT: CE2119
+
+fn f(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some("3") ->
+            return "three"
+        Maybe.Some(_) ->
+            return "other"
+        Maybe.None ->
+            return "none"
+
+fn main() i32:
+    println(f(Maybe.Some(3)))
+    return 0

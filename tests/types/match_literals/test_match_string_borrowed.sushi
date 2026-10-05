@@ -1,0 +1,58 @@
+# A string match borrows its scrutinee in every place position: a string parameter, a
+# peek string parameter, a struct field, an element of a local string array and a
+# unit-level var. `match nom s:` hands the local to the match, which frees it at the end.
+# Every owning string is built at run time, so the leak check sees the heap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "param write\nparam other\npeek write\npeek other\nfield write\nelement write\nvar idle\nvar busy\nnom write\nwrite write\n"
+
+struct Config:
+    string mode
+    i32 level
+
+var string state = "idle"
+
+fn by_param(string s) string:
+    match s:
+        "write" -> return "param write"
+        "read" -> return "param read"
+        _ -> return "param other"
+
+fn by_peek(peek string s) string:
+    match s:
+        "write" -> return "peek write"
+        "read" -> return "peek read"
+        _ -> return "peek other"
+
+fn main() i32:
+    let string base = "wri"
+    let string owned = "{base}te"
+    let string other = "{base}tten"
+    println(by_param(owned))
+    println(by_param(other))
+    println(by_peek(peek owned))
+    println(by_peek(peek other))
+    let Config cfg = Config("{base}te", 3)
+    match cfg.mode:
+        "read" -> println("field read")
+        "write" -> println("field write")
+        _ -> println("field other {cfg.level}")
+    let string[] words = from(["alpha", "{base}te", "gamma"])
+    match words[1]:
+        "alpha" -> println("element alpha")
+        "write" -> println("element write")
+        _ -> println("element other")
+    match state:
+        "idle" -> println("var idle")
+        _ -> println("var other")
+    state := "busy"
+    match state:
+        "idle" -> println("var idle")
+        "busy" -> println("var busy")
+        _ -> println("var other")
+    let string taken = "{base}te"
+    match nom taken:
+        "write" -> println("nom write")
+        _ -> println("nom other")
+    println("{owned} {words[1]}")
+    return 0
